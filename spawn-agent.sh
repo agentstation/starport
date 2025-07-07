@@ -15,9 +15,14 @@ WORKSPACE_ROOT="$HOME/starport-development"
 # Common workflow template that applies to ALL tasks
 WORKFLOW_TEMPLATE="IMPORTANT WORKFLOW:
 1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
-2. Complete the task requirements
-3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
-4. Create and submit the PR"
+   - Add entry to 'Active Work' table with your task, branch, and status
+2. Complete the task requirements below
+3. Update COORDINATION.md when PR is ready:
+   - Move task to 'Completed Today' section
+   - Add PR number
+4. Create and submit the PR
+
+Note: COORDINATION.md is the single source of truth for task status!"
 
 # Function to generate agent context
 generate_context() {

@@ -85,13 +85,27 @@ claude-code --task-filter "docs|openapi|sdk" --branch-prefix "task/" TASKS.md
 
 ### 6. Task Status Management
 
-Update task status in your PR:
+**COORDINATION.md is the single source of truth for task status.**
+
+When working on tasks:
+1. **Starting work**: Update COORDINATION.md immediately
+   - Add your task to "Active Work" table
+   - Mark status as "🟢 In Progress"
+   
+2. **Completing work**: Update COORDINATION.md when PR is ready
+   - Move task to "Completed Today" section
+   - Update "Active Work" to show "✅ Completed"
+   - Add PR number
+
+3. **In your PR description**: Include implementation checklist
 ```markdown
-## Task Status Update
-- [ ] → [x] Create directory structure
-- [ ] → [x] Initialize go.mod
-- [ ] → [~] Create Makefile (in progress)
+## Implementation Tasks
+- [x] Create directory structure
+- [x] Initialize go.mod
+- [x] Create Makefile
 ```
+
+**Note**: Do NOT update status in TASKS.md - it's for task definitions only.
 
 ### 7. Testing Requirements
 
