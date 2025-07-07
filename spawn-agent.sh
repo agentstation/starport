@@ -12,6 +12,40 @@ NC='\033[0m'
 REPO_URL="https://github.com/agentstation/starport"
 WORKSPACE_ROOT="$HOME/starport-development"
 
+# Common workflow template that applies to ALL tasks
+WORKFLOW_TEMPLATE="IMPORTANT WORKFLOW:
+1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+2. Complete the task requirements
+3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
+4. Create and submit the PR"
+
+# Function to generate agent context
+generate_context() {
+    local task_id=$1
+    local task_name=$2
+    local workspace=$3
+    local branch=$4
+    local prerequisite=$5
+    local files_to_read=$6
+    local requirements=$7
+    
+    echo "You are working on task $task_id ($task_name) for the Starport project.
+
+Project: Starport - A high-performance LLM gateway
+${prerequisite:+Prerequisite: $prerequisite
+}Workspace: $workspace
+
+$WORKFLOW_TEMPLATE
+
+First, read these files:
+$files_to_read
+
+Your task requirements:
+$requirements
+- Create branch: $branch
+- Follow PR format in TASKS.md"
+}
+
 # Check if task ID was provided
 if [ -z "$1" ]; then
     echo "Usage: ./spawn-agent.sh <TASK-ID>"
@@ -41,42 +75,90 @@ case $TASK_ID in
         AGENT_NAME="Foundation"
         TASK_NAME="Repository Initialization"
         BRANCH="task/P1-S1-1.1-repo-init"
-        PREREQ="None - this is the first task"
+        PREREQ=""
+        FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
+2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.1 for detailed requirements
+3. \$REPO_PATH/ARCHITECTURE.md - Review sections 1-3 for project overview
+4. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Create go.mod with module path: github.com/agentstation/starport
+- Ensure .gitignore exists (already created)
+- Create LICENSE file (MIT)
+- Update README.md if needed"
         ;;
     "P1-S1-1.2")
         WORKSPACE_NAME="starport-structure"
         AGENT_NAME="Structure"
         TASK_NAME="Project Structure"
         BRANCH="task/P1-S1-1.2-project-structure"
-        PREREQ="P1-S1-1.1 must be complete (check for go.mod)"
+        PREREQ="Task P1-S1-1.1 must be complete (check for go.mod)"
+        FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
+2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.2 for requirements
+3. \$REPO_PATH/ARCHITECTURE.md - Review section 4 for directory structure
+4. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Create directory structure per ARCHITECTURE.md
+- Create cmd/starport/main.go with CLI framework (urfave/cli)
+- Implement 'version' and 'serve' commands
+- Create Makefile with standard targets"
         ;;
     "P1-S1-1.3")
         WORKSPACE_NAME="starport-devops"
         AGENT_NAME="DevOps"
         TASK_NAME="Development Environment"
         BRANCH="task/P1-S1-1.3-dev-environment"
-        PREREQ="P1-S1-1.2 must be complete"
+        PREREQ="Task P1-S1-1.2 must be complete (check for cmd/starport/main.go)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.3
+2. \$REPO_PATH/ARCHITECTURE.md - Review DevOps sections
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Create docker-compose.yml for local Valkey
+- Set up GitHub Actions workflow (.github/workflows/ci.yml)
+- Configure golangci-lint
+- Add pre-commit hooks"
         ;;
     "P1-S1-1.4")
         WORKSPACE_NAME="starport-http"
         AGENT_NAME="HTTP"
         TASK_NAME="HTTP Server Foundation"
         BRANCH="task/P1-S1-1.4-http-server"
-        PREREQ="P1-S1-1.2 must be complete"
+        PREREQ="Task P1-S1-1.2 must be complete"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.4
+2. \$REPO_PATH/ARCHITECTURE.md - Review HTTP server design
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Implement HTTP server with chi router
+- Add middleware: request ID, logging, recovery, CORS
+- Create health check endpoints
+- Implement graceful shutdown"
         ;;
     "P1-S1-1.5")
         WORKSPACE_NAME="starport-config"
         AGENT_NAME="Config"
         TASK_NAME="Configuration System"
         BRANCH="task/P1-S1-1.5-config-system"
-        PREREQ="P1-S1-1.4 must be complete"
+        PREREQ="Task P1-S1-1.4 must be complete"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.5
+2. \$REPO_PATH/ARCHITECTURE.md - Review configuration design
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Define configuration structures
+- Implement YAML loading with viper
+- Add environment variable mapping
+- Create validation logic
+- Implement hot reload for rate limits"
         ;;
     "P1-S2-2.1")
         WORKSPACE_NAME="starport-storage-interface"
         AGENT_NAME="Storage"
         TASK_NAME="Storage Interface Definition"
         BRANCH="task/P1-S2-2.1-storage-interface"
-        PREREQ="P1-S1-1.5 must be complete"
+        PREREQ="Task P1-S1-1.5 must be complete (configuration system)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.1
+2. \$REPO_PATH/ARCHITECTURE.md - Review storage architecture sections
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Define KVStore interface with all required operations
+- Create error types for storage operations
+- Add serialization helpers
+- Create factory pattern for storage backends
+- Add context support throughout
+- Define transaction interface
+- Create mock implementation for testing"
         ;;
     *)
         echo -e "${YELLOW}Unknown task ID: $TASK_ID${NC}"
@@ -143,145 +225,8 @@ fi
 # Get the full path for context
 REPO_PATH=$(pwd)
 
-# Generate context based on task
-case $TASK_ID in
-    "P1-S1-1.1")
-        AGENT_CONTEXT="You are working on task P1-S1-1.1 (Repository Initialization) for the Starport project.
-
-Project: Starport - A high-performance LLM gateway (see README.md)
-Your task: Initialize the repository with proper Go module structure
-Workspace: $REPO_PATH
-
-IMPORTANT WORKFLOW:
-1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
-2. Complete the task requirements
-3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
-4. Create and submit the PR
-
-First, read these files in order:
-1. $REPO_PATH/CLAUDE.md - Understand the workflow
-2. $REPO_PATH/TASKS.md - Find task P1-S1-1.1 for detailed requirements
-3. $REPO_PATH/ARCHITECTURE.md - Review sections 1-3 for project overview
-4. $REPO_PATH/COORDINATION.md - Update your task status
-
-Your task requirements:
-- Create go.mod with module path: github.com/agentstation/starport
-- Ensure .gitignore exists (already created)
-- Create LICENSE file (MIT)
-- Update README.md if needed
-- Create branch: $BRANCH
-- Follow PR format in TASKS.md
-
-This is the first task with no dependencies."
-        ;;
-        
-    "P1-S1-1.2")
-        AGENT_CONTEXT="You are working on task P1-S1-1.2 (Project Structure) for the Starport project.
-
-Project: Starport - A high-performance LLM gateway
-Prerequisite: Task P1-S1-1.1 must be complete (check for go.mod)
-Workspace: $REPO_PATH
-
-IMPORTANT WORKFLOW:
-1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
-2. Complete the task requirements
-3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
-4. Create and submit the PR
-
-First, read these files:
-1. $REPO_PATH/CLAUDE.md - Understand the workflow
-2. $REPO_PATH/TASKS.md - Find task P1-S1-1.2 for requirements
-3. $REPO_PATH/ARCHITECTURE.md - Review section 4 for directory structure
-4. $REPO_PATH/COORDINATION.md - Update your task status
-
-Your task requirements:
-- Create directory structure per ARCHITECTURE.md
-- Create cmd/starport/main.go with CLI framework (urfave/cli)
-- Implement 'version' and 'serve' commands
-- Create Makefile with standard targets
-- Create branch: $BRANCH
-
-Other agents may be working on P1-S1-1.6 and P1-S1-1.7 in parallel."
-        ;;
-        
-    "P1-S1-1.3")
-        AGENT_CONTEXT="You are working on task P1-S1-1.3 (Development Environment) for the Starport project.
-
-Prerequisite: Task P1-S1-1.2 must be complete (check for cmd/starport/main.go)
-Workspace: $REPO_PATH
-
-IMPORTANT WORKFLOW:
-1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
-2. Complete the task requirements
-3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
-4. Create and submit the PR
-
-Read these files:
-1. $REPO_PATH/TASKS.md - Find task P1-S1-1.3
-2. $REPO_PATH/ARCHITECTURE.md - Review DevOps sections
-3. $REPO_PATH/COORDINATION.md - Update your task status
-
-Your task:
-- Create docker-compose.yml for local Valkey
-- Set up GitHub Actions workflow (.github/workflows/ci.yml)
-- Configure golangci-lint
-- Add pre-commit hooks
-- Create branch: $BRANCH"
-        ;;
-        
-    "P1-S1-1.4")
-        AGENT_CONTEXT="You are working on task P1-S1-1.4 (HTTP Server Foundation) for the Starport project.
-
-Prerequisite: Task P1-S1-1.2 must be complete
-Workspace: $REPO_PATH
-
-IMPORTANT WORKFLOW:
-1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
-2. Complete the task requirements
-3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
-4. Create and submit the PR
-
-Read:
-1. $REPO_PATH/TASKS.md - Find task P1-S1-1.4
-2. $REPO_PATH/ARCHITECTURE.md - Review HTTP server design
-3. $REPO_PATH/COORDINATION.md - Update your task status
-
-Your task:
-- Implement HTTP server with chi router
-- Add middleware: request ID, logging, recovery, CORS
-- Create health check endpoints
-- Implement graceful shutdown
-- Create branch: $BRANCH"
-        ;;
-        
-    "P1-S2-2.1")
-        AGENT_CONTEXT="You are working on task P1-S2-2.1 (Storage Interface Definition) for the Starport project.
-
-Prerequisite: Task P1-S1-1.5 must be complete (configuration system)
-Workspace: $REPO_PATH
-
-IMPORTANT WORKFLOW:
-1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
-2. Complete the task requirements
-3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
-4. Create and submit the PR
-
-Read these files:
-1. $REPO_PATH/TASKS.md - Find task P1-S2-2.1
-2. $REPO_PATH/ARCHITECTURE.md - Review storage architecture sections
-3. $REPO_PATH/COORDINATION.md - Update your task status
-
-Your task:
-- Define KVStore interface with all required operations
-- Create error types for storage operations
-- Add serialization helpers
-- Create factory pattern for storage backends
-- Add context support throughout
-- Define transaction interface
-- Create mock implementation for testing
-- Create branch: $BRANCH"
-        ;;
-esac
+# Generate context using the template function
+AGENT_CONTEXT=$(generate_context "$TASK_ID" "$TASK_NAME" "$REPO_PATH" "$BRANCH" "$PREREQ" "$FILES_TO_READ" "$REQUIREMENTS")
 
 # Save context to file for Claude Code
 CONTEXT_FILE="$WORKSPACE_PATH/context-$TASK_ID.txt"
