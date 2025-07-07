@@ -6,7 +6,7 @@
 *.dylib
 
 # Binary output
-starport
+/starport
 starport-ent
 
 # Test binary, built with `go test -c`
@@ -16,6 +16,8 @@ starport-ent
 *.out
 coverage.txt
 coverage.html
+*.test
+*.prof
 
 # Go workspace files
 go.work

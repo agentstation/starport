@@ -9,7 +9,7 @@ Last Updated: When agents update this file
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-| - | - | - | Waiting for agents | - | - |
+| Backend | P1-S1-1.2 Project Structure | task/P1-S1-1.2-project-structure | ✅ PR Ready | 4:00 PM | #2 |
 
 ### Recently Completed
 
@@ -21,7 +21,8 @@ Last Updated: When agents update this file
 
 | Task | Blocked By | Team | Notes |
 |------|------------|------|-------|
-| P1-S1-1.4 | P1-S1-1.2 | API | Waiting for project structure |
+| P1-S1-1.3 | - | DevOps | P1-S1-1.2 complete - can now proceed |
+| P1-S1-1.4 | - | API | P1-S1-1.2 complete - can now proceed |
 | P1-S1-1.5 | P1-S1-1.4 | API | Waiting for HTTP server |
 
 ## 📊 Sprint Progress
