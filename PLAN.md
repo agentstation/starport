@@ -18,7 +18,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] Set up `internal/` package structure
   - [ ] Create `pkg/enterprise/` interfaces
   - [ ] Initialize go.mod with module path `github.com/agentstation/starport`
-  - [ ] Set up CLI framework (urfave/cli or cobra)
+  - [ ] Set up CLI framework (urfave/cli)
 - [ ] Set up development environment
   - [ ] Docker Compose for Valkey (optional for development)
   - [ ] Basic Makefile for common tasks
@@ -29,7 +29,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] Connection pooling setup
   - [ ] Structured logging with zerolog
   - [ ] OpenTelemetry initialization
-  - [ ] Configuration loading from YAML/env
+  - [ ] Configuration loading with go-envconfig
 
 ### Subphase 1.2: KV Store & Core Models
 - [ ] Badger DB integration
@@ -46,8 +46,8 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] BYOK credential storage (encrypted)
   - [ ] Filter rules storage
 - [ ] Advanced API key management
-  - [ ] Key generation with crypto/rand
-  - [ ] Argon2id hashing implementation
+  - [ ] Starport API key generation with github.com/agentstation/uuidkey
+  - [ ] Direct key validation (no hashing needed with uuidkey)
   - [ ] JWT token support
   - [ ] Key validation middleware
   - [ ] Scopes and permissions system
@@ -91,6 +91,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
 ### Subphase 1.4: BYOK, Caching & Filtering
 - [ ] Advanced BYOK implementation
   - [ ] Credential encryption (AES-256-GCM)
+  - [ ] Key derivation using Argon2id
   - [ ] HashiCorp Vault integration
   - [ ] Zero-knowledge key passing
   - [ ] Key rotation scheduler
@@ -144,7 +145,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
 
 ### Subphase 2.2: Management API & CLI Integration
 - [ ] RESTful Management API
-  - [ ] OpenAPI 3.0 specification
+  - [ ] OpenAPI 3.1 specification
   - [ ] Async job processing
   - [ ] Bulk operations
   - [ ] Webhook event system
@@ -165,7 +166,6 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] CLI command documentation
   - [ ] Plugin development guide
   - [ ] Performance tuning guide
-  - [ ] OpenAPI 3.1 specification
   - [ ] Interactive API documentation (Swagger UI)
   - [ ] ReDoc documentation interface
   - [ ] Postman/Insomnia collections

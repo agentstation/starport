@@ -219,57 +219,85 @@ Structure:
 ```markdown
 - [ ] Create directory structure per ARCHITECTURE.md
 - [ ] Add placeholder README.md in each directory
-- [ ] Create cmd/starport/main.go with CLI framework
-- [ ] Implement `version` command
+- [ ] Create cmd/starport/main.go, start.go, run.go
+- [ ] Implement clean architecture pattern with app package
+- [ ] Implement `version` and `serve` commands
 - [ ] Create Makefile with standard targets
-- [ ] Add go.work for workspace management
+- [ ] Add .env and local.env support
 ```
 
 #### Code Template
 ```go
-// cmd/starport/main.go
+// cmd/starport/main.go - Minimal entry point
+package main
+
+func main() {
+    start()
+}
+
+// cmd/starport/start.go - Signal handling
 package main
 
 import (
-    "fmt"
+    "context"
+    "log"
     "os"
+    "os/signal"
+    "syscall"
+)
+
+func start() {
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+    defer stop()
     
+    if err := run(ctx); err != nil {
+        log.Fatalf("Fatal error: %v", err)
+    }
+}
+
+// cmd/starport/run.go - Application setup
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    "github.com/agentstation/starport/internal/app"
     "github.com/urfave/cli/v2"
 )
 
-var (
-    version = "dev"
-    commit  = "none"
-    date    = "unknown"
-)
-
-func main() {
-    app := &cli.App{
+func run(ctx context.Context) error {
+    cliApp := &cli.App{
         Name:    "starport",
         Usage:   "High-performance LLM gateway",
-        Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
+        Version: version,
         Commands: []*cli.Command{
             {
                 Name:    "serve",
                 Aliases: []string{"server"},
                 Usage:   "Run the gateway server",
-                Action:  runServer,
+                Action: func(c *cli.Context) error {
+                    return runServer(ctx)
+                },
             },
-            // Add more commands here
         },
-        Action: runServer, // Default action
+        Action: func(c *cli.Context) error {
+            return runServer(ctx)
+        },
     }
     
-    if err := app.Run(os.Args); err != nil {
-        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-        os.Exit(1)
-    }
+    return cliApp.RunContext(ctx, os.Args)
 }
 
-func runServer(c *cli.Context) error {
-    fmt.Println("Starting Starport server...")
-    // TODO: Implement server
-    return nil
+func runServer(ctx context.Context) error {
+    app, err := app.New(
+        app.WithConfig(loadConfig()),
+    )
+    if err != nil {
+        return fmt.Errorf("failed to create app: %w", err)
+    }
+    
+    return app.Run(ctx)
 }
 ```
 
@@ -369,6 +397,10 @@ Performance:
   - Health checks
 ```
 
+See ARCHITECTURE.md sections:
+- Section 6: Application Architecture - Clean architecture patterns
+- Section 9: Rate Limiting Architecture - Chi middleware integration
+
 #### Implementation Tasks
 ```markdown
 - [ ] Implement HTTP server with chi
@@ -418,6 +450,8 @@ func (s *Server) setupMiddleware() {
     s.router.Use(middleware.Logger)
     s.router.Use(middleware.Recoverer)
     s.router.Use(middleware.Timeout(60 * time.Second))
+    // TODO: Add rate limit middleware after storage is implemented
+    // s.router.Use(RateLimitMiddleware(s.store))
 }
 
 func (s *Server) setupRoutes() {
@@ -455,26 +489,30 @@ As an operator, I need a flexible configuration system that supports files and e
 #### Technical Requirements
 ```yaml
 Sources:
-  - YAML configuration files
-  - Environment variables (override)
+  - Environment variables (primary)
+  - .env and local.env files
   - Command-line flags (override)
   
 Features:
-  - Validation
+  - Type-safe struct configuration
+  - Validation with struct tags
   - Hot reload for specific settings
-  - Type safety
-  - Default values
+  - Default values with env tags
 ```
+
+See ARCHITECTURE.md sections:
+- Section 5: Technical Stack - go-envconfig details
+- Section 13: Configuration - Examples and structure
 
 #### Implementation Tasks
 ```markdown
-- [ ] Define configuration structures
-- [ ] Implement YAML loading with viper
-- [ ] Add environment variable mapping
+- [ ] Define configuration structures with env tags
+- [ ] Implement go-envconfig based loading
+- [ ] Add .env file support (local.env > .env)
 - [ ] Create validation logic
 - [ ] Implement hot reload for rate limits
 - [ ] Add configuration documentation
-- [ ] Create example configurations
+- [ ] Create example .env files
 ```
 
 #### Acceptance Criteria
@@ -611,6 +649,10 @@ Performance:
   - Compaction scheduling
 ```
 
+See ARCHITECTURE.md sections:
+- Section 16: Storage Architecture - Badger implementation details
+- Section 11: Data Models - Key patterns and storage structure
+
 #### Implementation Tasks
 ```markdown
 - [ ] Implement BadgerStore struct
@@ -645,16 +687,20 @@ As a developer, I need core data models for API keys, presets, and BYOK credenti
 #### Technical Requirements
 ```yaml
 Models:
-  - APIKey: token, scopes, metadata
+  - APIKey: token, scopes, metadata, rate_limit_tier
   - Preset: name, config, version
   - BYOKCredential: encrypted keys
-  - RateLimit: limits, windows
+  - TokenBucket: tokens, capacity, refill_rate, last_refill
   
 Features:
   - JSON serialization
   - Validation methods
   - Encryption for sensitive data
 ```
+
+See ARCHITECTURE.md sections:
+- Section 11: Data Models - Complete model specifications
+- Section 9: Rate Limiting Architecture - TokenBucket design
 
 #### Implementation Tasks
 ```markdown
@@ -842,6 +888,10 @@ Features:
   - Parallel requests
   - Circuit breakers
 ```
+
+See ARCHITECTURE.md sections:
+- Section 8: Advanced Routing Architecture - Complete routing strategies
+- Section 25: OpenRouter Compatibility - Provider routing details
 
 #### Implementation Tasks
 ```markdown

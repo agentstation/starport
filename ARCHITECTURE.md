@@ -121,9 +121,142 @@ go build -tags enterprise \
   ./cmd/starport
 ```
 
-## 5. CLI Architecture
+## 5. Technical Stack
 
-### 5.1 Single Binary Design
+### 5.1 Core Technologies
+
+**Language & Runtime**
+- **Go 1.22+** - For high performance and excellent concurrency
+- **Single binary deployment** - Both server and CLI in one executable
+
+**Web Framework & HTTP**
+- **Chi router** - Lightweight, fast HTTP router with middleware support
+- **Standard library net/http** - For maximum performance and compatibility
+- **HTTP/2 support** - Built-in with Go's standard library
+
+**CLI Framework**
+- **urfave/cli** - Simple, fast CLI framework for the command interface
+
+**Configuration Management**
+- **sethvargo/go-envconfig** - Type-safe environment configuration with validation
+- **Multiple .env file support** - local.env overrides .env for development
+- **Hot reload** for specific settings (rate limits, routing rules) via file watching
+
+**Logging & Observability**
+- **Zerolog** - Zero-allocation structured logging for performance
+- **OpenTelemetry** - For distributed tracing and metrics export
+
+**Storage**
+- **Badger v4** - Embedded KV store (default, zero dependencies)
+- **Valkey** - Redis-compatible distributed KV store (for multi-node)
+- **Standard library encoding/json** - For data serialization
+
+**Security**
+- **github.com/agentstation/uuidkey** - For Starport API key generation (UUID v7 based)
+- **Argon2id** - For key derivation when encrypting BYOK credentials
+- **AES-256-GCM** - For BYOK credential encryption
+- **crypto/rand** - For additional secure random needs
+
+**Testing**
+- **Standard library testing** - For unit tests
+- **Testify** - For assertions and mocks
+- **httptest** - For API endpoint testing
+
+### 5.2 Dependencies Philosophy
+
+The core OSS version maintains minimal dependencies:
+- Embedded storage (Badger) allows zero external dependencies
+- All chosen libraries are well-maintained with strong track records
+- Performance is prioritized over features
+- Standard library preferred where possible
+
+## 6. Application Architecture
+
+### 6.1 Clean Architecture Pattern
+
+Starport follows a clean architecture pattern with clear separation of concerns:
+
+```go
+// cmd/starport/main.go - Minimal entry point
+func main() {
+    start()
+}
+
+// cmd/starport/start.go - Signal handling and lifecycle
+func start() {
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+    defer stop()
+    
+    if err := run(ctx); err != nil {
+        log.Fatalf("Fatal error: %v", err)
+    }
+}
+
+// cmd/starport/run.go - Application setup
+func run(ctx context.Context) error {
+    app, err := app.New(
+        app.WithConfig(loadConfig()),
+        app.WithLogger(setupLogger()),
+    )
+    if err != nil {
+        return fmt.Errorf("failed to create app: %w", err)
+    }
+    
+    return app.Run(ctx)
+}
+```
+
+### 6.2 Options Pattern
+
+The application uses functional options for flexible configuration:
+
+```go
+type Option func(*App) error
+
+func WithConfig(cfg *Config) Option {
+    return func(a *App) error {
+        a.config = cfg
+        return nil
+    }
+}
+
+func WithLogger(logger *zerolog.Logger) Option {
+    return func(a *App) error {
+        a.logger = logger
+        return nil
+    }
+}
+```
+
+### 6.3 Graceful Shutdown
+
+Comprehensive shutdown handling with cleanup aggregation:
+
+```go
+func (app *App) Shutdown(ctx context.Context) error {
+    var shutdownErr error
+    
+    // Shutdown HTTP server first
+    if err := app.server.Shutdown(ctx); err != nil {
+        shutdownErr = fmt.Errorf("server shutdown error: %w", err)
+    }
+    
+    // Always attempt cleanup
+    if cleanupErr := app.cleanup(); cleanupErr != nil {
+        if shutdownErr != nil {
+            shutdownErr = fmt.Errorf("%v; cleanup error: %w", shutdownErr, cleanupErr)
+        } else {
+            shutdownErr = fmt.Errorf("cleanup error: %w", cleanupErr)
+        }
+    }
+    
+    return shutdownErr
+}
+```
+
+## 7. CLI Architecture
+
+### 7.1 Single Binary Design
 
 Starport uses a single binary that can operate in multiple modes:
 
@@ -166,7 +299,7 @@ func main() {
 }
 ```
 
-### 5.2 CLI Commands
+### 6.2 CLI Commands
 
 **Server Mode** (default):
 - `starport` or `starport serve` - Run the gateway server
@@ -187,9 +320,9 @@ func main() {
 - `starport health --url <gateway-url>` - Health check
 - `starport migrate` - Run database migrations
 
-## 6. Advanced Routing Architecture
+## 8. Advanced Routing Architecture
 
-### 6.1 Routing Strategies
+### 8.1 Routing Strategies
 ```yaml
 # Routing configuration example
 routing:
@@ -206,7 +339,7 @@ routing:
         classifier_model: "meta-llama/Llama-2-7b"
 ```
 
-### 6.2 Router Implementation
+### 8.2 Router Implementation
 ```go
 type Router interface {
     SelectProvider(ctx context.Context, req *Request) (*Provider, error)
@@ -220,7 +353,7 @@ type SmartRouter struct {
 }
 ```
 
-### 6.3 Routing Features
+### 8.3 Routing Features
 - **Latency tracking** with exponential moving averages
 - **Cost calculation** with real-time pricing updates
 - **Health scoring** based on success rates
@@ -234,9 +367,151 @@ type SmartRouter struct {
   - Data collection policy enforcement
   - Provider ignore/allow lists
 
-## 7. Feature Breakdown
+## 9. Rate Limiting Architecture
 
-### 7.1 Open Source Features
+### 9.1 Token Bucket Design
+
+Starport uses a hierarchical token bucket implementation optimized for LLM workloads:
+
+```go
+// Token bucket hierarchy
+type RateLimitConfig struct {
+    // Global gateway protection
+    Global GlobalLimits
+    
+    // Per API key limits
+    PerKey map[string]KeyLimits
+    
+    // Per model limits (unless BYOK)
+    PerModel map[string]ModelLimits
+}
+
+type TokenBucket struct {
+    Capacity    int64         // Max tokens in bucket
+    RefillRate  int64         // Tokens per second
+    BurstMultiplier float64   // Allow burst = capacity * multiplier
+}
+```
+
+### 9.2 Chi Middleware Integration
+
+```go
+// Rate limit middleware with early rejection
+func RateLimitMiddleware(store storage.KVStore) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            // Extract API key
+            apiKey := extractAPIKey(r)
+            
+            // Check limits in order: global → key → model
+            if !checkGlobalLimit(store, r) {
+                writeRateLimitResponse(w, "global limit exceeded")
+                return
+            }
+            
+            if !checkKeyLimit(store, apiKey, r) {
+                writeRateLimitResponse(w, "key limit exceeded")
+                return
+            }
+            
+            // Model limits checked after parsing request
+            next.ServeHTTP(w, r)
+        })
+    }
+}
+```
+
+### 9.3 Rate Limit Tiers
+
+**1. Global Limits** (Gateway Protection)
+- Purpose: Prevent gateway overload
+- Scope: All requests regardless of key
+- Config: High limits (10K+ RPS)
+
+**2. API Key Limits** (Customer Quotas)
+- Request-based: X requests per minute/hour
+- Token-based: Y tokens per minute/hour
+- Burst allowance: 2x normal rate
+- Headers: X-RateLimit-Limit, X-RateLimit-Remaining
+
+**3. Model Limits** (Provider Protection)
+- Applied only to gateway-proxied requests
+- BYOK requests bypass these limits
+- Different limits per model tier
+
+### 9.4 Storage Implementation
+
+**Badger (Single Node)**
+```go
+// Atomic token bucket operations
+func (b *BadgerStore) ConsumeTokens(key string, tokens int64) (allowed bool, remaining int64) {
+    err := b.db.Update(func(txn *badger.Txn) error {
+        // Get current bucket state
+        item, err := txn.Get([]byte(key))
+        // ... refill calculation ...
+        // Atomic consume operation
+        return txn.Set([]byte(key), encodedBucket)
+    })
+    return allowed, remaining
+}
+```
+
+**Valkey (Distributed)**
+```lua
+-- Lua script for atomic token consumption
+local key = KEYS[1]
+local requested = tonumber(ARGV[1])
+local now = tonumber(ARGV[2])
+local capacity = tonumber(ARGV[3])
+local refill_rate = tonumber(ARGV[4])
+
+-- Get current bucket
+local bucket = redis.call('HMGET', key, 'tokens', 'last_refill')
+-- ... refill and consume logic ...
+return {allowed, remaining}
+```
+
+### 9.5 Rate Limit Headers
+
+Following industry standards (GitHub/Stripe style):
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1672531200
+X-RateLimit-Retry-After: 60
+```
+
+### 9.6 Configuration
+
+```yaml
+rate_limits:
+  # Global protection
+  global:
+    requests_per_second: 10000
+    burst_multiplier: 2.0
+    
+  # Default key limits
+  default_key_limits:
+    requests:
+      - { window: "1m", limit: 60 }
+      - { window: "1h", limit: 1000 }
+    tokens:
+      - { window: "1m", limit: 100000 }
+      - { window: "1h", limit: 1000000 }
+    
+  # Model-specific limits
+  model_limits:
+    "gpt-4":
+      requests_per_minute: 20
+      tokens_per_minute: 40000
+    "claude-3-opus":
+      requests_per_minute: 30
+      tokens_per_minute: 100000
+```
+
+## 10. Feature Breakdown
+
+### 10.1 Open Source Features
 
 **High-Performance Gateway Core**
 - OpenAI-compatible REST API with <1ms overhead
@@ -260,14 +535,15 @@ type SmartRouter struct {
 - Cache warming and invalidation strategies
 
 **Authentication & Keys**
-- API key generation with cryptographically secure randomness
-- Argon2id hashing (more secure than SHA-256)
+- Starport API key generation using github.com/agentstation/uuidkey (UUID v7 based)
+- Direct key comparison (no hashing needed with uuidkey)
 - JWT token support for stateless auth
 - Key scopes and model permissions
 - Rate limit configuration per key
 
 **BYOK (Bring Your Own Key)**
 - Encrypted credential storage (AES-256-GCM)
+- Key derivation using Argon2id for encryption keys
 - Multi-provider support with validation
 - Automatic key rotation
 - HashiCorp Vault integration option
@@ -281,11 +557,16 @@ type SmartRouter struct {
 - Template variables and inheritance
 
 **Advanced Rate Limiting**
-- Token bucket with Valkey persistence
-- Sliding window algorithm option
-- Multi-tier limits (burst/sustained)
-- Token-based limits (not just requests)
-- Distributed rate limiting with Lua scripts
+- Token bucket algorithm (primary) with configurable burst
+- Request-based and token-based limits
+- Multi-tier hierarchy: global → per-key → per-model
+- Chi middleware integration for early rejection
+- Storage backends:
+  - Badger: Local token buckets with atomic operations
+  - Valkey: Distributed token buckets with Lua scripts
+- Hot-reloadable limits without restart
+- BYOK requests bypass provider limits
+- Rate limit headers (X-RateLimit-*) for transparency
 
 **Content Filtering & Moderation**
 - Pre-request prompt validation
@@ -316,7 +597,7 @@ type SmartRouter struct {
 - Real-time metric aggregation
 - Latency histograms and percentiles
 
-### 7.2 Enterprise Features (Separate Package)
+### 10.2 Enterprise Features (Separate Package)
 
 **Single Sign-On (SSO)**
 - WorkOS integration with SAML/OIDC
@@ -368,9 +649,9 @@ type SmartRouter struct {
 - Encrypted log storage
 - Chain of custody tracking
 
-## 8. Data Models
+## 11. Data Models
 
-### 8.1 Open Source Data Model (KV Store)
+### 11.1 Open Source Data Model (KV Store)
 
 OSS uses a key-value store (Badger or Valkey) with the following key patterns:
 
@@ -423,7 +704,7 @@ OSS uses a key-value store (Badger or Valkey) with the following key patterns:
 }
 ```
 
-### 8.2 Enterprise PostgreSQL Schema
+### 11.2 Enterprise PostgreSQL Schema
 
 Enterprise features use PostgreSQL for relational data (NOT for API keys or OSS features):
 
@@ -498,9 +779,9 @@ CREATE TABLE sessions (
 );
 ```
 
-## 9. API Endpoints
+## 12. API Endpoints
 
-### 9.1 Open Source Management API
+### 12.1 Open Source Management API
 
 ```yaml
 # Key Management
@@ -534,7 +815,7 @@ GET    /api/v1/health                  # Health check
 GET    /api/v1/metrics/prometheus      # Prometheus format
 ```
 
-### 9.2 LLM Proxy Endpoints (OpenAI & OpenRouter Compatible)
+### 12.2 LLM Proxy Endpoints (OpenAI & OpenRouter Compatible)
 
 ```yaml
 # Chat Completions (OpenAI & OpenRouter compatible)
@@ -562,9 +843,9 @@ GET    /api/v1/generation/{id}         # Get generation stats and token counts
 GET    /api/v1/auth/key                # Check rate limits and credits
 ```
 
-## 10. Configuration
+## 13. Configuration
 
-### 10.1 Open Source Configuration
+### 13.1 Open Source Configuration
 
 ```yaml
 # config.yaml (OSS)
@@ -608,7 +889,7 @@ security:
   tls_key: /path/to/key.pem
 ```
 
-### 10.2 Enterprise Configuration (Additional)
+### 13.2 Enterprise Configuration (Additional)
 
 ```yaml
 # enterprise.yaml (Additional config for enterprise build)
@@ -648,9 +929,9 @@ ui:
   base_path: /admin
 ```
 
-## 11. Deployment
+## 14. Deployment
 
-### 11.1 Docker Images
+### 14.1 Docker Images
 
 ```dockerfile
 # Open Source Image
@@ -678,7 +959,7 @@ COPY --from=builder /app/web/build /app/web/build
 ENTRYPOINT ["starport-enterprise"]
 ```
 
-### 11.2 Deployment Options
+### 14.2 Deployment Options
 
 #### Single Binary Deployment
 ```bash
@@ -765,9 +1046,9 @@ spec:
               key: database-url
 ```
 
-## 12. Security Model
+## 15. Security Model
 
-### 12.1 Open Source Security
+### 15.1 Open Source Security
 - API key authentication
 - TLS enforcement
 - Request signing
@@ -775,7 +1056,7 @@ spec:
 - Rate limiting protection
 - Encrypted credential storage
 
-### 12.2 Enterprise Security (Additional)
+### 15.2 Enterprise Security (Additional)
 - SSO/SAML authentication
 - Multi-factor authentication
 - IP allowlisting
@@ -783,9 +1064,9 @@ spec:
 - Compliance certifications
 - Advanced threat detection
 
-## 13. Storage Architecture
+## 16. Storage Architecture
 
-### 13.1 OSS Storage Options
+### 16.1 OSS Storage Options
 
 Starport uses a unified KV store for all data (API keys, presets, BYOK credentials, filters, and rate limits):
 
@@ -810,7 +1091,7 @@ Starport uses a unified KV store for all data (API keys, presets, BYOK credentia
   - 50K+ RPS with cluster
 - **Requirements**: External Valkey instance
 
-### 13.2 Enterprise Storage Requirements
+### 14.2 Enterprise Storage Requirements
 
 Enterprise deployments require BOTH:
 
@@ -879,16 +1160,16 @@ func (s *Storage) GetAPIKey(ctx context.Context, hash string) (*APIKey, error) {
 }
 ```
 
-## 14. Performance Architecture
+## 17. Performance Architecture
 
-### 14.1 Optimization Strategies
+### 17.1 Optimization Strategies
 - **Connection pooling** for upstream providers
 - **Object pools** for request/response structures
 - **Efficient JSON parsing** with streaming where possible
 - **Goroutine pooling** to reduce allocation overhead
 - **Caching** at multiple levels (local and distributed)
 
-### 14.2 Caching Architecture
+### 17.2 Caching Architecture
 ```go
 // Unified caching using the same KV store
 type Cache struct {
@@ -922,16 +1203,16 @@ func (c *Cache) CheckRateLimit(ctx context.Context, key string) (bool, error) {
 }
 ```
 
-### 14.3 Performance Targets
+### 17.3 Performance Targets
 - **Latency**: <1ms P99 overhead at 10K QPS
 - **Throughput**: 50,000+ RPS per instance
 - **Concurrent connections**: 100,000+ per instance
 - **Memory usage**: <500MB at full load
 - **CPU efficiency**: <1 core per 10K RPS
 
-## 15. Error Handling Strategy
+## 18. Error Handling Strategy
 
-### 15.1 Error Categories
+### 18.1 Error Categories
 
 ```go
 // Standardized error codes across the system
@@ -961,7 +1242,7 @@ type ErrorResponse struct {
 }
 ```
 
-### 15.2 Retry Strategy
+### 18.2 Retry Strategy
 
 ```yaml
 retry_policy:
@@ -978,22 +1259,22 @@ retry_policy:
   backoff_multiplier: 2
 ```
 
-### 15.3 Error Handling Flow
+### 18.3 Error Handling Flow
 
 1. **Provider Errors**: Automatically retry with fallback
 2. **Rate Limits**: Return immediately with retry-after header
 3. **Storage Errors**: Degrade gracefully (e.g., skip logging)
 4. **Auth Errors**: Return immediately, no retry
 
-## 16. API Versioning Strategy
+## 19. API Versioning Strategy
 
-### 16.1 Versioning Approach
+### 19.1 Versioning Approach
 
 - **Path-based versioning**: `/v1/`, `/v2/` for major versions
 - **Header-based feature flags**: `X-Starport-Features: streaming-v2`
 - **Backward compatibility**: Minimum 6 months deprecation notice
 
-### 16.2 Version Compatibility
+### 19.2 Version Compatibility
 
 ```go
 // Version negotiation
@@ -1013,15 +1294,15 @@ var SupportedVersions = []APIVersion{
 }
 ```
 
-### 16.3 Migration Support
+### 19.3 Migration Support
 
 - Dual-write period for data format changes
 - Response transformation for older clients
 - Clear migration guides with examples
 
-## 17. Operational Considerations
+## 20. Operational Considerations
 
-### 17.1 Graceful Shutdown
+### 20.1 Graceful Shutdown
 
 ```go
 // Shutdown sequence
@@ -1034,14 +1315,14 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 ```
 
-### 17.2 Configuration Management
+### 20.2 Configuration Management
 
 - **Hot reload** for rate limits and routing rules
 - **No restart required** for adding provider keys
 - **Validation** before applying changes
 - **Rollback** on configuration errors
 
-### 17.3 Health Checks
+### 20.3 Health Checks
 
 ```yaml
 # Health check endpoints
@@ -1062,7 +1343,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 ```
 
-### 17.4 Operational Metrics
+### 20.4 Operational Metrics
 
 - Request rate by endpoint
 - Latency percentiles (P50, P95, P99)
@@ -1070,9 +1351,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 - Storage capacity and performance
 - Provider health scores
 
-## 18. Testing Strategy
+## 21. Testing Strategy
 
-### 18.1 Testing Levels
+### 21.1 Testing Levels
 
 1. **Unit Tests**
    - Target: 90% coverage for business logic
@@ -1094,7 +1375,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
    - Storage failures
    - Provider timeouts
 
-### 18.2 Test Data Management
+### 21.2 Test Data Management
 
 ```go
 // Test fixtures for consistent testing
@@ -1113,9 +1394,9 @@ type MockProvider struct {
 }
 ```
 
-## 19. Migration Strategies
+## 22. Migration Strategies
 
-### 19.1 Badger to Valkey Migration
+### 22.1 Badger to Valkey Migration
 
 ```bash
 # Zero-downtime migration process
@@ -1127,7 +1408,7 @@ type MockProvider struct {
 6. Decommission Badger
 ```
 
-### 19.2 Data Export/Import
+### 22.2 Data Export/Import
 
 ```go
 // Backup format for portability
@@ -1143,9 +1424,9 @@ type BackupFormat struct {
 }
 ```
 
-## 20. Plugin Architecture
+## 23. Plugin Architecture
 
-### 20.1 Plugin System Design
+### 23.1 Plugin System Design
 ```go
 // Focused plugin interface for specific use cases
 type Plugin interface {
@@ -1168,21 +1449,21 @@ type TransformPlugin interface {
 }
 ```
 
-### 20.2 Plugin Loading
+### 23.2 Plugin Loading
 - **Built-in plugins only** (no dynamic loading in OSS)
 - **Enterprise plugins** via build tags
 - **Configuration-based activation**
 - **No external plugin loading** (security)
 
-### 20.3 Core Plugin Points
+### 23.3 Core Plugin Points
 - **Authentication**: Custom auth schemes
 - **Request/Response Transform**: Modify payloads
 - **Logging**: Custom log destinations
 - **Metrics**: Additional metric collectors
 
-## 21. API Documentation Strategy
+## 24. API Documentation Strategy
 
-### 21.1 OpenAPI Specification
+### 24.1 OpenAPI Specification
 
 ```yaml
 # openapi/starport.yaml
@@ -1227,7 +1508,7 @@ tags:
     description: Health and status endpoints
 ```
 
-### 21.2 API Documentation Generation
+### 24.2 API Documentation Generation
 
 ```go
 // internal/api/docs.go
@@ -1267,7 +1548,7 @@ func ServeAPIDocs(r chi.Router) {
 }
 ```
 
-### 21.3 Documentation Endpoints
+### 24.3 Documentation Endpoints
 
 ```yaml
 # API Documentation Endpoints
@@ -1283,7 +1564,7 @@ GET /postman.json             # Postman collection
 GET /insomnia.json            # Insomnia collection
 ```
 
-### 21.4 Developer Documentation Structure
+### 24.4 Developer Documentation Structure
 
 ```
 docs/
@@ -1319,7 +1600,7 @@ docs/
     └── java/                # Java SDK docs
 ```
 
-### 21.5 SDK Generation
+### 24.5 SDK Generation
 
 ```yaml
 # .github/workflows/sdk-generation.yml
@@ -1357,7 +1638,7 @@ jobs:
           output-dir: sdks/go
 ```
 
-### 21.6 Documentation Features
+### 24.6 Documentation Features
 
 1. **Interactive API Explorer**
    - Try API calls directly from documentation
@@ -1379,9 +1660,9 @@ jobs:
    - AI-powered search suggestions
    - Quick navigation shortcuts
 
-## 22. OpenRouter Compatibility
+## 25. OpenRouter Compatibility
 
-### 22.1 API Compatibility
+### 25.1 API Compatibility
 
 Starport provides full OpenRouter API compatibility, making it a drop-in replacement:
 
@@ -1417,7 +1698,7 @@ type Provider struct {
 }
 ```
 
-### 22.2 Custom Headers Support
+### 25.2 Custom Headers Support
 
 ```go
 // OpenRouter-compatible headers
@@ -1437,7 +1718,7 @@ func (h *Handler) extractHeaders(r *http.Request) RequestContext {
 }
 ```
 
-### 22.3 Provider Routing Implementation
+### 25.3 Provider Routing Implementation
 
 ```yaml
 # Configuration for OpenRouter-style provider routing
@@ -1474,7 +1755,7 @@ routing:
     backoff_ms: 1000
 ```
 
-### 22.4 Migration Guide from OpenRouter
+### 25.4 Migration Guide from OpenRouter
 
 ```bash
 # Before (OpenRouter)
@@ -1506,7 +1787,7 @@ curl https://your-starport.com/api/v1/chat/completions \
   }'
 ```
 
-### 22.5 SDK Compatibility
+### 25.5 SDK Compatibility
 
 ```javascript
 // OpenRouter SDK usage (unchanged)
@@ -1532,7 +1813,7 @@ const completion = await openai.chat.completions.create({
 });
 ```
 
-### 22.6 Feature Parity Checklist
+### 25.6 Feature Parity Checklist
 
 - [x] `/api/v1/*` endpoint paths
 - [x] Bearer token authentication
@@ -1549,7 +1830,7 @@ const completion = await openai.chat.completions.create({
 - [x] Streaming support for all models
 - [x] Normalized response format
 
-### 22.7 Enhanced Features Beyond OpenRouter
+### 25.7 Enhanced Features Beyond OpenRouter
 
 While maintaining full compatibility, Starport adds:
 
@@ -1561,9 +1842,9 @@ While maintaining full compatibility, Starport adds:
 6. **Metrics and observability** - Prometheus/Grafana integration
 7. **Plugin architecture** - Extend functionality
 
-## 23. Developer Experience
+## 26. Developer Experience
 
-### 23.1 Getting Started Experience
+### 26.1 Getting Started Experience
 
 ```bash
 # One-line install
@@ -1583,7 +1864,7 @@ starport serve
 # View docs at http://localhost:8080/docs
 ```
 
-### 23.2 Developer Tools
+### 26.2 Developer Tools
 
 ```yaml
 # starport.yaml - Configuration with IDE support
@@ -1602,7 +1883,7 @@ providers:
 # Real-time validation and error highlighting
 ```
 
-### 23.3 CLI Developer Commands
+### 26.3 CLI Developer Commands
 
 ```bash
 # Development helpers
@@ -1619,7 +1900,7 @@ starport trace <api-key>      # Trace all requests for key
 starport explain error <code> # Detailed error explanation
 ```
 
-### 23.4 Development Plugins
+### 26.4 Development Plugins
 
 ```json
 // .vscode/extensions.json
@@ -1638,7 +1919,7 @@ starport explain error <code> # Detailed error explanation
 // - Performance profiling
 ```
 
-### 23.5 Documentation Quality Standards
+### 26.5 Documentation Quality Standards
 
 1. **Every API endpoint** must have:
    - Clear description
