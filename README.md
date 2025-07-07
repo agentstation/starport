@@ -1,6 +1,9 @@
 # Starport
 
-> **🚧 Status: Pre-Implementation** - This repository contains comprehensive documentation and is ready for development to begin. See [TASKS.md](TASKS.md) to start contributing.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue.svg)](https://golang.org/dl/)
+
+> **🚧 Status: Implementation Started** - Repository initialized with Go module structure. See [TASKS.md](TASKS.md) to start contributing.
 
 High-performance LLM gateway with unified access to multiple model providers.
 
