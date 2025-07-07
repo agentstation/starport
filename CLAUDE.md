@@ -2,22 +2,45 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚀 Quick Start Agent Workflow
+
+When you receive a task (e.g., P1-S1-1.2), follow these steps:
+
+1. **Update COORDINATION.md immediately**:
+   ```markdown
+   | Backend | P1-S1-1.2 Project Structure | task/P1-S1-1.2-project-structure | 🟢 In Progress | 4:00 PM | - |
+   ```
+
+2. **Verify prerequisites are complete**:
+   - Check COORDINATION.md shows dependency tasks as "✅ Complete"
+   - Run any verification commands provided in your context
+   - If prerequisites aren't met, update COORDINATION.md with blocker and stop
+
+3. **Implement the task**:
+   - Requirements are in TASKS.md (search for your task ID)
+   - Technical decisions follow ARCHITECTURE.md
+   - Create branch exactly as specified in your context
+
+4. **When PR is ready**:
+   - Update COORDINATION.md: move to "Completed Today" with PR number
+   - Submit PR with format: `[P1-S1-1.2] Brief description`
+
+**Remember**: COORDINATION.md is the ONLY place to track status. Never update TASKS.md.
+
 ## Project Context
 
 **Project**: Starport - High-Performance LLM Gateway
-**Phase**: Implementation Ready
-**Status**: Architecture complete, ready for development
+**Phase**: Implementation Phase 1
+**Progress**: 1 of 16 tasks complete (P1-S1-1.1 ✅)
 
-## Document Hierarchy
+## Document Reference
 
-```
-ARCHITECTURE.md → PLAN.md → TASKS.md
-     ↓              ↓           ↓
-  Design        Schedule    Executable
-  Decisions     & Phases    Work Items
-```
-
-## Claude Code Workflow
+| Document | Purpose | When to Use |
+|----------|---------|-------------|
+| COORDINATION.md | Live task status (single source of truth) | Update when starting/completing work |
+| TASKS.md | Task definitions and requirements | Read to understand what to implement |
+| ARCHITECTURE.md | Technical specifications | Reference for design decisions |
+| STATUS.md | Quick status overview | Check what tasks are ready to start |
 
 ### 1. Task Selection
 When starting work:
@@ -115,73 +138,31 @@ Every PR must include:
 3. Documentation updates
 4. Passing CI checks
 
-### 8. Code Review Process
+### 8. Pull Request Guidelines
 
-1. Self-review checklist:
-   - [ ] Follows architecture in ARCHITECTURE.md
-   - [ ] Meets acceptance criteria in TASKS.md
-   - [ ] Has appropriate tests
-   - [ ] Documentation updated
-   - [ ] No security vulnerabilities
+**PR Title Format**: `[P1-S1-1.2] Brief description of changes`
 
-2. Tag reviewers based on area:
-   - Backend: `@backend-team`
-   - Frontend: `@frontend-team`
-   - DevOps: `@devops-team`
+**PR Description**: Use the template in `.github/pull_request_template.md`
 
-## Parallel Development Configuration
+Key points:
+- List all acceptance criteria as checkboxes
+- Verify all tests pass before submitting
+- Update COORDINATION.md with PR number
+- Note any blockers or incomplete items
 
-### Claude Code Config Templates
+## Working with Other Agents
 
-Create these config files for different team roles:
+### Avoiding Conflicts
+When multiple agents work in parallel:
+1. **Stay in your lane**: Only modify files related to your task
+2. **Pull before push**: Always `git pull origin main` before creating your branch
+3. **Communicate blockers**: Update COORDINATION.md immediately if blocked
 
-#### `.claude/backend.yaml`
-```yaml
-name: backend-developer
-focus_areas:
-  - internal/
-  - pkg/
-  - cmd/
-task_patterns:
-  - storage
-  - api
-  - connector
-  - routing
-branch_prefix: task/
-auto_test: true
-test_command: go test ./...
-```
-
-#### `.claude/frontend.yaml`
-```yaml
-name: frontend-developer
-focus_areas:
-  - web/
-  - internal/api/
-task_patterns:
-  - ui
-  - react
-  - frontend
-branch_prefix: task/
-auto_test: true
-test_command: cd web && npm test
-```
-
-#### `.claude/devops.yaml`
-```yaml
-name: devops-engineer
-focus_areas:
-  - .github/
-  - docker/
-  - helm/
-  - scripts/
-task_patterns:
-  - ci
-  - deployment
-  - docker
-  - kubernetes
-branch_prefix: task/
-```
+### Handoff Protocol
+When your task blocks others:
+1. Ensure your PR description clearly states what was implemented
+2. Update COORDINATION.md with accurate status
+3. List any known issues or incomplete items in the PR
 
 ## Key Architectural Decisions
 
@@ -276,77 +257,19 @@ make lint # Lint code
 - [ ] Performance impact assessed
 ```
 
-## Troubleshooting Parallel Development
+## Troubleshooting
 
-### Merge Conflicts
-1. Always pull latest main before starting work
-2. Keep PRs small and focused
-3. Communicate in #dev-coordination channel
+### Common Issues
+1. **Prerequisites not met**: Check COORDINATION.md, update blockers section
+2. **Merge conflicts**: Pull latest main, preserve both changes
+3. **Tests failing**: Check if related to your changes or pre-existing
+4. **Can't find files**: May need to create them per ARCHITECTURE.md
 
-### Dependency Conflicts
-1. Check TASKS.md dependency graph
-2. Coordinate with other developers
-3. Use feature flags for incomplete dependencies
+### Getting Help
+- Check existing PRs for similar implementations
+- Reference ARCHITECTURE.md for design decisions
+- Update COORDINATION.md with specific blockers
 
-### Testing Failures
-1. Run tests locally before pushing
-2. Check CI logs for details
-3. Ensure test data is isolated
-
-## For Human Operators: Spawning Agents
-
-To spawn Claude Code agents:
-```bash
-./spawn-agent.sh <TASK-ID>
-```
-Example: `./spawn-agent.sh P1-S1-1.1`
-
-See AGENT-STARTUP-SEQUENCE.md for task dependencies and order.
-
-## For Claude Code Agents: How to Use Documentation
-
-### Initial Context Loading
-When starting work, agents should:
-1. Read CLAUDE.md (this file) for workflow
-2. Check ARCHITECTURE.md for technical decisions
-3. Review TASKS.md for your assigned task
-4. Check COORDINATION.md for current status
-
-### Task Execution Flow
-```
-1. IMMEDIATELY update COORDINATION.md - mark task 'In Progress'
-   ↓
-2. Find task in TASKS.md
-   ↓
-3. Read technical requirements
-   ↓
-4. Check ARCHITECTURE.md for relevant sections
-   ↓
-5. Implement according to acceptance criteria
-   ↓
-6. Update COORDINATION.md - mark 'PR Submitted' with PR #
-   ↓
-7. Create and submit PR on GitHub
-```
-
-### Key Files for Agents
-
-| File | Purpose | When to Read |
-|------|---------|--------------|
-| CLAUDE.md | Workflow and patterns | First, always |
-| TASKS.md | Task details and requirements | Before starting work |
-| ARCHITECTURE.md | Technical specifications | When implementing |
-| COORDINATION.md | Current status and blockers | Before starting, hourly |
-| PLAN.md | Overall timeline | For context only |
-| AGENT-STARTUP-SEQUENCE.md | Agent coordination | For operators, not agents |
-
-### Context Awareness
-Agents should be aware of:
-- Their specific task ID and requirements
-- Completed dependencies
-- Other agents working in parallel
-- Which directories they should work in
-- Expected duration of their task
 
 ## Questions?
 - Architecture questions → Check ARCHITECTURE.md

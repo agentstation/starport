@@ -31,13 +31,15 @@ generate_context() {
     local workspace=$3
     local branch=$4
     local prerequisite=$5
-    local files_to_read=$6
-    local requirements=$7
+    local prereq_verify=$6
+    local files_to_read=$7
+    local requirements=$8
     
     echo "You are working on task $task_id ($task_name) for the Starport project.
 
 Project: Starport - A high-performance LLM gateway
 ${prerequisite:+Prerequisite: $prerequisite
+}${prereq_verify:+Verification command: $prereq_verify
 }Workspace: $workspace
 
 $WORKFLOW_TEMPLATE
@@ -98,6 +100,7 @@ case $TASK_ID in
         TASK_NAME="Repository Initialization"
         BRANCH="task/P1-S1-1.1-repo-init"
         PREREQ=""
+        PREREQ_VERIFY=""
         FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
 2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.1 for detailed requirements
 3. \$REPO_PATH/ARCHITECTURE.md - Review sections 1-3 for project overview
@@ -113,6 +116,7 @@ case $TASK_ID in
         TASK_NAME="Project Structure"
         BRANCH="task/P1-S1-1.2-project-structure"
         PREREQ="Task P1-S1-1.1 must be complete (check for go.mod)"
+        PREREQ_VERIFY="test -f go.mod || echo 'ERROR: go.mod not found - P1-S1-1.1 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
 2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.2 for requirements
 3. \$REPO_PATH/ARCHITECTURE.md - Review section 4 for directory structure
@@ -128,6 +132,7 @@ case $TASK_ID in
         TASK_NAME="Development Environment"
         BRANCH="task/P1-S1-1.3-dev-environment"
         PREREQ="Task P1-S1-1.2 must be complete (check for cmd/starport/main.go)"
+        PREREQ_VERIFY="test -f cmd/starport/main.go || echo 'ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.3
 2. \$REPO_PATH/ARCHITECTURE.md - Review DevOps sections
 3. \$REPO_PATH/COORDINATION.md - Update your task status"
@@ -142,6 +147,7 @@ case $TASK_ID in
         TASK_NAME="HTTP Server Foundation"
         BRANCH="task/P1-S1-1.4-http-server"
         PREREQ="Task P1-S1-1.2 must be complete"
+        PREREQ_VERIFY="test -f cmd/starport/main.go || echo 'ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.4
 2. \$REPO_PATH/ARCHITECTURE.md - Review HTTP server design
 3. \$REPO_PATH/COORDINATION.md - Update your task status"
@@ -156,6 +162,7 @@ case $TASK_ID in
         TASK_NAME="Configuration System"
         BRANCH="task/P1-S1-1.5-config-system"
         PREREQ="Task P1-S1-1.4 must be complete"
+        PREREQ_VERIFY="test -f internal/server/server.go || echo 'ERROR: internal/server/server.go not found - P1-S1-1.4 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.5
 2. \$REPO_PATH/ARCHITECTURE.md - Review configuration design
 3. \$REPO_PATH/COORDINATION.md - Update your task status"
@@ -171,6 +178,7 @@ case $TASK_ID in
         TASK_NAME="Storage Interface Definition"
         BRANCH="task/P1-S2-2.1-storage-interface"
         PREREQ="Task P1-S1-1.5 must be complete (configuration system)"
+        PREREQ_VERIFY="test -f internal/config/config.go || echo 'ERROR: internal/config/config.go not found - P1-S1-1.5 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.1
 2. \$REPO_PATH/ARCHITECTURE.md - Review storage architecture sections
 3. \$REPO_PATH/COORDINATION.md - Update your task status"
@@ -420,7 +428,7 @@ fi
 REPO_PATH=$(pwd)
 
 # Generate context using the template function
-AGENT_CONTEXT=$(generate_context "$TASK_ID" "$TASK_NAME" "$REPO_PATH" "$BRANCH" "$PREREQ" "$FILES_TO_READ" "$REQUIREMENTS")
+AGENT_CONTEXT=$(generate_context "$TASK_ID" "$TASK_NAME" "$REPO_PATH" "$BRANCH" "$PREREQ" "$PREREQ_VERIFY" "$FILES_TO_READ" "$REQUIREMENTS")
 
 # Save context to file for Claude Code
 CONTEXT_FILE="$WORKSPACE_PATH/context-$TASK_ID.txt"

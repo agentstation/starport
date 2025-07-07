@@ -1,10 +1,13 @@
 # Operator Execution Guide
 
-This guide shows exactly which agents to spawn and when. No need to check other files.
+**Quick Start**: Run `./spawn-agent.sh P1-S1-1.2` to start the next available task.
 
-## Important: Automatic Workspace Setup
+## How It Works
 
-The `spawn-agent.sh` script **automatically creates separate clones** for each agent to avoid Git conflicts. You don't need to manage this manually!
+1. **Check STATUS.md** to see which tasks are ready
+2. **Run spawn-agent.sh** with the task ID
+3. **Script handles everything**: workspace setup, context generation, prerequisite checking
+4. **Agents update COORDINATION.md** automatically
 
 ## Phase 1: Foundation Setup
 
