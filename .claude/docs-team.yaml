@@ -1,0 +1,73 @@
+# Claude Code Configuration - Documentation Team
+name: technical-writer
+role: Technical Writer / Developer Advocate
+
+# Directories this instance should focus on
+focus_areas:
+  - docs/
+  - openapi/
+  - examples/
+  - sdks/
+  - README.md
+  - "*.md"
+
+# Task patterns to look for in TASKS.md
+task_patterns:
+  - "P1-S1-1.6" # OpenAPI foundation
+  - "P1-S1-1.7" # Documentation infrastructure
+  - "P1-S14-*" # Documentation tasks
+  - "docs"
+  - "openapi"
+  - "sdk"
+  - "guide"
+  - "tutorial"
+  - "example"
+
+# Development settings
+development:
+  branch_prefix: "task/"
+  auto_test: false
+  lint_command: "markdownlint docs/**/*.md"
+
+# PR settings
+pull_request:
+  template: |
+    ## Summary
+    [Brief description of changes]
+
+    ## Task
+    - Task ID: [TASK-ID]
+    - Link: [Link to task in TASKS.md]
+
+    ## Changes
+    - [List documentation changes]
+
+    ## Documentation Impact
+    - [ ] API reference updated
+    - [ ] Examples tested
+    - [ ] Links verified
+    - [ ] Screenshots current
+
+    ## Checklist
+    - [ ] Spell check passed
+    - [ ] Code examples run
+    - [ ] Formatting consistent
+    - [ ] TOC updated
+
+# Context for Claude
+context: |
+  You are working on documentation for Starport. Focus on:
+  - Clear, concise technical writing
+  - Complete OpenAPI 3.1 specification
+  - Working code examples
+  - Migration guides
+  - SDK documentation
+
+  Key principles:
+  - Documentation as code
+  - Examples that actually run
+  - OpenRouter migration guide
+  - API-first documentation
+  - Developer experience focus
+
+  Check TASKS.md for available documentation tasks marked as Ready.

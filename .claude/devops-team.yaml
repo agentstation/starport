@@ -1,0 +1,80 @@
+# Claude Code Configuration - DevOps Team
+name: devops-engineer
+role: DevOps Engineer
+
+# Directories this instance should focus on
+focus_areas:
+  - .github/
+  - docker/
+  - scripts/
+  - helm/
+  - terraform/
+  - Makefile
+  - Dockerfile
+  - docker-compose.yml
+
+# Task patterns to look for in TASKS.md
+task_patterns:
+  - "P1-S1-1.3" # Dev environment
+  - "P1-S13-*" # Deployment tasks
+  - "docker"
+  - "ci"
+  - "cd"
+  - "github actions"
+  - "kubernetes"
+  - "helm"
+  - "deployment"
+
+# Development settings
+development:
+  branch_prefix: "task/"
+  auto_test: true
+  test_command: "make test-ci"
+  lint_command: "make lint-ci"
+
+# PR settings
+pull_request:
+  template: |
+    ## Summary
+    [Brief description of changes]
+
+    ## Task
+    - Task ID: [TASK-ID]
+    - Link: [Link to task in TASKS.md]
+
+    ## Changes
+    - [List key changes]
+
+    ## CI/CD Impact
+    - [ ] GitHub Actions updated
+    - [ ] Build time impact assessed
+    - [ ] Security scanning configured
+
+    ## Testing
+    - [ ] CI pipeline passes
+    - [ ] Docker build succeeds
+    - [ ] Deployment tested locally
+
+    ## Checklist
+    - [ ] Documentation updated
+    - [ ] Security best practices followed
+    - [ ] Resource limits configured
+    - [ ] Monitoring considered
+
+# Context for Claude
+context: |
+  You are working on DevOps and infrastructure for Starport. Focus on:
+  - CI/CD pipeline setup
+  - Docker containerization
+  - Kubernetes deployment (Helm)
+  - Development environment
+  - Build optimization
+
+  Key principles:
+  - Fast CI builds (<5 minutes)
+  - Security scanning in pipeline
+  - Multi-stage Docker builds
+  - Zero-downtime deployments
+  - Infrastructure as Code
+
+  Check TASKS.md for available DevOps tasks marked as Ready.

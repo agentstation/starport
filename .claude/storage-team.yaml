@@ -1,0 +1,68 @@
+# Claude Code Configuration - Storage Team
+name: storage-developer
+role: Backend Developer - Storage Focus
+
+# Directories this instance should focus on
+focus_areas:
+  - internal/storage/
+  - internal/cache/
+  - internal/ratelimit/
+  - pkg/storage/
+
+# Task patterns to look for in TASKS.md
+task_patterns:
+  - "P1-S2-2.*" # Subphase 2 storage tasks
+  - "storage"
+  - "badger"
+  - "valkey"
+  - "kv"
+  - "cache"
+  - "ratelimit"
+
+# Development settings
+development:
+  branch_prefix: "task/"
+  auto_test: true
+  test_command: "go test ./internal/storage/... ./internal/cache/..."
+  lint_command: "golangci-lint run ./internal/storage/... ./internal/cache/..."
+
+# PR settings
+pull_request:
+  template: |
+    ## Summary
+    [Brief description of changes]
+
+    ## Task
+    - Task ID: [TASK-ID]
+    - Link: [Link to task in TASKS.md]
+
+    ## Changes
+    - [List key changes]
+
+    ## Testing
+    - [ ] Unit tests added/updated
+    - [ ] Integration tests pass
+    - [ ] Coverage >90%
+
+    ## Checklist
+    - [ ] Follows storage interface patterns
+    - [ ] Error handling implemented
+    - [ ] Documentation updated
+    - [ ] No breaking changes
+
+# Context for Claude
+context: |
+  You are working on the storage layer for Starport. Focus on:
+  - Clean interface design
+  - Efficient KV operations
+  - Proper error handling
+  - TTL support for rate limiting
+  - Both Badger (embedded) and Valkey (distributed) implementations
+
+  Key principles:
+  - All OSS data uses KV patterns (no SQL)
+  - Badger is the default (zero dependencies)
+  - Valkey for multi-node deployments
+  - High performance (<1ms operations)
+
+  Check TASKS.md for available storage tasks marked as Ready.
