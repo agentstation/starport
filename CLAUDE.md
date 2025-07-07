@@ -300,15 +300,19 @@ When starting work, agents should:
 
 ### Task Execution Flow
 ```
-1. Find task in TASKS.md
+1. IMMEDIATELY update COORDINATION.md - mark task 'In Progress'
    ↓
-2. Read technical requirements
+2. Find task in TASKS.md
    ↓
-3. Check ARCHITECTURE.md for relevant sections
+3. Read technical requirements
    ↓
-4. Implement according to acceptance criteria
+4. Check ARCHITECTURE.md for relevant sections
    ↓
-5. Update COORDINATION.md with progress
+5. Implement according to acceptance criteria
+   ↓
+6. Update COORDINATION.md - mark 'PR Submitted' with PR #
+   ↓
+7. Create and submit PR on GitHub
 ```
 
 ### Key Files for Agents

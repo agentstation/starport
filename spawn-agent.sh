@@ -1,5 +1,5 @@
 #!/bin/bash
-# Agent spawning script for Starport - handles workspace setup automatically
+# Agent spawning script for Starport - handles workspace setup and starts Claude Code
 
 # Colors
 GREEN='\033[0;32m'
@@ -19,6 +19,7 @@ if [ -z "$1" ]; then
     echo "This script will:"
     echo "  1. Create a separate clone for the agent (avoids Git conflicts)"
     echo "  2. Provide the complete context for the task"
+    echo "  3. Start Claude Code in the workspace with --yolo mode"
     echo ""
     echo "Available first tasks:"
     echo "  P1-S1-1.1 - Repository Initialization (start here)"
@@ -157,10 +158,17 @@ Project: Starport - A high-performance LLM gateway (see README.md)
 Your task: Initialize the repository with proper Go module structure
 Workspace: $REPO_PATH
 
+IMPORTANT WORKFLOW:
+1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+2. Complete the task requirements
+3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
+4. Create and submit the PR
+
 First, read these files in order:
 1. $REPO_PATH/CLAUDE.md - Understand the workflow
 2. $REPO_PATH/TASKS.md - Find task P1-S1-1.1 for detailed requirements
 3. $REPO_PATH/ARCHITECTURE.md - Review sections 1-3 for project overview
+4. $REPO_PATH/COORDINATION.md - Update your task status
 
 Your task requirements:
 - Create go.mod with module path: github.com/agentstation/starport
@@ -170,7 +178,7 @@ Your task requirements:
 - Create branch: $BRANCH
 - Follow PR format in TASKS.md
 
-This is the first task with no dependencies. After completing, update COORDINATION.md."
+This is the first task with no dependencies."
         ;;
         
     "P1-S1-1.2")
@@ -180,10 +188,17 @@ Project: Starport - A high-performance LLM gateway
 Prerequisite: Task P1-S1-1.1 must be complete (check for go.mod)
 Workspace: $REPO_PATH
 
+IMPORTANT WORKFLOW:
+1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+2. Complete the task requirements
+3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
+4. Create and submit the PR
+
 First, read these files:
 1. $REPO_PATH/CLAUDE.md - Understand the workflow
 2. $REPO_PATH/TASKS.md - Find task P1-S1-1.2 for requirements
 3. $REPO_PATH/ARCHITECTURE.md - Review section 4 for directory structure
+4. $REPO_PATH/COORDINATION.md - Update your task status
 
 Your task requirements:
 - Create directory structure per ARCHITECTURE.md
@@ -201,9 +216,16 @@ Other agents may be working on P1-S1-1.6 and P1-S1-1.7 in parallel."
 Prerequisite: Task P1-S1-1.2 must be complete (check for cmd/starport/main.go)
 Workspace: $REPO_PATH
 
+IMPORTANT WORKFLOW:
+1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+2. Complete the task requirements
+3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
+4. Create and submit the PR
+
 Read these files:
 1. $REPO_PATH/TASKS.md - Find task P1-S1-1.3
 2. $REPO_PATH/ARCHITECTURE.md - Review DevOps sections
+3. $REPO_PATH/COORDINATION.md - Update your task status
 
 Your task:
 - Create docker-compose.yml for local Valkey
@@ -219,9 +241,16 @@ Your task:
 Prerequisite: Task P1-S1-1.2 must be complete
 Workspace: $REPO_PATH
 
+IMPORTANT WORKFLOW:
+1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+2. Complete the task requirements
+3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
+4. Create and submit the PR
+
 Read:
 1. $REPO_PATH/TASKS.md - Find task P1-S1-1.4
 2. $REPO_PATH/ARCHITECTURE.md - Review HTTP server design
+3. $REPO_PATH/COORDINATION.md - Update your task status
 
 Your task:
 - Implement HTTP server with chi router
@@ -238,9 +267,16 @@ Prerequisite: Task P1-S1-1.1 must be complete
 Note: You can work in parallel with tasks P1-S1-1.2 and P1-S1-1.7
 Workspace: $REPO_PATH
 
+IMPORTANT WORKFLOW:
+1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+2. Complete the task requirements
+3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
+4. Create and submit the PR
+
 Read:
 1. $REPO_PATH/TASKS.md - Find task P1-S1-1.6
 2. $REPO_PATH/ARCHITECTURE.md - Review API design sections
+3. $REPO_PATH/COORDINATION.md - Update your task status
 
 Your task:
 - Create docs/openapi/ directory
@@ -257,9 +293,16 @@ Prerequisite: Task P1-S1-1.1 must be complete
 Note: You can work in parallel with tasks P1-S1-1.2 and P1-S1-1.6
 Workspace: $REPO_PATH
 
+IMPORTANT WORKFLOW:
+1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+2. Complete the task requirements
+3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
+4. Create and submit the PR
+
 Read:
 1. $REPO_PATH/TASKS.md - Find task P1-S1-1.7
 2. Review existing docs structure
+3. $REPO_PATH/COORDINATION.md - Update your task status
 
 Your task:
 - Set up documentation system (MkDocs or similar)
@@ -269,22 +312,41 @@ Your task:
         ;;
 esac
 
+# Save context to file for Claude Code
+CONTEXT_FILE="$WORKSPACE_PATH/context-$TASK_ID.txt"
+echo "$AGENT_CONTEXT" > "$CONTEXT_FILE"
+
 echo -e "${GREEN}=== Workspace Ready ===${NC}"
 echo ""
 echo -e "Workspace location: ${BLUE}$WORKSPACE_PATH${NC}"
-echo -e "Current directory: ${BLUE}$(pwd)${NC}"
+echo -e "Context saved to: ${BLUE}$CONTEXT_FILE${NC}"
 echo ""
-echo -e "${GREEN}=== Claude Code Agent Context ===${NC}"
-echo ""
-echo -e "${BLUE}Copy this entire context when starting Claude Code:${NC}"
-echo ""
-echo "----------------------------------------"
-echo "$AGENT_CONTEXT"
-echo "----------------------------------------"
-echo ""
-echo -e "${GREEN}Alternative: Save context and start from workspace:${NC}"
-echo "cd $WORKSPACE_PATH"
-echo "echo '$AGENT_CONTEXT' > context-$TASK_ID.txt"
-echo "Then tell Claude: 'Read context-$TASK_ID.txt to understand your task'"
-echo ""
-echo -e "${YELLOW}Remember: This agent should work in: $WORKSPACE_PATH${NC}"
+
+# Check if claude command exists
+if command -v claude &> /dev/null; then
+    echo -e "${GREEN}=== Starting Claude Code ===${NC}"
+    echo ""
+    echo -e "${YELLOW}Starting Claude Code with --yolo mode in workspace...${NC}"
+    echo -e "${YELLOW}Context will be provided: Read context-$TASK_ID.txt${NC}"
+    echo ""
+    
+    # Change to workspace directory and start Claude Code
+    cd "$WORKSPACE_PATH"
+    claude --yolo "Read context-$TASK_ID.txt to understand your task and begin work."
+else
+    echo -e "${YELLOW}Claude Code CLI not found. Manual steps:${NC}"
+    echo ""
+    echo "1. Change to workspace directory:"
+    echo "   cd $WORKSPACE_PATH"
+    echo ""
+    echo "2. Start Claude Code with --yolo mode:"
+    echo "   claude --yolo"
+    echo ""
+    echo "3. Tell Claude to read the context:"
+    echo "   Read context-$TASK_ID.txt"
+    echo ""
+    echo -e "${GREEN}Or copy this context directly:${NC}"
+    echo "----------------------------------------"
+    echo "$AGENT_CONTEXT"
+    echo "----------------------------------------"
+fi
