@@ -51,9 +51,7 @@ Your gateway is now running at `http://localhost:8080`!
 **Current Focus**: Phase 1 - Core Foundation  
 **Progress**: 1 of 16 tasks complete (P1-S1-1.1 ✅)
 
-- [STATUS.md](STATUS.md) - Quick task status overview
-- [COORDINATION.md](COORDINATION.md) - Live team coordination dashboard  
-- [TASKS.md](TASKS.md) - Detailed task requirements
+- [TASKS.md](TASKS.md) - Task requirements and live status tracking
 
 ## Contributing
 

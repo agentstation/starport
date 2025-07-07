@@ -14,15 +14,15 @@ WORKSPACE_ROOT="$HOME/starport-development"
 
 # Common workflow template that applies to ALL tasks
 WORKFLOW_TEMPLATE="IMPORTANT WORKFLOW:
-1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
+1. IMMEDIATELY update TASKS.md to mark your task as 'In Progress'
    - Add entry to 'Active Work' table with your task, branch, and status
 2. Complete the task requirements below
-3. Update COORDINATION.md when PR is ready:
+3. Update TASKS.md when PR is ready:
    - Move task to 'Completed Today' section
    - Add PR number
 4. Create and submit the PR
 
-Note: COORDINATION.md is the single source of truth for task status!"
+Note: TASKS.md is the single source of truth for task status!"
 
 # Function to generate agent context
 generate_context() {
@@ -104,7 +104,7 @@ case $TASK_ID in
         FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
 2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.1 for detailed requirements
 3. \$REPO_PATH/ARCHITECTURE.md - Review sections 1-3 for project overview
-4. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Create go.mod with module path: github.com/agentstation/starport
 - Ensure .gitignore exists (already created)
 - Create LICENSE file (MIT)
@@ -120,7 +120,7 @@ case $TASK_ID in
         FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
 2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.2 for requirements
 3. \$REPO_PATH/ARCHITECTURE.md - Review section 4 for directory structure
-4. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Create directory structure per ARCHITECTURE.md
 - Create cmd/starport/main.go with CLI framework (urfave/cli)
 - Implement 'version' and 'serve' commands
@@ -135,7 +135,7 @@ case $TASK_ID in
         PREREQ_VERIFY="test -f cmd/starport/main.go || echo 'ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.3
 2. \$REPO_PATH/ARCHITECTURE.md - Review DevOps sections
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Create docker-compose.yml for local Valkey
 - Set up GitHub Actions workflow (.github/workflows/ci.yml)
 - Configure golangci-lint
@@ -150,7 +150,7 @@ case $TASK_ID in
         PREREQ_VERIFY="test -f cmd/starport/main.go || echo 'ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.4
 2. \$REPO_PATH/ARCHITECTURE.md - Review HTTP server design
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Implement HTTP server with chi router
 - Add middleware: request ID, logging, recovery, CORS
 - Create health check endpoints
@@ -165,7 +165,7 @@ case $TASK_ID in
         PREREQ_VERIFY="test -f internal/server/server.go || echo 'ERROR: internal/server/server.go not found - P1-S1-1.4 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.5
 2. \$REPO_PATH/ARCHITECTURE.md - Review configuration design
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Define configuration structures
 - Implement YAML loading with viper
 - Add environment variable mapping
@@ -181,7 +181,7 @@ case $TASK_ID in
         PREREQ_VERIFY="test -f internal/config/config.go || echo 'ERROR: internal/config/config.go not found - P1-S1-1.5 not complete'"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.1
 2. \$REPO_PATH/ARCHITECTURE.md - Review storage architecture sections
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Define KVStore interface with all required operations
 - Create error types for storage operations
 - Add serialization helpers
@@ -198,7 +198,7 @@ case $TASK_ID in
         PREREQ="Task P1-S2-2.1 must be complete (storage interface)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.2
 2. \$REPO_PATH/ARCHITECTURE.md - Review Badger configuration
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Implement BadgerStore struct
 - Configure Badger options for performance
 - Implement all KVStore interface methods
@@ -215,7 +215,7 @@ case $TASK_ID in
         PREREQ="Task P1-S2-2.1 must be complete (storage interface)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.3
 2. \$REPO_PATH/ARCHITECTURE.md - Review data models section
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Define APIKey model with validation
 - Define Preset model with versioning
 - Define BYOKCredential with encryption
@@ -232,7 +232,7 @@ case $TASK_ID in
         PREREQ="Task P1-S1-1.4 must be complete (HTTP server)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.1
 2. \$REPO_PATH/ARCHITECTURE.md - Review connector design
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Define Connector interface
 - Create request/response types
 - Add streaming support
@@ -249,7 +249,7 @@ case $TASK_ID in
         PREREQ="Task P1-S3-3.1 must be complete (connector interface)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.2
 2. \$REPO_PATH/ARCHITECTURE.md - Review provider implementations
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Implement OpenAI connector
 - Add OpenAI streaming support
 - Implement Anthropic connector
@@ -266,7 +266,7 @@ case $TASK_ID in
         PREREQ="Task P1-S3-3.1 must be complete (connector interface)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.3
 2. \$REPO_PATH/ARCHITECTURE.md - Review API endpoints
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Implement /v1/chat/completions
 - Add streaming for chat endpoint
 - Implement /v1/embeddings
@@ -284,7 +284,7 @@ case $TASK_ID in
         PREREQ="Task P1-S3-3.2 must be complete (provider connectors)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.4
 2. \$REPO_PATH/ARCHITECTURE.md - Review routing strategies
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Implement routing interface
 - Add latency tracking (EMA)
 - Implement cost-based routing
@@ -302,7 +302,7 @@ case $TASK_ID in
         PREREQ="Task P1-S2-2.3 must be complete (storage models)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.1
 2. \$REPO_PATH/ARCHITECTURE.md - Review BYOK security design
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Implement encryption layer
 - Add key derivation (Argon2)
 - Create BYOK manager
@@ -319,7 +319,7 @@ case $TASK_ID in
         PREREQ="Task P1-S3-3.3 must be complete (proxy endpoints)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.2
 2. \$REPO_PATH/ARCHITECTURE.md - Review caching architecture
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Integrate Ristretto cache
 - Implement cache key generation
 - Add KV store cache layer
@@ -336,7 +336,7 @@ case $TASK_ID in
         PREREQ="Task P1-S3-3.3 must be complete (proxy endpoints)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.3
 2. \$REPO_PATH/ARCHITECTURE.md - Review filtering design
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Create filter interface
 - Implement pre-request filters
 - Add post-response filters
@@ -353,7 +353,7 @@ case $TASK_ID in
         PREREQ="Task P1-S2-2.3 must be complete (storage models)"
         FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.4
 2. \$REPO_PATH/ARCHITECTURE.md - Review preset management
-3. \$REPO_PATH/COORDINATION.md - Update your task status"
+"
         REQUIREMENTS="- Create preset manager
 - Add template variable support
 - Implement inheritance

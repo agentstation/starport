@@ -6,15 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 When you receive a task (e.g., P1-S1-1.2), follow these steps:
 
-1. **Update COORDINATION.md immediately**:
+1. **Update TASKS.md immediately**:
    ```markdown
    | Backend | P1-S1-1.2 Project Structure | task/P1-S1-1.2-project-structure | 🟢 In Progress | 4:00 PM | - |
    ```
 
 2. **Verify prerequisites are complete**:
-   - Check COORDINATION.md shows dependency tasks as "✅ Complete"
+   - Check TASKS.md shows dependency tasks as "✅ Complete"
    - Run any verification commands provided in your context
-   - If prerequisites aren't met, update COORDINATION.md with blocker and stop
+   - If prerequisites aren't met, update TASKS.md with blocker and stop
 
 3. **Implement the task**:
    - Requirements are in TASKS.md (search for your task ID)
@@ -22,10 +22,10 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
    - Create branch exactly as specified in your context
 
 4. **When PR is ready**:
-   - Update COORDINATION.md: move to "Completed Today" with PR number
+   - Update TASKS.md: move to "Completed Today" with PR number
    - Submit PR with format: `[P1-S1-1.2] Brief description`
 
-**Remember**: COORDINATION.md is the ONLY place to track status. Never update TASKS.md.
+**Remember**: TASKS.md is the ONLY place to track status.
 
 ## Project Context
 
@@ -37,10 +37,8 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 
 | Document | Purpose | When to Use |
 |----------|---------|-------------|
-| COORDINATION.md | Live task status (single source of truth) | Update when starting/completing work |
-| TASKS.md | Task definitions and requirements | Read to understand what to implement |
+| TASKS.md | Task definitions, requirements, and live status (single source of truth) | Read for requirements, update for status |
 | ARCHITECTURE.md | Technical specifications | Reference for design decisions |
-| STATUS.md | Quick status overview | Check what tasks are ready to start |
 
 ### 1. Task Selection
 When starting work:
@@ -108,15 +106,15 @@ claude-code --task-filter "docs|openapi|sdk" --branch-prefix "task/" TASKS.md
 
 ### 6. Task Status Management
 
-**COORDINATION.md is the single source of truth for task status.**
+**TASKS.md is the single source of truth for task status.**
 
 When working on tasks:
-1. **Starting work**: Update COORDINATION.md immediately
+1. **Starting work**: Update TASKS.md immediately
    - Add your task to "Active Work" table
    - Mark status as "🟢 In Progress"
    
-2. **Completing work**: Update COORDINATION.md when PR is ready
-   - Move task to "Completed Today" section
+2. **Completing work**: Update TASKS.md when PR is ready
+   - Move task to "Recently Completed" section
    - Update "Active Work" to show "✅ Completed"
    - Add PR number
 
@@ -127,8 +125,6 @@ When working on tasks:
 - [x] Initialize go.mod
 - [x] Create Makefile
 ```
-
-**Note**: Do NOT update status in TASKS.md - it's for task definitions only.
 
 ### 7. Testing Requirements
 
@@ -147,7 +143,7 @@ Every PR must include:
 Key points:
 - List all acceptance criteria as checkboxes
 - Verify all tests pass before submitting
-- Update COORDINATION.md with PR number
+- Update TASKS.md with PR number
 - Note any blockers or incomplete items
 
 ## Working with Other Agents
@@ -156,12 +152,12 @@ Key points:
 When multiple agents work in parallel:
 1. **Stay in your lane**: Only modify files related to your task
 2. **Pull before push**: Always `git pull origin main` before creating your branch
-3. **Communicate blockers**: Update COORDINATION.md immediately if blocked
+3. **Communicate blockers**: Update TASKS.md immediately if blocked
 
 ### Handoff Protocol
 When your task blocks others:
 1. Ensure your PR description clearly states what was implemented
-2. Update COORDINATION.md with accurate status
+2. Update TASKS.md with accurate status
 3. List any known issues or incomplete items in the PR
 
 ## Key Architectural Decisions

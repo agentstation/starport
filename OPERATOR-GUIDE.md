@@ -4,10 +4,10 @@
 
 ## How It Works
 
-1. **Check STATUS.md** to see which tasks are ready
+1. **Check TASKS.md** to see which tasks are ready (see Phase 1 Progress section)
 2. **Run spawn-agent.sh** with the task ID
 3. **Script handles everything**: workspace setup, context generation, prerequisite checking
-4. **Agents update COORDINATION.md** automatically
+4. **Agents update TASKS.md** automatically
 
 ## Phase 1: Foundation Setup
 

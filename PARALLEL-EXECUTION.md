@@ -140,19 +140,12 @@ For files that multiple teams might touch:
 
 ### 3. Communication
 
-Create a `COORDINATION.md` file in the repo:
+Update the Active Work section in `TASKS.md`:
 ```markdown
-# Current Work
-
-## Storage Team
-- Working on: P1-S2-2.1
-- Branch: task/P1-S2-2.1-storage-interface
-- ETA: 2 hours
-
-## API Team  
-- Working on: P1-S3-3.2
-- Branch: task/P1-S3-3.2-openai-connector
-- ETA: 4 hours
+| Team | Current Task | Branch | Status | ETA | PR |
+|------|--------------|--------|--------|-----|-----|
+| Storage | P1-S2-2.1 Storage Interface | task/P1-S2-2.1-storage-interface | 🟢 In Progress | 2:00 PM | - |
+| API | P1-S3-3.2 OpenAI Connector | task/P1-S3-3.2-openai-connector | 🟢 In Progress | 4:00 PM | - |
 ```
 
 ## Testing Strategy
@@ -273,7 +266,7 @@ git rebase origin/main
 - Use feature flags for partial implementations
 
 ### Communication Breakdown
-- Update COORDINATION.md frequently
+- Update TASKS.md frequently
 - Use PR comments for discussions
 - Tag team members when blocked
 
