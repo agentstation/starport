@@ -289,6 +289,29 @@ Once a PR is merged, you can remove the workspace:
 rm -rf ~/starport-development/starport-init/
 ```
 
+## Parallel Execution Tips
+
+### Running Multiple Agents
+The spawn-agent.sh script creates separate workspaces automatically, so you can run multiple agents in parallel:
+
+```bash
+# Terminal 1 - Storage team
+./spawn-agent.sh P1-S2-2.2
+
+# Terminal 2 - API team  
+./spawn-agent.sh P1-S3-3.2
+
+# Terminal 3 - Features team
+./spawn-agent.sh P1-S4-4.1
+```
+
+Each agent gets its own Git clone to avoid conflicts. The script handles all workspace management.
+
+### Avoiding Conflicts
+- Each task modifies different packages/files
+- Agents update TASKS.md to coordinate
+- Use PR comments for cross-team communication
+
 ## Summary
 
 1. **Run `./spawn-agent.sh`** - it handles workspace setup automatically
@@ -301,6 +324,6 @@ rm -rf ~/starport-development/starport-init/
 No need to:
 - Manually clone repositories
 - Manage workspace directories
-- Read TASKS.md
+- Read TASKS.md in detail
 
 Everything you need is automated!

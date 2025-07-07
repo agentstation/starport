@@ -256,7 +256,7 @@ make lint # Lint code
 ## Troubleshooting
 
 ### Common Issues
-1. **Prerequisites not met**: Check COORDINATION.md, update blockers section
+1. **Prerequisites not met**: Check TASKS.md, update blockers section
 2. **Merge conflicts**: Pull latest main, preserve both changes
 3. **Tests failing**: Check if related to your changes or pre-existing
 4. **Can't find files**: May need to create them per ARCHITECTURE.md
@@ -264,7 +264,7 @@ make lint # Lint code
 ### Getting Help
 - Check existing PRs for similar implementations
 - Reference ARCHITECTURE.md for design decisions
-- Update COORDINATION.md with specific blockers
+- Update TASKS.md blocked tasks table with specific blockers
 
 
 ## Questions?
@@ -272,4 +272,4 @@ make lint # Lint code
 - Timeline questions → Check PLAN.md  
 - Task details → Check TASKS.md
 - Implementation patterns → Check existing code or ask in PR
-- Agent coordination → Check AGENT-STARTUP-SEQUENCE.md
+- Execution order → Check OPERATOR-GUIDE.md

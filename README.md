@@ -42,8 +42,8 @@ Your gateway is now running at `http://localhost:8080`!
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Technical design and decisions
 - [PLAN.md](PLAN.md) - Implementation roadmap
-- [TASKS.md](TASKS.md) - Development tasks
-- [TEAM-QUICKSTART.md](TEAM-QUICKSTART.md) - Getting started guide
+- [TASKS.md](TASKS.md) - Development tasks and live status
+- [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md) - How to execute tasks
 
 ## Development Status
 
@@ -63,24 +63,14 @@ This project uses parallel development with multiple Claude Code instances.
 ./spawn-agent.sh P1-S1-1.1
 ```
 
-### Documentation
+### Key Resources
 
-#### 👤 For Human Operators
-- [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md) - **Start here!** Simple execution guide
-- [AGENT-STARTUP-SEQUENCE.md](AGENT-STARTUP-SEQUENCE.md) - Detailed task dependencies and order
-- [TEAM-QUICKSTART.md](TEAM-QUICKSTART.md) - Quick start for human contributors
-- `spawn-agent.sh` - Script to spawn agents with proper context
-
-#### 🤖 For Claude Code Agents  
-- [CLAUDE.md](CLAUDE.md) - Agent workflow and documentation usage
-- [TASKS.md](TASKS.md) - Task requirements and dependencies (no status)
+- [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md) - **Start here!** How to execute tasks
+- [TASKS.md](TASKS.md) - Task requirements and live status tracking
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Technical specifications
 - [PLAN.md](PLAN.md) - Implementation roadmap
-
-#### 📚 For Both
-- [STATUS.md](STATUS.md) - Quick task status overview
-- [COORDINATION.md](COORDINATION.md) - Live team dashboard (source of truth)
-- [PARALLEL-EXECUTION.md](PARALLEL-EXECUTION.md) - Understanding parallel development
+- [CLAUDE.md](CLAUDE.md) - Agent-specific instructions
+- `spawn-agent.sh` - Script to spawn agents with proper context
 
 ## License
 
@@ -101,4 +91,4 @@ Starport is designed as a drop-in replacement for:
 
 ---
 
-Ready to build the future of LLM infrastructure? Check [TEAM-QUICKSTART.md](TEAM-QUICKSTART.md) to get started!
+Ready to build the future of LLM infrastructure? Check [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md) to get started!
