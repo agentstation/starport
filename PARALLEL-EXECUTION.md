@@ -2,54 +2,48 @@
 
 This guide explains how to run multiple Claude Code instances in parallel to accelerate Starport development.
 
+## ⚠️ Critical: One Clone Per Agent
+
+**Each agent MUST have its own Git clone** to avoid conflicts:
+- Git tracks one working branch per directory
+- Multiple agents in the same directory = broken branches
+- Always clone separate directories for parallel work
+
 ## Quick Start
 
-### 1. Setup Multiple Workspaces
+### Automatic Workspace Management
+
+The `spawn-agent.sh` script handles all workspace setup automatically:
 
 ```bash
-# Create a parent directory for all workspaces
-mkdir starport-development
-cd starport-development
-
-# Clone multiple instances
-git clone https://github.com/agentstation/starport workspace-storage
-git clone https://github.com/agentstation/starport workspace-api  
-git clone https://github.com/agentstation/starport workspace-devops
-git clone https://github.com/agentstation/starport workspace-docs
+# Just run the spawn script - it creates separate workspaces automatically
+./spawn-agent.sh P1-S1-1.1  # Creates ~/starport-development/starport-init/
+./spawn-agent.sh P1-S1-1.2  # Creates ~/starport-development/starport-structure/
+./spawn-agent.sh P1-S1-1.6  # Creates ~/starport-development/starport-openapi/
 ```
 
-### 2. Assign Work Streams
+No manual cloning needed! Each task gets its own isolated workspace.
 
-Each Claude Code instance should focus on a specific area:
+### Running Multiple Agents in Parallel
 
-| Workspace | Focus Area | Task Pattern | Example Tasks |
-|-----------|------------|--------------|---------------|
-| workspace-storage | Storage & Data | P1-S2-* | Storage interfaces, Badger, Valkey |
-| workspace-api | API & Connectors | P1-S3-*, P1-S6-* | OpenAI/Anthropic connectors, endpoints |
-| workspace-devops | Infrastructure | P1-S1-1.3, P1-S5-* | CI/CD, Docker, Kubernetes |
-| workspace-docs | Documentation | P1-S1-1.6, P1-S1-1.7 | OpenAPI, guides, SDKs |
-
-### 3. Launch Claude Code Instances
-
-Open separate terminals for each workspace:
+Open separate terminals and spawn agents for non-conflicting tasks:
 
 ```bash
-# Terminal 1 - Storage Team
-cd workspace-storage
-claude-code --context "You are working on storage components. Focus on tasks P1-S2-*. Check TASKS.md for available storage tasks."
+# Terminal 1: Project Structure
+./spawn-agent.sh P1-S1-1.2
 
-# Terminal 2 - API Team  
-cd workspace-api
-claude-code --context "You are working on API and connector components. Focus on tasks P1-S3-* and P1-S6-*. Check TASKS.md for API tasks."
+# Terminal 2: OpenAPI Documentation (parallel safe)
+./spawn-agent.sh P1-S1-1.6
 
-# Terminal 3 - DevOps Team
-cd workspace-devops  
-claude-code --context "You are working on DevOps and infrastructure. Focus on CI/CD, Docker, and deployment tasks. Check TASKS.md."
-
-# Terminal 4 - Documentation Team
-cd workspace-docs
-claude-code --context "You are working on documentation and SDKs. Focus on OpenAPI specs and developer guides. Check TASKS.md."
+# Terminal 3: Documentation Infrastructure (parallel safe)
+./spawn-agent.sh P1-S1-1.7
 ```
+
+The script will:
+1. Create a unique workspace for each task
+2. Clone the repository into that workspace
+3. Provide complete context for the agent
+4. Show the workspace location
 
 ## Dependency Management
 

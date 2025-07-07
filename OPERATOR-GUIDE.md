@@ -2,13 +2,19 @@
 
 This guide shows exactly which agents to spawn and when. No need to check other files.
 
+## Important: Automatic Workspace Setup
+
+The `spawn-agent.sh` script **automatically creates separate clones** for each agent to avoid Git conflicts. You don't need to manage this manually!
+
 ## Phase 1: Foundation Setup
 
 ### Day 1 Morning: Start Here
 
 #### Step 1: Initialize Repository
 ```bash
+# From your main starport directory
 ./spawn-agent.sh P1-S1-1.1
+# Script will create: ~/starport-development/starport-init/
 ```
 **Creates**: go.mod, LICENSE, updates README  
 **Time**: ~2 hours  
@@ -20,16 +26,19 @@ Open 3 terminal windows and run:
 ```bash
 # Terminal 1: Project Structure
 ./spawn-agent.sh P1-S1-1.2
+# Auto-creates: ~/starport-development/starport-structure/
 # Creates: Directory structure, cmd/starport/main.go, Makefile
 # Time: ~4 hours
 
 # Terminal 2: OpenAPI Documentation  
 ./spawn-agent.sh P1-S1-1.6
+# Auto-creates: ~/starport-development/starport-openapi/
 # Creates: docs/openapi/ with API specifications
 # Time: ~6 hours
 
 # Terminal 3: Documentation Infrastructure
-./spawn-agent.sh P1-S1-1.7  
+./spawn-agent.sh P1-S1-1.7
+# Auto-creates: ~/starport-development/starport-docs/
 # Creates: Documentation system setup
 # Time: ~4 hours
 ```
@@ -160,12 +169,42 @@ P1-S1-1.1 (Repository Init)
   +---> P1-S1-1.7 (Docs Infrastructure)
 ```
 
+## Automatic Workspace Management
+
+The `spawn-agent.sh` script handles all workspace management for you:
+
+### What it Does
+1. **Creates `~/starport-development/`** as the workspace root
+2. **Clones separate directories** for each task automatically
+3. **Names workspaces clearly**: `starport-init`, `starport-structure`, etc.
+4. **Handles existing workspaces**: Options to reuse or recreate
+5. **Pulls latest changes** when reusing workspaces
+
+### Workspace Locations
+All agent workspaces are created under `~/starport-development/`:
+- `P1-S1-1.1` → `~/starport-development/starport-init/`
+- `P1-S1-1.2` → `~/starport-development/starport-structure/`
+- `P1-S1-1.6` → `~/starport-development/starport-openapi/`
+- `P1-S1-1.7` → `~/starport-development/starport-docs/`
+
+### Clean Up After Merge
+Once a PR is merged, you can remove the workspace:
+```bash
+rm -rf ~/starport-development/starport-init/
+```
+
 ## Summary
 
-1. Always start with `P1-S1-1.1`
-2. Check dependencies before spawning agents
-3. Use multiple terminals for parallel tasks
-4. Wait for PRs to merge before dependent tasks
-5. Each spawn command gives complete context - just copy and paste
+1. **Run `./spawn-agent.sh`** - it handles workspace setup automatically
+2. Always start with `P1-S1-1.1`
+3. Check dependencies before spawning agents
+4. Use multiple terminals for parallel tasks
+5. Wait for PRs to merge before dependent tasks
+6. Each spawn command gives complete context - just copy and paste
 
-No need to read TASKS.md - everything you need is here!
+No need to:
+- Manually clone repositories
+- Manage workspace directories
+- Read TASKS.md
+
+Everything you need is automated!

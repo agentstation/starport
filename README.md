@@ -60,11 +60,22 @@ This project uses parallel development with multiple Claude Code instances.
 ```
 
 ### Documentation
+
+#### 👤 For Human Operators
 - [OPERATOR-GUIDE.md](OPERATOR-GUIDE.md) - **Start here!** Simple execution guide
-- [CLAUDE.md](CLAUDE.md) - Claude Code workflow and documentation usage
-- [AGENT-STARTUP-SEQUENCE.md](AGENT-STARTUP-SEQUENCE.md) - Detailed task dependencies
-- [PARALLEL-EXECUTION.md](PARALLEL-EXECUTION.md) - Running multiple instances
-- [TEAM-QUICKSTART.md](TEAM-QUICKSTART.md) - Quick start for contributors
+- [AGENT-STARTUP-SEQUENCE.md](AGENT-STARTUP-SEQUENCE.md) - Detailed task dependencies and order
+- [TEAM-QUICKSTART.md](TEAM-QUICKSTART.md) - Quick start for human contributors
+- `spawn-agent.sh` - Script to spawn agents with proper context
+
+#### 🤖 For Claude Code Agents  
+- [CLAUDE.md](CLAUDE.md) - Agent workflow and documentation usage
+- [TASKS.md](TASKS.md) - Detailed task requirements
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical specifications
+- [PLAN.md](PLAN.md) - Implementation roadmap
+
+#### 📚 For Both
+- [PARALLEL-EXECUTION.md](PARALLEL-EXECUTION.md) - Understanding parallel development
+- [COORDINATION.md](COORDINATION.md) - Sprint status tracking
 
 ## License
 

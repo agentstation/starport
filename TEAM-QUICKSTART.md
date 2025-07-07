@@ -15,8 +15,8 @@ grep -r "P1-W" . --exclude-dir=.git  # Should return nothing
 
 ### Your First Steps
 1. Check available tasks in TASKS.md (look for 🟡 Ready)
-2. Use `./scripts/spawn-agents.sh` to get started
-3. Follow the workflow in CLAUDE.md
+2. Use `./spawn-agent.sh <TASK-ID>` to get started
+3. The script automatically creates a workspace and provides context
 
 ## 📋 Day 1 Task Assignments
 
