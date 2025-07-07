@@ -26,8 +26,9 @@ if [ -z "$1" ]; then
     echo ""
     echo "After P1-S1-1.1 completes:"
     echo "  P1-S1-1.2 - Project Structure"
-    echo "  P1-S1-1.6 - OpenAPI Documentation" 
-    echo "  P1-S1-1.7 - Documentation Infrastructure"
+    echo ""
+    echo "After P1-S1-1.5 completes:"
+    echo "  P1-S2-2.1 - Storage Interface Definition"
     exit 1
 fi
 
@@ -70,19 +71,12 @@ case $TASK_ID in
         BRANCH="task/P1-S1-1.5-config-system"
         PREREQ="P1-S1-1.4 must be complete"
         ;;
-    "P1-S1-1.6")
-        WORKSPACE_NAME="starport-openapi"
-        AGENT_NAME="OpenAPI"
-        TASK_NAME="OpenAPI Documentation"
-        BRANCH="task/P1-S1-1.6-openapi"
-        PREREQ="P1-S1-1.1 must be complete"
-        ;;
-    "P1-S1-1.7")
-        WORKSPACE_NAME="starport-docs"
-        AGENT_NAME="Docs"
-        TASK_NAME="Documentation Infrastructure"
-        BRANCH="task/P1-S1-1.7-docs-infra"
-        PREREQ="P1-S1-1.1 must be complete"
+    "P1-S2-2.1")
+        WORKSPACE_NAME="starport-storage-interface"
+        AGENT_NAME="Storage"
+        TASK_NAME="Storage Interface Definition"
+        BRANCH="task/P1-S2-2.1-storage-interface"
+        PREREQ="P1-S1-1.5 must be complete"
         ;;
     *)
         echo -e "${YELLOW}Unknown task ID: $TASK_ID${NC}"
@@ -260,11 +254,10 @@ Your task:
 - Create branch: $BRANCH"
         ;;
         
-    "P1-S1-1.6")
-        AGENT_CONTEXT="You are working on task P1-S1-1.6 (OpenAPI Documentation) for the Starport project.
+    "P1-S2-2.1")
+        AGENT_CONTEXT="You are working on task P1-S2-2.1 (Storage Interface Definition) for the Starport project.
 
-Prerequisite: Task P1-S1-1.1 must be complete
-Note: You can work in parallel with tasks P1-S1-1.2 and P1-S1-1.7
+Prerequisite: Task P1-S1-1.5 must be complete (configuration system)
 Workspace: $REPO_PATH
 
 IMPORTANT WORKFLOW:
@@ -273,41 +266,19 @@ IMPORTANT WORKFLOW:
 3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
 4. Create and submit the PR
 
-Read:
-1. $REPO_PATH/TASKS.md - Find task P1-S1-1.6
-2. $REPO_PATH/ARCHITECTURE.md - Review API design sections
+Read these files:
+1. $REPO_PATH/TASKS.md - Find task P1-S2-2.1
+2. $REPO_PATH/ARCHITECTURE.md - Review storage architecture sections
 3. $REPO_PATH/COORDINATION.md - Update your task status
 
 Your task:
-- Create docs/openapi/ directory
-- Create OpenAPI 3.1 specification
-- Document all planned endpoints
-- Follow OpenAI/OpenRouter API patterns
-- Create branch: $BRANCH"
-        ;;
-        
-    "P1-S1-1.7")
-        AGENT_CONTEXT="You are working on task P1-S1-1.7 (Documentation Infrastructure) for the Starport project.
-
-Prerequisite: Task P1-S1-1.1 must be complete
-Note: You can work in parallel with tasks P1-S1-1.2 and P1-S1-1.6
-Workspace: $REPO_PATH
-
-IMPORTANT WORKFLOW:
-1. IMMEDIATELY update COORDINATION.md to mark your task as 'In Progress'
-2. Complete the task requirements
-3. Update COORDINATION.md to mark as 'PR Submitted' with the PR number
-4. Create and submit the PR
-
-Read:
-1. $REPO_PATH/TASKS.md - Find task P1-S1-1.7
-2. Review existing docs structure
-3. $REPO_PATH/COORDINATION.md - Update your task status
-
-Your task:
-- Set up documentation system (MkDocs or similar)
-- Create docs/ directory structure
-- Set up documentation build process
+- Define KVStore interface with all required operations
+- Create error types for storage operations
+- Add serialization helpers
+- Create factory pattern for storage backends
+- Add context support throughout
+- Define transaction interface
+- Create mock implementation for testing
 - Create branch: $BRANCH"
         ;;
 esac

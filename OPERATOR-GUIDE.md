@@ -20,75 +20,53 @@ The `spawn-agent.sh` script **automatically creates separate clones** for each a
 **Time**: ~2 hours  
 **Wait for**: PR to be merged before proceeding  
 
-#### Step 2: Launch Parallel Tasks (after Step 1 PR merged)
-Open 3 terminal windows and run:
+#### Step 2: Project Structure (after Step 1 PR merged)
 
 ```bash
-# Terminal 1: Project Structure
 ./spawn-agent.sh P1-S1-1.2
 # Auto-creates: ~/starport-development/starport-structure/
 # Creates: Directory structure, cmd/starport/main.go, Makefile
-# Time: ~4 hours
-
-# Terminal 2: OpenAPI Documentation  
-./spawn-agent.sh P1-S1-1.6
-# Auto-creates: ~/starport-development/starport-openapi/
-# Creates: docs/openapi/ with API specifications
-# Time: ~6 hours
-
-# Terminal 3: Documentation Infrastructure
-./spawn-agent.sh P1-S1-1.7
-# Auto-creates: ~/starport-development/starport-docs/
-# Creates: Documentation system setup
 # Time: ~4 hours
 ```
 
 ### Day 1 Afternoon: Development Environment
 
-#### Step 3: After P1-S1-1.2 is merged
-Open 2 terminal windows:
+#### Step 3: Development Environment (after P1-S1-1.2 is merged)
 
 ```bash
-# Terminal 1: Development Environment
 ./spawn-agent.sh P1-S1-1.3
+# Auto-creates: ~/starport-development/starport-devops/
 # Creates: docker-compose.yml, GitHub Actions, pre-commit hooks
 # Time: ~6 hours
+```
 
-# Terminal 2: HTTP Server Foundation
+#### Step 4: HTTP Server Foundation (after P1-S1-1.2 is merged)
+
+```bash
 ./spawn-agent.sh P1-S1-1.4
+# Auto-creates: ~/starport-development/starport-http/
 # Creates: HTTP server with chi router, health checks
 # Time: ~8 hours
 ```
 
-### Day 2: Configuration & Storage
+#### Step 5: Configuration System (after P1-S1-1.4 is merged)
 
-#### Step 4: After P1-S1-1.4 is merged
 ```bash
 ./spawn-agent.sh P1-S1-1.5
+# Auto-creates: ~/starport-development/starport-config/
 # Creates: Configuration system with viper
 # Time: ~6 hours
 ```
 
-#### Step 5: After P1-S1-1.5 is merged
+### Day 2: Storage Layer
+
+#### Step 6: Storage Interface (after P1-S1-1.5 is merged)
+
 ```bash
 ./spawn-agent.sh P1-S2-2.1
+# Auto-creates: ~/starport-development/starport-storage-interface/
 # Creates: Storage interface definitions
 # Time: ~4 hours
-```
-
-#### Step 6: After P1-S2-2.1 is merged
-Open 2 terminals:
-
-```bash
-# Terminal 1: Badger Implementation
-./spawn-agent.sh P1-S2-2.2
-# Creates: Embedded KV store implementation
-# Time: ~8 hours
-
-# Terminal 2: Data Models
-./spawn-agent.sh P1-S2-2.3
-# Creates: Core data structures
-# Time: ~6 hours
 ```
 
 ## Quick Reference Card
@@ -98,8 +76,6 @@ Open 2 terminals:
 
 ### Can Run After 1.1
 - `P1-S1-1.2` - Project structure
-- `P1-S1-1.6` - OpenAPI docs (parallel safe)
-- `P1-S1-1.7` - Docs infrastructure (parallel safe)
 
 ### Can Run After 1.2
 - `P1-S1-1.3` - Dev environment
@@ -110,10 +86,6 @@ Open 2 terminals:
 
 ### Can Run After 1.5
 - `P1-S2-2.1` - Storage interface
-
-### Can Run After 2.1
-- `P1-S2-2.2` - Badger implementation
-- `P1-S2-2.3` - Data models (parallel safe)
 
 ## Status Tracking
 
@@ -148,25 +120,18 @@ START
   v
 P1-S1-1.1 (Repository Init)
   |
-  +---> P1-S1-1.2 (Project Structure)
-  |         |
-  |         +---> P1-S1-1.3 (Dev Environment)
-  |         |
-  |         +---> P1-S1-1.4 (HTTP Server)
-  |                   |
-  |                   v
-  |                 P1-S1-1.5 (Configuration)
-  |                   |
-  |                   v
-  |                 P1-S2-2.1 (Storage Interface)
-  |                   |
-  |                   +---> P1-S2-2.2 (Badger)
-  |                   |
-  |                   +---> P1-S2-2.3 (Models)
+  v
+P1-S1-1.2 (Project Structure)
   |
-  +---> P1-S1-1.6 (OpenAPI Docs)
+  +---> P1-S1-1.3 (Dev Environment)
   |
-  +---> P1-S1-1.7 (Docs Infrastructure)
+  +---> P1-S1-1.4 (HTTP Server)
+            |
+            v
+          P1-S1-1.5 (Configuration)
+            |
+            v
+          P1-S2-2.1 (Storage Interface)
 ```
 
 ## Automatic Workspace Management
@@ -184,8 +149,10 @@ The `spawn-agent.sh` script handles all workspace management for you:
 All agent workspaces are created under `~/starport-development/`:
 - `P1-S1-1.1` → `~/starport-development/starport-init/`
 - `P1-S1-1.2` → `~/starport-development/starport-structure/`
-- `P1-S1-1.6` → `~/starport-development/starport-openapi/`
-- `P1-S1-1.7` → `~/starport-development/starport-docs/`
+- `P1-S1-1.3` → `~/starport-development/starport-devops/`
+- `P1-S1-1.4` → `~/starport-development/starport-http/`
+- `P1-S1-1.5` → `~/starport-development/starport-config/`
+- `P1-S2-2.1` → `~/starport-development/starport-storage-interface/`
 
 ### Clean Up After Merge
 Once a PR is merged, you can remove the workspace:
