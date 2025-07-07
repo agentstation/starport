@@ -69,23 +69,123 @@ The `spawn-agent.sh` script **automatically creates separate clones** for each a
 # Time: ~4 hours
 ```
 
+#### Step 7: Storage Implementations (after P1-S2-2.1 is merged)
+
+**Can run in parallel:**
+```bash
+# Terminal 1
+./spawn-agent.sh P1-S2-2.2
+# Auto-creates: ~/starport-development/starport-badger/
+# Creates: Badger DB implementation
+# Time: ~6 hours
+
+# Terminal 2
+./spawn-agent.sh P1-S2-2.3
+# Auto-creates: ~/starport-development/starport-models/
+# Creates: Core storage models
+# Time: ~4 hours
+```
+
+### Day 3: LLM Proxy Core
+
+#### Step 8: Connector Interface (after P1-S1-1.4 is merged)
+
+```bash
+./spawn-agent.sh P1-S3-3.1
+# Auto-creates: ~/starport-development/starport-connector-interface/
+# Creates: Model connector interface
+# Time: ~4 hours
+```
+
+#### Step 9: Provider Integration (after P1-S3-3.1 is merged)
+
+**Can run in parallel:**
+```bash
+# Terminal 1
+./spawn-agent.sh P1-S3-3.2
+# Auto-creates: ~/starport-development/starport-connectors/
+# Creates: OpenAI & Anthropic connectors
+# Time: ~8 hours
+
+# Terminal 2
+./spawn-agent.sh P1-S3-3.3
+# Auto-creates: ~/starport-development/starport-proxy/
+# Creates: Proxy endpoints
+# Time: ~10 hours
+```
+
+#### Step 10: Routing System (after P1-S3-3.2 is merged)
+
+```bash
+./spawn-agent.sh P1-S3-3.4
+# Auto-creates: ~/starport-development/starport-routing/
+# Creates: Advanced routing system
+# Time: ~8 hours
+```
+
+### Day 4: Advanced Features
+
+#### Step 11: Security & Storage Features (after dependencies met)
+
+**Can run in parallel after P1-S2-2.3:**
+```bash
+# Terminal 1
+./spawn-agent.sh P1-S4-4.1
+# Auto-creates: ~/starport-development/starport-byok/
+# Creates: BYOK implementation
+# Time: ~6 hours
+
+# Terminal 2
+./spawn-agent.sh P1-S4-4.4
+# Auto-creates: ~/starport-development/starport-presets/
+# Creates: Preset management
+# Time: ~4 hours
+```
+
+#### Step 12: Proxy Features (after P1-S3-3.3 is merged)
+
+**Can run in parallel:**
+```bash
+# Terminal 1
+./spawn-agent.sh P1-S4-4.2
+# Auto-creates: ~/starport-development/starport-cache/
+# Creates: Caching system
+# Time: ~6 hours
+
+# Terminal 2
+./spawn-agent.sh P1-S4-4.3
+# Auto-creates: ~/starport-development/starport-filters/
+# Creates: Content filtering
+# Time: ~6 hours
+```
+
 ## Quick Reference Card
 
 ### Can Run Immediately
 - `P1-S1-1.1` - First task, no dependencies
 
-### Can Run After 1.1
-- `P1-S1-1.2` - Project structure
+### Foundation Dependencies
+- `P1-S1-1.2` - After 1.1
+- `P1-S1-1.3` - After 1.2
+- `P1-S1-1.4` - After 1.2
+- `P1-S1-1.5` - After 1.4
 
-### Can Run After 1.2
-- `P1-S1-1.3` - Dev environment
-- `P1-S1-1.4` - HTTP server
+### Storage Dependencies
+- `P1-S2-2.1` - After 1.5
+- `P1-S2-2.2` - After 2.1 (parallel with 2.3)
+- `P1-S2-2.3` - After 2.1 (parallel with 2.2)
 
-### Can Run After 1.4
-- `P1-S1-1.5` - Configuration
+### LLM Proxy Dependencies
+- `P1-S3-3.1` - After 1.4
+- `P1-S3-3.2` - After 3.1 (parallel with 3.3)
+- `P1-S3-3.3` - After 3.1 (parallel with 3.2)
+- `P1-S3-3.4` - After 3.2
 
-### Can Run After 1.5
-- `P1-S2-2.1` - Storage interface
+### Feature Dependencies
+- `P1-S4-4.1` - After 2.3 (parallel with 4.4)
+- `P1-S4-4.2` - After 3.3 (parallel with 4.3)
+- `P1-S4-4.3` - After 3.3 (parallel with 4.2)
+- `P1-S4-4.4` - After 2.3 (parallel with 4.1)
 
 ## Status Tracking
 
@@ -125,13 +225,21 @@ P1-S1-1.2 (Project Structure)
   |
   +---> P1-S1-1.3 (Dev Environment)
   |
-  +---> P1-S1-1.4 (HTTP Server)
-            |
-            v
-          P1-S1-1.5 (Configuration)
-            |
-            v
-          P1-S2-2.1 (Storage Interface)
+  +---> P1-S1-1.4 (HTTP Server) -----> P1-S3-3.1 (Connector Interface)
+            |                                    |
+            v                                    +---> P1-S3-3.2 (Providers)
+          P1-S1-1.5 (Configuration)              |           |
+            |                                    |           v
+            v                                    |     P1-S3-3.4 (Routing)
+          P1-S2-2.1 (Storage Interface)          |
+            |                                    +---> P1-S3-3.3 (Proxy)
+            +---> P1-S2-2.2 (Badger)                        |
+            |                                               +---> P1-S4-4.2 (Cache)
+            +---> P1-S2-2.3 (Models)                        |
+                    |                                       +---> P1-S4-4.3 (Filters)
+                    +---> P1-S4-4.1 (BYOK)
+                    |
+                    +---> P1-S4-4.4 (Presets)
 ```
 
 ## Automatic Workspace Management
@@ -147,12 +255,30 @@ The `spawn-agent.sh` script handles all workspace management for you:
 
 ### Workspace Locations
 All agent workspaces are created under `~/starport-development/`:
+
+**Foundation:**
 - `P1-S1-1.1` → `~/starport-development/starport-init/`
 - `P1-S1-1.2` → `~/starport-development/starport-structure/`
 - `P1-S1-1.3` → `~/starport-development/starport-devops/`
 - `P1-S1-1.4` → `~/starport-development/starport-http/`
 - `P1-S1-1.5` → `~/starport-development/starport-config/`
+
+**Storage:**
 - `P1-S2-2.1` → `~/starport-development/starport-storage-interface/`
+- `P1-S2-2.2` → `~/starport-development/starport-badger/`
+- `P1-S2-2.3` → `~/starport-development/starport-models/`
+
+**LLM Proxy:**
+- `P1-S3-3.1` → `~/starport-development/starport-connector-interface/`
+- `P1-S3-3.2` → `~/starport-development/starport-connectors/`
+- `P1-S3-3.3` → `~/starport-development/starport-proxy/`
+- `P1-S3-3.4` → `~/starport-development/starport-routing/`
+
+**Features:**
+- `P1-S4-4.1` → `~/starport-development/starport-byok/`
+- `P1-S4-4.2` → `~/starport-development/starport-cache/`
+- `P1-S4-4.3` → `~/starport-development/starport-filters/`
+- `P1-S4-4.4` → `~/starport-development/starport-presets/`
 
 ### Clean Up After Merge
 Once a PR is merged, you can remove the workspace:

@@ -55,14 +55,31 @@ if [ -z "$1" ]; then
     echo "  2. Provide the complete context for the task"
     echo "  3. Start Claude Code in the workspace with --yolo mode"
     echo ""
-    echo "Available first tasks:"
+    echo "Phase 1 Tasks (in dependency order):"
+    echo ""
+    echo "Foundation:"
     echo "  P1-S1-1.1 - Repository Initialization (start here)"
-    echo ""
-    echo "After P1-S1-1.1 completes:"
     echo "  P1-S1-1.2 - Project Structure"
+    echo "  P1-S1-1.3 - Development Environment"
+    echo "  P1-S1-1.4 - HTTP Server Foundation"
+    echo "  P1-S1-1.5 - Configuration System"
     echo ""
-    echo "After P1-S1-1.5 completes:"
+    echo "Storage:"
     echo "  P1-S2-2.1 - Storage Interface Definition"
+    echo "  P1-S2-2.2 - Badger DB Integration"
+    echo "  P1-S2-2.3 - Core Storage Models"
+    echo ""
+    echo "LLM Proxy:"
+    echo "  P1-S3-3.1 - Model Connector Interface"
+    echo "  P1-S3-3.2 - OpenAI & Anthropic Connectors"
+    echo "  P1-S3-3.3 - Proxy Endpoints Implementation"
+    echo "  P1-S3-3.4 - Advanced Routing System"
+    echo ""
+    echo "Features:"
+    echo "  P1-S4-4.1 - BYOK Implementation"
+    echo "  P1-S4-4.2 - Caching System"
+    echo "  P1-S4-4.3 - Content Filtering Pipeline"
+    echo "  P1-S4-4.4 - Preset Management System"
     exit 1
 fi
 
@@ -159,6 +176,178 @@ case $TASK_ID in
 - Add context support throughout
 - Define transaction interface
 - Create mock implementation for testing"
+        ;;
+    "P1-S2-2.2")
+        WORKSPACE_NAME="starport-badger"
+        AGENT_NAME="Storage"
+        TASK_NAME="Badger DB Integration"
+        BRANCH="task/P1-S2-2.2-badger-integration"
+        PREREQ="Task P1-S2-2.1 must be complete (storage interface)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.2
+2. \$REPO_PATH/ARCHITECTURE.md - Review Badger configuration
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Implement BadgerStore struct
+- Configure Badger options for performance
+- Implement all KVStore interface methods
+- Add TTL support for rate limiting
+- Create backup/restore utilities
+- Add compaction scheduling
+- Write comprehensive tests"
+        ;;
+    "P1-S2-2.3")
+        WORKSPACE_NAME="starport-models"
+        AGENT_NAME="Models"
+        TASK_NAME="Core Storage Models"
+        BRANCH="task/P1-S2-2.3-storage-models"
+        PREREQ="Task P1-S2-2.1 must be complete (storage interface)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.3
+2. \$REPO_PATH/ARCHITECTURE.md - Review data models section
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Define APIKey model with validation
+- Define Preset model with versioning
+- Define BYOKCredential with encryption
+- Create serialization helpers
+- Add model validation
+- Implement encryption/decryption
+- Write model tests"
+        ;;
+    "P1-S3-3.1")
+        WORKSPACE_NAME="starport-connector-interface"
+        AGENT_NAME="Connector"
+        TASK_NAME="Model Connector Interface"
+        BRANCH="task/P1-S3-3.1-connector-interface"
+        PREREQ="Task P1-S1-1.4 must be complete (HTTP server)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.1
+2. \$REPO_PATH/ARCHITECTURE.md - Review connector design
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Define Connector interface
+- Create request/response types
+- Add streaming support
+- Define provider config structure
+- Create mock connector
+- Add health check interface
+- Write interface tests"
+        ;;
+    "P1-S3-3.2")
+        WORKSPACE_NAME="starport-connectors"
+        AGENT_NAME="Connectors"
+        TASK_NAME="OpenAI & Anthropic Connectors"
+        BRANCH="task/P1-S3-3.2-provider-connectors"
+        PREREQ="Task P1-S3-3.1 must be complete (connector interface)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.2
+2. \$REPO_PATH/ARCHITECTURE.md - Review provider implementations
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Implement OpenAI connector
+- Add OpenAI streaming support
+- Implement Anthropic connector
+- Add Anthropic streaming
+- Configure connection pooling
+- Add retry logic
+- Write integration tests"
+        ;;
+    "P1-S3-3.3")
+        WORKSPACE_NAME="starport-proxy"
+        AGENT_NAME="Proxy"
+        TASK_NAME="Proxy Endpoints Implementation"
+        BRANCH="task/P1-S3-3.3-proxy-endpoints"
+        PREREQ="Task P1-S3-3.1 must be complete (connector interface)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.3
+2. \$REPO_PATH/ARCHITECTURE.md - Review API endpoints
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Implement /v1/chat/completions
+- Add streaming for chat endpoint
+- Implement /v1/embeddings
+- Implement /v1/models
+- Add OpenRouter endpoints
+- Create request validators
+- Add response transformers
+- Write endpoint tests"
+        ;;
+    "P1-S3-3.4")
+        WORKSPACE_NAME="starport-routing"
+        AGENT_NAME="Routing"
+        TASK_NAME="Advanced Routing System"
+        BRANCH="task/P1-S3-3.4-routing-system"
+        PREREQ="Task P1-S3-3.2 must be complete (provider connectors)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.4
+2. \$REPO_PATH/ARCHITECTURE.md - Review routing strategies
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Implement routing interface
+- Add latency tracking (EMA)
+- Implement cost-based routing
+- Add content classifier
+- Create fallback logic
+- Add circuit breakers
+- Implement health checks
+- Write routing tests"
+        ;;
+    "P1-S4-4.1")
+        WORKSPACE_NAME="starport-byok"
+        AGENT_NAME="BYOK"
+        TASK_NAME="BYOK Implementation"
+        BRANCH="task/P1-S4-4.1-byok-implementation"
+        PREREQ="Task P1-S2-2.3 must be complete (storage models)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.1
+2. \$REPO_PATH/ARCHITECTURE.md - Review BYOK security design
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Implement encryption layer
+- Add key derivation (Argon2)
+- Create BYOK manager
+- Add provider key mapping
+- Implement key rotation
+- Add audit logging
+- Write security tests"
+        ;;
+    "P1-S4-4.2")
+        WORKSPACE_NAME="starport-cache"
+        AGENT_NAME="Cache"
+        TASK_NAME="Caching System"
+        BRANCH="task/P1-S4-4.2-caching-system"
+        PREREQ="Task P1-S3-3.3 must be complete (proxy endpoints)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.2
+2. \$REPO_PATH/ARCHITECTURE.md - Review caching architecture
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Integrate Ristretto cache
+- Implement cache key generation
+- Add KV store cache layer
+- Create cache policies
+- Add invalidation logic
+- Implement cache warming
+- Write cache tests"
+        ;;
+    "P1-S4-4.3")
+        WORKSPACE_NAME="starport-filters"
+        AGENT_NAME="Filters"
+        TASK_NAME="Content Filtering Pipeline"
+        BRANCH="task/P1-S4-4.3-content-filtering"
+        PREREQ="Task P1-S3-3.3 must be complete (proxy endpoints)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.3
+2. \$REPO_PATH/ARCHITECTURE.md - Review filtering design
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Create filter interface
+- Implement pre-request filters
+- Add post-response filters
+- Create PII detector
+- Add regex filters
+- Build filter chains
+- Write filter tests"
+        ;;
+    "P1-S4-4.4")
+        WORKSPACE_NAME="starport-presets"
+        AGENT_NAME="Presets"
+        TASK_NAME="Preset Management System"
+        BRANCH="task/P1-S4-4.4-preset-management"
+        PREREQ="Task P1-S2-2.3 must be complete (storage models)"
+        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.4
+2. \$REPO_PATH/ARCHITECTURE.md - Review preset management
+3. \$REPO_PATH/COORDINATION.md - Update your task status"
+        REQUIREMENTS="- Create preset manager
+- Add template variable support
+- Implement inheritance
+- Add version control
+- Create CRUD operations
+- Add validation
+- Write preset tests"
         ;;
     *)
         echo -e "${YELLOW}Unknown task ID: $TASK_ID${NC}"
