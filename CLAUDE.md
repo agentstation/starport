@@ -40,12 +40,12 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 | TASKS.md | Task definitions, requirements, and live status (single source of truth) | Read for requirements, update for status |
 | ARCHITECTURE.md | Technical specifications | Reference for design decisions |
 
-### 1. Task Selection
-When starting work:
-1. Check TASKS.md for available tasks
-2. Look for tasks with status `ready` and no blocking dependencies
-3. Select tasks that match your assigned area (backend, frontend, devops, etc.)
-4. Use the task ID format: `PHASE-SUBPHASE-TASK` (e.g., `P1-S1-1.2`)
+### 1. Working on Your Task
+You will receive a specific task ID (e.g., `P1-S1-1.2`) in your context. The spawn-agent.sh script has already:
+- Verified prerequisites
+- Created a workspace
+- Provided the task requirements
+- Given you the branch name to create
 
 ### 2. Branch Naming Convention
 ```bash
@@ -60,51 +60,7 @@ When creating a PR:
 - Link to the task in TASKS.md
 - Include acceptance criteria checklist in PR description
 
-### 4. Parallel Execution Guidelines
-
-#### Safe for Parallel Work
-These task groups can be worked on simultaneously by different Claude Code instances:
-
-**Subphase 1.1 Parallel Groups:**
-- Group A: Repository setup (1.1)
-- Group B: Documentation setup (1.6, 1.7) - after 1.1
-
-**Subphase 1.2 Parallel Groups:**
-- Group A: Project structure (1.2) - after 1.1
-- Group B: Development environment (1.3) - after 1.2
-- Group C: HTTP server (1.4) - after 1.2
-
-**Subphase 1.3+ Parallel Groups:**
-- Group A: OpenAI connector (3.2)
-- Group B: Anthropic connector (3.3)
-- Group C: Management API (6.1)
-- Group D: CLI implementation (6.2)
-
-#### Sequential Dependencies
-These must be done in order:
-1. Storage interface (2.1) → Badger implementation (2.2)
-2. HTTP server (1.4) → Configuration system (1.5)
-3. Connectors (3.2, 3.3) → Routing engine (3.4) → API endpoints (3.5)
-
-### 5. Task Assignment via Claude Code
-
-To run multiple Claude Code instances in parallel:
-
-```bash
-# Terminal 1 - Backend Storage Team
-claude-code --task-filter "storage|badger|kv" --branch-prefix "task/" TASKS.md
-
-# Terminal 2 - API Team  
-claude-code --task-filter "api|endpoint|openai|anthropic" --branch-prefix "task/" TASKS.md
-
-# Terminal 3 - DevOps Team
-claude-code --task-filter "docker|ci|deployment" --branch-prefix "task/" TASKS.md
-
-# Terminal 4 - Documentation Team
-claude-code --task-filter "docs|openapi|sdk" --branch-prefix "task/" TASKS.md
-```
-
-### 6. Task Status Management
+### 4. Task Status Management
 
 **TASKS.md is the single source of truth for task status.**
 

@@ -12,13 +12,261 @@ NC='\033[0m'
 REPO_URL="https://github.com/agentstation/starport"
 WORKSPACE_ROOT="$HOME/starport-development"
 
-# Common workflow template that applies to ALL tasks
+# Task definitions - stored as JSON-like structure
+declare -A TASKS=(
+    ["P1-S1-1.1"]='
+        name="Repository Initialization"
+        workspace="starport-init"
+        branch="task/P1-S1-1.1-repo-init"
+        prereq=""
+        prereq_verify=""
+        architecture_sections="sections 1-3 for project overview"
+        requirements="
+- Create go.mod with module path: github.com/agentstation/starport
+- Ensure .gitignore exists
+- Create LICENSE file (MIT)
+- Update README.md if needed"
+    '
+    ["P1-S1-1.2"]='
+        name="Project Structure Setup"
+        workspace="starport-structure"
+        branch="task/P1-S1-1.2-project-structure"
+        prereq="Task P1-S1-1.1 must be complete (check for go.mod)"
+        prereq_verify="test -f go.mod || echo \"ERROR: go.mod not found - P1-S1-1.1 not complete\""
+        architecture_sections="section 4 for directory structure"
+        requirements="
+- Create directory structure per ARCHITECTURE.md
+- Create cmd/starport/main.go with CLI framework (urfave/cli)
+- Implement \"version\" and \"serve\" commands
+- Create Makefile with standard targets"
+    '
+    ["P1-S1-1.3"]='
+        name="Development Environment"
+        workspace="starport-devops"
+        branch="task/P1-S1-1.3-dev-environment"
+        prereq="Task P1-S1-1.2 must be complete (check for cmd/starport/main.go)"
+        prereq_verify="test -f cmd/starport/main.go || echo \"ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete\""
+        architecture_sections="DevOps sections"
+        requirements="
+- Create docker-compose.yml for local Valkey
+- Set up GitHub Actions workflow (.github/workflows/ci.yml)
+- Configure golangci-lint
+- Add pre-commit hooks"
+    '
+    ["P1-S1-1.4"]='
+        name="HTTP Server Foundation"
+        workspace="starport-http"
+        branch="task/P1-S1-1.4-http-server"
+        prereq="Task P1-S1-1.2 must be complete"
+        prereq_verify="test -f cmd/starport/main.go || echo \"ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete\""
+        architecture_sections="HTTP server design"
+        requirements="
+- Implement HTTP server with chi router
+- Add middleware: request ID, logging, recovery, CORS
+- Create health check endpoints
+- Implement graceful shutdown"
+    '
+    ["P1-S1-1.5"]='
+        name="Configuration System"
+        workspace="starport-config"
+        branch="task/P1-S1-1.5-config-system"
+        prereq="Task P1-S1-1.4 must be complete"
+        prereq_verify="test -f internal/server/server.go || echo \"ERROR: internal/server/server.go not found - P1-S1-1.4 not complete\""
+        architecture_sections="configuration design"
+        requirements="
+- Define configuration structures
+- Implement YAML loading with viper
+- Add environment variable mapping
+- Create validation logic
+- Implement hot reload for rate limits"
+    '
+    ["P1-S2-2.1"]='
+        name="Storage Interface Definition"
+        workspace="starport-storage-interface"
+        branch="task/P1-S2-2.1-storage-interface"
+        prereq="Task P1-S1-1.5 must be complete (configuration system)"
+        prereq_verify="test -f internal/config/config.go || echo \"ERROR: internal/config/config.go not found - P1-S1-1.5 not complete\""
+        architecture_sections="storage architecture sections"
+        requirements="
+- Define KVStore interface with all required operations
+- Create error types for storage operations
+- Add serialization helpers
+- Create factory pattern for storage backends
+- Add context support throughout
+- Define transaction interface
+- Create mock implementation for testing"
+    '
+    ["P1-S2-2.2"]='
+        name="Badger DB Integration"
+        workspace="starport-badger"
+        branch="task/P1-S2-2.2-badger-integration"
+        prereq="Task P1-S2-2.1 must be complete (storage interface)"
+        prereq_verify="test -f internal/storage/interface.go || echo \"ERROR: internal/storage/interface.go not found - P1-S2-2.1 not complete\""
+        architecture_sections="Badger configuration"
+        requirements="
+- Implement BadgerStore struct
+- Configure Badger options for performance
+- Implement all KVStore interface methods
+- Add TTL support for rate limiting
+- Create backup/restore utilities
+- Add compaction scheduling
+- Write comprehensive tests"
+    '
+    ["P1-S2-2.3"]='
+        name="Core Storage Models"
+        workspace="starport-models"
+        branch="task/P1-S2-2.3-storage-models"
+        prereq="Task P1-S2-2.1 must be complete (storage interface)"
+        prereq_verify="test -f internal/storage/interface.go || echo \"ERROR: internal/storage/interface.go not found - P1-S2-2.1 not complete\""
+        architecture_sections="data models section"
+        requirements="
+- Define APIKey model with validation
+- Define Preset model with versioning
+- Define BYOKCredential with encryption
+- Create serialization helpers
+- Add model validation
+- Implement encryption/decryption
+- Write model tests"
+    '
+    ["P1-S3-3.1"]='
+        name="Model Connector Interface"
+        workspace="starport-connector-interface"
+        branch="task/P1-S3-3.1-connector-interface"
+        prereq="Task P1-S1-1.4 must be complete (HTTP server)"
+        prereq_verify="test -f internal/server/server.go || echo \"ERROR: internal/server/server.go not found - P1-S1-1.4 not complete\""
+        architecture_sections="connector design"
+        requirements="
+- Define Connector interface
+- Create request/response types
+- Add streaming support
+- Define provider config structure
+- Create mock connector
+- Add health check interface
+- Write interface tests"
+    '
+    ["P1-S3-3.2"]='
+        name="OpenAI & Anthropic Connectors"
+        workspace="starport-connectors"
+        branch="task/P1-S3-3.2-provider-connectors"
+        prereq="Task P1-S3-3.1 must be complete (connector interface)"
+        prereq_verify="test -f internal/connector/interface.go || echo \"ERROR: internal/connector/interface.go not found - P1-S3-3.1 not complete\""
+        architecture_sections="provider implementations"
+        requirements="
+- Implement OpenAI connector
+- Add OpenAI streaming support
+- Implement Anthropic connector
+- Add Anthropic streaming
+- Configure connection pooling
+- Add retry logic
+- Write integration tests"
+    '
+    ["P1-S3-3.3"]='
+        name="Proxy Endpoints Implementation"
+        workspace="starport-proxy"
+        branch="task/P1-S3-3.3-proxy-endpoints"
+        prereq="Task P1-S3-3.1 must be complete (connector interface)"
+        prereq_verify="test -f internal/connector/interface.go || echo \"ERROR: internal/connector/interface.go not found - P1-S3-3.1 not complete\""
+        architecture_sections="API endpoints"
+        requirements="
+- Implement /v1/chat/completions
+- Add streaming for chat endpoint
+- Implement /v1/embeddings
+- Implement /v1/models
+- Add OpenRouter endpoints
+- Create request validators
+- Add response transformers
+- Write endpoint tests"
+    '
+    ["P1-S3-3.4"]='
+        name="Advanced Routing System"
+        workspace="starport-routing"
+        branch="task/P1-S3-3.4-routing-system"
+        prereq="Task P1-S3-3.2 must be complete (provider connectors)"
+        prereq_verify="test -d internal/connector/openai || echo \"ERROR: OpenAI connector not found - P1-S3-3.2 not complete\""
+        architecture_sections="routing strategies"
+        requirements="
+- Implement routing interface
+- Add latency tracking (EMA)
+- Implement cost-based routing
+- Add content classifier
+- Create fallback logic
+- Add circuit breakers
+- Implement health checks
+- Write routing tests"
+    '
+    ["P1-S4-4.1"]='
+        name="BYOK Implementation"
+        workspace="starport-byok"
+        branch="task/P1-S4-4.1-byok-implementation"
+        prereq="Task P1-S2-2.3 must be complete (storage models)"
+        prereq_verify="test -f internal/models/apikey.go || echo \"ERROR: API key model not found - P1-S2-2.3 not complete\""
+        architecture_sections="BYOK security design"
+        requirements="
+- Implement encryption layer
+- Add key derivation (Argon2)
+- Create BYOK manager
+- Add provider key mapping
+- Implement key rotation
+- Add audit logging
+- Write security tests"
+    '
+    ["P1-S4-4.2"]='
+        name="Caching System"
+        workspace="starport-cache"
+        branch="task/P1-S4-4.2-caching-system"
+        prereq="Task P1-S3-3.3 must be complete (proxy endpoints)"
+        prereq_verify="test -f internal/proxy/handlers.go || echo \"ERROR: Proxy handlers not found - P1-S3-3.3 not complete\""
+        architecture_sections="caching architecture"
+        requirements="
+- Integrate Ristretto cache
+- Implement cache key generation
+- Add KV store cache layer
+- Create cache policies
+- Add invalidation logic
+- Implement cache warming
+- Write cache tests"
+    '
+    ["P1-S4-4.3"]='
+        name="Content Filtering Pipeline"
+        workspace="starport-filters"
+        branch="task/P1-S4-4.3-content-filtering"
+        prereq="Task P1-S3-3.3 must be complete (proxy endpoints)"
+        prereq_verify="test -f internal/proxy/handlers.go || echo \"ERROR: Proxy handlers not found - P1-S3-3.3 not complete\""
+        architecture_sections="filtering design"
+        requirements="
+- Create filter interface
+- Implement pre-request filters
+- Add post-response filters
+- Create PII detector
+- Add regex filters
+- Build filter chains
+- Write filter tests"
+    '
+    ["P1-S4-4.4"]='
+        name="Preset Management System"
+        workspace="starport-presets"
+        branch="task/P1-S4-4.4-preset-management"
+        prereq="Task P1-S2-2.3 must be complete (storage models)"
+        prereq_verify="test -f internal/models/preset.go || echo \"ERROR: Preset model not found - P1-S2-2.3 not complete\""
+        architecture_sections="preset management"
+        requirements="
+- Create preset manager
+- Add template variable support
+- Implement inheritance
+- Add version control
+- Create CRUD operations
+- Add validation
+- Write preset tests"
+    '
+)
+
+# Common workflow template
 WORKFLOW_TEMPLATE="IMPORTANT WORKFLOW:
 1. IMMEDIATELY update TASKS.md to mark your task as 'In Progress'
    - Add entry to 'Active Work' table with your task, branch, and status
 2. Complete the task requirements below
 3. Update TASKS.md when PR is ready:
-   - Move task to 'Completed Today' section
+   - Move task to 'Recently Completed' section
    - Add PR number
 4. Create and submit the PR
 
@@ -27,410 +275,158 @@ Note: TASKS.md is the single source of truth for task status!"
 # Function to generate agent context
 generate_context() {
     local task_id=$1
-    local task_name=$2
-    local workspace=$3
-    local branch=$4
-    local prerequisite=$5
-    local prereq_verify=$6
-    local files_to_read=$7
-    local requirements=$8
+    local task_info=$2
     
-    echo "You are working on task $task_id ($task_name) for the Starport project.
+    # Parse task info
+    eval "$task_info"
+    
+    # Build file list
+    local files_to_read="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
+2. \$REPO_PATH/TASKS.md - Find task $task_id for detailed requirements
+3. \$REPO_PATH/ARCHITECTURE.md - Review $architecture_sections"
+    
+    # Add optional files based on task
+    if [[ -n "$additional_files" ]]; then
+        files_to_read="$files_to_read
+$additional_files"
+    fi
+    
+    echo "You are working on task $task_id ($name) for the Starport project.
 
 Project: Starport - A high-performance LLM gateway
-${prerequisite:+Prerequisite: $prerequisite
+${prereq:+Prerequisite: $prereq
 }${prereq_verify:+Verification command: $prereq_verify
-}Workspace: $workspace
+}Workspace: \$REPO_PATH
 
 $WORKFLOW_TEMPLATE
 
 First, read these files:
 $files_to_read
 
-Your task requirements:
-$requirements
+Your task requirements:$requirements
+
+Additional instructions:
 - Create branch: $branch
-- Follow PR format in TASKS.md"
+- Follow PR format in TASKS.md
+- Check acceptance criteria in TASKS.md for this task
+- Ensure all tests pass before submitting PR"
 }
 
-# Check if task ID was provided
+# Function to setup workspace
+setup_workspace() {
+    local task_id=$1
+    local workspace_name=$2
+    
+    local workspace_path="$WORKSPACE_ROOT/$workspace_name"
+    
+    # Check if workspace already exists
+    if [ -d "$workspace_path" ]; then
+        echo -e "${YELLOW}Workspace already exists at: $workspace_path${NC}"
+        echo ""
+        echo "What would you like to do?"
+        echo "1) Use existing workspace (pull latest changes)"
+        echo "2) Remove and recreate workspace"
+        echo "3) Cancel"
+        echo ""
+        read -p "Choice (1-3): " choice
+        
+        case $choice in
+            1)
+                cd "$workspace_path"
+                echo -e "${BLUE}Pulling latest changes...${NC}"
+                git checkout main
+                git pull origin main
+                ;;
+            2)
+                echo -e "${RED}Removing existing workspace...${NC}"
+                rm -rf "$workspace_path"
+                echo -e "${BLUE}Cloning fresh workspace...${NC}"
+                git clone "$REPO_URL" "$workspace_path"
+                cd "$workspace_path"
+                ;;
+            3)
+                echo "Cancelled."
+                exit 0
+                ;;
+            *)
+                echo "Invalid choice. Cancelled."
+                exit 1
+                ;;
+        esac
+    else
+        echo -e "${BLUE}Creating workspace directory...${NC}"
+        mkdir -p "$WORKSPACE_ROOT"
+        echo -e "${BLUE}Cloning new workspace...${NC}"
+        git clone "$REPO_URL" "$workspace_path"
+        cd "$workspace_path"
+    fi
+    
+    echo "$workspace_path"
+}
+
+# Main script
 if [ -z "$1" ]; then
     echo "Usage: ./spawn-agent.sh <TASK-ID>"
     echo ""
     echo "This script will:"
     echo "  1. Create a separate clone for the agent (avoids Git conflicts)"
     echo "  2. Provide the complete context for the task"
-    echo "  3. Start Claude Code in the workspace with --yolo mode"
+    echo "  3. Start Claude Code in the workspace"
     echo ""
-    echo "Phase 1 Tasks (in dependency order):"
+    echo "Available Phase 1 Tasks:"
     echo ""
-    echo "Foundation:"
-    echo "  P1-S1-1.1 - Repository Initialization (start here)"
-    echo "  P1-S1-1.2 - Project Structure"
-    echo "  P1-S1-1.3 - Development Environment"
-    echo "  P1-S1-1.4 - HTTP Server Foundation"
-    echo "  P1-S1-1.5 - Configuration System"
-    echo ""
-    echo "Storage:"
-    echo "  P1-S2-2.1 - Storage Interface Definition"
-    echo "  P1-S2-2.2 - Badger DB Integration"
-    echo "  P1-S2-2.3 - Core Storage Models"
-    echo ""
-    echo "LLM Proxy:"
-    echo "  P1-S3-3.1 - Model Connector Interface"
-    echo "  P1-S3-3.2 - OpenAI & Anthropic Connectors"
-    echo "  P1-S3-3.3 - Proxy Endpoints Implementation"
-    echo "  P1-S3-3.4 - Advanced Routing System"
-    echo ""
-    echo "Features:"
-    echo "  P1-S4-4.1 - BYOK Implementation"
-    echo "  P1-S4-4.2 - Caching System"
-    echo "  P1-S4-4.3 - Content Filtering Pipeline"
-    echo "  P1-S4-4.4 - Preset Management System"
+    
+    # List tasks in order
+    for task_id in P1-S1-1.1 P1-S1-1.2 P1-S1-1.3 P1-S1-1.4 P1-S1-1.5 \
+                   P1-S2-2.1 P1-S2-2.2 P1-S2-2.3 \
+                   P1-S3-3.1 P1-S3-3.2 P1-S3-3.3 P1-S3-3.4 \
+                   P1-S4-4.1 P1-S4-4.2 P1-S4-4.3 P1-S4-4.4; do
+        if [[ -n "${TASKS[$task_id]}" ]]; then
+            eval "${TASKS[$task_id]}"
+            echo "  $task_id - $name"
+        fi
+    done
     exit 1
 fi
 
 TASK_ID=$1
 
-# Task definitions with workspace names
-case $TASK_ID in
-    "P1-S1-1.1")
-        WORKSPACE_NAME="starport-init"
-        AGENT_NAME="Foundation"
-        TASK_NAME="Repository Initialization"
-        BRANCH="task/P1-S1-1.1-repo-init"
-        PREREQ=""
-        PREREQ_VERIFY=""
-        FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
-2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.1 for detailed requirements
-3. \$REPO_PATH/ARCHITECTURE.md - Review sections 1-3 for project overview
-"
-        REQUIREMENTS="- Create go.mod with module path: github.com/agentstation/starport
-- Ensure .gitignore exists (already created)
-- Create LICENSE file (MIT)
-- Update README.md if needed"
-        ;;
-    "P1-S1-1.2")
-        WORKSPACE_NAME="starport-structure"
-        AGENT_NAME="Structure"
-        TASK_NAME="Project Structure"
-        BRANCH="task/P1-S1-1.2-project-structure"
-        PREREQ="Task P1-S1-1.1 must be complete (check for go.mod)"
-        PREREQ_VERIFY="test -f go.mod || echo 'ERROR: go.mod not found - P1-S1-1.1 not complete'"
-        FILES_TO_READ="1. \$REPO_PATH/CLAUDE.md - Understand the workflow
-2. \$REPO_PATH/TASKS.md - Find task P1-S1-1.2 for requirements
-3. \$REPO_PATH/ARCHITECTURE.md - Review section 4 for directory structure
-"
-        REQUIREMENTS="- Create directory structure per ARCHITECTURE.md
-- Create cmd/starport/main.go with CLI framework (urfave/cli)
-- Implement 'version' and 'serve' commands
-- Create Makefile with standard targets"
-        ;;
-    "P1-S1-1.3")
-        WORKSPACE_NAME="starport-devops"
-        AGENT_NAME="DevOps"
-        TASK_NAME="Development Environment"
-        BRANCH="task/P1-S1-1.3-dev-environment"
-        PREREQ="Task P1-S1-1.2 must be complete (check for cmd/starport/main.go)"
-        PREREQ_VERIFY="test -f cmd/starport/main.go || echo 'ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete'"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.3
-2. \$REPO_PATH/ARCHITECTURE.md - Review DevOps sections
-"
-        REQUIREMENTS="- Create docker-compose.yml for local Valkey
-- Set up GitHub Actions workflow (.github/workflows/ci.yml)
-- Configure golangci-lint
-- Add pre-commit hooks"
-        ;;
-    "P1-S1-1.4")
-        WORKSPACE_NAME="starport-http"
-        AGENT_NAME="HTTP"
-        TASK_NAME="HTTP Server Foundation"
-        BRANCH="task/P1-S1-1.4-http-server"
-        PREREQ="Task P1-S1-1.2 must be complete"
-        PREREQ_VERIFY="test -f cmd/starport/main.go || echo 'ERROR: cmd/starport/main.go not found - P1-S1-1.2 not complete'"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.4
-2. \$REPO_PATH/ARCHITECTURE.md - Review HTTP server design
-"
-        REQUIREMENTS="- Implement HTTP server with chi router
-- Add middleware: request ID, logging, recovery, CORS
-- Create health check endpoints
-- Implement graceful shutdown"
-        ;;
-    "P1-S1-1.5")
-        WORKSPACE_NAME="starport-config"
-        AGENT_NAME="Config"
-        TASK_NAME="Configuration System"
-        BRANCH="task/P1-S1-1.5-config-system"
-        PREREQ="Task P1-S1-1.4 must be complete"
-        PREREQ_VERIFY="test -f internal/server/server.go || echo 'ERROR: internal/server/server.go not found - P1-S1-1.4 not complete'"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S1-1.5
-2. \$REPO_PATH/ARCHITECTURE.md - Review configuration design
-"
-        REQUIREMENTS="- Define configuration structures
-- Implement YAML loading with viper
-- Add environment variable mapping
-- Create validation logic
-- Implement hot reload for rate limits"
-        ;;
-    "P1-S2-2.1")
-        WORKSPACE_NAME="starport-storage-interface"
-        AGENT_NAME="Storage"
-        TASK_NAME="Storage Interface Definition"
-        BRANCH="task/P1-S2-2.1-storage-interface"
-        PREREQ="Task P1-S1-1.5 must be complete (configuration system)"
-        PREREQ_VERIFY="test -f internal/config/config.go || echo 'ERROR: internal/config/config.go not found - P1-S1-1.5 not complete'"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.1
-2. \$REPO_PATH/ARCHITECTURE.md - Review storage architecture sections
-"
-        REQUIREMENTS="- Define KVStore interface with all required operations
-- Create error types for storage operations
-- Add serialization helpers
-- Create factory pattern for storage backends
-- Add context support throughout
-- Define transaction interface
-- Create mock implementation for testing"
-        ;;
-    "P1-S2-2.2")
-        WORKSPACE_NAME="starport-badger"
-        AGENT_NAME="Storage"
-        TASK_NAME="Badger DB Integration"
-        BRANCH="task/P1-S2-2.2-badger-integration"
-        PREREQ="Task P1-S2-2.1 must be complete (storage interface)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.2
-2. \$REPO_PATH/ARCHITECTURE.md - Review Badger configuration
-"
-        REQUIREMENTS="- Implement BadgerStore struct
-- Configure Badger options for performance
-- Implement all KVStore interface methods
-- Add TTL support for rate limiting
-- Create backup/restore utilities
-- Add compaction scheduling
-- Write comprehensive tests"
-        ;;
-    "P1-S2-2.3")
-        WORKSPACE_NAME="starport-models"
-        AGENT_NAME="Models"
-        TASK_NAME="Core Storage Models"
-        BRANCH="task/P1-S2-2.3-storage-models"
-        PREREQ="Task P1-S2-2.1 must be complete (storage interface)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S2-2.3
-2. \$REPO_PATH/ARCHITECTURE.md - Review data models section
-"
-        REQUIREMENTS="- Define APIKey model with validation
-- Define Preset model with versioning
-- Define BYOKCredential with encryption
-- Create serialization helpers
-- Add model validation
-- Implement encryption/decryption
-- Write model tests"
-        ;;
-    "P1-S3-3.1")
-        WORKSPACE_NAME="starport-connector-interface"
-        AGENT_NAME="Connector"
-        TASK_NAME="Model Connector Interface"
-        BRANCH="task/P1-S3-3.1-connector-interface"
-        PREREQ="Task P1-S1-1.4 must be complete (HTTP server)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.1
-2. \$REPO_PATH/ARCHITECTURE.md - Review connector design
-"
-        REQUIREMENTS="- Define Connector interface
-- Create request/response types
-- Add streaming support
-- Define provider config structure
-- Create mock connector
-- Add health check interface
-- Write interface tests"
-        ;;
-    "P1-S3-3.2")
-        WORKSPACE_NAME="starport-connectors"
-        AGENT_NAME="Connectors"
-        TASK_NAME="OpenAI & Anthropic Connectors"
-        BRANCH="task/P1-S3-3.2-provider-connectors"
-        PREREQ="Task P1-S3-3.1 must be complete (connector interface)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.2
-2. \$REPO_PATH/ARCHITECTURE.md - Review provider implementations
-"
-        REQUIREMENTS="- Implement OpenAI connector
-- Add OpenAI streaming support
-- Implement Anthropic connector
-- Add Anthropic streaming
-- Configure connection pooling
-- Add retry logic
-- Write integration tests"
-        ;;
-    "P1-S3-3.3")
-        WORKSPACE_NAME="starport-proxy"
-        AGENT_NAME="Proxy"
-        TASK_NAME="Proxy Endpoints Implementation"
-        BRANCH="task/P1-S3-3.3-proxy-endpoints"
-        PREREQ="Task P1-S3-3.1 must be complete (connector interface)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.3
-2. \$REPO_PATH/ARCHITECTURE.md - Review API endpoints
-"
-        REQUIREMENTS="- Implement /v1/chat/completions
-- Add streaming for chat endpoint
-- Implement /v1/embeddings
-- Implement /v1/models
-- Add OpenRouter endpoints
-- Create request validators
-- Add response transformers
-- Write endpoint tests"
-        ;;
-    "P1-S3-3.4")
-        WORKSPACE_NAME="starport-routing"
-        AGENT_NAME="Routing"
-        TASK_NAME="Advanced Routing System"
-        BRANCH="task/P1-S3-3.4-routing-system"
-        PREREQ="Task P1-S3-3.2 must be complete (provider connectors)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S3-3.4
-2. \$REPO_PATH/ARCHITECTURE.md - Review routing strategies
-"
-        REQUIREMENTS="- Implement routing interface
-- Add latency tracking (EMA)
-- Implement cost-based routing
-- Add content classifier
-- Create fallback logic
-- Add circuit breakers
-- Implement health checks
-- Write routing tests"
-        ;;
-    "P1-S4-4.1")
-        WORKSPACE_NAME="starport-byok"
-        AGENT_NAME="BYOK"
-        TASK_NAME="BYOK Implementation"
-        BRANCH="task/P1-S4-4.1-byok-implementation"
-        PREREQ="Task P1-S2-2.3 must be complete (storage models)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.1
-2. \$REPO_PATH/ARCHITECTURE.md - Review BYOK security design
-"
-        REQUIREMENTS="- Implement encryption layer
-- Add key derivation (Argon2)
-- Create BYOK manager
-- Add provider key mapping
-- Implement key rotation
-- Add audit logging
-- Write security tests"
-        ;;
-    "P1-S4-4.2")
-        WORKSPACE_NAME="starport-cache"
-        AGENT_NAME="Cache"
-        TASK_NAME="Caching System"
-        BRANCH="task/P1-S4-4.2-caching-system"
-        PREREQ="Task P1-S3-3.3 must be complete (proxy endpoints)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.2
-2. \$REPO_PATH/ARCHITECTURE.md - Review caching architecture
-"
-        REQUIREMENTS="- Integrate Ristretto cache
-- Implement cache key generation
-- Add KV store cache layer
-- Create cache policies
-- Add invalidation logic
-- Implement cache warming
-- Write cache tests"
-        ;;
-    "P1-S4-4.3")
-        WORKSPACE_NAME="starport-filters"
-        AGENT_NAME="Filters"
-        TASK_NAME="Content Filtering Pipeline"
-        BRANCH="task/P1-S4-4.3-content-filtering"
-        PREREQ="Task P1-S3-3.3 must be complete (proxy endpoints)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.3
-2. \$REPO_PATH/ARCHITECTURE.md - Review filtering design
-"
-        REQUIREMENTS="- Create filter interface
-- Implement pre-request filters
-- Add post-response filters
-- Create PII detector
-- Add regex filters
-- Build filter chains
-- Write filter tests"
-        ;;
-    "P1-S4-4.4")
-        WORKSPACE_NAME="starport-presets"
-        AGENT_NAME="Presets"
-        TASK_NAME="Preset Management System"
-        BRANCH="task/P1-S4-4.4-preset-management"
-        PREREQ="Task P1-S2-2.3 must be complete (storage models)"
-        FILES_TO_READ="1. \$REPO_PATH/TASKS.md - Find task P1-S4-4.4
-2. \$REPO_PATH/ARCHITECTURE.md - Review preset management
-"
-        REQUIREMENTS="- Create preset manager
-- Add template variable support
-- Implement inheritance
-- Add version control
-- Create CRUD operations
-- Add validation
-- Write preset tests"
-        ;;
-    *)
-        echo -e "${YELLOW}Unknown task ID: $TASK_ID${NC}"
-        echo "Check TASKS.md for valid task IDs"
+# Check if task exists
+if [[ -z "${TASKS[$TASK_ID]}" ]]; then
+    echo -e "${RED}Error: Unknown task ID: $TASK_ID${NC}"
+    echo "Run without arguments to see available tasks."
+    exit 1
+fi
+
+# Get task info
+eval "${TASKS[$TASK_ID]}"
+
+echo -e "${GREEN}=== Spawning Agent for Task $TASK_ID ===${NC}"
+echo -e "Task: ${BLUE}$name${NC}"
+echo -e "Workspace: ${BLUE}$workspace${NC}"
+echo ""
+
+# Set up workspace
+WORKSPACE_PATH=$(setup_workspace "$TASK_ID" "$workspace")
+cd "$WORKSPACE_PATH"
+
+# Run prerequisite verification if provided
+if [[ -n "$prereq_verify" ]]; then
+    echo -e "${YELLOW}Verifying prerequisites...${NC}"
+    eval "$prereq_verify"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Prerequisites not met. Please complete the dependent task first.${NC}"
         exit 1
-        ;;
-esac
-
-# Create workspace root if it doesn't exist
-if [ ! -d "$WORKSPACE_ROOT" ]; then
-    echo -e "${BLUE}Creating workspace root: $WORKSPACE_ROOT${NC}"
-    mkdir -p "$WORKSPACE_ROOT"
+    fi
+    echo -e "${GREEN}Prerequisites verified!${NC}"
+    echo ""
 fi
 
-# Set up the workspace
-WORKSPACE_PATH="$WORKSPACE_ROOT/$WORKSPACE_NAME"
-
-echo -e "${GREEN}=== Setting Up Agent Workspace ===${NC}"
-echo ""
-echo "Task: $TASK_ID - $TASK_NAME"
-echo "Workspace: $WORKSPACE_PATH"
-echo ""
-
-# Check if workspace already exists
-if [ -d "$WORKSPACE_PATH" ]; then
-    echo -e "${YELLOW}Workspace already exists!${NC}"
-    echo ""
-    echo "Options:"
-    echo "1. Use existing workspace (pulls latest main)"
-    echo "2. Remove and recreate workspace"
-    echo "3. Cancel"
-    echo ""
-    read -p "Choose option (1-3): " choice
-    
-    case $choice in
-        1)
-            cd "$WORKSPACE_PATH"
-            echo -e "${BLUE}Pulling latest changes...${NC}"
-            git checkout main
-            git pull origin main
-            ;;
-        2)
-            echo -e "${RED}Removing existing workspace...${NC}"
-            rm -rf "$WORKSPACE_PATH"
-            echo -e "${BLUE}Cloning fresh workspace...${NC}"
-            git clone "$REPO_URL" "$WORKSPACE_PATH"
-            cd "$WORKSPACE_PATH"
-            ;;
-        3)
-            echo "Cancelled."
-            exit 0
-            ;;
-        *)
-            echo "Invalid choice. Cancelled."
-            exit 1
-            ;;
-    esac
-else
-    echo -e "${BLUE}Cloning new workspace...${NC}"
-    git clone "$REPO_URL" "$WORKSPACE_PATH"
-    cd "$WORKSPACE_PATH"
-fi
-
-# Get the full path for context
+# Generate context
 REPO_PATH=$(pwd)
+AGENT_CONTEXT=$(generate_context "$TASK_ID" "${TASKS[$TASK_ID]}")
 
-# Generate context using the template function
-AGENT_CONTEXT=$(generate_context "$TASK_ID" "$TASK_NAME" "$REPO_PATH" "$BRANCH" "$PREREQ" "$PREREQ_VERIFY" "$FILES_TO_READ" "$REQUIREMENTS")
-
-# Save context to file for Claude Code
+# Save context to file
 CONTEXT_FILE="$WORKSPACE_PATH/context-$TASK_ID.txt"
 echo "$AGENT_CONTEXT" > "$CONTEXT_FILE"
 
@@ -444,27 +440,20 @@ echo ""
 if command -v claude &> /dev/null; then
     echo -e "${GREEN}=== Starting Claude Code ===${NC}"
     echo ""
-    echo -e "${YELLOW}Starting Claude Code with --yolo mode in workspace...${NC}"
-    echo -e "${YELLOW}Context will be provided: Read context-$TASK_ID.txt${NC}"
+    echo -e "${YELLOW}Starting Claude Code with context...${NC}"
     echo ""
-    
-    # Change to workspace directory and start Claude Code
+    # Start Claude Code with the context file
     cd "$WORKSPACE_PATH"
-    claude --yolo "Read context-$TASK_ID.txt to understand your task and begin work."
+    claude --yolo "$CONTEXT_FILE"
 else
-    echo -e "${YELLOW}Claude Code CLI not found. Manual steps:${NC}"
+    echo -e "${GREEN}=== Context Generated ===${NC}"
     echo ""
-    echo "1. Change to workspace directory:"
-    echo "   cd $WORKSPACE_PATH"
+    echo "Copy and paste this context into Claude Code:"
     echo ""
-    echo "2. Start Claude Code with --yolo mode:"
-    echo "   claude --yolo"
-    echo ""
-    echo "3. Tell Claude to read the context:"
-    echo "   Read context-$TASK_ID.txt"
-    echo ""
-    echo -e "${GREEN}Or copy this context directly:${NC}"
     echo "----------------------------------------"
-    echo "$AGENT_CONTEXT"
+    cat "$CONTEXT_FILE"
     echo "----------------------------------------"
+    echo ""
+    echo -e "${YELLOW}Note: Install Claude CLI for automatic startup${NC}"
+    echo "Visit: https://claude.ai/cli"
 fi
