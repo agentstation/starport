@@ -326,10 +326,58 @@ func main() {
 
 ## 8. Advanced Routing Architecture
 
-### 8.1 Routing Strategies
+### 8.1 OpenRouter-Compatible Model Naming
+
+**Model ID Format**: All models use the `provider/model` format for full OpenRouter compatibility:
+```
+openai/gpt-4
+anthropic/claude-3-opus-20240229
+google/gemini-1.5-pro
+groq/llama-3.1-70b-versatile
+mistral/mistral-large-latest
+azure/gpt-4
+```
+
+**Current Limitations**:
+- Google AI Studio and Vertex AI are combined under "google" provider
+  - Should be separated into `google-aistudio` and `google-vertexai` 
+  - Vertex AI supports many non-Gemini models (PaLM, Codey, etc.)
+- Static model lists for some providers (should fetch dynamically)
+
+### 8.2 Model Routing (OpenRouter Compatible)
+
+```go
+// Support for OpenRouter's model selection and fallback
+type ChatRequest struct {
+    Model   string   `json:"model"`           // Primary model (e.g., "openai/gpt-4")
+    Models  []string `json:"models,omitempty"` // Fallback models in order
+    // ... other fields
+}
+
+// Auto-routing support
+const AutoRouterModel = "openrouter/auto"  // Dynamically selects best model
+```
+
+**Fallback Triggers**:
+- Rate limit exceeded
+- Model unavailable
+- Context length exceeded
+- Content moderation flags
+- Provider errors (5xx)
+
+### 8.3 Provider Routing Configuration
+
 ```yaml
-# Routing configuration example
+# OpenRouter-compatible routing parameters
 routing:
+  # Provider preferences (in request or config)
+  provider_preferences:
+    order: ["openai", "anthropic", "google"]     # Try providers in this order
+    only: ["openai", "anthropic"]               # Only use these providers
+    ignore: ["azure"]                            # Never use these providers
+    allow_fallbacks: true                        # Allow fallback to other providers
+  
+  # Routing strategies
   strategies:
     - type: latency_based
       config:
@@ -338,38 +386,46 @@ routing:
     - type: cost_optimized
       config:
         max_latency_multiplier: 2.0
-    - type: content_based
+    - type: auto_router  # OpenRouter auto model
       config:
-        classifier_model: "meta-llama/Llama-2-7b"
+        classifier: "meta-llama/llama-3.1-8b"
 ```
 
-### 8.2 Router Implementation
+### 8.4 Router Implementation
+
 ```go
 type Router interface {
-    SelectProvider(ctx context.Context, req *Request) (*Provider, error)
-    RecordMetrics(provider *Provider, latency time.Duration, err error)
+    // OpenRouter compatible methods
+    SelectModel(ctx context.Context, req *ChatRequest) (string, error)
+    SelectProvider(ctx context.Context, model string, prefs *ProviderPreferences) (*Provider, error)
+    RecordMetrics(model string, provider *Provider, latency time.Duration, err error)
+}
+
+type ProviderPreferences struct {
+    Order          []string `json:"order,omitempty"`
+    Only           []string `json:"only,omitempty"`
+    Ignore         []string `json:"ignore,omitempty"`
+    AllowFallbacks bool     `json:"allow_fallbacks,omitempty"`
 }
 
 type SmartRouter struct {
     strategies []RoutingStrategy
     metrics    *MetricsCollector
+    modelMap   map[string][]string  // model -> available providers
     cache      *RoutingCache
 }
 ```
 
-### 8.3 Routing Features
+### 8.5 Routing Features
+- **Model fallback chain** with configurable retry logic
+- **Provider selection** based on preferences and performance
+- **Auto-routing** for optimal model selection
 - **Latency tracking** with exponential moving averages
 - **Cost calculation** with real-time pricing updates
 - **Health scoring** based on success rates
 - **Parallel requests** for critical operations
 - **Sticky sessions** for conversation continuity
 - **A/B testing** with traffic splitting
-- **OpenRouter-compatible provider routing**:
-  - Custom provider order preferences
-  - Fallback control (allow/deny)
-  - Parameter requirement filtering
-  - Data collection policy enforcement
-  - Provider ignore/allow lists
 
 ## 9. Rate Limiting Architecture
 
@@ -666,7 +722,11 @@ OSS uses a key-value store (Badger or Valkey) with the following key patterns:
     "name": "string",
     "hash": "string",
     "scopes": ["read", "write"],
-    "allowed_models": ["gpt-4", "claude-3"],
+    "allowed_models": ["openai/gpt-4", "anthropic/claude-3-opus"],
+    "provider_preferences": {
+        "order": ["openai", "anthropic"],
+        "allow_fallbacks": true
+    },
     "rate_limit_config": {...},
     "metadata": {...},
     "active": true,
@@ -819,32 +879,92 @@ GET    /api/v1/health                  # Health check
 GET    /api/v1/metrics/prometheus      # Prometheus format
 ```
 
-### 12.2 LLM Proxy Endpoints (OpenAI & OpenRouter Compatible)
+### 12.2 LLM Proxy Endpoints (Full OpenRouter Compatibility)
 
 ```yaml
 # Chat Completions (OpenAI & OpenRouter compatible)
-POST   /v1/chat/completions            # Create chat completion
+POST   /v1/chat/completions            # OpenAI-style endpoint
 POST   /api/v1/chat/completions        # OpenRouter-style endpoint
+  # Supports: model (string), models (array), provider preferences
 
 # Completions (Legacy)
-POST   /v1/completions                 # Create completion
+POST   /v1/completions                 # OpenAI-style endpoint
 POST   /api/v1/completions             # OpenRouter-style endpoint
 
 # Embeddings
-POST   /v1/embeddings                  # Create embeddings
+POST   /v1/embeddings                  # OpenAI-style endpoint
 POST   /api/v1/embeddings              # OpenRouter-style endpoint
 
-# Models
+# Models (OpenRouter Enhanced)
 GET    /v1/models                      # List available models
-GET    /api/v1/models                  # OpenRouter-style endpoint
-GET    /v1/models/{model}              # Get model details
-GET    /api/v1/models/{model}/endpoints # List endpoints for model (OpenRouter)
+GET    /api/v1/models                  # OpenRouter-style with full metadata
+  # Returns: id, name, created, description, pricing, context_length,
+  #          architecture, supported_parameters, top_provider, etc.
+
+GET    /v1/models/{model}              # Get specific model details
+GET    /api/v1/models/{model}/endpoints # List providers for model
+
+# Providers (OpenRouter Specific)
+GET    /api/v1/providers               # List all providers
+  # Returns: name, slug, logging_policy, privacy_url, moderated, etc.
 
 # Generation Stats (OpenRouter compatible)
-GET    /api/v1/generation/{id}         # Get generation stats and token counts
+GET    /api/v1/generation/{id}         # Get generation details
+  # Returns: id, model, usage, created_at, provider used
 
-# Authentication Check (OpenRouter compatible)
-GET    /api/v1/auth/key                # Check rate limits and credits
+# Authentication & Limits (OpenRouter compatible)
+GET    /api/v1/auth/key                # Check API key info
+  # Returns: usage, limit, is_free_tier, rate_limit_remaining
+```
+
+### 12.3 OpenRouter-Specific Features
+
+```yaml
+# Model Response Format (OpenRouter Compatible)
+{
+  "data": [
+    {
+      "id": "openai/gpt-4",
+      "name": "OpenAI: GPT-4",
+      "created": 1686935002,
+      "description": "GPT-4 is OpenAI's latest model...",
+      "pricing": {
+        "prompt": "0.00003",
+        "completion": "0.00006",
+        "image": "0",
+        "request": "0"
+      },
+      "context_length": 8192,
+      "architecture": {
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "cl100k_base"
+      },
+      "top_provider": {
+        "is_moderated": false,
+        "max_completion_tokens": 4096
+      },
+      "supported_parameters": [
+        "temperature", "top_p", "frequency_penalty",
+        "presence_penalty", "tools", "tool_choice"
+      ]
+    }
+  ]
+}
+
+# Provider Response Format
+{
+  "data": [
+    {
+      "name": "OpenAI",
+      "slug": "openai",
+      "logging_policy": "will_not_log",
+      "privacy_policy_url": "https://openai.com/privacy",
+      "is_moderated": false,
+      "status_page_url": "https://status.openai.com"
+    }
+  ]
+}
 ```
 
 ## 13. Configuration
@@ -1319,7 +1439,88 @@ var SupportedVersions = []APIVersion{
 - Response transformation for older clients
 - Clear migration guides with examples
 
-## 20. Operational Considerations
+## 20. BYOK (Bring Your Own Key) Architecture
+
+### 20.1 BYOK Overview
+
+BYOK allows users to use their own provider API keys directly through Starport, similar to OpenRouter:
+
+```go
+// BYOK credential storage (encrypted)
+"credential:{api_key_id}:{provider}" -> {
+    "provider": "openai",
+    "encrypted_credential": "base64_encrypted_data",
+    "config": {
+        "endpoint": "https://api.openai.com/v1",  // Custom endpoints supported
+        "api_version": "2024-02-01",             // Azure-specific
+        "deployment_id": "gpt-4-prod"            // Azure-specific
+    },
+    "is_fallback": true,  // Use as fallback when rate limited
+    "created_at": "timestamp"
+}
+```
+
+### 20.2 BYOK Request Flow
+
+```go
+// Check for BYOK credentials in request
+func (h *ProxyHandler) routeRequest(ctx context.Context, req *ChatRequest) {
+    // 1. Extract provider from model ID (e.g., "openai/gpt-4" -> "openai")
+    provider := extractProvider(req.Model)
+    
+    // 2. Check for BYOK credentials
+    if cred := h.getBYOKCredential(ctx, req.APIKey, provider); cred != nil {
+        // Use customer's key - bypass rate limits
+        return h.proxyWithBYOK(ctx, req, cred)
+    }
+    
+    // 3. Use gateway credentials with rate limiting
+    return h.proxyWithGateway(ctx, req)
+}
+```
+
+### 20.3 BYOK Security
+
+- **Encryption**: AES-256-GCM for credential storage
+- **Key Derivation**: Argon2id from master key + API key ID
+- **Isolation**: Each API key's BYOK credentials are encrypted with unique key
+- **No Logging**: BYOK requests bypass request/response logging
+- **Audit Trail**: Track BYOK usage without exposing credentials
+
+### 20.4 Supported BYOK Providers
+
+```yaml
+byok_providers:
+  openai:
+    required_fields: ["api_key"]
+    optional_fields: ["organization"]
+    
+  anthropic:
+    required_fields: ["api_key"]
+    optional_fields: ["version"]
+    
+  azure:
+    required_fields: ["api_key", "endpoint", "deployment_id"]
+    optional_fields: ["api_version"]
+    
+  google:
+    required_fields: ["api_key"]  # or service account JSON
+    optional_fields: ["project_id", "location"]
+    
+  aws_bedrock:
+    required_fields: ["access_key_id", "secret_access_key", "region"]
+    optional_fields: ["session_token"]
+```
+
+### 20.5 BYOK Fallback Behavior
+
+When "is_fallback" is enabled:
+1. First attempt uses gateway credits/keys
+2. On rate limit or failure, retry with BYOK
+3. Response indicates which method was used
+4. Billing reflects BYOK discount (5% of normal rate)
+
+## 21. Operational Considerations
 
 ### 20.1 Graceful Shutdown
 

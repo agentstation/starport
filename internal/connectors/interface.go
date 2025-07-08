@@ -44,23 +44,17 @@ type ChatStream interface {
 func NewConnector(provider string, config ProviderConfig) (Connector, error) {
 	switch provider {
 	case "openai":
-		// Will be implemented in P1-S3-3.2
-		return nil, ErrProviderNotSupported
+		return NewOpenAIConnector(config)
 	case "anthropic":
-		// Will be implemented in P1-S3-3.2
-		return nil, ErrProviderNotSupported
+		return NewAnthropicConnector(config)
 	case "gemini":
-		// Will be implemented in P1-S3-3.2
-		return nil, ErrProviderNotSupported
+		return NewGeminiConnector(config)
 	case "groq":
-		// Will be implemented in P1-S3-3.2
-		return nil, ErrProviderNotSupported
+		return NewGroqConnector(config)
 	case "mistral":
-		// Will be implemented in P1-S3-3.2
-		return nil, ErrProviderNotSupported
+		return NewMistralConnector(config)
 	case "azure":
-		// Will be implemented in P1-S3-3.2
-		return nil, ErrProviderNotSupported
+		return NewAzureOpenAIConnector(config)
 	case "mock":
 		return NewMockConnector(config), nil
 	default:
