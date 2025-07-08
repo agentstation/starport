@@ -149,7 +149,9 @@ func (h *ProxyHandler) handleStreamingChat(w http.ResponseWriter, r *http.Reques
 		h.handleConnectorError(w, err)
 		return
 	}
-	defer stream.Close()
+	defer func() {
+		_ = stream.Close()
+	}()
 
 	// Set headers for SSE
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -168,7 +170,7 @@ func (h *ProxyHandler) handleStreamingChat(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			if err == io.EOF {
 				// Send done marker
-				fmt.Fprintf(w, "data: %s\n\n", connectors.SSEDone)
+				_, _ = fmt.Fprintf(w, "data: %s\n\n", connectors.SSEDone)
 				if f, ok := w.(http.Flusher); ok {
 					f.Flush()
 				}
@@ -190,7 +192,7 @@ func (h *ProxyHandler) handleStreamingChat(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Write SSE data
-		fmt.Fprintf(w, "data: %s\n\n", data)
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
@@ -278,7 +280,7 @@ func (h *ProxyHandler) handleModels(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleProviders handles provider listing (OpenRouter-compatible)
-func (h *ProxyHandler) handleProviders(w http.ResponseWriter, r *http.Request) {
+func (h *ProxyHandler) handleProviders(w http.ResponseWriter, _ *http.Request) {
 	// Provider information (will be enhanced in later tasks)
 	providers := []map[string]interface{}{
 		{
