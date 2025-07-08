@@ -75,7 +75,7 @@ func (s *EncryptionService) EncryptCredential(plaintext string) (string, error) 
 	}
 
 	// Encrypt the plaintext
-	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
+	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil) // #nosec G407 -- nonce is randomly generated above
 
 	// Combine salt + nonce + ciphertext
 	combined := make([]byte, 0, saltSize+gcmNonceSize+len(ciphertext))
