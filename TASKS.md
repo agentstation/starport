@@ -9,12 +9,12 @@ Last Updated: When agents update this file
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-| Backend | P1-S3-3.7 Dynamic Model Fetching & Google Provider Separation | task/P1-S3-3.7-dynamic-models | 🟢 In Progress | 4:00 PM | - |
 
 ### Recently Completed
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| P1-S3-3.7 | Backend | #19 | 2025-01-08 | Dynamic model fetching for Anthropic/Gemini/Groq, split GeminiConnector into GoogleAIStudioConnector and VertexAIConnector, 1-hour cache TTL, Vertex AI models (PaLM, Codey, Claude), 85%+ test coverage |
 | P1-S3-3.6 | Backend | #18 | 2025-01-08 | Provider metadata & /api/v1/providers endpoint, enhanced /api/v1/models with full metadata (pricing, context, architecture), /api/v1/models/{model}/endpoints, 85%+ test coverage |
 | P1-S3-3.5 | Backend | #17 | 2025-01-08 | Provider routing with preferences (order/only/ignore), health tracking, latency-based routing, cost optimization, sticky sessions, 76.2% test coverage |
 | P1-S3-3.4 | Backend | #16 | 2025-01-08 | OpenRouter-compatible model routing with fallback chains, auto model selection, provider preferences, circuit breaker, model_used field in responses |
@@ -68,7 +68,7 @@ Last Updated: When agents update this file
 - [x] P1-S3-3.4 - OpenRouter-Compatible Model Routing ✅
 - [x] P1-S3-3.5 - Provider Routing & Fallback Support ✅
 - [x] P1-S3-3.6 - Provider Metadata & /api/v1/providers Endpoint ✅
-- [ ] P1-S3-3.7 - Dynamic Model Fetching & Google Provider Separation
+- [x] P1-S3-3.7 - Dynamic Model Fetching & Google Provider Separation ✅
 
 **Features (Subphase 1.5)**
 - [ ] P1-S4-4.1 - BYOK Implementation
@@ -77,9 +77,9 @@ Last Updated: When agents update this file
 - [ ] P1-S4-4.4 - Preset Management System
 
 ### Velocity Tracking
-- Tasks Completed: 14 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3, P1-S1-1.4, P1-S1-1.5, P1-S2-2.1, P1-S2-2.2, P1-S2-2.3, P1-S3-3.1, P1-S3-3.2, P1-S3-3.3, P1-S3-3.4, P1-S3-3.5, P1-S3-3.6)
+- Tasks Completed: 15 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3, P1-S1-1.4, P1-S1-1.5, P1-S2-2.1, P1-S2-2.2, P1-S2-2.3, P1-S3-3.1, P1-S3-3.2, P1-S3-3.3, P1-S3-3.4, P1-S3-3.5, P1-S3-3.6, P1-S3-3.7)
 - Tasks In Progress: 0
-- Phase 1 Tasks Remaining: 6
+- Phase 1 Tasks Remaining: 5
 
 ## 📝 Update Instructions
 
@@ -1383,29 +1383,29 @@ Key Requirements:
 
 #### Implementation Tasks
 ```markdown
-- [ ] Implement dynamic Models() for Anthropic connector
-- [ ] Implement dynamic Models() for Gemini connector
-- [ ] Implement dynamic Models() for Groq connector
-- [ ] Split GeminiConnector into two:
-  - [ ] GoogleAIStudioConnector (google-aistudio provider)
-  - [ ] VertexAIConnector (google-vertexai provider)
-- [ ] Update connector registry for new providers
-- [ ] Add model response caching with TTL
-- [ ] Update all model IDs to new provider names
-- [ ] Add Vertex AI non-Gemini models (PaLM, Codey, etc.)
-- [ ] Update tests for new providers
-- [ ] Update documentation
+- [x] Implement dynamic Models() for Anthropic connector
+- [x] Implement dynamic Models() for Gemini connector
+- [x] Implement dynamic Models() for Groq connector
+- [x] Split GeminiConnector into two:
+  - [x] GoogleAIStudioConnector (google-aistudio provider)
+  - [x] VertexAIConnector (google-vertexai provider)
+- [x] Update connector registry for new providers
+- [x] Add model response caching with TTL
+- [x] Update all model IDs to new provider names
+- [x] Add Vertex AI non-Gemini models (PaLM, Codey, etc.)
+- [x] Update tests for new providers
+- [x] Update documentation
 ```
 
 #### Acceptance Criteria
-- [ ] All providers fetch models dynamically (except Azure)
-- [ ] Model lists update when providers add new models
-- [ ] google-aistudio and google-vertexai are separate providers
-- [ ] Vertex AI connector supports all GCP models
-- [ ] Model lists are cached with 1-hour TTL
-- [ ] Fallback to static lists on API errors
-- [ ] All model IDs use correct provider prefix
-- [ ] 85% test coverage maintained
+- [x] All providers fetch models dynamically (except Azure)
+- [x] Model lists update when providers add new models
+- [x] google-aistudio and google-vertexai are separate providers
+- [x] Vertex AI connector supports all GCP models
+- [x] Model lists are cached with 1-hour TTL
+- [x] Fallback to static lists on API errors
+- [x] All model IDs use correct provider prefix
+- [x] 85% test coverage maintained
 
 ## Task Templates
 
