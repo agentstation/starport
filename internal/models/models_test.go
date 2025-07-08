@@ -1,0 +1,557 @@
+package models
+
+import (
+	"testing"
+	"time"
+)
+
+func TestAPIKey_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     *APIKey
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid api key",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "test-key",
+				Hash:      "hash123",
+				Scopes:    []string{"read", "write"},
+				Active:    true,
+				CreatedAt: time.Now(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing id",
+			key: &APIKey{
+				Name:      "test-key",
+				Hash:      "hash123",
+				Scopes:    []string{"read"},
+				CreatedAt: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "missing id",
+		},
+		{
+			name: "empty name",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "",
+				Hash:      "hash123",
+				Scopes:    []string{"read"},
+				CreatedAt: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "invalid name",
+		},
+		{
+			name: "name too long",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      string(make([]byte, 256)),
+				Hash:      "hash123",
+				Scopes:    []string{"read"},
+				CreatedAt: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "invalid name",
+		},
+		{
+			name: "invalid name characters",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "test key with spaces",
+				Hash:      "hash123",
+				Scopes:    []string{"read"},
+				CreatedAt: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "must contain only alphanumeric",
+		},
+		{
+			name: "missing hash",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "test-key",
+				Hash:      "",
+				Scopes:    []string{"read"},
+				CreatedAt: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "missing hash",
+		},
+		{
+			name: "no scopes",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "test-key",
+				Hash:      "hash123",
+				Scopes:    []string{},
+				CreatedAt: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "missing scopes",
+		},
+		{
+			name: "empty scope",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "test-key",
+				Hash:      "hash123",
+				Scopes:    []string{"read", ""},
+				CreatedAt: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "invalid scope",
+		},
+		{
+			name: "empty allowed model",
+			key: &APIKey{
+				ID:            "test-id",
+				Name:          "test-key",
+				Hash:          "hash123",
+				Scopes:        []string{"read"},
+				AllowedModels: []string{"gpt-4", ""},
+				CreatedAt:     time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "invalid model",
+		},
+		{
+			name: "expires before created",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "test-key",
+				Hash:      "hash123",
+				Scopes:    []string{"read"},
+				CreatedAt: time.Now(),
+				ExpiresAt: func() *time.Time { t := time.Now().Add(-time.Hour); return &t }(),
+			},
+			wantErr: true,
+			errMsg:  "expires_at must be after created_at",
+		},
+		{
+			name: "valid with expiry",
+			key: &APIKey{
+				ID:        "test-id",
+				Name:      "test-key_123",
+				Hash:      "hash123",
+				Scopes:    []string{"read"},
+				CreatedAt: time.Now(),
+				ExpiresAt: func() *time.Time { t := time.Now().Add(time.Hour); return &t }(),
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.key.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("APIKey.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				t.Errorf("APIKey.Validate() error = %v, want error containing %q", err, tt.errMsg)
+			}
+		})
+	}
+}
+
+func TestAPIKey_IsExpired(t *testing.T) {
+	tests := []struct {
+		name string
+		key  *APIKey
+		want bool
+	}{
+		{
+			name: "no expiry",
+			key: &APIKey{
+				ExpiresAt: nil,
+			},
+			want: false,
+		},
+		{
+			name: "not expired",
+			key: &APIKey{
+				ExpiresAt: func() *time.Time { t := time.Now().Add(time.Hour); return &t }(),
+			},
+			want: false,
+		},
+		{
+			name: "expired",
+			key: &APIKey{
+				ExpiresAt: func() *time.Time { t := time.Now().Add(-time.Hour); return &t }(),
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.key.IsExpired(); got != tt.want {
+				t.Errorf("APIKey.IsExpired() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAPIKey_HasScope(t *testing.T) {
+	key := &APIKey{
+		Scopes: []string{"read", "write", "*"},
+	}
+
+	tests := []struct {
+		name  string
+		scope string
+		want  bool
+	}{
+		{"has read", "read", true},
+		{"has write", "write", true},
+		{"has wildcard", "anything", true},
+		{"missing scope", "admin", true}, // wildcard matches
+		{"empty scope", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := key.HasScope(tt.scope); got != tt.want {
+				t.Errorf("APIKey.HasScope(%q) = %v, want %v", tt.scope, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAPIKey_CanUseModel(t *testing.T) {
+	tests := []struct {
+		name          string
+		allowedModels []string
+		model         string
+		want          bool
+	}{
+		{"no restrictions", nil, "gpt-4", true},
+		{"empty restrictions", []string{}, "gpt-4", true},
+		{"allowed model", []string{"gpt-4", "claude-3"}, "gpt-4", true},
+		{"not allowed model", []string{"gpt-4", "claude-3"}, "gpt-3.5", false},
+		{"wildcard allowed", []string{"*"}, "anything", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			key := &APIKey{AllowedModels: tt.allowedModels}
+			if got := key.CanUseModel(tt.model); got != tt.want {
+				t.Errorf("APIKey.CanUseModel(%q) = %v, want %v", tt.model, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPreset_Validate(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name    string
+		preset  *Preset
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid preset",
+			preset: &Preset{
+				ID:          "test-id",
+				Name:        "test-preset",
+				Description: "Test preset",
+				Config:      map[string]interface{}{"model": "gpt-4"},
+				Version:     1,
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing id",
+			preset: &Preset{
+				Name:      "test-preset",
+				Config:    map[string]interface{}{"model": "gpt-4"},
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			wantErr: true,
+			errMsg:  "missing id",
+		},
+		{
+			name: "invalid version",
+			preset: &Preset{
+				ID:        "test-id",
+				Name:      "test-preset",
+				Config:    map[string]interface{}{"model": "gpt-4"},
+				Version:   0,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			wantErr: true,
+			errMsg:  "invalid version",
+		},
+		{
+			name: "empty config",
+			preset: &Preset{
+				ID:        "test-id",
+				Name:      "test-preset",
+				Config:    map[string]interface{}{},
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			wantErr: true,
+			errMsg:  "empty config",
+		},
+		{
+			name: "updated before created",
+			preset: &Preset{
+				ID:        "test-id",
+				Name:      "test-preset",
+				Config:    map[string]interface{}{"model": "gpt-4"},
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now.Add(-time.Hour),
+			},
+			wantErr: true,
+			errMsg:  "updated_at must be after",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.preset.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Preset.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				t.Errorf("Preset.Validate() error = %v, want error containing %q", err, tt.errMsg)
+			}
+		})
+	}
+}
+
+func TestBYOKCredential_Validate(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name    string
+		cred    *BYOKCredential
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid credential",
+			cred: &BYOKCredential{
+				APIKeyID:            "key-123",
+				Provider:            "openai",
+				EncryptedCredential: "encrypted-data",
+				CreatedAt:           now,
+				UpdatedAt:           now,
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing api key id",
+			cred: &BYOKCredential{
+				Provider:            "openai",
+				EncryptedCredential: "encrypted-data",
+				CreatedAt:           now,
+				UpdatedAt:           now,
+			},
+			wantErr: true,
+			errMsg:  "missing api_key_id",
+		},
+		{
+			name: "missing provider",
+			cred: &BYOKCredential{
+				APIKeyID:            "key-123",
+				EncryptedCredential: "encrypted-data",
+				CreatedAt:           now,
+				UpdatedAt:           now,
+			},
+			wantErr: true,
+			errMsg:  "invalid provider",
+		},
+		{
+			name: "missing encrypted credential",
+			cred: &BYOKCredential{
+				APIKeyID:  "key-123",
+				Provider:  "openai",
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			wantErr: true,
+			errMsg:  "missing encrypted credential",
+		},
+		{
+			name: "updated before created",
+			cred: &BYOKCredential{
+				APIKeyID:            "key-123",
+				Provider:            "openai",
+				EncryptedCredential: "encrypted-data",
+				CreatedAt:           now,
+				UpdatedAt:           now.Add(-time.Hour),
+			},
+			wantErr: true,
+			errMsg:  "updated_at must be after",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cred.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BYOKCredential.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				t.Errorf("BYOKCredential.Validate() error = %v, want error containing %q", err, tt.errMsg)
+			}
+		})
+	}
+}
+
+func TestTokenBucket_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		bucket  *TokenBucket
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid bucket",
+			bucket: &TokenBucket{
+				Tokens:     50,
+				Capacity:   100,
+				RefillRate: 10,
+				LastRefill: time.Now(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid capacity",
+			bucket: &TokenBucket{
+				Tokens:     50,
+				Capacity:   0,
+				RefillRate: 10,
+				LastRefill: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "invalid capacity",
+		},
+		{
+			name: "invalid refill rate",
+			bucket: &TokenBucket{
+				Tokens:     50,
+				Capacity:   100,
+				RefillRate: 0,
+				LastRefill: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "invalid refill rate",
+		},
+		{
+			name: "negative tokens",
+			bucket: &TokenBucket{
+				Tokens:     -10,
+				Capacity:   100,
+				RefillRate: 10,
+				LastRefill: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "tokens cannot be negative",
+		},
+		{
+			name: "tokens exceed capacity",
+			bucket: &TokenBucket{
+				Tokens:     150,
+				Capacity:   100,
+				RefillRate: 10,
+				LastRefill: time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "tokens cannot exceed capacity",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.bucket.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TokenBucket.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+				t.Errorf("TokenBucket.Validate() error = %v, want error containing %q", err, tt.errMsg)
+			}
+		})
+	}
+}
+
+func TestTokenBucket_Refill(t *testing.T) {
+	now := time.Now()
+	bucket := &TokenBucket{
+		Tokens:     50,
+		Capacity:   100,
+		RefillRate: 10, // 10 tokens per second
+		LastRefill: now.Add(-5 * time.Second), // 5 seconds ago
+	}
+
+	bucket.Refill()
+
+	// Should have added 50 tokens (10 tokens/sec * 5 sec)
+	expectedTokens := 100.0 // capped at capacity
+	if bucket.Tokens != expectedTokens {
+		t.Errorf("TokenBucket.Refill() tokens = %v, want %v", bucket.Tokens, expectedTokens)
+	}
+
+	// Test partial refill
+	bucket.Tokens = 50
+	bucket.LastRefill = now.Add(-2 * time.Second)
+	bucket.Refill()
+
+	// Should have added 20 tokens (10 tokens/sec * 2 sec)
+	expectedTokens = 70.0
+	tolerance := 1.0 // Allow some tolerance for timing
+	if bucket.Tokens < expectedTokens-tolerance || bucket.Tokens > expectedTokens+tolerance {
+		t.Errorf("TokenBucket.Refill() tokens = %v, want approximately %v", bucket.Tokens, expectedTokens)
+	}
+}
+
+func TestTokenBucket_TryConsume(t *testing.T) {
+	bucket := &TokenBucket{
+		Tokens:     50,
+		Capacity:   100,
+		RefillRate: 10,
+		LastRefill: time.Now(),
+	}
+
+	tests := []struct {
+		name   string
+		tokens float64
+		want   bool
+	}{
+		{"consume 10", 10, true},
+		{"consume 40", 40, true},
+		{"consume 1", 1, false}, // only 0 left after previous consumes
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := bucket.TryConsume(tt.tokens); got != tt.want {
+				t.Errorf("TokenBucket.TryConsume(%v) = %v, want %v", tt.tokens, got, tt.want)
+			}
+		})
+	}
+}
+
+// Helper function
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsSubstring(s, substr))
+}
+
+func containsSubstring(s, substr string) bool {
+	return len(s) >= len(substr) && (s[:len(substr)] == substr || containsSubstring(s[1:], substr))
+}
