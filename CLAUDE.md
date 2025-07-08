@@ -74,6 +74,23 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Serialization helpers with type safety
 - 82.3% test coverage
 
+**✅ Badger DB Integration (P1-S2-2.2)**
+- Full KVStore interface implementation
+- TTL support for rate limiting
+- Backup/restore functionality
+- Automatic compaction
+- Thread-safe operations
+- 100% test coverage
+
+**✅ Core Storage Models (P1-S2-2.3)**
+- APIKey model with validation and permissions
+- Preset model with versioning
+- BYOKCredential with AES-256-GCM encryption
+- TokenBucket for rate limiting
+- Encryption service with Argon2 key derivation
+- Storage key helpers and parsers
+- 91.9% test coverage
+
 ### Project Structure
 ```
 starport/
@@ -84,6 +101,7 @@ starport/
 ├── internal/            # Private application code
 │   ├── app/            # Application lifecycle
 │   ├── config/         # Configuration system ✅
+│   ├── models/         # Data models ✅
 │   ├── server/         # HTTP server ✅
 │   └── storage/        # Storage abstraction ✅
 ├── pkg/enterprise/      # Enterprise plugin interfaces
@@ -99,6 +117,8 @@ starport/
 - **github.com/joho/godotenv**: .env file support
 - **github.com/fsnotify/fsnotify**: File watching for hot reload
 - **gopkg.in/yaml.v3**: YAML parsing for rate limits
+- **github.com/dgraph-io/badger/v4**: Embedded KV store
+- **golang.org/x/crypto**: Argon2 and AES-256-GCM encryption
 
 ### Configuration Capabilities
 All configuration via environment variables or .env files:
@@ -111,9 +131,9 @@ All configuration via environment variables or .env files:
 
 ### Next Tasks Ready to Implement
 Based on completed prerequisites:
-1. **P1-S2-2.2**: Badger DB Integration (depends on P1-S2-2.1 ✅)
-2. **P1-S2-2.3**: Core Storage Models (depends on P1-S2-2.1 ✅)
-3. **P1-S3-3.1**: Model Connector Interface (depends on server ✅)
+1. **P1-S3-3.1**: Model Connector Interface (depends on server ✅)
+2. **P1-S4-4.1**: BYOK Implementation (depends on P1-S2-2.3 ✅)
+3. **P1-S4-4.4**: Preset Management System (depends on P1-S2-2.3 ✅)
 
 These can be worked on in parallel by different agents.
 
@@ -157,6 +177,7 @@ When working on tasks:
    - Move task to "Recently Completed" section
    - Update "Active Work" to show "✅ Completed"
    - Add PR number
+   - Mark all acceptance criteria and implementation tasks as completed [x]
 
 3. **In your PR description**: Include implementation checklist
 ```markdown
@@ -242,6 +263,9 @@ if err != nil {
 - Define sentinel errors as package-level variables (e.g., `var ErrNotFound = errors.New("key not found")`)
 - Use constants for repeated strings to satisfy linters
 - Avoid shadowing built-in identifiers (e.g., use `newValue` instead of `new`)
+- For encryption: Always use crypto/rand, never math/rand
+- Include validation methods on all data models
+- Use regex for name validation to ensure clean data
 
 ### Logging
 ```go
@@ -365,6 +389,11 @@ make lint # Lint code
 2. **Merge conflicts**: Pull latest main, preserve both changes
 3. **Tests failing**: Check if related to your changes or pre-existing
 4. **Can't find files**: May need to create them per ARCHITECTURE.md
+5. **Gosec failures**: 
+   - Check for false positives (e.g., G407 for crypto/rand usage)
+   - Use `#nosec G###` with explanation for false positives
+   - Run locally with `go install github.com/securego/gosec/v2/cmd/gosec@latest`
+6. **Context file in PR**: Remove context-*.txt files before committing
 
 ### Getting Help
 - Check existing PRs for similar implementations
@@ -384,6 +413,13 @@ make lint # Lint code
   - Handle TTL expiration checks in read operations
   - Transaction isolation is critical - avoid deadlocks by releasing locks before calling store methods
   - Use type-specific serialization helpers (e.g., SerializeInt64) for atomic operations
+- **Lessons from P1-S2-2.3:**
+  - Create models in `internal/models/` package for data structures
+  - Use AES-256-GCM for encryption with crypto/rand for nonce generation
+  - Gosec may report false positives for crypto/rand usage - use `#nosec` with explanation
+  - Include validation methods on all models
+  - Storage key helpers should follow consistent patterns (prefix:id format)
+  - Test coverage >90% is achievable with table-driven tests
 
 ### For LLM Connector Implementation (P1-S3-3.X)
 - Connectors go in `internal/connectors/` package
