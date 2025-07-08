@@ -31,7 +31,7 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 
 **Project**: Starport - High-Performance LLM Gateway
 **Phase**: Implementation Phase 1
-**Progress**: 9 of 16 tasks complete
+**Progress**: 13 of 20 tasks complete
 
 ## Current Codebase Status
 
@@ -370,6 +370,14 @@ func NewMockStore() *MockStore {
   - Fall back to mock connector when no providers are configured for development
   - SSE streaming requires proper headers and [DONE] marker
   - Request validation should happen before connector selection
+- **Lessons from P1-S3-3.5 (Provider Routing):**
+  - For binary applications, consolidate features into a single implementation rather than multiple options
+  - All advanced routing features (latency tracking, cost optimization, sticky sessions) should be enabled by default
+  - Use sensible defaults for configuration values (e.g., EMA alpha=0.2, circuit breaker threshold=3)
+  - Provider health tracking needs Available field initialized to true
+  - Circuit breaker needs default values when config fields are zero
+  - Test coverage can be high (76%+) with comprehensive test suites
+  - Sticky session cleanup is important for memory management
 
 ## Commands to Remember
 

@@ -1,3 +1,6 @@
+// Package routing provides model routing and fallback capabilities for the Starport gateway.
+// It implements OpenRouter-compatible routing with provider preferences, health tracking,
+// latency-based routing, cost optimization, and sticky sessions for conversation continuity.
 package routing
 
 import (
@@ -29,6 +32,33 @@ var (
 	ErrAllModelsFailed = errors.New("all models failed")
 )
 
+// Config contains configuration for the router
+type Config struct {
+	// Latency tracking configuration
+	LatencyAlpha      float64       // EMA smoothing factor (0-1)
+	LatencyWindowSize int           // Samples before EMA kicks in
+	
+	// Cost optimization
+	EnableCostOptimization bool
+	MaxCostMultiplier      float64
+	
+	// Latency constraints
+	MaxLatencyMultiplier float64
+	
+	// Sticky sessions
+	EnableStickySessions bool
+	SessionTTL           time.Duration
+	
+	// Health check configuration
+	CircuitBreakerThreshold int           // Consecutive failures to open circuit
+	CircuitBreakerDuration  time.Duration // How long to keep circuit open
+	
+	// Retry configuration
+	MaxRetries          int
+	RetryDelay          time.Duration
+	RetryBackoffMultiplier float64
+}
+
 // defaultRouter implements the ModelRouter interface
 type defaultRouter struct {
 	registry         connectors.Registry
@@ -36,16 +66,50 @@ type defaultRouter struct {
 	availableModels  map[string]ModelInfo
 	providerHealthMu sync.RWMutex
 	providerHealth   map[string]*ProviderHealth
+	
+	// Advanced routing features
+	config               Config
+	latencyTracker       LatencyTracker
+	costCalculator       CostCalculator
+	stickySessionManager StickySessionManager
+	latencySelector      *LatencyBasedSelector
+	costSelector         *CostOptimizedSelector
 }
 
-// NewRouter creates a new model router
+// NewRouter creates a new model router with all features enabled by default
 func NewRouter(registry connectors.Registry) ModelRouter {
-	return &defaultRouter{
-		registry:        registry,
-		modelSelector:   NewDefaultModelSelector(),
-		availableModels: make(map[string]ModelInfo),
-		providerHealth:  make(map[string]*ProviderHealth),
+	config := Config{
+		LatencyAlpha:            0.2,
+		LatencyWindowSize:       5,
+		EnableCostOptimization:  true,
+		MaxCostMultiplier:       2.0,
+		MaxLatencyMultiplier:    2.0,
+		EnableStickySessions:    true,
+		SessionTTL:              30 * time.Minute,
+		CircuitBreakerThreshold: 3,
+		CircuitBreakerDuration:  30 * time.Second,
+		MaxRetries:              3,
+		RetryDelay:              1 * time.Second,
+		RetryBackoffMultiplier:  2.0,
 	}
+	
+	latencyTracker := NewLatencyTracker(config.LatencyAlpha, config.LatencyWindowSize)
+	costCalculator := NewCostCalculator()
+	
+	router := &defaultRouter{
+		registry:             registry,
+		modelSelector:        NewDefaultModelSelector(),
+		availableModels:      make(map[string]ModelInfo),
+		providerHealth:       make(map[string]*ProviderHealth),
+		latencyTracker:       latencyTracker,
+		costCalculator:       costCalculator,
+		config:               config,
+		latencySelector:      NewLatencyBasedSelector(latencyTracker, config.MaxLatencyMultiplier),
+		costSelector:         NewCostOptimizedSelector(costCalculator, latencyTracker, config.MaxCostMultiplier, config.MaxLatencyMultiplier),
+		stickySessionManager: NewStickySessionManager(config.SessionTTL),
+	}
+	
+	return router
 }
 
 // ProviderHealth tracks provider health status
@@ -71,6 +135,25 @@ type ModelInfo struct {
 
 // SelectModel chooses the best model based on the request and routing strategy
 func (r *defaultRouter) SelectModel(ctx context.Context, req *Request) (string, connectors.Connector, error) {
+	// Check sticky session first
+	if r.stickySessionManager != nil && r.config.EnableStickySessions && req.Metadata != nil && req.Metadata.ConversationID != "" {
+		if provider, exists := r.stickySessionManager.GetProvider(req.Metadata.ConversationID); exists {
+			// Check if provider is still healthy
+			if r.isProviderHealthy(provider) {
+				// Find a model from this provider in our candidates
+				models := r.getCandidateModels(req)
+				for _, model := range models {
+					if r.extractProvider(model) == provider {
+						connector := r.registry.Get(provider)
+						if connector != nil {
+							return model, connector, nil
+						}
+					}
+				}
+			}
+		}
+	}
+	
 	// Get candidate models
 	models := r.getCandidateModels(req)
 	if len(models) == 0 {
@@ -89,6 +172,19 @@ func (r *defaultRouter) SelectModel(ctx context.Context, req *Request) (string, 
 		if len(models) == 0 {
 			return "", nil, fmt.Errorf("no models allowed for this API key")
 		}
+	}
+	
+	// Filter by health
+	models = r.filterByHealth(models)
+	if len(models) == 0 {
+		return "", nil, ErrNoModelsAvailable
+	}
+	
+	// Apply latency-based filtering if available
+	if r.latencySelector != nil {
+		providers := r.extractProviders(models)
+		filteredProviders := r.latencySelector.FilterByLatency(providers)
+		models = r.filterModelsByProviders(models, filteredProviders)
 	}
 
 	// Select the best model
@@ -176,6 +272,17 @@ func (r *defaultRouter) RouteWithFallback(ctx context.Context, req *Request) (*R
 		if err == nil {
 			// Success!
 			r.recordProviderSuccess(provider)
+			
+			// Record latency if tracker is available
+			if r.latencyTracker != nil {
+				latency := time.Since(attemptStart)
+				r.latencyTracker.RecordLatency(provider, latency)
+			}
+			
+			// Update sticky session if enabled
+			if r.stickySessionManager != nil && r.config.EnableStickySessions && req.Metadata != nil && req.Metadata.ConversationID != "" {
+				r.stickySessionManager.SetProvider(req.Metadata.ConversationID, provider)
+			}
 			
 			return &Response{
 				ChatResponse: resp,
@@ -378,17 +485,36 @@ func (r *defaultRouter) filterByAPIKeyRestrictions(models []string, config *APIK
 }
 
 // selectBestModel selects the best model from candidates
-func (r *defaultRouter) selectBestModel(_ context.Context, models []string, _ *Request) string {
-	// For now, just return the first model
-	// In a full implementation, this would consider:
-	// - Model capabilities vs requirements
-	// - Provider latency (EMA)
-	// - Cost optimization
-	// - Context length requirements
-	if len(models) > 0 {
-		return models[0]
+func (r *defaultRouter) selectBestModel(_ context.Context, models []string, req *Request) string {
+	if len(models) == 0 {
+		return ""
 	}
-	return ""
+	
+	// Use cost optimization if enabled and we have token estimates
+	if r.costSelector != nil && r.config.EnableCostOptimization && req.Metadata != nil && req.Metadata.EstimatedTokens > 0 {
+		selectedModel := r.costSelector.SelectModel(
+			models,
+			req.Metadata.EstimatedTokens,
+			req.Metadata.EstimatedTokens/4, // Rough estimate for completion
+		)
+		if selectedModel != "" {
+			return selectedModel
+		}
+	}
+	
+	// Otherwise use latency-based selection if available
+	if r.latencySelector != nil {
+		providers := r.extractProviders(models)
+		bestProvider := r.latencySelector.SelectProvider(providers)
+		for _, model := range models {
+			if r.extractProvider(model) == bestProvider {
+				return model
+			}
+		}
+	}
+	
+	// Fallback to first model
+	return models[0]
 }
 
 // extractProvider extracts the provider from a model ID
@@ -442,7 +568,9 @@ func (r *defaultRouter) recordProviderFailure(provider string, err error) {
 
 	health, exists := r.providerHealth[provider]
 	if !exists {
-		health = &ProviderHealth{}
+		health = &ProviderHealth{
+			Available: true, // Default to available
+		}
 		r.providerHealth[provider] = health
 	}
 
@@ -451,9 +579,18 @@ func (r *defaultRouter) recordProviderFailure(provider string, err error) {
 	health.ConsecutiveFails++
 
 	// Open circuit if too many consecutive failures
-	if health.ConsecutiveFails >= 3 {
+	threshold := r.config.CircuitBreakerThreshold
+	if threshold == 0 {
+		threshold = 3 // Default
+	}
+	duration := r.config.CircuitBreakerDuration
+	if duration == 0 {
+		duration = 30 * time.Second // Default
+	}
+	
+	if health.ConsecutiveFails >= threshold {
 		health.CircuitOpen = true
-		health.CircuitOpenUntil = time.Now().Add(30 * time.Second)
+		health.CircuitOpenUntil = time.Now().Add(duration)
 		health.Available = false
 	}
 }
@@ -510,4 +647,49 @@ func (r *defaultRouter) triggerToString(trigger FallbackTrigger) string {
 	default:
 		return "unknown"
 	}
+}
+
+// filterByHealth filters out unhealthy providers
+func (r *defaultRouter) filterByHealth(models []string) []string {
+	var healthy []string
+	for _, model := range models {
+		provider := r.extractProvider(model)
+		if r.isProviderHealthy(provider) {
+			healthy = append(healthy, model)
+		}
+	}
+	return healthy
+}
+
+// extractProviders gets unique providers from model list
+func (r *defaultRouter) extractProviders(models []string) []string {
+	seen := make(map[string]bool)
+	var providers []string
+	
+	for _, model := range models {
+		provider := r.extractProvider(model)
+		if !seen[provider] {
+			seen[provider] = true
+			providers = append(providers, provider)
+		}
+	}
+	
+	return providers
+}
+
+// filterModelsByProviders filters models to only include those from specified providers
+func (r *defaultRouter) filterModelsByProviders(models []string, providers []string) []string {
+	providerMap := make(map[string]bool)
+	for _, p := range providers {
+		providerMap[p] = true
+	}
+	
+	var filtered []string
+	for _, model := range models {
+		if providerMap[r.extractProvider(model)] {
+			filtered = append(filtered, model)
+		}
+	}
+	
+	return filtered
 }
