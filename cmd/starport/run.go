@@ -129,6 +129,7 @@ func runServer(ctx context.Context) error {
 	app, err := app.New(
 		app.WithConfig(appConfig),
 		app.WithHotReloader(hotReloader),
+		app.WithProvidersConfig(&cfg.Providers),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create app: %w", err)

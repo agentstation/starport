@@ -17,7 +17,7 @@ func TestMiddlewareChain(t *testing.T) {
 		},
 	}
 
-	server := New(config)
+	server := newTestServer(config)
 
 	// Test request with all middleware
 	req := httptest.NewRequest("GET", "/api/v1/", nil)
@@ -37,7 +37,7 @@ func TestMiddlewareChain(t *testing.T) {
 
 func TestPanicRecovery(t *testing.T) {
 	config := &Config{Port: 8080}
-	server := New(config)
+	server := newTestServer(config)
 
 	// Add a route that panics
 	server.router.Get("/panic", func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +58,7 @@ func TestPanicRecovery(t *testing.T) {
 
 func TestRequestIDMiddleware(t *testing.T) {
 	config := &Config{Port: 8080}
-	server := New(config)
+	server := newTestServer(config)
 
 	// Create a test endpoint that returns the request ID
 	server.router.Get("/test-request-id", func(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +83,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestCompressionMiddleware(t *testing.T) {
 	config := &Config{Port: 8080}
-	server := New(config)
+	server := newTestServer(config)
 
 	// Add a route that returns compressible content
 	server.router.Get("/large", func(w http.ResponseWriter, r *http.Request) {

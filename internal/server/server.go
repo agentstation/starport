@@ -14,17 +14,23 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	router     *chi.Mux
-	config     *Config
-	httpServer *http.Server
+	router            *chi.Mux
+	config            *Config
+	httpServer        *http.Server
+	connectorRegistry *ConnectorRegistry
+	proxyHandler      *ProxyHandler
 }
 
 // New creates a new Server instance
-func New(config *Config) *Server {
+func New(config *Config, registry *ConnectorRegistry) *Server {
 	s := &Server{
-		router: chi.NewRouter(),
-		config: config,
+		router:            chi.NewRouter(),
+		config:            config,
+		connectorRegistry: registry,
 	}
+
+	// Initialize proxy handler
+	s.proxyHandler = NewProxyHandler(registry)
 
 	s.setupMiddleware()
 	s.setupRoutes()
@@ -77,9 +83,15 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/health/live", s.handleLive)
 	s.router.Get("/health/ready", s.handleReady)
 
-	// API routes will be added here
+	// Register OpenAI-compatible proxy routes
+	s.proxyHandler.RegisterRoutes(s.router)
+
+	// API routes
 	s.router.Route("/api/v1", func(r chi.Router) {
-		// Placeholder for API routes
+		// OpenRouter-compatible proxy routes
+		s.proxyHandler.RegisterOpenRouterRoutes(r)
+		
+		// Management API placeholder
 		r.Get("/", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			if _, err := w.Write([]byte(`{"message":"Starport API v1"}`)); err != nil {

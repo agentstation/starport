@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/server"
 )
 
@@ -109,5 +110,93 @@ func TestAppRunWithCancel(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Error("timeout waiting for app to shutdown")
+	}
+}
+
+func TestApp_InitializeConnectors(t *testing.T) {
+	tests := []struct {
+		name            string
+		providersConfig *config.ProvidersConfig
+		expectMock      bool
+		expectProviders []string
+	}{
+		{
+			name:            "no providers config uses mock",
+			providersConfig: nil,
+			expectMock:      true,
+			expectProviders: []string{},
+		},
+		{
+			name: "single provider configured",
+			providersConfig: &config.ProvidersConfig{
+				OpenAI: config.ProviderConfig{
+					BaseURL: "https://api.openai.com/v1",
+					Timeout: 30 * time.Second,
+				},
+			},
+			expectMock:      false,
+			expectProviders: []string{"openai"},
+		},
+		{
+			name: "multiple providers configured",
+			providersConfig: &config.ProvidersConfig{
+				OpenAI: config.ProviderConfig{
+					BaseURL: "https://api.openai.com/v1",
+					Timeout: 30 * time.Second,
+				},
+				Anthropic: config.ProviderConfig{
+					BaseURL: "https://api.anthropic.com/v1",
+					Timeout: 30 * time.Second,
+				},
+				Groq: config.ProviderConfig{
+					BaseURL: "https://api.groq.com/openai/v1",
+					Timeout: 30 * time.Second,
+				},
+			},
+			expectMock:      false,
+			expectProviders: []string{"openai", "anthropic", "groq"},
+		},
+		{
+			name: "no providers configured falls back to mock",
+			providersConfig: &config.ProvidersConfig{
+				// All providers have empty BaseURL
+			},
+			expectMock:      true,
+			expectProviders: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			appConfig := &Config{
+				Server: server.Config{
+					Port: 8080,
+				},
+			}
+
+			app, err := New(
+				WithConfig(appConfig),
+				WithProvidersConfig(tt.providersConfig),
+			)
+			if err != nil {
+				t.Fatalf("failed to create app: %v", err)
+			}
+
+			// Check mock connector
+			_, hasMock := app.connectorRegistry.Get("mock")
+			if tt.expectMock && hasMock != nil {
+				t.Error("expected mock connector to be registered")
+			}
+			if !tt.expectMock && hasMock == nil {
+				t.Error("did not expect mock connector to be registered")
+			}
+
+			// Check expected providers
+			for _, provider := range tt.expectProviders {
+				if _, err := app.connectorRegistry.Get(provider); err != nil {
+					t.Errorf("expected connector %s to be registered, but got error: %v", provider, err)
+				}
+			}
+		})
 	}
 }

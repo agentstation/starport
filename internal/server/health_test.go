@@ -10,7 +10,7 @@ import (
 
 func TestHandleLive(t *testing.T) {
 	config := &Config{Port: 8080}
-	server := New(config)
+	server := newTestServer(config)
 
 	req := httptest.NewRequest("GET", "/health/live", nil)
 	w := httptest.NewRecorder()
@@ -53,7 +53,7 @@ func TestHandleLive(t *testing.T) {
 
 func TestHandleReady(t *testing.T) {
 	config := &Config{Port: 8080}
-	server := New(config)
+	server := newTestServer(config)
 
 	req := httptest.NewRequest("GET", "/health/ready", nil)
 	w := httptest.NewRecorder()
@@ -106,7 +106,7 @@ func TestHandleReady(t *testing.T) {
 
 func TestHealthEndpointsIntegration(t *testing.T) {
 	config := &Config{Port: 8080}
-	server := New(config)
+	server := newTestServer(config)
 
 	tests := []struct {
 		name     string

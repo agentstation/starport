@@ -363,6 +363,13 @@ func NewMockStore() *MockStore {
   - All providers support streaming, but not all support embeddings
   - Return appropriate errors for unsupported features rather than silent failures
   - Test both with and without provider prefixes to ensure compatibility
+- **Lessons from P1-S3-3.3 (Proxy Endpoints):**
+  - Implement both OpenAI (/v1) and OpenRouter (/api/v1) style endpoints
+  - Transform model IDs to include provider prefix in responses
+  - Connector initialization should be driven by configuration with API keys from environment
+  - Fall back to mock connector when no providers are configured for development
+  - SSE streaming requires proper headers and [DONE] marker
+  - Request validation should happen before connector selection
 
 ## Commands to Remember
 
