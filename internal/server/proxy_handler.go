@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,6 +85,7 @@ func (h *ProxyHandler) RegisterOpenRouterRoutes(r chi.Router) {
 	r.Post("/chat/completions", h.handleChatCompletions)
 	r.Post("/embeddings", h.handleEmbeddings)
 	r.Get("/models", h.handleModels)
+	r.Get("/models/{model}/endpoints", h.handleModelEndpoints)
 	r.Get("/providers", h.handleProviders)
 }
 
@@ -137,11 +139,89 @@ func (h *ProxyHandler) handleEmbeddings(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// handleModels handles model listing
+// handleModels handles model listing - returns basic format for /v1/models, enhanced for /api/v1/models
 func (h *ProxyHandler) handleModels(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	
-	// Aggregate models from all connectors
+	// Get basic models from connectors first
+	basicModels := h.getAllModels(ctx)
+	
+	// Check if this is the OpenRouter-style endpoint
+	if strings.HasPrefix(r.URL.Path, "/api/v1/") {
+		// Enhance with metadata for OpenRouter compatibility
+		enhancedModels := []connectors.ModelMetadata{}
+		for _, basicModel := range basicModels {
+			metadata := connectors.GetModelMetadata(basicModel.ID)
+			if metadata != nil {
+				enhancedModels = append(enhancedModels, *metadata)
+			}
+		}
+		
+		// Create enhanced response
+		resp := connectors.EnhancedModelsResponse{
+			Object: "list",
+			Data:   enhancedModels,
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Error().Err(err).Msg("failed to encode response")
+		}
+	} else {
+		// Return basic OpenAI-compatible response for /v1/models
+		resp := connectors.ModelsResponse{
+			Object: "list",
+			Data:   basicModels,
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			log.Error().Err(err).Msg("failed to encode response")
+		}
+	}
+}
+
+// handleProviders handles provider listing (OpenRouter-compatible)
+func (h *ProxyHandler) handleProviders(w http.ResponseWriter, _ *http.Request) {
+	providers := connectors.GetProviderMetadata()
+	
+	resp := connectors.ProvidersResponse{
+		Data: providers,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Error().Err(err).Msg("failed to encode response")
+	}
+}
+
+// handleModelEndpoints handles listing providers that offer a specific model
+func (h *ProxyHandler) handleModelEndpoints(w http.ResponseWriter, r *http.Request) {
+	modelParam := chi.URLParam(r, "model")
+	if modelParam == "" {
+		h.writeError(w, http.StatusBadRequest, "invalid_request", "Model parameter is required")
+		return
+	}
+	
+	// URL decode the model parameter
+	model := strings.ReplaceAll(modelParam, "%2F", "/")
+	
+	// Get providers for this model
+	providers := connectors.GetProvidersForModel(model)
+	
+	resp := connectors.ModelProvidersResponse{
+		Model:     model,
+		Providers: providers,
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Error().Err(err).Msg("failed to encode response")
+	}
+}
+
+// getAllModels aggregates models from all connectors
+func (h *ProxyHandler) getAllModels(ctx context.Context) []connectors.Model {
 	allModels := []connectors.Model{}
 	
 	for provider, connector := range h.connectorRegistry.connectors {
@@ -161,75 +241,7 @@ func (h *ProxyHandler) handleModels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	
-	// Create response
-	resp := connectors.ModelsResponse{
-		Object: "list",
-		Data:   allModels,
-	}
-	
-	// Write response
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Error().Err(err).Msg("failed to encode response")
-	}
-}
-
-// handleProviders handles provider listing (OpenRouter-compatible)
-func (h *ProxyHandler) handleProviders(w http.ResponseWriter, _ *http.Request) {
-	// Provider information (will be enhanced in later tasks)
-	providers := []map[string]interface{}{
-		{
-			"name":               "OpenAI",
-			"slug":               "openai",
-			"logging_policy":     "will_not_log",
-			"privacy_policy_url": "https://openai.com/privacy",
-			"is_moderated":       false,
-		},
-		{
-			"name":               "Anthropic",
-			"slug":               "anthropic",
-			"logging_policy":     "will_not_log",
-			"privacy_policy_url": "https://www.anthropic.com/privacy",
-			"is_moderated":       false,
-		},
-		{
-			"name":               "Google",
-			"slug":               "google",
-			"logging_policy":     "will_not_log",
-			"privacy_policy_url": "https://policies.google.com/privacy",
-			"is_moderated":       false,
-		},
-		{
-			"name":               "Groq",
-			"slug":               "groq",
-			"logging_policy":     "will_not_log",
-			"privacy_policy_url": "https://groq.com/privacy-policy",
-			"is_moderated":       false,
-		},
-		{
-			"name":               "Mistral AI",
-			"slug":               "mistral",
-			"logging_policy":     "will_not_log",
-			"privacy_policy_url": "https://mistral.ai/terms",
-			"is_moderated":       false,
-		},
-		{
-			"name":               "Azure OpenAI",
-			"slug":               "azure",
-			"logging_policy":     "will_not_log",
-			"privacy_policy_url": "https://privacy.microsoft.com",
-			"is_moderated":       false,
-		},
-	}
-
-	resp := map[string]interface{}{
-		"data": providers,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Error().Err(err).Msg("failed to encode response")
-	}
+	return allModels
 }
 
 // validateChatRequest validates a chat request

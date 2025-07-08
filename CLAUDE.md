@@ -31,7 +31,7 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 
 **Project**: Starport - High-Performance LLM Gateway
 **Phase**: Implementation Phase 1
-**Progress**: 13 of 20 tasks complete
+**Progress**: 14 of 20 tasks complete
 
 ## Current Codebase Status
 
@@ -101,6 +101,46 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Comprehensive error types (APIError, StreamError)
 - 90.6% test coverage
 
+**✅ LLM Provider Connectors (P1-S3-3.2)**
+- All 6 provider connectors implemented: OpenAI, Anthropic, Gemini, Groq, Mistral, Azure OpenAI
+- Full streaming support for all providers
+- OpenRouter-compatible model IDs (provider/model format)
+- Provider-specific error handling and retry logic
+- Static model lists with metadata
+- 84.0% test coverage
+
+**✅ Proxy Endpoints (P1-S3-3.3)**
+- OpenAI-compatible endpoints (/v1) and OpenRouter-compatible endpoints (/api/v1)
+- Chat completions, embeddings, and models endpoints
+- Full streaming support with SSE
+- Request validation and transformation
+- Connector initialization from configuration
+- 85.4% test coverage
+
+**✅ Model Routing (P1-S3-3.4)**
+- OpenRouter-compatible model routing with fallback chains
+- Support for models array parameter and auto model selection
+- Provider preferences (order, only, ignore)
+- Circuit breaker pattern for provider failures
+- model_used field in responses
+- Request metadata extraction for routing decisions
+
+**✅ Provider Routing (P1-S3-3.5)**
+- Advanced routing features: latency tracking, cost optimization, sticky sessions
+- Provider health monitoring with circuit breaker
+- Exponential moving average for latency tracking
+- Cost-aware routing with provider pricing
+- Fallback support with configurable retry attempts
+- 76.2% test coverage
+
+**✅ Provider Metadata (P1-S3-3.6)**
+- /api/v1/providers endpoint with provider metadata
+- Enhanced /api/v1/models with full metadata (pricing, context_length, architecture)
+- /api/v1/models/{model}/endpoints to list providers for a model
+- OpenRouter-compatible metadata structures
+- Consolidated implementation (no duplicate "enhanced" methods)
+- 85%+ test coverage
+
 ### Project Structure
 ```
 starport/
@@ -142,10 +182,11 @@ All configuration via environment variables or .env files:
 
 ### Next Tasks Ready to Implement
 Based on completed prerequisites:
-1. **P1-S3-3.2**: LLM Provider Connectors (depends on P1-S3-3.1 ✅)
-2. **P1-S3-3.3**: Proxy Endpoints Implementation (depends on P1-S3-3.1 ✅)
-3. **P1-S4-4.1**: BYOK Implementation (depends on P1-S2-2.3 ✅)
-4. **P1-S4-4.4**: Preset Management System (depends on P1-S2-2.3 ✅)
+1. **P1-S3-3.7**: Dynamic Model Fetching & Google Provider Separation (depends on P1-S3-3.2 ✅)
+2. **P1-S4-4.1**: BYOK Implementation (depends on P1-S2-2.3 ✅)
+3. **P1-S4-4.2**: Caching System (depends on P1-S3-3.3 ✅)
+4. **P1-S4-4.3**: Content Filtering Pipeline (depends on P1-S3-3.3 ✅)
+5. **P1-S4-4.4**: Preset Management System (depends on P1-S2-2.3 ✅)
 
 These can be worked on in parallel by different agents.
 
@@ -378,6 +419,14 @@ func NewMockStore() *MockStore {
   - Circuit breaker needs default values when config fields are zero
   - Test coverage can be high (76%+) with comprehensive test suites
   - Sticky session cleanup is important for memory management
+- **Lessons from P1-S3-3.6 (Provider Metadata):**
+  - Avoid creating "enhanced" versions of endpoints - consolidate to single implementations
+  - CORRECTION: /v1/models should return basic OpenAI format, /api/v1/models returns enhanced metadata
+  - This maintains compatibility with OpenAI clients while providing enhanced data for OpenRouter clients
+  - Use helper functions (like modelContextPtr) to handle pointer conversions cleanly
+  - Provider metadata must follow OpenRouter's exact field names (may_log_prompts, not logging_policy)
+  - URL decoding is needed for path parameters containing special characters (e.g., %2F for /)
+  - Static metadata can achieve high test coverage (96%+) with table-driven tests
 
 ## Commands to Remember
 

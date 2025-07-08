@@ -956,18 +956,19 @@ POST   /api/v1/completions             # OpenRouter-style endpoint
 POST   /v1/embeddings                  # OpenAI-style endpoint
 POST   /api/v1/embeddings              # OpenRouter-style endpoint
 
-# Models (OpenRouter Enhanced) ✅
-GET    /v1/models                      # List available models
-GET    /api/v1/models                  # OpenRouter-style with full metadata
-  # Currently returns basic model info
-  # TODO: Full metadata with pricing, context_length, etc. (P1-S3-3.6)
+# Models ✅
+GET    /v1/models                      # OpenAI-compatible: basic model info only
+GET    /api/v1/models                  # OpenRouter-compatible: full metadata
+  # /v1/models returns: id, object, created, owned_by
+  # /api/v1/models returns: pricing, context_length, architecture, supported_parameters
 
 GET    /v1/models/{model}              # Get specific model details 🔴
-GET    /api/v1/models/{model}/endpoints # List providers for model 🔴
+GET    /api/v1/models/{model}/endpoints # List providers for model ✅
+  # Returns providers that offer the specified model with pricing
 
 # Providers (OpenRouter Specific) ✅
 GET    /api/v1/providers               # List all providers
-  # Returns: name, slug, logging_policy, privacy_url, moderated, etc.
+  # Returns: name, slug, logging_policy, privacy_url, is_moderated, etc.
 
 # Generation Stats (OpenRouter compatible)
 GET    /api/v1/generation/{id}         # Get generation details

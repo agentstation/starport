@@ -15,6 +15,7 @@ Last Updated: When agents update this file
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| P1-S3-3.6 | Backend | #18 | 2025-01-08 | Provider metadata & /api/v1/providers endpoint, enhanced /api/v1/models with full metadata (pricing, context, architecture), /api/v1/models/{model}/endpoints, 85%+ test coverage |
 | P1-S3-3.5 | Backend | #17 | 2025-01-08 | Provider routing with preferences (order/only/ignore), health tracking, latency-based routing, cost optimization, sticky sessions, 76.2% test coverage |
 | P1-S3-3.4 | Backend | #16 | 2025-01-08 | OpenRouter-compatible model routing with fallback chains, auto model selection, provider preferences, circuit breaker, model_used field in responses |
 | P1-S3-3.3 | Backend | #15 | 2025-01-08 | Proxy endpoints implemented with /v1 and /api/v1 routes, streaming support, request validation, connector initialization from config, 85.4% test coverage |
@@ -66,7 +67,7 @@ Last Updated: When agents update this file
 - [x] P1-S3-3.3 - Proxy Endpoints Implementation ✅
 - [x] P1-S3-3.4 - OpenRouter-Compatible Model Routing ✅
 - [x] P1-S3-3.5 - Provider Routing & Fallback Support ✅
-- [ ] P1-S3-3.6 - Provider Metadata & /api/v1/providers Endpoint
+- [x] P1-S3-3.6 - Provider Metadata & /api/v1/providers Endpoint ✅
 - [ ] P1-S3-3.7 - Dynamic Model Fetching & Google Provider Separation
 
 **Features (Subphase 1.5)**
@@ -76,9 +77,9 @@ Last Updated: When agents update this file
 - [ ] P1-S4-4.4 - Preset Management System
 
 ### Velocity Tracking
-- Tasks Completed: 13 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3, P1-S1-1.4, P1-S1-1.5, P1-S2-2.1, P1-S2-2.2, P1-S2-2.3, P1-S3-3.1, P1-S3-3.2, P1-S3-3.3, P1-S3-3.4, P1-S3-3.5)
+- Tasks Completed: 14 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3, P1-S1-1.4, P1-S1-1.5, P1-S2-2.1, P1-S2-2.2, P1-S2-2.3, P1-S3-3.1, P1-S3-3.2, P1-S3-3.3, P1-S3-3.4, P1-S3-3.5, P1-S3-3.6)
 - Tasks In Progress: 0
-- Phase 1 Tasks Remaining: 7
+- Phase 1 Tasks Remaining: 6
 
 ## 📝 Update Instructions
 
