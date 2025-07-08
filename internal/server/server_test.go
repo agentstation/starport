@@ -25,7 +25,7 @@ func TestNew(t *testing.T) {
 		},
 	}
 
-	server := New(config)
+	server := newTestServer(config)
 	if server == nil {
 		t.Fatal("expected server to be created")
 	}
@@ -52,7 +52,7 @@ func TestMiddleware(t *testing.T) {
 		},
 	}
 
-	server := New(config)
+	server := newTestServer(config)
 	
 	// Test that middleware is properly configured
 	req := httptest.NewRequest("GET", "/api/v1/", nil)
@@ -83,7 +83,7 @@ func TestShutdown(t *testing.T) {
 		ShutdownTimeout: 5 * time.Second,
 	}
 
-	server := New(config)
+	server := newTestServer(config)
 
 	// Start server in background
 	go func() {
@@ -115,7 +115,7 @@ func TestCORSHeaders(t *testing.T) {
 		},
 	}
 
-	server := New(config)
+	server := newTestServer(config)
 
 	// Test preflight request
 	req := httptest.NewRequest("OPTIONS", "/api/v1/", nil)

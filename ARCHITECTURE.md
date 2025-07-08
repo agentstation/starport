@@ -258,6 +258,32 @@ func (app *App) Shutdown(ctx context.Context) error {
 }
 ```
 
+### 6.4 Connector Initialization
+
+The application automatically initializes LLM provider connectors based on configuration:
+
+```go
+// Connectors are initialized from environment configuration
+// Only providers with configured base URLs are initialized
+if providersConfig.OpenAI.BaseURL != "" {
+    cfg := convertToConnectorConfig(providersConfig.OpenAI, "OPENAI_API_KEY")
+    connector, err := connectors.NewOpenAIConnector(cfg)
+    if err == nil {
+        registry.Register("openai", connector)
+    }
+}
+
+// API keys are loaded from environment variables:
+// - OPENAI_API_KEY
+// - ANTHROPIC_API_KEY  
+// - GOOGLE_API_KEY
+// - GROQ_API_KEY
+// - MISTRAL_API_KEY
+// - AZURE_OPENAI_API_KEY
+
+// Falls back to mock connector if no providers configured
+```
+
 ## 7. CLI Architecture
 
 ### 7.1 Single Binary Design
@@ -879,32 +905,33 @@ GET    /api/v1/health                  # Health check
 GET    /api/v1/metrics/prometheus      # Prometheus format
 ```
 
-### 12.2 LLM Proxy Endpoints (Full OpenRouter Compatibility)
+### 12.2 LLM Proxy Endpoints (Full OpenRouter Compatibility) ✅
 
 ```yaml
-# Chat Completions (OpenAI & OpenRouter compatible)
+# Chat Completions (OpenAI & OpenRouter compatible) ✅
 POST   /v1/chat/completions            # OpenAI-style endpoint
 POST   /api/v1/chat/completions        # OpenRouter-style endpoint
-  # Supports: model (string), models (array), provider preferences
+  # Supports: model (string), streaming, all OpenAI parameters
+  # TODO: models (array), provider preferences (P1-S3-3.4)
 
-# Completions (Legacy)
+# Completions (Legacy) 🔴
 POST   /v1/completions                 # OpenAI-style endpoint
 POST   /api/v1/completions             # OpenRouter-style endpoint
 
-# Embeddings
+# Embeddings ✅
 POST   /v1/embeddings                  # OpenAI-style endpoint
 POST   /api/v1/embeddings              # OpenRouter-style endpoint
 
-# Models (OpenRouter Enhanced)
+# Models (OpenRouter Enhanced) ✅
 GET    /v1/models                      # List available models
 GET    /api/v1/models                  # OpenRouter-style with full metadata
-  # Returns: id, name, created, description, pricing, context_length,
-  #          architecture, supported_parameters, top_provider, etc.
+  # Currently returns basic model info
+  # TODO: Full metadata with pricing, context_length, etc. (P1-S3-3.6)
 
-GET    /v1/models/{model}              # Get specific model details
-GET    /api/v1/models/{model}/endpoints # List providers for model
+GET    /v1/models/{model}              # Get specific model details 🔴
+GET    /api/v1/models/{model}/endpoints # List providers for model 🔴
 
-# Providers (OpenRouter Specific)
+# Providers (OpenRouter Specific) ✅
 GET    /api/v1/providers               # List all providers
   # Returns: name, slug, logging_policy, privacy_url, moderated, etc.
 
@@ -998,24 +1025,30 @@ providers:
   openai:
     base_url: https://api.openai.com
     timeout: 30s
+    # API key from environment: OPENAI_API_KEY
   anthropic:
     base_url: https://api.anthropic.com
     timeout: 30s
+    # API key from environment: ANTHROPIC_API_KEY
   gemini:
     # For Vertex AI regional endpoint: https://{location}-aiplatform.googleapis.com
     # For global endpoint: https://aiplatform.googleapis.com
     base_url: https://us-central1-aiplatform.googleapis.com
     timeout: 30s
+    # API key from environment: GOOGLE_API_KEY
   groq:
     base_url: https://api.groq.com/openai/v1
     timeout: 30s
+    # API key from environment: GROQ_API_KEY
   mistral:
     base_url: https://api.mistral.ai/v1
     timeout: 30s
+    # API key from environment: MISTRAL_API_KEY
   azure:
     # Replace YOUR-RESOURCE-NAME with your Azure OpenAI resource name
     base_url: https://YOUR-RESOURCE-NAME.openai.azure.com
     timeout: 30s
+    # API key from environment: AZURE_OPENAI_API_KEY
 
 rate_limiting:
   default_burst: 10
