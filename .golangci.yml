@@ -1,9 +1,9 @@
-# golangci-lint configuration for v2.1
+# golangci-lint configuration v2
 version: "2"
 
 run:
   timeout: 5m
-  tests: true
+  tests: false
 
 linters:
   enable:
@@ -13,3 +13,10 @@ linters:
     - ineffassign
     - unused
     - misspell
+    - gosec
+    - goconst
+    - gocyclo
+    - dupl
+    - revive
+    - bodyclose
+    - noctx

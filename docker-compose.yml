@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Local Valkey instance for development
+  valkey:
+    image: valkey/valkey:7-alpine
+    container_name: starport-valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+    command: valkey-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - starport-network
+
+  # Starport development server with hot reload
+  starport:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: starport-dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - go-cache:/go/pkg/mod
+    environment:
+      - STARPORT_ENV=development
+      - STARPORT_STORAGE=valkey
+      - STARPORT_VALKEY_URL=valkey:6379
+      - STARPORT_LOG_LEVEL=debug
+      - CGO_ENABLED=0
+    command: air
+    depends_on:
+      valkey:
+        condition: service_healthy
+    networks:
+      - starport-network
+
+volumes:
+  valkey-data:
+    driver: local
+  go-cache:
+    driver: local
+
+networks:
+  starport-network:
+    driver: bridge

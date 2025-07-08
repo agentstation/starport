@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue.svg)](https://golang.org/dl/)
+[![codecov](https://codecov.io/gh/agentstation/starport/branch/main/graph/badge.svg)](https://codecov.io/gh/agentstation/starport)
 
 > **🚧 Status: Implementation Started** - Repository initialized with Go module structure. See [TASKS.md](TASKS.md) to start contributing.
 

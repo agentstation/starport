@@ -38,6 +38,7 @@ vendor/
 .env
 .env.local
 .env.*.local
+local.env
 
 # Build directories
 dist/
