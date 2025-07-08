@@ -88,16 +88,16 @@ This document outlines the implementation plan for Starport, an open-source LLM 
     - [ ] Auto-routing with `openrouter/auto` (P1-S3-3.4)
   - [x] `/v1/embeddings` endpoint ✅
   - [x] `/api/v1/embeddings` (OpenRouter style) ✅
-  - [x] `/v1/models` with basic listing ✅
-  - [x] `/api/v1/models` with basic metadata: ✅
-    - [ ] Pricing information (P1-S3-3.6)
-    - [ ] Context length (P1-S3-3.6)
-    - [ ] Supported parameters (P1-S3-3.6)
-    - [ ] Architecture details (P1-S3-3.6)
+  - [x] `/v1/models` with enhanced metadata ✅
+  - [x] `/api/v1/models` with full metadata: ✅
+    - [x] Pricing information ✅
+    - [x] Context length ✅
+    - [x] Supported parameters ✅
+    - [x] Architecture details ✅
   - [x] `/api/v1/providers` endpoint: ✅
     - List all providers ✅
     - Provider metadata ✅
-  - [ ] `/api/v1/models/{model}/endpoints` (P1-S3-3.6)
+  - [x] `/api/v1/models/{model}/endpoints` ✅
   - [ ] `/api/v1/generation/{id}` for stats
   - [ ] `/api/v1/auth/key` for rate limits (OpenRouter)
   - [ ] Request/response transformation pipeline

@@ -584,37 +584,61 @@ func TestProxyHandler_Models(t *testing.T) {
 		handler.RegisterOpenRouterRoutes(r)
 	})
 
-	// Test both endpoints
-	endpoints := []string{"/v1/models", "/api/v1/models"}
+	// Test /v1/models endpoint (basic format)
+	t.Run("/v1/models", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/v1/models", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		// Assert
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp connectors.ModelsResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+
+		// Should have models from provider1 and provider2, but not provider3 (error)
+		assert.Equal(t, "list", resp.Object)
+		assert.Len(t, resp.Data, 3)
+
+		// Check that all models have provider prefix
+		modelIDs := make(map[string]bool)
+		for _, model := range resp.Data {
+			modelIDs[model.ID] = true
+		}
+
+		assert.True(t, modelIDs["provider1/model1"])
+		assert.True(t, modelIDs["provider1/model2"])
+		assert.True(t, modelIDs["provider2/model3"])
+	})
 	
-	for _, endpoint := range endpoints {
-		t.Run(endpoint, func(t *testing.T) {
-			req := httptest.NewRequest("GET", endpoint, nil)
-			w := httptest.NewRecorder()
-			router.ServeHTTP(w, req)
+	// Test /api/v1/models endpoint (enhanced format)
+	t.Run("/api/v1/models", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/v1/models", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
 
-			// Assert
-			assert.Equal(t, http.StatusOK, w.Code)
+		// Assert
+		assert.Equal(t, http.StatusOK, w.Code)
 
-			var resp connectors.ModelsResponse
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			require.NoError(t, err)
+		var resp connectors.EnhancedModelsResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
 
-			// Should have models from provider1 and provider2, but not provider3 (error)
-			assert.Equal(t, "list", resp.Object)
-			assert.Len(t, resp.Data, 3)
+		// Should have models from provider1 and provider2, but not provider3 (error)
+		assert.Equal(t, "list", resp.Object)
+		assert.Len(t, resp.Data, 3)
 
-			// Check that all models have provider prefix
-			modelIDs := make(map[string]bool)
-			for _, model := range resp.Data {
-				modelIDs[model.ID] = true
-			}
+		// Check that all models have provider prefix
+		modelIDs := make(map[string]bool)
+		for _, model := range resp.Data {
+			modelIDs[model.ID] = true
+		}
 
-			assert.True(t, modelIDs["provider1/model1"])
-			assert.True(t, modelIDs["provider1/model2"])
-			assert.True(t, modelIDs["provider2/model3"])
-		})
-	}
+		assert.True(t, modelIDs["provider1/model1"])
+		assert.True(t, modelIDs["provider1/model2"])
+		assert.True(t, modelIDs["provider2/model3"])
+	})
 }
 
 func TestProxyHandler_Providers(t *testing.T) {
@@ -643,13 +667,16 @@ func TestProxyHandler_Providers(t *testing.T) {
 	require.True(t, ok)
 	assert.Greater(t, len(data), 0)
 
-	// Check first provider has required fields
+	// Check first provider has required fields (OpenRouter format)
 	provider := data[0].(map[string]interface{})
 	assert.Contains(t, provider, "name")
 	assert.Contains(t, provider, "slug")
-	assert.Contains(t, provider, "logging_policy")
+	assert.Contains(t, provider, "may_log_prompts")
+	assert.Contains(t, provider, "may_train_on_data")
+	assert.Contains(t, provider, "moderated_by_openrouter")
 	assert.Contains(t, provider, "privacy_policy_url")
-	assert.Contains(t, provider, "is_moderated")
+	assert.Contains(t, provider, "terms_of_service_url")
+	assert.Contains(t, provider, "status_page_url")
 }
 
 func TestProxyHandler_OpenRouterCompatibility(t *testing.T) {
@@ -709,4 +736,227 @@ func TestProxyHandler_OpenRouterCompatibility(t *testing.T) {
 			assert.NotEqual(t, http.StatusNotFound, w.Code)
 		})
 	}
+}
+
+func TestProxyHandler_ModelsWithMetadata(t *testing.T) {
+	// Setup
+	registry := NewConnectorRegistry()
+	
+	// Register mock connectors
+	mockOpenAI := &mockConnector{
+		name: "openai",
+		modelsResponse: &connectors.ModelsResponse{
+			Object: "list",
+			Data: []connectors.Model{
+				{ID: "gpt-4", Object: "model", Created: 1686935002, OwnedBy: "openai"},
+				{ID: "gpt-3.5-turbo", Object: "model", Created: 1677649963, OwnedBy: "openai"},
+			},
+		},
+	}
+	mockAnthropic := &mockConnector{
+		name: "anthropic",
+		modelsResponse: &connectors.ModelsResponse{
+			Object: "list",
+			Data: []connectors.Model{
+				{ID: "claude-3-opus-20240229", Object: "model", Created: 1709251200, OwnedBy: "anthropic"},
+			},
+		},
+	}
+	
+	registry.Register("openai", mockOpenAI)
+	registry.Register("anthropic", mockAnthropic)
+
+	handler := NewProxyHandler(registry)
+	router := chi.NewRouter()
+	router.Route("/api/v1", func(r chi.Router) {
+		handler.RegisterOpenRouterRoutes(r)
+	})
+
+	// Test /api/v1/models
+	req := httptest.NewRequest("GET", "/api/v1/models", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+	// Parse response
+	var resp connectors.EnhancedModelsResponse
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	// Verify response structure
+	assert.Equal(t, "list", resp.Object)
+	assert.NotEmpty(t, resp.Data)
+
+	// Find and check GPT-4 metadata
+	var gpt4Found bool
+	for _, model := range resp.Data {
+		if model.ID == "openai/gpt-4" {
+			gpt4Found = true
+			assert.Equal(t, "OpenAI: GPT-4", model.Name)
+			assert.NotNil(t, model.Pricing)
+			assert.Equal(t, "0.00003", model.Pricing.Prompt)
+			assert.Equal(t, "0.00006", model.Pricing.Completion)
+			assert.NotNil(t, model.Context)
+			assert.Equal(t, connectors.ModelContext(8192), *model.Context)
+			assert.NotNil(t, model.Architecture)
+			assert.Contains(t, model.Architecture.InputModalities, "text")
+			assert.Equal(t, "cl100k_base", model.Architecture.Tokenizer)
+			assert.NotEmpty(t, model.SupportedParameters)
+			break
+		}
+	}
+	assert.True(t, gpt4Found, "GPT-4 model not found in response")
+}
+
+func TestProxyHandler_ModelEndpoints(t *testing.T) {
+	tests := []struct {
+		name           string
+		modelParam     string
+		expectedStatus int
+		expectedModel  string
+		expectedCount  int
+	}{
+		{
+			name:           "successful model endpoints",
+			modelParam:     "gpt-4",
+			expectedStatus: http.StatusOK,
+			expectedModel:  "gpt-4",
+			expectedCount:  2, // OpenAI and Azure
+		},
+		{
+			name:           "model with slash encoding",
+			modelParam:     "gpt-3.5-turbo",
+			expectedStatus: http.StatusOK,
+			expectedModel:  "gpt-3.5-turbo",
+			expectedCount:  2, // OpenAI and Azure
+		},
+		{
+			name:           "model not found",
+			modelParam:     "nonexistent-model",
+			expectedStatus: http.StatusOK,
+			expectedModel:  "nonexistent-model",
+			expectedCount:  0,
+		},
+		{
+			name:           "empty model parameter",
+			modelParam:     "",
+			expectedStatus: http.StatusBadRequest, // Empty parameter returns bad request
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			registry := NewConnectorRegistry()
+			handler := NewProxyHandler(registry)
+			router := chi.NewRouter()
+			router.Route("/api/v1", func(r chi.Router) {
+				handler.RegisterOpenRouterRoutes(r)
+			})
+
+			// Test request
+			url := "/api/v1/models/" + tt.modelParam + "/endpoints"
+			if tt.modelParam != "" {
+				url = "/api/v1/models/" + strings.ReplaceAll(tt.modelParam, "/", "%2F") + "/endpoints"
+			}
+			
+			req := httptest.NewRequest("GET", url, nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			// Assert
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				// Parse response
+				var resp connectors.ModelProvidersResponse
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.expectedModel, resp.Model)
+				assert.Equal(t, tt.expectedCount, len(resp.Providers))
+
+				// Check provider details if any
+				if tt.expectedCount > 0 {
+					for _, provider := range resp.Providers {
+						assert.NotEmpty(t, provider.Provider)
+						assert.NotEmpty(t, provider.Name)
+						if provider.Pricing != nil {
+							assert.NotEmpty(t, provider.Pricing.Prompt)
+							assert.NotEmpty(t, provider.Pricing.Completion)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestProxyHandler_ModelsEndpointCompatibility(t *testing.T) {
+	// Setup
+	registry := NewConnectorRegistry()
+	mockConn := &mockConnector{
+		name: "openai",
+		modelsResponse: &connectors.ModelsResponse{
+			Object: "list",
+			Data: []connectors.Model{
+				{ID: "gpt-4", Object: "model", Created: 1686935002, OwnedBy: "openai"},
+			},
+		},
+	}
+	registry.Register("openai", mockConn)
+
+	handler := NewProxyHandler(registry)
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+	router.Route("/api/v1", func(r chi.Router) {
+		handler.RegisterOpenRouterRoutes(r)
+	})
+
+	// Test /v1/models returns basic response
+	t.Run("/v1/models", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/v1/models", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		
+		// Parse as basic ModelsResponse
+		var resp connectors.ModelsResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		
+		assert.Equal(t, "list", resp.Object)
+		assert.NotEmpty(t, resp.Data)
+		assert.Equal(t, "openai/gpt-4", resp.Data[0].ID)
+		assert.Equal(t, "model", resp.Data[0].Object)
+		assert.Equal(t, int64(1686935002), resp.Data[0].Created)
+		assert.Equal(t, "openai", resp.Data[0].OwnedBy)
+	})
+	
+	// Test /api/v1/models returns enhanced response
+	t.Run("/api/v1/models", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/v1/models", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		
+		// Parse as EnhancedModelsResponse
+		var resp connectors.EnhancedModelsResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		
+		assert.Equal(t, "list", resp.Object)
+		assert.NotEmpty(t, resp.Data)
+		assert.Equal(t, "openai/gpt-4", resp.Data[0].ID)
+		
+		// Check enhanced metadata is present
+		assert.NotEmpty(t, resp.Data[0].Name)
+		assert.NotNil(t, resp.Data[0].Pricing)
+		assert.NotNil(t, resp.Data[0].Context)
+	})
 }
