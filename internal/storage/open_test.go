@@ -22,8 +22,7 @@ func TestOpen(t *testing.T) {
 					MemTableSize: 64 * 1024 * 1024,
 				},
 			},
-			wantErr: true, // Not implemented yet
-			errMsg:  "badger store not yet implemented",
+			wantErr: false, // Badger is now implemented
 		},
 		{
 			name: "valid valkey config",
@@ -77,8 +76,8 @@ func TestOpen(t *testing.T) {
 					t.Errorf("Open() error = %v, want error containing %v", err, tt.errMsg)
 				}
 			}
-			if store != nil {
-				t.Error("Open() returned non-nil store for unimplemented backend")
+			if !tt.wantErr && store != nil {
+				defer store.Close()
 			}
 		})
 	}
