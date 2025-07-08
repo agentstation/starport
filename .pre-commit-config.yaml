@@ -1,0 +1,47 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-imports
+        args: [-w, -local, github.com/agentstation/starport]
+      - id: go-vet
+      - id: go-mod-tidy
+      - id: go-unit-tests
+        args: [-tags=unit]
+      - id: golangci-lint
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.13.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  - repo: https://github.com/zricethezav/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: no-large-files
+        name: Check for large files
+        entry: bash -c 'find . -type f -size +1M | grep -v "^./.git" | grep -v "vendor/" | head -1 | xargs -I {} sh -c "echo \"Large file detected: {}\"; exit 1"'
+        language: system
+        pass_filenames: false
