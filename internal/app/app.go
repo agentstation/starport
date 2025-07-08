@@ -4,16 +4,23 @@ package app
 import (
 	"context"
 	"fmt"
+	"sync"
+
+	"github.com/rs/zerolog/log"
+
+	"github.com/agentstation/starport/internal/server"
 )
 
 // Config holds application configuration
 type Config struct {
-	// TODO: Add configuration fields
+	// Server configuration
+	Server server.Config
 }
 
 // App represents the main application
 type App struct {
-	config *Config
+	config     *Config
+	httpServer *server.Server
 }
 
 // Option is a functional option for App
@@ -29,21 +36,56 @@ func WithConfig(cfg *Config) Option {
 // New creates a new App instance
 func New(opts ...Option) (*App, error) {
 	app := &App{
-		config: &Config{},
+		config: &Config{
+			Server: server.Config{
+				Port: 8080,
+			},
+		},
 	}
 
 	for _, opt := range opts {
 		opt(app)
 	}
 
+	// Initialize HTTP server
+	app.httpServer = server.New(&app.config.Server)
+
 	return app, nil
 }
 
 // Run starts the application
 func (a *App) Run(ctx context.Context) error {
-	fmt.Println("Starport server starting...")
-	// TODO: Implement server logic
-	<-ctx.Done()
-	fmt.Println("Starport server shutting down...")
-	return nil
+	log.Info().Msg("starting Starport application")
+
+	// Create error channel for server errors
+	errChan := make(chan error, 1)
+
+	// Start HTTP server in a goroutine
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := a.httpServer.Start(); err != nil {
+			errChan <- fmt.Errorf("HTTP server error: %w", err)
+		}
+	}()
+
+	// Wait for context cancellation or server error
+	select {
+	case <-ctx.Done():
+		log.Info().Msg("shutting down Starport application")
+		
+		// Shutdown HTTP server
+		if err := a.httpServer.Shutdown(context.Background()); err != nil {
+			return fmt.Errorf("failed to shutdown HTTP server: %w", err)
+		}
+		
+		// Wait for goroutines to finish
+		wg.Wait()
+		
+		return nil
+		
+	case err := <-errChan:
+		return err
+	}
 }

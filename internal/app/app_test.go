@@ -1,0 +1,113 @@
+package app
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/agentstation/starport/internal/server"
+)
+
+func TestNew(t *testing.T) {
+	// Test with default config
+	app, err := New()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if app == nil {
+		t.Fatal("expected app to be created")
+	}
+
+	if app.config == nil {
+		t.Error("expected config to be initialized")
+	}
+
+	if app.httpServer == nil {
+		t.Error("expected HTTP server to be initialized")
+	}
+}
+
+func TestNewWithConfig(t *testing.T) {
+	config := &Config{
+		Server: server.Config{
+			Port:            9090,
+			ReadTimeout:     5 * time.Second,
+			WriteTimeout:    5 * time.Second,
+			IdleTimeout:     60 * time.Second,
+			ShutdownTimeout: 15 * time.Second,
+		},
+	}
+
+	app, err := New(WithConfig(config))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if app.config.Server.Port != 9090 {
+		t.Errorf("expected port 9090, got %d", app.config.Server.Port)
+	}
+}
+
+func TestAppRun(t *testing.T) {
+	// Create app with port 0 to use random port
+	config := &Config{
+		Server: server.Config{
+			Port:            0,
+			ShutdownTimeout: 5 * time.Second,
+		},
+	}
+
+	app, err := New(WithConfig(config))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Run app
+	err = app.Run(ctx)
+	if err != nil {
+		t.Errorf("expected no error on shutdown, got %v", err)
+	}
+}
+
+func TestAppRunWithCancel(t *testing.T) {
+	config := &Config{
+		Server: server.Config{
+			Port:            0,
+			ShutdownTimeout: 5 * time.Second,
+		},
+	}
+
+	app, err := New(WithConfig(config))
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Run app in goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- app.Run(ctx)
+	}()
+
+	// Give server time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Cancel context
+	cancel()
+
+	// Wait for shutdown
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Errorf("expected no error on shutdown, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Error("timeout waiting for app to shutdown")
+	}
+}
