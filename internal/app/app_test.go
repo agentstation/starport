@@ -183,18 +183,19 @@ func TestApp_InitializeConnectors(t *testing.T) {
 			}
 
 			// Check mock connector
-			_, hasMock := app.connectorRegistry.Get("mock")
-			if tt.expectMock && hasMock != nil {
+			mockConnector := app.connectorRegistry.Get("mock")
+			if tt.expectMock && mockConnector == nil {
 				t.Error("expected mock connector to be registered")
 			}
-			if !tt.expectMock && hasMock == nil {
+			if !tt.expectMock && mockConnector != nil {
 				t.Error("did not expect mock connector to be registered")
 			}
 
 			// Check expected providers
 			for _, provider := range tt.expectProviders {
-				if _, err := app.connectorRegistry.Get(provider); err != nil {
-					t.Errorf("expected connector %s to be registered, but got error: %v", provider, err)
+				connector := app.connectorRegistry.Get(provider)
+				if connector == nil {
+					t.Errorf("expected connector %s to be registered, but it was not found", provider)
 				}
 			}
 		})

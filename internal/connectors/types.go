@@ -35,6 +35,9 @@ type ChatRequest struct {
 	ToolChoice       interface{}     `json:"tool_choice,omitempty"`
 	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`
 
+	// OpenRouter-compatible model routing
+	Models []string `json:"models,omitempty"` // Fallback model chain
+
 	// Provider-specific extensions
 	ProviderOptions map[string]interface{} `json:"provider_options,omitempty"`
 }
