@@ -31,7 +31,7 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 
 **Project**: Starport - High-Performance LLM Gateway
 **Phase**: Implementation Phase 1
-**Progress**: 14 of 20 tasks complete
+**Progress**: 15 of 20 tasks complete
 
 ## Current Codebase Status
 
@@ -141,6 +141,14 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Consolidated implementation (no duplicate "enhanced" methods)
 - 85%+ test coverage
 
+**✅ Dynamic Model Fetching & Google Provider Separation (P1-S3-3.7)**
+- Dynamic model fetching for Anthropic, Gemini, and Groq connectors
+- Split GeminiConnector into GoogleAIStudioConnector and VertexAIConnector
+- Model response caching with 1-hour TTL
+- Vertex AI models support (Gemini, PaLM, Codey, Claude via Model Garden)
+- Backward compatibility maintained (legacy "gemini" maps to "google-aistudio")
+- 85%+ test coverage
+
 ### Project Structure
 ```
 starport/
@@ -182,11 +190,11 @@ All configuration via environment variables or .env files:
 
 ### Next Tasks Ready to Implement
 Based on completed prerequisites:
-1. **P1-S3-3.7**: Dynamic Model Fetching & Google Provider Separation (depends on P1-S3-3.2 ✅)
-2. **P1-S4-4.1**: BYOK Implementation (depends on P1-S2-2.3 ✅)
-3. **P1-S4-4.2**: Caching System (depends on P1-S3-3.3 ✅)
-4. **P1-S4-4.3**: Content Filtering Pipeline (depends on P1-S3-3.3 ✅)
-5. **P1-S4-4.4**: Preset Management System (depends on P1-S2-2.3 ✅)
+1. **P1-S4-4.1**: BYOK Implementation (depends on P1-S2-2.3 ✅)
+2. **P1-S4-4.2**: Caching System (depends on P1-S3-3.3 ✅)
+3. **P1-S4-4.3**: Content Filtering Pipeline (depends on P1-S3-3.3 ✅)
+4. **P1-S4-4.4**: Preset Management System (depends on P1-S2-2.3 ✅)
+5. **P1-S5-5.1**: Authentication System (depends on P1-S2-2.3 ✅)
 
 These can be worked on in parallel by different agents.
 
@@ -427,6 +435,14 @@ func NewMockStore() *MockStore {
   - Provider metadata must follow OpenRouter's exact field names (may_log_prompts, not logging_policy)
   - URL decoding is needed for path parameters containing special characters (e.g., %2F for /)
   - Static metadata can achieve high test coverage (96%+) with table-driven tests
+- **Lessons from P1-S3-3.7 (Dynamic Model Fetching):**
+  - Use shared base implementations to avoid code duplication between similar connectors
+  - Implement caching layer for API responses to reduce load and improve performance
+  - Always provide fallback to static lists when dynamic fetching fails
+  - Maintain backward compatibility when splitting providers (e.g., "gemini" -> "google-aistudio")
+  - Thread-safe global caches need proper mutex protection
+  - Consider making cache TTL configurable for different deployment scenarios
+  - Separate connectors allow for provider-specific features (e.g., Vertex AI's Model Garden)
 
 ## Commands to Remember
 

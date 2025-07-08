@@ -47,8 +47,8 @@ func TestNewConnector(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if connector.Name() != "gemini" {
-			t.Errorf("expected name 'gemini', got %s", connector.Name())
+		if connector.Name() != "google-aistudio" {
+			t.Errorf("expected name 'google-aistudio', got %s", connector.Name())
 		}
 	})
 

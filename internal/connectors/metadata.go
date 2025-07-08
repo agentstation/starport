@@ -100,14 +100,24 @@ func GetProviderMetadata() []ProviderMetadata {
 			StatusPageURL:         "https://status.anthropic.com",
 		},
 		{
-			Name:                  "Google",
-			Slug:                  "google",
+			Name:                  "Google AI Studio",
+			Slug:                  "google-aistudio",
 			MayLogPrompts:         false,
 			MayTrainOnData:        false,
 			ModeratedByOpenRouter: false,
 			PrivacyPolicyURL:      "https://policies.google.com/privacy",
 			TermsOfServiceURL:     "https://policies.google.com/terms",
 			StatusPageURL:         "",
+		},
+		{
+			Name:                  "Google Vertex AI",
+			Slug:                  "google-vertexai",
+			MayLogPrompts:         false,
+			MayTrainOnData:        false,
+			ModeratedByOpenRouter: false,
+			PrivacyPolicyURL:      "https://cloud.google.com/terms/cloud-privacy-notice",
+			TermsOfServiceURL:     "https://cloud.google.com/terms",
+			StatusPageURL:         "https://status.cloud.google.com",
 		},
 		{
 			Name:                  "Groq",
@@ -324,10 +334,10 @@ var modelMetadataMap = map[string]*ModelMetadata{
 		},
 	},
 	
-	// Google Models
-	"google/gemini-1.5-pro": {
-		ID:          "google/gemini-1.5-pro",
-		Name:        "Google: Gemini 1.5 Pro",
+	// Google AI Studio Models
+	"google-aistudio/gemini-1.5-pro": {
+		ID:          "google-aistudio/gemini-1.5-pro",
+		Name:        "Google AI Studio: Gemini 1.5 Pro",
 		Created:     1707868800,
 		Description: "Gemini 1.5 Pro with 1M+ context window",
 		Pricing: &ModelPricing{
@@ -351,9 +361,9 @@ var modelMetadataMap = map[string]*ModelMetadata{
 			"stop_sequences", "candidate_count",
 		},
 	},
-	"google/gemini-1.5-flash": {
-		ID:          "google/gemini-1.5-flash",
-		Name:        "Google: Gemini 1.5 Flash",
+	"google-aistudio/gemini-1.5-flash": {
+		ID:          "google-aistudio/gemini-1.5-flash",
+		Name:        "Google AI Studio: Gemini 1.5 Flash",
 		Created:     1715299200,
 		Description: "Fast multimodal model optimized for speed",
 		Pricing: &ModelPricing{
@@ -375,6 +385,189 @@ var modelMetadataMap = map[string]*ModelMetadata{
 		SupportedParameters: []string{
 			"temperature", "top_p", "top_k", "max_tokens",
 			"stop_sequences", "candidate_count",
+		},
+	},
+	
+	// Google Vertex AI Models
+	"google-vertexai/gemini-1.5-pro": {
+		ID:          "google-vertexai/gemini-1.5-pro",
+		Name:        "Google Vertex AI: Gemini 1.5 Pro",
+		Created:     1707868800,
+		Description: "Gemini 1.5 Pro on Vertex AI with 1M+ context window",
+		Pricing: &ModelPricing{
+			Prompt:     "0.00000125",
+			Completion: "0.00000375",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(1048576),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image", "video", "audio"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "gemini",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 8192,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "top_k", "max_tokens",
+			"stop_sequences", "candidate_count",
+		},
+	},
+	"google-vertexai/gemini-1.5-flash": {
+		ID:          "google-vertexai/gemini-1.5-flash",
+		Name:        "Google Vertex AI: Gemini 1.5 Flash",
+		Created:     1715299200,
+		Description: "Fast multimodal model on Vertex AI optimized for speed",
+		Pricing: &ModelPricing{
+			Prompt:     "0.000000125",
+			Completion: "0.000000375",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(1048576),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image", "video", "audio"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "gemini",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 8192,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "top_k", "max_tokens",
+			"stop_sequences", "candidate_count",
+		},
+	},
+	"google-vertexai/claude-3-opus@20240229": {
+		ID:          "google-vertexai/claude-3-opus@20240229",
+		Name:        "Google Vertex AI: Claude 3 Opus",
+		Created:     1709251200,
+		Description: "Claude 3 Opus available through Vertex AI Model Garden",
+		Pricing: &ModelPricing{
+			Prompt:     "0.000015",
+			Completion: "0.000075",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(200000),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "claude",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 4096,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "max_tokens",
+			"stop_sequences", "stream",
+		},
+	},
+	"google-vertexai/claude-3-sonnet@20240229": {
+		ID:          "google-vertexai/claude-3-sonnet@20240229",
+		Name:        "Google Vertex AI: Claude 3 Sonnet",
+		Created:     1709251200,
+		Description: "Claude 3 Sonnet available through Vertex AI Model Garden",
+		Pricing: &ModelPricing{
+			Prompt:     "0.000003",
+			Completion: "0.000015",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(200000),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "claude",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 4096,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "max_tokens",
+			"stop_sequences", "stream",
+		},
+	},
+	"google-vertexai/claude-3-haiku@20240307": {
+		ID:          "google-vertexai/claude-3-haiku@20240307",
+		Name:        "Google Vertex AI: Claude 3 Haiku",
+		Created:     1709856000,
+		Description: "Claude 3 Haiku available through Vertex AI Model Garden",
+		Pricing: &ModelPricing{
+			Prompt:     "0.00000025",
+			Completion: "0.00000125",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(200000),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "claude",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 4096,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "max_tokens",
+			"stop_sequences", "stream",
+		},
+	},
+	"google-vertexai/text-bison@001": {
+		ID:          "google-vertexai/text-bison@001",
+		Name:        "Google Vertex AI: PaLM 2 for Text",
+		Created:     1683590400,
+		Description: "PaLM 2 text generation model",
+		Pricing: &ModelPricing{
+			Prompt:     "0.000000125",
+			Completion: "0.000000125",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(8192),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "palm",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 1024,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "top_k", "max_tokens",
+			"stop_sequences",
+		},
+	},
+	"google-vertexai/code-bison@001": {
+		ID:          "google-vertexai/code-bison@001",
+		Name:        "Google Vertex AI: Codey for Code Generation",
+		Created:     1683590400,
+		Description: "Codey model for code generation",
+		Pricing: &ModelPricing{
+			Prompt:     "0.000000125",
+			Completion: "0.000000125",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(6144),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "palm",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 1024,
+		},
+		SupportedParameters: []string{
+			"temperature", "max_tokens", "stop_sequences",
 		},
 	},
 	

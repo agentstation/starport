@@ -128,8 +128,50 @@ func (c *AnthropicConnector) Embeddings(_ context.Context, _ *EmbeddingsRequest)
 }
 
 // Models lists available models from the provider
-func (c *AnthropicConnector) Models(_ context.Context) (*ModelsResponse, error) {
-	// Anthropic doesn't have a models endpoint, return hardcoded list
+func (c *AnthropicConnector) Models(ctx context.Context) (*ModelsResponse, error) {
+	return fetchModelsWithCache(ctx, "anthropic", func(ctx context.Context) (*ModelsResponse, error) {
+		// Try to fetch models dynamically from Anthropic API
+		req, err := http.NewRequestWithContext(ctx, "GET", c.config.BaseURL+"/models", nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Set headers
+		req.Header.Set("x-api-key", c.config.APIKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		if resp.StatusCode != http.StatusOK {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		// Parse the response
+		models, err := parseModelsResponse(body, "anthropic")
+		if err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		return models, nil
+	})
+}
+
+// staticModelsList returns the hardcoded list of models as fallback
+func (c *AnthropicConnector) staticModelsList() *ModelsResponse {
 	models := []Model{
 		// Claude Opus 4
 		{
@@ -207,14 +249,14 @@ func (c *AnthropicConnector) Models(_ context.Context) (*ModelsResponse, error) 
 	return &ModelsResponse{
 		Object: "list",
 		Data:   models,
-	}, nil
+	}
 }
 
 // Health checks the health of the connector
 func (c *AnthropicConnector) Health(ctx context.Context) error {
 	// Simple health check - try to get response with minimal request
 	req := &ChatRequest{
-		Model: "claude-3-haiku-20240307",
+		Model: "anthropic/claude-3-haiku-20240307",
 		Messages: []Message{
 			{Role: "user", Content: "Hi"},
 		},

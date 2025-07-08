@@ -34,7 +34,8 @@ graph TD
     Gateway --> Connector[Model Connectors]
     Connector --> OpenAI[OpenAI]
     Connector --> Anthropic[Anthropic]
-    Connector --> Gemini[Google Gemini/Vertex AI]
+    Connector --> GoogleAIStudio[Google AI Studio - Gemini]
+    Connector --> VertexAI[Google Vertex AI - All Models]
     Connector --> Groq[Groq]
     Connector --> Mistral[Mistral AI]
     Connector --> Azure[Azure OpenAI]
@@ -358,17 +359,21 @@ func main() {
 ```
 openai/gpt-4
 anthropic/claude-3-opus-20240229
-google/gemini-1.5-pro
+google-aistudio/gemini-1.5-pro
+google-vertexai/gemini-1.5-pro
+google-vertexai/claude-3-opus@20240229
 groq/llama-3.1-70b-versatile
 mistral/mistral-large-latest
 azure/gpt-4
 ```
 
-**Current Limitations**:
-- Google AI Studio and Vertex AI are combined under "google" provider
-  - Should be separated into `google-aistudio` and `google-vertexai` 
-  - Vertex AI supports many non-Gemini models (PaLM, Codey, etc.)
-- Static model lists for some providers (should fetch dynamically)
+**Current Features**:
+- Google AI Studio and Vertex AI are properly separated:
+  - `google-aistudio`: Gemini models only (with dynamic fetching)
+  - `google-vertexai`: All Vertex AI models (Gemini, PaLM, Codey, Claude via Model Garden)
+- Dynamic model fetching for Anthropic, Google AI Studio, and Groq
+- 1-hour cache TTL for model responses
+- Fallback to static lists on API errors
 
 ### 8.2 Model Routing (OpenRouter Compatible)
 
@@ -1065,12 +1070,17 @@ providers:
     base_url: https://api.anthropic.com
     timeout: 30s
     # API key from environment: ANTHROPIC_API_KEY
-  gemini:
-    # For Vertex AI regional endpoint: https://{location}-aiplatform.googleapis.com
-    # For global endpoint: https://aiplatform.googleapis.com
-    base_url: https://us-central1-aiplatform.googleapis.com
+  google_aistudio:
+    base_url: https://generativelanguage.googleapis.com/v1beta
     timeout: 30s
-    # API key from environment: GOOGLE_API_KEY
+    # API key from environment: GOOGLE_AISTUDIO_API_KEY
+  google_vertexai:
+    # Base URL is auto-generated from project_id and location
+    timeout: 30s
+    # Access token from environment: GOOGLE_VERTEXAI_TOKEN
+    extra:
+      project_id: "your-project-id"
+      location: "us-central1"
   groq:
     base_url: https://api.groq.com/openai/v1
     timeout: 30s
@@ -2013,10 +2023,11 @@ func (h *Handler) extractHeaders(r *http.Request) RequestContext {
 routing:
   # Default provider order (by cost)
   default_order:
-    - groq          # Fastest inference
+    - groq              # Fastest inference
     - openai
     - anthropic
-    - gemini
+    - google-aistudio   # Gemini models
+    - google-vertexai   # All Vertex AI models
     - mistral
     - together
     - azure
@@ -2033,10 +2044,14 @@ routing:
       supports_vision: true
       max_tokens: 200000
       data_collection: deny
-    gemini:
+    google-aistudio:
       supports_tools: true
       supports_vision: true
       max_tokens: 1048576  # 1M context window for Gemini 1.5
+    google-vertexai:
+      supports_tools: true
+      supports_vision: true
+      max_tokens: 1048576  # Includes Gemini, PaLM, Codey models
       data_collection: allow
     groq:
       supports_tools: false
