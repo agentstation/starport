@@ -195,7 +195,12 @@ func TestHotReloader_HotReload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	// Use atomic write to avoid partial reads
+	tempPath := configPath + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tempPath, configPath); err != nil {
 		t.Fatal(err)
 	}
 
@@ -250,13 +255,17 @@ func TestHotReloader_HotReload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write update
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
+	// Write update - use atomic write to avoid partial reads
+	tempPath = configPath + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tempPath, configPath); err != nil {
 		t.Fatal(err)
 	}
 
-	// Wait for reload
-	time.Sleep(500 * time.Millisecond)
+	// Wait for reload - give extra time for file watcher
+	time.Sleep(800 * time.Millisecond)
 
 	// Verify update
 	rule, ok = reloader.GetRuleForKey("test-key")

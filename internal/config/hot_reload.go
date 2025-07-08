@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -185,10 +186,27 @@ func (h *HotReloader) loadConfig() error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Check for empty file
+	if len(data) == 0 {
+		return fmt.Errorf("config file is empty")
+	}
+
 	// Parse YAML
 	var rules RateLimitRules
 	if err := yaml.Unmarshal(data, &rules); err != nil {
+		// Check if it's a partial file read
+		if len(data) < 10 || strings.TrimSpace(string(data)) == "" {
+			return fmt.Errorf("config file appears incomplete or empty")
+		}
 		return fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Initialize maps if nil
+	if rules.Rules == nil {
+		rules.Rules = make(map[string]RateLimitRule)
+	}
+	if rules.Models == nil {
+		rules.Models = make(map[string]RateLimitRule)
 	}
 
 	// Validate rules
@@ -283,8 +301,23 @@ func (h *HotReloader) watchLoop(ctx context.Context) {
 						Str("op", event.Op.String()).
 						Msg("Config file changed, reloading")
 					
-					if err := h.loadConfig(); err != nil {
-						log.Error().Err(err).Msg("Failed to reload config")
+					// Small delay to ensure file write is complete
+					time.Sleep(100 * time.Millisecond)
+					
+					// Retry logic for file reads
+					var err error
+					for i := 0; i < 3; i++ {
+						err = h.loadConfig()
+						if err == nil {
+							break
+						}
+						if i < 2 {
+							time.Sleep(50 * time.Millisecond)
+						}
+					}
+					
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to reload config after retries")
 					}
 				}
 			}
