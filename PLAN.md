@@ -114,11 +114,35 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] Credential encryption (AES-256-GCM)
   - [ ] Key derivation using Argon2id
   - [ ] Support for all major providers:
-    - OpenAI, Anthropic, Google, Azure
+    - OpenAI, Anthropic, Google AI Studio, Vertex AI
+    - Azure OpenAI Service with deployment mapping
     - AWS Bedrock credentials
-    - Custom endpoints
-  - [ ] BYOK fallback mode (use when rate limited)
+    - Groq, Mistral, and custom endpoints
+  - [ ] BYOK credential management:
+    - Multiple keys per provider with priority ordering
+    - Automatic credential validation on add
+    - Usage tracking and analytics
+    - Last used timestamp tracking
+  - [ ] Default key support:
+    - Gateway-wide default keys per provider
+    - Admin API for default key management
+    - Rate limiting for default keys
+  - [ ] Flexible fallback strategies:
+    - Gateway First (default): Use credits, fallback to BYOK
+    - BYOK First: Prefer customer keys, fallback to gateway
+    - BYOK Only: Never use gateway keys
+    - Configurable per API key
   - [ ] 5% pricing model for BYOK usage
+  - [ ] BYOK-specific features:
+    - Bypass gateway rate limits
+    - Use provider's native limits
+    - Combined capacity with fallback
+    - Separate quota tracking
+  - [ ] Response headers for transparency:
+    - X-Provider-Used
+    - X-Key-Type (byok/gateway/default)
+    - X-BYOK-Cost
+    - X-Credits-Remaining
   - [ ] HashiCorp Vault integration
   - [ ] Zero-knowledge key passing
   - [ ] Key rotation scheduler

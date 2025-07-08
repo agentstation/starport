@@ -811,9 +811,18 @@ OSS uses a key-value store (Badger or Valkey) with the following key patterns:
 
 // BYOK Credentials (encrypted)
 "credential:{api_key_id}:{provider}" -> {
+    "provider": "openai",
     "encrypted_credential": "base64_encrypted_data",
-    "metadata": {...},
-    "created_at": "timestamp"
+    "config": {
+        "endpoint": "https://api.openai.com/v1",
+        "api_version": "2024-02-01",
+        "deployment_id": "gpt-4-prod"
+    },
+    "is_fallback": true,
+    "priority": 1,
+    "created_at": "timestamp",
+    "last_used": "timestamp",
+    "usage_count": 12345
 }
 
 // Filter Rules
@@ -1521,7 +1530,13 @@ var SupportedVersions = []APIVersion{
 
 ### 20.1 BYOK Overview
 
-BYOK allows users to use their own provider API keys directly through Starport, similar to OpenRouter:
+BYOK allows users to use their own provider API keys directly through Starport, matching OpenRouter's functionality. This feature provides:
+
+- **5% Pricing Model**: Users pay 5% of the standard rate when using their own keys
+- **Higher Rate Limits**: Combines provider's native limits with Starport's capacity
+- **Unified Analytics**: Track usage across all providers in one place
+- **Default Keys**: Gateway can provide default keys for providers
+- **Fallback Support**: Automatic fallback between BYOK and gateway keys
 
 ```go
 // BYOK credential storage (encrypted)
@@ -1531,9 +1546,25 @@ BYOK allows users to use their own provider API keys directly through Starport, 
     "config": {
         "endpoint": "https://api.openai.com/v1",  // Custom endpoints supported
         "api_version": "2024-02-01",             // Azure-specific
-        "deployment_id": "gpt-4-prod"            // Azure-specific
+        "deployment_id": "gpt-4-prod",           // Azure-specific
+        "model_slug": "gpt-4"                    // Model mapping for Azure
     },
     "is_fallback": true,  // Use as fallback when rate limited
+    "priority": 1,        // Order preference (lower = higher priority)
+    "created_at": "timestamp",
+    "last_used": "timestamp",
+    "usage_count": 12345
+}
+
+// Default provider keys (gateway-wide)
+"default_key:{provider}" -> {
+    "provider": "openai",
+    "encrypted_credential": "base64_encrypted_data",
+    "config": {...},
+    "rate_limit": {
+        "requests_per_minute": 500,
+        "tokens_per_minute": 100000
+    },
     "created_at": "timestamp"
 }
 ```
@@ -1541,19 +1572,51 @@ BYOK allows users to use their own provider API keys directly through Starport, 
 ### 20.2 BYOK Request Flow
 
 ```go
-// Check for BYOK credentials in request
+// BYOK-aware request routing
 func (h *ProxyHandler) routeRequest(ctx context.Context, req *ChatRequest) {
     // 1. Extract provider from model ID (e.g., "openai/gpt-4" -> "openai")
     provider := extractProvider(req.Model)
     
-    // 2. Check for BYOK credentials
-    if cred := h.getBYOKCredential(ctx, req.APIKey, provider); cred != nil {
-        // Use customer's key - bypass rate limits
-        return h.proxyWithBYOK(ctx, req, cred)
-    }
+    // 2. Determine key selection strategy
+    keyStrategy := h.determineKeyStrategy(ctx, req)
     
-    // 3. Use gateway credentials with rate limiting
-    return h.proxyWithGateway(ctx, req)
+    switch keyStrategy {
+    case UseOnlyBYOK:
+        // Customer wants only their keys
+        if cred := h.getBYOKCredential(ctx, req.APIKey, provider); cred != nil {
+            return h.proxyWithBYOK(ctx, req, cred)
+        }
+        return errors.New("no BYOK credential found for provider")
+        
+    case PreferBYOK:
+        // Try BYOK first, fallback to gateway
+        if cred := h.getBYOKCredential(ctx, req.APIKey, provider); cred != nil {
+            if resp, err := h.proxyWithBYOK(ctx, req, cred); err == nil {
+                return resp, nil
+            }
+        }
+        return h.proxyWithGateway(ctx, req)
+        
+    case PreferGateway:
+        // Try gateway first, fallback to BYOK
+        resp, err := h.proxyWithGateway(ctx, req)
+        if err != nil && h.isRateLimitError(err) {
+            if cred := h.getBYOKCredential(ctx, req.APIKey, provider); cred != nil {
+                return h.proxyWithBYOK(ctx, req, cred)
+            }
+        }
+        return resp, err
+        
+    case UseDefaultKey:
+        // Use gateway's default key for provider
+        return h.proxyWithDefaultKey(ctx, req, provider)
+    }
+}
+
+// BYOK billing calculation
+func (h *ProxyHandler) calculateBYOKCost(usage *Usage, provider string) float64 {
+    standardCost := h.getStandardCost(usage, provider)
+    return standardCost * 0.05  // 5% of standard rate
 }
 ```
 
@@ -1572,31 +1635,128 @@ byok_providers:
   openai:
     required_fields: ["api_key"]
     optional_fields: ["organization"]
+    validation:
+      - check_api_key_format: "sk-*"
+      - test_endpoint: "/v1/models"
     
   anthropic:
     required_fields: ["api_key"]
     optional_fields: ["version"]
+    validation:
+      - check_api_key_format: "sk-ant-*"
+      - test_endpoint: "/v1/messages"
     
   azure:
     required_fields: ["api_key", "endpoint", "deployment_id"]
-    optional_fields: ["api_version"]
+    optional_fields: ["api_version", "model_slug"]
+    validation:
+      - validate_endpoint_url
+      - test_deployment_exists
+    config_format: |
+      {
+        "endpoint": "https://your-resource.openai.azure.com",
+        "api_key": "your-api-key",
+        "deployment_id": "gpt-4-deployment",
+        "model_slug": "gpt-4"
+      }
     
-  google:
-    required_fields: ["api_key"]  # or service account JSON
+  google_aistudio:
+    required_fields: ["api_key"]
+    optional_fields: []
+    validation:
+      - check_api_key_length: 39
+    
+  google_vertexai:
+    required_fields: ["service_account_json"]
     optional_fields: ["project_id", "location"]
+    validation:
+      - parse_service_account
+      - validate_permissions
     
   aws_bedrock:
     required_fields: ["access_key_id", "secret_access_key", "region"]
     optional_fields: ["session_token"]
+    validation:
+      - validate_aws_credentials
+      - check_bedrock_access
+    config_format: |
+      {
+        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "region": "us-east-1"
+      }
+      
+  groq:
+    required_fields: ["api_key"]
+    optional_fields: []
+    validation:
+      - check_api_key_format: "gsk_*"
+      
+  mistral:
+    required_fields: ["api_key"]
+    optional_fields: []
+    validation:
+      - check_api_key_length: 32
 ```
 
-### 20.5 BYOK Fallback Behavior
+### 20.5 BYOK Features & Benefits
 
-When "is_fallback" is enabled:
-1. First attempt uses gateway credits/keys
-2. On rate limit or failure, retry with BYOK
-3. Response indicates which method was used
-4. Billing reflects BYOK discount (5% of normal rate)
+**Key Management**:
+- Encrypted storage with AES-256-GCM
+- Per-API-key isolation of BYOK credentials
+- Support for multiple keys per provider
+- Priority-based key selection
+- Automatic key validation on add
+
+**Rate Limiting Benefits**:
+- BYOK requests bypass gateway rate limits
+- Use provider's native rate limits
+- Combined capacity when using fallback
+- Separate quota tracking for BYOK vs gateway
+
+**Fallback Behavior**:
+1. **Gateway First** (default):
+   - Use gateway keys/credits initially
+   - Fall back to BYOK on rate limit or failure
+   - Transparent to the client
+   
+2. **BYOK First**:
+   - Prefer customer's keys
+   - Fall back to gateway if BYOK fails
+   - Lower costs (5% rate)
+   
+3. **BYOK Only**:
+   - Never use gateway keys
+   - Fail if BYOK unavailable
+   - Maximum cost savings
+
+**Response Headers**:
+```http
+X-Provider-Used: openai
+X-Key-Type: byok  # or "gateway", "default"
+X-BYOK-Cost: 0.0015  # 5% of standard rate
+X-Credits-Remaining: 95.50
+```
+
+### 20.6 BYOK API Endpoints
+
+```yaml
+# BYOK Credential Management
+GET    /api/v1/keys/{key_id}/credentials          # List BYOK credentials
+POST   /api/v1/keys/{key_id}/credentials          # Add BYOK credential
+PUT    /api/v1/keys/{key_id}/credentials/{provider} # Update credential
+DELETE /api/v1/keys/{key_id}/credentials/{provider} # Remove credential
+POST   /api/v1/keys/{key_id}/credentials/{provider}/validate # Test credential
+
+# Default Key Management (Admin only)
+GET    /api/v1/admin/default-keys                 # List default keys
+POST   /api/v1/admin/default-keys                 # Set default key
+DELETE /api/v1/admin/default-keys/{provider}      # Remove default key
+
+# BYOK Usage Analytics
+GET    /api/v1/keys/{key_id}/usage/byok          # BYOK usage stats
+GET    /api/v1/keys/{key_id}/usage/comparison    # BYOK vs gateway comparison
+```
 
 ## 21. Operational Considerations
 

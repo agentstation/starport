@@ -261,20 +261,24 @@ get_task_info() {
 - Update all tests for new provider names"
             ;;
         "P1-S4-4.1")
-            name="BYOK Implementation"
+            name="BYOK Implementation (OpenRouter Compatible)"
             workspace="starport-byok"
             branch="task/P1-S4-4.1-byok-implementation"
             prereq="Task P1-S2-2.3 must be complete (storage models)"
             prereq_verify="test -f internal/models/apikey.go || echo \"ERROR: API key model not found - P1-S2-2.3 not complete\""
-            architecture_sections="BYOK security design"
+            architecture_sections="section 20 for BYOK Architecture"
             requirements="
-- Implement encryption layer
-- Add key derivation (Argon2)
-- Create BYOK manager
-- Add provider key mapping
-- Implement key rotation
-- Add audit logging
-- Write security tests"
+- Match OpenRouter's BYOK functionality with 5% pricing model
+- Support default provider keys (gateway-wide)
+- Implement AES-256-GCM encryption with Argon2id key derivation
+- Create flexible fallback strategies (Gateway First, BYOK First, BYOK Only)
+- Support all major providers (OpenAI, Anthropic, Azure, Google, AWS, etc.)
+- Add credential validation on add
+- Implement BYOK manager with priority ordering
+- Create BYOK API endpoints
+- Add usage tracking and cost calculation
+- Implement response headers (X-Key-Type, X-BYOK-Cost)
+- Write comprehensive security tests"
             ;;
         "P1-S4-4.2")
             name="Caching System"

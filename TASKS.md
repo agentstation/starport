@@ -971,49 +971,151 @@ See ARCHITECTURE.md sections:
 
 ## Phase 1, Subphase 1.4: BYOK, Caching & Filtering
 
-### 🎯 P1-S4-4.1: BYOK Implementation
+### 🎯 P1-S4-4.1: BYOK Implementation (OpenRouter Compatible)
 **Status**: 🔴 Blocked by P1-S2-2.3  
 **Type**: Development  
 **Assignee**: Security Developer  
-**Effort**: 6 hours  
+**Effort**: 10 hours  
 **Dependencies**: P1-S2-2.3  
-**Can Run Parallel With**: P1-S4-4.2, P1-S4-4.3  
+**Can Run Parallel With**: P1-S4-4.4  
 
 #### User Story
-As an enterprise user, I need BYOK support so that I can use my own API keys securely with the gateway.
+As an enterprise user, I need BYOK support matching OpenRouter's functionality so that I can use my own API keys securely with the gateway, pay only 5% of standard rates, and have flexible fallback options.
 
 #### Technical Requirements
 ```yaml
+Core BYOK Features:
+  - 5% pricing model for BYOK usage
+  - Support default provider keys (gateway-wide)
+  - Multiple keys per provider with priority ordering
+  - Flexible fallback strategies:
+    - Gateway First: Use credits, fallback to BYOK
+    - BYOK First: Prefer customer keys, fallback to gateway
+    - BYOK Only: Never use gateway keys
+  - Higher rate limits (bypass gateway limits)
+  - Unified analytics across all key types
+
 Security:
-  - AES-256-GCM encryption
-  - Key derivation (Argon2)
+  - AES-256-GCM encryption for credentials
+  - Key derivation using Argon2id
+  - Per-API-key isolation
   - Zero-knowledge design
-  - Secure key passing
+  - Automatic credential validation
   
+Supported Providers:
+  - OpenAI (api_key + optional organization)
+  - Anthropic (api_key)
+  - Azure OpenAI (api_key + endpoint + deployment_id)
+  - Google AI Studio (api_key)
+  - Google Vertex AI (service_account_json)
+  - AWS Bedrock (access_key_id + secret_access_key + region)
+  - Groq (api_key)
+  - Mistral (api_key)
+  - Custom endpoints
+
 Features:
-  - Multi-provider support
-  - Key rotation
-  - Audit logging
-  - Vault integration prep
+  - Key rotation scheduler
+  - Usage tracking per credential
+  - Last used timestamp
+  - HashiCorp Vault integration
+  - Audit logging without exposing keys
 ```
+
+See ARCHITECTURE.md sections:
+- Section 20: BYOK Architecture - Complete implementation details
+- Section 11: Data Models - Credential storage structure
 
 #### Implementation Tasks
 ```markdown
-- [ ] Implement encryption layer
-- [ ] Add key derivation (Argon2)
-- [ ] Create BYOK manager
-- [ ] Add provider key mapping
-- [ ] Implement key rotation
-- [ ] Add audit logging
-- [ ] Write security tests
+- [ ] Create internal/byok/manager.go with BYOKManager interface
+- [ ] Implement encryption layer with AES-256-GCM
+- [ ] Add Argon2id key derivation from master key + API key ID
+- [ ] Create credential storage with priority and fallback config
+- [ ] Implement provider-specific credential validation:
+  - [ ] OpenAI: Validate with /v1/models
+  - [ ] Anthropic: Validate with /v1/messages (empty request)
+  - [ ] Azure: Validate deployment exists
+  - [ ] Google: Validate API key format/service account
+  - [ ] AWS: Validate Bedrock access
+- [ ] Add default key management (admin API)
+- [ ] Implement fallback strategies (Gateway First, BYOK First, BYOK Only)
+- [ ] Create BYOK request routing logic
+- [ ] Add 5% cost calculation for BYOK usage
+- [ ] Implement response headers (X-Key-Type, X-BYOK-Cost)
+- [ ] Add credential CRUD API endpoints
+- [ ] Create key rotation scheduler
+- [ ] Add usage tracking and analytics
+- [ ] Write comprehensive security tests
+- [ ] Add audit logging without key exposure
+```
+
+#### Code Template
+```go
+// internal/byok/manager.go
+package byok
+
+import (
+    "context"
+    "crypto/aes"
+    "crypto/cipher"
+    "encoding/base64"
+    "fmt"
+    
+    "golang.org/x/crypto/argon2"
+)
+
+type FallbackStrategy string
+
+const (
+    GatewayFirst FallbackStrategy = "gateway_first" // Default
+    BYOKFirst    FallbackStrategy = "byok_first"
+    BYOKOnly     FallbackStrategy = "byok_only"
+)
+
+type Credential struct {
+    Provider           string                 `json:"provider"`
+    EncryptedData      string                 `json:"encrypted_credential"`
+    Config             map[string]interface{} `json:"config"` // Provider-specific
+    IsFallback         bool                   `json:"is_fallback"`
+    Priority           int                    `json:"priority"`
+    CreatedAt          time.Time              `json:"created_at"`
+    LastUsed           *time.Time             `json:"last_used"`
+    UsageCount         int64                  `json:"usage_count"`
+}
+
+type Manager interface {
+    // Credential management
+    AddCredential(ctx context.Context, apiKeyID, provider string, cred map[string]string) error
+    GetCredential(ctx context.Context, apiKeyID, provider string) (*Credential, error)
+    ListCredentials(ctx context.Context, apiKeyID string) ([]*Credential, error)
+    DeleteCredential(ctx context.Context, apiKeyID, provider string) error
+    ValidateCredential(ctx context.Context, provider string, cred map[string]string) error
+    
+    // Default key management
+    SetDefaultKey(ctx context.Context, provider string, cred map[string]string) error
+    GetDefaultKey(ctx context.Context, provider string) (*Credential, error)
+    
+    // Request routing
+    DetermineKeyStrategy(ctx context.Context, apiKey string, provider string) FallbackStrategy
+    CalculateBYOKCost(usage *Usage, provider string) float64
+    
+    // Security
+    RotateEncryptionKey(ctx context.Context) error
+}
 ```
 
 #### Acceptance Criteria
-- [ ] Keys encrypted at rest
-- [ ] Zero-knowledge verified
-- [ ] Key rotation works
-- [ ] Audit trail complete
-- [ ] Security tests pass
+- [ ] BYOK credentials encrypted with AES-256-GCM
+- [ ] 5% pricing model correctly applied
+- [ ] All three fallback strategies work correctly
+- [ ] Default keys can be configured per provider
+- [ ] Provider credentials validated on add
+- [ ] BYOK requests bypass gateway rate limits
+- [ ] Response headers indicate key type used
+- [ ] Usage tracking accurate for billing
+- [ ] Key rotation maintains zero downtime
+- [ ] Audit logs capture BYOK usage without exposing keys
+- [ ] 90% test coverage with security focus
 
 ---
 
