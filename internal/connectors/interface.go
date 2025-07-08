@@ -47,8 +47,13 @@ func NewConnector(provider string, config ProviderConfig) (Connector, error) {
 		return NewOpenAIConnector(config)
 	case "anthropic":
 		return NewAnthropicConnector(config)
-	case "gemini":
-		return NewGeminiConnector(config)
+	case "gemini", "google":
+		// Legacy support - map to google-aistudio
+		return NewGoogleAIStudioConnector(config)
+	case "google-aistudio":
+		return NewGoogleAIStudioConnector(config)
+	case "google-vertexai":
+		return NewVertexAIConnector(config)
 	case "groq":
 		return NewGroqConnector(config)
 	case "mistral":

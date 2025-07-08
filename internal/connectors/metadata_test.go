@@ -10,8 +10,8 @@ import (
 func TestGetProviderMetadata(t *testing.T) {
 	providers := GetProviderMetadata()
 
-	// Should return all 6 providers
-	assert.Equal(t, 6, len(providers))
+	// Should return all 7 providers (including google-aistudio and google-vertexai)
+	assert.Equal(t, 7, len(providers))
 
 	// Check each provider has required fields (OpenRouter format)
 	for _, provider := range providers {
@@ -182,12 +182,25 @@ func TestGetModelsByProvider(t *testing.T) {
 			minCount: 3,
 		},
 		{
-			provider: "google",
+			provider: "google-aistudio",
 			expectModels: []string{
-				"google/gemini-1.5-pro",
-				"google/gemini-1.5-flash",
+				"google-aistudio/gemini-1.5-pro",
+				"google-aistudio/gemini-1.5-flash",
 			},
 			minCount: 2,
+		},
+		{
+			provider: "google-vertexai",
+			expectModels: []string{
+				"google-vertexai/gemini-1.5-pro",
+				"google-vertexai/gemini-1.5-flash",
+				"google-vertexai/claude-3-opus@20240229",
+				"google-vertexai/claude-3-sonnet@20240229",
+				"google-vertexai/claude-3-haiku@20240307",
+				"google-vertexai/text-bison@001",
+				"google-vertexai/code-bison@001",
+			},
+			minCount: 7,
 		},
 		{
 			provider: "unknown",

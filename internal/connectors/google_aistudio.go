@@ -12,38 +12,17 @@ import (
 	"time"
 )
 
-// GeminiConnector implements the Connector interface for Google Gemini/Vertex AI
-type GeminiConnector struct {
+// GoogleAIStudioConnector implements the Connector interface for Google AI Studio (Gemini)
+type GoogleAIStudioConnector struct {
 	config     ProviderConfig
 	httpClient *http.Client
-	isVertexAI bool
-	projectID  string
-	location   string
 }
 
-// NewGeminiConnector creates a new Gemini connector
-func NewGeminiConnector(config ProviderConfig) (*GeminiConnector, error) {
-	// Determine if this is Vertex AI or Gemini API based on config
-	isVertexAI := false
-	projectID := ""
-	location := "us-central1"
-
-	if pid, ok := config.Extra["project_id"].(string); ok && pid != "" {
-		isVertexAI = true
-		projectID = pid
-	}
-	if loc, ok := config.Extra["location"].(string); ok && loc != "" {
-		location = loc
-	}
-
-	// Set default base URL based on API type
+// NewGoogleAIStudioConnector creates a new Google AI Studio connector
+func NewGoogleAIStudioConnector(config ProviderConfig) (*GoogleAIStudioConnector, error) {
+	// Set default base URL if not provided
 	if config.BaseURL == "" {
-		if isVertexAI {
-			config.BaseURL = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s",
-				location, projectID, location)
-		} else {
-			config.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
-		}
+		config.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
 	}
 
 	if err := config.Validate(); err != nil {
@@ -57,25 +36,22 @@ func NewGeminiConnector(config ProviderConfig) (*GeminiConnector, error) {
 		IdleConnTimeout:     90 * time.Second,
 	}
 
-	return &GeminiConnector{
+	return &GoogleAIStudioConnector{
 		config: config,
 		httpClient: &http.Client{
 			Transport: transport,
 			Timeout:   config.Timeout,
 		},
-		isVertexAI: isVertexAI,
-		projectID:  projectID,
-		location:   location,
 	}, nil
 }
 
 // Name returns the provider name
-func (c *GeminiConnector) Name() string {
-	return "gemini"
+func (c *GoogleAIStudioConnector) Name() string {
+	return "google-aistudio"
 }
 
 // Chat performs a chat completion request
-func (c *GeminiConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+func (c *GoogleAIStudioConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	geminiReq := c.convertToGeminiRequest(req)
 
 	body, err := json.Marshal(geminiReq)
@@ -112,7 +88,7 @@ func (c *GeminiConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 }
 
 // ChatStream performs a streaming chat completion request
-func (c *GeminiConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error) {
+func (c *GoogleAIStudioConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error) {
 	geminiReq := c.convertToGeminiRequest(req)
 
 	body, err := json.Marshal(geminiReq)
@@ -143,7 +119,7 @@ func (c *GeminiConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 }
 
 // Embeddings generates embeddings for the given input
-func (c *GeminiConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
+func (c *GoogleAIStudioConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Convert to Gemini embeddings request
 	geminiReq := map[string]interface{}{
 		"content": map[string]interface{}{
@@ -204,82 +180,131 @@ func (c *GeminiConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 }
 
 // Models lists available models from the provider
-func (c *GeminiConnector) Models(_ context.Context) (*ModelsResponse, error) {
-	// Hardcoded list as Gemini doesn't have a models endpoint
+func (c *GoogleAIStudioConnector) Models(ctx context.Context) (*ModelsResponse, error) {
+	providerPrefix := "google-aistudio"
+
+	// Try dynamic fetching with cache
+	return fetchModelsWithCache(ctx, providerPrefix, func(ctx context.Context) (*ModelsResponse, error) {
+		// Try to fetch models dynamically from Gemini API
+		url := fmt.Sprintf("%s/models?key=%s", c.config.BaseURL, c.config.APIKey)
+		
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		// Parse Gemini models response
+		var geminiResp struct {
+			Models []struct {
+				Name            string   `json:"name"`
+				DisplayName     string   `json:"displayName"`
+				Description     string   `json:"description"`
+				SupportedMethods []string `json:"supportedGenerationMethods"`
+			} `json:"models"`
+		}
+		
+		if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		// Convert to standard format
+		models := make([]Model, 0, len(geminiResp.Models))
+		for _, m := range geminiResp.Models {
+			// Extract model ID from name (e.g., "models/gemini-pro" -> "gemini-pro")
+			modelID := strings.TrimPrefix(m.Name, "models/")
+			
+			// Only include models that support content generation
+			supportsGeneration := false
+			for _, method := range m.SupportedMethods {
+				if method == "generateContent" || method == "streamGenerateContent" {
+					supportsGeneration = true
+					break
+				}
+			}
+			
+			if supportsGeneration {
+				models = append(models, Model{
+					ID:      providerPrefix + "/" + modelID,
+					Object:  "model",
+					Created: time.Now().Unix(),
+					OwnedBy: "google",
+				})
+			}
+		}
+
+		return &ModelsResponse{
+			Object: "list",
+			Data:   models,
+		}, nil
+	})
+}
+
+// staticModelsList returns the hardcoded list of AI Studio models
+func (c *GoogleAIStudioConnector) staticModelsList() *ModelsResponse {
+	// AI Studio models
 	models := []Model{
 		// Gemini 2.5 models (stable)
 		{
-			ID:      "google/gemini-2.5-pro",
+			ID:      "google-aistudio/gemini-2.5-pro",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
 		},
 		{
-			ID:      "google/gemini-2.5-flash",
+			ID:      "google-aistudio/gemini-2.5-flash",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
 		},
 		// Gemini 2.0 models
 		{
-			ID:      "google/gemini-2.0-flash-lite",
+			ID:      "google-aistudio/gemini-2.0-flash-lite",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
 		},
 		// Gemini 1.5 models
 		{
-			ID:      "google/gemini-1.5-pro-002",
+			ID:      "google-aistudio/gemini-1.5-pro-002",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
 		},
 		{
-			ID:      "google/gemini-1.5-pro",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "google",
-		},
-		{
-			ID:      "google/gemini-1.5-flash-002",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "google",
-		},
-		{
-			ID:      "google/gemini-1.5-flash",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "google",
-		},
-		{
-			ID:      "google/gemini-1.5-flash-8b-001",
+			ID:      "google-aistudio/gemini-1.5-flash-002",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
 		},
 		// Legacy models
 		{
-			ID:      "google/gemini-pro",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "google",
-		},
-		{
-			ID:      "google/gemini-pro-vision",
+			ID:      "google-aistudio/gemini-pro",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
 		},
 		// Embedding models
 		{
-			ID:      "google/text-embedding-004",
+			ID:      "google-aistudio/embedding-001",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
 		},
 		{
-			ID:      "google/embedding-001",
+			ID:      "google-aistudio/text-embedding-004",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "google",
@@ -289,14 +314,14 @@ func (c *GeminiConnector) Models(_ context.Context) (*ModelsResponse, error) {
 	return &ModelsResponse{
 		Object: "list",
 		Data:   models,
-	}, nil
+	}
 }
 
 // Health checks the health of the connector
-func (c *GeminiConnector) Health(ctx context.Context) error {
+func (c *GoogleAIStudioConnector) Health(ctx context.Context) error {
 	// Simple health check - try to get response with minimal request
 	req := &ChatRequest{
-		Model: "gemini-1.5-flash",
+		Model: "google-aistudio/gemini-1.5-flash",
 		Messages: []Message{
 			{Role: "user", Content: "Hi"},
 		},
@@ -315,47 +340,38 @@ func (c *GeminiConnector) Health(ctx context.Context) error {
 }
 
 // Close cleans up any resources
-func (c *GeminiConnector) Close() error {
+func (c *GoogleAIStudioConnector) Close() error {
 	c.httpClient.CloseIdleConnections()
 	return nil
 }
 
 // Helper methods
 
-func (c *GeminiConnector) getEndpoint(model string, streaming bool) string {
+func (c *GoogleAIStudioConnector) getEndpoint(model string, streaming bool) string {
 	action := "generateContent"
 	if streaming {
 		action = "streamGenerateContent"
 	}
 
-	if c.isVertexAI {
-		return fmt.Sprintf("%s/publishers/google/models/%s:%s", c.config.BaseURL, model, action)
-	}
-	return fmt.Sprintf("%s/models/%s:%s", c.config.BaseURL, model, action)
+	// Strip provider prefix from model name
+	model = strings.TrimPrefix(model, "google-aistudio/")
+	model = strings.TrimPrefix(model, "google/") // Support legacy prefix
+	return fmt.Sprintf("%s/models/%s:%s?key=%s", c.config.BaseURL, model, action, c.config.APIKey)
 }
 
-func (c *GeminiConnector) getEmbeddingEndpoint(model string) string {
-	if c.isVertexAI {
-		return fmt.Sprintf("%s/publishers/google/models/%s:predict", c.config.BaseURL, model)
-	}
-	return fmt.Sprintf("%s/models/%s:embedContent", c.config.BaseURL, model)
+func (c *GoogleAIStudioConnector) getEmbeddingEndpoint(model string) string {
+	// Strip provider prefix from model name
+	model = strings.TrimPrefix(model, "google-aistudio/")
+	model = strings.TrimPrefix(model, "google/") // Support legacy prefix
+	return fmt.Sprintf("%s/models/%s:embedContent?key=%s", c.config.BaseURL, model, c.config.APIKey)
 }
 
-func (c *GeminiConnector) setHeaders(req *http.Request) {
+func (c *GoogleAIStudioConnector) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-	if c.isVertexAI {
-		// Vertex AI uses OAuth2 token
-		req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
-	} else {
-		// Gemini API uses API key in query param
-		q := req.URL.Query()
-		q.Set("key", c.config.APIKey)
-		req.URL.RawQuery = q.Encode()
-	}
 	req.Header.Set("User-Agent", "starport/1.0")
 }
 
-func (c *GeminiConnector) handleError(resp *http.Response) error {
+func (c *GoogleAIStudioConnector) handleError(resp *http.Response) error {
 	var errResp struct {
 		Error struct {
 			Code    int    `json:"code"`
@@ -366,14 +382,14 @@ func (c *GeminiConnector) handleError(resp *http.Response) error {
 
 	if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
 		return &APIError{
-			Provider:   "gemini",
+			Provider:   "google-aistudio",
 			StatusCode: resp.StatusCode,
 			Message:    fmt.Sprintf("HTTP %d", resp.StatusCode),
 		}
 	}
 
 	return &APIError{
-		Provider:   "gemini",
+		Provider:   "google-aistudio",
 		StatusCode: resp.StatusCode,
 		Type:       errResp.Error.Status,
 		Message:    errResp.Error.Message,
@@ -382,7 +398,7 @@ func (c *GeminiConnector) handleError(resp *http.Response) error {
 }
 
 // convertToGeminiRequest converts OpenAI format to Gemini format
-func (c *GeminiConnector) convertToGeminiRequest(req *ChatRequest) map[string]interface{} {
+func (c *GoogleAIStudioConnector) convertToGeminiRequest(req *ChatRequest) map[string]interface{} {
 	var contents []map[string]interface{}
 	
 	for _, msg := range req.Messages {
@@ -447,7 +463,7 @@ func (c *GeminiConnector) convertToGeminiRequest(req *ChatRequest) map[string]in
 }
 
 // convertToOpenAIResponse converts Gemini response to OpenAI format
-func (c *GeminiConnector) convertToOpenAIResponse(resp *geminiResponse, model string) *ChatResponse {
+func (c *GoogleAIStudioConnector) convertToOpenAIResponse(resp *geminiResponse, model string) *ChatResponse {
 	if len(resp.Candidates) == 0 {
 		return &ChatResponse{
 			ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
@@ -502,22 +518,6 @@ func mapFinishReason(reason string) string {
 	}
 }
 
-// Gemini response types
-type geminiResponse struct {
-	Candidates []struct {
-		Content struct {
-			Parts []map[string]interface{} `json:"parts"`
-			Role  string                   `json:"role"`
-		} `json:"content"`
-		FinishReason string `json:"finishReason"`
-		Index        int    `json:"index"`
-	} `json:"candidates"`
-	UsageMetadata struct {
-		PromptTokenCount     int `json:"promptTokenCount"`
-		CandidatesTokenCount int `json:"candidatesTokenCount"`
-		TotalTokenCount      int `json:"totalTokenCount"`
-	} `json:"usageMetadata"`
-}
 
 // geminiStream implements ChatStream for Gemini responses
 type geminiStream struct {

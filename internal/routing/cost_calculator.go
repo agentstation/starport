@@ -128,30 +128,61 @@ func getDefaultPricing() map[string]ModelPricing {
 			CompletionCostPer1M: 2.4,
 		},
 		
-		// Google models
-		"google/gemini-1.5-pro": {
+		// Google AI Studio models
+		"google-aistudio/gemini-1.5-pro": {
 			PromptCostPer1M:     3.5,
 			CompletionCostPer1M: 10.5,
 		},
-		"google/gemini-1.5-pro-latest": {
+		"google-aistudio/gemini-1.5-pro-latest": {
 			PromptCostPer1M:     3.5,
 			CompletionCostPer1M: 10.5,
 		},
-		"google/gemini-1.5-flash": {
+		"google-aistudio/gemini-1.5-flash": {
 			PromptCostPer1M:     0.35,
 			CompletionCostPer1M: 0.70,
 		},
-		"google/gemini-1.5-flash-latest": {
+		"google-aistudio/gemini-1.5-flash-latest": {
 			PromptCostPer1M:     0.35,
 			CompletionCostPer1M: 0.70,
 		},
-		"google/gemini-pro": {
+		"google-aistudio/gemini-pro": {
 			PromptCostPer1M:     0.5,
 			CompletionCostPer1M: 1.5,
 		},
-		"google/gemini-pro-vision": {
+		"google-aistudio/gemini-pro-vision": {
 			PromptCostPer1M:     0.5,
 			CompletionCostPer1M: 1.5,
+		},
+		
+		// Google Vertex AI models (different pricing for enterprise)
+		"google-vertexai/gemini-1.5-pro": {
+			PromptCostPer1M:     1.25,
+			CompletionCostPer1M: 3.75,
+		},
+		"google-vertexai/gemini-1.5-flash": {
+			PromptCostPer1M:     0.125,
+			CompletionCostPer1M: 0.375,
+		},
+		"google-vertexai/text-bison@001": {
+			PromptCostPer1M:     0.125,
+			CompletionCostPer1M: 0.125,
+		},
+		"google-vertexai/code-bison@001": {
+			PromptCostPer1M:     0.125,
+			CompletionCostPer1M: 0.125,
+		},
+		// Claude via Vertex AI Model Garden (same as Anthropic pricing)
+		"google-vertexai/claude-3-opus@20240229": {
+			PromptCostPer1M:     15.0,
+			CompletionCostPer1M: 75.0,
+		},
+		"google-vertexai/claude-3-sonnet@20240229": {
+			PromptCostPer1M:     3.0,
+			CompletionCostPer1M: 15.0,
+		},
+		"google-vertexai/claude-3-haiku@20240307": {
+			PromptCostPer1M:     0.25,
+			CompletionCostPer1M: 1.25,
 		},
 		
 		// Groq models (very competitive pricing)

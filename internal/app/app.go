@@ -175,16 +175,52 @@ func (a *App) initializeConnectors() error {
 		}
 	}
 
-	// Gemini
-	if a.providersConfig.Gemini.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.Gemini, "GOOGLE_API_KEY")
-		connector, err := connectors.NewGeminiConnector(cfg)
+	// Google AI Studio (formerly Gemini)
+	if a.providersConfig.GoogleAIStudio.BaseURL != "" {
+		cfg := convertToConnectorConfig(a.providersConfig.GoogleAIStudio, "GOOGLE_API_KEY")
+		connector, err := connectors.NewGoogleAIStudioConnector(cfg)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Gemini connector")
+			log.Error().Err(err).Msg("failed to initialize Google AI Studio connector")
 		} else {
-			a.connectorRegistry.Register("gemini", connector)
+			a.connectorRegistry.Register("google-aistudio", connector)
 			initialized++
-			log.Info().Str("provider", "gemini").Msg("initialized connector")
+			log.Info().Str("provider", "google-aistudio").Msg("initialized connector")
+		}
+	} else if a.providersConfig.Gemini.BaseURL != "" {
+		// Fallback to legacy Gemini config
+		cfg := convertToConnectorConfig(a.providersConfig.Gemini, "GOOGLE_API_KEY")
+		connector, err := connectors.NewGoogleAIStudioConnector(cfg)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to initialize Google AI Studio connector (legacy)")
+		} else {
+			a.connectorRegistry.Register("google-aistudio", connector)
+			a.connectorRegistry.Register("gemini", connector) // Register under both names for compatibility
+			a.connectorRegistry.Register("google", connector) // Also register as "google"
+			initialized++
+			log.Info().Str("provider", "google-aistudio").Msg("initialized connector (from legacy config)")
+		}
+	}
+
+	// Google Vertex AI
+	if a.providersConfig.GoogleVertexAI.BaseURL != "" {
+		cfg := convertToConnectorConfig(a.providersConfig.GoogleVertexAI, "GOOGLE_APPLICATION_CREDENTIALS")
+		// Add project_id and location from environment if available
+		if cfg.Extra == nil {
+			cfg.Extra = make(map[string]interface{})
+		}
+		if projectID := os.Getenv("GOOGLE_VERTEXAI_PROJECT_ID"); projectID != "" {
+			cfg.Extra["project_id"] = projectID
+		}
+		if location := os.Getenv("GOOGLE_VERTEXAI_LOCATION"); location != "" {
+			cfg.Extra["location"] = location
+		}
+		connector, err := connectors.NewVertexAIConnector(cfg)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to initialize Google Vertex AI connector")
+		} else {
+			a.connectorRegistry.Register("google-vertexai", connector)
+			initialized++
+			log.Info().Str("provider", "google-vertexai").Msg("initialized connector")
 		}
 	}
 

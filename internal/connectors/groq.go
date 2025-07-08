@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -37,8 +38,49 @@ func (c *GroqConnector) Name() string {
 }
 
 // Models returns Groq-specific models
-func (c *GroqConnector) Models(_ context.Context) (*ModelsResponse, error) {
-	// Groq has specific models, return hardcoded list
+func (c *GroqConnector) Models(ctx context.Context) (*ModelsResponse, error) {
+	return fetchModelsWithCache(ctx, "groq", func(ctx context.Context) (*ModelsResponse, error) {
+		// Try to fetch models dynamically from Groq API
+		req, err := http.NewRequestWithContext(ctx, "GET", c.config.BaseURL+"/openai/v1/models", nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		// Set headers
+		req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		// Parse the response
+		models, err := parseModelsResponse(body, "groq")
+		if err != nil {
+			// Fall back to static list on error
+			return c.staticModelsList(), nil
+		}
+
+		return models, nil
+	})
+}
+
+// staticModelsList returns the hardcoded list of models as fallback
+func (c *GroqConnector) staticModelsList() *ModelsResponse {
 	models := []Model{
 		// Production models
 		{
@@ -84,7 +126,7 @@ func (c *GroqConnector) Models(_ context.Context) (*ModelsResponse, error) {
 	return &ModelsResponse{
 		Object: "list",
 		Data:   models,
-	}, nil
+	}
 }
 
 // Embeddings returns an error as Groq doesn't support embeddings

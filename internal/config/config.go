@@ -61,12 +61,14 @@ type ValkeyConfig struct {
 
 // ProvidersConfig defines LLM provider settings
 type ProvidersConfig struct {
-	OpenAI    ProviderConfig `env:",prefix=OPENAI_"`
-	Anthropic ProviderConfig `env:",prefix=ANTHROPIC_"`
-	Gemini    ProviderConfig `env:",prefix=GEMINI_"`
-	Groq      ProviderConfig `env:",prefix=GROQ_"`
-	Mistral   ProviderConfig `env:",prefix=MISTRAL_"`
-	Azure     ProviderConfig `env:",prefix=AZURE_"`
+	OpenAI         ProviderConfig `env:",prefix=OPENAI_"`
+	Anthropic      ProviderConfig `env:",prefix=ANTHROPIC_"`
+	Gemini         ProviderConfig `env:",prefix=GEMINI_"`         // Deprecated, use GoogleAIStudio
+	GoogleAIStudio ProviderConfig `env:",prefix=GOOGLE_AISTUDIO_"`
+	GoogleVertexAI ProviderConfig `env:",prefix=GOOGLE_VERTEXAI_"`
+	Groq           ProviderConfig `env:",prefix=GROQ_"`
+	Mistral        ProviderConfig `env:",prefix=MISTRAL_"`
+	Azure          ProviderConfig `env:",prefix=AZURE_"`
 }
 
 // ProviderConfig defines settings for a single LLM provider

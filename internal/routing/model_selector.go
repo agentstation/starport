@@ -62,7 +62,7 @@ func (s *defaultModelSelector) SelectModels(req *Request) []string {
 		models = append(models,
 			"openai/gpt-4-vision-preview",
 			"anthropic/claude-3-sonnet-20240229",
-			"google/gemini-1.5-pro",
+			"google-aistudio/gemini-1.5-pro",
 		)
 	} else if hasFunctions {
 		// Function-calling capable models
@@ -76,7 +76,7 @@ func (s *defaultModelSelector) SelectModels(req *Request) []string {
 		models = append(models,
 			"openai/gpt-4-turbo-preview",
 			"anthropic/claude-3-sonnet-20240229",
-			"google/gemini-1.5-pro",
+			"google-aistudio/gemini-1.5-pro",
 		)
 	}
 	
@@ -320,9 +320,9 @@ func defaultModelCapabilities() map[string]ModelCapability {
 			Quality:           "economy",
 		},
 		
-		// Google models
-		"google/gemini-1.5-pro": {
-			Provider:          "google",
+		// Google AI Studio models
+		"google-aistudio/gemini-1.5-pro": {
+			Provider:          "google-aistudio",
 			ContextLength:     1000000,
 			MaxOutputTokens:   8192,
 			SupportsVision:    true,
@@ -330,6 +330,52 @@ func defaultModelCapabilities() map[string]ModelCapability {
 			SupportsStreaming: true,
 			CostPerMillion:    7.0,
 			LatencyClass:      "medium",
+			Quality:           "premium",
+		},
+		"google-aistudio/gemini-1.5-flash": {
+			Provider:          "google-aistudio",
+			ContextLength:     1000000,
+			MaxOutputTokens:   8192,
+			SupportsVision:    true,
+			SupportsFunctions: true,
+			SupportsStreaming: true,
+			CostPerMillion:    0.7,
+			LatencyClass:      "fast",
+			Quality:           "economy",
+		},
+		
+		// Google Vertex AI models
+		"google-vertexai/gemini-1.5-pro": {
+			Provider:          "google-vertexai",
+			ContextLength:     1000000,
+			MaxOutputTokens:   8192,
+			SupportsVision:    true,
+			SupportsFunctions: true,
+			SupportsStreaming: true,
+			CostPerMillion:    2.5,
+			LatencyClass:      "medium",
+			Quality:           "premium",
+		},
+		"google-vertexai/gemini-1.5-flash": {
+			Provider:          "google-vertexai",
+			ContextLength:     1000000,
+			MaxOutputTokens:   8192,
+			SupportsVision:    true,
+			SupportsFunctions: true,
+			SupportsStreaming: true,
+			CostPerMillion:    0.25,
+			LatencyClass:      "fast",
+			Quality:           "economy",
+		},
+		"google-vertexai/claude-3-opus@20240229": {
+			Provider:          "google-vertexai",
+			ContextLength:     200000,
+			MaxOutputTokens:   4096,
+			SupportsVision:    true,
+			SupportsFunctions: false,
+			SupportsStreaming: true,
+			CostPerMillion:    15.0,
+			LatencyClass:      "slow",
 			Quality:           "premium",
 		},
 		

@@ -16,7 +16,7 @@ func TestModelCapabilities(t *testing.T) {
 		"openai/gpt-3.5-turbo",
 		"anthropic/claude-3-opus-20240229",
 		"anthropic/claude-3-sonnet-20240229",
-		"google/gemini-1.5-pro",
+		"google-aistudio/gemini-1.5-pro",
 		"groq/llama-3.1-8b-instant",
 	}
 	
@@ -189,7 +189,7 @@ func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 		// Should get vision-capable models
 		assert.Contains(t, models, "openai/gpt-4-vision-preview")
 		assert.Contains(t, models, "anthropic/claude-3-sonnet-20240229")
-		assert.Contains(t, models, "google/gemini-1.5-pro")
+		assert.Contains(t, models, "google-aistudio/gemini-1.5-pro")
 	})
 	
 	t.Run("function request gets function models", func(t *testing.T) {

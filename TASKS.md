@@ -9,7 +9,7 @@ Last Updated: When agents update this file
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-| - | No tasks currently in progress | - | - | - | - |
+| Backend | P1-S3-3.7 Dynamic Model Fetching & Google Provider Separation | task/P1-S3-3.7-dynamic-models | 🟢 In Progress | 4:00 PM | - |
 
 ### Recently Completed
 

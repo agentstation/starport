@@ -20,13 +20,13 @@ func TestProviderPreferencesFiltering(t *testing.T) {
 	}{
 		{
 			name:     "no preferences",
-			models:   []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro"},
+			models:   []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
 			prefs:    nil,
-			expected: []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro"},
+			expected: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
 		},
 		{
 			name:   "only filter",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
 			prefs: &ProviderPreferences{
 				Only: []string{"openai", "anthropic"},
 			},
@@ -34,15 +34,15 @@ func TestProviderPreferencesFiltering(t *testing.T) {
 		},
 		{
 			name:   "ignore filter",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
 			prefs: &ProviderPreferences{
-				Ignore: []string{"google"},
+				Ignore: []string{"google-aistudio"},
 			},
 			expected: []string{"openai/gpt-4", "anthropic/claude-3"},
 		},
 		{
 			name:   "order without fallbacks",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro", "groq/llama3-70b"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro", "groq/llama3-70b"},
 			prefs: &ProviderPreferences{
 				Order:          []string{"anthropic", "openai"},
 				AllowFallbacks: false,
@@ -51,19 +51,19 @@ func TestProviderPreferencesFiltering(t *testing.T) {
 		},
 		{
 			name:   "order with fallbacks",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro", "groq/llama3-70b"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro", "groq/llama3-70b"},
 			prefs: &ProviderPreferences{
 				Order:          []string{"anthropic", "openai"},
 				AllowFallbacks: true,
 			},
-			expected: []string{"anthropic/claude-3", "openai/gpt-4", "google/gemini-pro", "groq/llama3-70b"},
+			expected: []string{"anthropic/claude-3", "openai/gpt-4", "google-aistudio/gemini-pro", "groq/llama3-70b"},
 		},
 		{
 			name:   "order with ignore",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro", "groq/llama3-70b"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro", "groq/llama3-70b"},
 			prefs: &ProviderPreferences{
 				Order:          []string{"google", "anthropic", "openai"},
-				Ignore:         []string{"google"},
+				Ignore:         []string{"google-aistudio"},
 				AllowFallbacks: true,
 			},
 			expected: []string{"anthropic/claude-3", "openai/gpt-4", "groq/llama3-70b"},
@@ -258,7 +258,7 @@ func TestEnhancedAPIKeyRestrictions(t *testing.T) {
 	}
 	router := NewRouter(registry).(*defaultRouter)
 	
-	models := []string{"openai/gpt-4", "anthropic/claude-3", "google/gemini-pro"}
+	models := []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"}
 	config := &APIKeyConfig{
 		AllowedProviders: []string{"openai", "anthropic"},
 		ModelOverrides: map[string]string{
@@ -270,7 +270,7 @@ func TestEnhancedAPIKeyRestrictions(t *testing.T) {
 	assert.Len(t, filtered, 2)
 	assert.Contains(t, filtered, "openai/gpt-3.5-turbo") // Override applied
 	assert.Contains(t, filtered, "anthropic/claude-3")
-	assert.NotContains(t, filtered, "google/gemini-pro") // Not allowed
+	assert.NotContains(t, filtered, "google-aistudio/gemini-pro") // Not allowed
 }
 
 func TestRouterWithStickySessions(t *testing.T) {
