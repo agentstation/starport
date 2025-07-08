@@ -9,6 +9,7 @@ Last Updated: When agents update this file
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
+| Storage | P1-S2-2.1 Storage Interface | task/P1-S2-2.1-storage-interface | 🟢 In Progress | 4:00 PM | - |
 
 ### Recently Completed
 
@@ -602,13 +603,13 @@ type KVStore interface {
     Close() error
 }
 
-// Factory function
-func NewKVStore(config Config) (KVStore, error) {
+// Open creates a new KVStore instance based on the configuration
+func Open(config Config) (KVStore, error) {
     switch config.Type {
     case "badger":
-        return NewBadgerStore(config.Badger)
+        return OpenBadger(config.Badger)
     case "valkey":
-        return NewValkeyStore(config.Valkey)
+        return OpenValkey(config.Valkey)
     default:
         return nil, fmt.Errorf("unknown storage type: %s", config.Type)
     }
