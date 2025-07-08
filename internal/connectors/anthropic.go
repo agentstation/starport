@@ -146,7 +146,7 @@ func (c *AnthropicConnector) Models(ctx context.Context) (*ModelsResponse, error
 			// Fall back to static list on error
 			return c.staticModelsList(), nil
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != http.StatusOK {
 			// Fall back to static list on error

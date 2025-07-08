@@ -54,6 +54,9 @@ func setCachedModels(provider string, models *ModelsResponse) {
 }
 
 // clearModelCache clears the cache for a provider
+// Used for testing purposes
+//
+//nolint:unused // Used in tests
 func clearModelCache(provider string) {
 	globalModelCache.mu.Lock()
 	defer globalModelCache.mu.Unlock()
@@ -84,12 +87,12 @@ func fetchModelsWithCache(ctx context.Context, provider string, fetcher func(con
 func parseModelsResponse(data []byte, provider string) (*ModelsResponse, error) {
 	var response struct {
 		Data []struct {
-			ID          string `json:"id"`
-			Created     int64  `json:"created_at,omitempty"`
-			CreatedAt   string `json:"created_at,omitempty"` // Some APIs use string format
-			DisplayName string `json:"display_name,omitempty"`
-			Type        string `json:"type,omitempty"`
-			Object      string `json:"object,omitempty"`
+			ID            string `json:"id"`
+			Created       int64  `json:"created,omitempty"`
+			CreatedAtStr  string `json:"created_at,omitempty"` // Some APIs use string format
+			DisplayName   string `json:"display_name,omitempty"`
+			Type          string `json:"type,omitempty"`
+			Object        string `json:"object,omitempty"`
 		} `json:"data"`
 		Models []struct {
 			ID          string `json:"id"`
@@ -110,9 +113,9 @@ func parseModelsResponse(data []byte, provider string) (*ModelsResponse, error) 
 		// Anthropic format
 		for _, m := range response.Data {
 			created := m.Created
-			if created == 0 && m.CreatedAt != "" {
+			if created == 0 && m.CreatedAtStr != "" {
 				// Try to parse string date
-				if t, err := time.Parse(time.RFC3339, m.CreatedAt); err == nil {
+				if t, err := time.Parse(time.RFC3339, m.CreatedAtStr); err == nil {
 					created = t.Unix()
 				}
 			}

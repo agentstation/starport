@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// Provider name constants
+const (
+	GoogleAIStudioProvider = "google-aistudio"
+	GoogleVertexAIProvider = "google-vertexai"
+)
+
 // Connector defines the interface for LLM provider integrations
 type Connector interface {
 	// Chat performs a chat completion request
@@ -50,9 +56,9 @@ func NewConnector(provider string, config ProviderConfig) (Connector, error) {
 	case "gemini", "google":
 		// Legacy support - map to google-aistudio
 		return NewGoogleAIStudioConnector(config)
-	case "google-aistudio":
+	case GoogleAIStudioProvider:
 		return NewGoogleAIStudioConnector(config)
-	case "google-vertexai":
+	case GoogleVertexAIProvider:
 		return NewVertexAIConnector(config)
 	case "groq":
 		return NewGroqConnector(config)
