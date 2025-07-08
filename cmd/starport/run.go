@@ -12,6 +12,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/agentstation/starport/internal/app"
+	"github.com/agentstation/starport/internal/server"
 )
 
 // Build-time variables injected via ldflags
@@ -98,7 +99,11 @@ func runServer(ctx context.Context) error {
 
 func loadConfig() *app.Config {
 	// TODO: Load config from environment variables and files
-	return &app.Config{}
+	return &app.Config{
+		Server: server.Config{
+			Port: 8080,
+		},
+	}
 }
 
 func getBuildGoVersion() string {

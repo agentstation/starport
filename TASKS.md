@@ -9,6 +9,7 @@ Last Updated: When agents update this file
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
+| API | P1-S1-1.4 HTTP Server Foundation | task/P1-S1-1.4-http-server | 🟢 In Progress | 8 hours | - |
 
 ### Recently Completed
 
@@ -22,7 +23,6 @@ Last Updated: When agents update this file
 
 | Task | Blocked By | Team | Notes |
 |------|------------|------|-------|
-| P1-S1-1.4 | - | API | P1-S1-1.2 complete - can now proceed |
 | P1-S1-1.5 | P1-S1-1.4 | API | Waiting for HTTP server |
 
 ## 📊 Sprint Progress
@@ -55,8 +55,8 @@ Last Updated: When agents update this file
 
 ### Velocity Tracking
 - Tasks Completed: 3 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3)
-- Tasks In Progress: 0
-- Phase 1 Tasks Remaining: 13
+- Tasks In Progress: 1 (P1-S1-1.4)
+- Phase 1 Tasks Remaining: 12
 
 ## 📝 Update Instructions
 
