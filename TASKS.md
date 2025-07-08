@@ -15,7 +15,7 @@ Last Updated: When agents update this file
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
-| P1-S3-3.3 | Backend | TBD | 2025-01-08 | Proxy endpoints implemented with /v1 and /api/v1 routes, streaming support, request validation, connector initialization from config, 85.4% test coverage |
+| P1-S3-3.3 | Backend | #15 | 2025-01-08 | Proxy endpoints implemented with /v1 and /api/v1 routes, streaming support, request validation, connector initialization from config, 85.4% test coverage |
 | P1-S3-3.2 | Backend | #13 | 2025-01-08 | All 6 LLM provider connectors implemented with streaming, OpenRouter-compatible model IDs, 84.0% test coverage |
 | P1-S3-3.1 | Backend | #12 | 2025-01-08 | Model Connector Interface with streaming support, health checks, mock implementation, 90.6% test coverage |
 | P1-S2-2.3 | Storage | #10 | 2025-01-08 | Core storage models with APIKey, Preset, BYOKCredential, TokenBucket, AES-256-GCM encryption, 91.9% test coverage |
