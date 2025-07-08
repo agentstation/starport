@@ -31,11 +31,11 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 
 **Project**: Starport - High-Performance LLM Gateway
 **Phase**: Implementation Phase 1
-**Progress**: 5 of 16 tasks complete
+**Progress**: 6 of 16 tasks complete
 
 ## Current Codebase Status
 
-### Completed Components (Phase 1, Subphase 1.1-1.2)
+### Completed Components (Phase 1, Subphases 1.1-1.2 and partial 1.3)
 
 **✅ Repository & Structure (P1-S1-1.1, P1-S1-1.2)**
 - Go module initialized: `github.com/agentstation/starport`
@@ -64,6 +64,16 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Hot reload for rate limit rules (YAML)
 - Support for 6 LLM providers: OpenAI, Anthropic, Gemini, Groq, Mistral, Azure OpenAI
 
+**✅ Storage Interface (P1-S2-2.1)**
+- Complete KVStore interface abstraction
+- Support for TTL operations (rate limiting)
+- Atomic operations (increment, CAS)
+- Batch operations for efficiency
+- Transaction support with isolation
+- Mock implementation for testing
+- Serialization helpers with type safety
+- 82.3% test coverage
+
 ### Project Structure
 ```
 starport/
@@ -74,7 +84,8 @@ starport/
 ├── internal/            # Private application code
 │   ├── app/            # Application lifecycle
 │   ├── config/         # Configuration system ✅
-│   └── server/         # HTTP server ✅
+│   ├── server/         # HTTP server ✅
+│   └── storage/        # Storage abstraction ✅
 ├── pkg/enterprise/      # Enterprise plugin interfaces
 ├── Makefile            # Build automation ✅
 ├── docker-compose.yml  # Local development ✅
@@ -100,8 +111,9 @@ All configuration via environment variables or .env files:
 
 ### Next Tasks Ready to Implement
 Based on completed prerequisites:
-1. **P1-S2-2.1**: Storage Interface Definition (depends on config ✅)
-2. **P1-S3-3.1**: Model Connector Interface (depends on server ✅)
+1. **P1-S2-2.2**: Badger DB Integration (depends on P1-S2-2.1 ✅)
+2. **P1-S2-2.3**: Core Storage Models (depends on P1-S2-2.1 ✅)
+3. **P1-S3-3.1**: Model Connector Interface (depends on server ✅)
 
 These can be worked on in parallel by different agents.
 
@@ -226,6 +238,11 @@ if err != nil {
 }
 ```
 
+**Best Practices from Implementation:**
+- Define sentinel errors as package-level variables (e.g., `var ErrNotFound = errors.New("key not found")`)
+- Use constants for repeated strings to satisfy linters
+- Avoid shadowing built-in identifiers (e.g., use `newValue` instead of `new`)
+
 ### Logging
 ```go
 log.Info().
@@ -281,6 +298,27 @@ for _, tt := range tests {
     })
 }
 ```
+
+### Go Idioms and Conventions
+```go
+// Use Open() for connection/resource creation (not factory pattern)
+func Open(config Config) (Resource, error) {
+    // Following sql.Open, redis.Open conventions
+}
+
+// Use New() for simple struct creation
+func NewMockStore() *MockStore {
+    return &MockStore{
+        data: make(map[string][]byte),
+    }
+}
+```
+
+**Key Learnings:**
+- Prefer `Open()` over factory patterns for resource creation
+- Use `time.Until()` instead of `time.Sub()` for duration calculations
+- Convert if-else chains to switch statements when checking equality
+- Use atomic file operations (write to temp, rename) to avoid partial reads
 
 ## Commands to Remember
 
@@ -341,6 +379,11 @@ make lint # Lint code
 - Follow the context propagation pattern for all methods
 - Include TTL support for rate limiting
 - See ARCHITECTURE.md Section 16 for storage details
+- **Lessons from P1-S2-2.1:**
+  - Mock implementation should be thread-safe with proper mutex usage
+  - Handle TTL expiration checks in read operations
+  - Transaction isolation is critical - avoid deadlocks by releasing locks before calling store methods
+  - Use type-specific serialization helpers (e.g., SerializeInt64) for atomic operations
 
 ### For LLM Connector Implementation (P1-S3-3.X)
 - Connectors go in `internal/connectors/` package
