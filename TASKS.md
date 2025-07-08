@@ -14,6 +14,7 @@ Last Updated: When agents update this file
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| P1-S1-1.5 | API | #5 | 2025-01-07 | Configuration system with env vars, .env files, validation, and hot reload for rate limits |
 | P1-S1-1.4 | API | #4 | 2025-01-07 | HTTP server with chi router, middleware, health checks, 93% test coverage |
 | P1-S1-1.3 | DevOps | #3 | 2025-01-07 | Development environment with CI/CD, Docker, and pre-commit hooks |
 | P1-S1-1.2 | Backend | #2 | 2025-01-07 | Project structure with CLI framework and clean architecture |
@@ -23,7 +24,6 @@ Last Updated: When agents update this file
 
 | Task | Blocked By | Team | Notes |
 |------|------------|------|-------|
-| P1-S1-1.5 | - | API | P1-S1-1.4 complete - can now proceed |
 
 ## 📊 Sprint Progress
 
@@ -34,7 +34,7 @@ Last Updated: When agents update this file
 - [x] P1-S1-1.2 - Project Structure Setup ✅
 - [x] P1-S1-1.3 - Development Environment ✅
 - [x] P1-S1-1.4 - HTTP Server Foundation ✅
-- [ ] P1-S1-1.5 - Configuration System
+- [x] P1-S1-1.5 - Configuration System ✅
 
 **Storage (Subphase 1.3)**
 - [ ] P1-S2-2.1 - Storage Interface Definition
@@ -43,7 +43,7 @@ Last Updated: When agents update this file
 
 **LLM Proxy (Subphase 1.4)**
 - [ ] P1-S3-3.1 - Model Connector Interface
-- [ ] P1-S3-3.2 - OpenAI & Anthropic Connectors
+- [ ] P1-S3-3.2 - LLM Provider Connectors (OpenAI, Anthropic, Gemini, Groq, Mistral, Azure)
 - [ ] P1-S3-3.3 - Proxy Endpoints Implementation
 - [ ] P1-S3-3.4 - Advanced Routing System
 
@@ -54,9 +54,9 @@ Last Updated: When agents update this file
 - [ ] P1-S4-4.4 - Preset Management System
 
 ### Velocity Tracking
-- Tasks Completed: 4 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3, P1-S1-1.4)
+- Tasks Completed: 5 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3, P1-S1-1.4, P1-S1-1.5)
 - Tasks In Progress: 0
-- Phase 1 Tasks Remaining: 12
+- Phase 1 Tasks Remaining: 11
 
 ## 📝 Update Instructions
 
@@ -771,16 +771,16 @@ Features:
 
 ---
 
-### 🎯 P1-S3-3.2: OpenAI & Anthropic Connectors
+### 🎯 P1-S3-3.2: LLM Provider Connectors
 **Status**: 🔴 Blocked by P1-S3-3.1  
 **Type**: Development  
 **Assignee**: Backend Developer  
-**Effort**: 8 hours  
+**Effort**: 12 hours  
 **Dependencies**: P1-S3-3.1  
 **Can Run Parallel With**: P1-S3-3.3  
 
 #### User Story
-As an API consumer, I need OpenAI and Anthropic connectors so that I can route requests to these providers.
+As an API consumer, I need connectors for multiple LLM providers (OpenAI, Anthropic, Gemini, Groq, Mistral, and Azure OpenAI) so that I can route requests to these providers.
 
 #### Technical Requirements
 ```yaml
@@ -795,24 +795,54 @@ Anthropic Connector:
   - Streaming responses
   - System prompts
   - Context caching
+
+Gemini Connector:
+  - Vertex AI integration
+  - Regional/global endpoints
+  - Streaming support
+  - Vision & multimodal
+  - 1M+ context window
+
+Groq Connector:
+  - Ultra-fast inference
+  - OpenAI-compatible API
+  - Streaming support
+  - Llama & Mixtral models
+
+Mistral Connector:
+  - Mistral API support
+  - Streaming responses
+  - Function calling
+  - Multiple model tiers
+
+Azure OpenAI Connector:
+  - Resource-specific endpoints
+  - API version management
+  - Streaming support
+  - OpenAI-compatible API
+  - Deployment names instead of model names
 ```
 
 #### Implementation Tasks
 ```markdown
-- [ ] Implement OpenAI connector
-- [ ] Add OpenAI streaming support
-- [ ] Implement Anthropic connector
-- [ ] Add Anthropic streaming
-- [ ] Configure connection pooling
-- [ ] Add retry logic
-- [ ] Write integration tests
+- [ ] Implement OpenAI connector with streaming
+- [ ] Implement Anthropic connector with streaming
+- [ ] Implement Gemini/Vertex AI connector
+- [ ] Implement Groq connector (OpenAI-compatible)
+- [ ] Implement Mistral connector
+- [ ] Implement Azure OpenAI connector
+- [ ] Configure connection pooling for all providers
+- [ ] Add retry logic with provider-specific handling
+- [ ] Write integration tests for each provider
+- [ ] Add provider health checks
 ```
 
 #### Acceptance Criteria
-- [ ] Both connectors fully functional
-- [ ] Streaming works properly
-- [ ] Connection pooling configured
-- [ ] Retry logic handles failures
+- [ ] All six connectors fully functional
+- [ ] Streaming works properly for all providers
+- [ ] Connection pooling configured per provider
+- [ ] Retry logic handles provider-specific failures
+- [ ] Provider health checks operational
 - [ ] 85% test coverage
 
 ---

@@ -10,6 +10,9 @@ type Config struct {
 	// Port to listen on
 	Port int `env:"PORT,default=8080"`
 	
+	// Host to bind to
+	Host string `env:"HOST,default=0.0.0.0"`
+	
 	// Read and write timeouts
 	ReadTimeout  time.Duration `env:"READ_TIMEOUT,default=10s"`
 	WriteTimeout time.Duration `env:"WRITE_TIMEOUT,default=10s"`
