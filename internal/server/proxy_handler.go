@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -12,11 +11,13 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/connectors"
+	"github.com/agentstation/starport/internal/routing"
 )
 
 // ProxyHandler handles LLM proxy requests
 type ProxyHandler struct {
 	connectorRegistry *ConnectorRegistry
+	router            routing.ModelRouter
 }
 
 // ConnectorRegistry manages available connectors
@@ -28,6 +29,7 @@ type ConnectorRegistry struct {
 func NewProxyHandler(registry *ConnectorRegistry) *ProxyHandler {
 	return &ProxyHandler{
 		connectorRegistry: registry,
+		router:            routing.NewRouter(registry),
 	}
 }
 
@@ -43,8 +45,8 @@ func (r *ConnectorRegistry) Register(provider string, connector connectors.Conne
 	r.connectors[provider] = connector
 }
 
-// Get retrieves a connector by provider name
-func (r *ConnectorRegistry) Get(provider string) (connectors.Connector, error) {
+// GetWithError retrieves a connector by provider name with error
+func (r *ConnectorRegistry) GetWithError(provider string) (connectors.Connector, error) {
 	connector, ok := r.connectors[provider]
 	if !ok {
 		return nil, fmt.Errorf("provider %s not found", provider)
@@ -61,7 +63,7 @@ func (r *ConnectorRegistry) GetByModel(modelID string) (connectors.Connector, st
 	provider := parts[0]
 	model := parts[1]
 	
-	connector, err := r.Get(provider)
+	connector, err := r.GetWithError(provider)
 	if err != nil {
 		return nil, "", err
 	}
@@ -87,117 +89,10 @@ func (h *ProxyHandler) RegisterOpenRouterRoutes(r chi.Router) {
 
 // handleChatCompletions handles chat completion requests
 func (h *ProxyHandler) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
-	// Parse request
-	var req connectors.ChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid_request", "Invalid request body: "+err.Error())
-		return
-	}
-
-	// Validate request
-	if err := h.validateChatRequest(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
-		return
-	}
-
-	// Get connector based on model
-	connector, model, err := h.connectorRegistry.GetByModel(req.Model)
-	if err != nil {
-		h.writeError(w, http.StatusBadRequest, "model_not_found", "Model not found: "+req.Model)
-		return
-	}
-
-	// Update model to remove provider prefix for provider APIs
-	req.Model = model
-
-	// Handle streaming vs non-streaming
-	if req.Stream {
-		h.handleStreamingChat(w, r, connector, &req)
-	} else {
-		h.handleNonStreamingChat(w, r, connector, &req)
-	}
+	// Use the routing-aware handler
+	h.handleChatCompletionsWithRouting(w, r)
 }
 
-// handleNonStreamingChat handles non-streaming chat requests
-func (h *ProxyHandler) handleNonStreamingChat(w http.ResponseWriter, r *http.Request, connector connectors.Connector, req *connectors.ChatRequest) {
-	ctx := r.Context()
-
-	// Call connector
-	resp, err := connector.Chat(ctx, req)
-	if err != nil {
-		h.handleConnectorError(w, err)
-		return
-	}
-
-	// Transform response to include full model ID
-	resp.Model = fmt.Sprintf("%s/%s", connector.Name(), resp.Model)
-
-	// Write response
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Error().Err(err).Msg("failed to encode response")
-	}
-}
-
-// handleStreamingChat handles streaming chat requests
-func (h *ProxyHandler) handleStreamingChat(w http.ResponseWriter, r *http.Request, connector connectors.Connector, req *connectors.ChatRequest) {
-	ctx := r.Context()
-
-	// Call connector for streaming
-	stream, err := connector.ChatStream(ctx, req)
-	if err != nil {
-		h.handleConnectorError(w, err)
-		return
-	}
-	defer func() {
-		_ = stream.Close()
-	}()
-
-	// Set headers for SSE
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	// Flush headers
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-
-	// Stream chunks
-	for {
-		chunk, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				// Send done marker
-				_, _ = fmt.Fprintf(w, "data: %s\n\n", connectors.SSEDone)
-				if f, ok := w.(http.Flusher); ok {
-					f.Flush()
-				}
-				return
-			}
-			// Log error but don't send to client in stream
-			log.Error().Err(err).Msg("streaming error")
-			return
-		}
-
-		// Transform model in chunk
-		chunk.Model = fmt.Sprintf("%s/%s", connector.Name(), chunk.Model)
-
-		// Marshal chunk
-		data, err := json.Marshal(chunk)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to marshal chunk")
-			continue
-		}
-
-		// Write SSE data
-		_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-	}
-}
 
 // handleEmbeddings handles embeddings requests
 func (h *ProxyHandler) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
@@ -339,8 +234,9 @@ func (h *ProxyHandler) handleProviders(w http.ResponseWriter, _ *http.Request) {
 
 // validateChatRequest validates a chat request
 func (h *ProxyHandler) validateChatRequest(req *connectors.ChatRequest) error {
-	if req.Model == "" {
-		return errors.New("model is required")
+	// Either model or models array is required
+	if req.Model == "" && len(req.Models) == 0 {
+		return errors.New("model or models array is required")
 	}
 	if len(req.Messages) == 0 {
 		return errors.New("messages are required")

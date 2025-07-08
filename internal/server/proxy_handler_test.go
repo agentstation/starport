@@ -200,7 +200,7 @@ func TestProxyHandler_ChatCompletions(t *testing.T) {
 				},
 			},
 			expectedStatus: http.StatusBadRequest,
-			expectedError:  "model is required",
+			expectedError:  "model or models array is required",
 		},
 		{
 			name: "invalid request - missing messages",
