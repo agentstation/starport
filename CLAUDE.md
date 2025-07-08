@@ -355,6 +355,14 @@ func NewMockStore() *MockStore {
 - Use `time.Until()` instead of `time.Sub()` for duration calculations
 - Convert if-else chains to switch statements when checking equality
 - Use atomic file operations (write to temp, rename) to avoid partial reads
+- **Lessons from P1-S3-3.2 (LLM Connectors):**
+  - Adopt OpenRouter's `provider/model` naming convention from the start
+  - Create base implementations for common patterns (e.g., OpenAICompatibleConnector)
+  - Provider prefixes are part of the model ID and need to be stripped for provider-specific APIs
+  - Mark unused parameters in mocks with `_ = param // param is intentionally unused in mock`
+  - All providers support streaming, but not all support embeddings
+  - Return appropriate errors for unsupported features rather than silent failures
+  - Test both with and without provider prefixes to ensure compatibility
 
 ## Commands to Remember
 
@@ -447,6 +455,14 @@ make lint # Lint code
   - Streaming interface should use io.EOF to signal completion
   - Provider config should include connection pooling and retry settings with exponential backoff
   - Test coverage >90% is achievable with comprehensive mock implementation
+- **Lessons from P1-S3-3.2:**
+  - All model IDs must use `provider/model` format for OpenRouter compatibility
+  - Azure requires stripping the provider prefix when building deployment URLs
+  - Create shared base implementations (e.g., OpenAICompatibleConnector) to reduce duplication
+  - Not all providers support embeddings - return clear errors for unsupported features
+  - Provider-specific error formats need custom parsing in handleError methods
+  - Health checks should use prefixed model IDs
+  - Static model lists should include update dates as comments
 
 ### For Testing
 - Aim for 90% coverage on new code
