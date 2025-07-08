@@ -5,6 +5,18 @@ import (
 	"time"
 )
 
+// Common role constants
+const (
+	RoleSystem    = "system"
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+)
+
+// SSE stream constants
+const (
+	SSEDone = "[DONE]"
+)
+
 // ChatRequest represents a chat completion request
 type ChatRequest struct {
 	Model            string          `json:"model"`

@@ -193,21 +193,72 @@ get_task_info() {
 - Write endpoint tests"
             ;;
         "P1-S3-3.4")
-            name="Advanced Routing System"
-            workspace="starport-routing"
-            branch="task/P1-S3-3.4-routing-system"
-            prereq="Task P1-S3-3.2 must be complete (provider connectors)"
-            prereq_verify="test -d internal/connector/openai || echo \"ERROR: OpenAI connector not found - P1-S3-3.2 not complete\""
-            architecture_sections="routing strategies"
+            name="OpenRouter-Compatible Model Routing"
+            workspace="starport-model-routing"
+            branch="task/P1-S3-3.4-model-routing"
+            prereq="Task P1-S3-3.3 must be complete (proxy endpoints)"
+            prereq_verify="test -f internal/proxy/handlers.go || echo \"ERROR: Proxy handlers not found - P1-S3-3.3 not complete\""
+            architecture_sections="section 8.1-8.2 for model routing"
             requirements="
-- Implement routing interface
-- Add latency tracking (EMA)
-- Implement cost-based routing
-- Add content classifier
-- Create fallback logic
-- Add circuit breakers
-- Implement health checks
-- Write routing tests"
+- Support 'models' array parameter for fallback chain
+- Implement model ID parsing (provider/model format)
+- Add fallback triggers (rate limit, errors, context length)
+- Create openrouter/auto model selector
+- Handle model routing in ChatRequest
+- Add model availability checking
+- Implement fallback retry logic
+- Write model routing tests"
+            ;;
+        "P1-S3-3.5")
+            name="Provider Routing & Fallback Support"
+            workspace="starport-provider-routing"
+            branch="task/P1-S3-3.5-provider-routing"
+            prereq="Task P1-S3-3.4 must be complete (model routing)"
+            prereq_verify="test -f internal/routing/model_router.go || echo \"ERROR: Model router not found - P1-S3-3.4 not complete\""
+            architecture_sections="section 8.3-8.5 for provider routing"
+            requirements="
+- Implement ProviderPreferences struct
+- Support 'order', 'only', 'ignore' parameters
+- Add provider health tracking
+- Implement latency-based routing
+- Create cost optimization routing
+- Add provider fallback logic
+- Support allow_fallbacks parameter
+- Write provider routing tests"
+            ;;
+        "P1-S3-3.6")
+            name="Provider Metadata & /api/v1/providers Endpoint"
+            workspace="starport-providers-endpoint"
+            branch="task/P1-S3-3.6-providers-endpoint"
+            prereq="Task P1-S3-3.3 must be complete (proxy endpoints)"
+            prereq_verify="test -f internal/proxy/handlers.go || echo \"ERROR: Proxy handlers not found - P1-S3-3.3 not complete\""
+            architecture_sections="section 12.2-12.3 for provider endpoints"
+            requirements="
+- Implement /api/v1/providers endpoint
+- Create provider metadata structure
+- Add full model metadata to /api/v1/models
+- Include pricing, context_length, parameters
+- Add architecture information
+- Support model filtering by category
+- Implement /api/v1/models/{model}/endpoints
+- Write provider endpoint tests"
+            ;;
+        "P1-S3-3.7")
+            name="Dynamic Model Fetching & Google Provider Separation"
+            workspace="starport-dynamic-models"
+            branch="task/P1-S3-3.7-dynamic-models"
+            prereq="Task P1-S3-3.2 must be complete (provider connectors)"
+            prereq_verify="test -f internal/connectors/anthropic.go || echo \"ERROR: Provider connectors not found - P1-S3-3.2 not complete\""
+            architecture_sections="section 8.1 for model naming limitations"
+            requirements="
+- Implement dynamic Models() for Anthropic (GET /v1/models)
+- Implement dynamic Models() for Gemini (GET /v1beta/models)
+- Implement dynamic Models() for Groq (GET /openai/v1/models)
+- Split GeminiConnector into GoogleAIStudioConnector and VertexAIConnector
+- Update connector registry for google-aistudio and google-vertexai
+- Add model response caching with TTL
+- Add Vertex AI models (PaLM, Codey, etc.)
+- Update all tests for new provider names"
             ;;
         "P1-S4-4.1")
             name="BYOK Implementation"
@@ -380,7 +431,7 @@ if [ -z "$1" ]; then
     # List all tasks
     for task_id in P1-S1-1.1 P1-S1-1.2 P1-S1-1.3 P1-S1-1.4 P1-S1-1.5 \
                    P1-S2-2.1 P1-S2-2.2 P1-S2-2.3 \
-                   P1-S3-3.1 P1-S3-3.2 P1-S3-3.3 P1-S3-3.4 \
+                   P1-S3-3.1 P1-S3-3.2 P1-S3-3.3 P1-S3-3.4 P1-S3-3.5 P1-S3-3.6 P1-S3-3.7 \
                    P1-S4-4.1 P1-S4-4.2 P1-S4-4.3 P1-S4-4.4; do
         if get_task_info "$task_id"; then
             echo "  $task_id - $name"

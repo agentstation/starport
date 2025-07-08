@@ -37,16 +37,94 @@ func TestNewConnector(t *testing.T) {
 		}
 	})
 
-	t.Run("Create with unimplemented provider", func(t *testing.T) {
+	t.Run("Create Gemini connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			BaseURL: "https://api.openai.com",
 			APIKey:  "test-key",
 		}
 
-		// OpenAI is not implemented yet
-		_, err := connectors.NewConnector("openai", config)
-		if !errors.Is(err, connectors.ErrProviderNotSupported) {
-			t.Errorf("expected ErrProviderNotSupported, got %v", err)
+		connector, err := connectors.NewConnector("gemini", config)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if connector.Name() != "gemini" {
+			t.Errorf("expected name 'gemini', got %s", connector.Name())
+		}
+	})
+
+	t.Run("Create Groq connector", func(t *testing.T) {
+		config := connectors.ProviderConfig{
+			APIKey:  "test-key",
+		}
+
+		connector, err := connectors.NewConnector("groq", config)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if connector.Name() != "groq" {
+			t.Errorf("expected name 'groq', got %s", connector.Name())
+		}
+	})
+
+	t.Run("Create Mistral connector", func(t *testing.T) {
+		config := connectors.ProviderConfig{
+			APIKey:  "test-key",
+		}
+
+		connector, err := connectors.NewConnector("mistral", config)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if connector.Name() != "mistral" {
+			t.Errorf("expected name 'mistral', got %s", connector.Name())
+		}
+	})
+
+	t.Run("Create Azure OpenAI connector", func(t *testing.T) {
+		config := connectors.ProviderConfig{
+			BaseURL: "https://myresource.openai.azure.com",
+			APIKey:  "test-key",
+		}
+
+		connector, err := connectors.NewConnector("azure", config)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if connector.Name() != "azure" {
+			t.Errorf("expected name 'azure', got %s", connector.Name())
+		}
+	})
+
+	t.Run("Create OpenAI connector", func(t *testing.T) {
+		config := connectors.ProviderConfig{
+			APIKey:  "test-key",
+		}
+
+		connector, err := connectors.NewConnector("openai", config)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if connector.Name() != "openai" {
+			t.Errorf("expected name 'openai', got %s", connector.Name())
+		}
+	})
+
+	t.Run("Create Anthropic connector", func(t *testing.T) {
+		config := connectors.ProviderConfig{
+			APIKey:  "test-key",
+		}
+
+		connector, err := connectors.NewConnector("anthropic", config)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if connector.Name() != "anthropic" {
+			t.Errorf("expected name 'anthropic', got %s", connector.Name())
 		}
 	})
 }

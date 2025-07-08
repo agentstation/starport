@@ -62,7 +62,11 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] Mistral connector with function calling
   - [ ] Azure OpenAI connector with resource-specific URLs
   - [ ] Provider health check system
-  - [ ] OpenRouter compatibility layer
+  - [ ] OpenRouter full compatibility:
+    - Model ID format: provider/model (e.g., openai/gpt-4)
+    - Model fallback array support
+    - Provider routing preferences
+    - Auto-router implementation
 - [ ] Advanced routing implementation
   - [ ] Latency-based router with EMA tracking
   - [ ] Cost-aware routing logic
@@ -75,11 +79,23 @@ This document outlines the implementation plan for Starport, an open-source LLM 
     - Parameter requirement filtering
     - Data collection policies
     - Provider ignore/allow lists
-- [ ] Proxy endpoints (OpenAI & OpenRouter compatible)
+- [ ] Proxy endpoints (Full OpenRouter compatibility)
   - [ ] `/v1/chat/completions` with streaming
-  - [ ] `/api/v1/chat/completions` (OpenRouter style)
+  - [ ] `/api/v1/chat/completions` with model routing:
+    - Support for `model` string and `models` array
+    - Provider preferences in request
+    - Auto-routing with `openrouter/auto`
   - [ ] `/v1/embeddings` endpoint
+  - [ ] `/api/v1/embeddings` (OpenRouter style)
   - [ ] `/v1/models` with dynamic updates
+  - [ ] `/api/v1/models` with full metadata:
+    - Pricing information
+    - Context length
+    - Supported parameters
+    - Architecture details
+  - [ ] `/api/v1/providers` endpoint:
+    - List all providers
+    - Provider metadata
   - [ ] `/api/v1/models/{model}/endpoints` (OpenRouter)
   - [ ] `/api/v1/generation/{id}` for stats (OpenRouter)
   - [ ] `/api/v1/auth/key` for rate limits (OpenRouter)
@@ -93,9 +109,15 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] Graceful degradation
 
 ### Subphase 1.4: BYOK, Caching & Filtering
-- [ ] Advanced BYOK implementation
+- [ ] Advanced BYOK implementation (OpenRouter compatible)
   - [ ] Credential encryption (AES-256-GCM)
   - [ ] Key derivation using Argon2id
+  - [ ] Support for all major providers:
+    - OpenAI, Anthropic, Google, Azure
+    - AWS Bedrock credentials
+    - Custom endpoints
+  - [ ] BYOK fallback mode (use when rate limited)
+  - [ ] 5% pricing model for BYOK usage
   - [ ] HashiCorp Vault integration
   - [ ] Zero-knowledge key passing
   - [ ] Key rotation scheduler
