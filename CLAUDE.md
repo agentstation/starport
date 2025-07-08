@@ -31,7 +31,79 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 
 **Project**: Starport - High-Performance LLM Gateway
 **Phase**: Implementation Phase 1
-**Progress**: 1 of 16 tasks complete (P1-S1-1.1 ✅)
+**Progress**: 5 of 16 tasks complete
+
+## Current Codebase Status
+
+### Completed Components (Phase 1, Subphase 1.1-1.2)
+
+**✅ Repository & Structure (P1-S1-1.1, P1-S1-1.2)**
+- Go module initialized: `github.com/agentstation/starport`
+- Clean architecture with `cmd/starport/` for single binary
+- CLI framework integrated (urfave/cli v2)
+- Basic command structure: `serve` (default), `version`
+
+**✅ Development Environment (P1-S1-1.3)**
+- Docker Compose configuration for local development
+- GitHub Actions CI/CD pipeline with testing
+- Pre-commit hooks for code quality
+- Makefile with standard targets (build, test, lint, fmt)
+
+**✅ HTTP Server Foundation (P1-S1-1.4)**
+- Chi router with optimized middleware chain
+- Graceful shutdown with context handling
+- Health check endpoints (`/health/live`, `/health/ready`)
+- Request ID generation and structured logging
+- 93% test coverage on server package
+
+**✅ Configuration System (P1-S1-1.5)**
+- Type-safe configuration with go-envconfig
+- Environment variable support with `STARPORT_` prefix
+- `.env` file loading (local.env > .env precedence)
+- Comprehensive validation for all config sections
+- Hot reload for rate limit rules (YAML)
+- Support for 6 LLM providers: OpenAI, Anthropic, Gemini, Groq, Mistral, Azure OpenAI
+
+### Project Structure
+```
+starport/
+├── cmd/starport/         # Single binary entry point
+│   ├── main.go          # Minimal main function
+│   ├── start.go         # Signal handling
+│   └── run.go           # Application setup & CLI
+├── internal/            # Private application code
+│   ├── app/            # Application lifecycle
+│   ├── config/         # Configuration system ✅
+│   └── server/         # HTTP server ✅
+├── pkg/enterprise/      # Enterprise plugin interfaces
+├── Makefile            # Build automation ✅
+├── docker-compose.yml  # Local development ✅
+└── .github/workflows/  # CI/CD pipeline ✅
+```
+
+### Key Dependencies
+- **github.com/go-chi/chi/v5**: HTTP router
+- **github.com/rs/zerolog**: Structured logging
+- **github.com/sethvargo/go-envconfig**: Environment config
+- **github.com/joho/godotenv**: .env file support
+- **github.com/fsnotify/fsnotify**: File watching for hot reload
+- **gopkg.in/yaml.v3**: YAML parsing for rate limits
+
+### Configuration Capabilities
+All configuration via environment variables or .env files:
+- Server settings (port, timeouts, TLS)
+- Storage modes (Badger embedded or Valkey distributed)
+- Provider endpoints and timeouts (6 providers configured)
+- Rate limiting with hot reload
+- Security settings (CORS, JWT, API keys)
+- Logging configuration
+
+### Next Tasks Ready to Implement
+Based on completed prerequisites:
+1. **P1-S2-2.1**: Storage Interface Definition (depends on config ✅)
+2. **P1-S3-3.1**: Model Connector Interface (depends on server ✅)
+
+These can be worked on in parallel by different agents.
 
 ## Document Reference
 
@@ -171,6 +243,45 @@ func TestComponentAction(t *testing.T) {
 }
 ```
 
+### Configuration Pattern
+```go
+// Struct tags for env vars
+type Config struct {
+    Field string `env:"FIELD,default=value"`
+}
+
+// Validation method
+func (c *Config) Validate() error {
+    // Return descriptive errors
+}
+```
+
+### Context Propagation
+```go
+// Always accept context as first parameter
+func DoSomething(ctx context.Context, args...) error {
+    // Pass context through the call chain
+}
+```
+
+### Table-Driven Tests
+```go
+tests := []struct {
+    name    string
+    input   string
+    want    string
+    wantErr bool
+}{
+    // Test cases
+}
+
+for _, tt := range tests {
+    t.Run(tt.name, func(t *testing.T) {
+        // Test implementation
+    })
+}
+```
+
 ## Commands to Remember
 
 ```bash
@@ -222,6 +333,28 @@ make lint # Lint code
 - Reference ARCHITECTURE.md for design decisions
 - Update TASKS.md blocked tasks table with specific blockers
 
+## Quick Reference for Next Tasks
+
+### For Storage Implementation (P1-S2-2.X)
+- Storage interface should support both Badger and Valkey
+- Use the existing config structs in `internal/config/config.go`
+- Follow the context propagation pattern for all methods
+- Include TTL support for rate limiting
+- See ARCHITECTURE.md Section 16 for storage details
+
+### For LLM Connector Implementation (P1-S3-3.X)
+- Connectors go in `internal/connectors/` package
+- Each provider gets its own file (openai.go, anthropic.go, etc.)
+- Use the provider configs from `internal/config/config.go`
+- Implement streaming support from the start
+- See ARCHITECTURE.md Section 8 for routing architecture
+
+### For Testing
+- Aim for 90% coverage on new code
+- Use table-driven tests for multiple scenarios
+- Mock external dependencies
+- Test files go alongside implementation files
+- Run `make test-coverage` to check coverage
 
 ## Questions?
 - Architecture questions → Check ARCHITECTURE.md
@@ -229,3 +362,4 @@ make lint # Lint code
 - Task details → Check TASKS.md
 - Implementation patterns → Check existing code or ask in PR
 - Execution order → Check OPERATOR-GUIDE.md
+- Current codebase status → Check this file's "Current Codebase Status" section

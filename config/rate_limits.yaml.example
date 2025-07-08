@@ -1,0 +1,137 @@
+# Rate Limit Configuration
+# This file can be hot-reloaded without restarting the server
+
+version: "1.0"
+
+# API Key specific rate limits
+# These override the default limits for specific keys
+rules:
+  # Example: Premium tier key
+  "sk-premium-example":
+    name: "Premium Tier"
+    requests_per_minute: 600
+    requests_per_hour: 10000
+    tokens_per_minute: 1000000
+    tokens_per_hour: 10000000
+    burst_multiplier: 3.0
+
+  # Example: Basic tier key
+  "sk-basic-example":
+    name: "Basic Tier"
+    requests_per_minute: 60
+    requests_per_hour: 1000
+    tokens_per_minute: 100000
+    tokens_per_hour: 1000000
+    burst_multiplier: 2.0
+
+  # Example: Trial tier key
+  "sk-trial-example":
+    name: "Trial Tier"
+    requests_per_minute: 20
+    requests_per_hour: 100
+    tokens_per_minute: 50000
+    tokens_per_hour: 100000
+    burst_multiplier: 1.5
+
+# Model-specific rate limits
+# Applied to all requests for these models (unless using BYOK)
+models:
+  "gpt-4":
+    name: "GPT-4 Limits"
+    requests_per_minute: 20
+    requests_per_hour: 500
+    tokens_per_minute: 40000
+    tokens_per_hour: 400000
+    burst_multiplier: 2.0
+
+  "gpt-3.5-turbo":
+    name: "GPT-3.5 Turbo Limits"
+    requests_per_minute: 60
+    requests_per_hour: 3600
+    tokens_per_minute: 90000
+    tokens_per_hour: 900000
+    burst_multiplier: 2.0
+
+  "claude-3-opus":
+    name: "Claude 3 Opus Limits"
+    requests_per_minute: 30
+    requests_per_hour: 600
+    tokens_per_minute: 100000
+    tokens_per_hour: 1000000
+    burst_multiplier: 2.0
+
+  "claude-3-sonnet":
+    name: "Claude 3 Sonnet Limits"
+    requests_per_minute: 50
+    requests_per_hour: 1000
+    tokens_per_minute: 150000
+    tokens_per_hour: 1500000
+    burst_multiplier: 2.0
+
+  # Gemini models
+  "gemini-2.0-flash":
+    name: "Gemini 2.0 Flash Limits"
+    requests_per_minute: 60
+    requests_per_hour: 2000
+    tokens_per_minute: 180000
+    tokens_per_hour: 2000000
+    burst_multiplier: 2.0
+
+  "gemini-1.5-pro":
+    name: "Gemini 1.5 Pro Limits"
+    requests_per_minute: 30
+    requests_per_hour: 600
+    tokens_per_minute: 100000
+    tokens_per_hour: 1000000
+    burst_multiplier: 2.0
+
+  # Groq models (very fast inference)
+  "llama-3.3-70b-versatile":
+    name: "Llama 3.3 70B Limits"
+    requests_per_minute: 100
+    requests_per_hour: 6000
+    tokens_per_minute: 300000
+    tokens_per_hour: 3000000
+    burst_multiplier: 3.0
+
+  "mixtral-8x7b-32768":
+    name: "Mixtral 8x7B Limits"
+    requests_per_minute: 120
+    requests_per_hour: 7200
+    tokens_per_minute: 400000
+    tokens_per_hour: 4000000
+    burst_multiplier: 3.0
+
+  # Mistral models
+  "mistral-large-latest":
+    name: "Mistral Large Limits"
+    requests_per_minute: 40
+    requests_per_hour: 800
+    tokens_per_minute: 120000
+    tokens_per_hour: 1200000
+    burst_multiplier: 2.0
+
+  "mistral-medium-latest":
+    name: "Mistral Medium Limits"
+    requests_per_minute: 60
+    requests_per_hour: 1200
+    tokens_per_minute: 180000
+    tokens_per_hour: 1800000
+    burst_multiplier: 2.0
+
+  # Azure OpenAI models
+  "gpt-4-azure":
+    name: "Azure GPT-4 Limits"
+    requests_per_minute: 20
+    requests_per_hour: 500
+    tokens_per_minute: 40000
+    tokens_per_hour: 400000
+    burst_multiplier: 2.0
+
+  "gpt-35-turbo-azure":
+    name: "Azure GPT-3.5 Turbo Limits"
+    requests_per_minute: 60
+    requests_per_hour: 3600
+    tokens_per_minute: 90000
+    tokens_per_hour: 900000
+    burst_multiplier: 2.0

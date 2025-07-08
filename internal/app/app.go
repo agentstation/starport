@@ -15,12 +15,17 @@ import (
 type Config struct {
 	// Server configuration
 	Server server.Config
+	// Storage mode (badger or valkey)
+	StorageMode string
+	// Log level
+	LogLevel string
 }
 
 // App represents the main application
 type App struct {
-	config     *Config
-	httpServer *server.Server
+	config      *Config
+	httpServer  *server.Server
+	hotReloader interface{ Stop() }
 }
 
 // Option is a functional option for App
@@ -30,6 +35,13 @@ type Option func(*App)
 func WithConfig(cfg *Config) Option {
 	return func(a *App) {
 		a.config = cfg
+	}
+}
+
+// WithHotReloader sets the hot reloader for dynamic config updates
+func WithHotReloader(hr interface{ Stop() }) Option {
+	return func(a *App) {
+		a.hotReloader = hr
 	}
 }
 
@@ -55,7 +67,11 @@ func New(opts ...Option) (*App, error) {
 
 // Run starts the application
 func (a *App) Run(ctx context.Context) error {
-	log.Info().Msg("starting Starport application")
+	log.Info().
+		Str("storage_mode", a.config.StorageMode).
+		Str("log_level", a.config.LogLevel).
+		Int("port", a.config.Server.Port).
+		Msg("starting Starport application")
 
 	// Create error channel for server errors
 	errChan := make(chan error, 1)
@@ -74,6 +90,11 @@ func (a *App) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		log.Info().Msg("shutting down Starport application")
+		
+		// Stop hot reloader if present
+		if a.hotReloader != nil {
+			a.hotReloader.Stop()
+		}
 		
 		// Shutdown HTTP server
 		if err := a.httpServer.Shutdown(context.Background()); err != nil {

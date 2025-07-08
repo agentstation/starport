@@ -30,7 +30,7 @@ func New(config *Config) *Server {
 	s.setupRoutes()
 
 	s.httpServer = &http.Server{
-		Addr:         fmt.Sprintf(":%d", config.Port),
+		Addr:         fmt.Sprintf("%s:%d", config.Host, config.Port),
 		Handler:      s.router,
 		ReadTimeout:  config.ReadTimeout,
 		WriteTimeout: config.WriteTimeout,

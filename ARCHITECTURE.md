@@ -34,6 +34,10 @@ graph TD
     Gateway --> Connector[Model Connectors]
     Connector --> OpenAI[OpenAI]
     Connector --> Anthropic[Anthropic]
+    Connector --> Gemini[Google Gemini/Vertex AI]
+    Connector --> Groq[Groq]
+    Connector --> Mistral[Mistral AI]
+    Connector --> Azure[Azure OpenAI]
     Connector --> Custom[Custom Providers]
     
     RESTAPI[REST Management API] --> Auth
@@ -876,6 +880,21 @@ providers:
     timeout: 30s
   anthropic:
     base_url: https://api.anthropic.com
+    timeout: 30s
+  gemini:
+    # For Vertex AI regional endpoint: https://{location}-aiplatform.googleapis.com
+    # For global endpoint: https://aiplatform.googleapis.com
+    base_url: https://us-central1-aiplatform.googleapis.com
+    timeout: 30s
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    timeout: 30s
+  mistral:
+    base_url: https://api.mistral.ai/v1
+    timeout: 30s
+  azure:
+    # Replace YOUR-RESOURCE-NAME with your Azure OpenAI resource name
+    base_url: https://YOUR-RESOURCE-NAME.openai.azure.com
     timeout: 30s
 
 rate_limiting:
@@ -1725,8 +1744,11 @@ func (h *Handler) extractHeaders(r *http.Request) RequestContext {
 routing:
   # Default provider order (by cost)
   default_order:
+    - groq          # Fastest inference
     - openai
     - anthropic
+    - gemini
+    - mistral
     - together
     - azure
   
@@ -1742,6 +1764,22 @@ routing:
       supports_vision: true
       max_tokens: 200000
       data_collection: deny
+    gemini:
+      supports_tools: true
+      supports_vision: true
+      max_tokens: 1048576  # 1M context window for Gemini 1.5
+      data_collection: allow
+    groq:
+      supports_tools: false
+      supports_vision: false
+      max_tokens: 32768
+      data_collection: deny
+      inference_speed: ultra_fast  # Special capability
+    mistral:
+      supports_tools: true
+      supports_vision: false
+      max_tokens: 32768
+      data_collection: allow
     together:
       supports_tools: false
       supports_vision: false

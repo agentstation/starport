@@ -6,7 +6,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
 
 ## Phase 1: Core Foundation
 
-**Deliverables**: Basic HTTP server with KV storage, API key auth, and proxy to OpenAI/Anthropic
+**Deliverables**: Basic HTTP server with KV storage, API key auth, and proxy to multiple LLM providers (OpenAI, Anthropic, Gemini, Groq, Mistral, Azure OpenAI)
 **Test Coverage Target**: 80% for core components
 **Documentation**: README, basic API docs, development setup guide
 
@@ -57,6 +57,10 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] Define `Connector` interface with context support
   - [ ] OpenAI connector with connection pooling
   - [ ] Anthropic connector with streaming
+  - [ ] Gemini/Vertex AI connector with regional endpoints
+  - [ ] Groq connector with ultra-fast inference
+  - [ ] Mistral connector with function calling
+  - [ ] Azure OpenAI connector with resource-specific URLs
   - [ ] Provider health check system
   - [ ] OpenRouter compatibility layer
 - [ ] Advanced routing implementation
@@ -415,7 +419,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [ ] Bounty program
 - [ ] Ecosystem development
   - [ ] Create `starport-connectors` repository
-  - [ ] Additional providers (Ollama, Cohere, etc.)
+  - [ ] Additional providers (Ollama, Cohere, Together AI, etc.)
   - [ ] Client SDKs (Python, JS, Java, Rust)
   - [ ] Integration templates
 - [ ] Continuous improvement
