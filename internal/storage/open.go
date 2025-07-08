@@ -14,9 +14,7 @@ func Open(config Config) (KVStore, error) {
 
 	switch config.Type {
 	case StorageTypeBadger:
-		// TODO: Implement in P1-S2-2.2
-		// return OpenBadger(config.Badger)
-		return nil, fmt.Errorf("badger store not yet implemented")
+		return OpenBadger(config.Badger)
 	case StorageTypeValkey:
 		// TODO: Implement when needed
 		// return OpenValkey(config.Valkey)
