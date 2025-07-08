@@ -420,11 +420,10 @@ routing:
 ### 8.4 Router Implementation
 
 ```go
-type Router interface {
+type ModelRouter interface {
     // OpenRouter compatible methods
-    SelectModel(ctx context.Context, req *ChatRequest) (string, error)
-    SelectProvider(ctx context.Context, model string, prefs *ProviderPreferences) (*Provider, error)
-    RecordMetrics(model string, provider *Provider, latency time.Duration, err error)
+    SelectModel(ctx context.Context, req *Request) (string, connectors.Connector, error)
+    RouteWithFallback(ctx context.Context, req *Request) (*Response, error)
 }
 
 type ProviderPreferences struct {
@@ -434,23 +433,58 @@ type ProviderPreferences struct {
     AllowFallbacks bool     `json:"allow_fallbacks,omitempty"`
 }
 
-type SmartRouter struct {
-    strategies []RoutingStrategy
-    metrics    *MetricsCollector
-    modelMap   map[string][]string  // model -> available providers
-    cache      *RoutingCache
+// All routing features are integrated into a single router
+type Router struct {
+    registry             connectors.Registry
+    providerHealth       map[string]*ProviderHealth
+    latencyTracker       LatencyTracker
+    costCalculator       CostCalculator
+    stickySessionManager StickySessionManager
+    config               Config
 }
 ```
 
 ### 8.5 Routing Features
-- **Model fallback chain** with configurable retry logic
-- **Provider selection** based on preferences and performance
-- **Auto-routing** for optimal model selection
-- **Latency tracking** with exponential moving averages
-- **Cost calculation** with real-time pricing updates
-- **Health scoring** based on success rates
-- **Parallel requests** for critical operations
-- **Sticky sessions** for conversation continuity
+
+**Core Features Implemented**:
+- **Provider Preferences**: Support for `order`, `only`, `ignore` parameters
+- **Health Tracking**: Circuit breaker pattern (3 failures = 30s circuit open)
+- **Latency-Based Routing**: EMA tracking with configurable alpha (0.2) and window (5)
+- **Cost Optimization**: Model pricing data with 2x max cost multiplier
+- **Sticky Sessions**: Conversation continuity with 30-minute TTL
+- **Model Fallback**: Automatic retry with exponential backoff
+
+**Fallback Triggers**:
+- Rate limit exceeded (429)
+- Model unavailable (404)
+- Context length exceeded (400 + "context_length_exceeded")
+- Content moderation (400 + "content_policy_violation")
+- Provider errors (5xx)
+- Timeout errors
+
+**Configuration**:
+```go
+type Config struct {
+    // Latency tracking
+    LatencyAlpha      float64       // EMA smoothing (default: 0.2)
+    LatencyWindowSize int           // Warmup samples (default: 5)
+    
+    // Cost optimization
+    EnableCostOptimization bool    // Default: true
+    MaxCostMultiplier      float64 // Default: 2.0
+    
+    // Latency constraints
+    MaxLatencyMultiplier float64   // Default: 2.0
+    
+    // Sticky sessions
+    EnableStickySessions bool      // Default: true
+    SessionTTL           time.Duration // Default: 30m
+    
+    // Circuit breaker
+    CircuitBreakerThreshold int    // Default: 3 failures
+    CircuitBreakerDuration  time.Duration // Default: 30s
+}
+```
 - **A/B testing** with traffic splitting
 
 ## 9. Rate Limiting Architecture
