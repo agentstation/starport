@@ -2,7 +2,6 @@ package connectors
 
 import (
 	"context"
-	"errors"
 	"io"
 	"sync"
 	"time"
@@ -138,7 +137,7 @@ func (m *MockConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatRespon
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return nil, errors.New("connector closed")
+		return nil, ErrConnectorClosed
 	}
 
 	if m.chatError != nil {
@@ -161,7 +160,7 @@ func (m *MockConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatS
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return nil, errors.New("connector closed")
+		return nil, ErrConnectorClosed
 	}
 
 	if m.streamError != nil {
@@ -181,7 +180,7 @@ func (m *MockConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) 
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return nil, errors.New("connector closed")
+		return nil, ErrConnectorClosed
 	}
 
 	if m.embeddingError != nil {
@@ -203,7 +202,7 @@ func (m *MockConnector) Models(ctx context.Context) (*ModelsResponse, error) {
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return nil, errors.New("connector closed")
+		return nil, ErrConnectorClosed
 	}
 
 	if m.modelsError != nil {
@@ -225,7 +224,7 @@ func (m *MockConnector) Health(ctx context.Context) error {
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return errors.New("connector closed")
+		return ErrConnectorClosed
 	}
 
 	if m.healthError != nil {

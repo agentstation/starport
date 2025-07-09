@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -56,7 +55,7 @@ func (m *MemoryPubSub) Subscribe(pattern string, handler func(channel, message s
 	defer m.mu.Unlock()
 
 	if m.closed {
-		return fmt.Errorf("pubsub client is closed")
+		return ErrPubSubClosed
 	}
 
 	m.subscribers[pattern] = append(m.subscribers[pattern], handler)
@@ -70,7 +69,7 @@ func (m *MemoryPubSub) Publish(_ context.Context, channel string, message string
 	defer m.mu.RUnlock()
 
 	if m.closed {
-		return fmt.Errorf("pubsub client is closed")
+		return ErrPubSubClosed
 	}
 
 	// Simple pattern matching
