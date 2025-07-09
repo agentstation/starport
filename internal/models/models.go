@@ -38,9 +38,29 @@ type BYOKCredential struct {
 	APIKeyID            string                 `json:"api_key_id"`
 	Provider            string                 `json:"provider"`
 	EncryptedCredential string                 `json:"encrypted_credential"`
-	Metadata            map[string]interface{} `json:"metadata,omitempty"`
+	Config              map[string]interface{} `json:"config,omitempty"`     // Provider-specific config (endpoints, versions, etc)
+	IsFallback          bool                   `json:"is_fallback"`          // Use as fallback when rate limited
+	Priority            int                    `json:"priority"`             // Order preference (lower = higher priority)
+	CreatedAt           time.Time              `json:"created_at"`
+	LastUsed            *time.Time             `json:"last_used,omitempty"`
+	UsageCount          int64                  `json:"usage_count"`
+	UpdatedAt           time.Time              `json:"updated_at"`
+}
+
+// DefaultKey represents a gateway-wide default provider key
+type DefaultKey struct {
+	Provider            string                 `json:"provider"`
+	EncryptedCredential string                 `json:"encrypted_credential"`
+	Config              map[string]interface{} `json:"config,omitempty"`
+	RateLimit           *RateLimitConfig       `json:"rate_limit,omitempty"`
 	CreatedAt           time.Time              `json:"created_at"`
 	UpdatedAt           time.Time              `json:"updated_at"`
+}
+
+// RateLimitConfig defines rate limiting for a default key
+type RateLimitConfig struct {
+	RequestsPerMinute int `json:"requests_per_minute"`
+	TokensPerMinute   int `json:"tokens_per_minute"`
 }
 
 // TokenBucket represents rate limit state using token bucket algorithm
@@ -167,7 +187,35 @@ func (c *BYOKCredential) Validate() error {
 	if c.EncryptedCredential == "" {
 		return ErrMissingCredential
 	}
+	if c.Priority < 0 {
+		return errors.New("invalid priority: must be non-negative")
+	}
 	if c.UpdatedAt.Before(c.CreatedAt) {
+		return errors.New("updated_at must be after or equal to created_at")
+	}
+	if c.LastUsed != nil && c.LastUsed.Before(c.CreatedAt) {
+		return errors.New("last_used must be after created_at")
+	}
+	return nil
+}
+
+// Validate validates the DefaultKey fields
+func (d *DefaultKey) Validate() error {
+	if d.Provider == "" {
+		return ErrInvalidProvider
+	}
+	if d.EncryptedCredential == "" {
+		return ErrMissingCredential
+	}
+	if d.RateLimit != nil {
+		if d.RateLimit.RequestsPerMinute < 0 {
+			return errors.New("invalid requests_per_minute: must be non-negative")
+		}
+		if d.RateLimit.TokensPerMinute < 0 {
+			return errors.New("invalid tokens_per_minute: must be non-negative")
+		}
+	}
+	if d.UpdatedAt.Before(d.CreatedAt) {
 		return errors.New("updated_at must be after or equal to created_at")
 	}
 	return nil
