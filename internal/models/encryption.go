@@ -36,8 +36,11 @@ func NewEncryptionService(masterKey []byte) (*EncryptionService, error) {
 	if len(masterKey) < 32 {
 		return nil, errors.New("master key must be at least 32 bytes")
 	}
+	// Make a copy of the key to ensure immutability
+	keyCopy := make([]byte, len(masterKey))
+	copy(keyCopy, masterKey)
 	return &EncryptionService{
-		masterKey: masterKey,
+		masterKey: keyCopy,
 	}, nil
 }
 

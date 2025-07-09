@@ -10,6 +10,7 @@ const (
 	PrefixAPIKey      = "apikey"
 	PrefixPreset      = "preset"
 	PrefixCredential  = "credential"
+	PrefixDefaultKey  = "default_key"
 	PrefixRateLimit   = "ratelimit"
 	PrefixFilter      = "filter"
 )
@@ -102,4 +103,14 @@ func ExtractBYOKCredentialParts(key string) (apiKeyID, provider string, err erro
 		return "", "", fmt.Errorf("invalid BYOK credential storage key format: %s", key)
 	}
 	return parts[1], parts[2], nil
+}
+
+// DefaultKeyStorageKey generates the storage key for a default provider key
+func DefaultKeyStorageKey(provider string) string {
+	return fmt.Sprintf("%s:%s", PrefixDefaultKey, provider)
+}
+
+// IsDefaultKeyStorageKey checks if a key is a default key storage key
+func IsDefaultKeyStorageKey(key string) bool {
+	return strings.HasPrefix(key, PrefixDefaultKey+":")
 }

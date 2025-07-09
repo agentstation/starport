@@ -149,6 +149,18 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Backward compatibility maintained (legacy "gemini" maps to "google-aistudio")
 - 85%+ test coverage
 
+**✅ BYOK Implementation (P1-S4-4.1)**
+- OpenRouter-compatible BYOK with 5% pricing model
+- AES-256-GCM encryption with Argon2id key derivation
+- Zero-knowledge security design with per-API-key credential isolation
+- Three fallback strategies: Gateway First, BYOK First, BYOK Only
+- Provider-specific credential validation for all supported providers
+- BYOK manager with priority-based credential ordering
+- REST API endpoints for credential management
+- Usage tracking and cost calculation
+- Response headers (X-Key-Type, X-BYOK-Cost)
+- 75%+ test coverage with security-focused tests
+
 ### Project Structure
 ```
 starport/
@@ -158,6 +170,7 @@ starport/
 │   └── run.go           # Application setup & CLI
 ├── internal/            # Private application code
 │   ├── app/            # Application lifecycle
+│   ├── byok/           # BYOK credential management ✅
 │   ├── config/         # Configuration system ✅
 │   ├── connectors/     # LLM provider interfaces ✅
 │   ├── models/         # Data models ✅
@@ -443,6 +456,17 @@ func NewMockStore() *MockStore {
   - Thread-safe global caches need proper mutex protection
   - Consider making cache TTL configurable for different deployment scenarios
   - Separate connectors allow for provider-specific features (e.g., Vertex AI's Model Garden)
+- **Lessons from P1-S4-4.1 (BYOK Implementation):**
+  - Make defensive copies of sensitive data (e.g., master keys) to ensure immutability
+  - Use `defer func() { _ = resp.Body.Close() }()` to satisfy errcheck linter for deferred closes
+  - Mark unused parameters with `_` when they're reserved for future use or interface compliance
+  - Add package comments to explain partial implementations that will be integrated later
+  - Implement zero-knowledge security by encrypting credentials at rest with per-API-key isolation
+  - Use context.WithValue for optional behavior flags (e.g., "skip_validation" for testing)
+  - Provider-specific validation should check both format and optionally verify with API calls
+  - Table-driven tests can achieve high coverage (75%+) even for security-sensitive code
+  - Create separate test files for different aspects (manager_test.go, validation_test.go, security_test.go)
+  - Use nolint comments sparingly and with explanations for intentionally unused code
 
 ## Commands to Remember
 
