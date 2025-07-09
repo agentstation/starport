@@ -467,6 +467,17 @@ func NewMockStore() *MockStore {
   - Table-driven tests can achieve high coverage (75%+) even for security-sensitive code
   - Create separate test files for different aspects (manager_test.go, validation_test.go, security_test.go)
   - Use nolint comments sparingly and with explanations for intentionally unused code
+- **Lessons from P1-S4-4.2b (Valkey Storage Implementation):**
+  - Import cycles can occur when packages have circular dependencies - move shared interfaces to the lower-level package
+  - valkey-go API differs from standard Redis clients - always check the actual API documentation
+  - Use client.Receive() for pub/sub subscriptions, not dedicated clients
+  - MSET in valkey-go uses builder pattern: client.B().Mset().KeyValue(k1, v1).KeyValue(k2, v2).Build()
+  - ClientOption fields are specific - not all standard Redis options exist (e.g., no MinIdleConns)
+  - For batch operations without MSET support, use auto-pipelining with parallel Do() calls
+  - PubSubMessage may not have all expected fields - check actual struct definition
+  - Integration tests should use TEST_VALKEY_URL environment variable to skip when no instance available
+  - Move PubSub interfaces to storage package to avoid circular dependencies with cache package
+  - Use context.WithCancel for managing pub/sub subscription lifecycles
 
 ## Commands to Remember
 

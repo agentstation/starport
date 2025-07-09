@@ -1315,7 +1315,26 @@ Starport uses a unified KV store for all data (API keys, presets, BYOK credentia
   - High availability with replication
   - Shared rate limits across instances
   - 50K+ RPS with cluster
+  - Pub/Sub for cache invalidation
+  - Automatic failover with Sentinel
 - **Requirements**: External Valkey instance
+- **Features**:
+  - Full Redis protocol compatibility
+  - Pipeline support for batch operations
+  - Transaction support (MULTI/EXEC)
+  - Lua scripting for atomic operations
+  - Pattern-based pub/sub subscriptions
+- **Configuration**:
+  ```yaml
+  storage:
+    type: valkey
+    valkey:
+      url: redis://localhost:6379
+      password: ""
+      db: 0
+      max_retries: 3
+      cluster_mode: false
+  ```
 
 ### 14.2 Enterprise Storage Requirements
 
@@ -1336,32 +1355,62 @@ Enterprise deployments require BOTH:
   - SSO sessions and tokens
 - **NOT used for**: API keys, rate limits, or any OSS features
 
-### 13.3 Storage Interface
+### 16.3 Storage Interface
 
 ```go
 type KVStore interface {
-    // Key-Value operations
-    Set(ctx context.Context, key string, value []byte) error
+    // Basic operations
     Get(ctx context.Context, key string) ([]byte, error)
+    Set(ctx context.Context, key string, value []byte) error
     Delete(ctx context.Context, key string) error
+    Exists(ctx context.Context, key string) (bool, error)
     
-    // TTL operations for rate limiting
+    // TTL operations
     SetWithTTL(ctx context.Context, key string, value []byte, ttl time.Duration) error
+    GetTTL(ctx context.Context, key string) (time.Duration, error)
+    ExpireAt(ctx context.Context, key string, expireAt time.Time) error
     
     // Atomic operations
     Increment(ctx context.Context, key string, delta int64) (int64, error)
+    Decrement(ctx context.Context, key string, delta int64) (int64, error)
+    CompareAndSwap(ctx context.Context, key string, old, new []byte) error
     
-    // Health check
+    // Batch operations
+    BatchGet(ctx context.Context, keys []string) (map[string][]byte, error)
+    BatchSet(ctx context.Context, items map[string][]byte) error
+    BatchDelete(ctx context.Context, keys []string) error
+    BatchSetWithTTL(ctx context.Context, items map[string][]byte, ttl time.Duration) error
+    
+    // Transaction support
+    BeginTransaction(ctx context.Context) (Transaction, error)
+    
+    // Scan operations
+    Scan(ctx context.Context, pattern string, limit int) ([]string, error)
+    ScanWithPrefix(ctx context.Context, prefix string, limit int) ([]string, error)
+    
+    // Health and lifecycle
     Ping(ctx context.Context) error
+    Close() error
 }
 
-// Factory pattern for storage backends
-func NewKVStore(config Config) (KVStore, error) {
-    switch config.StorageMode {
+// PubSub support for cache invalidation
+type PubSubProvider interface {
+    GetPubSub() PubSubClient
+}
+
+type PubSubClient interface {
+    Subscribe(pattern string, handler func(channel, message string)) error
+    Publish(ctx context.Context, channel string, message string) error
+    Close() error
+}
+
+// Storage factory using Open pattern (Go convention)
+func Open(config Config) (KVStore, error) {
+    switch config.Type {
     case "valkey":
-        return NewValkeyStore(config.ValkeyURL)
+        return OpenValkey(config.Valkey)
     default: // badger is default
-        return NewBadgerStore(config.BadgerPath)
+        return OpenBadger(config.Badger)
     }
 }
 
@@ -1386,6 +1435,68 @@ func (s *Storage) GetAPIKey(ctx context.Context, hash string) (*APIKey, error) {
 }
 ```
 
+### 16.4 Valkey Implementation Details
+
+The Valkey storage backend provides enterprise-grade distributed storage:
+
+#### Connection Management
+```go
+type ValkeyConfig struct {
+    URL           string        `env:"URL,default=redis://localhost:6379"`
+    MaxRetries    int           `env:"MAX_RETRIES,default=3"`
+    MinIdleConns  int           `env:"MIN_IDLE_CONNS,default=10"`
+    MaxConnAge    time.Duration `env:"MAX_CONN_AGE,default=0"`
+    PoolTimeout   time.Duration `env:"POOL_TIMEOUT,default=4s"`
+    ReadTimeout   time.Duration `env:"READ_TIMEOUT,default=3s"`
+    WriteTimeout  time.Duration `env:"WRITE_TIMEOUT,default=3s"`
+    Password      string        `env:"PASSWORD"`
+    DB            int           `env:"DB,default=0"`
+    ClusterMode   bool          `env:"CLUSTER_MODE,default=false"`
+}
+```
+
+#### Key Features
+
+1. **Atomic Operations**
+   - Uses Lua scripts for compare-and-swap
+   - Native INCR/DECR for counters
+   - Pipeline support for batch operations
+
+2. **Transaction Support**
+   - MULTI/EXEC for atomic updates
+   - Optimistic locking with WATCH
+   - Rollback capability
+
+3. **Pub/Sub Integration**
+   - Pattern-based subscriptions
+   - Automatic reconnection
+   - Used for cache invalidation
+
+4. **Performance Optimizations**
+   - Connection pooling with configurable limits
+   - Auto-pipelining for concurrent operations
+   - Lazy connection establishment
+
+#### Example Usage
+```go
+// Initialize Valkey storage
+store, err := storage.Open(storage.Config{
+    Type: "valkey",
+    Valkey: storage.ValkeyConfig{
+        URL: "redis://localhost:6379",
+        ClusterMode: false,
+    },
+})
+
+// Use pub/sub for cache invalidation
+if provider, ok := store.(storage.PubSubProvider); ok {
+    pubsub := provider.GetPubSub()
+    pubsub.Subscribe("cache:invalidate:*", func(channel, message string) {
+        // Handle cache invalidation
+    })
+}
+```
+
 ## 17. Performance Architecture
 
 ### 17.1 Optimization Strategies
@@ -1396,36 +1507,93 @@ func (s *Storage) GetAPIKey(ctx context.Context, hash string) (*APIKey, error) {
 - **Caching** at multiple levels (local and distributed)
 
 ### 17.2 Caching Architecture
+
+Starport uses a sophisticated data-type-specific caching strategy optimized for LLM gateway workloads:
+
+#### Cache Strategy by Data Type
+
+| Data Type | Single-Node (Badger) | Multi-Node (Valkey) | Invalidation |
+|-----------|---------------------|---------------------|--------------|
+| API Keys | Local + Badger | Local + Valkey + Pub/Sub | On update/disable |
+| Rate Limits | Badger only | Valkey only | Not needed (TTL) |
+| LLM Responses | Local + Badger | Valkey only | Not needed (immutable) |
+| Model Metadata | Local only | Local + Pub/Sub | On model update |
+| Presets | Local + Badger | Local + Valkey + Pub/Sub | On update/delete |
+
+#### Implementation
+
 ```go
-// Unified caching using the same KV store
-type Cache struct {
-    local *ristretto.Cache  // In-process hot cache (microseconds)
-    kv    KVStore          // Same Badger/Valkey used for storage
-}
-
-// Cache patterns for different data types
-func (c *Cache) GetAPIKey(ctx context.Context, hash string) (*APIKey, error) {
-    // Check local cache first
-    if val, found := c.local.Get(hash); found {
-        return val.(*APIKey), nil
-    }
+// CacheManager manages different cache strategies for different data types
+type CacheManager struct {
+    // API Keys: Local + Distributed with pub/sub invalidation
+    apiKeys      *HybridCache
     
-    // Fall back to KV store
-    key, err := c.kv.Get(ctx, "apikey:"+hash)
-    if err == nil {
-        c.local.Set(hash, key, 1)
-    }
-    return key, err
+    // Rate Limits: Distributed only (needs consistency)
+    rateLimits   *DistributedCache
+    
+    // LLM Responses: Distributed only for multi-node
+    responses    Cache
+    
+    // Model Metadata: Local only with long TTL
+    models       *LocalCache
+    
+    // Presets: Local + Distributed with pub/sub invalidation
+    presets      *HybridCache
+    
+    storage      storage.KVStore
+    pubsub       PubSubClient
 }
 
-// Rate limiting uses TTL directly in KV store
-func (c *Cache) CheckRateLimit(ctx context.Context, key string) (bool, error) {
-    // Use atomic increment with TTL
-    count, err := c.kv.Increment(ctx, "ratelimit:"+key, 1)
-    if err != nil {
-        return false, err
+// HybridCache implements two-layer caching with invalidation
+type HybridCache struct {
+    local        *ristretto.Cache    // Hot tier (microseconds)
+    distributed  storage.KVStore     // Cold tier (milliseconds)
+    pubsub       PubSubClient       // For invalidation
+    localTTL     time.Duration      // Shorter TTL for local
+}
+```
+
+#### Cache Coherence with Pub/Sub
+
+When deployed with Valkey, Starport automatically enables pub/sub based cache invalidation:
+
+```go
+// API key disabled on Node A
+func (cm *CacheManager) DisableAPIKey(ctx context.Context, hash string) error {
+    // 1. Update in distributed store
+    apiKey.Active = false
+    cm.SetAPIKey(ctx, hash, apiKey)
+    
+    // 2. Delete from cache (triggers invalidation)
+    cm.apiKeys.Delete(ctx, hash)
+    // This publishes to "cache:inv:apikey:{hash}"
+    
+    // 3. All nodes receive invalidation and clear local cache
+}
+
+// Invalidation channels
+const (
+    ChannelAPIKeyInvalidate = "cache:inv:apikey:"
+    ChannelPresetInvalidate = "cache:inv:preset:"
+    ChannelModelInvalidate  = "cache:inv:model:"
+)
+```
+
+#### Deployment Mode Detection
+
+The cache manager automatically detects the deployment mode and adjusts strategies:
+
+```go
+func NewCacheManager(config Config, store storage.KVStore) (*CacheManager, error) {
+    // Detect pub/sub capability
+    if provider, ok := store.(PubSubProvider); ok {
+        cm.pubsub = provider.GetPubSub()
+        // Multi-node mode: Use distributed cache for responses
+        cm.responses = NewDistributedCache(store, "response:")
+    } else {
+        // Single-node mode: Use hybrid cache for better performance
+        cm.responses = NewHybridCache(config, store, nil)
     }
-    return count <= limit, nil
 }
 ```
 

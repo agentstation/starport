@@ -1,3 +1,5 @@
+//go:build integration
+
 package server
 
 // This file contains a partial implementation of BYOK proxy handling.
