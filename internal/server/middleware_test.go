@@ -13,6 +13,7 @@ func TestMiddlewareChain(t *testing.T) {
 	config := &Config{
 		Port:           8080,
 		RequestTimeout: 60 * time.Second,
+		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 		CORS: CORSConfig{
 			AllowedOrigins: []string{"*"},
 			AllowedMethods: []string{"GET", "POST"},
@@ -41,6 +42,7 @@ func TestPanicRecovery(t *testing.T) {
 	config := &Config{
 		Port:           8080,
 		RequestTimeout: 5 * time.Second, // Longer timeout to allow panic recovery
+		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
 	server := newTestServer(config)
 
@@ -62,7 +64,10 @@ func TestPanicRecovery(t *testing.T) {
 }
 
 func TestRequestIDMiddleware(t *testing.T) {
-	config := &Config{Port: 8080}
+	config := &Config{
+		Port:           8080,
+		MaxRequestSize: 10 * 1024 * 1024, // 10MB
+	}
 	server := newTestServer(config)
 
 	// Create a test endpoint that returns the request ID
@@ -87,7 +92,10 @@ func TestRequestIDMiddleware(t *testing.T) {
 }
 
 func TestCompressionMiddleware(t *testing.T) {
-	config := &Config{Port: 8080}
+	config := &Config{
+		Port:           8080,
+		MaxRequestSize: 10 * 1024 * 1024, // 10MB
+	}
 	server := newTestServer(config)
 
 	// Add a route that returns compressible content
