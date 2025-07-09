@@ -177,7 +177,8 @@ func (a *App) initializeConnectors() error {
 
 	// Google AI Studio (formerly Gemini)
 	if a.providersConfig.GoogleAIStudio.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.GoogleAIStudio, "GOOGLE_API_KEY")
+		// Support both GOOGLE_API_KEY (primary) and GEMINI_API_KEY (fallback)
+		cfg := convertToConnectorConfigWithFallback(a.providersConfig.GoogleAIStudio, "GOOGLE_API_KEY", "GEMINI_API_KEY")
 		connector, err := connectors.NewGoogleAIStudioConnector(cfg)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to initialize Google AI Studio connector")
@@ -188,7 +189,8 @@ func (a *App) initializeConnectors() error {
 		}
 	} else if a.providersConfig.Gemini.BaseURL != "" {
 		// Fallback to legacy Gemini config
-		cfg := convertToConnectorConfig(a.providersConfig.Gemini, "GOOGLE_API_KEY")
+		// Support both GOOGLE_API_KEY (primary) and GEMINI_API_KEY (fallback)
+		cfg := convertToConnectorConfigWithFallback(a.providersConfig.Gemini, "GOOGLE_API_KEY", "GEMINI_API_KEY")
 		connector, err := connectors.NewGoogleAIStudioConnector(cfg)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to initialize Google AI Studio connector (legacy)")
@@ -288,5 +290,23 @@ func convertToConnectorConfig(cfg config.ProviderConfig, apiKeyEnvVar string) co
 		RetryDelay:        cfg.RetryDelay,
 		BackoffMultiplier: cfg.BackoffMultiplier,
 		APIKey:            os.Getenv(apiKeyEnvVar),
+	}
+}
+
+// convertToConnectorConfigWithFallback converts config with multiple env var options
+func convertToConnectorConfigWithFallback(cfg config.ProviderConfig, primaryEnvVar, fallbackEnvVar string) connectors.ProviderConfig {
+	apiKey := os.Getenv(primaryEnvVar)
+	if apiKey == "" && fallbackEnvVar != "" {
+		apiKey = os.Getenv(fallbackEnvVar)
+	}
+	
+	return connectors.ProviderConfig{
+		BaseURL:           cfg.BaseURL,
+		Timeout:           cfg.Timeout,
+		MaxConnections:    cfg.MaxConnections,
+		MaxRetries:        cfg.MaxRetries,
+		RetryDelay:        cfg.RetryDelay,
+		BackoffMultiplier: cfg.BackoffMultiplier,
+		APIKey:            apiKey,
 	}
 }

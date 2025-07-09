@@ -1,7 +1,7 @@
 # Starport Architecture
 
 **Summary**  
-Starport is a high-performance, open-source LLM gateway built in Go that provides unified access to multiple model providers with sub-millisecond latency overhead. The OSS version requires **zero external dependencies** - using embedded Badger KV store by default for all data (API keys, rate limits, presets, BYOK credentials). For multi-node deployments, it supports Valkey as a distributed KV store. PostgreSQL is used **only in the enterprise version** for relational data like users, organizations, and audit logs. The gateway includes advanced routing strategies, comprehensive caching, rate limiting, BYOK support, and preset management. The core is fully open source (MIT), while enterprise features (SSO, advanced filtering, analytics) are available through a separate commercial package via a plugin architecture.
+Starport is a high-performance, open-source LLM gateway built in Go that provides unified access to multiple model providers with sub-millisecond latency overhead. The OSS version requires **zero external dependencies** - using embedded Badger KV store by default for all data (API keys, rate limits, presets, BYOK credentials). For multi-node deployments, it supports Valkey as a distributed KV store. PostgreSQL is used **only in the enterprise version** for relational data like users, organizations, and audit logs. The gateway includes advanced routing strategies, comprehensive caching, rate limiting, BYOK support, and preset management. The core is fully open source (GNU AGPLv3), while enterprise features (SSO, advanced filtering, analytics) are available through a separate commercial package via a plugin architecture.
 
 ## 1. Quick Start
 
@@ -2116,8 +2116,8 @@ info:
     name: Starport Support
     email: support@starport.dev
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
+    name: GNU AGPLv3
+    url: https://www.gnu.org/licenses/agpl-3.0.html
 
 servers:
   - url: https://api.starport.dev

@@ -319,7 +319,7 @@ When your task blocks others:
 - Multi-tier caching architecture
 
 ### OSS/Enterprise Separation
-- Core is fully open source (MIT)
+- Core is fully open source (GNU AGPLv3)
 - Enterprise features in separate private repository
 - Plugin architecture for clean separation
 - Build tags for conditional compilation

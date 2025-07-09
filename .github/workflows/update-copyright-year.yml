@@ -1,0 +1,61 @@
+name: Update Copyright Year
+
+on:
+  schedule:
+    # Run at 00:05 UTC on January 1st
+    - cron: '5 0 1 1 *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-copyright:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Get current year
+      id: year
+      run: echo "YEAR=$(date +%Y)" >> $GITHUB_OUTPUT
+    
+    - name: Update copyright year in LICENSE
+      run: |
+        # Update the copyright year in the LICENSE file
+        sed -i "s/Copyright (C) [0-9]\{4\} AgentStation/Copyright (C) ${{ steps.year.outputs.YEAR }} AgentStation/g" LICENSE
+    
+    - name: Check if changes were made
+      id: changes
+      run: |
+        if git diff --quiet; then
+          echo "NO_CHANGES=true" >> $GITHUB_OUTPUT
+        else
+          echo "NO_CHANGES=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create Pull Request
+      if: steps.changes.outputs.NO_CHANGES == 'false'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'chore: update copyright year to ${{ steps.year.outputs.YEAR }}'
+        title: 'chore: update copyright year to ${{ steps.year.outputs.YEAR }}'
+        body: |
+          ## Automated Copyright Year Update
+          
+          This PR automatically updates the copyright year in the LICENSE file to ${{ steps.year.outputs.YEAR }}.
+          
+          ### Changes
+          - Updated copyright year from previous year to ${{ steps.year.outputs.YEAR }}
+          
+          ### Note
+          This is an automated PR created by the `update-copyright-year` workflow.
+        branch: update-copyright-${{ steps.year.outputs.YEAR }}
+        delete-branch: true
+        labels: |
+          documentation
+          automated
