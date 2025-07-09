@@ -85,6 +85,12 @@ func (s *Server) setupMiddleware() {
 	// Recoverer middleware to recover from panics
 	s.router.Use(middleware.Recoverer)
 	
+	// Security headers middleware
+	s.router.Use(SecurityHeaders)
+	
+	// Request size limiter
+	s.router.Use(RequestSizeLimiter(s.config.MaxRequestSize))
+	
 	// Timeout middleware with configurable timeout
 	s.router.Use(middleware.Timeout(s.config.RequestTimeout))
 	

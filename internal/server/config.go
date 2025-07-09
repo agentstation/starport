@@ -24,6 +24,9 @@ type Config struct {
 	// Shutdown timeout
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT,default=30s"`
 	
+	// Maximum request body size (default: 10MB)
+	MaxRequestSize int64 `env:"MAX_REQUEST_SIZE,default=10485760"`
+	
 	// CORS configuration
 	CORS CORSConfig
 }
