@@ -125,6 +125,11 @@ func (a *App) Run(ctx context.Context) error {
 		// Wait for goroutines to finish
 		wg.Wait()
 
+		// Close all connectors
+		if err := a.connectorRegistry.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close connectors")
+		}
+
 		return nil
 
 	case err := <-errChan:
