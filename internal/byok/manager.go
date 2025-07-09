@@ -456,7 +456,7 @@ func (m *manager) DeleteDefaultKey(ctx context.Context, provider string) error {
 
 // ListDefaultKeys lists all default keys
 func (m *manager) ListDefaultKeys(ctx context.Context) ([]*Credential, error) {
-	prefix := "default_key:"
+	prefix := storage.KeyPrefixDefaultKey
 	keys, err := m.store.ScanWithPrefix(ctx, prefix, 1000)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list default keys: %w", err)
@@ -514,7 +514,7 @@ func (m *manager) CalculateBYOKCost(usage *Usage) float64 {
 }
 
 // RecordUsage records usage of a BYOK credential
-func (m *manager) RecordUsage(ctx context.Context, apiKeyID string, provider string, usage *Usage) error {
+func (m *manager) RecordUsage(ctx context.Context, apiKeyID string, provider string, _ *Usage) error {
 	// Get the credential
 	key := storage.CredentialKey(apiKeyID, provider)
 	data, err := m.store.Get(ctx, key)

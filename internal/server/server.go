@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
+
+	"github.com/agentstation/starport/internal/cache"
 )
 
 // Server represents the HTTP server
@@ -18,19 +20,43 @@ type Server struct {
 	config            *Config
 	httpServer        *http.Server
 	connectorRegistry *ConnectorRegistry
-	proxyHandler      *ProxyHandler
+	proxyHandler      ProxyHandlerInterface
+}
+
+// Option configures server options
+type Option func(*Server)
+
+// WithCache enables caching with the provided cache instance
+func WithCache(c cache.Cache, config CacheConfig) Option {
+	return func(s *Server) {
+		baseHandler := NewProxyHandler(s.connectorRegistry)
+		s.proxyHandler = NewCachedProxyHandler(baseHandler, c, config)
+	}
+}
+
+// WithCacheManager enables caching with the new cache Manager
+func WithCacheManager(cm *cache.Manager, config CacheConfig) Option {
+	return func(s *Server) {
+		baseHandler := NewProxyHandler(s.connectorRegistry)
+		s.proxyHandler = NewCachedProxyHandlerV2(baseHandler, cm, config)
+	}
 }
 
 // New creates a new Server instance
-func New(config *Config, registry *ConnectorRegistry) *Server {
+func New(config *Config, registry *ConnectorRegistry, opts ...Option) *Server {
 	s := &Server{
 		router:            chi.NewRouter(),
 		config:            config,
 		connectorRegistry: registry,
 	}
 
-	// Initialize proxy handler
+	// Initialize default proxy handler
 	s.proxyHandler = NewProxyHandler(registry)
+
+	// Apply options
+	for _, opt := range opts {
+		opt(s)
+	}
 
 	s.setupMiddleware()
 	s.setupRoutes()

@@ -32,8 +32,8 @@ func TestOpen(t *testing.T) {
 					URL: "redis://localhost:6379",
 				},
 			},
-			wantErr: true, // Not implemented yet
-			errMsg:  "valkey store not yet implemented",
+			wantErr: true, // Connection will fail in test environment
+			errMsg:  "failed to create valkey client",
 		},
 		{
 			name: "invalid storage type",

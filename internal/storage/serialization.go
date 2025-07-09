@@ -66,12 +66,3 @@ func DeserializeModel(data []byte, v interface{}) error {
 	return Deserialize(data, v)
 }
 
-// CredentialKey returns the storage key for a BYOK credential
-func CredentialKey(apiKeyID, provider string) string {
-	return fmt.Sprintf("credential:%s:%s", apiKeyID, provider)
-}
-
-// DefaultKeyKey returns the storage key for a default provider key
-func DefaultKeyKey(provider string) string {
-	return fmt.Sprintf("default_key:%s", provider)
-}
