@@ -4,13 +4,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 func TestMiddlewareChain(t *testing.T) {
 	config := &Config{
-		Port: 8080,
+		Port:           8080,
+		RequestTimeout: 60 * time.Second,
 		CORS: CORSConfig{
 			AllowedOrigins: []string{"*"},
 			AllowedMethods: []string{"GET", "POST"},
@@ -36,7 +38,10 @@ func TestMiddlewareChain(t *testing.T) {
 }
 
 func TestPanicRecovery(t *testing.T) {
-	config := &Config{Port: 8080}
+	config := &Config{
+		Port:           8080,
+		RequestTimeout: 5 * time.Second, // Longer timeout to allow panic recovery
+	}
 	server := newTestServer(config)
 
 	// Add a route that panics

@@ -117,8 +117,12 @@ func (a *App) Run(ctx context.Context) error {
 			a.hotReloader.Stop()
 		}
 
+		// Create shutdown context with timeout
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
 		// Shutdown HTTP server
-		if err := a.httpServer.Shutdown(context.Background()); err != nil {
+		if err := a.httpServer.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 		}
 
