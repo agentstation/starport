@@ -248,25 +248,25 @@ func (h *ProxyHandler) getAllModels(ctx context.Context) []connectors.Model {
 func (h *ProxyHandler) validateChatRequest(req *connectors.ChatRequest) error {
 	// Either model or models array is required
 	if req.Model == "" && len(req.Models) == 0 {
-		return errors.New("model or models array is required")
+		return ErrModelRequired
 	}
 	if len(req.Messages) == 0 {
-		return errors.New("messages are required")
+		return ErrMessagesRequired
 	}
 	
 	// Validate temperature
 	if req.Temperature != nil && (*req.Temperature < 0 || *req.Temperature > 2) {
-		return errors.New("temperature must be between 0 and 2")
+		return ErrInvalidTemperature
 	}
 	
 	// Validate top_p
 	if req.TopP != nil && (*req.TopP < 0 || *req.TopP > 1) {
-		return errors.New("top_p must be between 0 and 1")
+		return ErrInvalidTopP
 	}
 	
 	// Validate max_tokens
 	if req.MaxTokens != nil && *req.MaxTokens < 1 {
-		return errors.New("max_tokens must be at least 1")
+		return ErrInvalidMaxTokens
 	}
 	
 	return nil
@@ -275,15 +275,15 @@ func (h *ProxyHandler) validateChatRequest(req *connectors.ChatRequest) error {
 // validateEmbeddingsRequest validates an embeddings request
 func (h *ProxyHandler) validateEmbeddingsRequest(req *connectors.EmbeddingsRequest) error {
 	if req.Model == "" {
-		return errors.New("model is required")
+		return ErrEmbeddingsModelRequired
 	}
 	if req.Input == nil {
-		return errors.New("input is required")
+		return ErrInputRequired
 	}
 	
 	// Validate encoding format
 	if req.EncodingFormat != "" && req.EncodingFormat != "float" && req.EncodingFormat != "base64" {
-		return errors.New("encoding_format must be 'float' or 'base64'")
+		return ErrInvalidEncodingFormat
 	}
 	
 	return nil

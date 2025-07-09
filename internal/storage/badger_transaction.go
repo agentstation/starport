@@ -26,7 +26,7 @@ func (t *BadgerTransaction) Get(key string) ([]byte, error) {
 	defer t.mu.Unlock()
 
 	if t.closed {
-		return nil, errors.New("transaction is closed")
+		return nil, ErrTransactionClosed
 	}
 
 	if key == "" {
@@ -55,7 +55,7 @@ func (t *BadgerTransaction) Set(key string, value []byte) error {
 	defer t.mu.Unlock()
 
 	if t.closed {
-		return errors.New("transaction is closed")
+		return ErrTransactionClosed
 	}
 
 	if key == "" {
@@ -71,7 +71,7 @@ func (t *BadgerTransaction) Delete(key string) error {
 	defer t.mu.Unlock()
 
 	if t.closed {
-		return errors.New("transaction is closed")
+		return ErrTransactionClosed
 	}
 
 	if key == "" {
@@ -87,7 +87,7 @@ func (t *BadgerTransaction) SetWithTTL(key string, value []byte, ttl time.Durati
 	defer t.mu.Unlock()
 
 	if t.closed {
-		return errors.New("transaction is closed")
+		return ErrTransactionClosed
 	}
 
 	if key == "" {
@@ -104,7 +104,7 @@ func (t *BadgerTransaction) Increment(key string, delta int64) (int64, error) {
 	defer t.mu.Unlock()
 
 	if t.closed {
-		return 0, errors.New("transaction is closed")
+		return 0, ErrTransactionClosed
 	}
 
 	if key == "" {
@@ -157,7 +157,7 @@ func (t *BadgerTransaction) CompareAndSwap(key string, old, newValue []byte) err
 	defer t.mu.Unlock()
 
 	if t.closed {
-		return errors.New("transaction is closed")
+		return ErrTransactionClosed
 	}
 
 	if key == "" {
@@ -209,7 +209,7 @@ func (t *BadgerTransaction) Commit(_ context.Context) error {
 	defer t.mu.Unlock()
 
 	if t.closed {
-		return errors.New("transaction is closed")
+		return ErrTransactionClosed
 	}
 
 	err := t.txn.Commit()

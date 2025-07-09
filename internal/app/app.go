@@ -92,7 +92,7 @@ func (a *App) Run(ctx context.Context) error {
 		Str("storage_mode", a.config.StorageMode).
 		Str("log_level", a.config.LogLevel).
 		Int("port", a.config.Server.Port).
-		Msg("starting Starport application")
+		Msg("starting starport application")
 
 	// Create error channel for server errors
 	errChan := make(chan error, 1)
@@ -111,22 +111,22 @@ func (a *App) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		log.Info().Msg("shutting down Starport application")
-		
+
 		// Stop hot reloader if present
 		if a.hotReloader != nil {
 			a.hotReloader.Stop()
 		}
-		
+
 		// Shutdown HTTP server
 		if err := a.httpServer.Shutdown(context.Background()); err != nil {
 			return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 		}
-		
+
 		// Wait for goroutines to finish
 		wg.Wait()
-		
+
 		return nil
-		
+
 	case err := <-errChan:
 		return err
 	}
@@ -299,7 +299,7 @@ func convertToConnectorConfigWithFallback(cfg config.ProviderConfig, primaryEnvV
 	if apiKey == "" && fallbackEnvVar != "" {
 		apiKey = os.Getenv(fallbackEnvVar)
 	}
-	
+
 	return connectors.ProviderConfig{
 		BaseURL:           cfg.BaseURL,
 		Timeout:           cfg.Timeout,

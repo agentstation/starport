@@ -34,7 +34,7 @@ func (v *ValkeyPubSub) Subscribe(pattern string, handler func(channel, message s
 	defer v.mu.Unlock()
 
 	if v.closed {
-		return fmt.Errorf("pubsub client is closed")
+		return ErrPubSubClosed
 	}
 
 	// Check if already subscribed to this pattern
@@ -84,7 +84,7 @@ func (v *ValkeyPubSub) Publish(ctx context.Context, channel string, message stri
 	v.mu.RLock()
 	if v.closed {
 		v.mu.RUnlock()
-		return fmt.Errorf("pubsub client is closed")
+		return ErrPubSubClosed
 	}
 	v.mu.RUnlock()
 

@@ -34,6 +34,9 @@ var (
 
 	// ErrContextCanceled indicates the context was canceled
 	ErrContextCanceled = errors.New("context canceled")
+
+	// ErrConnectorClosed indicates operations attempted on a closed connector
+	ErrConnectorClosed = errors.New("connector closed")
 )
 
 // APIError represents an error from the provider's API

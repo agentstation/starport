@@ -23,7 +23,7 @@ type manager struct {
 // NewManager creates a new BYOK manager
 func NewManager(store storage.KVStore, masterKey []byte) (Manager, error) {
 	if store == nil {
-		return nil, errors.New("store is required")
+		return nil, ErrStoreRequired
 	}
 
 	encryption, err := models.NewEncryptionService(masterKey)
@@ -41,10 +41,10 @@ func NewManager(store storage.KVStore, masterKey []byte) (Manager, error) {
 func (m *manager) AddCredential(ctx context.Context, apiKeyID, provider string, cred map[string]string, config map[string]interface{}) error {
 	// Validate inputs
 	if apiKeyID == "" {
-		return errors.New("api key ID is required")
+		return ErrAPIKeyIDRequired
 	}
 	if provider == "" {
-		return errors.New("provider is required")
+		return ErrProviderRequired
 	}
 
 	// Validate credential format for provider
@@ -116,7 +116,7 @@ func (m *manager) GetCredential(ctx context.Context, apiKeyID, provider string) 
 // GetCredentials retrieves all BYOK credentials for a provider sorted by priority
 func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string) ([]*Credential, error) {
 	if apiKeyID == "" || provider == "" {
-		return nil, errors.New("api key ID and provider are required")
+		return nil, ErrAPIKeyAndProviderRequired
 	}
 
 	// List all credentials for this API key
@@ -191,7 +191,7 @@ func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string)
 // ListCredentials lists all BYOK credentials for an API key
 func (m *manager) ListCredentials(ctx context.Context, apiKeyID string) ([]*Credential, error) {
 	if apiKeyID == "" {
-		return nil, errors.New("api key ID is required")
+		return nil, ErrAPIKeyIDRequired
 	}
 
 	// List all credentials for this API key
@@ -241,7 +241,7 @@ func (m *manager) UpdateCredential(ctx context.Context, apiKeyID, provider strin
 	data, err := m.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return errors.New("credential not found")
+			return ErrCredentialNotFound
 		}
 		return fmt.Errorf("failed to get credential: %w", err)
 	}
@@ -305,7 +305,7 @@ func (m *manager) UpdateCredential(ctx context.Context, apiKeyID, provider strin
 // DeleteCredential removes a BYOK credential
 func (m *manager) DeleteCredential(ctx context.Context, apiKeyID, provider string) error {
 	if apiKeyID == "" || provider == "" {
-		return errors.New("api key ID and provider are required")
+		return fmt.Errorf("%w and %w", ErrAPIKeyIDRequired, ErrProviderRequired)
 	}
 
 	key := storage.CredentialKey(apiKeyID, provider)
@@ -313,7 +313,7 @@ func (m *manager) DeleteCredential(ctx context.Context, apiKeyID, provider strin
 	// Check if credential exists first
 	if _, err := m.store.Get(ctx, key); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return errors.New("credential not found")
+			return ErrCredentialNotFound
 		}
 		return fmt.Errorf("failed to check credential: %w", err)
 	}
@@ -333,7 +333,7 @@ func (m *manager) DeleteCredential(ctx context.Context, apiKeyID, provider strin
 // SetDefaultKey sets a gateway-wide default key for a provider
 func (m *manager) SetDefaultKey(ctx context.Context, provider string, cred map[string]string, config map[string]interface{}) error {
 	if provider == "" {
-		return errors.New("provider is required")
+		return ErrProviderRequired
 	}
 
 	// Validate credential
@@ -387,7 +387,7 @@ func (m *manager) SetDefaultKey(ctx context.Context, provider string, cred map[s
 // GetDefaultKey retrieves the default key for a provider
 func (m *manager) GetDefaultKey(ctx context.Context, provider string) (*Credential, error) {
 	if provider == "" {
-		return nil, errors.New("provider is required")
+		return nil, ErrProviderRequired
 	}
 
 	key := storage.DefaultKeyKey(provider)
@@ -430,7 +430,7 @@ func (m *manager) GetDefaultKey(ctx context.Context, provider string) (*Credenti
 // DeleteDefaultKey removes a default key
 func (m *manager) DeleteDefaultKey(ctx context.Context, provider string) error {
 	if provider == "" {
-		return errors.New("provider is required")
+		return ErrProviderRequired
 	}
 
 	key := storage.DefaultKeyKey(provider)
@@ -438,7 +438,7 @@ func (m *manager) DeleteDefaultKey(ctx context.Context, provider string) error {
 	// Check if default key exists first
 	if _, err := m.store.Get(ctx, key); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return errors.New("default key not found")
+			return ErrDefaultKeyNotFound
 		}
 		return fmt.Errorf("failed to check default key: %w", err)
 	}
@@ -553,7 +553,7 @@ func (m *manager) RotateEncryptionKey(_ context.Context) error {
 	// 2. Re-encrypt all credentials
 	// 3. Update master key
 	// For now, return not implemented
-	return errors.New("key rotation not implemented")
+	return ErrKeyRotationNotImplemented
 }
 
 // getStandardCost calculates the standard cost for usage
