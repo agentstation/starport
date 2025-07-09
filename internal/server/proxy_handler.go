@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -24,6 +25,7 @@ type ProxyHandler struct {
 // ConnectorRegistry manages available connectors
 type ConnectorRegistry struct {
 	connectors map[string]connectors.Connector
+	mu         sync.RWMutex
 }
 
 // NewProxyHandler creates a new proxy handler
@@ -43,11 +45,15 @@ func NewConnectorRegistry() *ConnectorRegistry {
 
 // Register adds a connector to the registry
 func (r *ConnectorRegistry) Register(provider string, connector connectors.Connector) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.connectors[provider] = connector
 }
 
 // GetWithError retrieves a connector by provider name with error
 func (r *ConnectorRegistry) GetWithError(provider string) (connectors.Connector, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	connector, ok := r.connectors[provider]
 	if !ok {
 		return nil, fmt.Errorf("provider %s not found", provider)
@@ -70,6 +76,30 @@ func (r *ConnectorRegistry) GetByModel(modelID string) (connectors.Connector, st
 	}
 	
 	return connector, model, nil
+}
+
+// Close closes all registered connectors
+func (r *ConnectorRegistry) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var firstError error
+	for provider, connector := range r.connectors {
+		if err := connector.Close(); err != nil {
+			log.Error().
+				Err(err).
+				Str("provider", provider).
+				Msg("failed to close connector")
+			if firstError == nil {
+				firstError = err
+			}
+		}
+	}
+
+	// Clear the connectors map
+	r.connectors = make(map[string]connectors.Connector)
+
+	return firstError
 }
 
 // RegisterRoutes adds proxy routes to the router
@@ -223,6 +253,9 @@ func (h *ProxyHandler) handleModelEndpoints(w http.ResponseWriter, r *http.Reque
 // getAllModels aggregates models from all connectors
 func (h *ProxyHandler) getAllModels(ctx context.Context) []connectors.Model {
 	allModels := []connectors.Model{}
+	
+	h.connectorRegistry.mu.RLock()
+	defer h.connectorRegistry.mu.RUnlock()
 	
 	for provider, connector := range h.connectorRegistry.connectors {
 		resp, err := connector.Models(ctx)
