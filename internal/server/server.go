@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -86,8 +85,8 @@ func (s *Server) setupMiddleware() {
 	// Recoverer middleware to recover from panics
 	s.router.Use(middleware.Recoverer)
 	
-	// Timeout middleware
-	s.router.Use(middleware.Timeout(60 * time.Second))
+	// Timeout middleware with configurable timeout
+	s.router.Use(middleware.Timeout(s.config.RequestTimeout))
 	
 	// CORS middleware
 	s.router.Use(cors.Handler(cors.Options{

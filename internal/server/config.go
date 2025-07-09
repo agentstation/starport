@@ -18,6 +18,9 @@ type Config struct {
 	WriteTimeout time.Duration `env:"WRITE_TIMEOUT,default=10s"`
 	IdleTimeout  time.Duration `env:"IDLE_TIMEOUT,default=120s"`
 	
+	// Request timeout for middleware
+	RequestTimeout time.Duration `env:"REQUEST_TIMEOUT,default=60s"`
+	
 	// Shutdown timeout
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT,default=30s"`
 	
