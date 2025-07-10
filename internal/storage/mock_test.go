@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/agentstation/starport/internal/testutil"
 )
 
 func TestMockStore_BasicOperations(t *testing.T) {
@@ -119,7 +121,7 @@ func TestMockStore_TTLOperations(t *testing.T) {
 		}
 
 		// Wait for expiration
-		time.Sleep(ttl + 10*time.Millisecond)
+		testutil.WaitForExpiration(t, store, key, ttl+100*time.Millisecond)
 
 		// Value should be gone
 		_, err = store.Get(ctx, key)
@@ -193,7 +195,7 @@ func TestMockStore_TTLOperations(t *testing.T) {
 		}
 
 		// Wait for expiration
-		time.Sleep(110 * time.Millisecond)
+		testutil.WaitForKeyNotExists(t, store, key, 200*time.Millisecond)
 
 		// Value should be gone
 		exists, err = store.Exists(ctx, key)
@@ -410,8 +412,13 @@ func TestMockStore_BatchOperations(t *testing.T) {
 			}
 		}
 
-		// Wait for expiration
-		time.Sleep(ttl + 10*time.Millisecond)
+		// Wait for expiration (check any key)
+		var anyKey string
+		for k := range items {
+			anyKey = k
+			break
+		}
+		testutil.WaitForExpiration(t, store, anyKey, ttl+100*time.Millisecond)
 
 		// Values should be gone
 		for key := range items {

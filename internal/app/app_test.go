@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/testutil"
 )
 
 func TestNew(t *testing.T) {
@@ -78,7 +80,7 @@ func TestAppRun(t *testing.T) {
 func TestAppRunWithCancel(t *testing.T) {
 	config := &Config{
 		Server: server.Config{
-			Port:            0,
+			Port:            18080, // Use a specific port for testing
 			ShutdownTimeout: 5 * time.Second,
 		},
 	}
@@ -96,8 +98,8 @@ func TestAppRunWithCancel(t *testing.T) {
 		errChan <- app.Run(ctx)
 	}()
 
-	// Give server time to start
-	time.Sleep(50 * time.Millisecond)
+	// Wait for server to be ready
+	testutil.WaitForServer(t, fmt.Sprintf("http://localhost:%d/health/live", config.Server.Port), 2*time.Second)
 
 	// Cancel context
 	cancel()
