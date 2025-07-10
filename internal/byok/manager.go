@@ -83,7 +83,7 @@ func (m *manager) AddCredential(ctx context.Context, apiKeyID, provider string, 
 	}
 
 	// Store credential
-	key := storage.CredentialKey(apiKeyID, provider)
+	key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 	data, err := storage.SerializeModel(providerKey)
 	if err != nil {
 		return fmt.Errorf("failed to serialize credential: %w", err)
@@ -131,7 +131,7 @@ func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string)
 	allKeys = append(allKeys, userKeys...)
 
 	// 2. Get global credentials
-	globalKey := storage.CredentialKey("global", provider)
+	globalKey := models.ProviderKeyStorageKey("*", provider)
 	if _, err := m.store.Get(ctx, globalKey); err == nil {
 		allKeys = append(allKeys, globalKey)
 	}
@@ -249,7 +249,7 @@ func (m *manager) ListCredentials(ctx context.Context, apiKeyID string) ([]*Cred
 // UpdateCredential updates an existing BYOK credential
 func (m *manager) UpdateCredential(ctx context.Context, apiKeyID, provider string, cred map[string]string, config map[string]interface{}) error {
 	// Get existing credential
-	key := storage.CredentialKey(apiKeyID, provider)
+	key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 	data, err := m.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -320,7 +320,7 @@ func (m *manager) DeleteCredential(ctx context.Context, apiKeyID, provider strin
 		return fmt.Errorf("%w and %w", ErrAPIKeyIDRequired, ErrProviderRequired)
 	}
 
-	key := storage.CredentialKey(apiKeyID, provider)
+	key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 	
 	// Check if credential exists first
 	if _, err := m.store.Get(ctx, key); err != nil {
@@ -382,7 +382,7 @@ func (m *manager) SetGlobalCredential(ctx context.Context, provider string, cred
 	}
 
 	// Store global credential
-	key := storage.CredentialKey("global", provider)
+	key := models.GlobalProviderKeyStorageKey(provider)
 	data, err := storage.SerializeModel(globalKey)
 	if err != nil {
 		return fmt.Errorf("failed to serialize global credential: %w", err)
@@ -405,7 +405,7 @@ func (m *manager) GetGlobalCredential(ctx context.Context, provider string) (*Cr
 		return nil, ErrProviderRequired
 	}
 
-	key := storage.CredentialKey("global", provider)
+	key := models.GlobalProviderKeyStorageKey(provider)
 	data, err := m.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -453,7 +453,7 @@ func (m *manager) DeleteGlobalCredential(ctx context.Context, provider string) e
 		return ErrProviderRequired
 	}
 
-	key := storage.CredentialKey("global", provider)
+	key := models.GlobalProviderKeyStorageKey(provider)
 	
 	// Check if global credential exists first
 	if _, err := m.store.Get(ctx, key); err != nil {
@@ -542,7 +542,7 @@ func (m *manager) CalculateBYOKCost(usage *Usage) float64 {
 // RecordUsage records usage of a BYOK credential
 func (m *manager) RecordUsage(ctx context.Context, apiKeyID string, provider string, _ *Usage) error {
 	// Get the credential
-	key := storage.CredentialKey(apiKeyID, provider)
+	key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 	data, err := m.store.Get(ctx, key)
 	if err != nil {
 		return fmt.Errorf("failed to get credential: %w", err)

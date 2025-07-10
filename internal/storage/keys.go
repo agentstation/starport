@@ -51,6 +51,7 @@ func ProviderKeyKey(scope, provider string) string {
 	return KeyPrefixProviderKey + scope + ":" + provider
 }
 
+// CredentialKey generates the storage key for a BYOK credential
 // Deprecated: Use ProviderKeyKey instead
 func CredentialKey(apiKeyID, provider string) string {
 	return KeyPrefixCredential + apiKeyID + ":" + provider

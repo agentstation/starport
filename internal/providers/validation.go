@@ -228,7 +228,7 @@ func (m *keyManager) validateGoogleAIStudio(_ context.Context, key map[string]st
 }
 
 // validateGoogleVertexAI validates Google Vertex AI service account
-func (m *keyManager) validateGoogleVertexAI(_ context.Context, key map[string]string, config map[string]interface{}) error {
+func (m *keyManager) validateGoogleVertexAI(_ context.Context, key map[string]string, _ map[string]interface{}) error {
 	serviceAccount, ok := key["service_account_json"]
 	if !ok || serviceAccount == "" {
 		return &ValidationError{
@@ -362,7 +362,7 @@ func (m *keyManager) validateMistral(_ context.Context, key map[string]string, _
 // isAlphanumeric checks if a string contains only alphanumeric characters
 func isAlphanumeric(s string) bool {
 	for _, r := range s {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
 			return false
 		}
 	}

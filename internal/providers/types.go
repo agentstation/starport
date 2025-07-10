@@ -1,4 +1,4 @@
-// Package providerkeys manages API keys for external LLM providers.
+// Package providers manages API keys for external LLM providers.
 package providers
 
 import (
