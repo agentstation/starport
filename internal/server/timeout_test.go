@@ -101,8 +101,10 @@ func TestShutdownTimeout(t *testing.T) {
 		_ = server.Start()
 	}()
 
-	// Give server time to start
-	time.Sleep(50 * time.Millisecond)
+	// Wait for server to be ready
+	// Note: Since we can't check server readiness directly here, we keep a minimal delay
+	// This is acceptable as we're testing shutdown behavior, not startup
+	time.Sleep(10 * time.Millisecond)
 
 	// Create a context that will be cancelled
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -131,15 +133,16 @@ func TestContextPropagation(t *testing.T) {
 	registry := NewConnectorRegistry()
 	server := New(config, registry)
 
-	// Track if context was cancelled
-	contextCancelled := false
+	// Track if context was cancelled using a channel
+	contextCancelled := make(chan bool, 1)
 
 	server.router.Get("/context-test", func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
-			contextCancelled = true
+			contextCancelled <- true
 			return
 		case <-time.After(100 * time.Millisecond):
+			contextCancelled <- false
 			w.WriteHeader(http.StatusOK)
 		}
 	})
@@ -149,13 +152,25 @@ func TestContextPropagation(t *testing.T) {
 	req := httptest.NewRequest("GET", "/context-test", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
-	// Cancel context before request completes
+	// Cancel context after a short delay
+	cancelDone := make(chan struct{})
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 		cancel()
+		close(cancelDone)
 	}()
 
-	server.router.ServeHTTP(w, req)
+	// Serve the request
+	go func() {
+		server.router.ServeHTTP(w, req)
+	}()
 
-	assert.True(t, contextCancelled, "context cancellation should propagate to handler")
+	// Wait for cancellation and verify
+	<-cancelDone
+	select {
+	case cancelled := <-contextCancelled:
+		assert.True(t, cancelled, "context cancellation should propagate to handler")
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("timeout waiting for context cancellation")
+	}
 }

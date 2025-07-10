@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/agentstation/starport/internal/testutil"
 )
 
 // TestBadgerStore runs all BadgerStore tests
@@ -179,7 +181,7 @@ func testBadgerTTLOperations(t *testing.T) {
 		}
 
 		// Wait for expiration (with buffer)
-		time.Sleep(ttl + 200*time.Millisecond)
+		testutil.WaitForExpiration(t, store, key, ttl+500*time.Millisecond)
 
 		// Key should be expired - Badger marks it as expired even if not yet garbage collected
 		_, err = store.Get(ctx, key)
@@ -243,8 +245,12 @@ func testBadgerTTLOperations(t *testing.T) {
 			t.Fatalf("ExpireAt failed: %v", err)
 		}
 
-		// Sleep a tiny bit to ensure ExpireAt completes
-		time.Sleep(10 * time.Millisecond)
+		// Wait a moment to ensure operation completes
+		testutil.WaitFor(t, func() bool {
+			// The key should still exist since we set a future expiration
+			exists, _ := store.Exists(ctx, key)
+			return exists
+		}, 100*time.Millisecond, "ExpireAt to complete")
 		
 		// Check - key should still exist
 		exists, err := store.Exists(ctx, key)
@@ -256,7 +262,7 @@ func testBadgerTTLOperations(t *testing.T) {
 		}
 
 		// Wait for expiration
-		time.Sleep(2100 * time.Millisecond)
+		testutil.WaitForKeyNotExists(t, store, key, 3*time.Second)
 
 		// Key should be expired
 		exists, err = store.Exists(ctx, key)
@@ -510,7 +516,7 @@ func testBadgerBatchOperations(t *testing.T) {
 		}
 
 		// Wait for expiration - Badger's IsDeletedOrExpired checks expiration time
-		time.Sleep(ttl + 200*time.Millisecond)
+		time.Sleep(ttl + 50*time.Millisecond)
 
 		// Keys should be expired - BatchGet should not return expired keys
 		results, err = store.BatchGet(ctx, []string{"ttl_batch_key1", "ttl_batch_key2"})
