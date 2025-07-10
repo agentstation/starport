@@ -1,4 +1,4 @@
-package byok
+package providers
 
 import "errors"
 
@@ -6,20 +6,22 @@ import "errors"
 var (
 	// ErrStoreRequired is returned when store is not provided
 	ErrStoreRequired = errors.New("store is required")
-	// ErrAPIKeyIDRequired is returned when API key ID is not provided
-	ErrAPIKeyIDRequired = errors.New("api key ID is required")
+	// ErrScopeRequired is returned when scope is not provided
+	ErrScopeRequired = errors.New("scope is required")
 	// ErrProviderRequired is returned when provider is not provided
 	ErrProviderRequired = errors.New("provider is required")
-	// ErrAPIKeyAndProviderRequired is returned when both are missing
-	ErrAPIKeyAndProviderRequired = errors.New("api key ID and provider are required")
-	// ErrCredentialsRequired is returned when credentials are not provided
-	ErrCredentialsRequired = errors.New("credentials are required")
+	// ErrScopeAndProviderRequired is returned when both are missing
+	ErrScopeAndProviderRequired = errors.New("scope and provider are required")
+	// ErrKeysRequired is returned when keys are not provided
+	ErrKeysRequired = errors.New("keys are required")
 	// ErrInvalidProvider is returned when provider is not supported
 	ErrInvalidProvider = errors.New("invalid provider")
-	// ErrCredentialNotFound is returned when a credential is not found
-	ErrCredentialNotFound = errors.New("credential not found")
-	// ErrInvalidCredentialFormat is returned when credential format is invalid
-	ErrInvalidCredentialFormat = errors.New("invalid credential format")
+	// ErrKeyNotFound is returned when a key is not found
+	ErrKeyNotFound = errors.New("key not found")
+	// ErrNotFound is an alias for ErrKeyNotFound for compatibility
+	ErrNotFound = ErrKeyNotFound
+	// ErrInvalidKeyFormat is returned when key format is invalid
+	ErrInvalidKeyFormat = errors.New("invalid key format")
 	// ErrEncryptionFailed is returned when encryption fails
 	ErrEncryptionFailed = errors.New("encryption failed")
 	// ErrDecryptionFailed is returned when decryption fails

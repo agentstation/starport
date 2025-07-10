@@ -335,18 +335,18 @@ func TestPreset_Validate(t *testing.T) {
 	}
 }
 
-func TestBYOKCredential_Validate(t *testing.T) {
+func TestProviderKey_Validate(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
 		name    string
-		cred    *BYOKCredential
+		key     *ProviderKey
 		wantErr bool
 		errMsg  string
 	}{
 		{
-			name: "valid credential",
-			cred: &BYOKCredential{
-				APIKeyID:            "key-123",
+			name: "valid user-scoped key",
+			key: &ProviderKey{
+				Scope:               "user:123",
 				Provider:            "openai",
 				EncryptedCredential: "encrypted-data",
 				CreatedAt:           now,
@@ -355,20 +355,31 @@ func TestBYOKCredential_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "missing api key id",
-			cred: &BYOKCredential{
+			name: "valid global key",
+			key: &ProviderKey{
+				Scope:               "*",
 				Provider:            "openai",
 				EncryptedCredential: "encrypted-data",
 				CreatedAt:           now,
 				UpdatedAt:           now,
 			},
-			wantErr: true,
-			errMsg:  "missing api_key_id",
+			wantErr: false,
+		},
+		{
+			name: "empty scope defaults to global",
+			key: &ProviderKey{
+				Scope:               "",
+				Provider:            "openai",
+				EncryptedCredential: "encrypted-data",
+				CreatedAt:           now,
+				UpdatedAt:           now,
+			},
+			wantErr: false,
 		},
 		{
 			name: "missing provider",
-			cred: &BYOKCredential{
-				APIKeyID:            "key-123",
+			key: &ProviderKey{
+				Scope:               "user:123",
 				EncryptedCredential: "encrypted-data",
 				CreatedAt:           now,
 				UpdatedAt:           now,
@@ -378,8 +389,8 @@ func TestBYOKCredential_Validate(t *testing.T) {
 		},
 		{
 			name: "missing encrypted credential",
-			cred: &BYOKCredential{
-				APIKeyID:  "key-123",
+			key: &ProviderKey{
+				Scope:     "user:123",
 				Provider:  "openai",
 				CreatedAt: now,
 				UpdatedAt: now,
@@ -389,8 +400,8 @@ func TestBYOKCredential_Validate(t *testing.T) {
 		},
 		{
 			name: "updated before created",
-			cred: &BYOKCredential{
-				APIKeyID:            "key-123",
+			key: &ProviderKey{
+				Scope:               "user:123",
 				Provider:            "openai",
 				EncryptedCredential: "encrypted-data",
 				CreatedAt:           now,
@@ -403,12 +414,12 @@ func TestBYOKCredential_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.cred.Validate()
+			err := tt.key.Validate()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("BYOKCredential.Validate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ProviderKey.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if err != nil && tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
-				t.Errorf("BYOKCredential.Validate() error = %v, want error containing %q", err, tt.errMsg)
+				t.Errorf("ProviderKey.Validate() error = %v, want error containing %q", err, tt.errMsg)
 			}
 		})
 	}

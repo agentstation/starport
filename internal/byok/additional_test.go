@@ -72,34 +72,34 @@ func TestDefaultKeyOperations(t *testing.T) {
 	// Skip validation
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
-	// Test setting default key with empty provider
-	err = manager.SetDefaultKey(ctx, "", map[string]string{"api_key": "sk-test"}, nil)
+	// Test setting global credential with empty provider
+	err = manager.SetGlobalCredential(ctx, "", map[string]string{"api_key": "sk-test"}, nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "provider is required")
 
-	// Test getting default key with empty provider
-	_, err = manager.GetDefaultKey(ctx, "")
+	// Test getting global credential with empty provider
+	_, err = manager.GetGlobalCredential(ctx, "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "provider is required")
 
-	// Test deleting default key with empty provider
-	err = manager.DeleteDefaultKey(ctx, "")
+	// Test deleting global credential with empty provider
+	err = manager.DeleteGlobalCredential(ctx, "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "provider is required")
 
 	// Test with invalid credential
-	err = manager.SetDefaultKey(ctx, "openai", map[string]string{}, nil)
+	err = manager.SetGlobalCredential(ctx, "openai", map[string]string{}, nil, nil)
 	assert.Error(t, err)
 
-	// Test getting non-existent default key
-	_, err = manager.GetDefaultKey(ctx, "non-existent")
+	// Test getting non-existent global credential
+	_, err = manager.GetGlobalCredential(ctx, "non-existent")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, storage.ErrNotFound)
 
-	// Test deleting non-existent default key
-	err = manager.DeleteDefaultKey(ctx, "non-existent")
+	// Test deleting non-existent global credential
+	err = manager.DeleteGlobalCredential(ctx, "non-existent")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "default key not found")
+	assert.Contains(t, err.Error(), "credential not found")
 }
 
 // TestRecordUsageErrors tests error cases in RecordUsage

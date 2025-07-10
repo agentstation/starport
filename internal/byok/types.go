@@ -4,6 +4,8 @@ package byok
 import (
 	"context"
 	"time"
+
+	"github.com/agentstation/starport/internal/models"
 )
 
 // FallbackStrategy defines how to handle key selection between BYOK and gateway keys
@@ -25,6 +27,7 @@ type Credential struct {
 	Config        map[string]interface{} `json:"config"`        // Provider-specific config
 	IsFallback    bool                   `json:"is_fallback"`   // Use as fallback when rate limited
 	Priority      int                    `json:"priority"`      // Order preference (lower = higher priority)
+	RateLimit     *models.RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (for global credentials)
 	CreatedAt     time.Time              `json:"created_at"`
 	LastUsed      *time.Time             `json:"last_used"`
 	UsageCount    int64                  `json:"usage_count"`
@@ -53,11 +56,11 @@ type Manager interface {
 	DeleteCredential(ctx context.Context, apiKeyID, provider string) error
 	ValidateCredential(ctx context.Context, provider string, cred map[string]string, config map[string]interface{}) error
 
-	// Default key management
-	SetDefaultKey(ctx context.Context, provider string, cred map[string]string, config map[string]interface{}) error
-	GetDefaultKey(ctx context.Context, provider string) (*Credential, error)
-	DeleteDefaultKey(ctx context.Context, provider string) error
-	ListDefaultKeys(ctx context.Context) ([]*Credential, error)
+	// Global credential management (replaces default keys)
+	SetGlobalCredential(ctx context.Context, provider string, cred map[string]string, config map[string]interface{}, rateLimit *models.RateLimitConfig) error
+	GetGlobalCredential(ctx context.Context, provider string) (*Credential, error)
+	DeleteGlobalCredential(ctx context.Context, provider string) error
+	ListGlobalCredentials(ctx context.Context) ([]*Credential, error)
 
 	// Request routing
 	DetermineKeyStrategy(ctx context.Context, apiKeyID string, provider string) FallbackStrategy
@@ -86,10 +89,8 @@ func (e *ValidationError) Error() string {
 type KeyType string
 
 const (
-	// KeyTypeGateway indicates gateway-provided keys were used
+	// KeyTypeGateway indicates gateway-provided keys were used (global BYOK)
 	KeyTypeGateway KeyType = "gateway"
 	// KeyTypeBYOK indicates user's own keys were used
 	KeyTypeBYOK    KeyType = "byok"
-	// KeyTypeDefault indicates default keys were used
-	KeyTypeDefault KeyType = "default"
 )

@@ -14,11 +14,11 @@ const (
 	// KeyPrefixPreset is the prefix for preset storage
 	KeyPrefixPreset = "preset:"
 	
-	// KeyPrefixCredential is the prefix for BYOK credentials
-	KeyPrefixCredential = "credential:" // #nosec G101 -- This is a key prefix, not a credential
+	// KeyPrefixProviderKey is the prefix for provider keys
+	KeyPrefixProviderKey = "providerkey:" // #nosec G101 -- This is a key prefix, not a credential
 	
-	// KeyPrefixDefaultKey is the prefix for default provider keys
-	KeyPrefixDefaultKey = "defaultkey:"
+	// KeyPrefixCredential is the prefix for legacy BYOK credentials (deprecated)
+	KeyPrefixCredential = "credential:" // #nosec G101 -- This is a key prefix, not a credential
 	
 	// KeyPrefixModel is the prefix for model metadata
 	KeyPrefixModel = "model:"
@@ -46,14 +46,14 @@ func PresetKey(name string) string {
 	return KeyPrefixPreset + name
 }
 
-// CredentialKey generates a storage key for a BYOK credential
-func CredentialKey(apiKeyID, provider string) string {
-	return KeyPrefixCredential + apiKeyID + ":" + provider
+// ProviderKeyKey generates a storage key for a provider key
+func ProviderKeyKey(scope, provider string) string {
+	return KeyPrefixProviderKey + scope + ":" + provider
 }
 
-// DefaultKeyKey generates a storage key for a default provider key
-func DefaultKeyKey(provider string) string {
-	return KeyPrefixDefaultKey + provider
+// Deprecated: Use ProviderKeyKey instead
+func CredentialKey(apiKeyID, provider string) string {
+	return KeyPrefixCredential + apiKeyID + ":" + provider
 }
 
 // ModelKey generates a storage key for model metadata

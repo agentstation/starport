@@ -64,9 +64,9 @@ func (m *manager) AddCredential(ctx context.Context, apiKeyID, provider string, 
 		return fmt.Errorf("failed to encrypt credential: %w", err)
 	}
 
-	// Create BYOK credential model
-	byokCred := &models.BYOKCredential{
-		APIKeyID:            apiKeyID,
+	// Create provider key model
+	providerKey := &models.ProviderKey{
+		Scope:               "user:" + apiKeyID,
 		Provider:            provider,
 		EncryptedCredential: encryptedCred,
 		Config:              config,
@@ -78,13 +78,13 @@ func (m *manager) AddCredential(ctx context.Context, apiKeyID, provider string, 
 	}
 
 	// Validate model
-	if err := byokCred.Validate(); err != nil {
+	if err := providerKey.Validate(); err != nil {
 		return fmt.Errorf("invalid credential: %w", err)
 	}
 
 	// Store credential
 	key := storage.CredentialKey(apiKeyID, provider)
-	data, err := storage.SerializeModel(byokCred)
+	data, err := storage.SerializeModel(providerKey)
 	if err != nil {
 		return fmt.Errorf("failed to serialize credential: %w", err)
 	}
@@ -114,20 +114,30 @@ func (m *manager) GetCredential(ctx context.Context, apiKeyID, provider string) 
 }
 
 // GetCredentials retrieves all BYOK credentials for a provider sorted by priority
+// This includes both user-specific credentials and global credentials
 func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string) ([]*Credential, error) {
 	if apiKeyID == "" || provider == "" {
 		return nil, ErrAPIKeyAndProviderRequired
 	}
 
-	// List all credentials for this API key
-	prefix := fmt.Sprintf("credential:%s:", apiKeyID)
-	keys, err := m.store.ScanWithPrefix(ctx, prefix, 1000)
+	var allKeys []string
+
+	// 1. Get user-specific credentials
+	userPrefix := fmt.Sprintf("credential:%s:", apiKeyID)
+	userKeys, err := m.store.ScanWithPrefix(ctx, userPrefix, 1000)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list credentials: %w", err)
+		return nil, fmt.Errorf("failed to list user credentials: %w", err)
+	}
+	allKeys = append(allKeys, userKeys...)
+
+	// 2. Get global credentials
+	globalKey := storage.CredentialKey("global", provider)
+	if _, err := m.store.Get(ctx, globalKey); err == nil {
+		allKeys = append(allKeys, globalKey)
 	}
 
 	var credentials []*Credential
-	for _, key := range keys {
+	for _, key := range allKeys {
 		// Extract provider from key
 		parts := strings.Split(key, ":")
 		if len(parts) < 3 {
@@ -146,14 +156,14 @@ func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string)
 		}
 
 		// Deserialize credential
-		var byokCred models.BYOKCredential
-		if err := storage.DeserializeModel(data, &byokCred); err != nil {
+		var providerKey models.ProviderKey
+		if err := storage.DeserializeModel(data, &providerKey); err != nil {
 			log.Warn().Str("key", key).Err(err).Msg("Failed to deserialize credential")
 			continue
 		}
 
 		// Decrypt credential
-		decryptedJSON, err := m.encryption.DecryptCredential(byokCred.EncryptedCredential)
+		decryptedJSON, err := m.encryption.DecryptCredential(providerKey.EncryptedCredential)
 		if err != nil {
 			log.Warn().Str("key", key).Err(err).Msg("Failed to decrypt credential")
 			continue
@@ -167,20 +177,22 @@ func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string)
 
 		// Convert to Credential
 		cred := &Credential{
-			Provider:   byokCred.Provider,
+			Provider:   providerKey.Provider,
 			Data:       credData,
-			Config:     byokCred.Config,
-			IsFallback: byokCred.IsFallback,
-			Priority:   byokCred.Priority,
-			CreatedAt:  byokCred.CreatedAt,
-			LastUsed:   byokCred.LastUsed,
-			UsageCount: byokCred.UsageCount,
+			Config:     providerKey.Config,
+			IsFallback: providerKey.IsFallback,
+			Priority:   providerKey.Priority,
+			RateLimit:  providerKey.RateLimit,
+			CreatedAt:  providerKey.CreatedAt,
+			LastUsed:   providerKey.LastUsed,
+			UsageCount: providerKey.UsageCount,
 		}
 
 		credentials = append(credentials, cred)
 	}
 
 	// Sort by priority (lower number = higher priority)
+	// Global credentials typically have higher priority values (lower precedence)
 	sort.Slice(credentials, func(i, j int) bool {
 		return credentials[i].Priority < credentials[j].Priority
 	})
@@ -211,21 +223,21 @@ func (m *manager) ListCredentials(ctx context.Context, apiKeyID string) ([]*Cred
 		}
 
 		// Deserialize credential
-		var byokCred models.BYOKCredential
-		if err := storage.DeserializeModel(data, &byokCred); err != nil {
+		var providerKey models.ProviderKey
+		if err := storage.DeserializeModel(data, &providerKey); err != nil {
 			log.Warn().Str("key", key).Err(err).Msg("Failed to deserialize credential")
 			continue
 		}
 
 		// Don't decrypt for listing - just return metadata
 		cred := &Credential{
-			Provider:   byokCred.Provider,
-			Config:     byokCred.Config,
-			IsFallback: byokCred.IsFallback,
-			Priority:   byokCred.Priority,
-			CreatedAt:  byokCred.CreatedAt,
-			LastUsed:   byokCred.LastUsed,
-			UsageCount: byokCred.UsageCount,
+			Provider:   providerKey.Provider,
+			Config:     providerKey.Config,
+			IsFallback: providerKey.IsFallback,
+			Priority:   providerKey.Priority,
+			CreatedAt:  providerKey.CreatedAt,
+			LastUsed:   providerKey.LastUsed,
+			UsageCount: providerKey.UsageCount,
 		}
 
 		credentials = append(credentials, cred)
@@ -247,8 +259,8 @@ func (m *manager) UpdateCredential(ctx context.Context, apiKeyID, provider strin
 	}
 
 	// Deserialize existing
-	var byokCred models.BYOKCredential
-	if err := storage.DeserializeModel(data, &byokCred); err != nil {
+	var providerKey models.ProviderKey
+	if err := storage.DeserializeModel(data, &providerKey); err != nil {
 		return fmt.Errorf("failed to deserialize credential: %w", err)
 	}
 
@@ -269,23 +281,23 @@ func (m *manager) UpdateCredential(ctx context.Context, apiKeyID, provider strin
 			return fmt.Errorf("failed to encrypt credential: %w", err)
 		}
 
-		byokCred.EncryptedCredential = encryptedCred
+		providerKey.EncryptedCredential = encryptedCred
 	}
 
 	// Update config if provided
 	if config != nil {
-		byokCred.Config = config
+		providerKey.Config = config
 	}
 
 	// Update timestamp
-	byokCred.UpdatedAt = time.Now()
+	providerKey.UpdatedAt = time.Now()
 
 	// Validate and store
-	if err := byokCred.Validate(); err != nil {
+	if err := providerKey.Validate(); err != nil {
 		return fmt.Errorf("invalid credential: %w", err)
 	}
 
-	data, err = storage.SerializeModel(&byokCred)
+	data, err = storage.SerializeModel(&providerKey)
 	if err != nil {
 		return fmt.Errorf("failed to serialize credential: %w", err)
 	}
@@ -330,8 +342,8 @@ func (m *manager) DeleteCredential(ctx context.Context, apiKeyID, provider strin
 	return nil
 }
 
-// SetDefaultKey sets a gateway-wide default key for a provider
-func (m *manager) SetDefaultKey(ctx context.Context, provider string, cred map[string]string, config map[string]interface{}) error {
+// SetGlobalCredential sets a gateway-wide credential for a provider
+func (m *manager) SetGlobalCredential(ctx context.Context, provider string, cred map[string]string, config map[string]interface{}, rateLimit *models.RateLimitConfig) error {
 	if provider == "" {
 		return ErrProviderRequired
 	}
@@ -352,135 +364,149 @@ func (m *manager) SetDefaultKey(ctx context.Context, provider string, cred map[s
 		return fmt.Errorf("failed to encrypt credential: %w", err)
 	}
 
-	// Create default key model
-	defaultKey := &models.DefaultKey{
+	// Create global credential as a ProviderKey with scope = "*"
+	globalKey := &models.ProviderKey{
+		Scope:               "*",
 		Provider:            provider,
 		EncryptedCredential: encryptedCred,
 		Config:              config,
+		RateLimit:           rateLimit,
+		Priority:            100, // Lower priority than user credentials
 		CreatedAt:           time.Now(),
 		UpdatedAt:           time.Now(),
 	}
 
 	// Validate model
-	if err := defaultKey.Validate(); err != nil {
-		return fmt.Errorf("invalid default key: %w", err)
+	if err := globalKey.Validate(); err != nil {
+		return fmt.Errorf("invalid global credential: %w", err)
 	}
 
-	// Store default key
-	key := storage.DefaultKeyKey(provider)
-	data, err := storage.SerializeModel(defaultKey)
+	// Store global credential
+	key := storage.CredentialKey("global", provider)
+	data, err := storage.SerializeModel(globalKey)
 	if err != nil {
-		return fmt.Errorf("failed to serialize default key: %w", err)
+		return fmt.Errorf("failed to serialize global credential: %w", err)
 	}
 
 	if err := m.store.Set(ctx, key, data); err != nil {
-		return fmt.Errorf("failed to store default key: %w", err)
+		return fmt.Errorf("failed to store global credential: %w", err)
 	}
 
 	log.Info().
 		Str("provider", provider).
-		Msg("Default key set")
+		Msg("Global credential set")
 
 	return nil
 }
 
-// GetDefaultKey retrieves the default key for a provider
-func (m *manager) GetDefaultKey(ctx context.Context, provider string) (*Credential, error) {
+// GetGlobalCredential retrieves the global credential for a provider
+func (m *manager) GetGlobalCredential(ctx context.Context, provider string) (*Credential, error) {
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
 
-	key := storage.DefaultKeyKey(provider)
+	key := storage.CredentialKey("global", provider)
 	data, err := m.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return nil, storage.ErrNotFound
 		}
-		return nil, fmt.Errorf("failed to get default key: %w", err)
+		return nil, fmt.Errorf("failed to get global credential: %w", err)
 	}
 
-	// Deserialize default key
-	var defaultKey models.DefaultKey
-	if err := storage.DeserializeModel(data, &defaultKey); err != nil {
-		return nil, fmt.Errorf("failed to deserialize default key: %w", err)
+	// Deserialize ProviderKey
+	var globalKey models.ProviderKey
+	if err := storage.DeserializeModel(data, &globalKey); err != nil {
+		return nil, fmt.Errorf("failed to deserialize global credential: %w", err)
 	}
 
 	// Decrypt credential
-	decryptedJSON, err := m.encryption.DecryptCredential(defaultKey.EncryptedCredential)
+	decryptedJSON, err := m.encryption.DecryptCredential(globalKey.EncryptedCredential)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt default key: %w", err)
+		return nil, fmt.Errorf("failed to decrypt global credential: %w", err)
 	}
 
 	var credData map[string]string
 	if err := json.Unmarshal([]byte(decryptedJSON), &credData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal default key: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal global credential: %w", err)
 	}
 
 	// Convert to Credential
 	cred := &Credential{
-		Provider:  defaultKey.Provider,
-		Data:      credData,
-		Config:    defaultKey.Config,
-		CreatedAt: defaultKey.CreatedAt,
+		Provider:   globalKey.Provider,
+		Data:       credData,
+		Config:     globalKey.Config,
+		RateLimit:  globalKey.RateLimit,
+		Priority:   globalKey.Priority,
+		IsFallback: globalKey.IsFallback,
+		CreatedAt:  globalKey.CreatedAt,
+		LastUsed:   globalKey.LastUsed,
+		UsageCount: globalKey.UsageCount,
 	}
 
 	return cred, nil
 }
 
-// DeleteDefaultKey removes a default key
-func (m *manager) DeleteDefaultKey(ctx context.Context, provider string) error {
+// DeleteGlobalCredential removes a global credential
+func (m *manager) DeleteGlobalCredential(ctx context.Context, provider string) error {
 	if provider == "" {
 		return ErrProviderRequired
 	}
 
-	key := storage.DefaultKeyKey(provider)
+	key := storage.CredentialKey("global", provider)
 	
-	// Check if default key exists first
+	// Check if global credential exists first
 	if _, err := m.store.Get(ctx, key); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
-			return ErrDefaultKeyNotFound
+			return ErrCredentialNotFound
 		}
-		return fmt.Errorf("failed to check default key: %w", err)
+		return fmt.Errorf("failed to check global credential: %w", err)
 	}
 	
 	if err := m.store.Delete(ctx, key); err != nil {
-		return fmt.Errorf("failed to delete default key: %w", err)
+		return fmt.Errorf("failed to delete global credential: %w", err)
 	}
 
 	log.Info().
 		Str("provider", provider).
-		Msg("Default key deleted")
+		Msg("Global credential deleted")
 
 	return nil
 }
 
-// ListDefaultKeys lists all default keys
-func (m *manager) ListDefaultKeys(ctx context.Context) ([]*Credential, error) {
-	prefix := storage.KeyPrefixDefaultKey
+// ListGlobalCredentials lists all global credentials
+func (m *manager) ListGlobalCredentials(ctx context.Context) ([]*Credential, error) {
+	// Global credentials are stored with api_key_id = "global"
+	prefix := storage.KeyPrefixCredential + "global:"
 	keys, err := m.store.ScanWithPrefix(ctx, prefix, 1000)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list default keys: %w", err)
+		return nil, fmt.Errorf("failed to list global credentials: %w", err)
 	}
 
 	var credentials []*Credential
 	for _, key := range keys {
 		data, err := m.store.Get(ctx, key)
 		if err != nil {
-			log.Warn().Str("key", key).Err(err).Msg("Failed to get default key")
+			log.Warn().Str("key", key).Err(err).Msg("Failed to get global credential")
 			continue
 		}
 
-		var defaultKey models.DefaultKey
-		if err := storage.DeserializeModel(data, &defaultKey); err != nil {
-			log.Warn().Str("key", key).Err(err).Msg("Failed to deserialize default key")
+		var globalKey models.ProviderKey
+		if err := storage.DeserializeModel(data, &globalKey); err != nil {
+			log.Warn().Str("key", key).Err(err).Msg("Failed to deserialize global credential")
 			continue
 		}
 
 		// Don't decrypt for listing
 		cred := &Credential{
-			Provider:  defaultKey.Provider,
-			Config:    defaultKey.Config,
-			CreatedAt: defaultKey.CreatedAt,
+			Provider:   globalKey.Provider,
+			Config:     globalKey.Config,
+			RateLimit:  globalKey.RateLimit,
+			Priority:   globalKey.Priority,
+			IsFallback: globalKey.IsFallback,
+			CreatedAt:  globalKey.CreatedAt,
+			LastUsed:   globalKey.LastUsed,
+			UsageCount: globalKey.UsageCount,
 		}
 
 		credentials = append(credentials, cred)
@@ -523,18 +549,18 @@ func (m *manager) RecordUsage(ctx context.Context, apiKeyID string, provider str
 	}
 
 	// Update usage stats
-	var byokCred models.BYOKCredential
-	if err := storage.DeserializeModel(data, &byokCred); err != nil {
+	var providerKey models.ProviderKey
+	if err := storage.DeserializeModel(data, &providerKey); err != nil {
 		return fmt.Errorf("failed to deserialize credential: %w", err)
 	}
 
 	now := time.Now()
-	byokCred.LastUsed = &now
-	byokCred.UsageCount++
-	byokCred.UpdatedAt = now
+	providerKey.LastUsed = &now
+	providerKey.UsageCount++
+	providerKey.UpdatedAt = now
 
 	// Store updated credential
-	data, err = storage.SerializeModel(&byokCred)
+	data, err = storage.SerializeModel(&providerKey)
 	if err != nil {
 		return fmt.Errorf("failed to serialize credential: %w", err)
 	}

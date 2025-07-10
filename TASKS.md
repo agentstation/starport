@@ -17,7 +17,7 @@ Last Updated: When agents update this file
 | P1-S4-4.2b | Backend | - | 2025-01-09 | Valkey storage implementation with full KVStore interface, pub/sub support for cache invalidation, transaction support with MULTI/EXEC, atomic operations with Lua scripts, batch operations with auto-pipelining, integration tests, valkey-go client integration |
 | P1-S4-4.2a | Backend | - | 2025-01-09 | Cache architecture refactoring with data-type-specific strategies, pub/sub invalidation for multi-node deployments, hybrid caching (local + distributed), automatic deployment mode detection, proper cache coherence for security-critical data (API keys, presets), distributed-only for rate limits, 75%+ test coverage |
 | P1-S4-4.2 | Backend | - | 2025-01-08 | Caching system with Ristretto in-memory layer, KV store persistence, cache key generation, TTL management, cache policies, invalidation logic, cache warming, metrics tracking, proxy handler integration, 75.3% test coverage |
-| P1-S4-4.1 | Security | - | 2025-01-08 | BYOK implementation with OpenRouter compatibility, 5% pricing model, AES-256-GCM encryption, Argon2id key derivation, fallback strategies, provider validation, BYOK manager, API endpoints, usage tracking, response headers, 75%+ test coverage |
+| P1-S4-4.1 | Security | - | 2025-01-08 | BYOK implementation with OpenRouter compatibility, 5% pricing model, AES-256-GCM encryption, Argon2id key derivation, fallback strategies, provider validation, BYOK manager, API endpoints, usage tracking, response headers, 75%+ test coverage. Note: Should be refactored to unify BYOKCredential and DefaultKey models. |
 | P1-S3-3.7 | Backend | #19 | 2025-01-08 | Dynamic model fetching for Anthropic/Gemini/Groq, split GeminiConnector into GoogleAIStudioConnector and VertexAIConnector, 1-hour cache TTL, Vertex AI models (PaLM, Codey, Claude), 85%+ test coverage |
 | P1-S3-3.6 | Backend | #18 | 2025-01-08 | Provider metadata & /api/v1/providers endpoint, enhanced /api/v1/models with full metadata (pricing, context, architecture), /api/v1/models/{model}/endpoints, 85%+ test coverage |
 | P1-S3-3.5 | Backend | #17 | 2025-01-08 | Provider routing with preferences (order/only/ignore), health tracking, latency-based routing, cost optimization, sticky sessions, 76.2% test coverage |
@@ -74,16 +74,20 @@ Last Updated: When agents update this file
 - [x] P1-S3-3.6 - Provider Metadata & /api/v1/providers Endpoint ✅
 - [x] P1-S3-3.7 - Dynamic Model Fetching & Google Provider Separation ✅
 
-**Features (Subphase 1.5)**
+**Features (Subphase 1.4)**
 - [x] P1-S4-4.1 - BYOK Implementation ✅
 - [x] P1-S4-4.2 - Caching System ✅
 - [ ] P1-S4-4.3 - Content Filtering Pipeline
 - [ ] P1-S4-4.4 - Preset Management System
+- [x] P1-S4-4.5 - Unified Credential Model (Refactoring) 🟢 90% - tests need updating
+
+**Authentication (Subphase 1.5)**
+- [ ] P1-S5-5.1 - API Key Implementation with UUIDKey
 
 ### Velocity Tracking
 - Tasks Completed: 19 (P1-S1-1.1, P1-S1-1.2, P1-S1-1.3, P1-S1-1.4, P1-S1-1.5, P1-S2-2.1, P1-S2-2.2, P1-S2-2.3, P1-S3-3.1, P1-S3-3.2, P1-S3-3.3, P1-S3-3.4, P1-S3-3.5, P1-S3-3.6, P1-S3-3.7, P1-S4-4.1, P1-S4-4.2, P1-S4-4.2a, P1-S4-4.2b)
 - Tasks In Progress: 0
-- Phase 1 Tasks Remaining: 3
+- Phase 1 Tasks Remaining: 5 (P1-S4-4.3, P1-S4-4.4, P1-S4-4.5, P1-S5-5.1)
 
 ## 📝 Update Instructions
 
@@ -1383,6 +1387,141 @@ Management:
 - [ ] Inheritance functions
 - [ ] Validation prevents errors
 - [ ] 85% test coverage
+
+---
+
+### 🎯 P1-S4-4.5: Simplify Credential Model
+**Status**: 🟢 In Progress (90% complete - tests need updating)  
+**Type**: Refactoring  
+**Assignee**: Backend Developer  
+**Effort**: 4 hours  
+**Dependencies**: P1-S4-4.1  
+**Can Run Parallel With**: P1-S5-5.1  
+
+#### User Story
+As a developer, I need to recognize that gateway default keys are just globally-scoped BYOK credentials, so we can remove the duplicate DefaultKey model and simplify the codebase.
+
+#### Technical Requirements
+```yaml
+Core Concept:
+  - All provider credentials are BYOK with different scopes
+  - User BYOK: api_key_id = "STARPRT_xxx" 
+  - Gateway BYOK: api_key_id = "global"
+  - Same features for all: encryption, rate limits, priority
+  
+Changes:
+  - Add RateLimits field to BYOKCredential
+  - Use api_key_id = "global" for gateway-wide credentials
+  - Update storage patterns and lookup logic
+  - Remove DefaultKey model entirely
+  
+Migration:
+  - Convert DefaultKey entries to BYOKCredential with global scope
+  - Update admin APIs to manage global BYOK credentials
+```
+
+#### Implementation Tasks
+```markdown
+- [x] Add RateLimits field to BYOKCredential model
+- [x] Update storage to use api_key_id = "global" for gateway credentials
+- [x] Modify credential lookup to include global scope
+- [x] Update BYOK manager to handle global credentials
+- [x] Migrate existing DefaultKey entries to BYOKCredential
+- [x] Update admin API endpoints to manage global BYOK
+- [x] Remove DefaultKey model and all references (deprecated but kept for migration)
+- [ ] Update tests to reflect unified model
+```
+
+#### Acceptance Criteria
+- [x] All credentials are BYOKCredential with different scopes
+- [x] Gateway credentials use api_key_id = "global"
+- [x] Admin can manage global BYOK like any other BYOK
+- [x] All existing functionality preserved
+- [x] DefaultKey model deprecated with migration path
+- [ ] 90% test coverage (tests need updating)
+
+---
+
+### 🎯 P1-S5-5.1: API Key Implementation with UUIDKey
+**Status**: ⏳ Ready  
+**Type**: Development  
+**Assignee**: Security Developer  
+**Effort**: 6 hours  
+**Dependencies**: P1-S2-2.3  
+**Can Run Parallel With**: P1-S4-4.3, P1-S4-4.4, P1-S4-4.5  
+
+#### User Story
+As a developer, I need secure, readable API keys with built-in validation so that I can easily manage authentication and prevent typos in production.
+
+#### Technical Requirements
+```yaml
+Core Features:
+  - UUIDKey format: STARPRT_38QARV01ET0G6Z2CJD9VA2ZZAR_A1B2C3D8
+  - CRC32 checksum validation
+  - UUID v7 for timestamp ordering
+  - GitHub secret scanning compatibility
+  
+Security:
+  - Keys stored by SHA256 hash
+  - Original key never persisted
+  - Checksum validation on every request
+  - Support for key expiration
+  
+Migration:
+  - Dual support for old hash-based keys
+  - Gradual migration path
+  - Backward compatibility during transition
+```
+
+See ARCHITECTURE.md Section 23: API Key Architecture
+
+#### Implementation Tasks
+```markdown
+- [ ] Add github.com/agentstation/uuidkey dependency
+- [ ] Update APIKey model with ID field
+- [ ] Create key generation utilities
+- [ ] Implement authentication middleware
+- [ ] Add checksum validation
+- [ ] Create key management endpoints
+- [ ] Support dual-format authentication
+- [ ] Add migration utilities
+- [ ] Write comprehensive tests
+```
+
+#### Code Template
+```go
+// internal/auth/keys.go
+package auth
+
+import (
+    "github.com/agentstation/uuidkey"
+)
+
+// GenerateAPIKey creates a new Starport API key
+func GenerateAPIKey() (string, error) {
+    // Use 160-bit entropy for extra security
+    key, err := uuidkey.NewKey("STARPRT", 160)
+    if err != nil {
+        return "", err
+    }
+    return key.String(), nil
+}
+
+// ValidateAPIKey checks key format and checksum
+func ValidateAPIKey(keyString string) error {
+    _, err := uuidkey.Parse(keyString)
+    return err
+}
+```
+
+#### Acceptance Criteria
+- [ ] New keys use UUIDKey format with STARPRT prefix
+- [ ] Checksum validation prevents invalid keys
+- [ ] Old hash-based keys continue to work
+- [ ] Key generation API returns properly formatted keys
+- [ ] Authentication middleware validates both formats
+- [ ] Migration tools generate new keys for existing users
+- [ ] 90% test coverage
 
 ---
 
