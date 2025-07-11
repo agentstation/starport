@@ -15,6 +15,7 @@ type Config struct {
 	RateLimiting RateLimitingConfig `env:",prefix=RATE_LIMITING_"`
 	Security     SecurityConfig     `env:",prefix=SECURITY_"`
 	Logging      LoggingConfig      `env:",prefix=LOGGING_"`
+	Cache        CacheConfig        `env:",prefix=CACHE_"`
 }
 
 // ServerConfig defines HTTP server settings
@@ -128,6 +129,11 @@ type LoggingConfig struct {
 	MaxBackups int    `env:"MAX_BACKUPS,default=3"`
 	MaxAge     int    `env:"MAX_AGE,default=7"`
 	Compress   bool   `env:"COMPRESS,default=true"`
+}
+
+// CacheConfig defines cache settings
+type CacheConfig struct {
+	Enabled bool `env:"ENABLED,default=true"`
 }
 
 // Validate performs validation on the configuration

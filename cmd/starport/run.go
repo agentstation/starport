@@ -101,8 +101,10 @@ func runServer(ctx context.Context) error {
 			Host: cfg.Server.Host,
 		}),
 		app.WithStorageMode(cfg.Storage.Mode),
+		app.WithStorageConfig(&cfg.Storage),
 		app.WithLogLevel(cfg.Logging.Level),
 		app.WithProvidersConfig(&cfg.Providers),
+		app.WithCache(cfg.Cache.Enabled),
 	}
 
 	// Add hot reload config if enabled

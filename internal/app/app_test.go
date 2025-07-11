@@ -91,7 +91,7 @@ func TestNewWithConfig(t *testing.T) {
 			IdleTimeout:     60 * time.Second,
 			ShutdownTimeout: 15 * time.Second,
 		}),
-		WithStorageMode("valkey"),
+		WithStorageMode("badger"),
 		WithLogLevel("debug"),
 	)
 	if err != nil {
@@ -101,8 +101,8 @@ func TestNewWithConfig(t *testing.T) {
 	if app.config.Server.Port != 9090 {
 		t.Errorf("expected port 9090, got %d", app.config.Server.Port)
 	}
-	if app.config.StorageMode != "valkey" {
-		t.Errorf("expected storage mode 'valkey', got %s", app.config.StorageMode)
+	if app.config.StorageMode != "badger" {
+		t.Errorf("expected storage mode 'badger', got %s", app.config.StorageMode)
 	}
 	if app.config.LogLevel != "debug" {
 		t.Errorf("expected log level 'debug', got %s", app.config.LogLevel)

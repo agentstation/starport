@@ -23,12 +23,16 @@ type Config struct {
 	Server server.Config
 	// Storage mode (badger or valkey)
 	StorageMode string
+	// Storage configuration
+	Storage *config.StorageConfig
 	// Log level
 	LogLevel string
 	// Providers configuration
 	Providers *config.ProvidersConfig
 	// Hot reload configuration
 	HotReload *HotReloadConfig
+	// Enable caching
+	EnableCache bool
 }
 
 // HotReloadConfig holds hot reload settings
@@ -89,6 +93,20 @@ func WithProvidersConfig(providersCfg *config.ProvidersConfig) Option {
 func WithHotReload(hotReloadCfg *HotReloadConfig) Option {
 	return func(cfg *Config) {
 		cfg.HotReload = hotReloadCfg
+	}
+}
+
+// WithStorageConfig sets the storage configuration
+func WithStorageConfig(storageCfg *config.StorageConfig) Option {
+	return func(cfg *Config) {
+		cfg.Storage = storageCfg
+	}
+}
+
+// WithCache enables caching
+func WithCache(enable bool) Option {
+	return func(cfg *Config) {
+		cfg.EnableCache = enable
 	}
 }
 

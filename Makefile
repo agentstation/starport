@@ -112,6 +112,50 @@ deps:
 run: build
 	./$(BINARY_NAME) serve
 
+# Run with docker-compose
+.PHONY: dev-docker
+dev-docker:
+	@echo "Starting development environment with docker-compose..."
+	docker-compose up -d
+	@echo "Development environment started:"
+	@echo "  - Starport: http://localhost:8080"
+	@echo "  - Valkey: localhost:6379"
+	@echo "Use 'make dev-docker-logs' to view logs"
+
+# View docker-compose logs
+.PHONY: dev-docker-logs
+dev-docker-logs:
+	docker-compose logs -f
+
+# Stop docker-compose
+.PHONY: dev-docker-stop
+dev-docker-stop:
+	@echo "Stopping development environment..."
+	docker-compose down
+	@echo "Development environment stopped"
+
+# Clean docker-compose volumes
+.PHONY: dev-docker-clean
+dev-docker-clean:
+	@echo "Cleaning development environment..."
+	docker-compose down -v
+	@echo "Development environment cleaned"
+
+# Run integration tests with docker-compose
+.PHONY: test-integration
+test-integration:
+	@echo "Starting Valkey for integration tests..."
+	docker-compose up -d valkey
+	@echo "Waiting for Valkey to be ready..."
+	@sleep 3
+	@echo "Running integration tests..."
+	TEST_VALKEY_URL=valkey://localhost:6379 $(GO) test -v ./internal/storage -run TestValkey
+	TEST_VALKEY_URL=valkey://localhost:6379 $(GO) test -v ./internal/cache -run TestValkeyIntegration
+	TEST_VALKEY_URL=valkey://localhost:6379 $(GO) test -v ./internal/app -run TestAppWithValkey
+	@echo "Stopping Valkey..."
+	docker-compose stop valkey
+	@echo "Integration tests complete"
+
 # Show version
 .PHONY: version
 version: build
@@ -121,15 +165,20 @@ version: build
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  make build         - Build the binary"
-	@echo "  make release       - Build optimized release binary"
-	@echo "  make test          - Run tests"
-	@echo "  make test-coverage - Run tests with coverage report"
-	@echo "  make clean         - Clean build artifacts"
-	@echo "  make fmt           - Format code"
-	@echo "  make lint          - Lint code"
-	@echo "  make dev           - Build with race detector"
-	@echo "  make deps          - Install dependencies"
-	@echo "  make run           - Build and run the server"
-	@echo "  make version       - Show version"
-	@echo "  make help          - Show this help message"
+	@echo "  make build              - Build the binary"
+	@echo "  make release            - Build optimized release binary"
+	@echo "  make test               - Run tests"
+	@echo "  make test-coverage      - Run tests with coverage report"
+	@echo "  make test-integration   - Run integration tests with docker-compose"
+	@echo "  make clean              - Clean build artifacts"
+	@echo "  make fmt                - Format code"
+	@echo "  make lint               - Lint code"
+	@echo "  make dev                - Build with race detector"
+	@echo "  make deps               - Install dependencies"
+	@echo "  make run                - Build and run the server"
+	@echo "  make dev-docker         - Start development environment with docker-compose"
+	@echo "  make dev-docker-logs    - View docker-compose logs"
+	@echo "  make dev-docker-stop    - Stop docker-compose environment"
+	@echo "  make dev-docker-clean   - Clean docker-compose volumes"
+	@echo "  make version            - Show version"
+	@echo "  make help               - Show this help message"
