@@ -9,6 +9,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/server"
@@ -17,14 +18,15 @@ import (
 
 // App represents the main application with new handler structure
 type App struct {
-	config      *Config
-	httpServer  *server.Server
-	hotReloader interface {
+	config       *Config
+	httpServer   *server.Server
+	hotReloader  interface {
 		Start(context.Context) error
 		Stop()
 	}
-	registry *registry.Registry
-	store    storage.KVStore
+	registry     *registry.Registry
+	store        storage.KVStore
+	cacheManager *cache.Manager
 }
 
 // New creates a new App instance with improved handler organization
@@ -72,8 +74,26 @@ func New(opts ...Option) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize connectors: %w", err)
 	}
 
+	// Initialize cache manager if caching is enabled
+	if cfg.EnableCache {
+		cacheConfig := cache.ManagerConfig{
+			// Use default cache configuration
+		}
+		cacheManager, err := cache.NewCacheManager(cacheConfig, app.store)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize cache manager")
+		} else {
+			app.cacheManager = cacheManager
+			log.Info().Msg("Cache manager initialized")
+		}
+	}
+
 	// Initialize HTTP server with new structure
-	app.httpServer = server.New(&app.config.Server, app.registry)
+	serverOpts := []server.Option{}
+	if app.cacheManager != nil {
+		serverOpts = append(serverOpts, server.WithCache(app.cacheManager))
+	}
+	app.httpServer = server.New(&app.config.Server, app.registry, serverOpts...)
 
 	return app, nil
 }
@@ -87,9 +107,33 @@ func (a *App) initializeStorage() (storage.KVStore, error) {
 		return storage.NewMockStore(), nil
 
 	case "valkey":
-		// TODO: Initialize Valkey storage when implemented
-		log.Warn().Msg("Valkey storage not yet implemented, using mock storage")
-		return storage.NewMockStore(), nil
+		if a.config.Storage == nil {
+			return nil, fmt.Errorf("valkey storage configuration not provided")
+		}
+		
+		// Convert config.ValkeyConfig to storage.ValkeyConfig
+		valkeyConfig := storage.ValkeyConfig{
+			URL:          a.config.Storage.Valkey.URL,
+			Password:     a.config.Storage.Valkey.Password,
+			DB:           0, // Default DB
+			MaxRetries:   3,
+			MinIdleConns: a.config.Storage.Valkey.MinIdleConns,
+			ReadTimeout:  a.config.Storage.Valkey.ReadTimeout,
+			WriteTimeout: a.config.Storage.Valkey.WriteTimeout,
+			ClusterMode:  a.config.Storage.Valkey.ClusterMode,
+		}
+
+		store, err := storage.OpenValkey(valkeyConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open valkey storage: %w", err)
+		}
+
+		log.Info().
+			Str("url", valkeyConfig.URL).
+			Bool("cluster", valkeyConfig.ClusterMode).
+			Msg("initialized valkey storage")
+
+		return store, nil
 
 	default:
 		return nil, fmt.Errorf("unknown storage mode: %s", a.config.StorageMode)
@@ -171,6 +215,13 @@ func (a *App) Run(ctx context.Context) error {
 		// Close all connectors
 		if err := a.registry.Close(); err != nil {
 			log.Error().Err(err).Msg("failed to close connectors")
+		}
+
+		// Close cache manager
+		if a.cacheManager != nil {
+			if err := a.cacheManager.Close(); err != nil {
+				log.Error().Err(err).Msg("failed to close cache manager")
+			}
 		}
 
 		// Close storage
