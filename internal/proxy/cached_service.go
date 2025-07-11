@@ -17,6 +17,11 @@ type contextKey string
 const (
 	// CacheStatusKey is the context key for cache status
 	CacheStatusKey contextKey = "X-Cache"
+
+	// CacheStatusHit indicates a cache hit
+	CacheStatusHit = "HIT"
+	// CacheStatusMiss indicates a cache miss
+	CacheStatusMiss = "MISS"
 )
 
 // CachedService wraps a Service with cache Manager
@@ -67,7 +72,7 @@ func (s *CachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 			Str("model", req.Model).
 			Msg("cache hit for chat completion")
 		resp := fromCacheChatResponse(cachedResp)
-		resp.CacheStatus = "HIT"
+		resp.CacheStatus = CacheStatusHit
 		return resp, nil
 	}
 
@@ -76,7 +81,7 @@ func (s *CachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	if err != nil {
 		return nil, err
 	}
-	resp.CacheStatus = "MISS"
+	resp.CacheStatus = CacheStatusMiss
 
 	// Cache successful responses
 	cacheResp := toCacheChatResponse(resp)
@@ -117,7 +122,7 @@ func (s *CachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 			Str("model", req.Model).
 			Msg("cache hit for embedding")
 		resp := fromCacheEmbeddingsResponse(cachedResp)
-		resp.CacheStatus = "HIT"
+		resp.CacheStatus = CacheStatusHit
 		return resp, nil
 	}
 
@@ -126,7 +131,7 @@ func (s *CachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 	if err != nil {
 		return nil, err
 	}
-	resp.CacheStatus = "MISS"
+	resp.CacheStatus = CacheStatusMiss
 
 	// Cache successful responses
 	cacheResp := toCacheEmbeddingsResponse(resp)
@@ -156,7 +161,7 @@ func (s *CachedService) ListModels(ctx context.Context) (*ModelsResponse, error)
 		var resp ModelsResponse
 		if err := json.Unmarshal(cachedData, &resp); err == nil {
 			log.Debug().Msg("cache hit for models list")
-			resp.CacheStatus = "HIT"
+			resp.CacheStatus = CacheStatusHit
 			return &resp, nil
 		}
 	}
@@ -166,7 +171,7 @@ func (s *CachedService) ListModels(ctx context.Context) (*ModelsResponse, error)
 	if err != nil {
 		return nil, err
 	}
-	resp.CacheStatus = "MISS"
+	resp.CacheStatus = CacheStatusMiss
 
 	// Cache successful responses
 	if respData, err := json.Marshal(resp); err == nil {
@@ -196,7 +201,7 @@ func (s *CachedService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 		var resp ProvidersResponse
 		if err := json.Unmarshal(cachedData, &resp); err == nil {
 			log.Debug().Msg("cache hit for providers list")
-			resp.CacheStatus = "HIT"
+			resp.CacheStatus = CacheStatusHit
 			return &resp, nil
 		}
 	}
@@ -206,7 +211,7 @@ func (s *CachedService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 	if err != nil {
 		return nil, err
 	}
-	resp.CacheStatus = "MISS"
+	resp.CacheStatus = CacheStatusMiss
 
 	// Cache successful responses
 	if respData, err := json.Marshal(resp); err == nil {
