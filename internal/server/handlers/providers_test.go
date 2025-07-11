@@ -192,17 +192,16 @@ func TestProvidersHandler_CacheHeaders(t *testing.T) {
 				},
 			}
 
+			// Set cache status on response if provided
+			if tt.cacheStatus != "" {
+				mockService.providers.CacheStatus = tt.cacheStatus
+			}
+
 			// Create handler
 			handler := NewProvidersHandler(mockService)
 
 			// Create request
 			req := httptest.NewRequest("GET", "/api/v1/providers", nil)
-
-			// Add cache status to context if provided
-			if tt.cacheStatus != "" {
-				ctx := context.WithValue(req.Context(), "X-Cache", tt.cacheStatus)
-				req = req.WithContext(ctx)
-			}
 
 			// Create response recorder
 			w := httptest.NewRecorder()

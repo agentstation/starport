@@ -35,8 +35,10 @@ func (h *ModelsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set cache headers
-	h.setCacheHeaders(ctx, w)
+	// Set cache headers from response
+	if resp.CacheStatus != "" {
+		w.Header().Set("X-Cache", resp.CacheStatus)
+	}
 
 	// For /v1/models, return basic OpenAI format
 	// For /api/v1/models, return enhanced metadata (already included in response)

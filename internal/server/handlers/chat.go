@@ -54,8 +54,10 @@ func (h *ChatHandler) handleNonStream(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 
-	// Set cache headers
-	h.setCacheHeaders(r.Context(), w)
+	// Set cache headers from response
+	if resp.CacheStatus != "" {
+		w.Header().Set("X-Cache", resp.CacheStatus)
+	}
 
 	// Write response
 	if err := dto.WriteJSON(w, http.StatusOK, resp); err != nil {

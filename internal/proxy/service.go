@@ -70,6 +70,9 @@ type ChatCompletionResponse struct {
 
 	// OpenRouter-compatible fields
 	ModelUsed string `json:"model_used,omitempty"`
+
+	// Internal fields (not serialized)
+	CacheStatus string `json:"-"`
 }
 
 // ChatCompletionStreamResponse represents a streaming response
@@ -100,12 +103,18 @@ type EmbeddingsResponse struct {
 	Data   []connectors.Embedding `json:"data"`
 	Model  string                 `json:"model"`
 	Usage  *connectors.Usage      `json:"usage,omitempty"`
+
+	// Internal fields (not serialized)
+	CacheStatus string `json:"-"`
 }
 
 // ModelsResponse represents a list of available models
 type ModelsResponse struct {
 	Object string      `json:"object"`
 	Data   []ModelInfo `json:"data"`
+
+	// Internal fields (not serialized)
+	CacheStatus string `json:"-"`
 }
 
 // ModelInfo represents model information
@@ -132,6 +141,9 @@ type ModelPricing struct {
 // ProvidersResponse represents provider information
 type ProvidersResponse struct {
 	Providers []ProviderInfo `json:"providers"`
+
+	// Internal fields (not serialized)
+	CacheStatus string `json:"-"`
 }
 
 // ProviderInfo represents provider metadata

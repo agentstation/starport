@@ -39,16 +39,6 @@ func (h *BaseHandler) getAPIKey(ctx context.Context) string {
 	return ""
 }
 
-// setCacheHeaders sets cache-related headers from context
-func (h *BaseHandler) setCacheHeaders(ctx context.Context, w http.ResponseWriter) {
-	// Check both string key and typed key for compatibility
-	if cacheStatus, ok := ctx.Value("X-Cache").(string); ok {
-		w.Header().Set("X-Cache", cacheStatus)
-	} else if cacheStatus, ok := ctx.Value(proxy.CacheStatusKey).(string); ok {
-		w.Header().Set("X-Cache", cacheStatus)
-	}
-}
-
 // logError logs an error with context
 func (h *BaseHandler) logError(ctx context.Context, err error, msg string) {
 	log.Error().

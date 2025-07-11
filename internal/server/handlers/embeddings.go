@@ -41,8 +41,10 @@ func (h *EmbeddingsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set cache headers
-	h.setCacheHeaders(ctx, w)
+	// Set cache headers from response
+	if resp.CacheStatus != "" {
+		w.Header().Set("X-Cache", resp.CacheStatus)
+	}
 
 	// Write response
 	if err := dto.WriteJSON(w, http.StatusOK, resp); err != nil {
