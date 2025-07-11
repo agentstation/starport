@@ -13,6 +13,15 @@ High-performance LLM gateway with unified access to multiple model providers.
 
 Starport is a high-performance, self-hosted LLM gateway that provides unified access to multiple AI providers through a single API. Think of it as an open-source, self-hosted alternative to OpenRouter with additional enterprise features.
 
+### Why Starport?
+
+Unlike managed services, Starport gives you:
+- **Complete Control** - Your infrastructure, your rules, your data
+- **No Vendor Lock-in** - Open source under GNU AGPLv3 license
+- **Cost Effective** - No markup on API calls, use your own keys
+- **Privacy First** - Data never leaves your infrastructure
+- **Customizable** - Plugin architecture for custom providers and features
+
 ### Key Features
 
 - **🔄 OpenAI & OpenRouter Compatible** - Drop-in replacement for existing applications
@@ -24,14 +33,19 @@ Starport is a high-performance, self-hosted LLM gateway that provides unified ac
 - **💾 Advanced Caching** - Multi-tier caching with TTL and invalidation
 - **🛡️ Enterprise Ready** - Rate limiting, content filtering, audit logs (Enterprise)
 
-### Why Starport?
+### Architecture
 
-Unlike managed services, Starport gives you:
-- **Complete Control** - Your infrastructure, your rules, your data
-- **No Vendor Lock-in** - Open source under GNU AGPLv3 license
-- **Cost Effective** - No markup on API calls, use your own keys
-- **Privacy First** - Data never leaves your infrastructure
-- **Customizable** - Plugin architecture for custom providers and features
+Starport is designed as a single binary that includes both server and CLI functionality:
+
+- **Single binary** - Server and CLI in one executable
+- **Storage options**:
+  - Badger (default) - Zero dependencies, embedded KV store
+  - Valkey/Redis - For multi-node deployments
+- **Provider support**:
+  - 6 major providers implemented with full streaming
+  - OpenRouter-compatible model routing
+  - Dynamic model fetching with caching
+- **Enterprise features** - SSO, RBAC, analytics (separate package)
 
 ## Quick Start
 
@@ -68,13 +82,13 @@ response = client.chat.completions.create(
 
 ### Current Performance (Actual Benchmarks)
 
-Starport is designed to add minimal overhead to your LLM API calls. Based on our benchmark suite on M1 MacBook Pro:
+Starport is designed to add minimal overhead to your LLM API calls. Based on our benchmark suite on M2 MacBook Pro:
 
 | Operation | Latency | Throughput | Memory/Op |
 |-----------|---------|------------|----------|
-| **Request Processing** | ~6.2μs | ~160K req/sec | 8.6KB |
-| **Middleware Overhead** | ~1-5μs | - | 5-6KB |
-| **Provider Lookup** | ~175ns | ~5.7M ops/sec | 688B |
+| **Request Processing** | ~5.4μs | ~185K req/sec | 8.5KB |
+| **Middleware Chain** | ~5.4μs | ~185K req/sec | 7.9KB |
+| **Routing Decision** | ~331ns | ~3M ops/sec | 320B |
 
 ### Performance Goals
 
@@ -90,14 +104,14 @@ For context, typical LLM API latencies are:
 - **Time to First Token**: 200-2000ms (provider dependent)
 - **Total Generation Time**: 1-30+ seconds
 
-A good gateway should add <1% overhead to these operations. Our current ~6μs request processing overhead is negligible compared to LLM inference time.
+A good gateway should add <1% overhead to these operations. Our current ~5.4μs request processing overhead is negligible compared to LLM inference time.
 
 ### Key Performance Features
 
 - **Zero-copy streaming**: Direct passthrough from providers (planned)
 - **Connection pooling**: HTTP client connection reuse
 - **Concurrent processing**: Goroutine-based parallel handling
-- **Low allocations**: ~52 allocations per request
+- **Low allocations**: ~51 allocations per request
 - **Circuit breakers**: Provider health tracking (implemented)
 
 ### Benchmarking
@@ -128,20 +142,6 @@ go tool pprof cpu.prof
 3. **Configure appropriate timeouts** to fail fast on slow providers
 4. **Enable circuit breakers** to avoid cascading failures
 5. **Monitor memory usage** - current implementation uses ~8KB per request
-
-## Architecture
-
-Starport is designed as a single binary that includes both server and CLI functionality:
-
-- **Single binary** - Server and CLI in one executable
-- **Storage options**:
-  - Badger (default) - Zero dependencies, embedded KV store
-  - Valkey/Redis - For multi-node deployments
-- **Provider support**:
-  - 6 major providers implemented with full streaming
-  - OpenRouter-compatible model routing
-  - Dynamic model fetching with caching
-- **Enterprise features** - SSO, RBAC, analytics (separate package)
 
 ## Contributing
 
