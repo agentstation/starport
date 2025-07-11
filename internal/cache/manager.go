@@ -463,6 +463,80 @@ func (cm *Manager) GetKeyGenerator() *KeyGenerator {
 	return cm.keyGen
 }
 
+// GetChatCompletion retrieves a cached chat completion response
+func (cm *Manager) GetChatCompletion(ctx context.Context, key string) (*ChatCompletionResponse, error) {
+	data, found, err := cm.responses.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil // Return nil, nil for cache miss
+	}
+
+	var resp ChatCompletionResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal chat completion: %w", err)
+	}
+
+	return &resp, nil
+}
+
+// SetChatCompletion caches a chat completion response
+func (cm *Manager) SetChatCompletion(ctx context.Context, key string, response *ChatCompletionResponse) error {
+	data, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal chat completion: %w", err)
+	}
+
+	// Check size limit
+	if len(data) > cm.config.Responses.MaxItemSizeKB*1024 {
+		log.Debug().
+			Str("key", key).
+			Int("size", len(data)).
+			Msg("chat completion too large to cache")
+		return nil // Don't cache, but don't error
+	}
+
+	return cm.responses.Set(ctx, key, data, cm.config.Responses.TTL)
+}
+
+// GetEmbedding retrieves a cached embedding response
+func (cm *Manager) GetEmbedding(ctx context.Context, key string) (*EmbeddingsResponse, error) {
+	data, found, err := cm.responses.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil // Return nil, nil for cache miss
+	}
+
+	var resp EmbeddingsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal embeddings: %w", err)
+	}
+
+	return &resp, nil
+}
+
+// SetEmbedding caches an embedding response
+func (cm *Manager) SetEmbedding(ctx context.Context, key string, response *EmbeddingsResponse) error {
+	data, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal embeddings: %w", err)
+	}
+
+	// Check size limit
+	if len(data) > cm.config.Responses.MaxItemSizeKB*1024 {
+		log.Debug().
+			Str("key", key).
+			Int("size", len(data)).
+			Msg("embeddings too large to cache")
+		return nil // Don't cache, but don't error
+	}
+
+	return cm.responses.Set(ctx, key, data, cm.config.Responses.TTL)
+}
+
 // Stats returns aggregated cache statistics
 func (cm *Manager) Stats() map[string]Stats {
 	stats := make(map[string]Stats)

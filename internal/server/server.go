@@ -40,24 +40,8 @@ type Server struct {
 // Option configures server options
 type Option func(*Server)
 
-// WithCache enables caching with the provided cache instance
-func WithCache(c cache.Cache) Option {
-	return func(s *Server) {
-		// Wrap service with caching layer
-		cacheConfig := proxy.CacheConfig{
-			EnableChatCache:      true,
-			EnableEmbeddingCache: true,
-			EnableModelCache:     true,
-			EnableProviderCache:  true,
-			CacheControlHeader:   "X-Cache-Control",
-		}
-		s.service = proxy.NewCachedService(s.service, c, cacheConfig)
-		log.Info().Msg("cache option applied - service wrapped with caching layer")
-	}
-}
-
-// WithCacheManager enables caching with the cache Manager
-func WithCacheManager(cm *cache.Manager) Option {
+// WithCache enables caching with the cache Manager
+func WithCache(cm *cache.Manager) Option {
 	return func(s *Server) {
 		// Wrap service with caching layer using cache manager
 		cacheConfig := proxy.CacheConfig{
@@ -67,7 +51,7 @@ func WithCacheManager(cm *cache.Manager) Option {
 			EnableProviderCache:  true,
 			CacheControlHeader:   "X-Cache-Control",
 		}
-		s.service = proxy.NewCachedServiceV2(s.service, cm, cacheConfig)
+		s.service = proxy.NewCachedService(s.service, cm, cacheConfig)
 		log.Info().Msg("cache manager option applied - service wrapped with caching layer")
 	}
 }

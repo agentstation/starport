@@ -187,3 +187,23 @@ type EmbeddingRequest struct {
 	Dimensions     *int        `json:"dimensions,omitempty"`
 	User           *string     `json:"user,omitempty"`
 }
+
+// ChatCompletionResponse represents a cached chat completion response
+type ChatCompletionResponse struct {
+	ID                string      `json:"id"`
+	Object            string      `json:"object"`
+	Created           int64       `json:"created"`
+	Model             string      `json:"model"`
+	Choices           interface{} `json:"choices"`
+	Usage             interface{} `json:"usage,omitempty"`
+	SystemFingerprint string      `json:"system_fingerprint,omitempty"`
+	ModelUsed         string      `json:"model_used,omitempty"`
+}
+
+// EmbeddingsResponse represents a cached embeddings response
+type EmbeddingsResponse struct {
+	Object string      `json:"object"`
+	Data   interface{} `json:"data"`
+	Model  string      `json:"model"`
+	Usage  interface{} `json:"usage"`
+}

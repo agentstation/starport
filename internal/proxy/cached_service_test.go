@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -106,20 +107,29 @@ func TestCacheDisabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a mock service and cache
+			// Create a mock service and cache manager
 			mockSvc := &mockService{}
 			mockStore := storage.NewMockStore()
-			cacheConfig := cache.Config{
-				MaxSize:     1000,
-				MaxSizeInMB: 10,
+			cacheManagerConfig := cache.ManagerConfig{
+				Responses: struct {
+					Strategy      string        `env:"STRATEGY,default=auto"`
+					TTL           time.Duration `env:"TTL,default=1h"`
+					MaxItemSizeKB int           `env:"MAX_ITEM_SIZE_KB,default=1024"`
+					LocalSizeMB   int64         `env:"LOCAL_SIZE_MB,default=256"`
+				}{
+					Strategy:      "local",
+					TTL:           time.Hour,
+					MaxItemSizeKB: 1024,
+					LocalSizeMB:   256,
+				},
 			}
-			mockCache, err := cache.New(cacheConfig, mockStore)
+			cacheManager, err := cache.NewCacheManager(cacheManagerConfig, mockStore)
 			if err != nil {
 				t.Fatal(err)
 			}
 			
 			// Create cached service with the test config
-			cachedSvc := NewCachedService(mockSvc, mockCache, tt.config)
+			cachedSvc := NewCachedService(mockSvc, cacheManager, tt.config)
 			ctx := context.Background()
 
 			// Test chat completion
@@ -171,16 +181,25 @@ func TestCacheDisabled(t *testing.T) {
 
 // TestCacheEnabled verifies that caching works when enabled
 func TestCacheEnabled(t *testing.T) {
-	// Create a mock service and cache
+	// Create a mock service and cache manager
 	mockSvc := &mockService{}
 	
 	// Use mock store for testing
 	mockStore := storage.NewMockStore()
-	cacheConfig := cache.Config{
-		MaxSize:     1000,
-		MaxSizeInMB: 10,
+	cacheManagerConfig := cache.ManagerConfig{
+		Responses: struct {
+			Strategy      string        `env:"STRATEGY,default=auto"`
+			TTL           time.Duration `env:"TTL,default=1h"`
+			MaxItemSizeKB int           `env:"MAX_ITEM_SIZE_KB,default=1024"`
+			LocalSizeMB   int64         `env:"LOCAL_SIZE_MB,default=256"`
+		}{
+			Strategy:      "local",
+			TTL:           time.Hour,
+			MaxItemSizeKB: 1024,
+			LocalSizeMB:   256,
+		},
 	}
-	mockCache, err := cache.New(cacheConfig, mockStore)
+	cacheManager, err := cache.NewCacheManager(cacheManagerConfig, mockStore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +211,7 @@ func TestCacheEnabled(t *testing.T) {
 		EnableModelCache:     true,
 		EnableProviderCache:  true,
 	}
-	cachedSvc := NewCachedService(mockSvc, mockCache, config)
+	cachedSvc := NewCachedService(mockSvc, cacheManager, config)
 	ctx := context.Background()
 
 	// Test chat completion caching
@@ -247,11 +266,20 @@ func TestCacheEnabled(t *testing.T) {
 func TestCacheSkipModels(t *testing.T) {
 	mockSvc := &mockService{}
 	mockStore := storage.NewMockStore()
-	cacheConfig := cache.Config{
-		MaxSize:     1000,
-		MaxSizeInMB: 10,
+	cacheManagerConfig := cache.ManagerConfig{
+		Responses: struct {
+			Strategy      string        `env:"STRATEGY,default=auto"`
+			TTL           time.Duration `env:"TTL,default=1h"`
+			MaxItemSizeKB int           `env:"MAX_ITEM_SIZE_KB,default=1024"`
+			LocalSizeMB   int64         `env:"LOCAL_SIZE_MB,default=256"`
+		}{
+			Strategy:      "local",
+			TTL:           time.Hour,
+			MaxItemSizeKB: 1024,
+			LocalSizeMB:   256,
+		},
 	}
-	mockCache, err := cache.New(cacheConfig, mockStore)
+	cacheManager, err := cache.NewCacheManager(cacheManagerConfig, mockStore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +288,7 @@ func TestCacheSkipModels(t *testing.T) {
 		EnableChatCache: true,
 		SkipCacheModels: []string{"gpt-4-turbo", "claude"},
 	}
-	cachedSvc := NewCachedService(mockSvc, mockCache, config)
+	cachedSvc := NewCachedService(mockSvc, cacheManager, config)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -301,11 +329,20 @@ func TestCacheSkipModels(t *testing.T) {
 func TestCacheControlHeader(t *testing.T) {
 	mockSvc := &mockService{}
 	mockStore := storage.NewMockStore()
-	cacheConfig := cache.Config{
-		MaxSize:     1000,
-		MaxSizeInMB: 10,
+	cacheManagerConfig := cache.ManagerConfig{
+		Responses: struct {
+			Strategy      string        `env:"STRATEGY,default=auto"`
+			TTL           time.Duration `env:"TTL,default=1h"`
+			MaxItemSizeKB int           `env:"MAX_ITEM_SIZE_KB,default=1024"`
+			LocalSizeMB   int64         `env:"LOCAL_SIZE_MB,default=256"`
+		}{
+			Strategy:      "local",
+			TTL:           time.Hour,
+			MaxItemSizeKB: 1024,
+			LocalSizeMB:   256,
+		},
 	}
-	mockCache, err := cache.New(cacheConfig, mockStore)
+	cacheManager, err := cache.NewCacheManager(cacheManagerConfig, mockStore)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +351,7 @@ func TestCacheControlHeader(t *testing.T) {
 		EnableChatCache:    true,
 		CacheControlHeader: "X-Cache-Control",
 	}
-	cachedSvc := NewCachedService(mockSvc, mockCache, config)
+	cachedSvc := NewCachedService(mockSvc, cacheManager, config)
 
 	req := &ChatCompletionRequest{
 		Model:    "gpt-4",
