@@ -63,21 +63,20 @@ func (s *CachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	// Try to get from cache
 	cachedResp, err := s.cacheManager.GetChatCompletion(ctx, cacheKey)
 	if err == nil && cachedResp != nil {
-		// Add cache hit header to context
-		// TODO: Need to propagate this context to response headers
-		_ = context.WithValue(ctx, CacheStatusKey, "HIT") // nolint:ineffassign
 		log.Debug().
 			Str("model", req.Model).
 			Msg("cache hit for chat completion")
-		return fromCacheChatResponse(cachedResp), nil
+		resp := fromCacheChatResponse(cachedResp)
+		resp.CacheStatus = "HIT"
+		return resp, nil
 	}
 
 	// Cache miss - call underlying service
-	ctx = context.WithValue(ctx, CacheStatusKey, "MISS")
 	resp, err := s.service.ProcessChatCompletion(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+	resp.CacheStatus = "MISS"
 
 	// Cache successful responses
 	cacheResp := toCacheChatResponse(resp)
@@ -114,21 +113,20 @@ func (s *CachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 	// Try to get from cache
 	cachedResp, err := s.cacheManager.GetEmbedding(ctx, cacheKey)
 	if err == nil && cachedResp != nil {
-		// Add cache hit header to context
-		// TODO: Need to propagate this context to response headers
-		_ = context.WithValue(ctx, CacheStatusKey, "HIT") // nolint:ineffassign
 		log.Debug().
 			Str("model", req.Model).
 			Msg("cache hit for embedding")
-		return fromCacheEmbeddingsResponse(cachedResp), nil
+		resp := fromCacheEmbeddingsResponse(cachedResp)
+		resp.CacheStatus = "HIT"
+		return resp, nil
 	}
 
 	// Cache miss
-	ctx = context.WithValue(ctx, CacheStatusKey, "MISS")
 	resp, err := s.service.ProcessEmbeddings(ctx, req)
 	if err != nil {
 		return nil, err
 	}
+	resp.CacheStatus = "MISS"
 
 	// Cache successful responses
 	cacheResp := toCacheEmbeddingsResponse(resp)
@@ -157,19 +155,18 @@ func (s *CachedService) ListModels(ctx context.Context) (*ModelsResponse, error)
 	if err == nil && found {
 		var resp ModelsResponse
 		if err := json.Unmarshal(cachedData, &resp); err == nil {
-			// TODO: Need to propagate this context to response headers
-			_ = context.WithValue(ctx, CacheStatusKey, "HIT") // nolint:ineffassign
 			log.Debug().Msg("cache hit for models list")
+			resp.CacheStatus = "HIT"
 			return &resp, nil
 		}
 	}
 
 	// Cache miss
-	ctx = context.WithValue(ctx, CacheStatusKey, "MISS")
 	resp, err := s.service.ListModels(ctx)
 	if err != nil {
 		return nil, err
 	}
+	resp.CacheStatus = "MISS"
 
 	// Cache successful responses
 	if respData, err := json.Marshal(resp); err == nil {
@@ -198,19 +195,18 @@ func (s *CachedService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 	if err == nil && found {
 		var resp ProvidersResponse
 		if err := json.Unmarshal(cachedData, &resp); err == nil {
-			// TODO: Need to propagate this context to response headers
-			_ = context.WithValue(ctx, CacheStatusKey, "HIT") // nolint:ineffassign
 			log.Debug().Msg("cache hit for providers list")
+			resp.CacheStatus = "HIT"
 			return &resp, nil
 		}
 	}
 
 	// Cache miss
-	ctx = context.WithValue(ctx, CacheStatusKey, "MISS")
 	resp, err := s.service.ListProviders(ctx)
 	if err != nil {
 		return nil, err
 	}
+	resp.CacheStatus = "MISS"
 
 	// Cache successful responses
 	if respData, err := json.Marshal(resp); err == nil {
@@ -365,6 +361,7 @@ func toCacheChatResponse(resp *ChatCompletionResponse) *cache.ChatCompletionResp
 		Usage:             resp.Usage,
 		SystemFingerprint: resp.SystemFingerprint,
 		ModelUsed:         resp.ModelUsed,
+		// Note: CacheStatus is not cached
 	}
 }
 
@@ -375,6 +372,7 @@ func toCacheEmbeddingsResponse(resp *EmbeddingsResponse) *cache.EmbeddingsRespon
 		Data:   resp.Data,
 		Model:  resp.Model,
 		Usage:  resp.Usage,
+		// Note: CacheStatus is not cached
 	}
 }
 

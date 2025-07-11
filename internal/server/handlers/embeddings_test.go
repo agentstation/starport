@@ -178,20 +178,22 @@ func TestEmbeddingsHandler_Create(t *testing.T) {
 }
 
 func TestEmbeddingsHandler_CacheHeaders(t *testing.T) {
-	// Create mock service that sets cache header in context
-	mockService := &mockEmbeddingsService{
-		embeddings: &proxy.EmbeddingsResponse{
-			Object: "list",
-			Data:   []connectors.Embedding{},
-			Model:  "text-embedding-ada-002",
-			Usage:  &connectors.Usage{},
-		},
-	}
-
-	handler := NewEmbeddingsHandler(mockService)
+	handler := NewEmbeddingsHandler(nil)
 
 	// Test cache hit
 	t.Run("cache hit", func(t *testing.T) {
+		// Create mock service that returns response with cache status
+		mockService := &mockEmbeddingsService{
+			embeddings: &proxy.EmbeddingsResponse{
+				Object:      "list",
+				Data:        []connectors.Embedding{},
+				Model:       "text-embedding-ada-002",
+				Usage:       &connectors.Usage{},
+				CacheStatus: "HIT",
+			},
+		}
+		handler.service = mockService
+
 		body := &proxy.EmbeddingsRequest{
 			Model: "text-embedding-ada-002",
 			Input: "test",
@@ -200,9 +202,8 @@ func TestEmbeddingsHandler_CacheHeaders(t *testing.T) {
 		req := httptest.NewRequest("POST", "/v1/embeddings", bytes.NewReader(bodyBytes))
 		req.Header.Set("Content-Type", "application/json")
 
-		// Add cache hit and required context values
-		ctx := context.WithValue(req.Context(), "X-Cache", "HIT")
-		ctx = context.WithValue(ctx, "request_id", "test-request-id")
+		// Add required context values
+		ctx := context.WithValue(req.Context(), "request_id", "test-request-id")
 		ctx = context.WithValue(ctx, "api_key", "test-key")
 		req = req.WithContext(ctx)
 
@@ -214,6 +215,18 @@ func TestEmbeddingsHandler_CacheHeaders(t *testing.T) {
 
 	// Test cache miss
 	t.Run("cache miss", func(t *testing.T) {
+		// Create mock service that returns response with cache status
+		mockService := &mockEmbeddingsService{
+			embeddings: &proxy.EmbeddingsResponse{
+				Object:      "list",
+				Data:        []connectors.Embedding{},
+				Model:       "text-embedding-ada-002",
+				Usage:       &connectors.Usage{},
+				CacheStatus: "MISS",
+			},
+		}
+		handler.service = mockService
+
 		body := &proxy.EmbeddingsRequest{
 			Model: "text-embedding-ada-002",
 			Input: "test",
@@ -222,9 +235,8 @@ func TestEmbeddingsHandler_CacheHeaders(t *testing.T) {
 		req := httptest.NewRequest("POST", "/v1/embeddings", bytes.NewReader(bodyBytes))
 		req.Header.Set("Content-Type", "application/json")
 
-		// Add cache miss and required context values
-		ctx := context.WithValue(req.Context(), "X-Cache", "MISS")
-		ctx = context.WithValue(ctx, "request_id", "test-request-id")
+		// Add required context values
+		ctx := context.WithValue(req.Context(), "request_id", "test-request-id")
 		ctx = context.WithValue(ctx, "api_key", "test-key")
 		req = req.WithContext(ctx)
 

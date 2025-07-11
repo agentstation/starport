@@ -159,9 +159,20 @@ func TestModelsHandler_List(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Create response copy for cache test
+			mockResp := tt.mockResponse
+			if tt.name == "cache headers" && mockResp != nil {
+				// Create a new response with cache status
+				mockResp = &proxy.ModelsResponse{
+					Object:      tt.mockResponse.Object,
+					Data:        tt.mockResponse.Data,
+					CacheStatus: "HIT",
+				}
+			}
+
 			// Create mock service
 			mockService := &mockModelsService{
-				models: tt.mockResponse,
+				models: mockResp,
 				err:    tt.mockError,
 			}
 
@@ -170,12 +181,6 @@ func TestModelsHandler_List(t *testing.T) {
 
 			// Create request
 			req := httptest.NewRequest("GET", tt.path, nil)
-
-			// Add cache status to context for cache test
-			if tt.name == "cache headers" {
-				ctx := context.WithValue(req.Context(), "X-Cache", "HIT")
-				req = req.WithContext(ctx)
-			}
 
 			// Create response recorder
 			w := httptest.NewRecorder()
