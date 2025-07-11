@@ -47,7 +47,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
   - [x] Filter rules storage ✅
 - [ ] Advanced API key management
   - [ ] Starport API key generation with github.com/agentstation/uuidkey
-  - [ ] Direct key validation (no hashing needed with uuidkey)
+  - [ ] Key storage by SHA256 hash with checksum validation
   - [ ] JWT token support
   - [ ] Key validation middleware
   - [ ] Scopes and permissions system

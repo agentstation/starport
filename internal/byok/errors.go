@@ -18,8 +18,6 @@ var (
 	ErrInvalidProvider = errors.New("invalid provider")
 	// ErrCredentialNotFound is returned when a credential is not found
 	ErrCredentialNotFound = errors.New("credential not found")
-	// ErrDefaultKeyNotFound is returned when default key is not found
-	ErrDefaultKeyNotFound = errors.New("default key not found")
 	// ErrInvalidCredentialFormat is returned when credential format is invalid
 	ErrInvalidCredentialFormat = errors.New("invalid credential format")
 	// ErrEncryptionFailed is returned when encryption fails

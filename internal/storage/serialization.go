@@ -65,4 +65,3 @@ func SerializeModel(v interface{}) ([]byte, error) {
 func DeserializeModel(data []byte, v interface{}) error {
 	return Deserialize(data, v)
 }
-

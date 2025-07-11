@@ -1,22 +1,27 @@
 package server
 
 import (
-	"github.com/agentstation/starport/internal/connectors"
+	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/registry"
 )
 
-// Ensure ConnectorRegistry implements connectors.Registry interface
-var _ connectors.Registry = (*ConnectorRegistry)(nil)
-
-// Get implements the connectors.Registry interface (no error return)
-func (r *ConnectorRegistry) Get(provider string) connectors.Connector {
-	return r.connectors[provider]
+// registryAdapter adapts registry.Registry to connectors.Registry
+type registryAdapter struct {
+	reg *registry.Registry
 }
 
-// List implements the connectors.Registry interface
-func (r *ConnectorRegistry) List() []string {
-	providers := make([]string, 0, len(r.connectors))
-	for provider := range r.connectors {
-		providers = append(providers, provider)
-	}
-	return providers
+// newRegistryAdapter creates a new adapter
+func newRegistryAdapter(reg *registry.Registry) connectors.Registry {
+	return &registryAdapter{reg: reg}
+}
+
+// Get implements connectors.Registry
+func (a *registryAdapter) Get(provider string) connectors.Connector {
+	conn, _ := a.reg.Get(provider)
+	return conn
+}
+
+// List implements connectors.Registry
+func (a *registryAdapter) List() []string {
+	return a.reg.ListProviders()
 }

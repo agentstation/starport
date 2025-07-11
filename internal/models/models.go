@@ -33,27 +33,19 @@ type Preset struct {
 	UpdatedAt   time.Time              `json:"updated_at"`
 }
 
-// BYOKCredential represents an encrypted credential for bring-your-own-key
-type BYOKCredential struct {
-	APIKeyID            string                 `json:"api_key_id"`
+// ProviderKey represents an encrypted API key for an external LLM provider
+// Keys can be scoped to specific users (scope = "user:id") or globally (scope = "*")
+type ProviderKey struct {
+	Scope               string                 `json:"scope"` // "*" for global, "user:id" for user-specific
 	Provider            string                 `json:"provider"`
 	EncryptedCredential string                 `json:"encrypted_credential"`
 	Config              map[string]interface{} `json:"config,omitempty"`     // Provider-specific config (endpoints, versions, etc)
 	IsFallback          bool                   `json:"is_fallback"`          // Use as fallback when rate limited
 	Priority            int                    `json:"priority"`             // Order preference (lower = higher priority)
+	RateLimit           *RateLimitConfig       `json:"rate_limit,omitempty"` // Rate limits (typically for global keys)
 	CreatedAt           time.Time              `json:"created_at"`
 	LastUsed            *time.Time             `json:"last_used,omitempty"`
 	UsageCount          int64                  `json:"usage_count"`
-	UpdatedAt           time.Time              `json:"updated_at"`
-}
-
-// DefaultKey represents a gateway-wide default provider key
-type DefaultKey struct {
-	Provider            string                 `json:"provider"`
-	EncryptedCredential string                 `json:"encrypted_credential"`
-	Config              map[string]interface{} `json:"config,omitempty"`
-	RateLimit           *RateLimitConfig       `json:"rate_limit,omitempty"`
-	CreatedAt           time.Time              `json:"created_at"`
 	UpdatedAt           time.Time              `json:"updated_at"`
 }
 
@@ -176,47 +168,40 @@ func (p *Preset) Validate() error {
 	return nil
 }
 
-// Validate validates the BYOKCredential fields
-func (c *BYOKCredential) Validate() error {
-	if c.APIKeyID == "" {
-		return ErrMissingAPIKeyID
-	}
-	if c.Provider == "" {
-		return ErrInvalidProvider
-	}
-	if c.EncryptedCredential == "" {
-		return ErrMissingCredential
-	}
-	if c.Priority < 0 {
-		return errors.New("invalid priority: must be non-negative")
-	}
-	if c.UpdatedAt.Before(c.CreatedAt) {
-		return errors.New("updated_at must be after or equal to created_at")
-	}
-	if c.LastUsed != nil && c.LastUsed.Before(c.CreatedAt) {
-		return errors.New("last_used must be after created_at")
-	}
-	return nil
+// IsGlobal returns true if this is a gateway-wide key
+func (k *ProviderKey) IsGlobal() bool {
+	return k.Scope == "*"
 }
 
-// Validate validates the DefaultKey fields
-func (d *DefaultKey) Validate() error {
-	if d.Provider == "" {
+// Validate validates the ProviderKey fields
+func (k *ProviderKey) Validate() error {
+	// Scope can be "*" for global or "user:id" for user-specific
+	// Empty scope defaults to global for backward compatibility
+	if k.Scope == "" {
+		k.Scope = "*"
+	}
+	if k.Provider == "" {
 		return ErrInvalidProvider
 	}
-	if d.EncryptedCredential == "" {
+	if k.EncryptedCredential == "" {
 		return ErrMissingCredential
 	}
-	if d.RateLimit != nil {
-		if d.RateLimit.RequestsPerMinute < 0 {
+	if k.Priority < 0 {
+		return errors.New("invalid priority: must be non-negative")
+	}
+	if k.RateLimit != nil {
+		if k.RateLimit.RequestsPerMinute < 0 {
 			return errors.New("invalid requests_per_minute: must be non-negative")
 		}
-		if d.RateLimit.TokensPerMinute < 0 {
+		if k.RateLimit.TokensPerMinute < 0 {
 			return errors.New("invalid tokens_per_minute: must be non-negative")
 		}
 	}
-	if d.UpdatedAt.Before(d.CreatedAt) {
+	if k.UpdatedAt.Before(k.CreatedAt) {
 		return errors.New("updated_at must be after or equal to created_at")
+	}
+	if k.LastUsed != nil && k.LastUsed.Before(k.CreatedAt) {
+		return errors.New("last_used must be after created_at")
 	}
 	return nil
 }
@@ -243,7 +228,7 @@ func (t *TokenBucket) Refill() {
 	now := time.Now()
 	elapsed := now.Sub(t.LastRefill).Seconds()
 	tokensToAdd := elapsed * t.RefillRate
-	
+
 	t.Tokens = t.Tokens + tokensToAdd
 	if t.Tokens > t.Capacity {
 		t.Tokens = t.Capacity

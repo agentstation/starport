@@ -15,7 +15,7 @@ type StorageGetter interface {
 // WaitForExpiration waits for a key to expire in storage
 func WaitForExpiration(t *testing.T, store StorageGetter, key string, timeout time.Duration) {
 	t.Helper()
-	
+
 	ctx := context.Background()
 	WaitFor(t, func() bool {
 		_, err := store.Get(ctx, key)
@@ -26,7 +26,7 @@ func WaitForExpiration(t *testing.T, store StorageGetter, key string, timeout ti
 // WaitForKeyNotExists waits for a key to not exist in storage
 func WaitForKeyNotExists(t *testing.T, store StorageGetter, key string, timeout time.Duration) {
 	t.Helper()
-	
+
 	ctx := context.Background()
 	WaitFor(t, func() bool {
 		exists, err := store.Exists(ctx, key)

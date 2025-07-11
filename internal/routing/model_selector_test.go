@@ -3,13 +3,13 @@ package routing
 import (
 	"testing"
 
-	"github.com/agentstation/starport/internal/connectors"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestModelCapabilities(t *testing.T) {
 	caps := defaultModelCapabilities()
-	
+
 	// Test that we have capabilities for key models
 	expectedModels := []string{
 		"openai/gpt-4",
@@ -19,7 +19,7 @@ func TestModelCapabilities(t *testing.T) {
 		"google-aistudio/gemini-1.5-pro",
 		"groq/llama-3.1-8b-instant",
 	}
-	
+
 	for _, model := range expectedModels {
 		_, ok := caps[model]
 		assert.True(t, ok, "Should have capabilities for %s", model)
@@ -82,7 +82,7 @@ func TestIsModelAvailable(t *testing.T) {
 			want:             false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsModelAvailable(tt.modelID, tt.requiredFeatures)
@@ -95,7 +95,7 @@ func TestDefaultModelSelector_RequestAnalysis(t *testing.T) {
 	selector := &defaultModelSelector{
 		modelCapabilities: defaultModelCapabilities(),
 	}
-	
+
 	t.Run("detect vision content", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -110,11 +110,11 @@ func TestDefaultModelSelector_RequestAnalysis(t *testing.T) {
 				},
 			},
 		}
-		
+
 		hasVision := selector.requestHasVision(req)
 		assert.True(t, hasVision)
 	})
-	
+
 	t.Run("detect function calling", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -126,11 +126,11 @@ func TestDefaultModelSelector_RequestAnalysis(t *testing.T) {
 				},
 			},
 		}
-		
+
 		hasFunctions := selector.requestHasFunctions(req)
 		assert.True(t, hasFunctions)
 	})
-	
+
 	t.Run("estimate tokens", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -141,7 +141,7 @@ func TestDefaultModelSelector_RequestAnalysis(t *testing.T) {
 				MaxTokens: intPtr(100),
 			},
 		}
-		
+
 		tokens := selector.estimateTokens(req)
 		// ~100 chars in messages / 4 + 100 max tokens * 4 chars / 4 = 25 + 100 = 125
 		assert.Greater(t, tokens, 100)
@@ -151,7 +151,7 @@ func TestDefaultModelSelector_RequestAnalysis(t *testing.T) {
 
 func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 	selector := NewDefaultModelSelector()
-	
+
 	t.Run("simple request gets fast models first", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -160,15 +160,15 @@ func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
-		
+
 		// First models should be fast/economical
 		assert.Contains(t, models[0], "groq/llama-3.1-8b-instant")
 		assert.Contains(t, models[1], "openai/gpt-3.5-turbo")
 	})
-	
+
 	t.Run("vision request gets vision models", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -182,16 +182,16 @@ func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
-		
+
 		// Should get vision-capable models
 		assert.Contains(t, models, "openai/gpt-4-vision-preview")
 		assert.Contains(t, models, "anthropic/claude-3-sonnet-20240229")
 		assert.Contains(t, models, "google-aistudio/gemini-1.5-pro")
 	})
-	
+
 	t.Run("function request gets function models", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -203,10 +203,10 @@ func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
-		
+
 		// Should include function-capable models
 		hasOpenAI := false
 		hasMistral := false
@@ -221,14 +221,14 @@ func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 		assert.True(t, hasOpenAI, "Should include OpenAI models for functions")
 		assert.True(t, hasMistral, "Should include Mistral models for functions")
 	})
-	
+
 	t.Run("large context request", func(t *testing.T) {
 		// Create a request with large estimated tokens
 		largeContent := make([]byte, 50000) // ~12.5k tokens
 		for i := range largeContent {
 			largeContent[i] = 'a'
 		}
-		
+
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
 				Messages: []connectors.Message{
@@ -236,10 +236,10 @@ func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
-		
+
 		// Should not start with small context models
 		assert.NotContains(t, models[0], "gpt-3.5")
 	})
@@ -247,7 +247,7 @@ func TestDefaultModelSelector_ModelSelection(t *testing.T) {
 
 func TestDefaultModelSelector_Preferences(t *testing.T) {
 	selector := NewDefaultModelSelector().(*defaultModelSelector)
-	
+
 	t.Run("quality preference", func(t *testing.T) {
 		models := []string{
 			"openai/gpt-3.5-turbo",
@@ -255,15 +255,15 @@ func TestDefaultModelSelector_Preferences(t *testing.T) {
 			"anthropic/claude-3-haiku-20240307",
 			"anthropic/claude-3-opus-20240229",
 		}
-		
+
 		metadata := &RequestMetadata{
 			UserPreferences: map[string]interface{}{
 				"quality": "premium",
 			},
 		}
-		
+
 		filtered := selector.filterByPreferences(models, metadata)
-		
+
 		// Should only include premium models
 		for _, model := range filtered {
 			cap, ok := selector.modelCapabilities[model]
@@ -272,7 +272,7 @@ func TestDefaultModelSelector_Preferences(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("speed preference", func(t *testing.T) {
 		models := []string{
 			"openai/gpt-3.5-turbo",
@@ -280,15 +280,15 @@ func TestDefaultModelSelector_Preferences(t *testing.T) {
 			"groq/llama-3.1-8b-instant",
 			"anthropic/claude-3-opus-20240229",
 		}
-		
+
 		metadata := &RequestMetadata{
 			UserPreferences: map[string]interface{}{
 				"speed": "fast",
 			},
 		}
-		
+
 		filtered := selector.filterByPreferences(models, metadata)
-		
+
 		// Should only include fast models
 		for _, model := range filtered {
 			cap, ok := selector.modelCapabilities[model]
@@ -303,7 +303,7 @@ func TestDefaultModelSelector_Deduplication(t *testing.T) {
 	selector := &defaultModelSelector{
 		modelCapabilities: defaultModelCapabilities(),
 	}
-	
+
 	models := []string{
 		"openai/gpt-4",
 		"anthropic/claude-3",
@@ -311,9 +311,9 @@ func TestDefaultModelSelector_Deduplication(t *testing.T) {
 		"groq/llama",
 		"anthropic/claude-3", // duplicate
 	}
-	
+
 	deduped := selector.deduplicateModels(models)
-	
+
 	assert.Len(t, deduped, 3)
 	assert.Equal(t, []string{"openai/gpt-4", "anthropic/claude-3", "groq/llama"}, deduped)
 }

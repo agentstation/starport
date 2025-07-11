@@ -35,7 +35,7 @@ func createTestBadgerStore(t *testing.T) (*BadgerStore, func()) {
 	t.Helper()
 
 	dir := filepath.Join(os.TempDir(), fmt.Sprintf("badger_test_%d_%d", time.Now().UnixNano(), os.Getpid()))
-	
+
 	config := BadgerConfig{
 		Path:         dir,
 		SyncWrites:   false,
@@ -251,7 +251,7 @@ func testBadgerTTLOperations(t *testing.T) {
 			exists, _ := store.Exists(ctx, key)
 			return exists
 		}, 100*time.Millisecond, "ExpireAt to complete")
-		
+
 		// Check - key should still exist
 		exists, err := store.Exists(ctx, key)
 		if err != nil {
@@ -405,7 +405,7 @@ func testBadgerAtomicOperations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CompareAndSwap on new key failed: %v", err)
 		}
-		
+
 		// Verify it was set
 		retrieved, err = store.Get(ctx, nonExistentKey)
 		if err != nil {
@@ -905,7 +905,7 @@ func testBadgerConcurrency(t *testing.T) {
 		// Reduce contention for race detector
 		numGoroutines := 10
 		incrementsPerGoroutine := 20
-		
+
 		var successCount atomic.Int64
 
 		for i := 0; i < numGoroutines; i++ {
@@ -935,17 +935,17 @@ func testBadgerConcurrency(t *testing.T) {
 		if err != nil {
 			t.Fatalf("DeserializeInt64 failed: %v", err)
 		}
-		
+
 		// The count should match successful increments
 		success := successCount.Load()
 		if finalCount != success {
 			t.Errorf("Expected count %d to match successful increments %d", finalCount, success)
 		}
-		
+
 		// We should have at least 80% success rate even under extreme contention
 		expectedMinSuccess := int64(float64(numGoroutines*incrementsPerGoroutine) * 0.8)
 		if success < expectedMinSuccess {
-			t.Errorf("Too many failures: only %d/%d increments succeeded (minimum expected: %d)", 
+			t.Errorf("Too many failures: only %d/%d increments succeeded (minimum expected: %d)",
 				success, numGoroutines*incrementsPerGoroutine, expectedMinSuccess)
 		}
 	})

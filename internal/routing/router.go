@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/agentstation/starport/internal/connectors"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -20,8 +20,8 @@ const (
 	AutoModelID = "openrouter/auto"
 
 	// Default retry settings
-	defaultMaxRetries       = 3
-	defaultRetryDelay       = 1 * time.Second
+	defaultMaxRetries        = 3
+	defaultRetryDelay        = 1 * time.Second
 	defaultBackoffMultiplier = 2.0
 )
 
@@ -35,45 +35,45 @@ var (
 // Config contains configuration for the router
 type Config struct {
 	// Latency tracking configuration
-	LatencyAlpha      float64       // EMA smoothing factor (0-1)
-	LatencyWindowSize int           // Samples before EMA kicks in
-	
+	LatencyAlpha      float64 // EMA smoothing factor (0-1)
+	LatencyWindowSize int     // Samples before EMA kicks in
+
 	// Cost optimization
 	EnableCostOptimization bool
 	MaxCostMultiplier      float64
-	
+
 	// Latency constraints
 	MaxLatencyMultiplier float64
-	
+
 	// Sticky sessions
 	EnableStickySessions bool
 	SessionTTL           time.Duration
-	
+
 	// Health check configuration
 	CircuitBreakerThreshold int           // Consecutive failures to open circuit
 	CircuitBreakerDuration  time.Duration // How long to keep circuit open
-	
+
 	// Retry configuration
-	MaxRetries          int
-	RetryDelay          time.Duration
+	MaxRetries             int
+	RetryDelay             time.Duration
 	RetryBackoffMultiplier float64
 }
 
-// defaultRouter implements the ModelRouter interface
-type defaultRouter struct {
+// modelRouter implements the ModelRouter interface
+type modelRouter struct {
 	registry         connectors.Registry
 	modelSelector    ModelSelector
 	availableModels  map[string]ModelInfo
 	providerHealthMu sync.RWMutex
 	providerHealth   map[string]*ProviderHealth
-	
+
 	// Advanced routing features
-	config               Config
-	latencyTracker       LatencyTracker
-	costCalculator       CostCalculator
-	stickySessionManager StickySessionManager
-	latencySelector      *LatencyBasedSelector
-	costSelector         *CostOptimizedSelector
+	config                       Config
+	latencyTracker               LatencyTracker
+	costCalculator               CostCalculator
+	stickyProviderSessionManager StickyProviderSessionManager
+	latencySelector              *LatencyBasedSelector
+	costSelector                 *CostOptimizedSelector
 }
 
 // NewRouter creates a new model router with all features enabled by default
@@ -92,33 +92,33 @@ func NewRouter(registry connectors.Registry) ModelRouter {
 		RetryDelay:              1 * time.Second,
 		RetryBackoffMultiplier:  2.0,
 	}
-	
+
 	latencyTracker := NewLatencyTracker(config.LatencyAlpha, config.LatencyWindowSize)
 	costCalculator := NewCostCalculator()
-	
-	router := &defaultRouter{
-		registry:             registry,
-		modelSelector:        NewDefaultModelSelector(),
-		availableModels:      make(map[string]ModelInfo),
-		providerHealth:       make(map[string]*ProviderHealth),
-		latencyTracker:       latencyTracker,
-		costCalculator:       costCalculator,
-		config:               config,
-		latencySelector:      NewLatencyBasedSelector(latencyTracker, config.MaxLatencyMultiplier),
-		costSelector:         NewCostOptimizedSelector(costCalculator, latencyTracker, config.MaxCostMultiplier, config.MaxLatencyMultiplier),
-		stickySessionManager: NewStickySessionManager(config.SessionTTL),
+
+	router := &modelRouter{
+		registry:                     registry,
+		modelSelector:                NewDefaultModelSelector(),
+		availableModels:              make(map[string]ModelInfo),
+		providerHealth:               make(map[string]*ProviderHealth),
+		latencyTracker:               latencyTracker,
+		costCalculator:               costCalculator,
+		config:                       config,
+		latencySelector:              NewLatencyBasedSelector(latencyTracker, config.MaxLatencyMultiplier),
+		costSelector:                 NewCostOptimizedSelector(costCalculator, latencyTracker, config.MaxCostMultiplier, config.MaxLatencyMultiplier),
+		stickyProviderSessionManager: NewStickyProviderSessionManager(config.SessionTTL),
 	}
-	
+
 	return router
 }
 
 // ProviderHealth tracks provider health status
 type ProviderHealth struct {
-	Available       bool
-	LastError       error
-	LastErrorTime   time.Time
+	Available        bool
+	LastError        error
+	LastErrorTime    time.Time
 	ConsecutiveFails int
-	CircuitOpen     bool
+	CircuitOpen      bool
 	CircuitOpenUntil time.Time
 }
 
@@ -134,10 +134,10 @@ type ModelInfo struct {
 }
 
 // SelectModel chooses the best model based on the request and routing strategy
-func (r *defaultRouter) SelectModel(ctx context.Context, req *Request) (string, connectors.Connector, error) {
+func (r *modelRouter) SelectModel(ctx context.Context, req *Request) (string, connectors.Connector, error) {
 	// Check sticky session first
-	if r.stickySessionManager != nil && r.config.EnableStickySessions && req.Metadata != nil && req.Metadata.ConversationID != "" {
-		if provider, exists := r.stickySessionManager.GetProvider(req.Metadata.ConversationID); exists {
+	if r.stickyProviderSessionManager != nil && r.config.EnableStickySessions && req.Metadata != nil && req.Metadata.ConversationID != "" {
+		if provider, exists := r.stickyProviderSessionManager.GetProvider(req.Metadata.ConversationID); exists {
 			// Check if provider is still healthy
 			if r.isProviderHealthy(provider) {
 				// Find a model from this provider in our candidates
@@ -153,7 +153,7 @@ func (r *defaultRouter) SelectModel(ctx context.Context, req *Request) (string, 
 			}
 		}
 	}
-	
+
 	// Get candidate models
 	models := r.getCandidateModels(req)
 	if len(models) == 0 {
@@ -173,13 +173,13 @@ func (r *defaultRouter) SelectModel(ctx context.Context, req *Request) (string, 
 			return "", nil, fmt.Errorf("no models allowed for this API key")
 		}
 	}
-	
+
 	// Filter by health
 	models = r.filterByHealth(models)
 	if len(models) == 0 {
 		return "", nil, ErrNoModelsAvailable
 	}
-	
+
 	// Apply latency-based filtering if available
 	if r.latencySelector != nil {
 		providers := r.extractProviders(models)
@@ -189,7 +189,7 @@ func (r *defaultRouter) SelectModel(ctx context.Context, req *Request) (string, 
 
 	// Select the best model
 	modelID := r.selectBestModel(ctx, models, req)
-	
+
 	// Get connector for the model
 	provider := r.extractProvider(modelID)
 	connector := r.registry.Get(provider)
@@ -201,9 +201,9 @@ func (r *defaultRouter) SelectModel(ctx context.Context, req *Request) (string, 
 }
 
 // RouteWithFallback attempts to route a request through multiple models with fallback logic
-func (r *defaultRouter) RouteWithFallback(ctx context.Context, req *Request) (*Response, error) {
+func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Response, error) {
 	startTime := time.Now()
-	
+
 	// Get candidate models
 	models := r.getCandidateModels(req)
 	if len(models) == 0 {
@@ -227,7 +227,7 @@ func (r *defaultRouter) RouteWithFallback(ctx context.Context, req *Request) (*R
 	for i, modelID := range models {
 		attemptStart := time.Now()
 		provider := r.extractProvider(modelID)
-		
+
 		// Check provider health
 		if !r.isProviderHealthy(provider) {
 			attempts = append(attempts, ModelAttempt{
@@ -256,11 +256,11 @@ func (r *defaultRouter) RouteWithFallback(ctx context.Context, req *Request) (*R
 		// Create a copy of the request with the current model
 		reqCopy := *req.ChatRequest
 		reqCopy.Model = modelID
-		
+
 		// Attempt the request
 		var resp *connectors.ChatResponse
 		var err error
-		
+
 		if reqCopy.Stream {
 			// For streaming, we need to handle it differently
 			// This is a simplified version - in production, we'd need to handle streaming fallback
@@ -272,18 +272,18 @@ func (r *defaultRouter) RouteWithFallback(ctx context.Context, req *Request) (*R
 		if err == nil {
 			// Success!
 			r.recordProviderSuccess(provider)
-			
+
 			// Record latency if tracker is available
 			if r.latencyTracker != nil {
 				latency := time.Since(attemptStart)
 				r.latencyTracker.RecordLatency(provider, latency)
 			}
-			
-			// Update sticky session if enabled
-			if r.stickySessionManager != nil && r.config.EnableStickySessions && req.Metadata != nil && req.Metadata.ConversationID != "" {
-				r.stickySessionManager.SetProvider(req.Metadata.ConversationID, provider)
+
+			// Update sticky provider session if enabled
+			if r.stickyProviderSessionManager != nil && r.config.EnableStickySessions && req.Metadata != nil && req.Metadata.ConversationID != "" {
+				r.stickyProviderSessionManager.SetProvider(req.Metadata.ConversationID, provider)
 			}
-			
+
 			return &Response{
 				ChatResponse: resp,
 				ModelUsed:    modelID,
@@ -305,11 +305,11 @@ func (r *defaultRouter) RouteWithFallback(ctx context.Context, req *Request) (*R
 		// Record the failure
 		r.recordProviderFailure(provider, err)
 		lastError = err
-		
+
 		// Check if we should fallback
 		trigger, shouldFallback := IsFallbackError(err)
 		errorMsg := err.Error()
-		
+
 		attempts = append(attempts, ModelAttempt{
 			Model:    modelID,
 			Provider: provider,
@@ -348,7 +348,7 @@ func (r *defaultRouter) RouteWithFallback(ctx context.Context, req *Request) (*R
 }
 
 // getCandidateModels returns the list of models to try
-func (r *defaultRouter) getCandidateModels(req *Request) []string {
+func (r *modelRouter) getCandidateModels(req *Request) []string {
 	// If Models array is provided in the routing request, use it
 	if len(req.Models) > 0 {
 		return r.expandAutoModel(req.Models, req)
@@ -369,9 +369,9 @@ func (r *defaultRouter) getCandidateModels(req *Request) []string {
 }
 
 // expandAutoModel expands "openrouter/auto" to actual models
-func (r *defaultRouter) expandAutoModel(models []string, req *Request) []string {
+func (r *modelRouter) expandAutoModel(models []string, req *Request) []string {
 	var expanded []string
-	
+
 	for _, model := range models {
 		if model == AutoModelID {
 			// Get auto-selected models
@@ -381,12 +381,12 @@ func (r *defaultRouter) expandAutoModel(models []string, req *Request) []string 
 			expanded = append(expanded, model)
 		}
 	}
-	
+
 	return expanded
 }
 
 // filterByProviderPreferences applies provider routing preferences
-func (r *defaultRouter) filterByProviderPreferences(models []string, prefs *ProviderPreferences) []string {
+func (r *modelRouter) filterByProviderPreferences(models []string, prefs *ProviderPreferences) []string {
 	if prefs == nil {
 		return models
 	}
@@ -400,7 +400,7 @@ func (r *defaultRouter) filterByProviderPreferences(models []string, prefs *Prov
 		for _, p := range prefs.Only {
 			onlyMap[p] = true
 		}
-		
+
 		for _, model := range models {
 			provider := r.extractProvider(model)
 			if onlyMap[provider] {
@@ -424,7 +424,7 @@ func (r *defaultRouter) filterByProviderPreferences(models []string, prefs *Prov
 			if ignoreMap[preferredProvider] {
 				continue
 			}
-			
+
 			for _, model := range models {
 				provider := r.extractProvider(model)
 				if provider == preferredProvider && !providersSeen[provider] {
@@ -458,7 +458,7 @@ func (r *defaultRouter) filterByProviderPreferences(models []string, prefs *Prov
 }
 
 // filterByAPIKeyRestrictions applies API key restrictions
-func (r *defaultRouter) filterByAPIKeyRestrictions(models []string, config *APIKeyConfig) []string {
+func (r *modelRouter) filterByAPIKeyRestrictions(models []string, config *APIKeyConfig) []string {
 	if config == nil || len(config.AllowedProviders) == 0 {
 		return models
 	}
@@ -485,11 +485,11 @@ func (r *defaultRouter) filterByAPIKeyRestrictions(models []string, config *APIK
 }
 
 // selectBestModel selects the best model from candidates
-func (r *defaultRouter) selectBestModel(_ context.Context, models []string, req *Request) string {
+func (r *modelRouter) selectBestModel(_ context.Context, models []string, req *Request) string {
 	if len(models) == 0 {
 		return ""
 	}
-	
+
 	// Use cost optimization if enabled and we have token estimates
 	if r.costSelector != nil && r.config.EnableCostOptimization && req.Metadata != nil && req.Metadata.EstimatedTokens > 0 {
 		selectedModel := r.costSelector.SelectModel(
@@ -501,7 +501,7 @@ func (r *defaultRouter) selectBestModel(_ context.Context, models []string, req 
 			return selectedModel
 		}
 	}
-	
+
 	// Otherwise use latency-based selection if available
 	if r.latencySelector != nil {
 		providers := r.extractProviders(models)
@@ -512,13 +512,13 @@ func (r *defaultRouter) selectBestModel(_ context.Context, models []string, req 
 			}
 		}
 	}
-	
+
 	// Fallback to first model
 	return models[0]
 }
 
 // extractProvider extracts the provider from a model ID
-func (r *defaultRouter) extractProvider(modelID string) string {
+func (r *modelRouter) extractProvider(modelID string) string {
 	parts := strings.SplitN(modelID, "/", 2)
 	if len(parts) > 0 {
 		return parts[0]
@@ -527,7 +527,7 @@ func (r *defaultRouter) extractProvider(modelID string) string {
 }
 
 // isProviderHealthy checks if a provider is healthy
-func (r *defaultRouter) isProviderHealthy(provider string) bool {
+func (r *modelRouter) isProviderHealthy(provider string) bool {
 	r.providerHealthMu.RLock()
 	health, exists := r.providerHealth[provider]
 	r.providerHealthMu.RUnlock()
@@ -546,7 +546,7 @@ func (r *defaultRouter) isProviderHealthy(provider string) bool {
 }
 
 // recordProviderSuccess records a successful request
-func (r *defaultRouter) recordProviderSuccess(provider string) {
+func (r *modelRouter) recordProviderSuccess(provider string) {
 	r.providerHealthMu.Lock()
 	defer r.providerHealthMu.Unlock()
 
@@ -562,7 +562,7 @@ func (r *defaultRouter) recordProviderSuccess(provider string) {
 }
 
 // recordProviderFailure records a failed request
-func (r *defaultRouter) recordProviderFailure(provider string, err error) {
+func (r *modelRouter) recordProviderFailure(provider string, err error) {
 	r.providerHealthMu.Lock()
 	defer r.providerHealthMu.Unlock()
 
@@ -587,7 +587,7 @@ func (r *defaultRouter) recordProviderFailure(provider string, err error) {
 	if duration == 0 {
 		duration = 30 * time.Second // Default
 	}
-	
+
 	if health.ConsecutiveFails >= threshold {
 		health.CircuitOpen = true
 		health.CircuitOpenUntil = time.Now().Add(duration)
@@ -596,14 +596,14 @@ func (r *defaultRouter) recordProviderFailure(provider string, err error) {
 }
 
 // attemptStreamingRequest handles streaming requests with fallback
-func (r *defaultRouter) attemptStreamingRequest(_ context.Context, _ connectors.Connector, _ *connectors.ChatRequest) (*connectors.ChatResponse, error) {
+func (r *modelRouter) attemptStreamingRequest(_ context.Context, _ connectors.Connector, _ *connectors.ChatRequest) (*connectors.ChatResponse, error) {
 	// For now, return an error - streaming fallback is complex
 	// In production, we'd need to handle stream interruption and retry
 	return nil, fmt.Errorf("streaming fallback not yet implemented")
 }
 
 // delayBeforeRetry adds a delay before retrying with exponential backoff
-func (r *defaultRouter) delayBeforeRetry(ctx context.Context, attemptNum int) {
+func (r *modelRouter) delayBeforeRetry(ctx context.Context, attemptNum int) {
 	// Ensure attemptNum is within safe bounds to prevent overflow
 	if attemptNum > 30 {
 		attemptNum = 30 // Cap at 2^30 to prevent overflow
@@ -612,7 +612,7 @@ func (r *defaultRouter) delayBeforeRetry(ctx context.Context, attemptNum int) {
 	if delay > 10*time.Second {
 		delay = 10 * time.Second
 	}
-	
+
 	select {
 	case <-ctx.Done():
 		return
@@ -622,7 +622,7 @@ func (r *defaultRouter) delayBeforeRetry(ctx context.Context, attemptNum int) {
 }
 
 // getSelectionReason returns a human-readable reason for model selection
-func (r *defaultRouter) getSelectionReason(index, total int) string {
+func (r *modelRouter) getSelectionReason(index, total int) string {
 	if index == 0 {
 		return "primary model succeeded"
 	}
@@ -630,7 +630,7 @@ func (r *defaultRouter) getSelectionReason(index, total int) string {
 }
 
 // triggerToString converts a fallback trigger to a string
-func (r *defaultRouter) triggerToString(trigger FallbackTrigger) string {
+func (r *modelRouter) triggerToString(trigger FallbackTrigger) string {
 	switch trigger {
 	case FallbackRateLimit:
 		return "rate_limit"
@@ -650,7 +650,7 @@ func (r *defaultRouter) triggerToString(trigger FallbackTrigger) string {
 }
 
 // filterByHealth filters out unhealthy providers
-func (r *defaultRouter) filterByHealth(models []string) []string {
+func (r *modelRouter) filterByHealth(models []string) []string {
 	var healthy []string
 	for _, model := range models {
 		provider := r.extractProvider(model)
@@ -662,10 +662,10 @@ func (r *defaultRouter) filterByHealth(models []string) []string {
 }
 
 // extractProviders gets unique providers from model list
-func (r *defaultRouter) extractProviders(models []string) []string {
+func (r *modelRouter) extractProviders(models []string) []string {
 	seen := make(map[string]bool)
 	var providers []string
-	
+
 	for _, model := range models {
 		provider := r.extractProvider(model)
 		if !seen[provider] {
@@ -673,23 +673,23 @@ func (r *defaultRouter) extractProviders(models []string) []string {
 			providers = append(providers, provider)
 		}
 	}
-	
+
 	return providers
 }
 
 // filterModelsByProviders filters models to only include those from specified providers
-func (r *defaultRouter) filterModelsByProviders(models []string, providers []string) []string {
+func (r *modelRouter) filterModelsByProviders(models []string, providers []string) []string {
 	providerMap := make(map[string]bool)
 	for _, p := range providers {
 		providerMap[p] = true
 	}
-	
+
 	var filtered []string
 	for _, model := range models {
 		if providerMap[r.extractProvider(model)] {
 			filtered = append(filtered, model)
 		}
 	}
-	
+
 	return filtered
 }

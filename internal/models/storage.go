@@ -9,8 +9,7 @@ import (
 const (
 	PrefixAPIKey      = "apikey"
 	PrefixPreset      = "preset"
-	PrefixCredential  = "credential"
-	PrefixDefaultKey  = "default_key"
+	PrefixProviderKey = "provider_key"
 	PrefixRateLimit   = "ratelimit"
 	PrefixFilter      = "filter"
 )
@@ -25,9 +24,14 @@ func PresetStorageKey(name string) string {
 	return fmt.Sprintf("%s:%s", PrefixPreset, name)
 }
 
-// BYOKCredentialStorageKey generates the storage key for a BYOK credential
+// ProviderKeyStorageKey generates the storage key for a provider key
+func ProviderKeyStorageKey(scope, provider string) string {
+	return fmt.Sprintf("%s:%s:%s", PrefixProviderKey, scope, provider)
+}
+
+// BYOKCredentialStorageKey is deprecated - use ProviderKeyStorageKey instead
 func BYOKCredentialStorageKey(apiKeyID, provider string) string {
-	return fmt.Sprintf("%s:%s:%s", PrefixCredential, apiKeyID, provider)
+	return ProviderKeyStorageKey(apiKeyID, provider)
 }
 
 // RateLimitStorageKey generates the storage key for rate limit state
@@ -59,9 +63,14 @@ func IsPresetStorageKey(key string) bool {
 	return strings.HasPrefix(key, PrefixPreset+":")
 }
 
-// IsBYOKCredentialStorageKey checks if a key is a BYOK credential storage key
+// IsProviderKeyStorageKey checks if a key is a provider key storage key
+func IsProviderKeyStorageKey(key string) bool {
+	return strings.HasPrefix(key, PrefixProviderKey+":")
+}
+
+// IsBYOKCredentialStorageKey is deprecated - use IsProviderKeyStorageKey instead
 func IsBYOKCredentialStorageKey(key string) bool {
-	return strings.HasPrefix(key, PrefixCredential+":")
+	return IsProviderKeyStorageKey(key)
 }
 
 // IsRateLimitStorageKey checks if a key is a rate limit storage key
@@ -93,24 +102,29 @@ func ExtractPresetName(key string) (string, error) {
 	return parts[1], nil
 }
 
-// ExtractBYOKCredentialParts extracts the API key ID and provider from a storage key
-func ExtractBYOKCredentialParts(key string) (apiKeyID, provider string, err error) {
-	if !IsBYOKCredentialStorageKey(key) {
-		return "", "", fmt.Errorf("not a BYOK credential storage key: %s", key)
+// ExtractProviderKeyParts extracts the scope and provider from a storage key
+func ExtractProviderKeyParts(key string) (scope, provider string, err error) {
+	if !IsProviderKeyStorageKey(key) {
+		return "", "", fmt.Errorf("not a provider key storage key: %s", key)
 	}
 	parts := strings.Split(key, ":")
 	if len(parts) != 3 {
-		return "", "", fmt.Errorf("invalid BYOK credential storage key format: %s", key)
+		return "", "", fmt.Errorf("invalid provider key storage key format: %s", key)
 	}
 	return parts[1], parts[2], nil
 }
 
-// DefaultKeyStorageKey generates the storage key for a default provider key
-func DefaultKeyStorageKey(provider string) string {
-	return fmt.Sprintf("%s:%s", PrefixDefaultKey, provider)
+// ExtractBYOKCredentialParts is deprecated - use ExtractProviderKeyParts instead
+func ExtractBYOKCredentialParts(key string) (apiKeyID, provider string, err error) {
+	return ExtractProviderKeyParts(key)
 }
 
-// IsDefaultKeyStorageKey checks if a key is a default key storage key
-func IsDefaultKeyStorageKey(key string) bool {
-	return strings.HasPrefix(key, PrefixDefaultKey+":")
+// GlobalProviderKeyStorageKey generates the storage key for a global provider key
+func GlobalProviderKeyStorageKey(provider string) string {
+	return ProviderKeyStorageKey("*", provider)
+}
+
+// GlobalCredentialStorageKey is deprecated - use GlobalProviderKeyStorageKey instead
+func GlobalCredentialStorageKey(provider string) string {
+	return GlobalProviderKeyStorageKey(provider)
 }

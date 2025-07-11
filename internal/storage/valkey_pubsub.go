@@ -52,9 +52,9 @@ func (v *ValkeyPubSub) Subscribe(pattern string, handler func(channel, message s
 	go func() {
 		defer v.wg.Done()
 		defer cancel()
-		
+
 		log.Info().Str("pattern", pattern).Msg("starting pubsub subscription")
-		
+
 		// Use client.Receive for pattern subscription
 		err := v.client.Receive(ctx, v.client.B().Psubscribe().Pattern(pattern).Build(), func(msg valkey.PubSubMessage) {
 			// For pattern messages, check if it has pattern field
@@ -64,11 +64,11 @@ func (v *ValkeyPubSub) Subscribe(pattern string, handler func(channel, message s
 			}
 			// Note: subscription confirmations are handled by OnSubscriptionHook if needed
 		})
-		
+
 		if err != nil && err != context.Canceled {
 			log.Error().Err(err).Str("pattern", pattern).Msg("pubsub receive error")
 		}
-		
+
 		// Clean up
 		v.mu.Lock()
 		delete(v.subscriptions, pattern)
@@ -90,7 +90,7 @@ func (v *ValkeyPubSub) Publish(ctx context.Context, channel string, message stri
 
 	cmd := v.client.B().Publish().Channel(channel).Message(message).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("failed to publish to channel %s: %w", channel, err)
 	}
@@ -117,20 +117,20 @@ func (v *ValkeyPubSub) Close() error {
 		return nil
 	}
 	v.closed = true
-	
+
 	// Cancel all subscriptions
 	for pattern, cancel := range v.subscriptions {
 		log.Debug().Str("pattern", pattern).Msg("cancelling subscription")
 		cancel()
 	}
-	
+
 	v.subscriptions = make(map[string]context.CancelFunc)
 	v.handlers = make(map[string]func(channel, message string))
 	v.mu.Unlock()
 
 	// Wait for all subscription handlers to finish
 	v.wg.Wait()
-	
+
 	log.Info().Msg("closed valkey pubsub client")
 	return nil
 }

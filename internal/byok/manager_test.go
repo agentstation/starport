@@ -65,13 +65,13 @@ func TestAddCredential(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
-		apiKeyID  string
-		provider  string
-		cred      map[string]string
-		config    map[string]interface{}
-		wantErr   bool
-		errMsg    string
+		name     string
+		apiKeyID string
+		provider string
+		cred     map[string]string
+		config   map[string]interface{}
+		wantErr  bool
+		errMsg   string
 	}{
 		{
 			name:     "Valid OpenAI credential",
@@ -139,7 +139,7 @@ func TestAddCredential(t *testing.T) {
 				assert.NoError(t, err)
 
 				// Verify credential was stored
-				key := storage.CredentialKey(tt.apiKeyID, tt.provider)
+				key := models.ProviderKeyStorageKey("user:"+tt.apiKeyID, tt.provider)
 				data, err := store.Get(ctx, key)
 				assert.NoError(t, err)
 				assert.NotNil(t, data)
@@ -185,12 +185,12 @@ func TestGetCredentials(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update priority
-		key := storage.CredentialKey(apiKeyID, provider)
+		key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 		data, _ := store.Get(ctx, key)
-		var byokCred models.BYOKCredential
-		storage.DeserializeModel(data, &byokCred)
-		byokCred.Priority = c.priority
-		data, _ = storage.SerializeModel(&byokCred)
+		var providerKey models.ProviderKey
+		storage.DeserializeModel(data, &providerKey)
+		providerKey.Priority = c.priority
+		data, _ = storage.SerializeModel(&providerKey)
 		store.Set(ctx, key, data)
 	}
 
@@ -285,29 +285,34 @@ func TestDefaultKeys(t *testing.T) {
 	cred := map[string]string{"api_key": "sk-default"}
 	config := map[string]interface{}{"rate_limit": float64(1000)}
 
-	// Set default key
-	err = manager.SetDefaultKey(ctx, provider, cred, config)
+	// Set global credential
+	rateLimit := &models.RateLimitConfig{
+		RequestsPerMinute: 1000,
+		TokensPerMinute:   100000,
+	}
+	err = manager.SetGlobalCredential(ctx, provider, cred, config, rateLimit)
 	assert.NoError(t, err)
 
-	// Get default key
-	defaultCred, err := manager.GetDefaultKey(ctx, provider)
+	// Get global credential
+	globalCred, err := manager.GetGlobalCredential(ctx, provider)
 	assert.NoError(t, err)
-	assert.Equal(t, provider, defaultCred.Provider)
-	assert.Equal(t, cred, defaultCred.Data)
-	assert.Equal(t, config, defaultCred.Config)
+	assert.Equal(t, provider, globalCred.Provider)
+	assert.Equal(t, cred, globalCred.Data)
+	assert.Equal(t, config, globalCred.Config)
+	assert.Equal(t, rateLimit, globalCred.RateLimit)
 
-	// List default keys
-	keys, err := manager.ListDefaultKeys(ctx)
+	// List global credentials
+	keys, err := manager.ListGlobalCredentials(ctx)
 	assert.NoError(t, err)
 	assert.Len(t, keys, 1)
 	assert.Equal(t, provider, keys[0].Provider)
 
-	// Delete default key
-	err = manager.DeleteDefaultKey(ctx, provider)
+	// Delete global credential
+	err = manager.DeleteGlobalCredential(ctx, provider)
 	assert.NoError(t, err)
 
 	// Verify deletion
-	_, err = manager.GetDefaultKey(ctx, provider)
+	_, err = manager.GetGlobalCredential(ctx, provider)
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, storage.ErrNotFound))
 }
@@ -472,7 +477,7 @@ func TestEncryptionSecurity(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get raw data from store
-	key := storage.CredentialKey(apiKeyID, provider)
+	key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 	rawData, err := store.Get(ctx, key)
 	require.NoError(t, err)
 
@@ -480,13 +485,13 @@ func TestEncryptionSecurity(t *testing.T) {
 	assert.NotContains(t, string(rawData), secretKey)
 
 	// Deserialize to check encrypted field
-	var byokCred models.BYOKCredential
-	err = storage.DeserializeModel(rawData, &byokCred)
+	var providerKey models.ProviderKey
+	err = storage.DeserializeModel(rawData, &providerKey)
 	require.NoError(t, err)
 
 	// Encrypted credential should be base64 and not contain the secret
-	assert.NotEmpty(t, byokCred.EncryptedCredential)
-	assert.NotContains(t, byokCred.EncryptedCredential, secretKey)
+	assert.NotEmpty(t, providerKey.EncryptedCredential)
+	assert.NotContains(t, providerKey.EncryptedCredential, secretKey)
 
 	// Verify we can decrypt it correctly
 	cred, err := manager.GetCredential(ctx, apiKeyID, provider)

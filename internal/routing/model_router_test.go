@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/agentstation/starport/internal/connectors"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +26,7 @@ func (m *mockConnector) Chat(ctx context.Context, req *connectors.ChatRequest) (
 	if m.chatFunc != nil {
 		return m.chatFunc(ctx, req)
 	}
-	
+
 	if m.shouldFail {
 		switch m.failureType {
 		case FallbackRateLimit:
@@ -41,7 +41,7 @@ func (m *mockConnector) Chat(ctx context.Context, req *connectors.ChatRequest) (
 			return nil, errors.New("unknown error")
 		}
 	}
-	
+
 	return &connectors.ChatResponse{
 		ID:    "test-response",
 		Model: req.Model,
@@ -162,12 +162,12 @@ func TestIsFallbackError(t *testing.T) {
 
 func TestRouteWithFallback(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create mock connectors
 	openaiConnector := &mockConnector{name: "openai"}
 	anthropicConnector := &mockConnector{name: "anthropic"}
 	groqConnector := &mockConnector{name: "groq"}
-	
+
 	registry := &mockRegistry{
 		connectors: map[string]connectors.Connector{
 			"openai":    openaiConnector,
@@ -175,7 +175,7 @@ func TestRouteWithFallback(t *testing.T) {
 			"groq":      groqConnector,
 		},
 	}
-	
+
 	router := NewRouter(registry)
 
 	t.Run("single model success", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestRouteWithFallback(t *testing.T) {
 				},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		assert.Equal(t, "openai/gpt-4", resp.ModelUsed)
@@ -200,7 +200,7 @@ func TestRouteWithFallback(t *testing.T) {
 		openaiConnector.shouldFail = true
 		openaiConnector.failureType = FallbackRateLimit
 		defer func() { openaiConnector.shouldFail = false }()
-		
+
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
 				Models: []string{"openai/gpt-4", "anthropic/claude-3-sonnet-20240229"},
@@ -209,7 +209,7 @@ func TestRouteWithFallback(t *testing.T) {
 				},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		assert.Equal(t, "anthropic/claude-3-sonnet-20240229", resp.ModelUsed)
@@ -228,7 +228,7 @@ func TestRouteWithFallback(t *testing.T) {
 			openaiConnector.shouldFail = false
 			anthropicConnector.shouldFail = false
 		}()
-		
+
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
 				Models: []string{"openai/gpt-4", "anthropic/claude-3-sonnet-20240229"},
@@ -237,7 +237,7 @@ func TestRouteWithFallback(t *testing.T) {
 				},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "all models failed")
@@ -253,7 +253,7 @@ func TestRouteWithFallback(t *testing.T) {
 			ChatRequest: &connectors.ChatRequest{
 				Models: []string{
 					"openai/gpt-4",
-					"anthropic/claude-3-sonnet-20240229", 
+					"anthropic/claude-3-sonnet-20240229",
 					"groq/llama-3.1-8b-instant",
 				},
 				Messages: []connectors.Message{
@@ -264,7 +264,7 @@ func TestRouteWithFallback(t *testing.T) {
 				Order: []string{"groq", "anthropic", "openai"},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		// Should use groq first due to preference order
@@ -288,7 +288,7 @@ func TestRouteWithFallback(t *testing.T) {
 				Only: []string{"anthropic"},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		// Should only use anthropic
@@ -311,7 +311,7 @@ func TestRouteWithFallback(t *testing.T) {
 				Ignore: []string{"openai"},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		// Should skip openai and use anthropic
@@ -328,7 +328,7 @@ func TestRouteWithFallback(t *testing.T) {
 				},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		// Should select a model automatically
@@ -338,18 +338,18 @@ func TestRouteWithFallback(t *testing.T) {
 
 	t.Run("circuit breaker", func(t *testing.T) {
 		// Create a new router for this test
-		testRouter := &defaultRouter{
+		testRouter := &modelRouter{
 			registry:        registry,
 			modelSelector:   NewDefaultModelSelector(),
 			availableModels: make(map[string]ModelInfo),
 			providerHealth:  make(map[string]*ProviderHealth),
 		}
-		
+
 		// Record multiple failures to open circuit
 		for i := 0; i < 3; i++ {
 			testRouter.recordProviderFailure("openai", errors.New("test error"))
 		}
-		
+
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
 				Models: []string{"openai/gpt-4", "anthropic/claude-3-sonnet-20240229"},
@@ -358,7 +358,7 @@ func TestRouteWithFallback(t *testing.T) {
 				},
 			},
 		}
-		
+
 		resp, err := testRouter.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		// Should skip openai due to circuit breaker
@@ -373,7 +373,7 @@ func TestRouteWithFallback(t *testing.T) {
 
 func TestModelSelection(t *testing.T) {
 	selector := NewDefaultModelSelector()
-	
+
 	t.Run("simple text request", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -382,13 +382,13 @@ func TestModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
 		// Should start with fast, economical models
 		assert.Contains(t, models[0], "groq/llama-3.1-8b-instant")
 	})
-	
+
 	t.Run("vision request", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -403,7 +403,7 @@ func TestModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
 		// Should include vision-capable models
@@ -412,7 +412,7 @@ func TestModelSelection(t *testing.T) {
 			assert.True(t, cap.SupportsVision, fmt.Sprintf("Model %s should support vision", model))
 		}
 	})
-	
+
 	t.Run("function calling request", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -424,7 +424,7 @@ func TestModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
 		// Should include function-capable models
@@ -435,7 +435,7 @@ func TestModelSelection(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("quality preference", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -449,7 +449,7 @@ func TestModelSelection(t *testing.T) {
 				},
 			},
 		}
-		
+
 		models := selector.SelectModels(req)
 		assert.NotEmpty(t, models)
 		// Check that premium models are prioritized
@@ -473,10 +473,10 @@ func TestAPIKeyRestrictions(t *testing.T) {
 			"groq":      &mockConnector{name: "groq"},
 		},
 	}
-	
+
 	router := NewRouter(registry)
 	ctx := context.Background()
-	
+
 	t.Run("allowed providers only", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -493,13 +493,13 @@ func TestAPIKeyRestrictions(t *testing.T) {
 				AllowedProviders: []string{"anthropic", "groq"},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		// Should only use allowed providers
 		assert.Contains(t, []string{"anthropic", "groq"}, resp.ProviderUsed)
 	})
-	
+
 	t.Run("model override", func(t *testing.T) {
 		req := &Request{
 			ChatRequest: &connectors.ChatRequest{
@@ -515,7 +515,7 @@ func TestAPIKeyRestrictions(t *testing.T) {
 				},
 			},
 		}
-		
+
 		resp, err := router.RouteWithFallback(ctx, req)
 		require.NoError(t, err)
 		// Should use the override model

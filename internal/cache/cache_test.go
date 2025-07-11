@@ -160,10 +160,10 @@ func TestLayeredCache(t *testing.T) {
 		defer cache2.Close()
 
 		// Generate some activity
-		cache2.Get(ctx, "miss1")     // miss
-		cache2.Get(ctx, "miss2")     // miss
+		cache2.Get(ctx, "miss1") // miss
+		cache2.Get(ctx, "miss2") // miss
 		cache2.Set(ctx, "hit1", []byte("data"), 1*time.Hour)
-		cache2.Get(ctx, "hit1")      // hit
+		cache2.Get(ctx, "hit1") // hit
 		cache2.Delete(ctx, "hit1")
 
 		stats := cache2.Stats()

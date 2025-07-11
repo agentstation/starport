@@ -39,8 +39,8 @@ func TestEncryptionIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get raw encrypted data from store
-	key1 := storage.CredentialKey(apiKey1, provider)
-	key2 := storage.CredentialKey(apiKey2, provider)
+	key1 := models.ProviderKeyStorageKey("user:"+apiKey1, provider)
+	key2 := models.ProviderKeyStorageKey("user:"+apiKey2, provider)
 
 	data1, err := store.Get(ctx, key1)
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestCredentialLeakage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify stored data doesn't contain plaintext
-	key := storage.CredentialKey("test-key", "openai")
+	key := models.ProviderKeyStorageKey("user:test-key", "openai")
 	rawData, err := store.Get(ctx, key)
 	require.NoError(t, err)
 

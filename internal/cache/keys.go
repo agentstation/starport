@@ -155,21 +155,21 @@ func (kg *KeyGenerator) normalizeInput(input interface{}) interface{} {
 
 // ChatCompletionRequest represents a chat completion request
 type ChatCompletionRequest struct {
-	Model            string                 `json:"model"`
-	Messages         []Message              `json:"messages"`
-	Temperature      *float32               `json:"temperature,omitempty"`
-	MaxTokens        *int                   `json:"max_tokens,omitempty"`
-	TopP             *float32               `json:"top_p,omitempty"`
-	N                *int                   `json:"n,omitempty"`
-	Stop             interface{}            `json:"stop,omitempty"`
-	PresencePenalty  *float32               `json:"presence_penalty,omitempty"`
-	FrequencyPenalty *float32               `json:"frequency_penalty,omitempty"`
-	LogitBias        map[string]float32     `json:"logit_bias,omitempty"`
-	User             *string                `json:"user,omitempty"`
-	Seed             *int                   `json:"seed,omitempty"`
-	Tools            []interface{}          `json:"tools,omitempty"`
-	ToolChoice       interface{}            `json:"tool_choice,omitempty"`
-	ResponseFormat   interface{}            `json:"response_format,omitempty"`
+	Model            string             `json:"model"`
+	Messages         []Message          `json:"messages"`
+	Temperature      *float32           `json:"temperature,omitempty"`
+	MaxTokens        *int               `json:"max_tokens,omitempty"`
+	TopP             *float32           `json:"top_p,omitempty"`
+	N                *int               `json:"n,omitempty"`
+	Stop             interface{}        `json:"stop,omitempty"`
+	PresencePenalty  *float32           `json:"presence_penalty,omitempty"`
+	FrequencyPenalty *float32           `json:"frequency_penalty,omitempty"`
+	LogitBias        map[string]float32 `json:"logit_bias,omitempty"`
+	User             *string            `json:"user,omitempty"`
+	Seed             *int               `json:"seed,omitempty"`
+	Tools            []interface{}      `json:"tools,omitempty"`
+	ToolChoice       interface{}        `json:"tool_choice,omitempty"`
+	ResponseFormat   interface{}        `json:"response_format,omitempty"`
 }
 
 // Message represents a chat message

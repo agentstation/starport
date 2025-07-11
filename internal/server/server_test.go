@@ -30,7 +30,7 @@ func TestNew(t *testing.T) {
 		t.Fatal("expected server to be created")
 	}
 
-	if server.config != config {
+	if server.cfg != config {
 		t.Error("expected server config to match")
 	}
 
@@ -53,9 +53,10 @@ func TestMiddleware(t *testing.T) {
 	}
 
 	server := newTestServer(config)
-	
+
 	// Test that middleware is properly configured
-	req := httptest.NewRequest("GET", "/api/v1/", nil)
+	// Use /health/live which doesn't require authentication
+	req := httptest.NewRequest("GET", "/health/live", nil)
 	w := httptest.NewRecorder()
 
 	server.router.ServeHTTP(w, req)
@@ -66,12 +67,12 @@ func TestMiddleware(t *testing.T) {
 
 	// CORS headers are only set when Origin header is present in request
 	// Let's test with Origin header
-	req2 := httptest.NewRequest("GET", "/api/v1/", nil)
+	req2 := httptest.NewRequest("GET", "/health/live", nil)
 	req2.Header.Set("Origin", "http://localhost:3000")
 	w2 := httptest.NewRecorder()
-	
+
 	server.router.ServeHTTP(w2, req2)
-	
+
 	if w2.Header().Get("Access-Control-Allow-Origin") == "" {
 		t.Error("expected CORS headers to be set when Origin is present")
 	}
@@ -122,7 +123,7 @@ func TestCORSHeaders(t *testing.T) {
 	req.Header.Set("Origin", "https://example.com")
 	req.Header.Set("Access-Control-Request-Method", "POST")
 	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
-	
+
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 

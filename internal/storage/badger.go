@@ -20,15 +20,15 @@ var _ KVStore = (*BadgerStore)(nil)
 
 // BadgerStore implements the KVStore interface using Badger DB
 type BadgerStore struct {
-	db             *badger.DB
-	config         BadgerConfig
-	gcTicker       *time.Ticker
-	gcStop         chan struct{}
-	compactTicker  *time.Ticker
-	compactStop    chan struct{}
-	wg             sync.WaitGroup
-	closed         bool
-	mu             sync.RWMutex
+	db            *badger.DB
+	config        BadgerConfig
+	gcTicker      *time.Ticker
+	gcStop        chan struct{}
+	compactTicker *time.Ticker
+	compactStop   chan struct{}
+	wg            sync.WaitGroup
+	closed        bool
+	mu            sync.RWMutex
 }
 
 // OpenBadger creates a new BadgerStore instance with the given configuration
@@ -44,7 +44,7 @@ func OpenBadger(config BadgerConfig) (*BadgerStore, error) {
 	opts.NumVersionsToKeep = config.NumVersions
 	opts.NumLevelZeroTables = config.NumLevelZero
 	opts.MemTableSize = config.MemTableSize
-	
+
 	// Performance optimizations
 	opts.NumMemtables = 5
 	opts.NumLevelZeroTablesStall = 10
@@ -66,7 +66,7 @@ func OpenBadger(config BadgerConfig) (*BadgerStore, error) {
 
 	// Start garbage collection for expired keys
 	store.startGarbageCollection()
-	
+
 	// Start periodic compaction
 	store.startCompaction()
 
@@ -296,53 +296,53 @@ func (s *BadgerStore) Increment(_ context.Context, key string, delta int64) (int
 
 	const maxRetries = 100 // Increased for high contention scenarios and race detection
 	var newValue int64
-	
+
 	for i := 0; i < maxRetries; i++ {
 		err := s.db.Update(func(txn *badger.Txn) error {
-		// Get current value
-		item, err := txn.Get([]byte(key))
-		if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
-			return err
-		}
-
-		var currentValue int64
-		var ttl time.Duration
-		
-		if err == nil {
-			// Key exists, get current value
-			val, err := item.ValueCopy(nil)
-			if err != nil {
+			// Get current value
+			item, err := txn.Get([]byte(key))
+			if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
 				return err
 			}
-			currentValue, err = DeserializeInt64(val)
-			if err != nil {
-				return fmt.Errorf("invalid counter value: %w", err)
+
+			var currentValue int64
+			var ttl time.Duration
+
+			if err == nil {
+				// Key exists, get current value
+				val, err := item.ValueCopy(nil)
+				if err != nil {
+					return err
+				}
+				currentValue, err = DeserializeInt64(val)
+				if err != nil {
+					return fmt.Errorf("invalid counter value: %w", err)
+				}
+
+				// Preserve TTL if set
+				expiresAt := item.ExpiresAt()
+				if expiresAt > 0 {
+					ttl = time.Until(time.Unix(int64(expiresAt), 0)) // #nosec G115
+				}
 			}
 
-			// Preserve TTL if set
-			expiresAt := item.ExpiresAt()
-			if expiresAt > 0 {
-				ttl = time.Until(time.Unix(int64(expiresAt), 0)) // #nosec G115
+			// Calculate new value
+			newValue = currentValue + delta
+
+			// Serialize and store
+			serialized := SerializeInt64(newValue)
+
+			if ttl > 0 {
+				e := badger.NewEntry([]byte(key), serialized).WithTTL(ttl)
+				return txn.SetEntry(e)
 			}
-		}
+			return txn.Set([]byte(key), serialized)
+		})
 
-		// Calculate new value
-		newValue = currentValue + delta
-
-		// Serialize and store
-		serialized := SerializeInt64(newValue)
-
-		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), serialized).WithTTL(ttl)
-			return txn.SetEntry(e)
-		}
-		return txn.Set([]byte(key), serialized)
-	})
-	
 		if err == nil {
 			return newValue, nil
 		}
-		
+
 		// Check if it's a conflict error
 		if errors.Is(err, badger.ErrConflict) {
 			// Retry with better backoff strategy
@@ -353,11 +353,11 @@ func (s *BadgerStore) Increment(_ context.Context, key string, delta int64) (int
 			time.Sleep(backoff)
 			continue
 		}
-		
+
 		// For other errors, return immediately
 		return 0, err
 	}
-	
+
 	// Max retries exceeded
 	return 0, fmt.Errorf("increment failed after %d retries: %w", maxRetries, badger.ErrConflict)
 }
@@ -433,7 +433,7 @@ func (s *BadgerStore) BatchGet(_ context.Context, keys []string) (map[string][]b
 	s.mu.RUnlock()
 
 	result := make(map[string][]byte, len(keys))
-	
+
 	err := s.db.View(func(txn *badger.Txn) error {
 		for _, key := range keys {
 			if key == "" {
@@ -622,7 +622,7 @@ func (s *BadgerStore) ScanWithPrefix(_ context.Context, prefix string, limit int
 			}
 
 			item := it.Item()
-			
+
 			// Skip expired keys
 			if item.IsDeletedOrExpired() {
 				continue
@@ -781,10 +781,10 @@ func (s *BadgerStore) Restore(_ context.Context, path string) error {
 func (s *BadgerStore) startGarbageCollection() {
 	s.gcTicker = time.NewTicker(5 * time.Minute)
 	s.wg.Add(1)
-	
+
 	go func() {
 		defer s.wg.Done()
-		
+
 		for {
 			select {
 			case <-s.gcTicker.C:
@@ -815,10 +815,10 @@ func (s *BadgerStore) runGarbageCollection() {
 func (s *BadgerStore) startCompaction() {
 	s.compactTicker = time.NewTicker(30 * time.Minute)
 	s.wg.Add(1)
-	
+
 	go func() {
 		defer s.wg.Done()
-		
+
 		for {
 			select {
 			case <-s.compactTicker.C:
@@ -846,7 +846,6 @@ func (s *BadgerStore) runCompaction() {
 }
 
 // Helper functions
-
 
 // matchesPattern checks if a key matches a pattern (simple glob-style for now)
 func matchesPattern(key, pattern string) bool {

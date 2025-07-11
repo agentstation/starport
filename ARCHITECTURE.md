@@ -157,7 +157,7 @@ go build -tags enterprise \
 - **Standard library encoding/json** - For data serialization
 
 **Security**
-- **github.com/agentstation/uuidkey** - For Starport API key generation (UUID v7 based)
+- **github.com/agentstation/uuidkey** - For Starport API key generation (UUID v7 based, checksum validated)
 - **Argon2id** - For key derivation when encrypting BYOK credentials
 - **AES-256-GCM** - For BYOK credential encryption
 - **crypto/rand** - For additional secure random needs
@@ -661,7 +661,7 @@ rate_limits:
 
 **Authentication & Keys**
 - Starport API key generation using github.com/agentstation/uuidkey (UUID v7 based)
-- Direct key comparison (no hashing needed with uuidkey)
+- Keys stored by SHA256 hash with uuidkey checksum validation
 - JWT token support for stateless auth
 - Key scopes and model permissions
 - Rate limit configuration per key
@@ -781,11 +781,11 @@ rate_limits:
 OSS uses a key-value store (Badger or Valkey) with the following key patterns:
 
 ```go
-// API Keys
+// API Keys (using uuidkey format)
 "apikey:{hash}" -> {
-    "id": "uuid",
+    "id": "STARPRT_38QARV01ET0G6Z2CJD9VA2ZZAR_A1B2C3D8",  // uuidkey format
     "name": "string",
-    "hash": "string",
+    "hash": "string",  // SHA256 of the full key
     "scopes": ["read", "write"],
     "allowed_models": ["openai/gpt-4", "anthropic/claude-3-opus"],
     "provider_preferences": {
@@ -809,8 +809,9 @@ OSS uses a key-value store (Badger or Valkey) with the following key patterns:
     "created_at": "timestamp"
 }
 
-// BYOK Credentials (encrypted)
+// Provider Credentials (user BYOK and gateway defaults)
 "credential:{api_key_id}:{provider}" -> {
+    "api_key_id": "STARPRT_xxx",  // Empty string for gateway defaults
     "provider": "openai",
     "encrypted_credential": "base64_encrypted_data",
     "config": {
@@ -820,6 +821,10 @@ OSS uses a key-value store (Badger or Valkey) with the following key patterns:
     },
     "is_fallback": true,
     "priority": 1,
+    "rate_limit": {  // Optional, mainly for gateway defaults
+        "requests_per_minute": 500,
+        "tokens_per_minute": 100000
+    },
     "created_at": "timestamp",
     "last_used": "timestamp",
     "usage_count": 12345
@@ -1703,12 +1708,13 @@ BYOK allows users to use their own provider API keys directly through Starport, 
 - **5% Pricing Model**: Users pay 5% of the standard rate when using their own keys
 - **Higher Rate Limits**: Combines provider's native limits with Starport's capacity
 - **Unified Analytics**: Track usage across all providers in one place
-- **Default Keys**: Gateway can provide default keys for providers
+- **Gateway Keys**: Admin-configured BYOK credentials with global scope (available to all users)
 - **Fallback Support**: Automatic fallback between BYOK and gateway keys
 
 ```go
-// BYOK credential storage (encrypted)
+// All provider credentials are BYOK with different scopes
 "credential:{api_key_id}:{provider}" -> {
+    "api_key_id": "STARPRT_xxx",  // "global" for gateway-wide scope
     "provider": "openai",
     "encrypted_credential": "base64_encrypted_data",
     "config": {
@@ -1719,22 +1725,18 @@ BYOK allows users to use their own provider API keys directly through Starport, 
     },
     "is_fallback": true,  // Use as fallback when rate limited
     "priority": 1,        // Order preference (lower = higher priority)
+    "rate_limit": {      // Available for all credentials
+        "requests_per_minute": 500,
+        "tokens_per_minute": 100000
+    },
     "created_at": "timestamp",
     "last_used": "timestamp",
     "usage_count": 12345
 }
 
-// Default provider keys (gateway-wide)
-"default_key:{provider}" -> {
-    "provider": "openai",
-    "encrypted_credential": "base64_encrypted_data",
-    "config": {...},
-    "rate_limit": {
-        "requests_per_minute": 500,
-        "tokens_per_minute": 100000
-    },
-    "created_at": "timestamp"
-}
+// Storage pattern:
+// User BYOK:    credential:{api_key_id}:{provider} (e.g., credential:STARPRT_xxx:openai)
+// Gateway BYOK: credential:global:{provider}        (e.g., credential:global:openai)
 ```
 
 ### 20.2 BYOK Request Flow
@@ -1775,9 +1777,12 @@ func (h *ProxyHandler) routeRequest(ctx context.Context, req *ChatRequest) {
         }
         return resp, err
         
-    case UseDefaultKey:
-        // Use gateway's default key for provider
-        return h.proxyWithDefaultKey(ctx, req, provider)
+    case UseGatewayDefault:
+        // Use gateway's global BYOK credential
+        if cred := h.getCredential(ctx, "global", provider); cred != nil {
+            return h.proxyWithCredential(ctx, req, cred)
+        }
+        return errors.New("no gateway credential found for provider")
     }
 }
 
@@ -1901,7 +1906,7 @@ byok_providers:
 **Response Headers**:
 ```http
 X-Provider-Used: openai
-X-Key-Type: byok  # or "gateway", "default"
+X-Key-Type: byok  # or "gateway"
 X-BYOK-Cost: 0.0015  # 5% of standard rate
 X-Credits-Remaining: 95.50
 ```
@@ -1916,10 +1921,11 @@ PUT    /api/v1/keys/{key_id}/credentials/{provider} # Update credential
 DELETE /api/v1/keys/{key_id}/credentials/{provider} # Remove credential
 POST   /api/v1/keys/{key_id}/credentials/{provider}/validate # Test credential
 
-# Default Key Management (Admin only)
-GET    /api/v1/admin/default-keys                 # List default keys
-POST   /api/v1/admin/default-keys                 # Set default key
-DELETE /api/v1/admin/default-keys/{provider}      # Remove default key
+# Gateway Credential Management (Admin only)
+GET    /api/v1/admin/credentials                  # List gateway credentials
+POST   /api/v1/admin/credentials                  # Add gateway credential
+PUT    /api/v1/admin/credentials/{provider}       # Update gateway credential
+DELETE /api/v1/admin/credentials/{provider}       # Remove gateway credential
 
 # BYOK Usage Analytics
 GET    /api/v1/keys/{key_id}/usage/byok          # BYOK usage stats
@@ -2050,9 +2056,119 @@ type BackupFormat struct {
 }
 ```
 
-## 23. Plugin Architecture
+## 23. API Key Architecture
 
-### 23.1 Plugin System Design
+### 23.1 UUIDKey-Based API Keys
+
+Starport uses [github.com/agentstation/uuidkey](https://github.com/agentstation/uuidkey) for API key generation, providing secure, readable keys with built-in validation.
+
+**Key Format**:
+```
+STARPRT_38QARV01ET0G6Z2CJD9VA2ZZAR0XJJLSO7WBNWY3F_A1B2C3D8
+└──┬──┘ └────────────┬────────────┘└──────┬──────┘ └───┬───┘
+ Prefix         Key (UUID v7)          Entropy      Checksum
+```
+
+**Benefits**:
+- **Readable**: Clear prefix identifies Starport keys
+- **Secure**: 128+ bits of entropy with UUID v7
+- **Validated**: CRC32 checksum prevents typos
+- **Sortable**: UUID v7 provides timestamp ordering
+- **Scannable**: Compatible with GitHub secret scanning
+
+### 23.2 API Key Storage
+
+```go
+// API key stored by hash for security
+type APIKey struct {
+    ID          string    `json:"id"`          // Full uuidkey format
+    Hash        string    `json:"-"`           // SHA256 for storage key
+    Name        string    `json:"name"`        
+    
+    // Permissions
+    Scopes      []string  `json:"scopes"`      // ["read", "write", "*"]
+    AllowedModels []string `json:"allowed_models"`
+    
+    // RBAC (OSS has fields, Enterprise implements)
+    OwnerID     string    `json:"owner_id,omitempty"`
+    OwnerType   string    `json:"owner_type,omitempty"`
+    
+    // Metadata
+    IsActive    bool      `json:"is_active"`
+    CreatedAt   time.Time `json:"created_at"`
+    ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+}
+```
+
+### 23.3 Authentication Flow
+
+```go
+// Authentication middleware
+func authenticateAPIKey(r *http.Request) (*APIKey, error) {
+    // 1. Extract key from Authorization header
+    authHeader := r.Header.Get("Authorization")
+    if !strings.HasPrefix(authHeader, "Bearer ") {
+        return nil, ErrInvalidAuth
+    }
+    
+    keyString := strings.TrimPrefix(authHeader, "Bearer ")
+    
+    // 2. Validate uuidkey format and checksum
+    key, err := uuidkey.Parse(keyString)
+    if err != nil {
+        return nil, ErrInvalidKeyFormat
+    }
+    
+    // 3. Look up by hash
+    hash := sha256.Sum256([]byte(keyString))
+    apiKey, err := storage.GetAPIKey(hex.EncodeToString(hash[:]))
+    if err != nil {
+        return nil, ErrKeyNotFound
+    }
+    
+    // 4. Validate key status
+    if !apiKey.IsActive {
+        return nil, ErrKeyInactive
+    }
+    
+    if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
+        return nil, ErrKeyExpired
+    }
+    
+    return apiKey, nil
+}
+```
+
+### 23.4 Key Generation
+
+```go
+// Generate new API key
+func generateAPIKey() (string, error) {
+    // Use 160-bit entropy for extra security
+    key, err := uuidkey.NewKey("STARPRT", 160)
+    if err != nil {
+        return "", err
+    }
+    
+    return key.String(), nil
+}
+
+// Example generated key:
+// STARPRT_38QARV01ET0G6Z2CJD9VA2ZZAR0XJJLSO7WBNWY3F_A1B2C3D8
+```
+
+### 23.5 Migration from Hash-Based Keys
+
+For existing deployments using hash-based keys:
+
+1. **Dual Support Phase**: Accept both old and new formats
+2. **Key Generation**: Generate uuidkeys for existing users
+3. **Gradual Migration**: Notify users, provide grace period
+4. **Deprecation**: Eventually remove old format support
+
+## 24. Plugin Architecture
+
+### 24.1 Plugin System Design
 ```go
 // Focused plugin interface for specific use cases
 type Plugin interface {
@@ -2075,21 +2191,21 @@ type TransformPlugin interface {
 }
 ```
 
-### 23.2 Plugin Loading
+### 24.2 Plugin Loading
 - **Built-in plugins only** (no dynamic loading in OSS)
 - **Enterprise plugins** via build tags
 - **Configuration-based activation**
 - **No external plugin loading** (security)
 
-### 23.3 Core Plugin Points
+### 24.3 Core Plugin Points
 - **Authentication**: Custom auth schemes
 - **Request/Response Transform**: Modify payloads
 - **Logging**: Custom log destinations
 - **Metrics**: Additional metric collectors
 
-## 24. API Documentation Strategy
+## 25. API Documentation Strategy
 
-### 24.1 OpenAPI Specification
+### 25.1 OpenAPI Specification
 
 ```yaml
 # openapi/starport.yaml
@@ -2134,7 +2250,7 @@ tags:
     description: Health and status endpoints
 ```
 
-### 24.2 API Documentation Generation
+### 25.2 API Documentation Generation
 
 ```go
 // internal/api/docs.go
@@ -2174,7 +2290,7 @@ func ServeAPIDocs(r chi.Router) {
 }
 ```
 
-### 24.3 Documentation Endpoints
+### 25.3 Documentation Endpoints
 
 ```yaml
 # API Documentation Endpoints
@@ -2190,7 +2306,7 @@ GET /postman.json             # Postman collection
 GET /insomnia.json            # Insomnia collection
 ```
 
-### 24.4 Developer Documentation Structure
+### 25.4 Developer Documentation Structure
 
 ```
 docs/
@@ -2226,7 +2342,7 @@ docs/
     └── java/                # Java SDK docs
 ```
 
-### 24.5 SDK Generation
+### 25.5 SDK Generation
 
 ```yaml
 # .github/workflows/sdk-generation.yml

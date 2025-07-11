@@ -13,11 +13,11 @@ import (
 // HybridCache implements a two-layer cache with local (Ristretto) and distributed (KV store) layers
 // It supports pub/sub based invalidation for multi-node consistency
 type HybridCache struct {
-	local       *ristretto.Cache[string, []byte]
-	distributed storage.KVStore
-	pubsub      PubSubClient
-	prefix      string
-	localTTL    time.Duration
+	local        *ristretto.Cache[string, []byte]
+	distributed  storage.KVStore
+	pubsub       PubSubClient
+	prefix       string
+	localTTL     time.Duration
 	invalidateCh string // Channel prefix for invalidation
 }
 
@@ -195,7 +195,7 @@ func (h *HybridCache) Exists(ctx context.Context, key string) (bool, error) {
 	if _, found := h.local.Get(key); found {
 		return true, nil
 	}
-	
+
 	// Check distributed cache
 	fullKey := h.prefix + key
 	return h.distributed.Exists(ctx, fullKey)
@@ -205,7 +205,7 @@ func (h *HybridCache) Exists(ctx context.Context, key string) (bool, error) {
 func (h *HybridCache) GetMulti(ctx context.Context, keys []string) (map[string][]byte, error) {
 	result := make(map[string][]byte)
 	missingKeys := []string{}
-	
+
 	// Check local cache first
 	for _, key := range keys {
 		if value, found := h.local.Get(key); found {
@@ -214,19 +214,19 @@ func (h *HybridCache) GetMulti(ctx context.Context, keys []string) (map[string][
 			missingKeys = append(missingKeys, key)
 		}
 	}
-	
+
 	// Get missing keys from distributed
 	if len(missingKeys) > 0 {
 		fullKeys := make([]string, len(missingKeys))
 		for i, key := range missingKeys {
 			fullKeys[i] = h.prefix + key
 		}
-		
+
 		kvValues, err := h.distributed.BatchGet(ctx, fullKeys)
 		if err != nil {
 			return result, fmt.Errorf("failed to batch get from distributed: %w", err)
 		}
-		
+
 		// Add to result and populate local cache
 		for i, key := range missingKeys {
 			fullKey := fullKeys[i]
@@ -238,7 +238,7 @@ func (h *HybridCache) GetMulti(ctx context.Context, keys []string) (map[string][
 		// Wait for all values to be set
 		h.local.Wait()
 	}
-	
+
 	return result, nil
 }
 
@@ -249,23 +249,23 @@ func (h *HybridCache) SetMulti(ctx context.Context, items map[string][]byte, ttl
 	for key, value := range items {
 		distItems[h.prefix+key] = value
 	}
-	
+
 	// Set in distributed store
 	if err := h.distributed.BatchSetWithTTL(ctx, distItems, ttl); err != nil {
 		return fmt.Errorf("failed to batch set in distributed: %w", err)
 	}
-	
+
 	// Set in local cache
 	localTTL := h.localTTL
 	if ttl > 0 && ttl < localTTL {
 		localTTL = ttl
 	}
-	
+
 	for key, value := range items {
 		h.local.SetWithTTL(key, value, int64(len(value)), localTTL)
 	}
 	h.local.Wait()
-	
+
 	return nil
 }
 
@@ -274,18 +274,18 @@ func (h *HybridCache) Warm(ctx context.Context, keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	
+
 	// Get from distributed
 	fullKeys := make([]string, len(keys))
 	for i, key := range keys {
 		fullKeys[i] = h.prefix + key
 	}
-	
+
 	values, err := h.distributed.BatchGet(ctx, fullKeys)
 	if err != nil {
 		return fmt.Errorf("failed to warm cache: %w", err)
 	}
-	
+
 	// Load into local cache
 	for i, key := range keys {
 		fullKey := fullKeys[i]
@@ -295,7 +295,7 @@ func (h *HybridCache) Warm(ctx context.Context, keys []string) error {
 	}
 	// Wait for all values to be set
 	h.local.Wait()
-	
+
 	return nil
 }
 
@@ -359,12 +359,12 @@ func (d *DistributedCache) GetMulti(ctx context.Context, keys []string) (map[str
 	for i, key := range keys {
 		fullKeys[i] = d.prefix + key
 	}
-	
+
 	kvValues, err := d.store.BatchGet(ctx, fullKeys)
 	if err != nil {
 		return nil, fmt.Errorf("failed to batch get: %w", err)
 	}
-	
+
 	// Transform back to original keys
 	result := make(map[string][]byte)
 	for i, key := range keys {
@@ -373,7 +373,7 @@ func (d *DistributedCache) GetMulti(ctx context.Context, keys []string) (map[str
 			result[key] = value
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -384,7 +384,7 @@ func (d *DistributedCache) SetMulti(ctx context.Context, items map[string][]byte
 	for key, value := range items {
 		fullItems[d.prefix+key] = value
 	}
-	
+
 	if ttl > 0 {
 		return d.store.BatchSetWithTTL(ctx, fullItems, ttl)
 	}
@@ -398,11 +398,11 @@ func (d *DistributedCache) Invalidate(ctx context.Context, pattern string) error
 	if err != nil {
 		return fmt.Errorf("failed to scan keys: %w", err)
 	}
-	
+
 	if len(keys) > 0 {
 		return d.store.BatchDelete(ctx, keys)
 	}
-	
+
 	return nil
 }
 
@@ -521,12 +521,12 @@ func (l *LocalCache) Stats() Stats {
 	hits := metrics.Hits()
 	misses := metrics.Misses()
 	total := hits + misses
-	
+
 	var hitRate float64
 	if total > 0 {
 		hitRate = float64(hits) / float64(total)
 	}
-	
+
 	return Stats{
 		Hits:    hits,
 		Misses:  misses,
