@@ -28,6 +28,6 @@ Documentation for the Starport open source LLM gateway.
 
 ## Developer Resources
 
-- [Contributing Guidelines](../CONTRIBUTING.md) - How to contribute
-- [Code of Conduct](../CODE_OF_CONDUCT.md) - Community standards
+- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute
+- [Code of Conduct](CODE_OF_CONDUCT.md) - Community standards
 - [Claude Instructions](../CLAUDE.md) - For AI assistants

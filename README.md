@@ -116,7 +116,7 @@ Starport is designed as a single binary that includes both server and CLI functi
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guidelines](docs/CONTRIBUTING.md) for details.
 
 ### Quick Start
 
@@ -131,7 +131,7 @@ make test
 make build
 ```
 
-For detailed development setup, testing guidelines, and contribution workflow, please refer to [CONTRIBUTING.md](CONTRIBUTING.md).
+For detailed development setup, testing guidelines, and contribution workflow, please refer to [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
 ## Roadmap
 
