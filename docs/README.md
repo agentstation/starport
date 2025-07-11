@@ -25,6 +25,7 @@ Documentation for the Starport open source LLM gateway.
 - Deployment Guide - Production deployment instructions
 - Provider Setup - Configuring LLM providers
 - Performance Tuning - Optimization guide
+- [Model Catalog](../MODELS.md) - Complete list of supported models
 
 ## Developer Resources
 

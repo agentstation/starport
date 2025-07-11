@@ -193,7 +193,7 @@ For detailed development setup, testing guidelines, and contribution workflow, p
 | Feature | OpenRouter | Starport OSS | Starport Enterprise |
 |---------|------------|--------------|---------------------|
 | **API Compatibility** | ✅ | ✅ | ✅ |
-| **Major Providers** | ✅ | ✅ (6 providers) | ✅ |
+| **Top 6 Major Providers** | ✅ | ✅ | ✅ |
 | **Model Routing** | ✅ | ✅ | ✅ |
 | **BYOK Support** | ✅ | ✅ | ✅ |
 | **Response Caching** | ✅ | 🚧 | ✅ |
@@ -203,6 +203,53 @@ For detailed development setup, testing guidelines, and contribution workflow, p
 | **Rate Limiting** | ✅ | 🚧 | ✅ |
 | **SSO/RBAC** | ✅ | ❌ | ✅ |
 | **Analytics** | ✅ | ❌ | ✅ |
+
+## Providers & Models
+
+Starport supports the following AI providers out of the box:
+
+| Provider | Models | Highlights |
+|----------|--------|------------|
+| **OpenAI** | o3, o4, GPT-4.5, GPT-4, GPT-4o | Advanced reasoning, function calling |
+| **Anthropic** | Claude 4 Opus/Sonnet, Claude 3.5 | 200K context, vision support |
+| **Google AI Studio** | Gemini 2.5 Pro/Flash, Gemini 1.5 | 1M+ context, multimodal |
+| **Google Vertex AI** | Gemini, Claude via Model Garden | Enterprise features, Model Garden |
+| **Groq** | Llama 4, Llama 3.3, Mixtral | Ultra-fast inference on LPU |
+| **Mistral** | Devstral, Large, Medium | Code specialist, function calling |
+| **Azure OpenAI** | GPT-4, GPT-3.5 | Enterprise security, compliance |
+
+### Additional Providers (Coming Soon)
+- **xAI** - Grok models with extended context
+- **Cohere** - Command R series for enterprise use
+- **01.AI** - Yi Large multilingual models |
+
+### Featured Models
+
+**OpenAI:**
+- **o4 Mini** (`openai/o4-mini`) - Next-gen reasoning model
+- **o3** (`openai/o3`) - Advanced reasoning, 200K context
+- **GPT-4.5 Preview** (`openai/gpt-4.5-preview`) - Enhanced GPT-4, 128K context
+- **GPT-4.1** (`openai/gpt-4.1`) - Extended context, 1M+ tokens
+
+**Anthropic:**
+- **Claude 4 Opus** (`anthropic/claude-4-opus`) - Most advanced, 200K context
+- **Claude 4 Sonnet** (`anthropic/claude-4-sonnet`) - Balanced performance
+- **Claude 3.5 Sonnet** (`anthropic/claude-3.5-sonnet`) - Previous flagship
+
+**Google:**
+- **Gemini 2.5 Pro** (`google/gemini-2.5-pro`) - Flagship model, 1M+ context
+- **Gemini 2.5 Flash** (`google/gemini-2.5-flash`) - Ultra-fast, 1M+ context
+
+**Meta:**
+- **Llama 4 Maverick** (`meta-llama/llama-4-maverick`) - Latest open model, 1M+ context
+- **Llama 3.3 70B** (`meta-llama/llama-3.3-70b-instruct`) - Powerful open model
+
+**Others:**
+- **Grok 4** (`x-ai/grok-4`) - xAI's latest, 256K context
+- **DeepSeek R1** (`deepseek/deepseek-r1`) - Reasoning specialist, 128K context
+- **Command R+** (`cohere/command-r-plus`) - Enterprise-ready, 128K context
+
+See [MODELS.md](MODELS.md) for the complete list of 30+ supported models with pricing and capabilities. 
 
 ## Documentation
 

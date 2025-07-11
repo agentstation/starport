@@ -254,7 +254,61 @@ var modelMetadataMap = map[string]*ModelMetadata{
 		},
 	},
 
-	// Anthropic Models
+	// Anthropic Models - Claude 4 Series
+	"anthropic/claude-4-opus": {
+		ID:          "anthropic/claude-4-opus",
+		Name:        "Anthropic: Claude 4 Opus",
+		Created:     1736524800, // Jan 2025
+		Description: "Claude 4 Opus - Most advanced model with superior reasoning",
+		Pricing: &ModelPricing{
+			Prompt:     "0.000015",
+			Completion: "0.000075",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(200000),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "claude",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 4096,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "max_tokens",
+			"stop_sequences", "stream",
+		},
+	},
+	"anthropic/claude-4-sonnet": {
+		ID:          "anthropic/claude-4-sonnet",
+		Name:        "Anthropic: Claude 4 Sonnet",
+		Created:     1736524800, // Jan 2025
+		Description: "Claude 4 Sonnet - Balanced performance and cost",
+		Pricing: &ModelPricing{
+			Prompt:     "0.000006",
+			Completion: "0.00003",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(200000),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "claude",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         false,
+			MaxCompletionTokens: 4096,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "max_tokens",
+			"stop_sequences", "stream",
+		},
+	},
+
+	// Anthropic Models - Claude 3 Series
 	"anthropic/claude-3-opus-20240229": {
 		ID:          "anthropic/claude-3-opus-20240229",
 		Name:        "Anthropic: Claude 3 Opus",
