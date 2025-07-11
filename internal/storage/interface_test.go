@@ -188,7 +188,7 @@ func TestConfig_Validate(t *testing.T) {
 func TestBadgerConfig_Defaults(t *testing.T) {
 	// Test that the struct tags define proper defaults
 	config := BadgerConfig{}
-	
+
 	// These would be set by envconfig in production
 	if config.Path != "" {
 		t.Errorf("Path should be empty by default, got %s", config.Path)
@@ -204,7 +204,7 @@ func TestBadgerConfig_Defaults(t *testing.T) {
 func TestValkeyConfig_Defaults(t *testing.T) {
 	// Test that the struct tags define proper defaults
 	config := ValkeyConfig{}
-	
+
 	// These would be set by envconfig in production
 	if config.URL != "" {
 		t.Errorf("URL should be empty by default, got %s", config.URL)
@@ -218,17 +218,17 @@ func TestTransactionInterface(t *testing.T) {
 	// Create a mock store first
 	store := NewMockStore()
 	defer store.Close()
-	
+
 	// Begin a transaction
 	ctx := context.Background()
 	tx, err := store.BeginTransaction(ctx)
 	if err != nil {
 		t.Fatalf("BeginTransaction failed: %v", err)
 	}
-	
+
 	// Ensure all required methods are defined
 	var _ Transaction = tx
-	
+
 	// Test that interface methods exist (these calls ensure the interface is properly implemented)
 	_, _ = tx.Get("key")
 	_ = tx.Set("key", []byte("value"))

@@ -201,6 +201,6 @@ func TestConfig_Validate(t *testing.T) {
 }
 
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || 
+	return len(s) >= len(substr) && s[:len(substr)] == substr ||
 		len(s) > len(substr) && containsString(s[1:], substr)
 }

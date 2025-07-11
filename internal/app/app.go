@@ -4,86 +4,116 @@ package app
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/connectors"
+	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/storage"
 )
 
-// Config holds application configuration
-type Config struct {
-	// Server configuration
-	Server server.Config
-	// Storage mode (badger or valkey)
-	StorageMode string
-	// Log level
-	LogLevel string
-}
-
-// App represents the main application
+// App represents the main application with new handler structure
 type App struct {
-	config            *Config
-	httpServer        *server.Server
-	hotReloader       interface{ Stop() }
-	connectorRegistry *server.ConnectorRegistry
-	providersConfig   *config.ProvidersConfig
-}
-
-// Option is a functional option for App
-type Option func(*App)
-
-// WithConfig sets the app configuration
-func WithConfig(cfg *Config) Option {
-	return func(a *App) {
-		a.config = cfg
+	config      *Config
+	httpServer  *server.Server
+	hotReloader interface {
+		Start(context.Context) error
+		Stop()
 	}
+	registry *registry.Registry
+	store    storage.KVStore
 }
 
-// WithHotReloader sets the hot reloader for dynamic config updates
-func WithHotReloader(hr interface{ Stop() }) Option {
-	return func(a *App) {
-		a.hotReloader = hr
-	}
-}
-
-// WithProvidersConfig sets the providers configuration
-func WithProvidersConfig(cfg *config.ProvidersConfig) Option {
-	return func(a *App) {
-		a.providersConfig = cfg
-	}
-}
-
-// New creates a new App instance
+// New creates a new App instance with improved handler organization
 func New(opts ...Option) (*App, error) {
+	// Apply options to default config
+	cfg := DefaultConfig.Apply(opts...)
+
 	app := &App{
-		config: &Config{
-			Server: server.Config{
-				Port: 8080,
-			},
-		},
+		config: &cfg,
 	}
 
-	for _, opt := range opts {
-		opt(app)
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	// Initialize storage
+	store, err := app.initializeStorage()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
+	}
+	app.store = store
+
+	// Initialize hot reloader if configured
+	if cfg.HotReload != nil && cfg.HotReload.Enabled {
+		hotReloader, err := config.NewHotReloader(
+			cfg.HotReload.ConfigPath,
+			cfg.HotReload.CheckInterval,
+		)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize rate limit hot reloader")
+		} else {
+			app.hotReloader = hotReloader
+			log.Info().
+				Str("config_path", cfg.HotReload.ConfigPath).
+				Msg("Rate limit hot reload configured")
+		}
 	}
 
 	// Initialize connector registry
-	app.connectorRegistry = server.NewConnectorRegistry()
+	app.registry = registry.New()
 
-	// Initialize connectors based on configuration
-	if err := app.initializeConnectors(); err != nil {
+	// Register connectors
+	if err := app.registerConnectors(); err != nil {
 		return nil, fmt.Errorf("failed to initialize connectors: %w", err)
 	}
 
-	// Initialize HTTP server with registry
-	app.httpServer = server.New(&app.config.Server, app.connectorRegistry)
+	// Initialize HTTP server with new structure
+	app.httpServer = server.New(&app.config.Server, app.registry)
 
 	return app, nil
+}
+
+// initializeStorage initializes the storage backend based on configuration
+func (a *App) initializeStorage() (storage.KVStore, error) {
+	switch a.config.StorageMode {
+	case "badger":
+		// TODO: Initialize Badger storage when implemented
+		log.Warn().Msg("Badger storage not yet implemented, using mock storage")
+		return storage.NewMockStore(), nil
+
+	case "valkey":
+		// TODO: Initialize Valkey storage when implemented
+		log.Warn().Msg("Valkey storage not yet implemented, using mock storage")
+		return storage.NewMockStore(), nil
+
+	default:
+		return nil, fmt.Errorf("unknown storage mode: %s", a.config.StorageMode)
+	}
+}
+
+// registerConnectors registers connectors using the registry adapter
+func (a *App) registerConnectors() error {
+	adapter := registry.NewAdapter(a.registry)
+
+	// Create config with providers if they exist
+	cfg := &config.Config{}
+	if a.config.Providers != nil {
+		cfg.Providers = *a.config.Providers
+	}
+
+	// Initialize connectors from configuration
+	// This will use mock connector if no providers are configured
+	ctx := context.Background()
+	if err := adapter.InitializeFromConfig(ctx, cfg); err != nil {
+		return fmt.Errorf("failed to initialize connectors: %w", err)
+	}
+
+	return nil
 }
 
 // Run starts the application
@@ -93,6 +123,15 @@ func (a *App) Run(ctx context.Context) error {
 		Str("log_level", a.config.LogLevel).
 		Int("port", a.config.Server.Port).
 		Msg("starting starport application")
+
+	// Start hot reloader if configured
+	if a.hotReloader != nil {
+		if err := a.hotReloader.Start(ctx); err != nil {
+			log.Warn().Err(err).Msg("Failed to start rate limit hot reloader")
+		} else {
+			log.Info().Msg("Rate limit hot reload started")
+		}
+	}
 
 	// Create error channel for server errors
 	errChan := make(chan error, 1)
@@ -130,192 +169,43 @@ func (a *App) Run(ctx context.Context) error {
 		wg.Wait()
 
 		// Close all connectors
-		if err := a.connectorRegistry.Close(); err != nil {
+		if err := a.registry.Close(); err != nil {
 			log.Error().Err(err).Msg("failed to close connectors")
 		}
 
+		// Close storage
+		if err := a.store.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close storage")
+		}
+
+		log.Info().Msg("Starport application stopped successfully")
 		return nil
 
 	case err := <-errChan:
+		// Server encountered an error
 		return err
 	}
 }
 
-// initializeConnectors initializes all configured LLM provider connectors
-func (a *App) initializeConnectors() error {
-	// If no providers config, use a mock connector for development
-	if a.providersConfig == nil {
-		log.Warn().Msg("No providers configured, using mock connector")
-		mockConfig := connectors.ProviderConfig{
-			BaseURL: "http://mock",
-			Timeout: 30 * time.Second,
-		}
-		mockConnector := connectors.NewMockConnector(mockConfig)
-		a.connectorRegistry.Register("mock", mockConnector)
-		return nil
+// Validate validates the configuration
+func (c *Config) Validate() error {
+	// Add validation logic here
+	if c.Server.Port < 1 || c.Server.Port > 65535 {
+		return fmt.Errorf("invalid port: %d", c.Server.Port)
+	}
+	if c.StorageMode != "badger" && c.StorageMode != "valkey" {
+		return fmt.Errorf("invalid storage mode: %s", c.StorageMode)
 	}
 
-	// Initialize each configured provider
-	initialized := 0
-
-	// OpenAI
-	if a.providersConfig.OpenAI.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.OpenAI, "OPENAI_API_KEY")
-		connector, err := connectors.NewOpenAIConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize OpenAI connector")
-		} else {
-			a.connectorRegistry.Register("openai", connector)
-			initialized++
-			log.Info().Str("provider", "openai").Msg("initialized connector")
+	// Validate hot reload config
+	if c.HotReload != nil && c.HotReload.Enabled {
+		if c.HotReload.ConfigPath == "" {
+			return fmt.Errorf("hot reload config path cannot be empty when enabled")
+		}
+		if c.HotReload.CheckInterval <= 0 {
+			return fmt.Errorf("hot reload check interval must be positive")
 		}
 	}
 
-	// Anthropic
-	if a.providersConfig.Anthropic.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.Anthropic, "ANTHROPIC_API_KEY")
-		connector, err := connectors.NewAnthropicConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Anthropic connector")
-		} else {
-			a.connectorRegistry.Register("anthropic", connector)
-			initialized++
-			log.Info().Str("provider", "anthropic").Msg("initialized connector")
-		}
-	}
-
-	// Google AI Studio (formerly Gemini)
-	if a.providersConfig.GoogleAIStudio.BaseURL != "" {
-		// Support both GOOGLE_API_KEY (primary) and GEMINI_API_KEY (fallback)
-		cfg := convertToConnectorConfigWithFallback(a.providersConfig.GoogleAIStudio, "GOOGLE_API_KEY", "GEMINI_API_KEY")
-		connector, err := connectors.NewGoogleAIStudioConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Google AI Studio connector")
-		} else {
-			a.connectorRegistry.Register("google-aistudio", connector)
-			initialized++
-			log.Info().Str("provider", "google-aistudio").Msg("initialized connector")
-		}
-	} else if a.providersConfig.Gemini.BaseURL != "" {
-		// Fallback to legacy Gemini config
-		// Support both GOOGLE_API_KEY (primary) and GEMINI_API_KEY (fallback)
-		cfg := convertToConnectorConfigWithFallback(a.providersConfig.Gemini, "GOOGLE_API_KEY", "GEMINI_API_KEY")
-		connector, err := connectors.NewGoogleAIStudioConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Google AI Studio connector (legacy)")
-		} else {
-			a.connectorRegistry.Register("google-aistudio", connector)
-			a.connectorRegistry.Register("gemini", connector) // Register under both names for compatibility
-			a.connectorRegistry.Register("google", connector) // Also register as "google"
-			initialized++
-			log.Info().Str("provider", "google-aistudio").Msg("initialized connector (from legacy config)")
-		}
-	}
-
-	// Google Vertex AI
-	if a.providersConfig.GoogleVertexAI.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.GoogleVertexAI, "GOOGLE_APPLICATION_CREDENTIALS")
-		// Add project_id and location from environment if available
-		if cfg.Extra == nil {
-			cfg.Extra = make(map[string]interface{})
-		}
-		if projectID := os.Getenv("GOOGLE_VERTEXAI_PROJECT_ID"); projectID != "" {
-			cfg.Extra["project_id"] = projectID
-		}
-		if location := os.Getenv("GOOGLE_VERTEXAI_LOCATION"); location != "" {
-			cfg.Extra["location"] = location
-		}
-		connector, err := connectors.NewVertexAIConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Google Vertex AI connector")
-		} else {
-			a.connectorRegistry.Register("google-vertexai", connector)
-			initialized++
-			log.Info().Str("provider", "google-vertexai").Msg("initialized connector")
-		}
-	}
-
-	// Groq
-	if a.providersConfig.Groq.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.Groq, "GROQ_API_KEY")
-		connector, err := connectors.NewGroqConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Groq connector")
-		} else {
-			a.connectorRegistry.Register("groq", connector)
-			initialized++
-			log.Info().Str("provider", "groq").Msg("initialized connector")
-		}
-	}
-
-	// Mistral
-	if a.providersConfig.Mistral.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.Mistral, "MISTRAL_API_KEY")
-		connector, err := connectors.NewMistralConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Mistral connector")
-		} else {
-			a.connectorRegistry.Register("mistral", connector)
-			initialized++
-			log.Info().Str("provider", "mistral").Msg("initialized connector")
-		}
-	}
-
-	// Azure OpenAI
-	if a.providersConfig.Azure.BaseURL != "" {
-		cfg := convertToConnectorConfig(a.providersConfig.Azure, "AZURE_OPENAI_API_KEY")
-		connector, err := connectors.NewAzureOpenAIConnector(cfg)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to initialize Azure OpenAI connector")
-		} else {
-			a.connectorRegistry.Register("azure", connector)
-			initialized++
-			log.Info().Str("provider", "azure").Msg("initialized connector")
-		}
-	}
-
-	if initialized == 0 {
-		// If no providers were initialized, add a mock connector
-		log.Warn().Msg("No providers initialized, adding mock connector")
-		mockConfig := connectors.ProviderConfig{
-			BaseURL: "http://mock",
-			Timeout: 30 * time.Second,
-		}
-		mockConnector := connectors.NewMockConnector(mockConfig)
-		a.connectorRegistry.Register("mock", mockConnector)
-	}
-
-	log.Info().Int("count", initialized).Msg("initialized provider connectors")
 	return nil
-}
-
-// convertToConnectorConfig converts from config.ProviderConfig to connectors.ProviderConfig
-func convertToConnectorConfig(cfg config.ProviderConfig, apiKeyEnvVar string) connectors.ProviderConfig {
-	return connectors.ProviderConfig{
-		BaseURL:           cfg.BaseURL,
-		Timeout:           cfg.Timeout,
-		MaxConnections:    cfg.MaxConnections,
-		MaxRetries:        cfg.MaxRetries,
-		RetryDelay:        cfg.RetryDelay,
-		BackoffMultiplier: cfg.BackoffMultiplier,
-		APIKey:            os.Getenv(apiKeyEnvVar),
-	}
-}
-
-// convertToConnectorConfigWithFallback converts config with multiple env var options
-func convertToConnectorConfigWithFallback(cfg config.ProviderConfig, primaryEnvVar, fallbackEnvVar string) connectors.ProviderConfig {
-	apiKey := os.Getenv(primaryEnvVar)
-	if apiKey == "" && fallbackEnvVar != "" {
-		apiKey = os.Getenv(fallbackEnvVar)
-	}
-
-	return connectors.ProviderConfig{
-		BaseURL:           cfg.BaseURL,
-		Timeout:           cfg.Timeout,
-		MaxConnections:    cfg.MaxConnections,
-		MaxRetries:        cfg.MaxRetries,
-		RetryDelay:        cfg.RetryDelay,
-		BackoffMultiplier: cfg.BackoffMultiplier,
-		APIKey:            apiKey,
-	}
 }

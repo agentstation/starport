@@ -88,9 +88,9 @@ type Transaction interface {
 
 // Config represents storage configuration
 type Config struct {
-	Type   string        `env:"TYPE,default=badger"`
-	Badger BadgerConfig  `env:",prefix=BADGER_"`
-	Valkey ValkeyConfig  `env:",prefix=VALKEY_"`
+	Type   string       `env:"TYPE,default=badger"`
+	Badger BadgerConfig `env:",prefix=BADGER_"`
+	Valkey ValkeyConfig `env:",prefix=VALKEY_"`
 }
 
 // BadgerConfig represents Badger-specific configuration
@@ -105,16 +105,16 @@ type BadgerConfig struct {
 
 // ValkeyConfig represents Valkey/Redis-specific configuration
 type ValkeyConfig struct {
-	URL           string        `env:"URL,default=redis://localhost:6379"`
-	MaxRetries    int           `env:"MAX_RETRIES,default=3"`
-	MinIdleConns  int           `env:"MIN_IDLE_CONNS,default=10"`
-	MaxConnAge    time.Duration `env:"MAX_CONN_AGE,default=0"`
-	PoolTimeout   time.Duration `env:"POOL_TIMEOUT,default=4s"`
-	ReadTimeout   time.Duration `env:"READ_TIMEOUT,default=3s"`
-	WriteTimeout  time.Duration `env:"WRITE_TIMEOUT,default=3s"`
-	Password      string        `env:"PASSWORD"`
-	DB            int           `env:"DB,default=0"`
-	ClusterMode   bool          `env:"CLUSTER_MODE,default=false"`
+	URL          string        `env:"URL,default=redis://localhost:6379"`
+	MaxRetries   int           `env:"MAX_RETRIES,default=3"`
+	MinIdleConns int           `env:"MIN_IDLE_CONNS,default=10"`
+	MaxConnAge   time.Duration `env:"MAX_CONN_AGE,default=0"`
+	PoolTimeout  time.Duration `env:"POOL_TIMEOUT,default=4s"`
+	ReadTimeout  time.Duration `env:"READ_TIMEOUT,default=3s"`
+	WriteTimeout time.Duration `env:"WRITE_TIMEOUT,default=3s"`
+	Password     string        `env:"PASSWORD"`
+	DB           int           `env:"DB,default=0"`
+	ClusterMode  bool          `env:"CLUSTER_MODE,default=false"`
 }
 
 // Validate validates the storage configuration

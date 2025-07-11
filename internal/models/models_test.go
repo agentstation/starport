@@ -506,7 +506,7 @@ func TestTokenBucket_Refill(t *testing.T) {
 	bucket := &TokenBucket{
 		Tokens:     50,
 		Capacity:   100,
-		RefillRate: 10, // 10 tokens per second
+		RefillRate: 10,                        // 10 tokens per second
 		LastRefill: now.Add(-5 * time.Second), // 5 seconds ago
 	}
 

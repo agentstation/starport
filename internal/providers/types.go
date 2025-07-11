@@ -22,15 +22,15 @@ const (
 
 // Key represents a decrypted provider key with metadata
 type Key struct {
-	Provider      string                 `json:"provider"`
-	Data          map[string]string      `json:"data"`          // Decrypted key data
-	Config        map[string]interface{} `json:"config"`        // Provider-specific config
-	IsFallback    bool                   `json:"is_fallback"`   // Use as fallback when rate limited
-	Priority      int                    `json:"priority"`      // Order preference (lower = higher priority)
-	RateLimit     *models.RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (for global keys)
-	CreatedAt     time.Time              `json:"created_at"`
-	LastUsed      *time.Time             `json:"last_used"`
-	UsageCount    int64                  `json:"usage_count"`
+	Provider   string                  `json:"provider"`
+	Data       map[string]string       `json:"data"`                 // Decrypted key data
+	Config     map[string]interface{}  `json:"config"`               // Provider-specific config
+	IsFallback bool                    `json:"is_fallback"`          // Use as fallback when rate limited
+	Priority   int                     `json:"priority"`             // Order preference (lower = higher priority)
+	RateLimit  *models.RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (for global keys)
+	CreatedAt  time.Time               `json:"created_at"`
+	LastUsed   *time.Time              `json:"last_used"`
+	UsageCount int64                   `json:"usage_count"`
 }
 
 // Usage represents usage metrics for cost calculation
@@ -93,18 +93,18 @@ const (
 	// KeyTypeGateway indicates gateway-provided keys were used (global keys)
 	KeyTypeGateway KeyType = "gateway"
 	// KeyTypeUser indicates user's own keys were used
-	KeyTypeUser    KeyType = "user"
+	KeyTypeUser KeyType = "user"
 )
 
 // Request types for API endpoints
 
 // CreateKeyRequest represents a request to create a provider key
 type CreateKeyRequest struct {
-	Provider   string                 `json:"provider"`
-	Key        map[string]string      `json:"key"`
-	Config     map[string]interface{} `json:"config,omitempty"`
-	IsFallback bool                   `json:"is_fallback,omitempty"`
-	Priority   int                    `json:"priority,omitempty"`
+	Provider   string                  `json:"provider"`
+	Key        map[string]string       `json:"key"`
+	Config     map[string]interface{}  `json:"config,omitempty"`
+	IsFallback bool                    `json:"is_fallback,omitempty"`
+	Priority   int                     `json:"priority,omitempty"`
 	RateLimit  *models.RateLimitConfig `json:"rate_limit,omitempty"` // For global keys
 }
 

@@ -51,9 +51,9 @@ type Manager struct {
 type ManagerConfig struct {
 	// API Keys configuration
 	APIKeys struct {
-		LocalTTL        time.Duration `env:"LOCAL_TTL,default=5m"`
-		DistributedTTL  time.Duration `env:"DISTRIBUTED_TTL,default=1h"`
-		LocalSizeMB     int64         `env:"LOCAL_SIZE_MB,default=32"`
+		LocalTTL       time.Duration `env:"LOCAL_TTL,default=5m"`
+		DistributedTTL time.Duration `env:"DISTRIBUTED_TTL,default=1h"`
+		LocalSizeMB    int64         `env:"LOCAL_SIZE_MB,default=32"`
 	} `env:",prefix=API_KEYS_"`
 
 	// Rate Limits configuration
@@ -63,24 +63,24 @@ type ManagerConfig struct {
 
 	// LLM Responses configuration
 	Responses struct {
-		Strategy       string        `env:"STRATEGY,default=auto"`
-		TTL            time.Duration `env:"TTL,default=1h"`
-		MaxItemSizeKB  int           `env:"MAX_ITEM_SIZE_KB,default=1024"`
-		LocalSizeMB    int64         `env:"LOCAL_SIZE_MB,default=256"`
+		Strategy      string        `env:"STRATEGY,default=auto"`
+		TTL           time.Duration `env:"TTL,default=1h"`
+		MaxItemSizeKB int           `env:"MAX_ITEM_SIZE_KB,default=1024"`
+		LocalSizeMB   int64         `env:"LOCAL_SIZE_MB,default=256"`
 	} `env:",prefix=RESPONSES_"`
 
 	// Model Metadata configuration
 	Models struct {
-		Strategy    string        `env:"STRATEGY,default=local"`
-		TTL         time.Duration `env:"TTL,default=6h"`
-		SizeMB      int64         `env:"SIZE_MB,default=16"`
+		Strategy string        `env:"STRATEGY,default=local"`
+		TTL      time.Duration `env:"TTL,default=6h"`
+		SizeMB   int64         `env:"SIZE_MB,default=16"`
 	} `env:",prefix=MODELS_"`
 
 	// Presets configuration
 	Presets struct {
-		LocalTTL        time.Duration `env:"LOCAL_TTL,default=10m"`
-		DistributedTTL  time.Duration `env:"DISTRIBUTED_TTL,default=24h"`
-		LocalSizeMB     int64         `env:"LOCAL_SIZE_MB,default=16"`
+		LocalTTL       time.Duration `env:"LOCAL_TTL,default=10m"`
+		DistributedTTL time.Duration `env:"DISTRIBUTED_TTL,default=24h"`
+		LocalSizeMB    int64         `env:"LOCAL_SIZE_MB,default=16"`
 	} `env:",prefix=PRESETS_"`
 }
 
@@ -120,7 +120,7 @@ func NewCacheManager(config ManagerConfig, store storage.KVStore) (*Manager, err
 	if config.Responses.MaxItemSizeKB == 0 {
 		config.Responses.MaxItemSizeKB = 1024
 	}
-	
+
 	cm := &Manager{
 		storage: store,
 		stopCh:  make(chan struct{}),
@@ -252,7 +252,7 @@ func (cm *Manager) DisableAPIKey(ctx context.Context, hash string) error {
 
 	// Invalidate local cache only
 	cm.apiKeys.InvalidateLocal(hash)
-	
+
 	// Publish invalidation message if pub/sub is available
 	if cm.pubsub != nil && !isNoopPubSub(cm.pubsub) {
 		channel := ChannelAPIKeyInvalidate + hash
@@ -260,7 +260,7 @@ func (cm *Manager) DisableAPIKey(ctx context.Context, hash string) error {
 			log.Warn().Err(err).Str("channel", channel).Msg("failed to publish invalidation")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -314,13 +314,13 @@ func (cm *Manager) GetModel(ctx context.Context, modelID string) (interface{}, b
 	if err != nil || !found {
 		return nil, found, err
 	}
-	
+
 	// Unmarshal the data
 	var model interface{}
 	if err := json.Unmarshal(data, &model); err != nil {
 		return nil, false, fmt.Errorf("failed to unmarshal model: %w", err)
 	}
-	
+
 	return model, true, nil
 }
 
@@ -380,10 +380,10 @@ func (cm *Manager) DeletePreset(ctx context.Context, name string) error {
 	if err := cm.storage.Delete(ctx, fullKey); err != nil && err != storage.ErrNotFound {
 		return err
 	}
-	
+
 	// Invalidate local cache
 	cm.presets.InvalidateLocal(name)
-	
+
 	// Publish invalidation message if pub/sub is available
 	if cm.pubsub != nil && !isNoopPubSub(cm.pubsub) {
 		channel := ChannelPresetInvalidate + name
@@ -391,7 +391,7 @@ func (cm *Manager) DeletePreset(ctx context.Context, name string) error {
 			log.Warn().Err(err).Str("channel", channel).Msg("failed to publish invalidation")
 		}
 	}
-	
+
 	return nil
 }
 

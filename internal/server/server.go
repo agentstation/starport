@@ -6,60 +6,114 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/cache"
+	"github.com/agentstation/starport/internal/providers"
+	"github.com/agentstation/starport/internal/proxy"
+	"github.com/agentstation/starport/internal/registry"
+	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/server/handlers"
+	"github.com/agentstation/starport/internal/storage"
 )
 
-// Server represents the HTTP server
+// Server represents the HTTP server with new handler organization
 type Server struct {
-	router            *chi.Mux
-	config            *Config
-	httpServer        *http.Server
-	connectorRegistry *ConnectorRegistry
-	proxyHandler      ProxyHandlerInterface
+	router     *chi.Mux
+	cfg        *Config
+	httpServer *http.Server
+
+	// Core dependencies
+	registry   *registry.Registry
+	service    proxy.Service
+	store      storage.KVStore
+	keyManager providers.KeyManager
+
+	// Handler collection
+	handlers *handlers.Collection
+
+	// Middleware
+	auth *AuthMiddleware
 }
 
 // Option configures server options
 type Option func(*Server)
 
 // WithCache enables caching with the provided cache instance
-func WithCache(c cache.Cache, config CacheConfig) Option {
+func WithCache(c cache.Cache) Option {
 	return func(s *Server) {
-		baseHandler := NewProxyHandler(s.connectorRegistry)
-		s.proxyHandler = NewCachedProxyHandler(baseHandler, c, config)
+		// Wrap service with caching layer
+		cacheConfig := proxy.CacheConfig{
+			EnableChatCache:      true,
+			EnableEmbeddingCache: true,
+			EnableModelCache:     true,
+			EnableProviderCache:  true,
+			CacheControlHeader:   "X-Cache-Control",
+		}
+		s.service = proxy.NewCachedService(s.service, c, cacheConfig)
+		log.Info().Msg("cache option applied - service wrapped with caching layer")
 	}
 }
 
-// WithCacheManager enables caching with the new cache Manager
-func WithCacheManager(cm *cache.Manager, config CacheConfig) Option {
+// WithCacheManager enables caching with the cache Manager
+func WithCacheManager(cm *cache.Manager) Option {
 	return func(s *Server) {
-		baseHandler := NewProxyHandler(s.connectorRegistry)
-		s.proxyHandler = NewCachedProxyHandlerV2(baseHandler, cm, config)
+		// Wrap service with caching layer using cache manager
+		cacheConfig := proxy.CacheConfig{
+			EnableChatCache:      true,
+			EnableEmbeddingCache: true,
+			EnableModelCache:     true,
+			EnableProviderCache:  true,
+			CacheControlHeader:   "X-Cache-Control",
+		}
+		s.service = proxy.NewCachedServiceV2(s.service, cm, cacheConfig)
+		log.Info().Msg("cache manager option applied - service wrapped with caching layer")
 	}
 }
 
-// New creates a new Server instance
-func New(config *Config, registry *ConnectorRegistry, opts ...Option) *Server {
+// New creates a new server instance with improved handler organization
+func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
+	// Create dependencies
+	store := storage.NewMockStore()                      // TODO: Get from config
+	keyManager, _ := providers.NewKeyManager(store, nil) // TODO: Get encryption service
+
+	// Create routing with adapter
+	router := routing.NewRouter(newRegistryAdapter(reg))
+
+	// Create proxy service
+	service := proxy.NewService(reg, router)
+
+	// Create handler collection
+	handlerConfig := handlers.Config{
+		Service:     service,
+		KeyManager:  keyManager,
+		Store:       store,
+		ServiceName: "starport",
+		Version:     "1.0.0",
+	}
+	handlerCollection := handlers.NewCollection(handlerConfig)
+
 	s := &Server{
-		router:            chi.NewRouter(),
-		config:            config,
-		connectorRegistry: registry,
+		router:     chi.NewRouter(),
+		cfg:        config,
+		registry:   reg,
+		service:    service,
+		store:      store,
+		keyManager: keyManager,
+		handlers:   handlerCollection,
+		auth:       NewAuthMiddleware(store),
 	}
-
-	// Initialize default proxy handler
-	s.proxyHandler = NewProxyHandler(registry)
 
 	// Apply options
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	s.setupMiddleware()
-	s.setupRoutes()
+	// Setup routes using the new centralized routes.go
+	s.setupRoutes(s.router)
 
+	// Create HTTP server
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", config.Host, config.Port),
 		Handler:      s.router,
@@ -71,95 +125,62 @@ func New(config *Config, registry *ConnectorRegistry, opts ...Option) *Server {
 	return s
 }
 
-// setupMiddleware configures all middleware
-func (s *Server) setupMiddleware() {
-	// Request ID middleware - must be first
-	s.router.Use(middleware.RequestID)
-	
-	// Real IP middleware to get the true client IP
-	s.router.Use(middleware.RealIP)
-	
-	// Logging middleware
-	s.router.Use(LoggingMiddleware)
-	
-	// Recoverer middleware to recover from panics
-	s.router.Use(middleware.Recoverer)
-	
-	// Security headers middleware
-	s.router.Use(SecurityHeaders)
-	
-	// Request size limiter
-	s.router.Use(RequestSizeLimiter(s.config.MaxRequestSize))
-	
-	// Timeout middleware with configurable timeout
-	s.router.Use(middleware.Timeout(s.config.RequestTimeout))
-	
-	// CORS middleware
-	s.router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   s.config.CORS.AllowedOrigins,
-		AllowedMethods:   s.config.CORS.AllowedMethods,
-		AllowedHeaders:   s.config.CORS.AllowedHeaders,
-		ExposedHeaders:   s.config.CORS.ExposedHeaders,
-		AllowCredentials: s.config.CORS.AllowCredentials,
-		MaxAge:           s.config.CORS.MaxAge,
-	}))
-	
-	// Compression middleware
-	s.router.Use(middleware.Compress(5))
+// Middleware methods that routes.go expects
+
+func (s *Server) requireAPIKey(next http.Handler) http.Handler {
+	return s.auth.RequireAPIKey(next)
 }
 
-// setupRoutes configures all routes
-func (s *Server) setupRoutes() {
-	// Health check routes
-	s.router.Get("/health/live", s.handleLive)
-	s.router.Get("/health/ready", s.handleReady)
+func (s *Server) requireKeyOwnership(next http.Handler) http.Handler {
+	return s.auth.RequireKeyOwnership(next)
+}
 
-	// Register OpenAI-compatible proxy routes
-	s.proxyHandler.RegisterRoutes(s.router)
+func (s *Server) requireAdmin(next http.Handler) http.Handler {
+	return s.auth.RequireAdmin(next)
+}
 
-	// API routes
-	s.router.Route("/api/v1", func(r chi.Router) {
-		// OpenRouter-compatible proxy routes
-		s.proxyHandler.RegisterOpenRouterRoutes(r)
-		
-		// Management API placeholder
-		r.Get("/", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			if _, err := w.Write([]byte(`{"message":"Starport API v1"}`)); err != nil {
-				log.Error().Err(err).Msg("failed to write response")
-			}
-		})
-	})
+func (s *Server) handleNotFound(w http.ResponseWriter, _ *http.Request) {
+	dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "The requested endpoint does not exist")
+}
+
+func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
+	dto.WriteError(w, http.StatusMethodNotAllowed, dto.ErrorTypeInvalidRequest, "Method not allowed")
 }
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
 	log.Info().
-		Int("port", s.config.Port).
+		Int("port", s.cfg.Port).
+		Str("host", s.cfg.Host).
 		Msg("starting HTTP server")
 
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
-	
+
 	return nil
 }
 
 // Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
 	log.Info().Msg("shutting down HTTP server")
-	
-	shutdownCtx, cancel := context.WithTimeout(ctx, s.config.ShutdownTimeout)
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, s.cfg.ShutdownTimeout)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("failed to shutdown server: %w", err)
 	}
 
+	// Close registry and cleanup resources
+	if err := s.registry.Close(); err != nil {
+		log.Error().Err(err).Msg("failed to close registry")
+	}
+
 	return nil
 }
 
-// Router returns the chi router for testing
+// Router returns the chi router (useful for testing)
 func (s *Server) Router() http.Handler {
 	return s.router
 }

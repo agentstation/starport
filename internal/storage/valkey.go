@@ -22,13 +22,13 @@ func OpenValkey(config ValkeyConfig) (KVStore, error) {
 	// Parse URL to extract host:port
 	url := strings.TrimPrefix(config.URL, "redis://")
 	url = strings.TrimPrefix(url, "valkey://")
-	
+
 	opts := valkey.ClientOption{
-		InitAddress:     []string{url},
-		Password:        config.Password,
-		SelectDB:        config.DB,
-		ClientName:      "starport",
-		DisableRetry:    config.MaxRetries == 0,
+		InitAddress:  []string{url},
+		Password:     config.Password,
+		SelectDB:     config.DB,
+		ClientName:   "starport",
+		DisableRetry: config.MaxRetries == 0,
 	}
 
 	// Create client
@@ -73,7 +73,7 @@ func (v *ValkeyStore) GetPubSub() PubSubClient {
 func (v *ValkeyStore) Get(ctx context.Context, key string) ([]byte, error) {
 	cmd := v.client.B().Get().Key(key).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	val, err := resp.AsBytes()
 	if err != nil {
 		if valkey.IsValkeyNil(err) {
@@ -81,7 +81,7 @@ func (v *ValkeyStore) Get(ctx context.Context, key string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("failed to get key %s: %w", key, err)
 	}
-	
+
 	return val, nil
 }
 
@@ -89,11 +89,11 @@ func (v *ValkeyStore) Get(ctx context.Context, key string) ([]byte, error) {
 func (v *ValkeyStore) Set(ctx context.Context, key string, value []byte) error {
 	cmd := v.client.B().Set().Key(key).Value(string(value)).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("failed to set key %s: %w", key, err)
 	}
-	
+
 	return nil
 }
 
@@ -101,11 +101,11 @@ func (v *ValkeyStore) Set(ctx context.Context, key string, value []byte) error {
 func (v *ValkeyStore) Delete(ctx context.Context, key string) error {
 	cmd := v.client.B().Del().Key(key).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("failed to delete key %s: %w", key, err)
 	}
-	
+
 	return nil
 }
 
@@ -113,12 +113,12 @@ func (v *ValkeyStore) Delete(ctx context.Context, key string) error {
 func (v *ValkeyStore) Exists(ctx context.Context, key string) (bool, error) {
 	cmd := v.client.B().Exists().Key(key).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	count, err := resp.AsInt64()
 	if err != nil {
 		return false, fmt.Errorf("failed to check key existence %s: %w", key, err)
 	}
-	
+
 	return count > 0, nil
 }
 
@@ -128,11 +128,11 @@ func (v *ValkeyStore) Exists(ctx context.Context, key string) (bool, error) {
 func (v *ValkeyStore) SetWithTTL(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	cmd := v.client.B().Set().Key(key).Value(string(value)).Ex(ttl).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("failed to set key with TTL %s: %w", key, err)
 	}
-	
+
 	return nil
 }
 
@@ -140,19 +140,19 @@ func (v *ValkeyStore) SetWithTTL(ctx context.Context, key string, value []byte, 
 func (v *ValkeyStore) GetTTL(ctx context.Context, key string) (time.Duration, error) {
 	cmd := v.client.B().Ttl().Key(key).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	ttl, err := resp.AsInt64()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get TTL for key %s: %w", key, err)
 	}
-	
+
 	if ttl == -2 {
 		return 0, ErrNotFound
 	}
 	if ttl == -1 {
 		return 0, nil // No expiration
 	}
-	
+
 	return time.Duration(ttl) * time.Second, nil
 }
 
@@ -160,11 +160,11 @@ func (v *ValkeyStore) GetTTL(ctx context.Context, key string) (time.Duration, er
 func (v *ValkeyStore) ExpireAt(ctx context.Context, key string, expireAt time.Time) error {
 	cmd := v.client.B().Expireat().Key(key).Timestamp(expireAt.Unix()).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("failed to set expiration for key %s: %w", key, err)
 	}
-	
+
 	return nil
 }
 
@@ -174,12 +174,12 @@ func (v *ValkeyStore) ExpireAt(ctx context.Context, key string, expireAt time.Ti
 func (v *ValkeyStore) Increment(ctx context.Context, key string, delta int64) (int64, error) {
 	cmd := v.client.B().Incrby().Key(key).Increment(delta).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	val, err := resp.AsInt64()
 	if err != nil {
 		return 0, fmt.Errorf("failed to increment key %s: %w", key, err)
 	}
-	
+
 	return val, nil
 }
 
@@ -187,12 +187,12 @@ func (v *ValkeyStore) Increment(ctx context.Context, key string, delta int64) (i
 func (v *ValkeyStore) Decrement(ctx context.Context, key string, delta int64) (int64, error) {
 	cmd := v.client.B().Decrby().Key(key).Decrement(delta).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	val, err := resp.AsInt64()
 	if err != nil {
 		return 0, fmt.Errorf("failed to decrement key %s: %w", key, err)
 	}
-	
+
 	return val, nil
 }
 
@@ -206,21 +206,21 @@ func (v *ValkeyStore) CompareAndSwap(ctx context.Context, key string, old, newVa
 			return nil
 		end
 	`
-	
+
 	cmd := v.client.B().Eval().Script(script).Numkeys(1).Key(key).Arg(string(old), string(newValue)).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	// Check for errors first
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("failed to compare and swap key %s: %w", key, err)
 	}
-	
+
 	// Check if the script returned nil (mismatch) by trying to get the value
 	_, err := resp.ToString()
 	if err != nil && valkey.IsValkeyNil(err) {
 		return ErrConflict
 	}
-	
+
 	return nil
 }
 
@@ -235,16 +235,16 @@ func (v *ValkeyStore) BatchGet(ctx context.Context, keys []string) (map[string][
 	// Use MGET for batch retrieval
 	cmd := v.client.B().Mget().Key(keys...).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	// MGET returns an array of values, some might be nil
 	result := make(map[string][]byte)
-	
+
 	// Parse the array response
 	arr, err := resp.ToArray()
 	if err != nil {
 		return nil, fmt.Errorf("failed to batch get keys: %w", err)
 	}
-	
+
 	for i, key := range keys {
 		if i < len(arr) {
 			val, err := arr[i].AsBytes()
@@ -256,7 +256,7 @@ func (v *ValkeyStore) BatchGet(ctx context.Context, keys []string) (map[string][
 			}
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -272,14 +272,14 @@ func (v *ValkeyStore) BatchSet(ctx context.Context, items map[string][]byte) err
 		cmd := v.client.B().Set().Key(key).Value(string(value)).Build()
 		results = append(results, v.client.Do(ctx, cmd))
 	}
-	
+
 	// Check all results
 	for i, result := range results {
 		if err := result.Error(); err != nil {
 			return fmt.Errorf("failed to set key in batch at index %d: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -291,11 +291,11 @@ func (v *ValkeyStore) BatchDelete(ctx context.Context, keys []string) error {
 
 	cmd := v.client.B().Del().Key(keys...).Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("failed to batch delete keys: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -307,20 +307,20 @@ func (v *ValkeyStore) BatchSetWithTTL(ctx context.Context, items map[string][]by
 
 	// Use pipeline for atomic batch operation with TTL
 	results := make([]valkey.ValkeyResult, 0, len(items))
-	
+
 	// Build all commands first
 	for key, value := range items {
 		cmd := v.client.B().Set().Key(key).Value(string(value)).Ex(ttl).Build()
 		results = append(results, v.client.Do(ctx, cmd))
 	}
-	
+
 	// Check all results
 	for i, result := range results {
 		if err := result.Error(); err != nil {
 			return fmt.Errorf("failed to set key with TTL in batch at index %d: %w", i, err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -342,32 +342,32 @@ func (v *ValkeyStore) BeginTransaction(ctx context.Context) (Transaction, error)
 func (v *ValkeyStore) Scan(ctx context.Context, pattern string, limit int) ([]string, error) {
 	var keys []string
 	cursor := uint64(0)
-	
+
 	for {
 		cmd := v.client.B().Scan().Cursor(cursor).Match(pattern).Count(int64(limit)).Build()
 		resp := v.client.Do(ctx, cmd)
-		
+
 		// Parse scan result
 		scanResult, err := resp.AsScanEntry()
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan keys with pattern %s: %w", pattern, err)
 		}
-		
+
 		keys = append(keys, scanResult.Elements...)
-		
+
 		// Check if we've reached the limit or finished scanning
 		if scanResult.Cursor == 0 || len(keys) >= limit {
 			break
 		}
-		
+
 		cursor = scanResult.Cursor
 	}
-	
+
 	// Trim to limit
 	if len(keys) > limit {
 		keys = keys[:limit]
 	}
-	
+
 	return keys, nil
 }
 
@@ -382,11 +382,11 @@ func (v *ValkeyStore) ScanWithPrefix(ctx context.Context, prefix string, limit i
 func (v *ValkeyStore) Ping(ctx context.Context) error {
 	cmd := v.client.B().Ping().Build()
 	resp := v.client.Do(ctx, cmd)
-	
+
 	if err := resp.Error(); err != nil {
 		return fmt.Errorf("ping failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -397,7 +397,7 @@ func (v *ValkeyStore) Close() error {
 			log.Warn().Err(err).Msg("failed to close pubsub")
 		}
 	}
-	
+
 	v.client.Close()
 	return nil
 }
@@ -416,7 +416,7 @@ func (t *ValkeyTransaction) Get(key string) ([]byte, error) {
 	if val, ok := t.state[key]; ok {
 		return val, nil
 	}
-	
+
 	// Otherwise get from store
 	return t.store.Get(t.ctx, key)
 }
@@ -427,7 +427,7 @@ func (t *ValkeyTransaction) Set(key string, value []byte) error {
 		t.state = make(map[string][]byte)
 	}
 	t.state[key] = value
-	
+
 	cmd := t.store.client.B().Set().Key(key).Value(string(value)).Build()
 	t.commands = append(t.commands, cmd)
 	return nil
@@ -446,7 +446,7 @@ func (t *ValkeyTransaction) SetWithTTL(key string, value []byte, ttl time.Durati
 		t.state = make(map[string][]byte)
 	}
 	t.state[key] = value
-	
+
 	cmd := t.store.client.B().Set().Key(key).Value(string(value)).Ex(ttl).Build()
 	t.commands = append(t.commands, cmd)
 	return nil
@@ -472,7 +472,7 @@ func (t *ValkeyTransaction) Commit(ctx context.Context) error {
 	if len(t.commands) == 0 {
 		return nil
 	}
-	
+
 	// Use dedicated client for transaction
 	var txErr error
 	_ = t.store.client.Dedicated(func(c valkey.DedicatedClient) error {
@@ -481,10 +481,10 @@ func (t *ValkeyTransaction) Commit(ctx context.Context) error {
 		cmds = append(cmds, c.B().Multi().Build())
 		cmds = append(cmds, t.commands...)
 		cmds = append(cmds, c.B().Exec().Build())
-		
+
 		// Execute transaction
 		results := c.DoMulti(ctx, cmds...)
-		
+
 		// Check results - the last one is EXEC result
 		if len(results) > 0 {
 			execResult := results[len(results)-1]
@@ -493,10 +493,10 @@ func (t *ValkeyTransaction) Commit(ctx context.Context) error {
 				return err
 			}
 		}
-		
+
 		return nil
 	})
-	
+
 	return txErr
 }
 

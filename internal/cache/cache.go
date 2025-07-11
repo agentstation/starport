@@ -249,7 +249,7 @@ func (lc *layeredCache) Stats() Stats {
 	hits := lc.stats.hits.Load()
 	misses := lc.stats.misses.Load()
 	total := hits + misses
-	
+
 	var hitRate float64
 	if total > 0 {
 		hitRate = float64(hits) / float64(total)

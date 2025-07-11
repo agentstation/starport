@@ -49,7 +49,7 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 
 	// Create a custom lookuper that adds our prefix
 	lookuper := envconfig.PrefixLookuper(l.prefix, envconfig.OsLookuper())
-	
+
 	// Process environment variables using go-envconfig
 	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
 		Target:   cfg,

@@ -109,9 +109,9 @@ func TestNewMockStore(t *testing.T) {
 
 // Helper function to check if error message contains substring
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && s[:len(substr)] == substr || 
-		   len(s) >= len(substr) && s[len(s)-len(substr):] == substr ||
-		   len(s) > len(substr) && containsSubstring(s[1:], substr)
+	return len(s) >= len(substr) && s[:len(substr)] == substr ||
+		len(s) >= len(substr) && s[len(s)-len(substr):] == substr ||
+		len(s) > len(substr) && containsSubstring(s[1:], substr)
 }
 
 func containsSubstring(s, substr string) bool {

@@ -550,12 +550,12 @@ func (t *MockTransaction) Get(key string) ([]byte, error) {
 	t.mu.Unlock()
 	value, err := t.store.Get(context.Background(), key)
 	t.mu.Lock()
-	
+
 	// Re-check if transaction was finished while we didn't hold the lock
 	if t.finished {
 		return nil, errors.New("transaction already finished")
 	}
-	
+
 	return value, err
 }
 
@@ -641,12 +641,12 @@ func (t *MockTransaction) Increment(key string, delta int64) (int64, error) {
 			t.mu.Unlock()
 			data, err := t.store.Get(context.Background(), key)
 			t.mu.Lock()
-			
+
 			// Re-check if transaction was finished while we didn't hold the lock
 			if t.finished {
 				return 0, errors.New("transaction already finished")
 			}
-			
+
 			if err != nil && err != ErrNotFound {
 				return 0, err
 			}
@@ -676,7 +676,7 @@ func (t *MockTransaction) CompareAndSwap(key string, old, newValue []byte) error
 	// Get current value - check pending operations first
 	var current []byte
 	var err error
-	
+
 	if op, exists := t.pending[key]; exists {
 		switch op.opType {
 		case opTypeDelete:
@@ -690,13 +690,13 @@ func (t *MockTransaction) CompareAndSwap(key string, old, newValue []byte) error
 		t.mu.Unlock()
 		current, err = t.store.Get(context.Background(), key)
 		t.mu.Lock()
-		
+
 		// Re-check if transaction was finished while we didn't hold the lock
 		if t.finished {
 			return errors.New("transaction already finished")
 		}
 	}
-	
+
 	if err != nil && err != ErrNotFound {
 		return err
 	}

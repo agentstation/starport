@@ -25,8 +25,8 @@ type ModelCapability struct {
 	SupportsFunctions bool
 	SupportsStreaming bool
 	CostPerMillion    float64 // Cost per million tokens
-	LatencyClass      string   // "fast", "medium", "slow"
-	Quality           string   // "economy", "standard", "premium"
+	LatencyClass      string  // "fast", "medium", "slow"
+	Quality           string  // "economy", "standard", "premium"
 }
 
 // NewDefaultModelSelector creates a new model selector with default configurations
@@ -42,20 +42,20 @@ func (s *defaultModelSelector) SelectModels(req *Request) []string {
 	hasVision := s.requestHasVision(req)
 	hasFunctions := s.requestHasFunctions(req)
 	estimatedTokens := s.estimateTokens(req)
-	
+
 	// Build a list of suitable models
 	var models []string
-	
+
 	// Start with fast, economical models
 	if !hasVision && !hasFunctions && estimatedTokens < 4000 {
 		// Simple requests can use fast models
-		models = append(models, 
-			"groq/llama-3.1-8b-instant",      // Ultra-fast
-			"openai/gpt-3.5-turbo",           // Fast and cheap
+		models = append(models,
+			"groq/llama-3.1-8b-instant",         // Ultra-fast
+			"openai/gpt-3.5-turbo",              // Fast and cheap
 			"anthropic/claude-3-haiku-20240307", // Fast Claude
 		)
 	}
-	
+
 	// Add standard models
 	if hasVision {
 		// Vision-capable models
@@ -79,18 +79,18 @@ func (s *defaultModelSelector) SelectModels(req *Request) []string {
 			"google-aistudio/gemini-1.5-pro",
 		)
 	}
-	
+
 	// Add premium models as final fallback
 	models = append(models,
 		"openai/gpt-4",
 		"anthropic/claude-3-opus-20240229",
 	)
-	
+
 	// Filter by metadata preferences if provided
 	if req.Metadata != nil {
 		models = s.filterByPreferences(models, req.Metadata)
 	}
-	
+
 	// Remove duplicates while preserving order
 	return s.deduplicateModels(models)
 }
@@ -121,7 +121,7 @@ func (s *defaultModelSelector) requestHasFunctions(req *Request) bool {
 func (s *defaultModelSelector) estimateTokens(req *Request) int {
 	// Very rough estimation: ~4 characters per token
 	totalChars := 0
-	
+
 	for _, msg := range req.Messages {
 		switch content := msg.Content.(type) {
 		case string:
@@ -141,14 +141,14 @@ func (s *defaultModelSelector) estimateTokens(req *Request) int {
 			}
 		}
 	}
-	
+
 	// Add some buffer for response
 	if req.MaxTokens != nil {
 		totalChars += *req.MaxTokens * 4
 	} else {
 		totalChars += 2000 // Default buffer
 	}
-	
+
 	return totalChars / 4
 }
 
@@ -157,7 +157,7 @@ func (s *defaultModelSelector) filterByPreferences(models []string, metadata *Re
 	if metadata.UserPreferences == nil {
 		return models
 	}
-	
+
 	// Check for quality preference
 	if quality, ok := metadata.UserPreferences["quality"].(string); ok {
 		filtered := []string{}
@@ -170,7 +170,7 @@ func (s *defaultModelSelector) filterByPreferences(models []string, metadata *Re
 			models = filtered
 		}
 	}
-	
+
 	// Check for speed preference
 	if speed, ok := metadata.UserPreferences["speed"].(string); ok {
 		filtered := []string{}
@@ -183,7 +183,7 @@ func (s *defaultModelSelector) filterByPreferences(models []string, metadata *Re
 			models = filtered
 		}
 	}
-	
+
 	return models
 }
 
@@ -193,7 +193,7 @@ func (s *defaultModelSelector) matchesQuality(model, quality string) bool {
 	if !ok {
 		return true // Unknown models pass through
 	}
-	
+
 	switch quality {
 	case "economy":
 		return caps.Quality == "economy"
@@ -204,13 +204,13 @@ func (s *defaultModelSelector) matchesQuality(model, quality string) bool {
 	}
 }
 
-// matchesSpeed checks if a model matches the speed preference  
+// matchesSpeed checks if a model matches the speed preference
 func (s *defaultModelSelector) matchesSpeed(model, speed string) bool {
 	caps, ok := s.modelCapabilities[model]
 	if !ok {
 		return true // Unknown models pass through
 	}
-	
+
 	switch speed {
 	case "fast":
 		return caps.LatencyClass == "fast"
@@ -225,14 +225,14 @@ func (s *defaultModelSelector) matchesSpeed(model, speed string) bool {
 func (s *defaultModelSelector) deduplicateModels(models []string) []string {
 	seen := make(map[string]bool)
 	result := []string{}
-	
+
 	for _, model := range models {
 		if !seen[model] {
 			seen[model] = true
 			result = append(result, model)
 		}
 	}
-	
+
 	return result
 }
 
@@ -284,7 +284,7 @@ func defaultModelCapabilities() map[string]ModelCapability {
 			LatencyClass:      "fast",
 			Quality:           "economy",
 		},
-		
+
 		// Anthropic models
 		"anthropic/claude-3-opus-20240229": {
 			Provider:          "anthropic",
@@ -319,7 +319,7 @@ func defaultModelCapabilities() map[string]ModelCapability {
 			LatencyClass:      "fast",
 			Quality:           "economy",
 		},
-		
+
 		// Google AI Studio models
 		"google-aistudio/gemini-1.5-pro": {
 			Provider:          "google-aistudio",
@@ -343,7 +343,7 @@ func defaultModelCapabilities() map[string]ModelCapability {
 			LatencyClass:      "fast",
 			Quality:           "economy",
 		},
-		
+
 		// Google Vertex AI models
 		"google-vertexai/gemini-1.5-pro": {
 			Provider:          "google-vertexai",
@@ -378,7 +378,7 @@ func defaultModelCapabilities() map[string]ModelCapability {
 			LatencyClass:      "slow",
 			Quality:           "premium",
 		},
-		
+
 		// Groq models
 		"groq/llama-3.1-8b-instant": {
 			Provider:          "groq",
@@ -391,7 +391,7 @@ func defaultModelCapabilities() map[string]ModelCapability {
 			LatencyClass:      "fast",
 			Quality:           "economy",
 		},
-		
+
 		// Mistral models
 		"mistral/mistral-large-latest": {
 			Provider:          "mistral",
@@ -421,7 +421,7 @@ func IsModelAvailable(modelID string, requiredFeatures []string) bool {
 		// Unknown model, assume it's available
 		return true
 	}
-	
+
 	for _, feature := range requiredFeatures {
 		switch strings.ToLower(feature) {
 		case "vision":
@@ -438,6 +438,6 @@ func IsModelAvailable(modelID string, requiredFeatures []string) bool {
 			}
 		}
 	}
-	
+
 	return true
 }

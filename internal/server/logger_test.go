@@ -88,4 +88,3 @@ func TestLoggingMiddlewareWithError(t *testing.T) {
 		t.Error("expected log to contain status 500")
 	}
 }
-

@@ -4,22 +4,19 @@ package storage
 const (
 	// KeyPrefixAPIKey is the prefix for API key storage
 	KeyPrefixAPIKey = "apikey:"
-	
+
 	// KeyPrefixRateLimit is the prefix for rate limit counters
 	KeyPrefixRateLimit = "ratelimit:"
-	
+
 	// KeyPrefixResponse is the prefix for cached responses
 	KeyPrefixResponse = "response:"
-	
+
 	// KeyPrefixPreset is the prefix for preset storage
 	KeyPrefixPreset = "preset:"
-	
+
 	// KeyPrefixProviderKey is the prefix for provider keys
 	KeyPrefixProviderKey = "providerkey:" // #nosec G101 -- This is a key prefix, not a credential
-	
-	// KeyPrefixCredential is the prefix for legacy BYOK credentials (deprecated)
-	KeyPrefixCredential = "credential:" // #nosec G101 -- This is a key prefix, not a credential
-	
+
 	// KeyPrefixModel is the prefix for model metadata
 	KeyPrefixModel = "model:"
 )
@@ -49,12 +46,6 @@ func PresetKey(name string) string {
 // ProviderKeyKey generates a storage key for a provider key
 func ProviderKeyKey(scope, provider string) string {
 	return KeyPrefixProviderKey + scope + ":" + provider
-}
-
-// CredentialKey generates the storage key for a BYOK credential
-// Deprecated: Use ProviderKeyKey instead
-func CredentialKey(apiKeyID, provider string) string {
-	return KeyPrefixCredential + apiKeyID + ":" + provider
 }
 
 // ModelKey generates a storage key for model metadata

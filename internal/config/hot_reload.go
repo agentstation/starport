@@ -16,19 +16,19 @@ import (
 
 // RateLimitRule represents a rate limit configuration that can be hot-reloaded
 type RateLimitRule struct {
-	Name             string `yaml:"name"`
-	RequestsPerMinute int    `yaml:"requests_per_minute"`
-	RequestsPerHour   int    `yaml:"requests_per_hour"`
-	TokensPerMinute   int    `yaml:"tokens_per_minute"`
-	TokensPerHour     int    `yaml:"tokens_per_hour"`
+	Name              string  `yaml:"name"`
+	RequestsPerMinute int     `yaml:"requests_per_minute"`
+	RequestsPerHour   int     `yaml:"requests_per_hour"`
+	TokensPerMinute   int     `yaml:"tokens_per_minute"`
+	TokensPerHour     int     `yaml:"tokens_per_hour"`
 	BurstMultiplier   float64 `yaml:"burst_multiplier"`
 }
 
 // RateLimitRules represents the hot-reloadable rate limit configuration
 type RateLimitRules struct {
-	Version string                    `yaml:"version"`
-	Rules   map[string]RateLimitRule  `yaml:"rules"`
-	Models  map[string]RateLimitRule  `yaml:"models"`
+	Version string                   `yaml:"version"`
+	Rules   map[string]RateLimitRule `yaml:"rules"`
+	Models  map[string]RateLimitRule `yaml:"models"`
 }
 
 // HotReloader manages hot-reloading of configuration files
@@ -98,7 +98,7 @@ func (h *HotReloader) Start(ctx context.Context) error {
 func (h *HotReloader) Stop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	select {
 	case <-h.stopCh:
 		// Already stopped
@@ -129,11 +129,11 @@ func (h *HotReloader) GetRateLimitRules() *RateLimitRules {
 func (h *HotReloader) GetRuleForKey(keyID string) (*RateLimitRule, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	if h.rateLimitRules == nil {
 		return nil, false
 	}
-	
+
 	rule, ok := h.rateLimitRules.Rules[keyID]
 	return &rule, ok
 }
@@ -142,11 +142,11 @@ func (h *HotReloader) GetRuleForKey(keyID string) (*RateLimitRule, bool) {
 func (h *HotReloader) GetRuleForModel(model string) (*RateLimitRule, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	if h.rateLimitRules == nil {
 		return nil, false
 	}
-	
+
 	rule, ok := h.rateLimitRules.Models[model]
 	return &rule, ok
 }
@@ -174,7 +174,7 @@ func (h *HotReloader) loadConfig() error {
 	h.mu.Lock()
 	lastMod := h.lastModTime
 	h.mu.Unlock()
-	
+
 	if !lastMod.IsZero() && info.ModTime().Equal(lastMod) {
 		// File hasn't changed
 		return nil
@@ -282,7 +282,7 @@ func (h *HotReloader) watchLoop(ctx context.Context) {
 	if h.watcher == nil {
 		return
 	}
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -300,10 +300,10 @@ func (h *HotReloader) watchLoop(ctx context.Context) {
 						Str("file", event.Name).
 						Str("op", event.Op.String()).
 						Msg("Config file changed, reloading")
-					
+
 					// Small delay to ensure file write is complete
 					time.Sleep(100 * time.Millisecond)
-					
+
 					// Retry logic for file reads
 					var err error
 					for i := 0; i < 3; i++ {
@@ -315,7 +315,7 @@ func (h *HotReloader) watchLoop(ctx context.Context) {
 							time.Sleep(50 * time.Millisecond)
 						}
 					}
-					
+
 					if err != nil {
 						log.Error().Err(err).Msg("Failed to reload config after retries")
 					}

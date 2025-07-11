@@ -22,15 +22,15 @@ const (
 
 // Credential represents a decrypted BYOK credential with metadata
 type Credential struct {
-	Provider      string                 `json:"provider"`
-	Data          map[string]string      `json:"data"`          // Decrypted credential data
-	Config        map[string]interface{} `json:"config"`        // Provider-specific config
-	IsFallback    bool                   `json:"is_fallback"`   // Use as fallback when rate limited
-	Priority      int                    `json:"priority"`      // Order preference (lower = higher priority)
-	RateLimit     *models.RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (for global credentials)
-	CreatedAt     time.Time              `json:"created_at"`
-	LastUsed      *time.Time             `json:"last_used"`
-	UsageCount    int64                  `json:"usage_count"`
+	Provider   string                  `json:"provider"`
+	Data       map[string]string       `json:"data"`                 // Decrypted credential data
+	Config     map[string]interface{}  `json:"config"`               // Provider-specific config
+	IsFallback bool                    `json:"is_fallback"`          // Use as fallback when rate limited
+	Priority   int                     `json:"priority"`             // Order preference (lower = higher priority)
+	RateLimit  *models.RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (for global credentials)
+	CreatedAt  time.Time               `json:"created_at"`
+	LastUsed   *time.Time              `json:"last_used"`
+	UsageCount int64                   `json:"usage_count"`
 }
 
 // Usage represents usage metrics for cost calculation
@@ -92,5 +92,5 @@ const (
 	// KeyTypeGateway indicates gateway-provided keys were used (global BYOK)
 	KeyTypeGateway KeyType = "gateway"
 	// KeyTypeBYOK indicates user's own keys were used
-	KeyTypeBYOK    KeyType = "byok"
+	KeyTypeBYOK KeyType = "byok"
 )

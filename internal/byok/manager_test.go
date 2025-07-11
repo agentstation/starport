@@ -65,13 +65,13 @@ func TestAddCredential(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name      string
-		apiKeyID  string
-		provider  string
-		cred      map[string]string
-		config    map[string]interface{}
-		wantErr   bool
-		errMsg    string
+		name     string
+		apiKeyID string
+		provider string
+		cred     map[string]string
+		config   map[string]interface{}
+		wantErr  bool
+		errMsg   string
 	}{
 		{
 			name:     "Valid OpenAI credential",
@@ -139,7 +139,7 @@ func TestAddCredential(t *testing.T) {
 				assert.NoError(t, err)
 
 				// Verify credential was stored
-				key := storage.CredentialKey(tt.apiKeyID, tt.provider)
+				key := models.ProviderKeyStorageKey("user:"+tt.apiKeyID, tt.provider)
 				data, err := store.Get(ctx, key)
 				assert.NoError(t, err)
 				assert.NotNil(t, data)
@@ -185,7 +185,7 @@ func TestGetCredentials(t *testing.T) {
 		require.NoError(t, err)
 
 		// Update priority
-		key := storage.CredentialKey(apiKeyID, provider)
+		key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 		data, _ := store.Get(ctx, key)
 		var providerKey models.ProviderKey
 		storage.DeserializeModel(data, &providerKey)
@@ -477,7 +477,7 @@ func TestEncryptionSecurity(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get raw data from store
-	key := storage.CredentialKey(apiKeyID, provider)
+	key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
 	rawData, err := store.Get(ctx, key)
 	require.NoError(t, err)
 

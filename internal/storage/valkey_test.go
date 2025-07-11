@@ -256,7 +256,7 @@ func TestValkeyStore(t *testing.T) {
 		err = tx.SetWithTTL(prefix+"key2", []byte("value2"), 10*time.Second)
 		assert.NoError(t, err)
 
-		err = tx.Delete(prefix+"nonexistent")
+		err = tx.Delete(prefix + "nonexistent")
 		assert.NoError(t, err)
 
 		// Commit transaction
@@ -404,7 +404,7 @@ func BenchmarkValkeyStore(b *testing.B) {
 	b.Run("Set", func(b *testing.B) {
 		key := "bench:set"
 		value := []byte("benchmark value")
-		
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_ = store.Set(ctx, key, value)
@@ -415,7 +415,7 @@ func BenchmarkValkeyStore(b *testing.B) {
 		key := "bench:get"
 		value := []byte("benchmark value")
 		_ = store.Set(ctx, key, value)
-		
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, _ = store.Get(ctx, key)
@@ -424,7 +424,7 @@ func BenchmarkValkeyStore(b *testing.B) {
 
 	b.Run("Increment", func(b *testing.B) {
 		key := "bench:incr"
-		
+
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, _ = store.Increment(ctx, key, 1)

@@ -14,10 +14,10 @@ type ModelPricing struct {
 type CostCalculator interface {
 	// GetModelCost returns the pricing for a model
 	GetModelCost(modelID string) (ModelPricing, bool)
-	
+
 	// EstimateCost estimates the cost for a request
 	EstimateCost(modelID string, promptTokens, completionTokens int) float64
-	
+
 	// CompareModelCosts compares costs between models
 	CompareModelCosts(modelID1, modelID2 string, promptTokens, completionTokens int) float64
 }
@@ -40,7 +40,7 @@ func (c *defaultCostCalculator) GetModelCost(modelID string) (ModelPricing, bool
 	if exists {
 		return pricing, true
 	}
-	
+
 	// Try without provider prefix for fallback
 	parts := strings.SplitN(modelID, "/", 2)
 	if len(parts) == 2 {
@@ -48,7 +48,7 @@ func (c *defaultCostCalculator) GetModelCost(modelID string) (ModelPricing, bool
 			return pricing, true
 		}
 	}
-	
+
 	return ModelPricing{}, false
 }
 
@@ -58,10 +58,10 @@ func (c *defaultCostCalculator) EstimateCost(modelID string, promptTokens, compl
 	if !exists {
 		return 0
 	}
-	
+
 	promptCost := (float64(promptTokens) / 1_000_000) * pricing.PromptCostPer1M
 	completionCost := (float64(completionTokens) / 1_000_000) * pricing.CompletionCostPer1M
-	
+
 	return promptCost + completionCost
 }
 
@@ -69,11 +69,11 @@ func (c *defaultCostCalculator) EstimateCost(modelID string, promptTokens, compl
 func (c *defaultCostCalculator) CompareModelCosts(modelID1, modelID2 string, promptTokens, completionTokens int) float64 {
 	cost1 := c.EstimateCost(modelID1, promptTokens, completionTokens)
 	cost2 := c.EstimateCost(modelID2, promptTokens, completionTokens)
-	
+
 	if cost2 == 0 {
 		return 0
 	}
-	
+
 	return cost1 / cost2
 }
 
@@ -101,7 +101,7 @@ func getDefaultPricing() map[string]ModelPricing {
 			PromptCostPer1M:     3.0,
 			CompletionCostPer1M: 4.0,
 		},
-		
+
 		// Anthropic models
 		"anthropic/claude-3-opus-20240229": {
 			PromptCostPer1M:     15.0,
@@ -127,7 +127,7 @@ func getDefaultPricing() map[string]ModelPricing {
 			PromptCostPer1M:     0.8,
 			CompletionCostPer1M: 2.4,
 		},
-		
+
 		// Google AI Studio models
 		"google-aistudio/gemini-1.5-pro": {
 			PromptCostPer1M:     3.5,
@@ -153,7 +153,7 @@ func getDefaultPricing() map[string]ModelPricing {
 			PromptCostPer1M:     0.5,
 			CompletionCostPer1M: 1.5,
 		},
-		
+
 		// Google Vertex AI models (different pricing for enterprise)
 		"google-vertexai/gemini-1.5-pro": {
 			PromptCostPer1M:     1.25,
@@ -184,7 +184,7 @@ func getDefaultPricing() map[string]ModelPricing {
 			PromptCostPer1M:     0.25,
 			CompletionCostPer1M: 1.25,
 		},
-		
+
 		// Groq models (very competitive pricing)
 		"groq/llama-3.1-405b-reasoning": {
 			PromptCostPer1M:     0.95,
@@ -214,7 +214,7 @@ func getDefaultPricing() map[string]ModelPricing {
 			PromptCostPer1M:     0.10,
 			CompletionCostPer1M: 0.10,
 		},
-		
+
 		// Mistral models
 		"mistral/mistral-large-latest": {
 			PromptCostPer1M:     4.0,
@@ -240,7 +240,7 @@ func getDefaultPricing() map[string]ModelPricing {
 			PromptCostPer1M:     2.0,
 			CompletionCostPer1M: 6.0,
 		},
-		
+
 		// Azure models (same as OpenAI)
 		"azure/gpt-4": {
 			PromptCostPer1M:     30.0,
@@ -277,7 +277,7 @@ func NewCostOptimizedSelector(calculator CostCalculator, latencyTracker LatencyT
 	if maxLatencyMultiplier <= 0 {
 		maxLatencyMultiplier = 2.0
 	}
-	
+
 	return &CostOptimizedSelector{
 		calculator:           calculator,
 		maxCostMultiplier:    maxCostMultiplier,
@@ -291,17 +291,17 @@ func (s *CostOptimizedSelector) SelectModel(models []string, estimatedPromptToke
 	if len(models) == 0 {
 		return ""
 	}
-	
+
 	type modelScore struct {
 		modelID string
 		cost    float64
 		latency float64
 		score   float64
 	}
-	
+
 	var scores []modelScore
 	latencies := s.latencyTracker.GetAllLatencies()
-	
+
 	// Calculate scores for each model
 	for _, modelID := range models {
 		cost := s.calculator.EstimateCost(modelID, estimatedPromptTokens, estimatedCompletionTokens)
@@ -309,19 +309,19 @@ func (s *CostOptimizedSelector) SelectModel(models []string, estimatedPromptToke
 			// Unknown pricing, skip
 			continue
 		}
-		
+
 		provider := extractProviderFromModel(modelID)
 		latency := float64(latencies[provider].Milliseconds())
 		if latency == 0 {
 			// No latency data, use a default
 			latency = 1000 // 1 second default
 		}
-		
+
 		// Simple scoring: lower is better
 		// Normalize both cost and latency to 0-1 range, then combine
 		// This is a simplified version - in production, you'd want more sophisticated scoring
-		score := cost * 1000 + latency // Cost in dollars * 1000 + latency in ms
-		
+		score := cost*1000 + latency // Cost in dollars * 1000 + latency in ms
+
 		scores = append(scores, modelScore{
 			modelID: modelID,
 			cost:    cost,
@@ -329,12 +329,12 @@ func (s *CostOptimizedSelector) SelectModel(models []string, estimatedPromptToke
 			score:   score,
 		})
 	}
-	
+
 	if len(scores) == 0 {
 		// No models with pricing data, return first
 		return models[0]
 	}
-	
+
 	// Find best score
 	bestIdx := 0
 	for i := 1; i < len(scores); i++ {
@@ -342,7 +342,7 @@ func (s *CostOptimizedSelector) SelectModel(models []string, estimatedPromptToke
 			bestIdx = i
 		}
 	}
-	
+
 	return scores[bestIdx].modelID
 }
 

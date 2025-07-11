@@ -9,9 +9,7 @@ import (
 const (
 	PrefixAPIKey      = "apikey"
 	PrefixPreset      = "preset"
-	PrefixCredential  = "credential"
-	// PrefixDefaultKey is deprecated - use credential:global:provider instead
-	// PrefixDefaultKey  = "default_key"
+	PrefixProviderKey = "provider_key"
 	PrefixRateLimit   = "ratelimit"
 	PrefixFilter      = "filter"
 )
@@ -28,7 +26,7 @@ func PresetStorageKey(name string) string {
 
 // ProviderKeyStorageKey generates the storage key for a provider key
 func ProviderKeyStorageKey(scope, provider string) string {
-	return fmt.Sprintf("%s:%s:%s", PrefixCredential, scope, provider)
+	return fmt.Sprintf("%s:%s:%s", PrefixProviderKey, scope, provider)
 }
 
 // BYOKCredentialStorageKey is deprecated - use ProviderKeyStorageKey instead
@@ -67,7 +65,7 @@ func IsPresetStorageKey(key string) bool {
 
 // IsProviderKeyStorageKey checks if a key is a provider key storage key
 func IsProviderKeyStorageKey(key string) bool {
-	return strings.HasPrefix(key, PrefixCredential+":")
+	return strings.HasPrefix(key, PrefixProviderKey+":")
 }
 
 // IsBYOKCredentialStorageKey is deprecated - use IsProviderKeyStorageKey instead

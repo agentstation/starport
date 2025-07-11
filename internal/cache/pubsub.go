@@ -120,12 +120,12 @@ func matchesPattern(pattern, channel string) bool {
 	if pattern == channel {
 		return true
 	}
-	
+
 	// Pattern with wildcard
 	if strings.HasSuffix(pattern, "*") {
 		prefix := strings.TrimSuffix(pattern, "*")
 		return strings.HasPrefix(channel, prefix)
 	}
-	
+
 	return false
 }

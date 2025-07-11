@@ -23,7 +23,8 @@ func TestMiddlewareChain(t *testing.T) {
 	server := newTestServer(config)
 
 	// Test request with all middleware
-	req := httptest.NewRequest("GET", "/api/v1/", nil)
+	// Use health endpoint which doesn't require auth
+	req := httptest.NewRequest("GET", "/health/live", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 	w := httptest.NewRecorder()
 
@@ -41,7 +42,7 @@ func TestMiddlewareChain(t *testing.T) {
 func TestPanicRecovery(t *testing.T) {
 	config := &Config{
 		Port:           8080,
-		RequestTimeout: 5 * time.Second, // Longer timeout to allow panic recovery
+		RequestTimeout: 5 * time.Second,  // Longer timeout to allow panic recovery
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
 	server := newTestServer(config)

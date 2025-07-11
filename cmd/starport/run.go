@@ -9,7 +9,6 @@ import (
 	"runtime/debug"
 	"syscall"
 
-	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
 
 	"github.com/agentstation/starport/internal/app"
@@ -95,42 +94,27 @@ func runServer(ctx context.Context) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Convert to app config
-	appConfig := &app.Config{
-		Server: server.Config{
+	// Build app options from loaded config
+	opts := []app.Option{
+		app.WithServerConfig(server.Config{
 			Port: cfg.Server.Port,
 			Host: cfg.Server.Host,
-		},
-		StorageMode: cfg.Storage.Mode,
-		LogLevel:    cfg.Logging.Level,
-	}
-
-	// Initialize hot reloader if enabled
-	var hotReloader *config.HotReloader
-	if cfg.RateLimiting.EnableHotReload {
-		hotReloader, err = config.NewHotReloader(
-			cfg.RateLimiting.ConfigPath,
-			cfg.RateLimiting.ReloadCheckInterval,
-		)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize rate limit hot reloader")
-		} else {
-			if err := hotReloader.Start(ctx); err != nil {
-				log.Warn().Err(err).Msg("Failed to start rate limit hot reloader")
-			} else {
-				defer hotReloader.Stop()
-				log.Info().
-					Str("config_path", cfg.RateLimiting.ConfigPath).
-					Msg("Rate limit hot reload enabled")
-			}
-		}
-	}
-
-	app, err := app.New(
-		app.WithConfig(appConfig),
-		app.WithHotReloader(hotReloader),
+		}),
+		app.WithStorageMode(cfg.Storage.Mode),
+		app.WithLogLevel(cfg.Logging.Level),
 		app.WithProvidersConfig(&cfg.Providers),
-	)
+	}
+
+	// Add hot reload config if enabled
+	if cfg.RateLimiting.EnableHotReload {
+		opts = append(opts, app.WithHotReload(&app.HotReloadConfig{
+			Enabled:       true,
+			ConfigPath:    cfg.RateLimiting.ConfigPath,
+			CheckInterval: cfg.RateLimiting.ReloadCheckInterval,
+		}))
+	}
+
+	app, err := app.New(opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create app: %w", err)
 	}

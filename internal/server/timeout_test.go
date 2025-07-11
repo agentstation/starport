@@ -11,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/registry"
 )
 
 func TestRequestTimeout(t *testing.T) {
@@ -45,6 +47,16 @@ func TestRequestTimeout(t *testing.T) {
 }
 
 func TestConfigurableRequestTimeout(t *testing.T) {
+	// Create a custom handler that simulates a slow endpoint
+	slowHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(200 * time.Millisecond):
+			w.WriteHeader(http.StatusOK)
+		case <-r.Context().Done():
+			return
+		}
+	})
+
 	// Create server with custom timeout
 	config := &Config{
 		Port:           0,
@@ -56,25 +68,17 @@ func TestConfigurableRequestTimeout(t *testing.T) {
 		},
 	}
 
-	registry := NewConnectorRegistry()
-	server := New(config, registry)
-
-	// Add a slow endpoint
-	server.router.Get("/test-slow", func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case <-time.After(200 * time.Millisecond):
-			w.WriteHeader(http.StatusOK)
-		case <-r.Context().Done():
-			return
-		}
-	})
+	// Test the timeout middleware directly
+	router := chi.NewRouter()
+	router.Use(Timeout(config.RequestTimeout))
+	router.Get("/test-slow", slowHandler)
 
 	// Make request
 	req := httptest.NewRequest("GET", "/test-slow", nil)
 	w := httptest.NewRecorder()
 
 	start := time.Now()
-	server.router.ServeHTTP(w, req)
+	router.ServeHTTP(w, req)
 	elapsed := time.Since(start)
 
 	// Should timeout after ~100ms
@@ -93,8 +97,8 @@ func TestShutdownTimeout(t *testing.T) {
 		},
 	}
 
-	registry := NewConnectorRegistry()
-	server := New(config, registry)
+	reg := registry.New()
+	server := New(config, reg)
 
 	// Start server
 	go func() {
@@ -130,8 +134,8 @@ func TestContextPropagation(t *testing.T) {
 		},
 	}
 
-	registry := NewConnectorRegistry()
-	server := New(config, registry)
+	reg := registry.New()
+	server := New(config, reg)
 
 	// Track if context was cancelled using a channel
 	contextCancelled := make(chan bool, 1)

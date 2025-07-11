@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/agentstation/starport/internal/connectors"
+	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
 // ModelRouter handles model selection, fallback logic, and provider routing

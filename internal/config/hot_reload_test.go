@@ -241,7 +241,7 @@ func TestHotReloader_HotReload(t *testing.T) {
 		Rules: map[string]RateLimitRule{
 			"test-key": {
 				Name:              "Updated Rule",
-				RequestsPerMinute: 200, // Changed
+				RequestsPerMinute: 200,  // Changed
 				RequestsPerHour:   2000, // Changed
 				TokensPerMinute:   200000,
 				TokensPerHour:     2000000,
@@ -281,7 +281,7 @@ func TestHotReloader_HotReload(t *testing.T) {
 	finalUpdateCount := updateCount
 	finalLastUpdate := lastUpdate
 	mu.Unlock()
-	
+
 	if finalUpdateCount == 0 {
 		t.Error("expected update callback to be called")
 	}

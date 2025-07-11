@@ -32,18 +32,18 @@ type ServerConfig struct {
 
 // StorageConfig defines storage backend settings
 type StorageConfig struct {
-	Mode   string        `env:"MODE,default=badger"`
-	Badger BadgerConfig  `env:",prefix=BADGER_"`
-	Valkey ValkeyConfig  `env:",prefix=VALKEY_"`
+	Mode   string       `env:"MODE,default=badger"`
+	Badger BadgerConfig `env:",prefix=BADGER_"`
+	Valkey ValkeyConfig `env:",prefix=VALKEY_"`
 }
 
 // BadgerConfig defines Badger DB settings
 type BadgerConfig struct {
-	Path            string `env:"PATH,default=./data/starport"`
-	SyncWrites      bool   `env:"SYNC_WRITES,default=false"`
-	Compression     string `env:"COMPRESSION,default=snappy"`
-	GCInterval      time.Duration `env:"GC_INTERVAL,default=5m"`
-	GCDiscardRatio  float64 `env:"GC_DISCARD_RATIO,default=0.5"`
+	Path           string        `env:"PATH,default=./data/starport"`
+	SyncWrites     bool          `env:"SYNC_WRITES,default=false"`
+	Compression    string        `env:"COMPRESSION,default=snappy"`
+	GCInterval     time.Duration `env:"GC_INTERVAL,default=5m"`
+	GCDiscardRatio float64       `env:"GC_DISCARD_RATIO,default=0.5"`
 }
 
 // ValkeyConfig defines Valkey/Redis settings
@@ -63,7 +63,7 @@ type ValkeyConfig struct {
 type ProvidersConfig struct {
 	OpenAI         ProviderConfig `env:",prefix=OPENAI_"`
 	Anthropic      ProviderConfig `env:",prefix=ANTHROPIC_"`
-	Gemini         ProviderConfig `env:",prefix=GEMINI_"`         // Deprecated, use GoogleAIStudio
+	Gemini         ProviderConfig `env:",prefix=GEMINI_"` // Deprecated, use GoogleAIStudio
 	GoogleAIStudio ProviderConfig `env:",prefix=GOOGLE_AISTUDIO_"`
 	GoogleVertexAI ProviderConfig `env:",prefix=GOOGLE_VERTEXAI_"`
 	Groq           ProviderConfig `env:",prefix=GROQ_"`
@@ -73,12 +73,12 @@ type ProvidersConfig struct {
 
 // ProviderConfig defines settings for a single LLM provider
 type ProviderConfig struct {
-	BaseURL         string        `env:"BASE_URL"`
-	Timeout         time.Duration `env:"TIMEOUT,default=30s"`
-	MaxConnections  int           `env:"MAX_CONNECTIONS,default=100"`
-	MaxRetries      int           `env:"MAX_RETRIES,default=3"`
-	RetryDelay      time.Duration `env:"RETRY_DELAY,default=1s"`
-	BackoffMultiplier float64     `env:"BACKOFF_MULTIPLIER,default=2.0"`
+	BaseURL           string        `env:"BASE_URL"`
+	Timeout           time.Duration `env:"TIMEOUT,default=30s"`
+	MaxConnections    int           `env:"MAX_CONNECTIONS,default=100"`
+	MaxRetries        int           `env:"MAX_RETRIES,default=3"`
+	RetryDelay        time.Duration `env:"RETRY_DELAY,default=1s"`
+	BackoffMultiplier float64       `env:"BACKOFF_MULTIPLIER,default=2.0"`
 }
 
 // RateLimitingConfig defines rate limiting settings
@@ -86,22 +86,22 @@ type RateLimitingConfig struct {
 	// Global limits
 	GlobalRequestsPerSecond int     `env:"GLOBAL_REQUESTS_PER_SECOND,default=10000"`
 	GlobalBurstMultiplier   float64 `env:"GLOBAL_BURST_MULTIPLIER,default=2.0"`
-	
+
 	// Default key limits
 	DefaultRequestsPerMinute int `env:"DEFAULT_REQUESTS_PER_MINUTE,default=60"`
 	DefaultRequestsPerHour   int `env:"DEFAULT_REQUESTS_PER_HOUR,default=1000"`
 	DefaultTokensPerMinute   int `env:"DEFAULT_TOKENS_PER_MINUTE,default=100000"`
 	DefaultTokensPerHour     int `env:"DEFAULT_TOKENS_PER_HOUR,default=1000000"`
 	DefaultBurst             int `env:"DEFAULT_BURST,default=10"`
-	
+
 	// Rate limit window
 	WindowSize      time.Duration `env:"WINDOW_SIZE,default=1m"`
 	SyncInterval    time.Duration `env:"SYNC_INTERVAL,default=5s"`
 	CleanupInterval time.Duration `env:"CLEANUP_INTERVAL,default=10m"`
-	
+
 	// Hot reload settings
-	EnableHotReload    bool          `env:"ENABLE_HOT_RELOAD,default=true"`
-	ConfigPath         string        `env:"CONFIG_PATH,default=./config/rate_limits.yaml"`
+	EnableHotReload     bool          `env:"ENABLE_HOT_RELOAD,default=true"`
+	ConfigPath          string        `env:"CONFIG_PATH,default=./config/rate_limits.yaml"`
 	ReloadCheckInterval time.Duration `env:"RELOAD_CHECK_INTERVAL,default=10s"`
 }
 

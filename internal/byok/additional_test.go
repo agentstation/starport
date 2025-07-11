@@ -304,9 +304,9 @@ func TestCostCalculationEdgeCases(t *testing.T) {
 		{
 			name: "Unknown provider",
 			usage: &Usage{
-				Provider:     "unknown",
-				Model:        "some-model",
-				TotalTokens:  1000,
+				Provider:    "unknown",
+				Model:       "some-model",
+				TotalTokens: 1000,
 			},
 		},
 		{

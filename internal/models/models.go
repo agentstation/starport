@@ -36,7 +36,7 @@ type Preset struct {
 // ProviderKey represents an encrypted API key for an external LLM provider
 // Keys can be scoped to specific users (scope = "user:id") or globally (scope = "*")
 type ProviderKey struct {
-	Scope               string                 `json:"scope"`                // "*" for global, "user:id" for user-specific
+	Scope               string                 `json:"scope"` // "*" for global, "user:id" for user-specific
 	Provider            string                 `json:"provider"`
 	EncryptedCredential string                 `json:"encrypted_credential"`
 	Config              map[string]interface{} `json:"config,omitempty"`     // Provider-specific config (endpoints, versions, etc)
@@ -46,17 +46,6 @@ type ProviderKey struct {
 	CreatedAt           time.Time              `json:"created_at"`
 	LastUsed            *time.Time             `json:"last_used,omitempty"`
 	UsageCount          int64                  `json:"usage_count"`
-	UpdatedAt           time.Time              `json:"updated_at"`
-}
-
-// DefaultKey is deprecated - use ProviderKey with scope="*" instead
-// This struct is kept only for migration purposes and will be removed in a future release
-type DefaultKey struct {
-	Provider            string                 `json:"provider"`
-	EncryptedCredential string                 `json:"encrypted_credential"`
-	Config              map[string]interface{} `json:"config,omitempty"`
-	RateLimit           *RateLimitConfig       `json:"rate_limit,omitempty"`
-	CreatedAt           time.Time              `json:"created_at"`
 	UpdatedAt           time.Time              `json:"updated_at"`
 }
 
@@ -217,7 +206,6 @@ func (k *ProviderKey) Validate() error {
 	return nil
 }
 
-
 // Validate validates the TokenBucket fields
 func (t *TokenBucket) Validate() error {
 	if t.Capacity <= 0 {
@@ -240,7 +228,7 @@ func (t *TokenBucket) Refill() {
 	now := time.Now()
 	elapsed := now.Sub(t.LastRefill).Seconds()
 	tokensToAdd := elapsed * t.RefillRate
-	
+
 	t.Tokens = t.Tokens + tokensToAdd
 	if t.Tokens > t.Capacity {
 		t.Tokens = t.Capacity

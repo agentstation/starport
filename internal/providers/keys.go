@@ -309,7 +309,7 @@ func (m *keyManager) DeleteKey(ctx context.Context, scope, provider string) erro
 	}
 
 	storageKey := models.ProviderKeyStorageKey(scope, provider)
-	
+
 	// Check if key exists first
 	if _, err := m.store.Get(ctx, storageKey); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -317,7 +317,7 @@ func (m *keyManager) DeleteKey(ctx context.Context, scope, provider string) erro
 		}
 		return fmt.Errorf("failed to check key: %w", err)
 	}
-	
+
 	if err := m.store.Delete(ctx, storageKey); err != nil {
 		return fmt.Errorf("failed to delete key: %w", err)
 	}
@@ -491,7 +491,7 @@ func (m *keyManager) DeleteGlobalKey(ctx context.Context, provider string) error
 	}
 
 	storageKey := models.GlobalProviderKeyStorageKey(provider)
-	
+
 	// Check if global key exists first
 	if _, err := m.store.Get(ctx, storageKey); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -499,7 +499,7 @@ func (m *keyManager) DeleteGlobalKey(ctx context.Context, provider string) error
 		}
 		return fmt.Errorf("failed to check global key: %w", err)
 	}
-	
+
 	if err := m.store.Delete(ctx, storageKey); err != nil {
 		return fmt.Errorf("failed to delete global key: %w", err)
 	}
@@ -514,7 +514,7 @@ func (m *keyManager) DeleteGlobalKey(ctx context.Context, provider string) error
 // ListGlobalKeys lists all global keys
 func (m *keyManager) ListGlobalKeys(ctx context.Context) ([]*models.ProviderKey, error) {
 	// Global keys are stored with scope = "*"
-	prefix := storage.KeyPrefixCredential + "*:"
+	prefix := storage.KeyPrefixProviderKey + "*:"
 	storageKeys, err := m.store.ScanWithPrefix(ctx, prefix, 1000)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list global keys: %w", err)
@@ -560,7 +560,7 @@ func (m *keyManager) DetermineKeyStrategy(ctx context.Context, scope string, pro
 func (m *keyManager) CalculateProviderKeyCost(usage *Usage) float64 {
 	// Get standard pricing for the provider/model
 	standardCost := getStandardCost(usage)
-	
+
 	// User key pricing is 5% of standard rate
 	return standardCost * 0.05
 }
@@ -617,10 +617,10 @@ func getStandardCost(usage *Usage) float64 {
 	switch usage.Provider {
 	case "openai":
 		// Example: GPT-4 pricing
-		cost = float64(usage.PromptTokens) * 0.00003 + float64(usage.CompletionTokens) * 0.00006
+		cost = float64(usage.PromptTokens)*0.00003 + float64(usage.CompletionTokens)*0.00006
 	case "anthropic":
 		// Example: Claude pricing
-		cost = float64(usage.PromptTokens) * 0.00002 + float64(usage.CompletionTokens) * 0.00006
+		cost = float64(usage.PromptTokens)*0.00002 + float64(usage.CompletionTokens)*0.00006
 	case "google-aistudio", "google-vertexai":
 		// Example: Gemini pricing
 		cost = float64(usage.TotalTokens) * 0.00002

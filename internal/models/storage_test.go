@@ -23,7 +23,7 @@ func TestStorageKeys(t *testing.T) {
 		{
 			name:     "byok credential storage key",
 			function: func() string { return BYOKCredentialStorageKey("key123", "openai") },
-			expected: "credential:key123:openai",
+			expected: "provider_key:key123:openai",
 		},
 		{
 			name:     "rate limit storage key",
@@ -67,8 +67,8 @@ func TestParseStorageKey(t *testing.T) {
 		},
 		{
 			name:       "byok credential",
-			key:        "credential:key123:openai",
-			wantPrefix: "credential",
+			key:        "provider_key:key123:openai",
+			wantPrefix: "provider_key",
 			wantParts:  []string{"key123", "openai"},
 		},
 		{
@@ -125,7 +125,7 @@ func TestIsStorageKey(t *testing.T) {
 		},
 		{
 			name:     "byok credential",
-			key:      "credential:key123:openai",
+			key:      "provider_key:key123:openai",
 			checkBYO: true,
 		},
 		{
@@ -253,13 +253,13 @@ func TestExtractBYOKCredentialParts(t *testing.T) {
 	}{
 		{
 			name:         "valid credential",
-			key:          "credential:key123:openai",
+			key:          "provider_key:key123:openai",
 			wantAPIKeyID: "key123",
 			wantProvider: "openai",
 		},
 		{
 			name:         "different provider",
-			key:          "credential:apikey456:anthropic",
+			key:          "provider_key:apikey456:anthropic",
 			wantAPIKeyID: "apikey456",
 			wantProvider: "anthropic",
 		},
@@ -270,12 +270,12 @@ func TestExtractBYOKCredentialParts(t *testing.T) {
 		},
 		{
 			name:    "missing provider",
-			key:     "credential:key123",
+			key:     "provider_key:key123",
 			wantErr: true,
 		},
 		{
 			name:    "too many parts",
-			key:     "credential:key123:openai:extra",
+			key:     "provider_key:key123:openai:extra",
 			wantErr: true,
 		},
 	}

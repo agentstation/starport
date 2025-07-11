@@ -123,12 +123,11 @@ func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string)
 	var allKeys []string
 
 	// 1. Get user-specific credentials
-	userPrefix := fmt.Sprintf("credential:%s:", apiKeyID)
-	userKeys, err := m.store.ScanWithPrefix(ctx, userPrefix, 1000)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list user credentials: %w", err)
+	// Look for the specific provider key
+	userKey := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
+	if _, err := m.store.Get(ctx, userKey); err == nil {
+		allKeys = append(allKeys, userKey)
 	}
-	allKeys = append(allKeys, userKeys...)
 
 	// 2. Get global credentials
 	globalKey := models.ProviderKeyStorageKey("*", provider)
@@ -143,7 +142,16 @@ func (m *manager) GetCredentials(ctx context.Context, apiKeyID, provider string)
 		if len(parts) < 3 {
 			continue
 		}
-		keyProvider := parts[2]
+		// For user keys: credential:user:apiKeyID:provider (parts[3])
+		// For global keys: credential:*:provider (parts[2])
+		var keyProvider string
+		if len(parts) == 4 && parts[1] == "user" {
+			keyProvider = parts[3]
+		} else if len(parts) == 3 {
+			keyProvider = parts[2]
+		} else {
+			continue
+		}
 		if keyProvider != provider {
 			continue
 		}
@@ -207,7 +215,7 @@ func (m *manager) ListCredentials(ctx context.Context, apiKeyID string) ([]*Cred
 	}
 
 	// List all credentials for this API key
-	prefix := fmt.Sprintf("credential:%s:", apiKeyID)
+	prefix := fmt.Sprintf("%s:user:%s:", models.PrefixProviderKey, apiKeyID)
 	keys, err := m.store.ScanWithPrefix(ctx, prefix, 1000)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
@@ -321,7 +329,7 @@ func (m *manager) DeleteCredential(ctx context.Context, apiKeyID, provider strin
 	}
 
 	key := models.ProviderKeyStorageKey("user:"+apiKeyID, provider)
-	
+
 	// Check if credential exists first
 	if _, err := m.store.Get(ctx, key); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -329,7 +337,7 @@ func (m *manager) DeleteCredential(ctx context.Context, apiKeyID, provider strin
 		}
 		return fmt.Errorf("failed to check credential: %w", err)
 	}
-	
+
 	if err := m.store.Delete(ctx, key); err != nil {
 		return fmt.Errorf("failed to delete credential: %w", err)
 	}
@@ -454,7 +462,7 @@ func (m *manager) DeleteGlobalCredential(ctx context.Context, provider string) e
 	}
 
 	key := models.GlobalProviderKeyStorageKey(provider)
-	
+
 	// Check if global credential exists first
 	if _, err := m.store.Get(ctx, key); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -462,7 +470,7 @@ func (m *manager) DeleteGlobalCredential(ctx context.Context, provider string) e
 		}
 		return fmt.Errorf("failed to check global credential: %w", err)
 	}
-	
+
 	if err := m.store.Delete(ctx, key); err != nil {
 		return fmt.Errorf("failed to delete global credential: %w", err)
 	}
@@ -476,8 +484,8 @@ func (m *manager) DeleteGlobalCredential(ctx context.Context, provider string) e
 
 // ListGlobalCredentials lists all global credentials
 func (m *manager) ListGlobalCredentials(ctx context.Context) ([]*Credential, error) {
-	// Global credentials are stored with api_key_id = "global"
-	prefix := storage.KeyPrefixCredential + "global:"
+	// Global credentials are stored with scope = "*"
+	prefix := models.PrefixProviderKey + ":*:"
 	keys, err := m.store.ScanWithPrefix(ctx, prefix, 1000)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list global credentials: %w", err)
@@ -534,7 +542,7 @@ func (m *manager) DetermineKeyStrategy(ctx context.Context, apiKeyID string, pro
 func (m *manager) CalculateBYOKCost(usage *Usage) float64 {
 	// Get standard pricing for the provider/model
 	standardCost := getStandardCost(usage)
-	
+
 	// BYOK pricing is 5% of standard rate
 	return standardCost * 0.05
 }
@@ -587,14 +595,14 @@ func getStandardCost(usage *Usage) float64 {
 	// Simplified pricing calculation
 	// In production, this would use actual provider pricing tables
 	var cost float64
-	
+
 	switch usage.Provider {
 	case "openai":
 		// Example: GPT-4 pricing
-		cost = float64(usage.PromptTokens) * 0.00003 + float64(usage.CompletionTokens) * 0.00006
+		cost = float64(usage.PromptTokens)*0.00003 + float64(usage.CompletionTokens)*0.00006
 	case "anthropic":
 		// Example: Claude pricing
-		cost = float64(usage.PromptTokens) * 0.00002 + float64(usage.CompletionTokens) * 0.00006
+		cost = float64(usage.PromptTokens)*0.00002 + float64(usage.CompletionTokens)*0.00006
 	case "google-aistudio", "google-vertexai":
 		// Example: Gemini pricing
 		cost = float64(usage.TotalTokens) * 0.00002
@@ -602,16 +610,16 @@ func getStandardCost(usage *Usage) float64 {
 		// Default pricing
 		cost = float64(usage.TotalTokens) * 0.00001
 	}
-	
+
 	// Add image costs if applicable
 	if usage.ImageCount > 0 {
 		cost += float64(usage.ImageCount) * 0.02 // Example: $0.02 per image
 	}
-	
+
 	// Add audio costs if applicable
 	if usage.AudioSeconds > 0 {
 		cost += usage.AudioSeconds * 0.006 // Example: $0.006 per second
 	}
-	
+
 	return cost
 }

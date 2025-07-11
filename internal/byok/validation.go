@@ -120,7 +120,7 @@ func (m *manager) validateAnthropic(ctx context.Context, cred map[string]string,
 	// Optional: Test the key with a simple API call
 	if ctx.Value("skip_validation") == nil {
 		client := &http.Client{Timeout: 10 * time.Second}
-		
+
 		// Create a minimal messages request
 		reqBody := map[string]interface{}{
 			"model": "claude-3-haiku-20240307",
@@ -129,7 +129,7 @@ func (m *manager) validateAnthropic(ctx context.Context, cred map[string]string,
 			},
 			"max_tokens": 1,
 		}
-		
+
 		bodyJSON, _ := json.Marshal(reqBody)
 		req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", strings.NewReader(string(bodyJSON)))
 		if err != nil {
@@ -219,7 +219,7 @@ func (m *manager) validateAzureOpenAI(ctx context.Context, cred map[string]strin
 	// Optional: Test the deployment exists
 	if ctx.Value("skip_validation") == nil {
 		client := &http.Client{Timeout: 10 * time.Second}
-		
+
 		apiVersion := "2024-02-01"
 		if config != nil {
 			if v, ok := config["api_version"].(string); ok && v != "" {
