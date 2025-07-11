@@ -1,8 +1,8 @@
 # Starport
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue.svg)](https://golang.org/dl/)
 [![codecov](https://codecov.io/gh/agentstation/starport/branch/main/graph/badge.svg)](https://codecov.io/gh/agentstation/starport)
+[![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue.svg)](https://golang.org/dl/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/agentstation/starport)](https://goreportcard.com/report/github.com/agentstation/starport)
 
 > **🚧 Status: Alpha - 75% Feature Complete** - Core proxy and routing features implemented. Authentication, caching, and rate limiting in progress. See [roadmap](#roadmap) for details.
@@ -66,23 +66,39 @@ response = client.chat.completions.create(
 
 ## Performance
 
-### Measured Performance
+### Current Performance (Actual Benchmarks)
 
-Based on our benchmark suite, Starport adds minimal overhead:
+Starport is designed to add minimal overhead to your LLM API calls. Based on our benchmark suite on M1 MacBook Pro:
 
-| Operation | Latency (P50) | Latency (P99) | Throughput |
-|-----------|---------------|---------------|------------|
-| **Routing Decision** | 0.05ms | 0.8ms | 2M ops/sec |
-| **Request Processing** | 0.2ms | 0.9ms | 50K req/sec |
-| **Streaming First Token** | 0.3ms | 1.2ms | 30K req/sec |
+| Operation | Latency | Throughput | Memory/Op |
+|-----------|---------|------------|----------|
+| **Request Processing** | ~6.2μs | ~160K req/sec | 8.6KB |
+| **Middleware Overhead** | ~1-5μs | - | 5-6KB |
+| **Provider Lookup** | ~175ns | ~5.7M ops/sec | 688B |
+
+### Performance Goals
+
+| Operation | Target Latency | Target Throughput |
+|-----------|----------------|------------------|
+| **Routing Decision** | <100μs | >1M decisions/sec |
+| **First Token Overhead** | <1ms | >10K streams/sec |
+| **End-to-end Gateway Overhead** | <1ms P99 | >10K req/sec |
+
+### Understanding LLM Gateway Performance
+
+For context, typical LLM API latencies are:
+- **Time to First Token**: 200-2000ms (provider dependent)
+- **Total Generation Time**: 1-30+ seconds
+
+A good gateway should add <1% overhead to these operations. Our current ~6μs request processing overhead is negligible compared to LLM inference time.
 
 ### Key Performance Features
 
-- **Zero-copy streaming**: Direct passthrough from providers
-- **Connection pooling**: Reuse connections to providers
-- **Parallel processing**: Concurrent request handling
-- **Minimal allocations**: Optimized for GC pressure
-- **Circuit breakers**: Fast failure detection (3 strikes = 30s cooldown)
+- **Zero-copy streaming**: Direct passthrough from providers (planned)
+- **Connection pooling**: HTTP client connection reuse
+- **Concurrent processing**: Goroutine-based parallel handling
+- **Low allocations**: ~52 allocations per request
+- **Circuit breakers**: Provider health tracking (implemented)
 
 ### Benchmarking
 
@@ -92,13 +108,26 @@ Run performance benchmarks yourself:
 # Run all benchmarks
 go test -bench=. -benchmem ./...
 
-# Run specific benchmark
+# Run server benchmarks (request handling)
 go test -bench=BenchmarkProxyHandler -benchtime=10s ./internal/server
+
+# Run storage benchmarks
+go test -bench=. -benchmem ./internal/storage
 
 # Profile CPU usage
 go test -bench=. -cpuprofile=cpu.prof ./internal/server
 go tool pprof cpu.prof
 ```
+
+**Note**: Current benchmarks measure middleware and request handling overhead. Additional benchmarks for routing decisions and streaming first-token latency are in development.
+
+### Performance Optimization Tips
+
+1. **Enable connection pooling** in provider configurations
+2. **Use Badger storage** for single-node deployments (embedded, no network overhead)
+3. **Configure appropriate timeouts** to fail fast on slow providers
+4. **Enable circuit breakers** to avoid cascading failures
+5. **Monitor memory usage** - current implementation uses ~8KB per request
 
 ## Architecture
 
