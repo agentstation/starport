@@ -161,6 +161,23 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Response headers (X-Key-Type, X-BYOK-Cost)
 - 75%+ test coverage with security-focused tests
 
+**✅ Valkey Storage Implementation (P1-S4-4.2b)**
+- Full KVStore interface implementation for Valkey/Redis
+- Pub/sub support for cache invalidation across nodes
+- Transaction support with MULTI/EXEC
+- Atomic operations with Lua scripts
+- Batch operations with auto-pipelining
+- Integration tests with real Valkey instance
+- Mock tests using valkey-go mock library
+
+**😧 Cache Implementation (P1-S4-4.2)**
+- Cache manager interface complete
+- Hybrid caching strategy designed (local + distributed)
+- Pub/sub invalidation setup complete
+- **MISSING**: Actual in-memory cache implementation
+- **MISSING**: Response caching logic
+- **MISSING**: Cache warming strategies
+
 ### Project Structure
 ```
 starport/
@@ -201,22 +218,34 @@ All configuration via environment variables or .env files:
 - Security settings (CORS, JWT, API keys)
 - Logging configuration
 
-### Next Tasks Ready to Implement
-Based on completed prerequisites:
-1. **P1-S4-4.1**: BYOK Implementation (depends on P1-S2-2.3 ✅)
-2. **P1-S4-4.2**: Caching System (depends on P1-S3-3.3 ✅)
-3. **P1-S4-4.3**: Content Filtering Pipeline (depends on P1-S3-3.3 ✅)
-4. **P1-S4-4.4**: Preset Management System (depends on P1-S2-2.3 ✅)
-5. **P1-S5-5.1**: Authentication System (depends on P1-S2-2.3 ✅)
+### Current Status Summary
 
-These can be worked on in parallel by different agents.
+**Completed Features (19 tasks):**
+- All infrastructure and storage components
+- All 6 LLM provider connectors with streaming
+- OpenAI/OpenRouter compatible API endpoints
+- Smart routing with circuit breakers
+- BYOK implementation with encryption
+- Valkey storage with pub/sub support
+
+**Critical Issues (Must Fix):**
+1. **Authentication is broken** - Middleware treats API key as ID instead of hash
+2. **No caching implementation** - Interface exists but no actual cache
+3. **No rate limiting enforcement** - Models exist but no middleware
+
+**Not Implemented:**
+- Content filtering pipeline
+- Preset management endpoints
+- Observability (metrics, tracing)
 
 ## Document Reference
 
 | Document | Purpose | When to Use |
 |----------|---------|-------------|
-| TASKS.md | Task definitions, requirements, and live status (single source of truth) | Read for requirements, update for status |
-| ARCHITECTURE.md | Technical specifications | Reference for design decisions |
+| docs/TASKS.md | Task definitions, requirements, and live status (single source of truth) | Read for requirements, update for status |
+| docs/ARCHITECTURE.md | Technical specifications | Reference for design decisions |
+| docs/PLAN.md | Implementation roadmap | Reference for project phases |
+| docs/OPERATOR-GUIDE.md | Development workflow | Reference for task execution |
 
 ### 1. Working on Your Task
 You will receive a specific task ID (e.g., `P1-S1-1.2`) in your context. The spawn-agent.sh script has already:
@@ -235,19 +264,19 @@ git checkout -b task/P1-S1-1.2-project-structure-setup
 When creating a PR:
 - Title: `[TASK-ID] Brief description`
 - Example: `[P1-S1-1.2] Set up initial project structure`
-- Link to the task in TASKS.md
+- Link to the task in docs/TASKS.md
 - Include acceptance criteria checklist in PR description
 
 ### 4. Task Status Management
 
-**TASKS.md is the single source of truth for task status.**
+**docs/TASKS.md is the single source of truth for task status.**
 
 When working on tasks:
-1. **Starting work**: Update TASKS.md immediately
+1. **Starting work**: Update docs/TASKS.md immediately
    - Add your task to "Active Work" table
    - Mark status as "🟢 In Progress"
    
-2. **Completing work**: Update TASKS.md when PR is ready
+2. **Completing work**: Update docs/TASKS.md when PR is ready
    - Move task to "Recently Completed" section
    - Update "Active Work" to show "✅ Completed"
    - Add PR number
@@ -278,7 +307,7 @@ Every PR must include:
 Key points:
 - List all acceptance criteria as checkboxes
 - Verify all tests pass before submitting
-- Update TASKS.md with PR number
+- Update docs/TASKS.md with PR number
 - Note any blockers or incomplete items
 
 ## Working with Other Agents
@@ -287,12 +316,12 @@ Key points:
 When multiple agents work in parallel:
 1. **Stay in your lane**: Only modify files related to your task
 2. **Pull before push**: Always `git pull origin main` before creating your branch
-3. **Communicate blockers**: Update TASKS.md immediately if blocked
+3. **Communicate blockers**: Update docs/TASKS.md immediately if blocked
 
 ### Handoff Protocol
 When your task blocks others:
 1. Ensure your PR description clearly states what was implemented
-2. Update TASKS.md with accurate status
+2. Update docs/TASKS.md with accurate status
 3. List any known issues or incomplete items in the PR
 
 ## Key Architectural Decisions
@@ -508,7 +537,7 @@ make lint # Lint code
 ```markdown
 ## PR Checklist
 - [ ] Task ID in PR title and branch name
-- [ ] Links to task in TASKS.md
+- [ ] Links to task in docs/TASKS.md
 - [ ] Meets all acceptance criteria
 - [ ] Tests added/updated (90% coverage)
 - [ ] Documentation updated
@@ -520,10 +549,10 @@ make lint # Lint code
 ## Troubleshooting
 
 ### Common Issues
-1. **Prerequisites not met**: Check TASKS.md, update blockers section
+1. **Prerequisites not met**: Check docs/TASKS.md, update blockers section
 2. **Merge conflicts**: Pull latest main, preserve both changes
 3. **Tests failing**: Check if related to your changes or pre-existing
-4. **Can't find files**: May need to create them per ARCHITECTURE.md
+4. **Can't find files**: May need to create them per docs/ARCHITECTURE.md
 5. **Gosec failures**: 
    - Check for false positives (e.g., G407 for crypto/rand usage)
    - Use `#nosec G###` with explanation for false positives
@@ -532,8 +561,8 @@ make lint # Lint code
 
 ### Getting Help
 - Check existing PRs for similar implementations
-- Reference ARCHITECTURE.md for design decisions
-- Update TASKS.md blocked tasks table with specific blockers
+- Reference docs/ARCHITECTURE.md for design decisions
+- Update docs/TASKS.md blocked tasks table with specific blockers
 
 ## Quick Reference for Next Tasks
 
@@ -542,7 +571,7 @@ make lint # Lint code
 - Use the existing config structs in `internal/config/config.go`
 - Follow the context propagation pattern for all methods
 - Include TTL support for rate limiting
-- See ARCHITECTURE.md Section 16 for storage details
+- See docs/ARCHITECTURE.md Section 16 for storage details
 - **Lessons from P1-S2-2.1:**
   - Mock implementation should be thread-safe with proper mutex usage
   - Handle TTL expiration checks in read operations
@@ -561,7 +590,7 @@ make lint # Lint code
 - Each provider gets its own file (openai.go, anthropic.go, etc.)
 - Use the provider configs from `internal/config/config.go`
 - Implement streaming support from the start
-- See ARCHITECTURE.md Section 8 for routing architecture
+- See docs/ARCHITECTURE.md Section 8 for routing architecture
 - **Lessons from P1-S3-3.1:**
   - Add package comment to satisfy linters (e.g., `// Package connectors provides interfaces and types for LLM provider integrations`)
   - For mock implementations, mark unused parameters with `_ = param // param is intentionally unused in mock`
@@ -587,9 +616,9 @@ make lint # Lint code
 - Run `make test-coverage` to check coverage
 
 ## Questions?
-- Architecture questions → Check ARCHITECTURE.md
-- Timeline questions → Check PLAN.md  
-- Task details → Check TASKS.md
+- Architecture questions → Check docs/ARCHITECTURE.md
+- Timeline questions → Check docs/PLAN.md  
+- Task details → Check docs/TASKS.md
 - Implementation patterns → Check existing code or ask in PR
-- Execution order → Check OPERATOR-GUIDE.md
+- Execution order → Check docs/OPERATOR-GUIDE.md
 - Current codebase status → Check this file's "Current Codebase Status" section
