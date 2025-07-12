@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/chat/static/chat.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">{{.Title}}</h1>
+                <div class="header-actions">
+                    <button id="theme-toggle" class="btn-icon" title="Toggle theme">
+                        <svg class="icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                        <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
+                    <button id="settings-btn" class="btn-icon" title="Settings">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z"></path>
+                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <button id="new-chat" class="btn btn-primary">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        New Chat
+                    </button>
+                </div>
+                <div class="chat-list" id="chat-list">
+                    <!-- Chat history will be populated here -->
+                </div>
+                <div class="sidebar-footer">
+                    <button id="clear-all" class="btn btn-ghost">Clear All Chats</button>
+                </div>
+            </aside>
+
+            <!-- Chat Container -->
+            <main class="chat-container">
+                <div class="chat-header">
+                    <button id="sidebar-toggle" class="btn-icon mobile-only" title="Toggle sidebar">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                    <select id="model-select" class="model-select">
+                        <option value="">Loading models...</option>
+                    </select>
+                    <div id="model-pricing" class="model-pricing"></div>
+                </div>
+
+                <div class="messages" id="messages">
+                    <div class="welcome-message">
+                        <h2>Welcome to {{.Title}}</h2>
+                        <p>To get started:</p>
+                        <ol style="text-align: left; display: inline-block;">
+                            <li>Click the settings icon (⚙️) in the header</li>
+                            {{if .AllowKeyGen}}
+                            <li>Click "Generate" to create a new API key, or enter an existing one</li>
+                            {{else}}
+                            <li>Enter your API key</li>
+                            {{end}}
+                            <li>Select a model from the dropdown</li>
+                            <li>Start chatting!</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <textarea 
+                            id="message-input" 
+                            class="message-input" 
+                            placeholder="Type your message..."
+                            rows="1"
+                        ></textarea>
+                        <button id="send-btn" class="btn btn-primary send-btn" disabled>
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                        <button id="stop-btn" class="btn btn-danger send-btn" style="display: none;">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="6" y="6" width="12" height="12"></rect>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="input-info">
+                        <span id="token-count">Tokens: 0</span>
+                        <span id="cost-estimate">Cost: $0.00</span>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="btn-icon modal-close">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="api-key">API Key</label>
+                        <div class="input-group">
+                            <input type="password" id="api-key" class="form-input" placeholder="sk-...">
+                            {{if .AllowKeyGen}}
+                            <button id="generate-key" class="btn btn-secondary">Generate</button>
+                            {{end}}
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="api-base">API Base URL</label>
+                        <input type="text" id="api-base" class="form-input" value="{{.APIBaseURL}}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="stream-enabled" checked>
+                            Enable streaming responses
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="typewriter-enabled" checked>
+                            Enable typewriter animation
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="typewriter-speed">Typewriter Speed</label>
+                        <select id="typewriter-speed" class="form-input">
+                            <option value="instant">Instant</option>
+                            <option value="fast">Fast</option>
+                            <option value="normal" selected>Normal</option>
+                            <option value="slow">Slow</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary modal-close">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Toast -->
+        <div id="error-toast" class="toast toast-error" style="display: none;">
+            <div class="toast-content">
+                <span class="toast-message"></span>
+                <button class="btn-icon toast-close">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="toast-details" style="display: none;">
+                <pre class="error-json"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Pass configuration to JavaScript
+        window.STARPORT_CONFIG = {
+            apiBaseURL: "{{.APIBaseURL}}",
+            allowKeyGen: {{.AllowKeyGen}}
+        };
+    </script>
+    <script src="/chat/static/chat.js"></script>
+</body>
+</html>

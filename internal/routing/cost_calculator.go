@@ -129,6 +129,18 @@ func getDefaultPricing() map[string]ModelPricing {
 		},
 
 		// Google AI Studio models
+		"google-aistudio/gemini-2.5-pro": {
+			PromptCostPer1M:     1.25,
+			CompletionCostPer1M: 10.0,
+		},
+		"google-aistudio/gemini-2.5-flash": {
+			PromptCostPer1M:     0.3,
+			CompletionCostPer1M: 2.5,
+		},
+		"google-aistudio/gemini-2.0-flash-001": {
+			PromptCostPer1M:     0.1,
+			CompletionCostPer1M: 0.4,
+		},
 		"google-aistudio/gemini-1.5-pro": {
 			PromptCostPer1M:     3.5,
 			CompletionCostPer1M: 10.5,

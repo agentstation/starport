@@ -389,6 +389,84 @@ var modelMetadataMap = map[string]*ModelMetadata{
 	},
 
 	// Google AI Studio Models
+	"google-aistudio/gemini-2.5-pro": {
+		ID:          "google-aistudio/gemini-2.5-pro",
+		Name:        "Google AI Studio: Gemini 2.5 Pro",
+		Created:     1736121600, // 2025-01-06
+		Description: "Google's most advanced model with 1M+ context",
+		Pricing: &ModelPricing{
+			Prompt:     "0.00125", // $1.25 per 1M tokens
+			Completion: "0.01",    // $10.00 per 1M tokens
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(1048576),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image", "video", "audio"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "gemini",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         true,
+			MaxCompletionTokens: 8192,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "top_k", "max_tokens",
+			"stop_sequences", "candidate_count",
+		},
+	},
+	"google-aistudio/gemini-2.5-flash": {
+		ID:          "google-aistudio/gemini-2.5-flash",
+		Name:        "Google AI Studio: Gemini 2.5 Flash",
+		Created:     1736121600, // 2025-01-06
+		Description: "Ultra-fast multimodal model with 1M+ context",
+		Pricing: &ModelPricing{
+			Prompt:     "0.0000003",
+			Completion: "0.0000025",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(1048576),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image", "video", "audio"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "gemini",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         true,
+			MaxCompletionTokens: 8192,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "top_k", "max_tokens",
+			"stop_sequences", "candidate_count",
+		},
+	},
+	"google-aistudio/gemini-2.0-flash-001": {
+		ID:          "google-aistudio/gemini-2.0-flash-001",
+		Name:        "Google AI Studio: Gemini 2.0 Flash",
+		Created:     1731024000, // 2024-11-08
+		Description: "Previous generation ultra-fast model",
+		Pricing: &ModelPricing{
+			Prompt:     "0.0000001",
+			Completion: "0.0000004",
+			Image:      "0",
+			Request:    "0",
+		},
+		Context: modelContextPtr(1048576),
+		Architecture: &ModelArchitecture{
+			InputModalities:  []string{"text", "image", "video", "audio"},
+			OutputModalities: []string{"text"},
+			Tokenizer:        "gemini",
+		},
+		TopProvider: &TopProviderInfo{
+			IsModerated:         true,
+			MaxCompletionTokens: 8192,
+		},
+		SupportedParameters: []string{
+			"temperature", "top_p", "top_k", "max_tokens",
+			"stop_sequences", "candidate_count",
+		},
+	},
 	"google-aistudio/gemini-1.5-pro": {
 		ID:          "google-aistudio/gemini-1.5-pro",
 		Name:        "Google AI Studio: Gemini 1.5 Pro",

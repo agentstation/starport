@@ -234,6 +234,9 @@ type googleStream struct {
 	model    string
 	provider string
 	closed   bool
+	buffer   []byte
+	decoder  *json.Decoder
+	started  bool
 }
 
 func newGoogleStream(resp *http.Response, model, provider string) *googleStream {
@@ -242,6 +245,7 @@ func newGoogleStream(resp *http.Response, model, provider string) *googleStream 
 		reader:   bufio.NewReader(resp.Body),
 		model:    model,
 		provider: provider,
+		buffer:   make([]byte, 0),
 	}
 }
 
@@ -250,34 +254,56 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 		return nil, ErrStreamClosed
 	}
 
+	// Google's streaming format is a JSON array of objects separated by commas
+	// Format: [{...},\n{...},\n{...}]
+	// We need to handle this differently than line-delimited JSON
+
+	// Read until we have a complete JSON object
 	for {
-		line, err := s.reader.ReadBytes('\n')
-		if err != nil {
-			if err == io.EOF {
-				s.closed = true
-				return nil, io.EOF
-			}
+		// Read more data if needed
+		chunk := make([]byte, 4096)
+		n, err := s.reader.Read(chunk)
+		if n > 0 {
+			s.buffer = append(s.buffer, chunk[:n]...)
+		}
+		
+		if err == io.EOF && len(s.buffer) == 0 {
+			s.closed = true
+			return nil, io.EOF
+		}
+		
+		if err != nil && err != io.EOF {
 			return nil, &StreamError{
 				Err:    err,
 				Reason: "failed to read stream",
 			}
 		}
 
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
+		// Try to parse a complete JSON object from the buffer
+		chunk, remaining, found := s.extractNextChunk()
+		if !found {
+			if err == io.EOF {
+				// No more data and no complete object
+				s.closed = true
+				return nil, io.EOF
+			}
+			// Need more data
 			continue
 		}
 
-		// Parse Google streaming response
-		var chunk geminiResponse
-		if err := json.Unmarshal(line, &chunk); err != nil {
-			continue // Skip malformed chunks
+		s.buffer = remaining
+
+		// Parse the extracted chunk
+		var geminiResp geminiResponse
+		if err := json.Unmarshal(chunk, &geminiResp); err != nil {
+			// Skip malformed chunks
+			continue
 		}
 
 		// Convert to OpenAI format
-		if len(chunk.Candidates) > 0 {
+		if len(geminiResp.Candidates) > 0 {
 			content := ""
-			for _, part := range chunk.Candidates[0].Content.Parts {
+			for _, part := range geminiResp.Candidates[0].Content.Parts {
 				if text, ok := part["text"].(string); ok {
 					content += text
 				}
@@ -285,12 +311,12 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 
 			finishReason := ""
 			if s.provider == GoogleVertexAIProvider {
-				finishReason = mapVertexFinishReason(chunk.Candidates[0].FinishReason)
+				finishReason = mapVertexFinishReason(geminiResp.Candidates[0].FinishReason)
 			} else {
-				finishReason = mapFinishReason(chunk.Candidates[0].FinishReason)
+				finishReason = mapFinishReason(geminiResp.Candidates[0].FinishReason)
 			}
 
-			return &ChatStreamChunk{
+			chunk := &ChatStreamChunk{
 				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
 				Object:  "chat.completion.chunk",
 				Created: time.Now().Unix(),
@@ -304,9 +330,79 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 						FinishReason: finishReason,
 					},
 				},
-			}, nil
+			}
+			
+			// Include usage metadata if available (typically in the final chunk)
+			if geminiResp.UsageMetadata.TotalTokenCount > 0 {
+				chunk.Usage = &Usage{
+					PromptTokens:     geminiResp.UsageMetadata.PromptTokenCount,
+					CompletionTokens: geminiResp.UsageMetadata.CandidatesTokenCount,
+					TotalTokens:      geminiResp.UsageMetadata.TotalTokenCount,
+				}
+			}
+			
+			return chunk, nil
 		}
 	}
+}
+
+// extractNextChunk attempts to extract a complete JSON object from the buffer
+func (s *googleStream) extractNextChunk() ([]byte, []byte, bool) {
+	// Skip leading whitespace and array brackets
+	start := 0
+	for start < len(s.buffer) {
+		ch := s.buffer[start]
+		if ch != ' ' && ch != '\n' && ch != '\r' && ch != '\t' && ch != '[' && ch != ',' {
+			break
+		}
+		start++
+	}
+
+	if start >= len(s.buffer) {
+		return nil, s.buffer[start:], false
+	}
+
+	// Look for a complete JSON object starting with {
+	if s.buffer[start] != '{' {
+		return nil, s.buffer[start:], false
+	}
+
+	// Count braces to find the end of the object
+	braceCount := 0
+	inString := false
+	escaped := false
+	end := start
+
+	for end < len(s.buffer) {
+		ch := s.buffer[end]
+		
+		if !escaped {
+			if ch == '"' && !inString {
+				inString = true
+			} else if ch == '"' && inString {
+				inString = false
+			} else if ch == '\\' && inString {
+				escaped = true
+			} else if !inString {
+				if ch == '{' {
+					braceCount++
+				} else if ch == '}' {
+					braceCount--
+					if braceCount == 0 {
+						// Found complete object
+						return s.buffer[start : end+1], s.buffer[end+1:], true
+					}
+				}
+			}
+		} else {
+			escaped = false
+		}
+		
+		end++
+	}
+
+	// Incomplete object, need more data
+	return nil, s.buffer[start:], false
 }
 
 func (s *googleStream) Close() error {
