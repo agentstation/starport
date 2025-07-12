@@ -1,12 +1,16 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/agentstation/uuidkey"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/models"
@@ -100,11 +104,26 @@ func (h *AdminHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now(),
 	}
 
-	// Generate key ID and hash
-	apiKey.ID = generateAPIKeyID()
-	// TODO: Generate actual key and hash
-	apiKey.Hash = "placeholder-hash"
-	key := "sk_" + generateRandomString(32) // The actual key shown to user once
+	// Generate UUID for the key
+	keyUUID := uuid.New().String()
+	
+	// Create API key using uuidkey with STARPORT prefix
+	apiKeyObj, err := uuidkey.NewAPIKey("STARPORT", keyUUID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create API key with uuidkey")
+		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to generate API key")
+		return
+	}
+	
+	// The actual key value (only shown once)
+	keyValue := apiKeyObj.String()
+	
+	// Use the prefix_key format as the ID (without entropy for storage key)
+	apiKey.ID = fmt.Sprintf("%s_%s", apiKeyObj.Prefix, apiKeyObj.Key)
+	
+	// Hash the full key value for storage
+	hash := sha256.Sum256([]byte(keyValue))
+	apiKey.Hash = hex.EncodeToString(hash[:])
 
 	// Basic validation
 	if apiKey.Name == "" {
@@ -126,11 +145,20 @@ func (h *AdminHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Also store hash -> ID mapping for quick lookups during authentication
+	if err := h.store.Set(ctx, storage.APIKeyHashKey(apiKey.Hash), []byte(apiKey.ID)); err != nil {
+		log.Error().Err(err).Msg("Failed to store API key hash mapping")
+		// Try to clean up the key we just stored
+		_ = h.store.Delete(ctx, storage.APIKeyKey(apiKey.ID))
+		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create API key")
+		return
+	}
+
 	// Return created key (with the actual key value visible once)
 	response := map[string]interface{}{
 		"key": map[string]interface{}{
 			"id":         apiKey.ID,
-			"key":        key, // Only shown on creation
+			"key":        keyValue, // Only shown on creation - the full uuidkey format
 			"name":       apiKey.Name,
 			"scopes":     apiKey.Scopes,
 			"active":     apiKey.Active,
@@ -342,19 +370,4 @@ func convertStringMapToInterface(m map[string]string) map[string]interface{} {
 		result[k] = v
 	}
 	return result
-}
-
-func generateAPIKeyID() string {
-	// Simple ID generation - in production, use a proper UUID
-	return fmt.Sprintf("sk_%d", time.Now().UnixNano())
-}
-
-func generateRandomString(length int) string {
-	// Simple random string generation - in production, use crypto/rand
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
-	}
-	return string(b)
 }

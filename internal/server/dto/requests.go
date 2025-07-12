@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/agentstation/starport/internal/proxy"
 )
 
@@ -27,12 +29,18 @@ func ParseChatCompletionRequest(r *http.Request) (*proxy.ChatCompletionRequest, 
 	// Extract additional context from HTTP request
 	req.RequestID = r.Header.Get("X-Request-ID")
 	if req.RequestID == "" {
-		req.RequestID = r.Context().Value("request_id").(string)
+		// Use chi's middleware.GetReqID to safely get request ID
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			req.RequestID = reqID
+		}
 	}
 
 	// API key will be set by authentication middleware
+	// Note: Handlers typically override this with their own context extraction
 	if apiKey := r.Context().Value("api_key"); apiKey != nil {
-		req.APIKey = apiKey.(string)
+		if keyStr, ok := apiKey.(string); ok {
+			req.APIKey = keyStr
+		}
 	}
 
 	return &req, nil
@@ -56,12 +64,18 @@ func ParseEmbeddingsRequest(r *http.Request) (*proxy.EmbeddingsRequest, error) {
 	// Extract additional context from HTTP request
 	req.RequestID = r.Header.Get("X-Request-ID")
 	if req.RequestID == "" {
-		req.RequestID = r.Context().Value("request_id").(string)
+		// Use chi's middleware.GetReqID to safely get request ID
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			req.RequestID = reqID
+		}
 	}
 
 	// API key will be set by authentication middleware
+	// Note: Handlers typically override this with their own context extraction
 	if apiKey := r.Context().Value("api_key"); apiKey != nil {
-		req.APIKey = apiKey.(string)
+		if keyStr, ok := apiKey.(string); ok {
+			req.APIKey = keyStr
+		}
 	}
 
 	return &req, nil

@@ -116,6 +116,11 @@ func runServer(ctx context.Context) error {
 		}))
 	}
 
+	// Add ChatUI config if enabled
+	if cfg.ChatUI.Enabled {
+		opts = append(opts, app.WithChatUI(&cfg.ChatUI))
+	}
+
 	app, err := app.New(opts...)
 	if err != nil {
 		return fmt.Errorf("failed to create app: %w", err)

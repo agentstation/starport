@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/cache"
+	"github.com/agentstation/starport/internal/chatui"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/registry"
@@ -35,6 +36,9 @@ type Server struct {
 
 	// Middleware
 	auth *AuthMiddleware
+
+	// ChatUI configuration
+	chatUIConfig *chatui.Config
 }
 
 // Option configures server options
@@ -56,6 +60,13 @@ func WithCache(cm *cache.Manager) Option {
 	}
 }
 
+// WithChatUI enables the ChatUI with the given configuration
+func WithChatUI(config *chatui.Config) Option {
+	return func(s *Server) {
+		s.chatUIConfig = config
+	}
+}
+
 // New creates a new server instance with improved handler organization
 func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 	// Create dependencies
@@ -68,16 +79,7 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 	// Create proxy service
 	service := proxy.NewService(reg, router)
 
-	// Create handler collection
-	handlerConfig := handlers.Config{
-		Service:     service,
-		KeyManager:  keyManager,
-		Store:       store,
-		ServiceName: "starport",
-		Version:     "1.0.0",
-	}
-	handlerCollection := handlers.NewCollection(handlerConfig)
-
+	// Create server instance
 	s := &Server{
 		router:     chi.NewRouter(),
 		cfg:        config,
@@ -85,14 +87,30 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 		service:    service,
 		store:      store,
 		keyManager: keyManager,
-		handlers:   handlerCollection,
 		auth:       NewAuthMiddleware(store),
 	}
 
-	// Apply options
+	// Apply options first to get ChatUI config
 	for _, opt := range opts {
 		opt(s)
 	}
+
+	// Create handler collection with ChatUI config
+	handlerConfig := handlers.Config{
+		Service:       service,
+		KeyManager:    keyManager,
+		Store:         store,
+		ServiceName:   "starport",
+		Version:       "1.0.0",
+		ChatUIEnabled: s.chatUIConfig != nil,
+		Logger:        &log.Logger,
+	}
+	
+	if s.chatUIConfig != nil {
+		handlerConfig.ChatUIConfig = *s.chatUIConfig
+	}
+	
+	s.handlers = handlers.NewCollection(handlerConfig)
 
 	// Setup routes using the new centralized routes.go
 	s.setupRoutes(s.router)

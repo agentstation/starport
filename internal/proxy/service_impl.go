@@ -183,12 +183,36 @@ func (s *ServiceImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	// Transform []connectors.Model to response
 	modelInfos := make([]ModelInfo, len(models))
 	for i, m := range models {
-		modelInfos[i] = ModelInfo{
+		modelInfo := ModelInfo{
 			ID:      m.ID,
 			Object:  "model",
 			Created: m.Created,
 			OwnedBy: m.OwnedBy,
 		}
+		
+		// Enrich with metadata if available
+		metadata := connectors.GetModelMetadata(m.ID)
+		if metadata != nil {
+			if metadata.Pricing != nil {
+				modelInfo.Pricing = &ModelPricing{
+					Prompt:     metadata.Pricing.Prompt,
+					Completion: metadata.Pricing.Completion,
+					Currency:   "USD",
+				}
+			}
+			if metadata.Context != nil {
+				// Convert ModelContext (int) to *int
+				ctx := int(*metadata.Context)
+				modelInfo.Context = &ctx
+			}
+			if metadata.Description != "" {
+				modelInfo.Description = metadata.Description
+			}
+			// Note: Architecture field not available in ModelInfo struct
+			// Would need to extend ModelInfo to include architecture data
+		}
+		
+		modelInfos[i] = modelInfo
 	}
 
 	return &ModelsResponse{

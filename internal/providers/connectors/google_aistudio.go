@@ -129,8 +129,29 @@ func (c *GoogleAIStudioConnector) staticModelsList() *ModelsResponse {
 	providerPrefix := GoogleAIStudioProvider
 
 	// Google AI Studio models (Gemini models only)
-	// Updated: 2024-12-15
+	// Updated: 2025-01-12
 	models := []Model{
+		// Gemini 2.5 models (latest generation)
+		{
+			ID:      providerPrefix + "/gemini-2.5-pro",
+			Object:  "model",
+			Created: time.Now().Unix(),
+			OwnedBy: "google",
+		},
+		{
+			ID:      providerPrefix + "/gemini-2.5-flash",
+			Object:  "model",
+			Created: time.Now().Unix(),
+			OwnedBy: "google",
+		},
+		// Gemini 2.0 models
+		{
+			ID:      providerPrefix + "/gemini-2.0-flash-001",
+			Object:  "model",
+			Created: time.Now().Unix(),
+			OwnedBy: "google",
+		},
+		// Gemini 1.5 models
 		{
 			ID:      providerPrefix + "/gemini-1.5-pro",
 			Object:  "model",

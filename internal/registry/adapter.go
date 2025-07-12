@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -83,8 +84,38 @@ func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) 
 	}
 
 	// Initialize Vertex AI if configured
-	if cfg.Providers.GoogleVertexAI.BaseURL != "" {
+	projectID := os.Getenv("STARPORT_PROVIDERS_GOOGLE_VERTEXAI_PROJECT_ID")
+	if projectID == "" {
+		projectID = os.Getenv("GCP_PROJECT_ID")
+	}
+	if projectID == "" {
+		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	}
+	
+	if projectID != "" {
 		providerCfg := convertToProviderConfig(cfg.Providers.GoogleVertexAI, "GOOGLE_APPLICATION_CREDENTIALS")
+		
+		// Add Vertex AI specific configuration
+		providerCfg.Extra = make(map[string]interface{})
+		providerCfg.Extra["project_id"] = projectID
+		
+		// Check for location configuration
+		location := os.Getenv("STARPORT_PROVIDERS_GOOGLE_VERTEXAI_LOCATION")
+		if location != "" {
+			providerCfg.Extra["location"] = location
+		}
+		
+		// Check for fallback locations (comma-separated)
+		fallbackLocations := os.Getenv("STARPORT_PROVIDERS_GOOGLE_VERTEXAI_FALLBACK_LOCATIONS")
+		if fallbackLocations != "" {
+			locations := strings.Split(fallbackLocations, ",")
+			var fallbacks []interface{}
+			for _, loc := range locations {
+				fallbacks = append(fallbacks, strings.TrimSpace(loc))
+			}
+			providerCfg.Extra["fallback_locations"] = fallbacks
+		}
+		
 		connector, err := connectors.NewConnector("google-vertexai", providerCfg)
 		if err != nil {
 			return fmt.Errorf("failed to create Vertex AI connector: %w", err)
@@ -92,7 +123,11 @@ func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) 
 		if err := a.registry.Register("google-vertexai", connector); err != nil {
 			return fmt.Errorf("failed to register Vertex AI connector: %w", err)
 		}
-		log.Info().Msg("initialized Vertex AI connector")
+		logEntry := log.Info().Str("project_id", projectID)
+		if loc, ok := providerCfg.Extra["location"].(string); ok {
+			logEntry = logEntry.Str("location", loc)
+		}
+		logEntry.Msg("initialized Vertex AI connector")
 	}
 
 	// Note: Legacy Gemini config is mapped to Google AI Studio, not Vertex AI
@@ -211,8 +246,30 @@ func findProviderSeparator(modelID string) int {
 	return -1
 }
 
+// getGoogleAPIKey returns the Google API key with correct precedence
+// Priority order: STARPORT_PROVIDERS_GEMINI_API_KEY > GOOGLE_API_KEY > GEMINI_API_KEY
+func getGoogleAPIKey() string {
+	// First check the standard Starport environment variable
+	if key := os.Getenv("STARPORT_PROVIDERS_GEMINI_API_KEY"); key != "" {
+		return key
+	}
+	// Then check common alternative names
+	if key := os.Getenv("GOOGLE_API_KEY"); key != "" {
+		return key
+	}
+	return os.Getenv("GEMINI_API_KEY")
+}
+
 // convertToProviderConfig converts config.ProviderConfig to connectors.ProviderConfig
 func convertToProviderConfig(cfg config.ProviderConfig, apiKeyEnv string) connectors.ProviderConfig {
+	// Special handling for Google/Gemini API keys
+	apiKey := ""
+	if apiKeyEnv == "GOOGLE_API_KEY" {
+		apiKey = getGoogleAPIKey()
+	} else {
+		apiKey = os.Getenv(apiKeyEnv)
+	}
+
 	return connectors.ProviderConfig{
 		BaseURL:           cfg.BaseURL,
 		Timeout:           cfg.Timeout,
@@ -220,6 +277,6 @@ func convertToProviderConfig(cfg config.ProviderConfig, apiKeyEnv string) connec
 		MaxRetries:        cfg.MaxRetries,
 		RetryDelay:        cfg.RetryDelay,
 		BackoffMultiplier: cfg.BackoffMultiplier,
-		APIKey:            os.Getenv(apiKeyEnv),
+		APIKey:            apiKey,
 	}
 }

@@ -140,3 +140,10 @@ Desktop.ini
 
 # Claude Code specific
 .claude/settings.local.json
+
+# Test files and temporary documentation
+test*.sh
+test*.html
+test-*.md
+chatui-test-summary.md
+uuidkey-migration-summary.md

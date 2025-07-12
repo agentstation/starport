@@ -16,6 +16,7 @@ type Config struct {
 	Security     SecurityConfig     `env:",prefix=SECURITY_"`
 	Logging      LoggingConfig      `env:",prefix=LOGGING_"`
 	Cache        CacheConfig        `env:",prefix=CACHE_"`
+	ChatUI       ChatUIConfig       `env:",prefix=CHATUI_"`
 }
 
 // ServerConfig defines HTTP server settings
@@ -136,6 +137,14 @@ type CacheConfig struct {
 	Enabled bool `env:"ENABLED,default=true"`
 }
 
+// ChatUIConfig defines settings for the embedded chat UI
+type ChatUIConfig struct {
+	Enabled     bool   `env:"ENABLED,default=false"`
+	Title       string `env:"TITLE,default=Starport Chat"`
+	Theme       string `env:"THEME,default=light"`
+	AllowKeyGen bool   `env:"ALLOW_KEY_GEN,default=false"`
+}
+
 // Validate performs validation on the configuration
 func (c *Config) Validate() error {
 	// Validate server config
@@ -160,6 +169,11 @@ func (c *Config) Validate() error {
 
 	// Validate logging config
 	if err := c.Logging.Validate(); err != nil {
+		return err
+	}
+
+	// Validate ChatUI config
+	if err := c.ChatUI.Validate(); err != nil {
 		return err
 	}
 

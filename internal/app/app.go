@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/cache"
+	"github.com/agentstation/starport/internal/chatui"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/server"
@@ -93,6 +94,23 @@ func New(opts ...Option) (*App, error) {
 	if app.cacheManager != nil {
 		serverOpts = append(serverOpts, server.WithCache(app.cacheManager))
 	}
+	
+	// Add ChatUI configuration if enabled
+	if cfg.ChatUI != nil && cfg.ChatUI.Enabled {
+		chatUIConfig := chatui.Config{
+			Title:       cfg.ChatUI.Title,
+			Theme:       cfg.ChatUI.Theme,
+			AllowKeyGen: cfg.ChatUI.AllowKeyGen,
+			APIBaseURL:  fmt.Sprintf("http://localhost:%d", cfg.Server.Port),
+		}
+		serverOpts = append(serverOpts, server.WithChatUI(&chatUIConfig))
+		log.Info().
+			Str("title", cfg.ChatUI.Title).
+			Str("theme", cfg.ChatUI.Theme).
+			Bool("allow_key_gen", cfg.ChatUI.AllowKeyGen).
+			Msg("ChatUI enabled")
+	}
+	
 	app.httpServer = server.New(&app.config.Server, app.registry, serverOpts...)
 
 	return app, nil

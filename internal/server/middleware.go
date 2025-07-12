@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
@@ -163,10 +165,26 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 			return
 		}
 
-		// Validate API key
-		// TODO: Implement API key lookup by key value
-		// For now, this is a placeholder that won't work correctly
-		keyData, err := m.store.Get(r.Context(), storage.APIKeyKey(apiKey))
+		// Hash the provided API key
+		hash := sha256.Sum256([]byte(apiKey))
+		hashStr := hex.EncodeToString(hash[:])
+
+		// Look up the key ID by hash
+		keyIDData, err := m.store.Get(r.Context(), storage.APIKeyHashKey(hashStr))
+		if err != nil {
+			if err == storage.ErrNotFound {
+				dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Invalid API key")
+				return
+			}
+			log.Error().Err(err).Msg("Failed to lookup API key hash")
+			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Authentication error")
+			return
+		}
+
+		keyID := string(keyIDData)
+
+		// Get the full API key data by ID
+		keyData, err := m.store.Get(r.Context(), storage.APIKeyKey(keyID))
 		if err != nil {
 			if err == storage.ErrNotFound {
 				dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Invalid API key")
@@ -182,6 +200,16 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		if err := storage.Deserialize(keyData, &apiKeyModel); err != nil {
 			log.Error().Err(err).Msg("Failed to deserialize API key")
 			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Authentication error")
+			return
+		}
+
+		// Verify the hash matches (extra security check)
+		if apiKeyModel.Hash != hashStr {
+			log.Error().
+				Str("expected_hash", apiKeyModel.Hash).
+				Str("actual_hash", hashStr).
+				Msg("API key hash mismatch")
+			dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Invalid API key")
 			return
 		}
 

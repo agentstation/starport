@@ -149,6 +149,13 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Backward compatibility maintained (legacy "gemini" maps to "google-aistudio")
 - 85%+ test coverage
 
+**✅ Enhanced Vertex AI Multi-Region Support**
+- Automatic failover to backup regions on errors (429, 5xx)
+- Intelligent default region selection based on geography
+- Configurable fallback locations via environment variables
+- Maintains optimal connection state after successful failover
+- Comprehensive test coverage for multi-region scenarios
+
 **✅ BYOK Implementation (P1-S4-4.1)**
 - OpenRouter-compatible BYOK with 5% pricing model
 - AES-256-GCM encryption with Argon2id key derivation

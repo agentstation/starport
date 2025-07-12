@@ -5,6 +5,9 @@ const (
 	// KeyPrefixAPIKey is the prefix for API key storage
 	KeyPrefixAPIKey = "apikey:"
 
+	// KeyPrefixAPIKeyHash is the prefix for API key hash to ID mappings
+	KeyPrefixAPIKeyHash = "apikey:hash:"
+
 	// KeyPrefixRateLimit is the prefix for rate limit counters
 	KeyPrefixRateLimit = "ratelimit:"
 
@@ -24,8 +27,13 @@ const (
 // Helper functions for key generation
 
 // APIKeyKey generates a storage key for an API key
-func APIKeyKey(hash string) string {
-	return KeyPrefixAPIKey + hash
+func APIKeyKey(id string) string {
+	return KeyPrefixAPIKey + id
+}
+
+// APIKeyHashKey generates a storage key for API key hash to ID mapping
+func APIKeyHashKey(hash string) string {
+	return KeyPrefixAPIKeyHash + hash
 }
 
 // RateLimitKey generates a storage key for rate limiting

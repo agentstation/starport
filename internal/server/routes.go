@@ -92,6 +92,11 @@ func (s *Server) setupRoutes(mux *chi.Mux) {
 		})
 	})
 
+	// ChatUI endpoints (optional feature)
+	if s.handlers.ChatUI != nil {
+		mux.Mount("/chat", s.handlers.ChatUI.Routes())
+	}
+
 	// Legacy compatibility routes (deprecated)
 	mux.Route("/openai/v1", func(r chi.Router) {
 		r.Use(s.requireAPIKey)

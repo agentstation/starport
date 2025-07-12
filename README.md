@@ -31,6 +31,7 @@ Unlike managed services, Starport gives you:
 - **🧠 Smart Routing** - Automatic failover, latency-based, cost-aware routing
 - **🔐 BYOK Support** - Bring your own keys with zero-knowledge security
 - **💾 Advanced Caching** - Multi-tier caching with TTL and invalidation
+- **💬 Chat UI** - Built-in web interface for testing and development
 - **🛡️ Enterprise Ready** - Rate limiting, content filtering, audit logs (Enterprise)
 
 ### Architecture
@@ -77,6 +78,49 @@ response = client.chat.completions.create(
     messages=[{"role": "user", "content": "Hello!"}]
 )
 ```
+
+## ChatUI - Built-in Web Interface
+
+Starport includes an optional web-based chat interface for testing and development. This provides a clean, modern UI for interacting with your configured LLM providers.
+
+### Enabling ChatUI
+
+Add these environment variables to your `.env` file or export them:
+
+```bash
+# Enable the ChatUI feature
+STARPORT_CHATUI_ENABLED=true
+
+# Customize the interface
+STARPORT_CHATUI_TITLE="Starport Chat"
+STARPORT_CHATUI_THEME=light  # or "dark"
+
+# Allow API key generation from the UI (development only)
+STARPORT_CHATUI_ALLOW_KEY_GEN=true
+```
+
+### Accessing ChatUI
+
+Once enabled, visit `http://localhost:8080/chat` to access the interface.
+
+### Features
+
+- **🎨 Modern Interface** - Clean, responsive design with light/dark themes
+- **💬 Streaming Chat** - Real-time streaming responses from all providers
+- **🔑 API Key Management** - Generate keys directly from the UI (when enabled)
+- **📱 Mobile Friendly** - Responsive design works on all devices
+- **💾 Local Storage** - Conversations saved locally in your browser
+- **📤 Export Chats** - Download conversations as JSON or Markdown
+- **⚡ Model Switching** - Easy switching between providers and models
+- **🔍 Search History** - Find past conversations quickly
+- **⌨️ Keyboard Shortcuts** - Efficient navigation (Cmd/Ctrl+K for search)
+
+### Security Notes
+
+- ChatUI is disabled by default for security
+- API key generation should only be enabled in development
+- All chat data is stored locally in the browser
+- No conversation data is sent to external services
 
 ## Performance
 
@@ -174,6 +218,7 @@ For detailed development setup, testing guidelines, and contribution workflow, p
 | **Model Routing** | ✅ Complete | Smart routing with failover and preferences |
 | **BYOK Support** | ✅ Complete | Encrypted credential storage with fallback |
 | **Storage Layer** | ✅ Complete | Badger and Valkey implementations |
+| **ChatUI Interface** | ✅ Complete | Web-based chat interface with API key generation |
 | **Caching System** | 🚧 In Progress | Interface complete, implementation needed |
 | **Authentication** | 🚧 In Progress | Broken middleware, needs API key generation |
 | **Rate Limiting** | ❌ Not Started | Models exist, no enforcement |
@@ -191,6 +236,7 @@ For detailed development setup, testing guidelines, and contribution workflow, p
 - ✅ OpenAI/OpenRouter compatible endpoints
 - ✅ Smart routing with circuit breakers
 - ✅ BYOK implementation with encryption
+- ✅ ChatUI web interface with streaming support
 
 **In Progress:**
 - 🚧 Authentication system with API key management
@@ -229,6 +275,7 @@ For detailed development setup, testing guidelines, and contribution workflow, p
 | **Self-hosted** | ❌ | ✅ | ✅ |
 | **Zero Dependencies** | ❌ | ✅ | ✅ |
 | **<1ms Overhead** | ❌ | ✅ | ✅ |
+| **Built-in Chat UI** | ❌ | ✅ | ✅ |
 | **Rate Limiting** | ✅ | 🚧 | ✅ |
 | **SSO/RBAC** | ✅ | ❌ | ✅ |
 | **Analytics** | ✅ | ❌ | ✅ |
@@ -242,7 +289,7 @@ Starport supports the following AI providers out of the box:
 | **OpenAI** | o3, o4, GPT-4.5, GPT-4, GPT-4o | Advanced reasoning, function calling |
 | **Anthropic** | Claude 4 Opus/Sonnet, Claude 3.5 | 200K context, vision support |
 | **Google AI Studio** | Gemini 2.5 Pro/Flash, Gemini 1.5 | 1M+ context, multimodal |
-| **Google Vertex AI** | Gemini, Claude via Model Garden | Enterprise features, Model Garden |
+| **Google Vertex AI** | Gemini, Claude via Model Garden | Enterprise features, multi-region failover |
 | **Groq** | Llama 4, Llama 3.3, Mixtral | Ultra-fast inference on LPU |
 | **Mistral** | Devstral, Large, Medium | Code specialist, function calling |
 | **Azure OpenAI** | GPT-4, GPT-3.5 | Enterprise security, compliance |

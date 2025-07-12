@@ -33,6 +33,8 @@ type Config struct {
 	HotReload *HotReloadConfig
 	// Enable caching
 	EnableCache bool
+	// ChatUI configuration
+	ChatUI *config.ChatUIConfig
 }
 
 // HotReloadConfig holds hot reload settings
@@ -114,5 +116,12 @@ func WithCache(enable bool) Option {
 func WithConfig(appCfg *Config) Option {
 	return func(cfg *Config) {
 		*cfg = *appCfg
+	}
+}
+
+// WithChatUI sets the ChatUI configuration
+func WithChatUI(chatUICfg *config.ChatUIConfig) Option {
+	return func(cfg *Config) {
+		cfg.ChatUI = chatUICfg
 	}
 }

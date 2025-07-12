@@ -424,3 +424,77 @@ func TestLoggingConfig_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestChatUIConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  ChatUIConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid config",
+			config: ChatUIConfig{
+				Enabled:     true,
+				Title:       "Starport Chat",
+				Theme:       "light",
+				AllowKeyGen: true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid dark theme",
+			config: ChatUIConfig{
+				Enabled:     true,
+				Title:       "Starport Chat",
+				Theme:       "dark",
+				AllowKeyGen: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid theme",
+			config: ChatUIConfig{
+				Enabled:     true,
+				Title:       "Starport Chat",
+				Theme:       "purple",
+				AllowKeyGen: true,
+			},
+			wantErr: true,
+			errMsg:  "invalid theme: purple (must be 'light' or 'dark')",
+		},
+		{
+			name: "empty title",
+			config: ChatUIConfig{
+				Enabled:     true,
+				Title:       "",
+				Theme:       "light",
+				AllowKeyGen: true,
+			},
+			wantErr: true,
+			errMsg:  "ChatUI title cannot be empty",
+		},
+		{
+			name: "disabled config still validates",
+			config: ChatUIConfig{
+				Enabled:     false,
+				Title:       "Test",
+				Theme:       "light",
+				AllowKeyGen: false,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMsg != "" && err.Error() != tt.errMsg {
+				t.Errorf("Validate() error message = %v, want %v", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}
