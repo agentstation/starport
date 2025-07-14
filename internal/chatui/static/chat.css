@@ -1416,38 +1416,51 @@ a.btn-icon {
 
 #token-count {
   font-weight: 500;
-  flex: 0 0 auto;
+  flex: 0 0 120px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 #cost-estimate {
   text-align: right;
-  flex: 0 0 auto;
-  max-width: 300px;
+  flex: 0 0 120px;
+  min-height: 1em;
 }
 
 /* Attribution styling */
 .attribution {
-  flex: 1;
+  flex: 0 0 auto;
+  margin: 0 auto;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary);
-  opacity: 0.6;
+  opacity: 0.4;
   transition: opacity 0.2s ease;
 }
 
-.attribution a {
-  color: inherit;
+.attribution a,
+.attribution a:link,
+.attribution a:visited,
+.attribution a:active {
+  color: inherit !important;
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .attribution:hover {
-  opacity: 0.8;
+  opacity: 0.5;
 }
 
 .attribution a:hover {
+  color: inherit !important;
+  opacity: 0.7;
   border-bottom-color: currentColor;
+}
+
+.attribution .heart {
+  opacity: 0.5;
+  font-size: 9px;
 }
 
 /* Modal */
