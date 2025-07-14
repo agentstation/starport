@@ -20,6 +20,9 @@
     expandedReasoning: new Set(), // Track which messages have expanded reasoning
     autoScroll: true, // Track if auto-scroll is enabled
     userScrolled: false, // Track if user has manually scrolled
+    pinnedChats: JSON.parse(
+      localStorage.getItem("starport_pinned_chats") || "[]"
+    ), // Track pinned chat IDs
   };
 
   // DOM Elements
@@ -36,13 +39,14 @@
     newChatBtn: document.getElementById("new-chat"),
     chatList: document.getElementById("chat-list"),
     clearAllBtn: document.getElementById("clear-all"),
-    
+
     // Search
     searchBtn: document.getElementById("search-btn"),
     searchModal: document.getElementById("search-modal"),
     searchInput: document.getElementById("search-input"),
     searchResults: document.getElementById("search-results"),
     plusBtn: document.getElementById("plus-btn"),
+    sidebarSearchInput: document.getElementById("sidebar-search-input"),
 
     // Chat
     modelSelect: document.getElementById("model-select"),
@@ -75,19 +79,15 @@
     setupEventListeners();
     setupScrollHandlers();
     updateUI();
-    
+
     // Set initial sidebar state based on screen size
     const app = document.getElementById("app");
-    const isMobile = window.innerWidth <= 768;
-    
-    if (!isMobile) {
+
+    if (window.innerWidth > 768) {
       // Desktop: sidebar is visible by default
       elements.sidebar.classList.add("active");
       app.classList.add("sidebar-open");
-      elements.modelSelect.parentElement.style.marginLeft = '0';
-    } else {
-      // Mobile: sidebar is closed by default
-      elements.modelSelect.parentElement.style.marginLeft = '100px';
+      elements.drawerToggle.setAttribute("aria-expanded", "true");
     }
 
     // Initialize Prism.js theme based on current theme
@@ -213,20 +213,62 @@
     }
     elements.drawerToggle.addEventListener("click", toggleSidebar);
     elements.sidebarBackdrop.addEventListener("click", closeSidebar);
-    elements.newChatBtn.addEventListener("click", createNewChat);
+    elements.newChatBtn.addEventListener("click", () => {
+      const currentChat = state.chats[state.currentChatId];
+      // If current chat is temporary and has no messages, just focus input
+      if (
+        currentChat &&
+        currentChat.temporary &&
+        currentChat.messages.length === 0
+      ) {
+        elements.messageInput.focus();
+      } else {
+        createNewChat();
+      }
+    });
     elements.clearAllBtn.addEventListener("click", clearAllChats);
 
     // Search
     elements.searchBtn.addEventListener("click", openSearch);
-    elements.plusBtn.addEventListener("click", createNewChat);
-    document.querySelector(".search-close").addEventListener("click", closeSearch);
+    elements.plusBtn.addEventListener("click", () => {
+      const currentChat = state.chats[state.currentChatId];
+      // If current chat is temporary and has no messages, just focus input
+      if (
+        currentChat &&
+        currentChat.temporary &&
+        currentChat.messages.length === 0
+      ) {
+        elements.messageInput.focus();
+      } else {
+        createNewChat();
+      }
+    });
+    document
+      .querySelector(".search-close")
+      .addEventListener("click", closeSearch);
     elements.searchModal.addEventListener("click", (e) => {
       if (e.target === elements.searchModal) {
         closeSearch();
       }
     });
-    elements.searchInput.addEventListener("input", debounce(performSearch, 300));
+    elements.searchInput.addEventListener(
+      "input",
+      debounce(performSearch, 300)
+    );
     elements.searchInput.addEventListener("keydown", handleSearchKeydown);
+
+    // Sidebar search
+    elements.sidebarSearchInput.addEventListener(
+      "input",
+      debounce(filterChatList, 150)
+    );
+    elements.sidebarSearchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        elements.sidebarSearchInput.value = "";
+        filterChatList();
+        elements.sidebarSearchInput.blur();
+      }
+    });
 
     // Model selection
     elements.modelSelect.addEventListener("change", (e) => {
@@ -257,8 +299,7 @@
     // Error toast
     document.querySelector(".toast-close").addEventListener("click", hideError);
     elements.toastMessage.addEventListener("click", () => {
-      elements.toastDetails.style.display =
-        elements.toastDetails.style.display === "none" ? "block" : "none";
+      elements.toastDetails.classList.toggle("hidden");
     });
 
     // Global keyboard shortcuts
@@ -269,33 +310,39 @@
         openSearch();
       }
       // Escape to close search
-      if (e.key === "Escape" && elements.searchModal.classList.contains("active")) {
+      if (
+        e.key === "Escape" &&
+        elements.searchModal.classList.contains("active")
+      ) {
         closeSearch();
       }
     });
 
     // Handle window resize to sync sidebar state with breakpoint
-    window.addEventListener('resize', debounce(() => {
-      const isMobile = window.innerWidth <= 768;
-      const app = document.getElementById("app");
-      
-      if (isMobile) {
-        // Mobile: close sidebar by default
-        if (elements.sidebar.classList.contains("active")) {
-          elements.sidebar.classList.remove("active");
-          elements.sidebarBackdrop.classList.remove("active");
-          app.classList.remove("sidebar-open");
-          elements.modelSelect.parentElement.style.marginLeft = '100px';
+    window.addEventListener(
+      "resize",
+      debounce(() => {
+        const isMobile = window.innerWidth <= 768;
+        const app = document.getElementById("app");
+
+        if (isMobile) {
+          // Mobile: close sidebar by default
+          if (elements.sidebar.classList.contains("active")) {
+            elements.sidebar.classList.remove("active");
+            elements.sidebarBackdrop.classList.remove("active");
+            app.classList.remove("sidebar-open");
+            elements.modelSelect.parentElement.style.marginLeft = "100px";
+          }
+        } else {
+          // Desktop: open sidebar by default
+          if (!elements.sidebar.classList.contains("active")) {
+            elements.sidebar.classList.add("active");
+            app.classList.add("sidebar-open");
+            elements.modelSelect.parentElement.style.marginLeft = "0";
+          }
         }
-      } else {
-        // Desktop: open sidebar by default
-        if (!elements.sidebar.classList.contains("active")) {
-          elements.sidebar.classList.add("active");
-          app.classList.add("sidebar-open");
-          elements.modelSelect.parentElement.style.marginLeft = '0';
-        }
-      }
-    }, 150));
+      }, 150)
+    );
 
     // Keyboard shortcuts
     document.addEventListener("keydown", handleKeyboardShortcuts);
@@ -432,28 +479,26 @@
   // Sidebar Management
   function toggleSidebar() {
     const app = document.getElementById("app");
-    
+
     elements.sidebar.classList.toggle("active");
     elements.sidebarBackdrop.classList.toggle("active");
-    
+
     // Toggle sidebar-open class on app
     if (elements.sidebar.classList.contains("active")) {
       app.classList.add("sidebar-open");
-      // Remove margin when sidebar is open (only 1 icon visible)
-      elements.modelSelect.parentElement.style.marginLeft = '0';
+      elements.drawerToggle.setAttribute("aria-expanded", "true");
     } else {
       app.classList.remove("sidebar-open");
-      // Add margin when sidebar is closed (3 icons visible)
-      elements.modelSelect.parentElement.style.marginLeft = '100px';
+      elements.drawerToggle.setAttribute("aria-expanded", "false");
     }
   }
 
   function closeSidebar() {
+    const app = document.getElementById("app");
     elements.sidebar.classList.remove("active");
     elements.sidebarBackdrop.classList.remove("active");
-    document.getElementById("app").classList.remove("sidebar-open");
-    // Add margin when closing sidebar
-    elements.modelSelect.parentElement.style.marginLeft = '100px';
+    app.classList.remove("sidebar-open");
+    elements.drawerToggle.setAttribute("aria-expanded", "false");
   }
 
   // Chat Management
@@ -465,12 +510,12 @@
       messages: [],
       created: Date.now(),
       lastModified: Date.now(),
+      temporary: true, // Mark as temporary until first message
     };
 
     state.chats[chatId] = chat;
     state.currentChatId = chatId;
-    saveChats();
-    updateChatList();
+    // Don't save temporary chats to localStorage or update chat list
     updateMessagesUI();
     updateConversationStats();
     elements.messageInput.focus();
@@ -487,6 +532,15 @@
 
   function deleteChat(chatId) {
     delete state.chats[chatId];
+
+    // Remove from pinned chats if it was pinned
+    if (state.pinnedChats.includes(chatId)) {
+      state.pinnedChats = state.pinnedChats.filter((id) => id !== chatId);
+      localStorage.setItem(
+        "starport_pinned_chats",
+        JSON.stringify(state.pinnedChats)
+      );
+    }
 
     if (state.currentChatId === chatId) {
       const remainingChats = Object.keys(state.chats);
@@ -506,6 +560,38 @@
     }
   }
 
+  function renameChat(chatId) {
+    const chat = state.chats[chatId];
+    if (!chat) return;
+
+    const newTitle = prompt("Enter new chat title:", chat.title);
+    if (newTitle && newTitle.trim()) {
+      chat.title = newTitle.trim();
+      chat.lastModified = Date.now();
+      saveChats();
+      updateChatList();
+    }
+  }
+
+  function togglePinChat(chatId) {
+    const isPinned = state.pinnedChats.includes(chatId);
+
+    if (isPinned) {
+      // Unpin
+      state.pinnedChats = state.pinnedChats.filter((id) => id !== chatId);
+    } else {
+      // Pin
+      state.pinnedChats.push(chatId);
+    }
+
+    // Save pinned state
+    localStorage.setItem(
+      "starport_pinned_chats",
+      JSON.stringify(state.pinnedChats)
+    );
+    updateChatList();
+  }
+
   function clearAllChats() {
     if (
       confirm(
@@ -513,7 +599,9 @@
       )
     ) {
       state.chats = {};
+      state.pinnedChats = [];
       localStorage.removeItem("starport_chats");
+      localStorage.removeItem("starport_pinned_chats");
       createNewChat();
     }
   }
@@ -526,6 +614,76 @@
         firstMessage.substring(0, 50) + (firstMessage.length > 50 ? "..." : "");
       saveChats();
       updateChatList();
+    }
+  }
+
+  async function generateChatTitle(chatId, userMessage) {
+    try {
+      const chat = state.chats[chatId];
+      if (!chat) return;
+
+      // Build context from existing messages if available
+      let contextMessage = userMessage;
+      if (chat.messages.length > 0) {
+        // Include first user message and current message for better context
+        const firstUserMsg = chat.messages.find(m => m.role === "user");
+        if (firstUserMsg && firstUserMsg.content !== userMessage) {
+          contextMessage = `First message: ${firstUserMsg.content}\n\nLatest message: ${userMessage}`;
+        }
+      }
+
+      const response = await fetch(`${config.apiBaseURL}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "google-aistudio/gemini-1.5-flash",
+          messages: [
+            {
+              role: "system",
+              content:
+                "Generate a concise, descriptive title (max 6 words) for a chat based on the conversation. Respond with ONLY the title, no quotes or punctuation.",
+            },
+            {
+              role: "user",
+              content: contextMessage,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 20,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate title");
+      }
+
+      const data = await response.json();
+      const title = data.choices[0].message.content.trim();
+      
+      console.log("Generated title:", title); // Debug log
+
+      // Update chat title if chat still exists
+      if (chat && title) {
+        chat.title = title;
+        
+        // Update the chat list immediately - before saving
+        updateChatList();
+        
+        // Then save to localStorage
+        saveChats();
+        
+        // If this is the current chat, update the page title too
+        if (chatId === state.currentChatId) {
+          document.title = `${title} - ${config.title || 'Starport LLM Chat'}`;
+        }
+      }
+    } catch (error) {
+      console.error("Error generating chat title:", error);
+      // Don't remove the generating flag on error - let it stay until message generation completes
+      // The title will just remain as the truncated first message
     }
   }
 
@@ -600,6 +758,14 @@
       state.isGenerating = false;
 
       assistantMessage.streaming = false;
+
+      // Clear generation flag for current chat
+      const chat = state.chats[state.currentChatId];
+      if (chat && chat.isGenerating) {
+        chat.isGenerating = false;
+        updateChatList();
+      }
+
       saveChats();
       updateUI();
       // Don't rebuild the entire UI, just update the final state
@@ -617,6 +783,9 @@
     const chat = state.chats[state.currentChatId];
     if (!chat) return;
 
+    // Check if this is the first message in a temporary chat
+    const isFirstMessage = chat.temporary && chat.messages.length === 0;
+
     // Add user message
     const userMessage = {
       role: "user",
@@ -629,9 +798,29 @@
     elements.messageInput.value = "";
     autoResizeTextarea(elements.messageInput);
 
+    // Mark chat as generating
+    chat.isGenerating = true;
+    updateChatList();
+
+    // Handle first message in temporary chat
+    if (isFirstMessage) {
+      // Mark as permanent and save
+      chat.temporary = false;
+
+      // Set initial title from first message
+      chat.title =
+        message.substring(0, 50) + (message.length > 50 ? "..." : "");
+
+      // Save chat and update list
+      saveChats();
+      updateChatList();
+
+      // Start concurrent title generation
+      generateChatTitle(state.currentChatId, message);
+    }
+
     // Update UI
     updateMessagesUI();
-    updateChatTitle(state.currentChatId, message);
 
     // Prepare assistant message
     const assistantMessage = {
@@ -880,29 +1069,311 @@
     elements.sendBtn.disabled = !canSend;
 
     // Show/hide send vs stop button
-    elements.sendBtn.style.display = state.isGenerating ? "none" : "block";
-    elements.stopBtn.style.display = state.isGenerating ? "block" : "none";
+    elements.sendBtn.classList.toggle("hidden", state.isGenerating);
+    elements.stopBtn.classList.toggle("hidden", !state.isGenerating);
   }
 
   function updateChatList() {
     elements.chatList.innerHTML = "";
 
-    const sortedChats = Object.values(state.chats).sort(
+    // Filter out temporary chats
+    const permanentChats = Object.values(state.chats).filter(
+      (chat) => !chat.temporary
+    );
+
+    const sortedChats = permanentChats.sort(
       (a, b) => b.lastModified - a.lastModified
     );
 
-    sortedChats.forEach((chat) => {
-      const chatItem = document.createElement("div");
-      chatItem.className =
-        "chat-item" + (chat.id === state.currentChatId ? " active" : "");
-      chatItem.innerHTML = `
-                <div class="chat-item-title">${escapeHtml(chat.title)}</div>
-                <div class="chat-item-date">${formatDate(
-                  chat.lastModified
-                )}</div>
-            `;
-      chatItem.addEventListener("click", () => loadChat(chat.id));
-      elements.chatList.appendChild(chatItem);
+    const groups = groupChatsByTime(sortedChats);
+
+    // Render each group that has chats
+    Object.entries(groups).forEach(([groupKey, group]) => {
+      if (group.chats.length === 0) return;
+
+      // Create group container
+      const groupContainer = document.createElement("div");
+      groupContainer.className = "chat-group";
+
+      // Create group header
+      const groupHeader = document.createElement("h3");
+      groupHeader.className = "chat-group-header";
+      groupHeader.textContent = group.label;
+      groupContainer.appendChild(groupHeader);
+
+      // Create container for chat items
+      const groupItems = document.createElement("div");
+      groupItems.className = "chat-group-items";
+
+      // Add chat items to the group
+      group.chats.forEach((chat) => {
+        const chatItem = document.createElement("div");
+        chatItem.className = "chat-item-wrapper";
+
+        const isActive = chat.id === state.currentChatId;
+        const isPinned = state.pinnedChats.includes(chat.id);
+
+        chatItem.innerHTML = `
+          <div class="chat-item ${isActive ? "active" : ""}">
+            <button class="chat-item-button" data-chat-id="${chat.id}">
+              <div class="chat-item-content">
+                <span class="chat-item-title" title="${escapeHtml(
+                  chat.title
+                )}">${escapeHtml(chat.title)}</span>
+              </div>
+            </button>
+            ${
+              chat.isGenerating
+                ? `
+              <div class="chat-item-generating">
+                <svg class="icon loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/>
+                </svg>
+              </div>
+            `
+                : `
+              <div class="chat-item-actions">
+                <div class="chat-item-gradient"></div>
+                <button class="chat-action-btn ${
+                  isPinned ? "pinned" : ""
+                }" data-action="pin" data-chat-id="${chat.id}" title="${
+                    isPinned ? "Unpin chat" : "Pin chat"
+                  }">
+                  <svg class="icon" viewBox="0 0 24 24" fill="${
+                    isPinned ? "currentColor" : "none"
+                  }" stroke="currentColor" stroke-width="2">
+                    <path d="M12 17v5"></path>
+                    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path>
+                  </svg>
+                </button>
+                <button class="chat-action-btn" data-action="rename" data-chat-id="${
+                  chat.id
+                }" title="Rename chat">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+                <button class="chat-action-btn chat-action-delete" data-action="delete" data-chat-id="${
+                  chat.id
+                }" title="Delete chat">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            `
+            }
+          </div>
+        `;
+
+        // Add click event to the button
+        const button = chatItem.querySelector(".chat-item-button");
+        button.addEventListener("click", () => loadChat(chat.id));
+
+        // Add action button events only if not generating
+        if (!chat.isGenerating) {
+          const pinBtn = chatItem.querySelector('[data-action="pin"]');
+          const renameBtn = chatItem.querySelector('[data-action="rename"]');
+          const deleteBtn = chatItem.querySelector('[data-action="delete"]');
+
+          if (pinBtn) {
+            pinBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              togglePinChat(chat.id);
+            });
+          }
+
+          if (renameBtn) {
+            renameBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              renameChat(chat.id);
+            });
+          }
+
+          if (deleteBtn) {
+            deleteBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              if (confirm("Delete this chat?")) {
+                deleteChat(chat.id);
+              }
+            });
+          }
+        }
+
+        groupItems.appendChild(chatItem);
+      });
+
+      groupContainer.appendChild(groupItems);
+      elements.chatList.appendChild(groupContainer);
+    });
+  }
+
+  function filterChatList() {
+    const searchTerm = elements.sidebarSearchInput.value.toLowerCase().trim();
+
+    // If no search term, show all chats
+    if (!searchTerm) {
+      updateChatList();
+      return;
+    }
+
+    elements.chatList.innerHTML = "";
+
+    // Filter out temporary chats
+    const permanentChats = Object.values(state.chats).filter(
+      (chat) => !chat.temporary
+    );
+
+    const sortedChats = permanentChats.sort(
+      (a, b) => b.lastModified - a.lastModified
+    );
+
+    const filteredChats = sortedChats.filter((chat) => {
+      // Search in chat title
+      if (chat.title.toLowerCase().includes(searchTerm)) {
+        return true;
+      }
+
+      // Search in message content
+      return chat.messages.some((message) =>
+        message.content.toLowerCase().includes(searchTerm)
+      );
+    });
+
+    if (filteredChats.length === 0) {
+      elements.chatList.innerHTML = `
+        <div class="chat-search-empty">
+          <p>No chats found for "${escapeHtml(searchTerm)}"</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Group the filtered chats
+    const groups = groupChatsByTime(filteredChats);
+
+    // Render each group that has chats
+    Object.entries(groups).forEach(([groupKey, group]) => {
+      if (group.chats.length === 0) return;
+
+      // Create group container
+      const groupContainer = document.createElement("div");
+      groupContainer.className = "chat-group";
+
+      // Create group header
+      const groupHeader = document.createElement("h3");
+      groupHeader.className = "chat-group-header";
+      groupHeader.textContent = group.label;
+      groupContainer.appendChild(groupHeader);
+
+      // Create container for chat items
+      const groupItems = document.createElement("div");
+      groupItems.className = "chat-group-items";
+
+      // Add chat items to the group
+      group.chats.forEach((chat) => {
+        const chatItem = document.createElement("div");
+        chatItem.className = "chat-item-wrapper";
+
+        const isActive = chat.id === state.currentChatId;
+        const isPinned = state.pinnedChats.includes(chat.id);
+
+        chatItem.innerHTML = `
+          <div class="chat-item ${isActive ? "active" : ""}">
+            <button class="chat-item-button" data-chat-id="${chat.id}">
+              <div class="chat-item-content">
+                <span class="chat-item-title" title="${escapeHtml(
+                  chat.title
+                )}">${escapeHtml(chat.title)}</span>
+              </div>
+            </button>
+            ${
+              chat.isGenerating
+                ? `
+              <div class="chat-item-generating">
+                <svg class="icon loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/>
+                </svg>
+              </div>
+            `
+                : `
+              <div class="chat-item-actions">
+                <div class="chat-item-gradient"></div>
+                <button class="chat-action-btn ${
+                  isPinned ? "pinned" : ""
+                }" data-action="pin" data-chat-id="${chat.id}" title="${
+                    isPinned ? "Unpin chat" : "Pin chat"
+                  }">
+                  <svg class="icon" viewBox="0 0 24 24" fill="${
+                    isPinned ? "currentColor" : "none"
+                  }" stroke="currentColor" stroke-width="2">
+                    <path d="M12 17v5"></path>
+                    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path>
+                  </svg>
+                </button>
+                <button class="chat-action-btn" data-action="rename" data-chat-id="${
+                  chat.id
+                }" title="Rename chat">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+                <button class="chat-action-btn chat-action-delete" data-action="delete" data-chat-id="${
+                  chat.id
+                }" title="Delete chat">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path>
+                  </svg>
+                </button>
+              </div>
+            `
+            }
+          </div>
+        `;
+
+        // Add click event to the button
+        const button = chatItem.querySelector(".chat-item-button");
+        button.addEventListener("click", () => loadChat(chat.id));
+
+        // Add action button events only if not generating
+        if (!chat.isGenerating) {
+          const pinBtn = chatItem.querySelector('[data-action="pin"]');
+          const renameBtn = chatItem.querySelector('[data-action="rename"]');
+          const deleteBtn = chatItem.querySelector('[data-action="delete"]');
+
+          if (pinBtn) {
+            pinBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              togglePinChat(chat.id);
+            });
+          }
+
+          if (renameBtn) {
+            renameBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              renameChat(chat.id);
+            });
+          }
+
+          if (deleteBtn) {
+            deleteBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              if (confirm("Delete this chat?")) {
+                deleteChat(chat.id);
+              }
+            });
+          }
+        }
+
+        groupItems.appendChild(chatItem);
+      });
+
+      groupContainer.appendChild(groupItems);
+      elements.chatList.appendChild(groupContainer);
     });
   }
 
@@ -959,8 +1430,12 @@
     const textEl = messageEl.querySelector(".message-text");
     if (textEl && message.content) {
       // Simply update content without any fade effects
-      textEl.innerHTML = formatMessageContent(message.content);
-      renderSpecialContent(textEl);
+      if (message.role === "user") {
+        textEl.innerHTML = escapeHtml(message.content);
+      } else {
+        textEl.innerHTML = formatMessageContent(message.content);
+        renderSpecialContent(textEl);
+      }
     }
 
     // Update or add reasoning section
@@ -1271,12 +1746,16 @@
       // Update text content
       const textEl = messageEl.querySelector(".message-text");
       if (textEl) {
-        let fullHTML = formatMessageContent(message.content);
-        textEl.innerHTML = fullHTML;
+        if (message.role === "user") {
+          textEl.innerHTML = escapeHtml(message.content);
+        } else {
+          let fullHTML = formatMessageContent(message.content);
+          textEl.innerHTML = fullHTML;
 
-        // Render special content after final update
-        if (!message.streaming) {
-          renderSpecialContent(textEl);
+          // Render special content after final update
+          if (!message.streaming) {
+            renderSpecialContent(textEl);
+          }
         }
       }
 
@@ -1570,7 +2049,7 @@
                     : ""
                 }
                 <div class="message-text">
-                    ${formatMessageContent(message.content)}
+                    ${message.role === "user" ? escapeHtml(message.content) : formatMessageContent(message.content)}
                 </div>
                 ${
                   message.role === "assistant" && !message.streaming
@@ -1829,15 +2308,15 @@
       elements.errorJson.textContent = JSON.stringify(error, null, 2);
     }
 
-    elements.errorToast.style.display = "block";
+    elements.errorToast.classList.remove("hidden");
 
     // Auto-hide after 10 seconds
     setTimeout(hideError, 10000);
   }
 
   function hideError() {
-    elements.errorToast.style.display = "none";
-    elements.toastDetails.style.display = "none";
+    elements.errorToast.classList.add("hidden");
+    elements.toastDetails.classList.add("hidden");
   }
 
   // Toast notifications
@@ -1845,11 +2324,11 @@
     // For now, use the error toast for all notifications
     elements.toastMessage.textContent = message;
     elements.errorToast.className = `toast toast-${type}`;
-    elements.errorToast.style.display = "block";
+    elements.errorToast.classList.remove("hidden");
 
     // Auto-hide after 3 seconds for success messages
     setTimeout(() => {
-      elements.errorToast.style.display = "none";
+      elements.errorToast.classList.add("hidden");
     }, 3000);
   }
 
@@ -1889,6 +2368,13 @@
       const saved = localStorage.getItem("starport_chats");
       if (saved) {
         state.chats = JSON.parse(saved);
+
+        // Clean up any temporary chats that shouldn't have been saved
+        Object.keys(state.chats).forEach((chatId) => {
+          if (state.chats[chatId].temporary) {
+            delete state.chats[chatId];
+          }
+        });
       }
     } catch (e) {
       console.error("Failed to load chats:", e);
@@ -1899,6 +2385,50 @@
   // Utility Functions
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  function groupChatsByTime(chats) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+
+    const groups = {
+      pinned: { label: "Pinned", chats: [] },
+      today: { label: "Today", chats: [] },
+      yesterday: { label: "Yesterday", chats: [] },
+      previousWeek: { label: "Previous 7 Days", chats: [] },
+      previousMonth: { label: "Previous 30 Days", chats: [] },
+      older: { label: "Older", chats: [] },
+    };
+
+    chats.forEach((chat) => {
+      // Check if chat is pinned
+      if (state.pinnedChats.includes(chat.id)) {
+        groups.pinned.chats.push(chat);
+      } else {
+        // Group by time for unpinned chats
+        const chatDate = new Date(chat.lastModified);
+
+        if (chatDate >= today) {
+          groups.today.chats.push(chat);
+        } else if (chatDate >= yesterday) {
+          groups.yesterday.chats.push(chat);
+        } else if (chatDate >= weekAgo) {
+          groups.previousWeek.chats.push(chat);
+        } else if (chatDate >= monthAgo) {
+          groups.previousMonth.chats.push(chat);
+        } else {
+          groups.older.chats.push(chat);
+        }
+      }
+    });
+
+    return groups;
   }
 
   function formatDate(timestamp) {
@@ -2400,16 +2930,16 @@
 
   function performSearch() {
     const query = elements.searchInput.value.trim().toLowerCase();
-    
+
     if (!query) {
       elements.searchResults.innerHTML = "";
       return;
     }
 
     const results = [];
-    
+
     // Search through all chats
-    Object.values(state.chats).forEach(chat => {
+    Object.values(state.chats).forEach((chat) => {
       // Search in chat title
       if (chat.title.toLowerCase().includes(query)) {
         results.push({
@@ -2417,10 +2947,11 @@
           title: chat.title,
           type: "title",
           preview: chat.title,
-          date: chat.messages.length > 0 ? chat.messages[0].timestamp : Date.now()
+          date:
+            chat.messages.length > 0 ? chat.messages[0].timestamp : Date.now(),
         });
       }
-      
+
       // Search in messages
       chat.messages.forEach((message, index) => {
         if (message.content && message.content.toLowerCase().includes(query)) {
@@ -2430,7 +2961,7 @@
             type: "message",
             preview: message.content,
             messageIndex: index,
-            date: message.timestamp || Date.now()
+            date: message.timestamp || Date.now(),
           });
         }
       });
@@ -2441,7 +2972,8 @@
 
   function displaySearchResults(results, query) {
     if (results.length === 0) {
-      elements.searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
+      elements.searchResults.innerHTML =
+        '<div class="search-no-results">No results found</div>';
       return;
     }
 
@@ -2449,32 +2981,38 @@
     results.sort((a, b) => b.date - a.date);
 
     // Create result elements
-    elements.searchResults.innerHTML = results.map((result, index) => {
-      const highlighted = highlightText(result.preview, query);
-      const date = new Date(result.date).toLocaleDateString();
-      
-      return `
+    elements.searchResults.innerHTML = results
+      .map((result, index) => {
+        const highlighted = highlightText(result.preview, query);
+        const date = new Date(result.date).toLocaleDateString();
+
+        return `
         <div class="search-result-item" data-index="${index}">
           <div class="search-result-title">${escapeHtml(result.title)}</div>
           <div class="search-result-preview">${highlighted}</div>
           <div class="search-result-date">${date}</div>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
 
     // Add click handlers
-    const resultItems = elements.searchResults.querySelectorAll(".search-result-item");
+    const resultItems = elements.searchResults.querySelectorAll(
+      ".search-result-item"
+    );
     resultItems.forEach((item, index) => {
       item.addEventListener("click", () => {
         const result = results[index];
         loadChat(result.chatId);
         closeSearch();
-        
+
         // Scroll to specific message if it's a message result
         if (result.type === "message" && result.messageIndex !== undefined) {
           setTimeout(() => {
             const chat = state.chats[result.chatId];
-            const messageEl = document.querySelector(`#message-${chat.messages[result.messageIndex].timestamp}`);
+            const messageEl = document.querySelector(
+              `#message-${chat.messages[result.messageIndex].timestamp}`
+            );
             if (messageEl) {
               messageEl.scrollIntoView({ behavior: "smooth", block: "center" });
               messageEl.classList.add("highlight");
@@ -2497,8 +3035,12 @@
   }
 
   function handleSearchKeydown(e) {
-    const results = elements.searchResults.querySelectorAll(".search-result-item");
-    const selected = elements.searchResults.querySelector(".search-result-item.selected");
+    const results = elements.searchResults.querySelectorAll(
+      ".search-result-item"
+    );
+    const selected = elements.searchResults.querySelector(
+      ".search-result-item.selected"
+    );
     let currentIndex = -1;
 
     if (selected) {
@@ -2514,7 +3056,7 @@
           results[currentIndex + 1].scrollIntoView({ block: "nearest" });
         }
         break;
-        
+
       case "ArrowUp":
         e.preventDefault();
         if (currentIndex > 0) {
@@ -2523,7 +3065,7 @@
           results[currentIndex - 1].scrollIntoView({ block: "nearest" });
         }
         break;
-        
+
       case "Enter":
         e.preventDefault();
         if (selected) {
