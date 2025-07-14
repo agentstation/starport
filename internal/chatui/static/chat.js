@@ -31,9 +31,18 @@
     // Sidebar
     sidebar: document.getElementById("sidebar"),
     sidebarToggle: document.getElementById("sidebar-toggle"),
+    drawerToggle: document.getElementById("drawer-toggle"),
+    sidebarBackdrop: document.getElementById("sidebar-backdrop"),
     newChatBtn: document.getElementById("new-chat"),
     chatList: document.getElementById("chat-list"),
     clearAllBtn: document.getElementById("clear-all"),
+    
+    // Search
+    searchBtn: document.getElementById("search-btn"),
+    searchModal: document.getElementById("search-modal"),
+    searchInput: document.getElementById("search-input"),
+    searchResults: document.getElementById("search-results"),
+    plusBtn: document.getElementById("plus-btn"),
 
     // Chat
     modelSelect: document.getElementById("model-select"),
@@ -66,6 +75,19 @@
     setupEventListeners();
     setupScrollHandlers();
     updateUI();
+    
+    // Set initial sidebar state based on screen size
+    const app = document.getElementById("app");
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) {
+      // Desktop: sidebar is visible by default
+      elements.sidebar.classList.add("active");
+      app.classList.add("sidebar-open");
+      elements.modelSelect.parentElement.style.marginLeft = '0';
+    } else {
+      // Mobile: sidebar is closed by default
+      elements.modelSelect.parentElement.style.marginLeft = '100px';
+    }
 
     // Initialize Prism.js theme based on current theme
     const currentTheme = document.documentElement.getAttribute("data-theme");
@@ -185,9 +207,25 @@
     });
 
     // Sidebar
-    elements.sidebarToggle.addEventListener("click", toggleSidebar);
+    if (elements.sidebarToggle) {
+      elements.sidebarToggle.addEventListener("click", toggleSidebar);
+    }
+    elements.drawerToggle.addEventListener("click", toggleSidebar);
+    elements.sidebarBackdrop.addEventListener("click", closeSidebar);
     elements.newChatBtn.addEventListener("click", createNewChat);
     elements.clearAllBtn.addEventListener("click", clearAllChats);
+
+    // Search
+    elements.searchBtn.addEventListener("click", openSearch);
+    elements.plusBtn.addEventListener("click", createNewChat);
+    document.querySelector(".search-close").addEventListener("click", closeSearch);
+    elements.searchModal.addEventListener("click", (e) => {
+      if (e.target === elements.searchModal) {
+        closeSearch();
+      }
+    });
+    elements.searchInput.addEventListener("input", debounce(performSearch, 300));
+    elements.searchInput.addEventListener("keydown", handleSearchKeydown);
 
     // Model selection
     elements.modelSelect.addEventListener("change", (e) => {
@@ -221,6 +259,42 @@
       elements.toastDetails.style.display =
         elements.toastDetails.style.display === "none" ? "block" : "none";
     });
+
+    // Global keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      // Ctrl/Cmd + K for search
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        openSearch();
+      }
+      // Escape to close search
+      if (e.key === "Escape" && elements.searchModal.classList.contains("active")) {
+        closeSearch();
+      }
+    });
+
+    // Handle window resize to sync sidebar state with breakpoint
+    window.addEventListener('resize', debounce(() => {
+      const isMobile = window.innerWidth <= 768;
+      const app = document.getElementById("app");
+      
+      if (isMobile) {
+        // Mobile: close sidebar by default
+        if (elements.sidebar.classList.contains("active")) {
+          elements.sidebar.classList.remove("active");
+          elements.sidebarBackdrop.classList.remove("active");
+          app.classList.remove("sidebar-open");
+          elements.modelSelect.parentElement.style.marginLeft = '100px';
+        }
+      } else {
+        // Desktop: open sidebar by default
+        if (!elements.sidebar.classList.contains("active")) {
+          elements.sidebar.classList.add("active");
+          app.classList.add("sidebar-open");
+          elements.modelSelect.parentElement.style.marginLeft = '0';
+        }
+      }
+    }, 150));
 
     // Keyboard shortcuts
     document.addEventListener("keydown", handleKeyboardShortcuts);
@@ -357,6 +431,27 @@
   // Sidebar Management
   function toggleSidebar() {
     elements.sidebar.classList.toggle("active");
+    elements.sidebarBackdrop.classList.toggle("active");
+    
+    // Toggle sidebar-open class on app
+    const app = document.getElementById("app");
+    if (elements.sidebar.classList.contains("active")) {
+      app.classList.add("sidebar-open");
+      // Remove margin when sidebar is open (only 1 icon visible)
+      elements.modelSelect.parentElement.style.marginLeft = '0';
+    } else {
+      app.classList.remove("sidebar-open");
+      // Add margin when sidebar is closed (3 icons visible)
+      elements.modelSelect.parentElement.style.marginLeft = '100px';
+    }
+  }
+
+  function closeSidebar() {
+    elements.sidebar.classList.remove("active");
+    elements.sidebarBackdrop.classList.remove("active");
+    document.getElementById("app").classList.remove("sidebar-open");
+    // Add margin when closing sidebar
+    elements.modelSelect.parentElement.style.marginLeft = '100px';
   }
 
   // Chat Management
@@ -819,7 +914,7 @@
       elements.messages.innerHTML = `
                 <div class="welcome-message">
                     <h2>Welcome to ${escapeHtml(
-                      config.title || "Starport Chat"
+                      config.title || "Starport LLM Chat"
                     )}</h2>
                     <p>Select a model and start chatting!</p>
                 </div>
@@ -2286,6 +2381,168 @@
       await generate(newAssistantMessage);
     }
   };
+
+  // Search functionality
+  function openSearch() {
+    elements.searchModal.classList.add("active");
+    elements.searchInput.value = "";
+    elements.searchInput.focus();
+    elements.searchResults.innerHTML = "";
+  }
+
+  function closeSearch() {
+    elements.searchModal.classList.remove("active");
+    elements.searchInput.value = "";
+    elements.searchResults.innerHTML = "";
+  }
+
+  function performSearch() {
+    const query = elements.searchInput.value.trim().toLowerCase();
+    
+    if (!query) {
+      elements.searchResults.innerHTML = "";
+      return;
+    }
+
+    const results = [];
+    
+    // Search through all chats
+    Object.values(state.chats).forEach(chat => {
+      // Search in chat title
+      if (chat.title.toLowerCase().includes(query)) {
+        results.push({
+          chatId: chat.id,
+          title: chat.title,
+          type: "title",
+          preview: chat.title,
+          date: chat.messages.length > 0 ? chat.messages[0].timestamp : Date.now()
+        });
+      }
+      
+      // Search in messages
+      chat.messages.forEach((message, index) => {
+        if (message.content && message.content.toLowerCase().includes(query)) {
+          results.push({
+            chatId: chat.id,
+            title: chat.title,
+            type: "message",
+            preview: message.content,
+            messageIndex: index,
+            date: message.timestamp || Date.now()
+          });
+        }
+      });
+    });
+
+    displaySearchResults(results, query);
+  }
+
+  function displaySearchResults(results, query) {
+    if (results.length === 0) {
+      elements.searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
+      return;
+    }
+
+    // Sort results by date (newest first)
+    results.sort((a, b) => b.date - a.date);
+
+    // Create result elements
+    elements.searchResults.innerHTML = results.map((result, index) => {
+      const highlighted = highlightText(result.preview, query);
+      const date = new Date(result.date).toLocaleDateString();
+      
+      return `
+        <div class="search-result-item" data-index="${index}">
+          <div class="search-result-title">${escapeHtml(result.title)}</div>
+          <div class="search-result-preview">${highlighted}</div>
+          <div class="search-result-date">${date}</div>
+        </div>
+      `;
+    }).join("");
+
+    // Add click handlers
+    const resultItems = elements.searchResults.querySelectorAll(".search-result-item");
+    resultItems.forEach((item, index) => {
+      item.addEventListener("click", () => {
+        const result = results[index];
+        loadChat(result.chatId);
+        closeSearch();
+        
+        // Scroll to specific message if it's a message result
+        if (result.type === "message" && result.messageIndex !== undefined) {
+          setTimeout(() => {
+            const chat = state.chats[result.chatId];
+            const messageEl = document.querySelector(`#message-${chat.messages[result.messageIndex].timestamp}`);
+            if (messageEl) {
+              messageEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              messageEl.classList.add("highlight");
+              setTimeout(() => messageEl.classList.remove("highlight"), 2000);
+            }
+          }, 100);
+        }
+      });
+    });
+  }
+
+  function highlightText(text, query) {
+    const escaped = escapeHtml(text);
+    const regex = new RegExp(`(${escapeRegExp(query)})`, "gi");
+    return escaped.replace(regex, '<span class="search-highlight">$1</span>');
+  }
+
+  function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function handleSearchKeydown(e) {
+    const results = elements.searchResults.querySelectorAll(".search-result-item");
+    const selected = elements.searchResults.querySelector(".search-result-item.selected");
+    let currentIndex = -1;
+
+    if (selected) {
+      currentIndex = Array.from(results).indexOf(selected);
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        if (currentIndex < results.length - 1) {
+          if (selected) selected.classList.remove("selected");
+          results[currentIndex + 1].classList.add("selected");
+          results[currentIndex + 1].scrollIntoView({ block: "nearest" });
+        }
+        break;
+        
+      case "ArrowUp":
+        e.preventDefault();
+        if (currentIndex > 0) {
+          if (selected) selected.classList.remove("selected");
+          results[currentIndex - 1].classList.add("selected");
+          results[currentIndex - 1].scrollIntoView({ block: "nearest" });
+        }
+        break;
+        
+      case "Enter":
+        e.preventDefault();
+        if (selected) {
+          selected.click();
+        }
+        break;
+    }
+  }
+
+  // Debounce helper
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
 
   // Initialize on load
   init();

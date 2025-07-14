@@ -436,7 +436,7 @@ func TestChatUIConfig_Validate(t *testing.T) {
 			name: "valid config",
 			config: ChatUIConfig{
 				Enabled:     true,
-				Title:       "Starport Chat",
+				Title:       "Starport LLM Chat",
 				Theme:       "light",
 				AllowKeyGen: true,
 			},
@@ -446,7 +446,7 @@ func TestChatUIConfig_Validate(t *testing.T) {
 			name: "valid dark theme",
 			config: ChatUIConfig{
 				Enabled:     true,
-				Title:       "Starport Chat",
+				Title:       "Starport LLM Chat",
 				Theme:       "dark",
 				AllowKeyGen: false,
 			},
@@ -456,7 +456,7 @@ func TestChatUIConfig_Validate(t *testing.T) {
 			name: "invalid theme",
 			config: ChatUIConfig{
 				Enabled:     true,
-				Title:       "Starport Chat",
+				Title:       "Starport LLM Chat",
 				Theme:       "purple",
 				AllowKeyGen: true,
 			},
