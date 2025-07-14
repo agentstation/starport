@@ -79,6 +79,7 @@
     // Set initial sidebar state based on screen size
     const app = document.getElementById("app");
     const isMobile = window.innerWidth <= 768;
+    
     if (!isMobile) {
       // Desktop: sidebar is visible by default
       elements.sidebar.classList.add("active");
@@ -430,11 +431,12 @@
 
   // Sidebar Management
   function toggleSidebar() {
+    const app = document.getElementById("app");
+    
     elements.sidebar.classList.toggle("active");
     elements.sidebarBackdrop.classList.toggle("active");
     
     // Toggle sidebar-open class on app
-    const app = document.getElementById("app");
     if (elements.sidebar.classList.contains("active")) {
       app.classList.add("sidebar-open");
       // Remove margin when sidebar is open (only 1 icon visible)
