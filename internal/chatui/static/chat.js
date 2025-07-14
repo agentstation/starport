@@ -626,7 +626,7 @@
       let contextMessage = userMessage;
       if (chat.messages.length > 0) {
         // Include first user message and current message for better context
-        const firstUserMsg = chat.messages.find(m => m.role === "user");
+        const firstUserMsg = chat.messages.find((m) => m.role === "user");
         if (firstUserMsg && firstUserMsg.content !== userMessage) {
           contextMessage = `First message: ${firstUserMsg.content}\n\nLatest message: ${userMessage}`;
         }
@@ -662,22 +662,22 @@
 
       const data = await response.json();
       const title = data.choices[0].message.content.trim();
-      
+
       console.log("Generated title:", title); // Debug log
 
       // Update chat title if chat still exists
       if (chat && title) {
         chat.title = title;
-        
+
         // Update the chat list immediately - before saving
         updateChatList();
-        
+
         // Then save to localStorage
         saveChats();
-        
+
         // If this is the current chat, update the page title too
         if (chatId === state.currentChatId) {
-          document.title = `${title} - ${config.title || 'Starport LLM Chat'}`;
+          document.title = `${title} - ${config.title || "Starport Chat"}`;
         }
       }
     } catch (error) {
@@ -1031,7 +1031,7 @@
     ) {
       const reasoningTokens =
         message.usage.completion_tokens_details.reasoning_tokens;
-      
+
       // Estimate reasoning time based on reasoning tokens and rate
       message.reasoningDuration = reasoningTokens / message.tokensPerSecond;
       message.reasoningDurationEstimated = true; // Mark as estimated
@@ -1384,7 +1384,7 @@
       elements.messages.innerHTML = `
                 <div class="welcome-message">
                     <h2>Welcome to ${escapeHtml(
-                      config.title || "Starport LLM Chat"
+                      config.title || "Starport Chat"
                     )}</h2>
                     <p>Select a model and start chatting!</p>
                 </div>
@@ -1430,7 +1430,8 @@
       if (message.role === "user") {
         textEl.innerHTML = escapeHtml(message.content);
       } else if (message.streaming && !message.content && !message.reasoning) {
-        textEl.innerHTML = '<div class="thinking-indicator">Thinking<span class="thinking-dots"></span></div>';
+        textEl.innerHTML =
+          '<div class="thinking-indicator">Thinking<span class="thinking-dots"></span></div>';
       } else {
         textEl.innerHTML = formatMessageContent(message.content);
         renderSpecialContent(textEl);
@@ -1573,12 +1574,8 @@
                         ${
                           message.reasoningDuration
                             ? `Thought for <span style="color: var(--text-tertiary);">${
-                                message.reasoningDurationEstimated
-                                  ? "~"
-                                  : ""
-                              }${message.reasoningDuration.toFixed(
-                                3
-                              )}s</span>`
+                                message.reasoningDurationEstimated ? "~" : ""
+                              }${message.reasoningDuration.toFixed(3)}s</span>`
                             : "Reasoning"
                         }
                     `;
@@ -2048,11 +2045,16 @@
                     : ""
                 }
                 <div class="message-text">
-                    ${message.role === "assistant" && message.streaming && !message.content && !message.reasoning 
+                    ${
+                      message.role === "assistant" &&
+                      message.streaming &&
+                      !message.content &&
+                      !message.reasoning
                         ? '<div class="thinking-indicator">Thinking<span class="thinking-dots"></span></div>'
-                        : message.role === "user" 
-                            ? escapeHtml(message.content) 
-                            : formatMessageContent(message.content)}
+                        : message.role === "user"
+                        ? escapeHtml(message.content)
+                        : formatMessageContent(message.content)
+                    }
                 </div>
                 ${
                   message.role === "assistant" && !message.streaming

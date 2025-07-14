@@ -92,7 +92,7 @@ Add these environment variables to your `.env` file or export them:
 STARPORT_CHATUI_ENABLED=true
 
 # Customize the interface
-STARPORT_CHATUI_TITLE="Starport LLM Chat"
+STARPORT_CHATUI_TITLE="Starport Chat"
 STARPORT_CHATUI_THEME=light  # or "dark"
 
 # Allow API key generation from the UI (development only)
