@@ -6,6 +6,7 @@
   const config = window.STARPORT_CONFIG || {
     apiBaseURL: window.location.origin,
     allowKeyGen: false,
+    reasoningOverheadMS: 200,
   };
 
   // State
@@ -1013,7 +1014,7 @@
     message.usage = data.usage;
     message.cacheHit = data.cache_info?.hit;
 
-    // For non-streaming, estimate reasoning duration based on token proportions
+    // For non-streaming, estimate reasoning duration based on token rate and overhead
     if (
       message.reasoning &&
       message.usage?.completion_tokens_details?.reasoning_tokens
@@ -1021,11 +1022,15 @@
       const reasoningTokens =
         message.usage.completion_tokens_details.reasoning_tokens;
       const totalTokens = message.usage.completion_tokens || 0;
-      if (totalTokens > 0) {
-        // Estimate reasoning took proportional time based on token count
-        const reasoningProportion = reasoningTokens / totalTokens;
-        message.reasoningDuration =
-          (message.latency / 1000) * reasoningProportion;
+      const overheadMS = config.reasoningOverheadMS || 200; // Default 200ms if not configured
+      
+      if (totalTokens > 0 && message.latency > overheadMS) {
+        // Calculate tokens per second based on actual generation time (minus overhead)
+        const generationTimeS = (message.latency - overheadMS) / 1000;
+        const tokensPerSecond = totalTokens / generationTimeS;
+        
+        // Estimate reasoning time based on reasoning tokens and rate
+        message.reasoningDuration = reasoningTokens / tokensPerSecond;
         message.reasoningDurationEstimated = true; // Mark as estimated
       }
     }
@@ -1428,10 +1433,12 @@
 
     // Update content
     const textEl = messageEl.querySelector(".message-text");
-    if (textEl && message.content) {
+    if (textEl) {
       // Simply update content without any fade effects
       if (message.role === "user") {
         textEl.innerHTML = escapeHtml(message.content);
+      } else if (message.streaming && !message.content && !message.reasoning) {
+        textEl.innerHTML = '<div class="thinking-indicator">Thinking<span class="thinking-dots"></span></div>';
       } else {
         textEl.innerHTML = formatMessageContent(message.content);
         renderSpecialContent(textEl);
@@ -2049,7 +2056,11 @@
                     : ""
                 }
                 <div class="message-text">
-                    ${message.role === "user" ? escapeHtml(message.content) : formatMessageContent(message.content)}
+                    ${message.role === "assistant" && message.streaming && !message.content && !message.reasoning 
+                        ? '<div class="thinking-indicator">Thinking<span class="thinking-dots"></span></div>'
+                        : message.role === "user" 
+                            ? escapeHtml(message.content) 
+                            : formatMessageContent(message.content)}
                 </div>
                 ${
                   message.role === "assistant" && !message.streaming

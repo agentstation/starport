@@ -39,11 +39,12 @@ type Handler struct {
 
 // Config holds ChatUI-specific configuration.
 type Config struct {
-	Title       string
-	Theme       string
-	AllowKeyGen bool
-	APIBaseURL  string
-	Store       storage.KVStore
+	Title               string
+	Theme               string
+	AllowKeyGen         bool
+	APIBaseURL          string
+	Store               storage.KVStore
+	ReasoningOverheadMS int
 }
 
 // NewHandler creates a new ChatUI handler.
@@ -68,15 +69,17 @@ func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	
 	data := struct {
-		Title       string
-		Theme       string
-		APIBaseURL  string
-		AllowKeyGen bool
+		Title               string
+		Theme               string
+		APIBaseURL          string
+		AllowKeyGen         bool
+		ReasoningOverheadMS int
 	}{
-		Title:       h.config.Title,
-		Theme:       h.config.Theme,
-		APIBaseURL:  h.config.APIBaseURL,
-		AllowKeyGen: h.config.AllowKeyGen,
+		Title:               h.config.Title,
+		Theme:               h.config.Theme,
+		APIBaseURL:          h.config.APIBaseURL,
+		AllowKeyGen:         h.config.AllowKeyGen,
+		ReasoningOverheadMS: h.config.ReasoningOverheadMS,
 	}
 
 	if err := h.template.Execute(w, data); err != nil {

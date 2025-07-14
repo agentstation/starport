@@ -241,7 +241,8 @@
         // Pass configuration to JavaScript
         window.STARPORT_CONFIG = {
             apiBaseURL: "{{.APIBaseURL}}",
-            allowKeyGen: {{.AllowKeyGen}}
+            allowKeyGen: {{.AllowKeyGen}},
+            reasoningOverheadMS: {{.ReasoningOverheadMS}}
         };
     </script>
     <!-- Markdown parsing and XSS protection libraries -->
