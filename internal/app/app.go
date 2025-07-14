@@ -98,11 +98,10 @@ func New(opts ...Option) (*App, error) {
 	// Add ChatUI configuration if enabled
 	if cfg.ChatUI != nil && cfg.ChatUI.Enabled {
 		chatUIConfig := chatui.Config{
-			Title:               cfg.ChatUI.Title,
-			Theme:               cfg.ChatUI.Theme,
-			AllowKeyGen:         cfg.ChatUI.AllowKeyGen,
-			APIBaseURL:          fmt.Sprintf("http://localhost:%d", cfg.Server.Port),
-			ReasoningOverheadMS: cfg.ChatUI.ReasoningOverheadMS,
+			Title:       cfg.ChatUI.Title,
+			Theme:       cfg.ChatUI.Theme,
+			AllowKeyGen: cfg.ChatUI.AllowKeyGen,
+			APIBaseURL:  fmt.Sprintf("http://localhost:%d", cfg.Server.Port),
 		}
 		serverOpts = append(serverOpts, server.WithChatUI(&chatUIConfig))
 		log.Info().

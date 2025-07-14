@@ -139,11 +139,10 @@ type CacheConfig struct {
 
 // ChatUIConfig defines settings for the embedded chat UI
 type ChatUIConfig struct {
-	Enabled             bool   `env:"ENABLED,default=false"`
-	Title               string `env:"TITLE,default=Starport LLM Chat"`
-	Theme               string `env:"THEME,default=light"`
-	AllowKeyGen         bool   `env:"ALLOW_KEY_GEN,default=false"`
-	ReasoningOverheadMS int    `env:"REASONING_OVERHEAD_MS,default=200"`
+	Enabled     bool   `env:"ENABLED,default=false"`
+	Title       string `env:"TITLE,default=Starport LLM Chat"`
+	Theme       string `env:"THEME,default=light"`
+	AllowKeyGen bool   `env:"ALLOW_KEY_GEN,default=false"`
 }
 
 // Validate performs validation on the configuration

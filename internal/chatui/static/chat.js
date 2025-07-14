@@ -6,7 +6,6 @@
   const config = window.STARPORT_CONFIG || {
     apiBaseURL: window.location.origin,
     allowKeyGen: false,
-    reasoningOverheadMS: 200,
   };
 
   // State
@@ -1014,27 +1013,6 @@
     message.usage = data.usage;
     message.cacheHit = data.cache_info?.hit;
 
-    // For non-streaming, estimate reasoning duration based on token rate and overhead
-    if (
-      message.reasoning &&
-      message.usage?.completion_tokens_details?.reasoning_tokens
-    ) {
-      const reasoningTokens =
-        message.usage.completion_tokens_details.reasoning_tokens;
-      const totalTokens = message.usage.completion_tokens || 0;
-      const overheadMS = config.reasoningOverheadMS || 200; // Default 200ms if not configured
-      
-      if (totalTokens > 0 && message.latency > overheadMS) {
-        // Calculate tokens per second based on actual generation time (minus overhead)
-        const generationTimeS = (message.latency - overheadMS) / 1000;
-        const tokensPerSecond = totalTokens / generationTimeS;
-        
-        // Estimate reasoning time based on reasoning tokens and rate
-        message.reasoningDuration = reasoningTokens / tokensPerSecond;
-        message.reasoningDurationEstimated = true; // Mark as estimated
-      }
-    }
-
     // Calculate tokens per second
     if (
       message.latency > 0 &&
@@ -1043,6 +1021,20 @@
     ) {
       message.tokensPerSecond =
         message.usage.total_tokens / (message.latency / 1000);
+    }
+
+    // For non-streaming, estimate reasoning duration based on token rate
+    if (
+      message.reasoning &&
+      message.usage?.completion_tokens_details?.reasoning_tokens &&
+      message.tokensPerSecond > 0
+    ) {
+      const reasoningTokens =
+        message.usage.completion_tokens_details.reasoning_tokens;
+      
+      // Estimate reasoning time based on reasoning tokens and rate
+      message.reasoningDuration = reasoningTokens / message.tokensPerSecond;
+      message.reasoningDurationEstimated = true; // Mark as estimated
     }
 
     // Update the previous user message to show prompt tokens
@@ -1495,13 +1487,13 @@
                                 </svg>
                                 ${
                                   message.reasoningDuration
-                                    ? `Thought for <span style="color: var(--text-tertiary);">${message.reasoningDuration.toFixed(
-                                        3
-                                      )}s${
+                                    ? `Thought for <span style="color: var(--text-tertiary);">${
                                         message.reasoningDurationEstimated
-                                          ? " (estimate)"
+                                          ? "~"
                                           : ""
-                                      }</span>`
+                                      }${message.reasoningDuration.toFixed(
+                                        3
+                                      )}s</span>`
                                     : "Reasoning"
                                 }
                             `
@@ -1580,13 +1572,13 @@
                         </svg>
                         ${
                           message.reasoningDuration
-                            ? `Thought for <span style="color: var(--text-tertiary);">${message.reasoningDuration.toFixed(
-                                3
-                              )}s${
+                            ? `Thought for <span style="color: var(--text-tertiary);">${
                                 message.reasoningDurationEstimated
-                                  ? " (estimate)"
+                                  ? "~"
                                   : ""
-                              }</span>`
+                              }${message.reasoningDuration.toFixed(
+                                3
+                              )}s</span>`
                             : "Reasoning"
                         }
                     `;
@@ -2030,13 +2022,13 @@
                             </svg>
                             ${
                               message.reasoningDuration
-                                ? `Thought for <span style="color: var(--text-tertiary);">${message.reasoningDuration.toFixed(
-                                    3
-                                  )}s${
+                                ? `Thought for <span style="color: var(--text-tertiary);">${
                                     message.reasoningDurationEstimated
-                                      ? " (estimate)"
+                                      ? "~"
                                       : ""
-                                  }</span>`
+                                  }${message.reasoningDuration.toFixed(
+                                    3
+                                  )}s</span>`
                                 : "Reasoning"
                             }
                         `
