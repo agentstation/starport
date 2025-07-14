@@ -38,6 +38,9 @@ type ChatRequest struct {
 	// OpenRouter-compatible model routing
 	Models []string `json:"models,omitempty"` // Fallback model chain
 
+	// OpenRouter reasoning configuration
+	Reasoning *ReasoningConfig `json:"reasoning,omitempty"`
+
 	// Provider-specific extensions
 	ProviderOptions map[string]interface{} `json:"provider_options,omitempty"`
 }
@@ -46,6 +49,7 @@ type ChatRequest struct {
 type Message struct {
 	Role       string         `json:"role"`
 	Content    MessageContent `json:"content"`
+	Reasoning  string         `json:"reasoning,omitempty"`
 	Name       string         `json:"name,omitempty"`
 	ToolCalls  []ToolCall     `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
@@ -139,9 +143,15 @@ type TopLogProb struct {
 
 // Usage represents token usage information
 type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens            int                      `json:"prompt_tokens"`
+	CompletionTokens        int                      `json:"completion_tokens"`
+	TotalTokens             int                      `json:"total_tokens"`
+	CompletionTokensDetails *CompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+}
+
+// CompletionTokensDetails provides detailed token counts
+type CompletionTokensDetails struct {
+	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
 }
 
 // ChatStreamChunk represents a chunk in a streaming response
@@ -167,6 +177,7 @@ type StreamChoice struct {
 type MessageDelta struct {
 	Role      string     `json:"role,omitempty"`
 	Content   string     `json:"content,omitempty"`
+	Reasoning string     `json:"reasoning,omitempty"`
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }
 
@@ -280,4 +291,11 @@ func UnmarshalMessageContent(data []byte) (MessageContent, error) {
 	}
 
 	return nil, ErrInvalidMessageContent
+}
+
+// ReasoningConfig represents OpenRouter-style reasoning configuration
+type ReasoningConfig struct {
+	Effort    string `json:"effort,omitempty"`     // "high", "medium", "low"
+	MaxTokens *int   `json:"max_tokens,omitempty"` // Alternative to effort
+	Exclude   bool   `json:"exclude,omitempty"`    // Exclude reasoning from response
 }

@@ -27,7 +27,8 @@ func TransformChatRequest(req *ChatCompletionRequest) *connectors.ChatRequest {
 		ResponseFormat:   req.ResponseFormat,
 
 		// OpenRouter extensions
-		Models: req.Models,
+		Models:    req.Models,
+		Reasoning: transformReasoning(req.Reasoning),
 	}
 
 	// Note: Provider preferences would be handled at the routing layer
@@ -130,6 +131,18 @@ func generateRandomString(length int) string {
 		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
 	}
 	return string(b)
+}
+
+// transformReasoning converts proxy ReasoningConfig to connectors ReasoningConfig
+func transformReasoning(rc *ReasoningConfig) *connectors.ReasoningConfig {
+	if rc == nil {
+		return nil
+	}
+	return &connectors.ReasoningConfig{
+		Effort:    rc.Effort,
+		MaxTokens: rc.MaxTokens,
+		Exclude:   rc.Exclude,
+	}
 }
 
 // convertLogitBias converts float32 map to int map for compatibility

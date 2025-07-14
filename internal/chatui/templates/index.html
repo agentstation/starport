@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="gpc-enabled" content="false">
     <title>{{.Title}}</title>
     <link rel="stylesheet" href="/chat/static/chat.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
@@ -77,7 +78,7 @@
                     <div id="model-pricing" class="model-pricing"></div>
                 </div>
 
-                <div class="messages" id="messages">
+                <div class="messages" id="messages" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false">
                     <div class="welcome-message">
                         <h2>Welcome to {{.Title}}</h2>
                         <p>To get started:</p>
@@ -101,6 +102,9 @@
                             class="message-input" 
                             placeholder="Type your message..."
                             rows="1"
+                            data-gramm="false"
+                            data-gramm_editor="false"
+                            data-enable-grammarly="false"
                         ></textarea>
                         <button id="send-btn" class="btn btn-primary send-btn" disabled>
                             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -154,21 +158,6 @@
                             Enable streaming responses
                         </label>
                     </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="typewriter-enabled" checked>
-                            Enable typewriter animation
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label for="typewriter-speed">Typewriter Speed</label>
-                        <select id="typewriter-speed" class="form-input">
-                            <option value="instant">Instant</option>
-                            <option value="fast">Fast</option>
-                            <option value="normal" selected>Normal</option>
-                            <option value="slow">Slow</option>
-                        </select>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-primary modal-close">Close</button>
@@ -200,6 +189,19 @@
             allowKeyGen: {{.AllowKeyGen}}
         };
     </script>
+    <!-- Markdown parsing and XSS protection libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <!-- Syntax highlighting with Prism.js -->
+    <link id="prism-theme" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/{{if eq .Theme "dark"}}prism-tomorrow{{else}}prism{{end}}.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    <!-- Math rendering with KaTeX -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <!-- Diagram rendering with Mermaid.js -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
     <script src="/chat/static/chat.js"></script>
 </body>
 </html>

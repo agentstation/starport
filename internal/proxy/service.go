@@ -49,9 +49,10 @@ type ChatCompletionRequest struct {
 	ResponseFormat   *connectors.ResponseFormat `json:"response_format,omitempty"`
 
 	// OpenRouter-compatible fields
-	Models   []string             `json:"models,omitempty"`
-	Route    string               `json:"route,omitempty"`
-	Provider *ProviderPreferences `json:"provider,omitempty"`
+	Models    []string               `json:"models,omitempty"`
+	Route     string                 `json:"route,omitempty"`
+	Provider  *ProviderPreferences   `json:"provider,omitempty"`
+	Reasoning *ReasoningConfig       `json:"reasoning,omitempty"`
 
 	// Internal fields
 	APIKey    string `json:"-"`
@@ -180,4 +181,11 @@ type ProviderPreferences struct {
 	Ignore        []string `json:"ignore,omitempty"`
 	Only          []string `json:"only,omitempty"`
 	AllowFallback bool     `json:"allow_fallback,omitempty"`
+}
+
+// ReasoningConfig represents OpenRouter-style reasoning configuration
+type ReasoningConfig struct {
+	Effort    string `json:"effort,omitempty"`     // "high", "medium", "low"
+	MaxTokens *int   `json:"max_tokens,omitempty"` // Alternative to effort
+	Exclude   bool   `json:"exclude,omitempty"`    // Exclude reasoning from response
 }

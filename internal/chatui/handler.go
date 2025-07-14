@@ -63,8 +63,8 @@ func NewHandler(logger *zerolog.Logger, config Config) (*Handler, error) {
 
 // Index serves the main ChatUI page.
 func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
-	// Override CSP for ChatUI to allow inline scripts
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';")
+	// Override CSP for ChatUI to allow inline scripts and CDN resources for markdown/syntax highlighting
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self'; frame-ancestors 'none';")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	
 	data := struct {

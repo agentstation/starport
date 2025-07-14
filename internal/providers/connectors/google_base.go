@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,9 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
+	
+	// Debug log the request
+	fmt.Printf("[Gemini] Request body: %s\n", string(body))
 
 	endpoint := getEndpoint(req.Model, false)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
@@ -56,9 +60,12 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
+	
+	// Debug log usage metadata
+	fmt.Printf("[Gemini] UsageMetadata: %+v\n", geminiResp.UsageMetadata)
 
 	// Convert to OpenAI format
-	return c.convertToOpenAIResponse(&geminiResp, req.Model), nil
+	return c.convertToOpenAIResponse(&geminiResp, req), nil
 }
 
 // ChatStream performs a streaming chat completion request
@@ -69,6 +76,9 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
+	
+	// Debug log the request
+	fmt.Printf("[Gemini] Request body: %s\n", string(body))
 
 	endpoint := getEndpoint(req.Model, true)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
@@ -89,7 +99,7 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 		return nil, c.handleError(resp)
 	}
 
-	return newGoogleStream(resp, req.Model, c.name), nil
+	return newGoogleStream(resp, req.Model, c.name, req.Reasoning != nil && req.Reasoning.Exclude), nil
 }
 
 // handleError handles error responses from Google APIs
@@ -177,6 +187,42 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 		genConfig["stopSequences"] = req.Stop
 	}
 
+	// Handle OpenRouter-style reasoning configuration
+	if req.Reasoning != nil && !req.Reasoning.Exclude {
+		// Create thinkingConfig for Gemini 2.5 models
+		thinkingConfig := make(map[string]interface{})
+		
+		// Debug log
+		fmt.Printf("[Gemini] Reasoning config: effort=%s, max_tokens=%v\n", req.Reasoning.Effort, req.Reasoning.MaxTokens)
+		
+		// Handle max_tokens if specified (takes precedence over effort)
+		if req.Reasoning.MaxTokens != nil {
+			thinkingConfig["thinkingBudget"] = *req.Reasoning.MaxTokens
+		} else if req.Reasoning.Effort != "" {
+			// Handle effort level -> thinking budget mapping
+			switch req.Reasoning.Effort {
+			case "high":
+				thinkingConfig["thinkingBudget"] = -1 // Dynamic thinking
+			case "medium":
+				thinkingConfig["thinkingBudget"] = 10000
+			case "low":
+				thinkingConfig["thinkingBudget"] = 5000
+			default:
+				// Default to dynamic thinking for unknown effort levels
+				thinkingConfig["thinkingBudget"] = -1
+			}
+		} else {
+			// Default to dynamic thinking if no effort or max_tokens specified
+			thinkingConfig["thinkingBudget"] = -1
+		}
+		
+		// IMPORTANT: Request thought summaries to be included
+		thinkingConfig["includeThoughts"] = true
+		
+		genConfig["thinkingConfig"] = thinkingConfig
+		fmt.Printf("[Gemini] ThinkingConfig: %+v\n", thinkingConfig)
+	}
+	
 	if len(genConfig) > 0 {
 		geminiReq["generationConfig"] = genConfig
 	}
@@ -185,37 +231,65 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 }
 
 // convertToOpenAIResponse converts Gemini response to OpenAI format
-func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, model string) *ChatResponse {
+func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req *ChatRequest) *ChatResponse {
 	if len(resp.Candidates) == 0 {
 		return &ChatResponse{
 			ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
 			Object:  "chat.completion",
 			Created: time.Now().Unix(),
-			Model:   model,
+			Model:   req.Model,
 			Choices: []Choice{},
 		}
 	}
 
 	candidate := resp.Candidates[0]
 	content := ""
-	for _, part := range candidate.Content.Parts {
-		if text, ok := part["text"].(string); ok {
-			content += text
+	reasoning := ""
+	
+	// Separate thought parts from content parts
+	for i, part := range candidate.Content.Parts {
+		fmt.Printf("[Gemini] Part %d: Text='%.100s...', Thought=%v\n", i, part.Text, part.Thought)
+		if part.Thought {
+			// This is a raw reasoning/thought part
+			if part.Text != "" {
+				reasoning += part.Text
+			}
+		} else {
+			// This is regular content - check if it contains thought summaries
+			if part.Text != "" {
+				// Look for embedded thought summaries
+				partContent, partReasoning := extractThoughtSummary(part.Text)
+				content += partContent
+				if partReasoning != "" {
+					if reasoning != "" {
+						reasoning += "\n\n"
+					}
+					reasoning += partReasoning
+				}
+			}
 		}
+	}
+
+	message := Message{
+		Role:    "assistant",
+		Content: content,
+	}
+	
+	// Only add reasoning if it's not empty and not excluded
+	if reasoning != "" && (req.Reasoning == nil || !req.Reasoning.Exclude) {
+		message.Reasoning = reasoning
+		fmt.Printf("[Gemini] Found reasoning text (length=%d)\n", len(reasoning))
 	}
 
 	return &ChatResponse{
 		ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
 		Object:  "chat.completion",
 		Created: time.Now().Unix(),
-		Model:   model,
+		Model:   req.Model,
 		Choices: []Choice{
 			{
-				Index: 0,
-				Message: Message{
-					Role:    "assistant",
-					Content: content,
-				},
+				Index:        0,
+				Message:      message,
 				FinishReason: mapFinishReason(candidate.FinishReason),
 			},
 		},
@@ -223,29 +297,39 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, mode
 			PromptTokens:     resp.UsageMetadata.PromptTokenCount,
 			CompletionTokens: resp.UsageMetadata.CandidatesTokenCount,
 			TotalTokens:      resp.UsageMetadata.TotalTokenCount,
+			CompletionTokensDetails: func() *CompletionTokensDetails {
+				if resp.UsageMetadata.ThoughtsTokenCount > 0 {
+					return &CompletionTokensDetails{
+						ReasoningTokens: resp.UsageMetadata.ThoughtsTokenCount,
+					}
+				}
+				return nil
+			}(),
 		},
 	}
 }
 
 // googleStream implements ChatStream for Google responses
 type googleStream struct {
-	response *http.Response
-	reader   *bufio.Reader
-	model    string
-	provider string
-	closed   bool
-	buffer   []byte
-	decoder  *json.Decoder
-	started  bool
+	response        *http.Response
+	reader          *bufio.Reader
+	model           string
+	provider        string
+	closed          bool
+	buffer          []byte
+	decoder         *json.Decoder
+	started         bool
+	excludeReasoning bool
 }
 
-func newGoogleStream(resp *http.Response, model, provider string) *googleStream {
+func newGoogleStream(resp *http.Response, model, provider string, excludeReasoning bool) *googleStream {
 	return &googleStream{
-		response: resp,
-		reader:   bufio.NewReader(resp.Body),
-		model:    model,
-		provider: provider,
-		buffer:   make([]byte, 0),
+		response:        resp,
+		reader:          bufio.NewReader(resp.Body),
+		model:           model,
+		provider:        provider,
+		buffer:          make([]byte, 0),
+		excludeReasoning: excludeReasoning,
 	}
 }
 
@@ -299,13 +383,36 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			// Skip malformed chunks
 			continue
 		}
+		
+		// Debug log usage metadata in streaming
+		if geminiResp.UsageMetadata.TotalTokenCount > 0 {
+			fmt.Printf("[Gemini Stream] UsageMetadata: %+v\n", geminiResp.UsageMetadata)
+		}
 
 		// Convert to OpenAI format
 		if len(geminiResp.Candidates) > 0 {
 			content := ""
-			for _, part := range geminiResp.Candidates[0].Content.Parts {
-				if text, ok := part["text"].(string); ok {
-					content += text
+			reasoning := ""
+			
+			// Separate thought parts from content parts
+			for i, part := range geminiResp.Candidates[0].Content.Parts {
+				if i == 0 && len(part.Text) > 0 { // Only log first part to avoid spam
+					fmt.Printf("[Gemini Stream] Part %d: Text='%.50s...', Thought=%v\n", i, part.Text, part.Thought)
+				}
+				if part.Thought {
+					// This is a raw reasoning/thought part
+					if part.Text != "" {
+						reasoning += part.Text
+					}
+				} else {
+					// Check for embedded thought summaries in content
+					if part.Text != "" {
+						partContent, partReasoning := extractThoughtSummary(part.Text)
+						content += partContent
+						if partReasoning != "" {
+							reasoning += partReasoning
+						}
+					}
 				}
 			}
 
@@ -316,6 +423,16 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 				finishReason = mapFinishReason(geminiResp.Candidates[0].FinishReason)
 			}
 
+			// Create delta with content and/or reasoning
+			delta := MessageDelta{}
+			if content != "" {
+				delta.Content = content
+			}
+			if reasoning != "" && !s.excludeReasoning {
+				delta.Reasoning = reasoning
+				fmt.Printf("[Gemini Stream] Found reasoning text in chunk (length=%d)\n", len(reasoning))
+			}
+			
 			chunk := &ChatStreamChunk{
 				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
 				Object:  "chat.completion.chunk",
@@ -323,10 +440,8 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 				Model:   s.model,
 				Choices: []StreamChoice{
 					{
-						Index: 0,
-						Delta: MessageDelta{
-							Content: content,
-						},
+						Index:        0,
+						Delta:        delta,
 						FinishReason: finishReason,
 					},
 				},
@@ -338,6 +453,14 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 					PromptTokens:     geminiResp.UsageMetadata.PromptTokenCount,
 					CompletionTokens: geminiResp.UsageMetadata.CandidatesTokenCount,
 					TotalTokens:      geminiResp.UsageMetadata.TotalTokenCount,
+					CompletionTokensDetails: func() *CompletionTokensDetails {
+						if geminiResp.UsageMetadata.ThoughtsTokenCount > 0 {
+							return &CompletionTokensDetails{
+								ReasoningTokens: geminiResp.UsageMetadata.ThoughtsTokenCount,
+							}
+						}
+						return nil
+					}(),
 				}
 			}
 			
@@ -434,4 +557,52 @@ func mapVertexFinishReason(reason string) string {
 	default:
 		return reason
 	}
+}
+
+// extractThoughtSummary looks for thought summaries in various formats
+func extractThoughtSummary(text string) (content, reasoning string) {
+	content = text
+	reasoning = ""
+	
+	// Pattern 1: <thinking>...</thinking> tags
+	if start := strings.Index(text, "<thinking>"); start != -1 {
+		if end := strings.Index(text[start:], "</thinking>"); end != -1 {
+			end += start
+			reasoning = strings.TrimSpace(text[start+10 : end])
+			content = strings.TrimSpace(text[:start] + text[end+11:])
+			return
+		}
+	}
+	
+	// Pattern 2: Thought: prefix at the beginning
+	if strings.HasPrefix(text, "Thought:") || strings.HasPrefix(text, "Thinking:") {
+		lines := strings.Split(text, "\n")
+		for i, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				// Found empty line, split here
+				reasoning = strings.Join(lines[:i], "\n")
+				content = strings.Join(lines[i+1:], "\n")
+				return
+			}
+		}
+	}
+	
+	// Pattern 3: [Thinking Process] or similar markers
+	markers := []string{"[Thinking Process]", "[Thought Process]", "[Internal Reasoning]"}
+	for _, marker := range markers {
+		if idx := strings.Index(text, marker); idx != -1 {
+			// Find the end of the thinking section (next marker or double newline)
+			endIdx := strings.Index(text[idx:], "\n\n")
+			if endIdx == -1 {
+				endIdx = len(text) - idx
+			} else {
+				endIdx += idx
+			}
+			reasoning = strings.TrimSpace(text[idx : endIdx])
+			content = strings.TrimSpace(text[:idx] + text[endIdx:])
+			return
+		}
+	}
+	
+	return content, reasoning
 }

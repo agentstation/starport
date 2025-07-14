@@ -129,32 +129,19 @@ func TestGoogleAIStudioConnector_Chat(t *testing.T) {
 
 		// Send response
 		resp := geminiResponse{
-			Candidates: []struct {
-				Content struct {
-					Parts []map[string]interface{} `json:"parts"`
-					Role  string                   `json:"role"`
-				} `json:"content"`
-				FinishReason string `json:"finishReason"`
-				Index        int    `json:"index"`
-			}{
+			Candidates: []geminiCandidate{
 				{
-					Content: struct {
-						Parts []map[string]interface{} `json:"parts"`
-						Role  string                   `json:"role"`
-					}{
-						Parts: []map[string]interface{}{
-							{"text": "Hello from Google AI Studio!"},
+					Content: geminiContent{
+						Parts: []geminiPart{
+							{Text: "Hello from Google AI Studio!", Thought: false},
 						},
 						Role: "model",
 					},
 					FinishReason: "STOP",
+					Index:        0,
 				},
 			},
-			UsageMetadata: struct {
-				PromptTokenCount     int `json:"promptTokenCount"`
-				CandidatesTokenCount int `json:"candidatesTokenCount"`
-				TotalTokenCount      int `json:"totalTokenCount"`
-			}{
+			UsageMetadata: geminiUsageMetadata{
 				PromptTokenCount:     10,
 				CandidatesTokenCount: 20,
 				TotalTokenCount:      30,
@@ -209,32 +196,19 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 
 		// Send response
 		resp := geminiResponse{
-			Candidates: []struct {
-				Content struct {
-					Parts []map[string]interface{} `json:"parts"`
-					Role  string                   `json:"role"`
-				} `json:"content"`
-				FinishReason string `json:"finishReason"`
-				Index        int    `json:"index"`
-			}{
+			Candidates: []geminiCandidate{
 				{
-					Content: struct {
-						Parts []map[string]interface{} `json:"parts"`
-						Role  string                   `json:"role"`
-					}{
-						Parts: []map[string]interface{}{
-							{"text": "Hello from Vertex AI!"},
+					Content: geminiContent{
+						Parts: []geminiPart{
+							{Text: "Hello from Vertex AI!", Thought: false},
 						},
 						Role: "model",
 					},
 					FinishReason: "STOP",
+					Index:        0,
 				},
 			},
-			UsageMetadata: struct {
-				PromptTokenCount     int `json:"promptTokenCount"`
-				CandidatesTokenCount int `json:"candidatesTokenCount"`
-				TotalTokenCount      int `json:"totalTokenCount"`
-			}{
+			UsageMetadata: geminiUsageMetadata{
 				PromptTokenCount:     10,
 				CandidatesTokenCount: 20,
 				TotalTokenCount:      30,
@@ -379,25 +353,16 @@ func TestGoogleAIStudioConnector_ChatStream(t *testing.T) {
 		chunks := []string{"Hello", " from", " stream!"}
 		for i, chunk := range chunks {
 			resp := geminiResponse{
-				Candidates: []struct {
-					Content struct {
-						Parts []map[string]interface{} `json:"parts"`
-						Role  string                   `json:"role"`
-					} `json:"content"`
-					FinishReason string `json:"finishReason"`
-					Index        int    `json:"index"`
-				}{
+				Candidates: []geminiCandidate{
 					{
-						Content: struct {
-							Parts []map[string]interface{} `json:"parts"`
-							Role  string                   `json:"role"`
-						}{
-							Parts: []map[string]interface{}{
-								{"text": chunk},
+						Content: geminiContent{
+							Parts: []geminiPart{
+								{Text: chunk, Thought: false},
 							},
 							Role: "model",
 						},
 						FinishReason: "",
+						Index:        0,
 					},
 				},
 			}

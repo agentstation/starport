@@ -1,1204 +1,2306 @@
 // Starport ChatUI JavaScript Client
-(function() {
-    'use strict';
+(function () {
+  "use strict";
 
-    // Configuration
-    const config = window.STARPORT_CONFIG || {
-        apiBaseURL: window.location.origin,
-        allowKeyGen: false
-    };
+  // Configuration
+  const config = window.STARPORT_CONFIG || {
+    apiBaseURL: window.location.origin,
+    allowKeyGen: false,
+  };
 
-    // State
-    const state = {
-        currentChatId: null,
-        chats: {},
-        apiKey: localStorage.getItem('starport_api_key') || '',
-        selectedModel: localStorage.getItem('starport_model') || '',
-        streamEnabled: localStorage.getItem('starport_stream') !== 'false',
-        typewriterEnabled: localStorage.getItem('starport_typewriter') !== 'false',
-        typewriterSpeed: localStorage.getItem('starport_typewriter_speed') || 'normal',
-        isGenerating: false,
-        abortController: null,
-        typewriterQueues: new Map() // Map of timestamp -> TypewriterQueue
-    };
+  // State
+  const state = {
+    currentChatId: null,
+    chats: {},
+    apiKey: localStorage.getItem("starport_api_key") || "",
+    selectedModel: localStorage.getItem("starport_model") || "",
+    streamEnabled: localStorage.getItem("starport_stream") !== "false",
+    isGenerating: false,
+    abortController: null,
+    expandedReasoning: new Set(), // Track which messages have expanded reasoning
+    autoScroll: true, // Track if auto-scroll is enabled
+    userScrolled: false, // Track if user has manually scrolled
+  };
 
-    // DOM Elements
-    const elements = {
-        // Header
-        themeToggle: document.getElementById('theme-toggle'),
-        settingsBtn: document.getElementById('settings-btn'),
-        
-        // Sidebar
-        sidebar: document.getElementById('sidebar'),
-        sidebarToggle: document.getElementById('sidebar-toggle'),
-        newChatBtn: document.getElementById('new-chat'),
-        chatList: document.getElementById('chat-list'),
-        clearAllBtn: document.getElementById('clear-all'),
-        
-        // Chat
-        modelSelect: document.getElementById('model-select'),
-        modelPricing: document.getElementById('model-pricing'),
-        messages: document.getElementById('messages'),
-        messageInput: document.getElementById('message-input'),
-        sendBtn: document.getElementById('send-btn'),
-        stopBtn: document.getElementById('stop-btn'),
-        tokenCount: document.getElementById('token-count'),
-        costEstimate: document.getElementById('cost-estimate'),
-        
-        // Settings Modal
-        settingsModal: document.getElementById('settings-modal'),
-        apiKeyInput: document.getElementById('api-key'),
-        apiBaseInput: document.getElementById('api-base'),
-        streamEnabledInput: document.getElementById('stream-enabled'),
-        typewriterEnabledInput: document.getElementById('typewriter-enabled'),
-        typewriterSpeedSelect: document.getElementById('typewriter-speed'),
-        generateKeyBtn: document.getElementById('generate-key'),
-        
-        // Error Toast
-        errorToast: document.getElementById('error-toast'),
-        toastMessage: document.querySelector('.toast-message'),
-        toastDetails: document.querySelector('.toast-details'),
-        errorJson: document.querySelector('.error-json')
-    };
+  // DOM Elements
+  const elements = {
+    // Header
+    themeToggle: document.getElementById("theme-toggle"),
+    settingsBtn: document.getElementById("settings-btn"),
 
-    // Typewriter effect for smooth chunk rendering
-    class TypewriterQueue {
-        constructor(messageTimestamp, updateCallback) {
-            this.messageTimestamp = messageTimestamp;
-            this.updateCallback = updateCallback;
-            this.queue = [];
-            this.currentText = '';
-            this.isTyping = false;
-            this.finished = false;
-            
-            // Speed settings based on user preference
-            const speedSettings = {
-                instant: { base: 0, min: 0, max: 0 },
-                fast: { base: 1, min: 0.5, max: 3 },
-                normal: { base: 3, min: 1, max: 5 },
-                slow: { base: 8, min: 4, max: 15 }
-            };
-            
-            const setting = speedSettings[state.typewriterSpeed] || speedSettings.normal;
-            this.baseSpeed = setting.base;
-            this.minSpeed = setting.min;
-            this.maxSpeed = setting.max;
-            this.speedupFactor = 0.95; // Speed increases as queue grows
-            this.chunkDelay = 0; // ms delay between chunks
-        }
+    // Sidebar
+    sidebar: document.getElementById("sidebar"),
+    sidebarToggle: document.getElementById("sidebar-toggle"),
+    newChatBtn: document.getElementById("new-chat"),
+    chatList: document.getElementById("chat-list"),
+    clearAllBtn: document.getElementById("clear-all"),
 
-        addChunk(text) {
-            this.queue.push(text);
-            if (!this.isTyping) {
-                this.processQueue();
-            }
-        }
+    // Chat
+    modelSelect: document.getElementById("model-select"),
+    modelPricing: document.getElementById("model-pricing"),
+    messages: document.getElementById("messages"),
+    messageInput: document.getElementById("message-input"),
+    sendBtn: document.getElementById("send-btn"),
+    stopBtn: document.getElementById("stop-btn"),
+    tokenCount: document.getElementById("token-count"),
+    costEstimate: document.getElementById("cost-estimate"),
 
-        async processQueue() {
-            if (this.queue.length === 0 || this.isTyping) return;
-            
-            this.isTyping = true;
-            
-            while (this.queue.length > 0) {
-                const chunk = this.queue.shift();
-                await this.typeChunk(chunk);
-                
-                if (this.queue.length > 0 && this.chunkDelay > 0) {
-                    await this.sleep(this.chunkDelay);
-                }
-            }
-            
-            this.isTyping = false;
-            
-            // If we're finished and no more chunks, remove cursor
-            if (this.finished && this.queue.length === 0) {
-                this.updateCallback(this.currentText, false);
-            }
-        }
+    // Settings Modal
+    settingsModal: document.getElementById("settings-modal"),
+    apiKeyInput: document.getElementById("api-key"),
+    apiBaseInput: document.getElementById("api-base"),
+    streamEnabledInput: document.getElementById("stream-enabled"),
+    generateKeyBtn: document.getElementById("generate-key"),
 
-        async typeChunk(text) {
-            // Instant mode - just add the whole chunk at once
-            if (this.baseSpeed === 0) {
-                this.currentText += text;
-                this.updateCallback(this.currentText, true);
-                return;
-            }
-            
-            // Calculate dynamic typing speed based on queue size
-            const queuePressure = Math.min(this.queue.length / 5, 1); // 0-1 scale
-            const speedMultiplier = 1 - (queuePressure * (1 - this.speedupFactor));
-            const currentSpeed = Math.max(
-                this.minSpeed,
-                Math.min(this.maxSpeed, this.baseSpeed * speedMultiplier)
-            );
-            
-            // Type characters in small batches for smoother performance
-            const batchSize = queuePressure > 0.7 ? 5 : queuePressure > 0.3 ? 3 : 1;
-            
-            for (let i = 0; i < text.length; i += batchSize) {
-                const batch = text.slice(i, i + batchSize);
-                this.currentText += batch;
-                this.updateCallback(this.currentText, true); // true = still streaming
-                await this.sleep(currentSpeed * batch.length);
-            }
-        }
+    // Error Toast
+    errorToast: document.getElementById("error-toast"),
+    toastMessage: document.querySelector(".toast-message"),
+    toastDetails: document.querySelector(".toast-details"),
+    errorJson: document.querySelector(".error-json"),
+  };
 
-        async finish() {
-            // Mark as finished but continue typing animation
-            this.finished = true;
-            
-            // If still typing, let it complete naturally
-            if (this.isTyping) {
-                return;
-            }
-            
-            // If there are queued chunks, process them
-            if (this.queue.length > 0) {
-                await this.processQueue();
-            }
-            
-            // Final update to remove cursor
-            this.updateCallback(this.currentText, false); // false = done streaming
-        }
+  // Initialize
+  function init() {
+    loadChats();
+    loadModels();
+    setupEventListeners();
+    setupScrollHandlers();
+    updateUI();
 
-        sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
+    // Initialize Prism.js theme based on current theme
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    updatePrismTheme(currentTheme);
 
-        destroy() {
-            this.queue = [];
-            this.isTyping = false;
-        }
+    // Configure Prism autoloader path for CDN languages
+    if (
+      typeof Prism !== "undefined" &&
+      Prism.plugins &&
+      Prism.plugins.autoloader
+    ) {
+      Prism.plugins.autoloader.languages_path =
+        "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/";
     }
 
-    // Initialize
-    function init() {
-        loadChats();
+    // Initialize Mermaid with theme-aware configuration
+    if (typeof mermaid !== "undefined") {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: currentTheme === "dark" ? "dark" : "default",
+        securityLevel: "strict",
+        flowchart: {
+          useMaxWidth: true,
+          htmlLabels: true,
+          curve: "basis",
+        },
+        sequence: {
+          useMaxWidth: true,
+          showSequenceNumbers: true,
+        },
+        gantt: {
+          numberSectionStyles: 4,
+          leftPadding: 120,
+        },
+      });
+    }
+
+    // Set up lazy loading for diagrams
+    if ("IntersectionObserver" in window) {
+      const diagramObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const container = entry.target;
+              const diagramData = container.getAttribute(
+                "data-mermaid-diagram"
+              );
+              if (diagramData && typeof mermaid !== "undefined") {
+                renderMermaidDiagram(container, diagramData);
+                diagramObserver.unobserve(container);
+              }
+            }
+          });
+        },
+        {
+          root: null,
+          rootMargin: "100px",
+        }
+      );
+
+      // Store observer for later use
+      state.diagramObserver = diagramObserver;
+    }
+
+    // Create new chat if no chats exist
+    if (Object.keys(state.chats).length === 0) {
+      createNewChat();
+    } else {
+      // Load the most recent chat
+      const chatIds = Object.keys(state.chats).sort(
+        (a, b) => state.chats[b].lastModified - state.chats[a].lastModified
+      );
+      loadChat(chatIds[0]);
+    }
+  }
+
+  // Event Listeners
+  function setupEventListeners() {
+    // Theme toggle
+    elements.themeToggle.addEventListener("click", toggleTheme);
+
+    // Settings
+    elements.settingsBtn.addEventListener("click", () =>
+      showModal(elements.settingsModal)
+    );
+    elements.apiKeyInput.value = state.apiKey;
+    elements.streamEnabledInput.checked = state.streamEnabled;
+
+    elements.apiKeyInput.addEventListener("change", (e) => {
+      const previousKey = state.apiKey;
+      state.apiKey = e.target.value;
+      localStorage.setItem("starport_api_key", state.apiKey);
+      updateUI();
+
+      // Reload models when API key changes
+      if (state.apiKey !== previousKey) {
         loadModels();
-        setupEventListeners();
-        updateUI();
-        
-        // Create new chat if no chats exist
-        if (Object.keys(state.chats).length === 0) {
-            createNewChat();
-        } else {
-            // Load the most recent chat
-            const chatIds = Object.keys(state.chats).sort((a, b) => 
-                state.chats[b].lastModified - state.chats[a].lastModified
-            );
-            loadChat(chatIds[0]);
+        // Show feedback
+        if (state.apiKey) {
+          showToast("API key saved successfully", "success");
         }
+      }
+    });
+
+    elements.streamEnabledInput.addEventListener("change", (e) => {
+      state.streamEnabled = e.target.checked;
+      localStorage.setItem("starport_stream", state.streamEnabled);
+    });
+
+    if (elements.generateKeyBtn) {
+      elements.generateKeyBtn.addEventListener("click", generateAPIKey);
     }
 
-    // Event Listeners
-    function setupEventListeners() {
-        // Theme toggle
-        elements.themeToggle.addEventListener('click', toggleTheme);
-        
-        // Settings
-        elements.settingsBtn.addEventListener('click', () => showModal(elements.settingsModal));
-        elements.apiKeyInput.value = state.apiKey;
-        elements.streamEnabledInput.checked = state.streamEnabled;
-        elements.typewriterEnabledInput.checked = state.typewriterEnabled;
-        elements.typewriterSpeedSelect.value = state.typewriterSpeed;
-        
-        elements.apiKeyInput.addEventListener('change', (e) => {
-            const previousKey = state.apiKey;
-            state.apiKey = e.target.value;
-            localStorage.setItem('starport_api_key', state.apiKey);
-            updateUI();
-            
-            // Reload models when API key changes
-            if (state.apiKey !== previousKey) {
-                loadModels();
-                // Show feedback
-                if (state.apiKey) {
-                    showToast('API key saved successfully', 'success');
-                }
-            }
-        });
-        
-        elements.streamEnabledInput.addEventListener('change', (e) => {
-            state.streamEnabled = e.target.checked;
-            localStorage.setItem('starport_stream', state.streamEnabled);
-        });
-        
-        elements.typewriterEnabledInput.addEventListener('change', (e) => {
-            state.typewriterEnabled = e.target.checked;
-            localStorage.setItem('starport_typewriter', state.typewriterEnabled);
-        });
-        
-        elements.typewriterSpeedSelect.addEventListener('change', (e) => {
-            state.typewriterSpeed = e.target.value;
-            localStorage.setItem('starport_typewriter_speed', state.typewriterSpeed);
-        });
-        
-        if (elements.generateKeyBtn) {
-            elements.generateKeyBtn.addEventListener('click', generateAPIKey);
-        }
-        
-        // Modal close buttons
-        document.querySelectorAll('.modal-close').forEach(btn => {
-            btn.addEventListener('click', () => hideModal(elements.settingsModal));
-        });
-        
-        // Sidebar
-        elements.sidebarToggle.addEventListener('click', toggleSidebar);
-        elements.newChatBtn.addEventListener('click', createNewChat);
-        elements.clearAllBtn.addEventListener('click', clearAllChats);
-        
-        // Model selection
-        elements.modelSelect.addEventListener('change', (e) => {
-            state.selectedModel = e.target.value;
-            localStorage.setItem('starport_model', state.selectedModel);
-            updateUI();
-            updateModelPricing();
-            updateConversationStats();
-        });
-        
-        // Message input
-        elements.messageInput.addEventListener('input', () => {
-            autoResizeTextarea(elements.messageInput);
-            updateUI();
-        });
-        
-        elements.messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-        
-        // Send/Stop buttons
-        elements.sendBtn.addEventListener('click', sendMessage);
-        elements.stopBtn.addEventListener('click', stopGeneration);
-        
-        // Error toast
-        document.querySelector('.toast-close').addEventListener('click', hideError);
-        elements.toastMessage.addEventListener('click', () => {
-            elements.toastDetails.style.display = 
-                elements.toastDetails.style.display === 'none' ? 'block' : 'none';
-        });
-        
-        // Keyboard shortcuts
-        document.addEventListener('keydown', handleKeyboardShortcuts);
+    // Modal close buttons
+    document.querySelectorAll(".modal-close").forEach((btn) => {
+      btn.addEventListener("click", () => hideModal(elements.settingsModal));
+    });
+
+    // Sidebar
+    elements.sidebarToggle.addEventListener("click", toggleSidebar);
+    elements.newChatBtn.addEventListener("click", createNewChat);
+    elements.clearAllBtn.addEventListener("click", clearAllChats);
+
+    // Model selection
+    elements.modelSelect.addEventListener("change", (e) => {
+      state.selectedModel = e.target.value;
+      localStorage.setItem("starport_model", state.selectedModel);
+      updateUI();
+      updateModelPricing();
+      updateConversationStats();
+    });
+
+    // Message input
+    elements.messageInput.addEventListener("input", () => {
+      autoResizeTextarea(elements.messageInput);
+      updateUI();
+    });
+
+    elements.messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Send/Stop buttons
+    elements.sendBtn.addEventListener("click", sendMessage);
+    elements.stopBtn.addEventListener("click", stopGeneration);
+
+    // Error toast
+    document.querySelector(".toast-close").addEventListener("click", hideError);
+    elements.toastMessage.addEventListener("click", () => {
+      elements.toastDetails.style.display =
+        elements.toastDetails.style.display === "none" ? "block" : "none";
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", handleKeyboardShortcuts);
+  }
+
+  function setupScrollHandlers() {
+    let scrollTimeout;
+    const scrollThreshold = 100; // pixels from bottom to consider "at bottom"
+
+    // Create scroll to bottom button
+    const scrollButton = document.createElement("button");
+    scrollButton.className = "scroll-to-bottom";
+    scrollButton.innerHTML = `
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <polyline points="19 12 12 19 5 12"></polyline>
+            </svg>
+        `;
+    scrollButton.style.opacity = "0";
+    scrollButton.style.pointerEvents = "none";
+    elements.messages.parentElement.appendChild(scrollButton);
+
+    // Check if user is at bottom of messages
+    function isAtBottom() {
+      const { scrollTop, scrollHeight, clientHeight } = elements.messages;
+      return scrollHeight - scrollTop - clientHeight < scrollThreshold;
     }
 
-    // Theme Management
-    function toggleTheme() {
-        const html = document.documentElement;
-        const currentTheme = html.getAttribute('data-theme');
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        html.setAttribute('data-theme', newTheme);
-        localStorage.setItem('starport_theme', newTheme);
+    // Update scroll button visibility
+    function updateScrollButton() {
+      if (isAtBottom()) {
+        scrollButton.style.opacity = "0";
+        scrollButton.style.pointerEvents = "none";
+        state.autoScroll = true;
+        state.userScrolled = false;
+      } else {
+        scrollButton.style.opacity = "1";
+        scrollButton.style.pointerEvents = "auto";
+      }
     }
 
-    // Modal Management
-    function showModal(modal) {
-        modal.classList.add('active');
+    // Scroll to bottom smoothly
+    function scrollToBottom(smooth = true) {
+      elements.messages.scrollTo({
+        top: elements.messages.scrollHeight,
+        behavior: smooth ? "smooth" : "instant",
+      });
+      state.autoScroll = true;
+      state.userScrolled = false;
     }
 
-    function hideModal(modal) {
-        modal.classList.remove('active');
+    // Handle scroll events
+    elements.messages.addEventListener("scroll", () => {
+      // IMMEDIATE actions (no delay)
+      const atBottom = isAtBottom();
+
+      // Show/hide button immediately with smooth transition
+      if (atBottom) {
+        scrollButton.style.opacity = "0";
+        scrollButton.style.pointerEvents = "none";
+      } else {
+        scrollButton.style.opacity = "1";
+        scrollButton.style.pointerEvents = "auto";
+      }
+
+      // If user scrolled up during streaming, disable auto-scroll IMMEDIATELY
+      if (state.isGenerating && !atBottom) {
+        state.userScrolled = true;
+        state.autoScroll = false;
+      }
+
+      // If user scrolled to bottom (even during streaming), re-enable auto-scroll
+      if (atBottom) {
+        state.autoScroll = true;
+        state.userScrolled = false;
+      }
+
+      // DEBOUNCED actions (with delay) - not needed anymore but kept for future use
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        // Could add additional logic here if needed
+      }, 150);
+    });
+
+    // Scroll to bottom button click
+    scrollButton.addEventListener("click", () => {
+      // Use instant scroll during streaming so we can keep up with new content
+      scrollToBottom(!state.isGenerating);
+    });
+
+    // Store scroll functions globally for use in other parts
+    window.scrollToBottom = scrollToBottom;
+    window.isAtBottom = isAtBottom;
+  }
+
+  // Theme Management
+  function toggleTheme() {
+    const html = document.documentElement;
+    const currentTheme = html.getAttribute("data-theme");
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+    html.setAttribute("data-theme", newTheme);
+    localStorage.setItem("starport_theme", newTheme);
+
+    // Update Prism.js theme
+    updatePrismTheme(newTheme);
+
+    // Update Mermaid theme
+    if (typeof mermaid !== "undefined") {
+      mermaid.initialize({
+        theme: newTheme === "dark" ? "dark" : "default",
+      });
+    }
+  }
+
+  function updatePrismTheme(theme) {
+    // Update Prism.js theme stylesheet
+    const prismLink = document.getElementById("prism-theme");
+    if (prismLink) {
+      const baseUrl = "https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/";
+      const themeName = theme === "dark" ? "prism-tomorrow" : "prism";
+      prismLink.href = `${baseUrl}${themeName}.min.css`;
+    }
+  }
+
+  // Modal Management
+  function showModal(modal) {
+    modal.classList.add("active");
+  }
+
+  function hideModal(modal) {
+    modal.classList.remove("active");
+  }
+
+  // Sidebar Management
+  function toggleSidebar() {
+    elements.sidebar.classList.toggle("active");
+  }
+
+  // Chat Management
+  function createNewChat() {
+    const chatId = generateId();
+    const chat = {
+      id: chatId,
+      title: "New Chat",
+      messages: [],
+      created: Date.now(),
+      lastModified: Date.now(),
+    };
+
+    state.chats[chatId] = chat;
+    state.currentChatId = chatId;
+    saveChats();
+    updateChatList();
+    updateMessagesUI();
+    updateConversationStats();
+    elements.messageInput.focus();
+  }
+
+  function loadChat(chatId) {
+    if (!state.chats[chatId]) return;
+
+    state.currentChatId = chatId;
+    updateChatList();
+    updateMessagesUI();
+    updateConversationStats();
+  }
+
+  function deleteChat(chatId) {
+    delete state.chats[chatId];
+
+    if (state.currentChatId === chatId) {
+      const remainingChats = Object.keys(state.chats);
+      if (remainingChats.length > 0) {
+        loadChat(remainingChats[0]);
+      } else {
+        createNewChat();
+      }
     }
 
-    // Sidebar Management
-    function toggleSidebar() {
-        elements.sidebar.classList.toggle('active');
-    }
+    saveChats();
+    updateChatList();
 
-    // Chat Management
-    function createNewChat() {
-        const chatId = generateId();
-        const chat = {
-            id: chatId,
-            title: 'New Chat',
-            messages: [],
-            created: Date.now(),
-            lastModified: Date.now()
+    // Update stats if this was the current chat
+    if (state.currentChatId && state.chats[state.currentChatId]) {
+      updateConversationStats();
+    }
+  }
+
+  function clearAllChats() {
+    if (
+      confirm(
+        "Are you sure you want to clear all chats? This cannot be undone."
+      )
+    ) {
+      state.chats = {};
+      localStorage.removeItem("starport_chats");
+      createNewChat();
+    }
+  }
+
+  function updateChatTitle(chatId, firstMessage) {
+    const chat = state.chats[chatId];
+    if (chat && chat.messages.length === 1) {
+      // Update title based on first message
+      chat.title =
+        firstMessage.substring(0, 50) + (firstMessage.length > 50 ? "..." : "");
+      saveChats();
+      updateChatList();
+    }
+  }
+
+  // Message Generation
+  async function generate(assistantMessage) {
+    const chat = state.chats[state.currentChatId];
+    if (!chat) return;
+
+    // Start generation
+    state.isGenerating = true;
+    state.abortController = new AbortController();
+    updateUI();
+
+    try {
+      const requestBody = {
+        model: state.selectedModel,
+        messages: chat.messages.slice(0, -1).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+        stream: state.streamEnabled,
+      };
+
+      // Add reasoning parameters for models that support it
+      // Enable for Gemini 2.5 models (Pro, Flash, Flash-Lite)
+      const model = state.selectedModel.toLowerCase();
+
+      if (
+        model.includes("gemini") &&
+        (model.includes("2.5-pro") ||
+          model.includes("2.5-flash") ||
+          model.includes("2.5-flash-lite") ||
+          model.includes("gemini-2.5-pro") ||
+          model.includes("gemini-2.5-flash"))
+      ) {
+        requestBody.reasoning = {
+          effort: "high", // Use dynamic thinking for best results
         };
-        
-        state.chats[chatId] = chat;
-        state.currentChatId = chatId;
-        saveChats();
-        updateChatList();
-        updateMessagesUI();
-        updateConversationStats();
-        elements.messageInput.focus();
+      }
+
+      const startTime = performance.now();
+
+      const response = await fetch(`${config.apiBaseURL}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+        signal: state.abortController.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || `HTTP ${response.status}`);
+      }
+
+      if (state.streamEnabled) {
+        await handleStreamingResponse(response, assistantMessage, startTime);
+      } else {
+        await handleNonStreamingResponse(response, assistantMessage, startTime);
+      }
+    } catch (error) {
+      if (error.name === "AbortError") {
+        assistantMessage.content += " [Generation stopped]";
+        updateMessageDirectly(assistantMessage);
+      } else {
+        showError(error.message, error);
+        chat.messages.pop(); // Remove failed assistant message
+      }
+    } finally {
+      state.isGenerating = false;
+
+      assistantMessage.streaming = false;
+      saveChats();
+      updateUI();
+      // Don't rebuild the entire UI, just update the final state
+      updateMessageUI(assistantMessage);
+      updateConversationStats();
+    }
+  }
+
+  // Message Handling
+  async function sendMessage() {
+    const message = elements.messageInput.value.trim();
+    if (!message || !state.apiKey || !state.selectedModel || state.isGenerating)
+      return;
+
+    const chat = state.chats[state.currentChatId];
+    if (!chat) return;
+
+    // Add user message
+    const userMessage = {
+      role: "user",
+      content: message,
+      timestamp: Date.now(),
+    };
+    chat.messages.push(userMessage);
+
+    // Clear input
+    elements.messageInput.value = "";
+    autoResizeTextarea(elements.messageInput);
+
+    // Update UI
+    updateMessagesUI();
+    updateChatTitle(state.currentChatId, message);
+
+    // Prepare assistant message
+    const assistantMessage = {
+      role: "assistant",
+      content: "",
+      reasoning: "",
+      timestamp: Date.now(),
+      streaming: true,
+      startTime: performance.now(),
+      firstTokenTime: null,
+    };
+    chat.messages.push(assistantMessage);
+
+    // Append the assistant message element directly
+    const messageEl = createMessageElement(
+      assistantMessage,
+      chat.messages.length - 1
+    );
+    elements.messages.appendChild(messageEl);
+
+    // Scroll to bottom if auto-scroll is enabled
+    if (state.autoScroll) {
+      elements.messages.scrollTop = elements.messages.scrollHeight;
     }
 
-    function loadChat(chatId) {
-        if (!state.chats[chatId]) return;
-        
-        state.currentChatId = chatId;
-        updateChatList();
-        updateMessagesUI();
-        updateConversationStats();
-    }
+    // Call the generate function
+    await generate(assistantMessage);
+  }
 
-    function deleteChat(chatId) {
-        delete state.chats[chatId];
-        
-        if (state.currentChatId === chatId) {
-            const remainingChats = Object.keys(state.chats);
-            if (remainingChats.length > 0) {
-                loadChat(remainingChats[0]);
-            } else {
-                createNewChat();
+  async function handleStreamingResponse(
+    response,
+    assistantMessage,
+    startTime
+  ) {
+    // Get the actual message reference from the chat
+    const chat = state.chats[state.currentChatId];
+    if (!chat) return;
+
+    // Find the actual message in the array
+    const messageIndex = chat.messages.findIndex(
+      (m) => m.timestamp === assistantMessage.timestamp
+    );
+    if (messageIndex === -1) return;
+
+    const message = chat.messages[messageIndex]; // Use the actual reference
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          if (data === "[DONE]") {
+            message.latency = Math.round(performance.now() - message.startTime);
+            message.streaming = false;
+
+            // Calculate reasoning duration if not already set (e.g., reasoning-only response)
+            if (!message.reasoningDuration && message.reasoningStartTime) {
+              message.reasoningEndTime = performance.now();
+              message.reasoningDuration =
+                (message.reasoningEndTime - message.reasoningStartTime) / 1000;
             }
-        }
-        
-        saveChats();
-        updateChatList();
-        
-        // Update stats if this was the current chat
-        if (state.currentChatId && state.chats[state.currentChatId]) {
-            updateConversationStats();
-        }
-    }
 
-    function clearAllChats() {
-        if (confirm('Are you sure you want to clear all chats? This cannot be undone.')) {
-            state.chats = {};
-            localStorage.removeItem('starport_chats');
-            createNewChat();
-        }
-    }
+            // Calculate tokens per second
+            if (
+              message.latency > 0 &&
+              message.usage &&
+              message.usage.total_tokens > 0
+            ) {
+              message.tokensPerSecond =
+                message.usage.total_tokens / (message.latency / 1000);
+            }
 
-    function updateChatTitle(chatId, firstMessage) {
-        const chat = state.chats[chatId];
-        if (chat && chat.messages.length === 1) {
-            // Update title based on first message
-            chat.title = firstMessage.substring(0, 50) + (firstMessage.length > 50 ? '...' : '');
+            // Final update to show completion tokens and reasoning tokens
+            updateMessageDirectly(message);
             saveChats();
-            updateChatList();
-        }
-    }
+            return;
+          }
 
-    // Message Handling
-    async function sendMessage() {
-        const message = elements.messageInput.value.trim();
-        if (!message || !state.apiKey || !state.selectedModel || state.isGenerating) return;
-        
-        const chat = state.chats[state.currentChatId];
-        if (!chat) return;
-        
-        // Add user message
-        const userMessage = {
-            role: 'user',
-            content: message,
-            timestamp: Date.now()
-        };
-        chat.messages.push(userMessage);
-        
-        // Clear input
-        elements.messageInput.value = '';
-        autoResizeTextarea(elements.messageInput);
-        
-        // Update UI
-        updateMessagesUI();
-        updateChatTitle(state.currentChatId, message);
-        
-        // Prepare assistant message
-        const assistantMessage = {
-            role: 'assistant',
-            content: '',
-            timestamp: Date.now(),
-            streaming: true,
-            thinking: true,
-            startTime: performance.now(),
-            firstTokenTime: null
-        };
-        chat.messages.push(assistantMessage);
-        console.log('Created assistant message with timestamp:', assistantMessage.timestamp);
-        
-        // Create typewriter queue for this message if enabled
-        if (state.typewriterEnabled && state.streamEnabled) {
-            const typewriter = new TypewriterQueue(assistantMessage.timestamp, (text, isStreaming) => {
-                assistantMessage.content = text;
-                assistantMessage.streaming = isStreaming;
-                updateMessageUI(assistantMessage);
-            });
-            state.typewriterQueues.set(assistantMessage.timestamp, typewriter);
-        }
-        
-        // Render the empty assistant message container
-        updateMessagesUI();
-        
-        // Start generation
-        state.isGenerating = true;
-        state.abortController = new AbortController();
-        updateUI();
-        
-        try {
-            const requestBody = {
-                model: state.selectedModel,
-                messages: chat.messages.slice(0, -1).map(m => ({
-                    role: m.role,
-                    content: m.content
-                })),
-                stream: state.streamEnabled
-            };
-            
-            const startTime = performance.now();
-            
-            const response = await fetch(`${config.apiBaseURL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${state.apiKey}`
-                },
-                body: JSON.stringify(requestBody),
-                signal: state.abortController.signal
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error?.message || `HTTP ${response.status}`);
-            }
-            
-            if (state.streamEnabled) {
-                await handleStreamingResponse(response, assistantMessage, startTime);
-            } else {
-                await handleNonStreamingResponse(response, assistantMessage, startTime);
-            }
-            
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                // Stop typewriter and add stopped message
-                const typewriter = state.typewriterQueues.get(assistantMessage.timestamp);
-                if (typewriter) {
-                    typewriter.destroy();
-                    state.typewriterQueues.delete(assistantMessage.timestamp);
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            const reasoning = parsed.choices?.[0]?.delta?.reasoning;
+
+            if (content || reasoning) {
+              // Record time to first token
+              if (!message.firstTokenTime && (content || reasoning)) {
+                message.firstTokenTime = Math.round(
+                  performance.now() - message.startTime
+                );
+              }
+
+              if (content) {
+                // Track reasoning duration when content starts
+                if (!message.reasoningEndTime && message.reasoningStartTime) {
+                  message.reasoningEndTime = performance.now();
+                  message.reasoningDuration =
+                    (message.reasoningEndTime - message.reasoningStartTime) /
+                    1000; // Convert to seconds
                 }
-                assistantMessage.content += ' [Generation stopped]';
-                updateMessageUI(assistantMessage);
-            } else {
-                showError(error.message, error);
-                chat.messages.pop(); // Remove failed assistant message
-            }
-        } finally {
-            state.isGenerating = false;
-            
-            // Finish typewriter animation
-            const typewriter = state.typewriterQueues.get(assistantMessage.timestamp);
-            if (typewriter) {
-                await typewriter.finish();
-                state.typewriterQueues.delete(assistantMessage.timestamp);
-            }
-            
-            assistantMessage.streaming = false;
-            saveChats();
-            updateUI();
-            // Don't rebuild the entire UI, just update the final state
-            updateMessageUI(assistantMessage);
-            updateConversationStats();
-        }
-    }
-
-    async function handleStreamingResponse(response, message, startTime) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
-                    if (data === '[DONE]') {
-                        message.latency = Math.round(performance.now() - message.startTime);
-                        return;
-                    }
-                    
-                    try {
-                        const parsed = JSON.parse(data);
-                        const content = parsed.choices?.[0]?.delta?.content;
-                        if (content) {
-                            // Clear thinking state and record time to first token
-                            if (message.thinking) {
-                                message.thinking = false;
-                                message.firstTokenTime = Math.round(performance.now() - message.startTime);
-                            }
-                            
-                            if (state.typewriterEnabled) {
-                                // Add chunk to typewriter queue
-                                const typewriter = state.typewriterQueues.get(message.timestamp);
-                                if (typewriter) {
-                                    typewriter.addChunk(content);
-                                } else {
-                                    // Fallback if typewriter not found
-                                    message.content += content;
-                                    updateMessageUI(message);
-                                }
-                            } else {
-                                // Direct update without typewriter effect
-                                message.content += content;
-                                updateMessageUI(message);
-                            }
-                        }
-                        
-                        // Update usage info
-                        if (parsed.usage) {
-                            message.usage = parsed.usage;
-                            updateConversationStats();
-                            // Update the previous user message to show prompt tokens
-                            updatePreviousUserMessageTokens(message);
-                        }
-                        
-                        // Check for cache info
-                        if (parsed.cache_info) {
-                            message.cacheHit = parsed.cache_info.hit;
-                        }
-                    } catch (e) {
-                        console.error('Failed to parse SSE data:', e);
-                    }
+                // Auto-collapse reasoning when actual content starts arriving
+                if (
+                  message.reasoning &&
+                  state.expandedReasoning.has(message.timestamp)
+                ) {
+                  state.expandedReasoning.delete(message.timestamp);
                 }
+
+                // Direct update
+                message.content += content;
+                updateMessageDirectly(message);
+              }
+
+              if (reasoning) {
+                // Track when reasoning starts
+                if (!message.reasoning && !message.reasoningStartTime) {
+                  message.reasoningStartTime = performance.now();
+                }
+                // Append reasoning directly - the API already includes proper formatting
+                if (message.reasoning) {
+                  // Simply concatenate - the content already has proper line breaks
+                  message.reasoning = message.reasoning + reasoning;
+                } else {
+                  message.reasoning = reasoning;
+                }
+
+                // Auto-expand reasoning when it starts coming in (only if no content yet)
+                const hasContent =
+                  message.content && message.content.trim().length > 0;
+                if (
+                  !hasContent &&
+                  !state.expandedReasoning.has(message.timestamp)
+                ) {
+                  state.expandedReasoning.add(message.timestamp);
+                }
+                updateMessageDirectly(message);
+              }
             }
+
+            // Update usage info
+            if (parsed.usage) {
+              message.usage = parsed.usage;
+              updateConversationStats();
+              // Update the previous user message to show prompt tokens
+              updatePreviousUserMessageTokens(message);
+              // Update message UI to show tokens
+              updateMessageDirectly(message);
+            }
+
+            // Check for cache info
+            if (parsed.cache_info) {
+              message.cacheHit = parsed.cache_info.hit;
+            }
+          } catch (e) {
+            console.error("Failed to parse SSE data:", e);
+          }
         }
+      }
+    }
+  }
+
+  async function handleNonStreamingResponse(
+    response,
+    assistantMessage,
+    startTime
+  ) {
+    // Get the actual message reference from the chat
+    const chat = state.chats[state.currentChatId];
+    if (!chat) return;
+
+    // Find the actual message in the array
+    const messageIndex = chat.messages.findIndex(
+      (m) => m.timestamp === assistantMessage.timestamp
+    );
+    if (messageIndex === -1) return;
+
+    const message = chat.messages[messageIndex]; // Use the actual reference
+    const data = await response.json();
+    message.content = data.choices?.[0]?.message?.content || "";
+    message.reasoning = data.choices?.[0]?.message?.reasoning || "";
+    message.latency = Math.round(performance.now() - message.startTime);
+    message.usage = data.usage;
+    message.cacheHit = data.cache_info?.hit;
+
+    // For non-streaming, estimate reasoning duration based on token proportions
+    if (
+      message.reasoning &&
+      message.usage?.completion_tokens_details?.reasoning_tokens
+    ) {
+      const reasoningTokens =
+        message.usage.completion_tokens_details.reasoning_tokens;
+      const totalTokens = message.usage.completion_tokens || 0;
+      if (totalTokens > 0) {
+        // Estimate reasoning took proportional time based on token count
+        const reasoningProportion = reasoningTokens / totalTokens;
+        message.reasoningDuration =
+          (message.latency / 1000) * reasoningProportion;
+        message.reasoningDurationEstimated = true; // Mark as estimated
+      }
     }
 
-    async function handleNonStreamingResponse(response, message, startTime) {
-        const data = await response.json();
-        message.content = data.choices?.[0]?.message?.content || '';
-        message.latency = Math.round(performance.now() - message.startTime);
-        message.usage = data.usage;
-        message.cacheHit = data.cache_info?.hit;
-        message.thinking = false;
-        
-        // Update the previous user message to show prompt tokens
-        if (message.usage) {
-            updatePreviousUserMessageTokens(message);
-        }
-        
-        if (data.usage) {
-            updateConversationStats();
-        }
-        
-        updateMessagesUI();
+    // Calculate tokens per second
+    if (
+      message.latency > 0 &&
+      message.usage &&
+      message.usage.total_tokens > 0
+    ) {
+      message.tokensPerSecond =
+        message.usage.total_tokens / (message.latency / 1000);
     }
 
-    function stopGeneration() {
-        if (state.abortController) {
-            state.abortController.abort();
-        }
+    // Update the previous user message to show prompt tokens
+    if (message.usage) {
+      updatePreviousUserMessageTokens(message);
     }
 
-    // UI Updates
-    function updateUI() {
-        // Send button state
-        const canSend = elements.messageInput.value.trim() && 
-                       state.apiKey && 
-                       state.selectedModel && 
-                       !state.isGenerating;
-        elements.sendBtn.disabled = !canSend;
-        
-        // Show/hide send vs stop button
-        elements.sendBtn.style.display = state.isGenerating ? 'none' : 'block';
-        elements.stopBtn.style.display = state.isGenerating ? 'block' : 'none';
+    if (data.usage) {
+      updateConversationStats();
     }
 
-    function updateChatList() {
-        elements.chatList.innerHTML = '';
-        
-        const sortedChats = Object.values(state.chats).sort((a, b) => 
-            b.lastModified - a.lastModified
-        );
-        
-        sortedChats.forEach(chat => {
-            const chatItem = document.createElement('div');
-            chatItem.className = 'chat-item' + (chat.id === state.currentChatId ? ' active' : '');
-            chatItem.innerHTML = `
+    updateMessagesUI();
+  }
+
+  function stopGeneration() {
+    if (state.abortController) {
+      state.abortController.abort();
+    }
+  }
+
+  // UI Updates
+  function updateUI() {
+    // Send button state
+    const canSend =
+      elements.messageInput.value.trim() &&
+      state.apiKey &&
+      state.selectedModel &&
+      !state.isGenerating;
+    elements.sendBtn.disabled = !canSend;
+
+    // Show/hide send vs stop button
+    elements.sendBtn.style.display = state.isGenerating ? "none" : "block";
+    elements.stopBtn.style.display = state.isGenerating ? "block" : "none";
+  }
+
+  function updateChatList() {
+    elements.chatList.innerHTML = "";
+
+    const sortedChats = Object.values(state.chats).sort(
+      (a, b) => b.lastModified - a.lastModified
+    );
+
+    sortedChats.forEach((chat) => {
+      const chatItem = document.createElement("div");
+      chatItem.className =
+        "chat-item" + (chat.id === state.currentChatId ? " active" : "");
+      chatItem.innerHTML = `
                 <div class="chat-item-title">${escapeHtml(chat.title)}</div>
-                <div class="chat-item-date">${formatDate(chat.lastModified)}</div>
+                <div class="chat-item-date">${formatDate(
+                  chat.lastModified
+                )}</div>
             `;
-            chatItem.addEventListener('click', () => loadChat(chat.id));
-            elements.chatList.appendChild(chatItem);
-        });
-    }
+      chatItem.addEventListener("click", () => loadChat(chat.id));
+      elements.chatList.appendChild(chatItem);
+    });
+  }
 
-    function updateMessagesUI() {
-        const chat = state.chats[state.currentChatId];
-        if (!chat) return;
-        
-        elements.messages.innerHTML = '';
-        
-        if (chat.messages.length === 0) {
-            elements.messages.innerHTML = `
+  function updateMessagesUI() {
+    const chat = state.chats[state.currentChatId];
+    if (!chat) return;
+
+    elements.messages.innerHTML = "";
+
+    if (chat.messages.length === 0) {
+      elements.messages.innerHTML = `
                 <div class="welcome-message">
-                    <h2>Welcome to ${escapeHtml(config.title || 'Starport Chat')}</h2>
+                    <h2>Welcome to ${escapeHtml(
+                      config.title || "Starport Chat"
+                    )}</h2>
                     <p>Select a model and start chatting!</p>
                 </div>
             `;
-            return;
+      return;
+    }
+
+    chat.messages.forEach((message, index) => {
+      const messageEl = createMessageElement(message, index);
+      elements.messages.appendChild(messageEl);
+    });
+
+    // Render math in all messages
+    if (typeof renderMathInElement !== "undefined") {
+      const messageElements = elements.messages.querySelectorAll(".message");
+      messageElements.forEach((msgEl) => {
+        renderMathInMessage(msgEl);
+      });
+    }
+
+    // Render code and diagrams
+    renderCodeAndDiagrams(elements.messages);
+
+    // Scroll to bottom if auto-scroll is enabled
+    if (state.autoScroll) {
+      elements.messages.scrollTop = elements.messages.scrollHeight;
+    }
+  }
+
+  function updateMessageDirectly(message) {
+    const messageEl = document.getElementById(`message-${message.timestamp}`);
+    if (!messageEl) return;
+
+    // Update streaming class
+    messageEl.className = `message ${message.role}${
+      message.streaming ? " streaming" : ""
+    }`;
+
+    // Update content
+    const textEl = messageEl.querySelector(".message-text");
+    if (textEl && message.content) {
+      // Simply update content without any fade effects
+      textEl.innerHTML = formatMessageContent(message.content);
+      renderSpecialContent(textEl);
+    }
+
+    // Update or add reasoning section
+    if (message.reasoning) {
+      let reasoningEl = messageEl.querySelector(".message-reasoning");
+      if (!reasoningEl) {
+        // Create reasoning section if it doesn't exist
+        const contentEl = messageEl.querySelector(".message-content");
+        const textEl = messageEl.querySelector(".message-text");
+        if (contentEl && textEl) {
+          reasoningEl = document.createElement("div");
+          reasoningEl.className = "message-reasoning";
+          const hasContent =
+            message.content && message.content.trim().length > 0;
+          const reasoningStreaming =
+            message.streaming && message.reasoning && !hasContent;
+          reasoningEl.innerHTML = `
+                        <button class="reasoning-toggle${
+                          reasoningStreaming ? " reasoning-streaming" : ""
+                        }" onclick="toggleReasoning('${message.timestamp}')">
+                            ${
+                              reasoningStreaming
+                                ? `
+                                <svg class="icon loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/>
+                                </svg>
+                                Reasoning...
+                            `
+                                : `
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 18V5"/>
+                                    <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/>
+                                    <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/>
+                                    <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/>
+                                    <path d="M18 18a4 4 0 0 0 2-7.464"/>
+                                    <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/>
+                                    <path d="M6 18a4 4 0 0 1-2-7.464"/>
+                                    <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>
+                                    <!-- Circuit-like nodes -->
+                                    <circle cx="12" cy="5" r="1" fill="currentColor"/>
+                                    <circle cx="12" cy="9" r="0.5" fill="currentColor"/>
+                                    <circle cx="9" cy="13" r="0.5" fill="currentColor"/>
+                                    <circle cx="15" cy="13" r="0.5" fill="currentColor"/>
+                                    <circle cx="12" cy="18" r="1" fill="currentColor"/>
+                                    <!-- Connection dots -->
+                                    <circle cx="6" cy="8" r="0.3" fill="currentColor"/>
+                                    <circle cx="18" cy="8" r="0.3" fill="currentColor"/>
+                                    <circle cx="6" cy="15" r="0.3" fill="currentColor"/>
+                                    <circle cx="18" cy="15" r="0.3" fill="currentColor"/>
+                                </svg>
+                                ${
+                                  message.reasoningDuration
+                                    ? `Thought for <span style="color: var(--text-tertiary);">${message.reasoningDuration.toFixed(
+                                        3
+                                      )}s${
+                                        message.reasoningDurationEstimated
+                                          ? " (estimate)"
+                                          : ""
+                                      }</span>`
+                                    : "Reasoning"
+                                }
+                            `
+                            }
+                        </button>
+                        <div class="reasoning-content ${
+                          state.expandedReasoning.has(message.timestamp)
+                            ? "expanded"
+                            : "collapsed"
+                        }">
+                            <div class="reasoning-inner">
+                                ${formatMessageContent(message.reasoning, true)}
+                            </div>
+                        </div>
+                    `;
+          // Insert before message-text (reasoning should appear above the response)
+          textEl.insertAdjacentElement("beforebegin", reasoningEl);
         }
-        
-        chat.messages.forEach((message, index) => {
-            const messageEl = createMessageElement(message, index);
-            elements.messages.appendChild(messageEl);
-        });
-        
-        // Scroll to bottom
+      } else {
+        // Update existing reasoning content
+        const innerEl = reasoningEl.querySelector(".reasoning-inner");
+        if (innerEl) {
+          innerEl.innerHTML = formatMessageContent(message.reasoning, true);
+          // Auto-scroll to bottom during streaming
+          if (
+            message.streaming &&
+            state.expandedReasoning.has(message.timestamp)
+          ) {
+            requestAnimationFrame(() => {
+              innerEl.scrollTop = innerEl.scrollHeight;
+            });
+          }
+        }
+
+        // Update toggle button and visibility state
+        const toggleBtn = reasoningEl.querySelector(".reasoning-toggle");
+        const reasoningContent =
+          reasoningEl.querySelector(".reasoning-content");
+
+        if (toggleBtn) {
+          const hasContent =
+            message.content && message.content.trim().length > 0;
+          const reasoningStreaming =
+            message.streaming && message.reasoning && !hasContent;
+          toggleBtn.className = `reasoning-toggle${
+            reasoningStreaming ? " reasoning-streaming" : ""
+          }`;
+          toggleBtn.innerHTML = reasoningStreaming
+            ? `
+                        <svg class="icon loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/>
+                        </svg>
+                        Reasoning...
+                    `
+            : `
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 18V5"/>
+                            <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/>
+                            <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/>
+                            <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/>
+                            <path d="M18 18a4 4 0 0 0 2-7.464"/>
+                            <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/>
+                            <path d="M6 18a4 4 0 0 1-2-7.464"/>
+                            <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>
+                            <!-- Circuit-like nodes -->
+                            <circle cx="12" cy="5" r="1" fill="currentColor"/>
+                            <circle cx="12" cy="9" r="0.5" fill="currentColor"/>
+                            <circle cx="9" cy="13" r="0.5" fill="currentColor"/>
+                            <circle cx="15" cy="13" r="0.5" fill="currentColor"/>
+                            <circle cx="12" cy="18" r="1" fill="currentColor"/>
+                            <!-- Connection dots -->
+                            <circle cx="6" cy="8" r="0.3" fill="currentColor"/>
+                            <circle cx="18" cy="8" r="0.3" fill="currentColor"/>
+                            <circle cx="6" cy="15" r="0.3" fill="currentColor"/>
+                            <circle cx="18" cy="15" r="0.3" fill="currentColor"/>
+                        </svg>
+                        ${
+                          message.reasoningDuration
+                            ? `Thought for <span style="color: var(--text-tertiary);">${message.reasoningDuration.toFixed(
+                                3
+                              )}s${
+                                message.reasoningDurationEstimated
+                                  ? " (estimate)"
+                                  : ""
+                              }</span>`
+                            : "Reasoning"
+                        }
+                    `;
+        }
+
+        if (reasoningContent) {
+          // Update the expanded/collapsed class
+          reasoningContent.className = `reasoning-content ${
+            state.expandedReasoning.has(message.timestamp)
+              ? "expanded"
+              : "collapsed"
+          }`;
+        }
+      }
+    }
+
+    // Update metadata
+    const metadataEl = messageEl.querySelector(".message-metadata");
+    if (metadataEl) {
+      updateMessageMetadata(metadataEl, message);
+    }
+
+    // Update message actions (show only when not streaming)
+    if (message.role === "assistant") {
+      let actionsEl = messageEl.querySelector(".message-actions");
+      const contentEl = messageEl.querySelector(".message-content");
+
+      if (!message.streaming && !actionsEl && contentEl) {
+        // Create actions when streaming ends
+        actionsEl = document.createElement("div");
+        actionsEl.className = "message-actions";
+        actionsEl.innerHTML = `
+          <button class="btn btn-ghost" onclick="copyMessage('${message.timestamp}')">Copy</button>
+          <button class="btn btn-ghost" onclick="regenerateMessage('${message.timestamp}')">Regenerate</button>
+        `;
+        contentEl.appendChild(actionsEl);
+      } else if (message.streaming && actionsEl) {
+        // Remove actions during streaming
+        actionsEl.remove();
+      }
+    }
+
+    // Save periodically during streaming
+    if (message.streaming && Math.random() < 0.1) {
+      // Save ~10% of updates
+      saveChats();
+    }
+
+    // Auto-scroll during streaming if enabled
+    if (message.streaming && state.autoScroll && !state.userScrolled) {
+      requestAnimationFrame(() => {
         elements.messages.scrollTop = elements.messages.scrollHeight;
+      });
+    }
+  }
+
+  function updateMessageMetadata(metadataEl, message) {
+    let metadataHtml = "";
+
+    if (message.role === "assistant" && message.usage) {
+      // Determine which phase is streaming
+      const hasContent = message.content && message.content.trim().length > 0;
+      const reasoningStreaming = !!(
+        message.streaming &&
+        message.reasoning &&
+        !hasContent
+      );
+      const contentStreaming = !!(message.streaming && hasContent);
+
+      // Show reasoning tokens first if available
+      if (message.usage.completion_tokens_details?.reasoning_tokens) {
+        const reasoningTokens =
+          message.usage.completion_tokens_details.reasoning_tokens;
+        if (reasoningStreaming) {
+          metadataHtml += `<span class="token-badge streaming" title="Reasoning tokens">Reasoning: ${reasoningTokens.toLocaleString()} tok</span>`;
+        } else {
+          metadataHtml += `<span class="token-badge" title="Reasoning tokens">Reasoning: ${reasoningTokens.toLocaleString()} tok</span>`;
+        }
+      }
+
+      // Then show completion tokens
+      const completionTokens = message.usage.completion_tokens || 0;
+      const tokenBadgeClass = contentStreaming
+        ? "token-badge streaming"
+        : "token-badge";
+      metadataHtml += `<span class="${tokenBadgeClass}" title="Completion tokens generated">Completion: ${completionTokens.toLocaleString()} tok</span>`;
     }
 
-    function updatePreviousUserMessageTokens(assistantMessage) {
-        const chat = state.chats[state.currentChatId];
-        if (!chat || !assistantMessage.usage) return;
-        
-        // Find the index of this assistant message
-        const assistantIndex = chat.messages.findIndex(m => m.timestamp === assistantMessage.timestamp);
-        if (assistantIndex <= 0) return;
-        
-        // Get the previous message (should be user message)
-        const userMessage = chat.messages[assistantIndex - 1];
-        if (userMessage.role !== 'user') return;
-        
-        // Find the user message element and update its metadata
-        const messageElements = elements.messages.querySelectorAll('.message');
-        const userMessageEl = messageElements[assistantIndex - 1];
-        if (userMessageEl) {
-            const metadataEl = userMessageEl.querySelector('.message-metadata');
-            if (metadataEl) {
-                metadataEl.innerHTML = `<span class="token-badge" title="Total prompt tokens">Tokens: ${assistantMessage.usage.prompt_tokens.toLocaleString()}</span>`;
-            }
-        }
+    if (message.firstTokenTime) {
+      metadataHtml += `<span class="latency-badge" title="Time to First Token (milliseconds)">TTFT: ${formatLatency(
+        message.firstTokenTime
+      )}</span>`;
     }
-    
-    function updateMessageUI(message) {
-        // Get the current chat to find message index
-        const chat = state.chats[state.currentChatId];
-        if (!chat) return;
-        
-        // Find the message index
-        const messageIndex = chat.messages.findIndex(m => m.timestamp === message.timestamp);
-        if (messageIndex === -1) {
-            console.error('Message not found in chat messages');
-            return;
-        }
-        
-        // Find the message element by index (more reliable than timestamp)
-        const messageElements = elements.messages.querySelectorAll('.message');
-        const messageEl = messageElements[messageIndex];
-        
-        if (messageEl) {
-            const textEl = messageEl.querySelector('.message-text');
-            if (textEl) {
-                let fullHTML = '';
-                if (message.thinking && !message.content) {
-                    fullHTML = '<span class="thinking-indicator">Thinking...</span>';
-                } else {
-                    fullHTML = formatMessageContent(message.content);
-                    
-                    // If streaming, add cursor at the very end of the content
-                    if (message.streaming && message.content) {
-                        // Find the last closing </p> tag and insert cursor before it
-                        const lastPIndex = fullHTML.lastIndexOf('</p>');
-                        if (lastPIndex !== -1) {
-                            fullHTML = fullHTML.slice(0, lastPIndex) + 
-                                      '<span class="typing-indicator">▍</span>' + 
-                                      fullHTML.slice(lastPIndex);
-                        } else {
-                            // No paragraph tags, append cursor at the end
-                            fullHTML += '<span class="typing-indicator">▍</span>';
-                        }
-                    }
-                }
-                textEl.innerHTML = fullHTML;
-                
-                // Update metadata if message is complete (not streaming)
-                if (!message.streaming) {
-                    const metadataEl = messageEl.querySelector('.message-metadata');
-                    if (metadataEl) {
-                        let metadataHtml = '';
-                        
-                        if (message.role === 'assistant' && message.usage) {
-                            // For assistant messages, show completion tokens
-                            const completionTokens = message.usage.completion_tokens || 0;
-                            metadataHtml += `<span class="token-badge" title="Tokens generated">Tokens: ${completionTokens.toLocaleString()}</span>`;
-                        }
-                        
-                        if (message.firstTokenTime) {
-                            metadataHtml += `<span class="latency-badge" title="Time to First Token (milliseconds)">TTFT: ${formatLatency(message.firstTokenTime)}</span>`;
-                        }
-                        if (message.latency) {
-                            metadataHtml += `<span class="latency-badge" title="Total response latency (milliseconds)">Latency: ${formatLatency(message.latency)}</span>`;
-                        }
-                        if (message.cacheHit !== undefined) {
-                            metadataHtml += `<span class="cache-badge ${message.cacheHit ? 'hit' : 'miss'}" title="Whether this response was served from cache">${message.cacheHit ? 'Cache Hit' : 'Cache Miss'}</span>`;
-                        }
-                        metadataEl.innerHTML = metadataHtml;
-                    }
-                }
-                
-                // Scroll to bottom to show new content
-                elements.messages.scrollTop = elements.messages.scrollHeight;
-            }
-        }
+    if (message.latency) {
+      metadataHtml += `<span class="latency-badge" title="Total response latency (milliseconds)">Latency: ${formatLatency(
+        message.latency
+      )}</span>`;
+    }
+    if (message.tokensPerSecond) {
+      metadataHtml += `<span class="latency-badge" title="Tokens per second (includes reasoning)">TPS: ${message.tokensPerSecond.toFixed(
+        1
+      )} tok/s</span>`;
+    }
+    if (message.cacheHit !== undefined) {
+      metadataHtml += `<span class="cache-badge ${
+        message.cacheHit ? "hit" : "miss"
+      }" title="Whether this response was served from cache">${
+        message.cacheHit ? "Cache Hit" : "Cache Miss"
+      }</span>`;
     }
 
-    function createMessageElement(message, index) {
-        const div = document.createElement('div');
-        div.className = `message ${message.role}`;
-        div.setAttribute('data-timestamp', String(message.timestamp));
-        div.setAttribute('data-message-index', String(index));
-        
-        const avatar = message.role === 'user' ? 'U' : 'A';
-        const roleDisplay = message.role === 'user' ? 'You' : 'Assistant';
-        
-        let metadataHtml = '';
-        
-        // For user messages, show total prompt tokens from the next assistant message
-        if (message.role === 'user') {
-            const chat = state.chats[state.currentChatId];
-            if (chat && index < chat.messages.length - 1) {
-                const nextMessage = chat.messages[index + 1];
-                if (nextMessage.role === 'assistant' && nextMessage.usage && nextMessage.usage.prompt_tokens) {
-                    metadataHtml += `<span class="token-badge" title="Total prompt tokens">Tokens: ${nextMessage.usage.prompt_tokens.toLocaleString()}</span>`;
-                }
+    metadataEl.innerHTML = metadataHtml;
+  }
+
+  function updatePreviousUserMessageTokens(assistantMessage) {
+    const chat = state.chats[state.currentChatId];
+    if (!chat || !assistantMessage.usage) return;
+
+    // Find the index of this assistant message
+    const assistantIndex = chat.messages.findIndex(
+      (m) => m.timestamp === assistantMessage.timestamp
+    );
+    if (assistantIndex <= 0) return;
+
+    // Get the previous message (should be user message)
+    const userMessage = chat.messages[assistantIndex - 1];
+    if (userMessage.role !== "user") return;
+
+    // Find the user message element and update its metadata
+    const messageElements = elements.messages.querySelectorAll(".message");
+    const userMessageEl = messageElements[assistantIndex - 1];
+    if (userMessageEl) {
+      const metadataEl = userMessageEl.querySelector(".message-metadata");
+      if (metadataEl) {
+        metadataEl.innerHTML = `<span class="token-badge" title="Total prompt tokens">Prompt: ${assistantMessage.usage.prompt_tokens.toLocaleString()} tok</span>`;
+      }
+    }
+  }
+
+  function updateMessageUI(message) {
+    // Get the current chat to find message index
+    const chat = state.chats[state.currentChatId];
+    if (!chat) return;
+
+    // Find the message index
+    const messageIndex = chat.messages.findIndex(
+      (m) => m.timestamp === message.timestamp
+    );
+    if (messageIndex === -1) {
+      console.error("Message not found in chat messages");
+      return;
+    }
+
+    // Find the message element by index (more reliable than timestamp)
+    const messageElements = elements.messages.querySelectorAll(".message");
+    const messageEl = messageElements[messageIndex];
+
+    if (messageEl) {
+      // Update message element classes (for streaming state)
+      messageEl.className = `message ${message.role}${
+        message.streaming ? " streaming" : ""
+      }`;
+
+      // Update text content
+      const textEl = messageEl.querySelector(".message-text");
+      if (textEl) {
+        let fullHTML = formatMessageContent(message.content);
+        textEl.innerHTML = fullHTML;
+
+        // Render special content after final update
+        if (!message.streaming) {
+          renderSpecialContent(textEl);
+        }
+      }
+
+      // Always update metadata
+      const metadataEl = messageEl.querySelector(".message-metadata");
+      if (metadataEl) {
+        updateMessageMetadata(metadataEl, message);
+      }
+
+      // Update or add reasoning section
+      if (message.reasoning) {
+        let reasoningEl = messageEl.querySelector(".message-reasoning");
+        if (!reasoningEl) {
+          // Create reasoning section if it doesn't exist
+          const contentEl = messageEl.querySelector(".message-content");
+          const textEl = messageEl.querySelector(".message-text");
+          if (contentEl && textEl) {
+            reasoningEl = document.createElement("div");
+            reasoningEl.className = "message-reasoning";
+            const hasContent =
+              message.content && message.content.trim().length > 0;
+            const reasoningStreaming =
+              message.streaming && message.reasoning && !hasContent;
+            reasoningEl.innerHTML = `
+                            <button class="reasoning-toggle${
+                              reasoningStreaming ? " reasoning-streaming" : ""
+                            }" onclick="toggleReasoning('${
+              message.timestamp
+            }')">
+                                ${
+                                  reasoningStreaming
+                                    ? `
+                                    <svg class="icon loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/>
+                                    </svg>
+                                    Reasoning...
+                                `
+                                    : `
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 18V5"/>
+                                        <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/>
+                                        <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/>
+                                        <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/>
+                                        <path d="M18 18a4 4 0 0 0 2-7.464"/>
+                                        <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/>
+                                        <path d="M6 18a4 4 0 0 1-2-7.464"/>
+                                        <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>
+                                        <!-- Circuit-like nodes -->
+                                        <circle cx="12" cy="5" r="1" fill="currentColor"/>
+                                        <circle cx="12" cy="9" r="0.5" fill="currentColor"/>
+                                        <circle cx="9" cy="13" r="0.5" fill="currentColor"/>
+                                        <circle cx="15" cy="13" r="0.5" fill="currentColor"/>
+                                        <circle cx="12" cy="18" r="1" fill="currentColor"/>
+                                        <!-- Connection dots -->
+                                        <circle cx="6" cy="8" r="0.3" fill="currentColor"/>
+                                        <circle cx="18" cy="8" r="0.3" fill="currentColor"/>
+                                        <circle cx="6" cy="15" r="0.3" fill="currentColor"/>
+                                        <circle cx="18" cy="15" r="0.3" fill="currentColor"/>
+                                    </svg>
+                                    Reasoning
+                                `
+                                }
+                            </button>
+                            <div class="reasoning-content ${
+                              state.expandedReasoning.has(message.timestamp)
+                                ? "expanded"
+                                : "collapsed"
+                            }">
+                                <div class="reasoning-inner">
+                                    ${formatMessageContent(
+                                      message.reasoning,
+                                      true
+                                    )}
+                                </div>
+                            </div>
+                        `;
+            // Insert before message-text (reasoning should appear above the response)
+            textEl.insertAdjacentElement("beforebegin", reasoningEl);
+          }
+        } else {
+          // Update existing reasoning content
+          const reasoningContentEl =
+            reasoningEl.querySelector(".reasoning-content");
+          if (reasoningContentEl) {
+            // Find or create the inner div
+            let innerEl = reasoningContentEl.querySelector(".reasoning-inner");
+            if (!innerEl) {
+              innerEl = document.createElement("div");
+              innerEl.className = "reasoning-inner";
+              reasoningContentEl.appendChild(innerEl);
             }
-        } else if (message.role === 'assistant' && message.usage) {
-            // For assistant messages, show completion tokens
-            const completionTokens = message.usage.completion_tokens || 0;
-            metadataHtml += `<span class="token-badge" title="Tokens generated">Tokens: ${completionTokens.toLocaleString()}</span>`;
+            innerEl.innerHTML = formatMessageContent(message.reasoning, true);
+            // Auto-scroll to bottom of reasoning content during streaming
+            if (message.streaming) {
+              // Small delay to ensure DOM updates
+              requestAnimationFrame(() => {
+                innerEl.scrollTop = innerEl.scrollHeight;
+              });
+            }
+            // Update classes (no streaming class for reasoning)
+            reasoningContentEl.className = `reasoning-content ${
+              state.expandedReasoning.has(message.timestamp)
+                ? "expanded"
+                : "collapsed"
+            }`;
+          }
+          // Update toggle button
+          const toggleBtn = reasoningEl.querySelector(".reasoning-toggle");
+          if (toggleBtn) {
+            // Don't update innerHTML here - it's already set correctly above
+            // Add/remove reasoning-streaming class based on whether reasoning is still streaming
+            const hasContent =
+              message.content && message.content.trim().length > 0;
+            const reasoningStreaming =
+              message.streaming && message.reasoning && !hasContent;
+            if (reasoningStreaming) {
+              toggleBtn.classList.add("reasoning-streaming");
+            } else {
+              toggleBtn.classList.remove("reasoning-streaming");
+            }
+          }
         }
-        
-        if (message.firstTokenTime) {
-            metadataHtml += `<span class="latency-badge" title="Time to First Token (milliseconds)">TTFT: ${formatLatency(message.firstTokenTime)}</span>`;
+      }
+
+      // Render math in the message
+      renderMathInMessage(messageEl);
+
+      // Render code highlighting and diagrams
+      renderCodeAndDiagrams(messageEl);
+
+      // Scroll to bottom to show new content
+      elements.messages.scrollTop = elements.messages.scrollHeight;
+    }
+  }
+
+  function createMessageElement(message, index) {
+    const div = document.createElement("div");
+    div.className = `message ${message.role}${
+      message.streaming ? " streaming" : ""
+    }`;
+    div.id = `message-${message.timestamp}`;
+    div.setAttribute("data-timestamp", String(message.timestamp));
+    div.setAttribute("data-message-index", String(index));
+
+    const avatar = message.role === "user" ? "U" : "A";
+    const roleDisplay = message.role === "user" ? "You" : "Assistant";
+
+    let metadataHtml = "";
+
+    // For user messages, show total prompt tokens from the next assistant message
+    if (message.role === "user") {
+      const chat = state.chats[state.currentChatId];
+      if (chat && index < chat.messages.length - 1) {
+        const nextMessage = chat.messages[index + 1];
+        if (
+          nextMessage.role === "assistant" &&
+          nextMessage.usage &&
+          nextMessage.usage.prompt_tokens
+        ) {
+          metadataHtml += `<span class="token-badge" title="Total prompt tokens">Prompt: ${nextMessage.usage.prompt_tokens.toLocaleString()} tok</span>`;
         }
-        if (message.latency) {
-            metadataHtml += `<span class="latency-badge" title="Total response latency (milliseconds)">Latency: ${formatLatency(message.latency)}</span>`;
+      }
+    } else if (message.role === "assistant" && message.usage) {
+      // Determine which phase is streaming
+      const hasContent = message.content && message.content.trim().length > 0;
+      const reasoningStreaming = !!(
+        message.streaming &&
+        message.reasoning &&
+        !hasContent
+      );
+      const contentStreaming = !!(message.streaming && hasContent);
+
+      // Show reasoning tokens first if available
+      if (message.usage.completion_tokens_details?.reasoning_tokens) {
+        const reasoningTokens =
+          message.usage.completion_tokens_details.reasoning_tokens;
+        // Only apply inline styles when NOT streaming (to show blue when static)
+        if (reasoningStreaming) {
+          metadataHtml += `<span class="token-badge streaming" title="Reasoning tokens">Reasoning: ${reasoningTokens.toLocaleString()} tok</span>`;
+        } else {
+          metadataHtml += `<span class="token-badge" title="Reasoning tokens">Reasoning: ${reasoningTokens.toLocaleString()} tok</span>`;
         }
-        if (message.cacheHit !== undefined) {
-            metadataHtml += `<span class="cache-badge ${message.cacheHit ? 'hit' : 'miss'}" title="Whether this response was served from cache">${message.cacheHit ? 'Cache Hit' : 'Cache Miss'}</span>`;
-        }
-        
-        div.innerHTML = `
+      }
+
+      // Then show completion tokens
+      const completionTokens = message.usage.completion_tokens || 0;
+      metadataHtml += `<span class="token-badge${
+        contentStreaming ? " streaming" : ""
+      }" title="Completion tokens generated">Completion: ${completionTokens.toLocaleString()} tok</span>`;
+    }
+
+    if (message.firstTokenTime) {
+      metadataHtml += `<span class="latency-badge" title="Time to First Token (milliseconds)">TTFT: ${formatLatency(
+        message.firstTokenTime
+      )}</span>`;
+    }
+    if (message.latency) {
+      metadataHtml += `<span class="latency-badge" title="Total response latency (milliseconds)">Latency: ${formatLatency(
+        message.latency
+      )}</span>`;
+    }
+    if (message.tokensPerSecond) {
+      metadataHtml += `<span class="latency-badge" title="Tokens per second (includes reasoning)">TPS: ${message.tokensPerSecond.toFixed(
+        1
+      )} tok/s</span>`;
+    }
+    if (message.cacheHit !== undefined) {
+      metadataHtml += `<span class="cache-badge ${
+        message.cacheHit ? "hit" : "miss"
+      }" title="Whether this response was served from cache">${
+        message.cacheHit ? "Cache Hit" : "Cache Miss"
+      }</span>`;
+    }
+
+    div.innerHTML = `
             <div class="message-avatar">${avatar}</div>
             <div class="message-content">
                 <div class="message-header">
                     <span class="message-role">${roleDisplay}</span>
                     <div class="message-metadata">${metadataHtml}</div>
                 </div>
-                <div class="message-text">
-                    ${message.thinking && !message.content ? '<span class="thinking-indicator">Thinking...</span>' : 
-                      (() => {
-                          let html = formatMessageContent(message.content);
-                          if (message.streaming && message.content) {
-                              // Find the last closing </p> tag and insert cursor before it
-                              const lastPIndex = html.lastIndexOf('</p>');
-                              if (lastPIndex !== -1) {
-                                  html = html.slice(0, lastPIndex) + 
-                                        '<span class="typing-indicator">▍</span>' + 
-                                        html.slice(lastPIndex);
-                              } else {
-                                  // No paragraph tags, append cursor at the end
-                                  html += '<span class="typing-indicator">▍</span>';
-                              }
-                          }
-                          return html;
-                      })()
-                    }
+                ${
+                  message.reasoning
+                    ? `
+                <div class="message-reasoning">
+                    <button class="reasoning-toggle${
+                      message.streaming &&
+                      message.reasoning &&
+                      (!message.content || message.content.trim().length === 0)
+                        ? " reasoning-streaming"
+                        : ""
+                    }" onclick="toggleReasoning('${message.timestamp}')">
+                        ${
+                          message.streaming &&
+                          message.reasoning &&
+                          (!message.content ||
+                            message.content.trim().length === 0)
+                            ? `
+                            <svg class="icon loading-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a10 10 0 1 0 10 10" stroke-linecap="round"/>
+                            </svg>
+                            Reasoning...
+                        `
+                            : `
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 18V5"/>
+                                <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"/>
+                                <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5"/>
+                                <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77"/>
+                                <path d="M18 18a4 4 0 0 0 2-7.464"/>
+                                <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517"/>
+                                <path d="M6 18a4 4 0 0 1-2-7.464"/>
+                                <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77"/>
+                                <!-- Circuit-like nodes -->
+                                <circle cx="12" cy="5" r="1" fill="currentColor"/>
+                                <circle cx="12" cy="9" r="0.5" fill="currentColor"/>
+                                <circle cx="9" cy="13" r="0.5" fill="currentColor"/>
+                                <circle cx="15" cy="13" r="0.5" fill="currentColor"/>
+                                <circle cx="12" cy="18" r="1" fill="currentColor"/>
+                                <!-- Connection dots -->
+                                <circle cx="6" cy="8" r="0.3" fill="currentColor"/>
+                                <circle cx="18" cy="8" r="0.3" fill="currentColor"/>
+                                <circle cx="6" cy="15" r="0.3" fill="currentColor"/>
+                                <circle cx="18" cy="15" r="0.3" fill="currentColor"/>
+                            </svg>
+                            ${
+                              message.reasoningDuration
+                                ? `Thought for <span style="color: var(--text-tertiary);">${message.reasoningDuration.toFixed(
+                                    3
+                                  )}s${
+                                    message.reasoningDurationEstimated
+                                      ? " (estimate)"
+                                      : ""
+                                  }</span>`
+                                : "Reasoning"
+                            }
+                        `
+                        }
+                    </button>
+                    <div class="reasoning-content ${
+                      state.expandedReasoning.has(message.timestamp)
+                        ? "expanded"
+                        : "collapsed"
+                    }">
+                        <div class="reasoning-inner">
+                            ${formatMessageContent(message.reasoning, true)}
+                        </div>
+                    </div>
                 </div>
-                ${message.role === 'assistant' ? `
+                `
+                    : ""
+                }
+                <div class="message-text">
+                    ${formatMessageContent(message.content)}
+                </div>
+                ${
+                  message.role === "assistant" && !message.streaming
+                    ? `
                 <div class="message-actions">
                     <button class="btn btn-ghost" onclick="copyMessage('${message.timestamp}')">Copy</button>
                     <button class="btn btn-ghost" onclick="regenerateMessage('${message.timestamp}')">Regenerate</button>
                 </div>
-                ` : ''}
+                `
+                    : ""
+                }
             </div>
         `;
-        
-        return div;
+
+    return div;
+  }
+
+  // Model Management
+  async function loadModels() {
+    try {
+      // If no API key is set, show a helpful message
+      if (!state.apiKey) {
+        updateModelSelect([]);
+        elements.modelSelect.innerHTML =
+          '<option value="">Set API key in settings first</option>';
+        return;
+      }
+
+      const response = await fetch(`${config.apiBaseURL}/api/v1/models`, {
+        headers: { Authorization: `Bearer ${state.apiKey}` },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          updateModelSelect([]);
+          elements.modelSelect.innerHTML =
+            '<option value="">Invalid API key - check settings</option>';
+          return;
+        }
+        throw new Error(`Failed to load models: ${response.status}`);
+      }
+
+      const data = await response.json();
+      state.models = data.data || [];
+
+      // Build pricing lookup
+      state.modelPricing = {};
+      state.models.forEach((model) => {
+        if (model.pricing) {
+          state.modelPricing[model.id] = model.pricing;
+        }
+      });
+
+      updateModelSelect(state.models);
+      updateModelPricing();
+      updateConversationStats();
+    } catch (error) {
+      console.error("Failed to load models:", error);
+      updateModelSelect([]);
+      elements.modelSelect.innerHTML =
+        '<option value="">Error loading models</option>';
+    }
+  }
+
+  function updateModelSelect(models) {
+    elements.modelSelect.innerHTML = "";
+
+    if (models.length === 0) {
+      elements.modelSelect.innerHTML =
+        '<option value="">No models available</option>';
+      return;
     }
 
-    // Model Management
-    async function loadModels() {
-        try {
-            // If no API key is set, show a helpful message
-            if (!state.apiKey) {
-                updateModelSelect([]);
-                elements.modelSelect.innerHTML = '<option value="">Set API key in settings first</option>';
-                return;
-            }
-            
-            const response = await fetch(`${config.apiBaseURL}/api/v1/models`, {
-                headers: { 'Authorization': `Bearer ${state.apiKey}` }
-            });
-            
-            if (!response.ok) {
-                if (response.status === 401) {
-                    updateModelSelect([]);
-                    elements.modelSelect.innerHTML = '<option value="">Invalid API key - check settings</option>';
-                    return;
-                }
-                throw new Error(`Failed to load models: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            state.models = data.data || [];
-            
-            // Build pricing lookup
-            state.modelPricing = {};
-            state.models.forEach(model => {
-                if (model.pricing) {
-                    state.modelPricing[model.id] = model.pricing;
-                }
-            });
-            
-            updateModelSelect(state.models);
-            updateModelPricing();
-            updateConversationStats();
-            
-        } catch (error) {
-            console.error('Failed to load models:', error);
-            updateModelSelect([]);
-            elements.modelSelect.innerHTML = '<option value="">Error loading models</option>';
+    // Group models by provider
+    const modelsByProvider = {};
+    models.forEach((model) => {
+      const [provider] = model.id.split("/");
+      if (!modelsByProvider[provider]) {
+        modelsByProvider[provider] = [];
+      }
+      modelsByProvider[provider].push(model);
+    });
+
+    // Create optgroups
+    Object.entries(modelsByProvider).forEach(([provider, providerModels]) => {
+      const optgroup = document.createElement("optgroup");
+      optgroup.label = provider.charAt(0).toUpperCase() + provider.slice(1);
+
+      providerModels.forEach((model) => {
+        const option = document.createElement("option");
+        option.value = model.id;
+        option.textContent = model.id.split("/")[1];
+
+        if (model.id === state.selectedModel) {
+          option.selected = true;
         }
+
+        optgroup.appendChild(option);
+      });
+
+      elements.modelSelect.appendChild(optgroup);
+    });
+
+    // If no model is selected, select the first one
+    if (!state.selectedModel && models.length > 0) {
+      state.selectedModel = models[0].id;
+      elements.modelSelect.value = state.selectedModel;
+      localStorage.setItem("starport_model", state.selectedModel);
     }
+  }
 
-    function updateModelSelect(models) {
-        elements.modelSelect.innerHTML = '';
-        
-        if (models.length === 0) {
-            elements.modelSelect.innerHTML = '<option value="">No models available</option>';
-            return;
-        }
-        
-        // Group models by provider
-        const modelsByProvider = {};
-        models.forEach(model => {
-            const [provider] = model.id.split('/');
-            if (!modelsByProvider[provider]) {
-                modelsByProvider[provider] = [];
-            }
-            modelsByProvider[provider].push(model);
-        });
-        
-        // Create optgroups
-        Object.entries(modelsByProvider).forEach(([provider, providerModels]) => {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = provider.charAt(0).toUpperCase() + provider.slice(1);
-            
-            providerModels.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model.id;
-                option.textContent = model.id.split('/')[1];
-                
-                if (model.id === state.selectedModel) {
-                    option.selected = true;
-                }
-                
-                optgroup.appendChild(option);
-            });
-            
-            elements.modelSelect.appendChild(optgroup);
-        });
-        
-        // If no model is selected, select the first one
-        if (!state.selectedModel && models.length > 0) {
-            state.selectedModel = models[0].id;
-            elements.modelSelect.value = state.selectedModel;
-            localStorage.setItem('starport_model', state.selectedModel);
-        }
+  // API Key Generation
+  async function generateAPIKey() {
+    try {
+      const response = await fetch(`${config.apiBaseURL}/chat/generate-key`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      elements.apiKeyInput.value = data.key;
+      state.apiKey = data.key;
+      localStorage.setItem("starport_api_key", state.apiKey);
+      updateUI();
+
+      // Load models with the new key
+      await loadModels();
+
+      showToast("API key generated and saved successfully!", "success");
+
+      // Close the modal after a short delay
+      setTimeout(() => {
+        hideModal(elements.settingsModal);
+      }, 1500);
+    } catch (error) {
+      showError("Failed to generate API key", error);
     }
+  }
 
-    // API Key Generation
-    async function generateAPIKey() {
-        try {
-            const response = await fetch(`${config.apiBaseURL}/chat/generate-key`, {
-                method: 'POST'
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || `HTTP ${response.status}`);
-            }
-            
-            const data = await response.json();
-            elements.apiKeyInput.value = data.key;
-            state.apiKey = data.key;
-            localStorage.setItem('starport_api_key', state.apiKey);
-            updateUI();
-            
-            // Load models with the new key
-            await loadModels();
-            
-            showToast('API key generated and saved successfully!', 'success');
-            
-            // Close the modal after a short delay
-            setTimeout(() => {
-                hideModal(elements.settingsModal);
-            }, 1500);
-            
-        } catch (error) {
-            showError('Failed to generate API key', error);
+  function updateModelPricing() {
+    const pricing =
+      state.modelPricing && state.selectedModel
+        ? state.modelPricing[state.selectedModel]
+        : null;
+
+    if (pricing) {
+      // Convert from per-1k to per-1M tokens
+      const promptPricePerMillion = parseFloat(pricing.prompt) * 1000;
+      const completionPricePerMillion = parseFloat(pricing.completion) * 1000;
+
+      // Format prices based on magnitude
+      const formatPrice = (price) => {
+        if (price >= 1) {
+          return price.toFixed(2);
+        } else if (price >= 0.01) {
+          return price.toFixed(3);
+        } else if (price > 0) {
+          return price.toFixed(4);
+        } else {
+          return "0.00";
         }
-    }
+      };
 
-
-    function updateModelPricing() {
-        const pricing = state.modelPricing && state.selectedModel ? state.modelPricing[state.selectedModel] : null;
-        
-        if (pricing) {
-            // Convert from per-1k to per-1M tokens
-            const promptPricePerMillion = parseFloat(pricing.prompt) * 1000;
-            const completionPricePerMillion = parseFloat(pricing.completion) * 1000;
-            
-            // Format prices based on magnitude
-            const formatPrice = (price) => {
-                if (price >= 1) {
-                    return price.toFixed(2);
-                } else if (price >= 0.01) {
-                    return price.toFixed(3);
-                } else if (price > 0) {
-                    return price.toFixed(4);
-                } else {
-                    return '0.00';
-                }
-            };
-            
-            elements.modelPricing.innerHTML = `
-                <span>$${formatPrice(promptPricePerMillion)}/M↓</span>
-                <span style="margin-left: 8px;">$${formatPrice(completionPricePerMillion)}/M↑</span>
+      elements.modelPricing.innerHTML = `
+                <span>$${formatPrice(promptPricePerMillion)}1/M tok ↓</span>
+                <span style="margin-left: 8px;">$${formatPrice(
+                  completionPricePerMillion
+                )}1/M tok ↑</span>
             `;
-        } else {
-            elements.modelPricing.textContent = '';
-        }
+    } else {
+      elements.modelPricing.textContent = "";
+    }
+  }
+
+  function updateConversationStats() {
+    const chat = state.chats[state.currentChatId];
+    if (!chat) {
+      // Clear stats display when no chat
+      elements.tokenCount.textContent = "↓ 0 ↑ 0";
+      elements.costEstimate.textContent = "";
+      return;
     }
 
-    function updateConversationStats() {
-        const chat = state.chats[state.currentChatId];
-        if (!chat) {
-            // Clear stats display when no chat
-            elements.tokenCount.textContent = '↓ 0 ↑ 0';
-            elements.costEstimate.textContent = '';
-            return;
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let totalCost = 0;
+
+    // Get current model pricing (may not be loaded yet)
+    const pricing =
+      state.modelPricing && state.selectedModel
+        ? state.modelPricing[state.selectedModel]
+        : null;
+
+    // Calculate totals from all messages
+    chat.messages.forEach((message) => {
+      if (message.usage) {
+        totalPromptTokens += message.usage.prompt_tokens || 0;
+        totalCompletionTokens += message.usage.completion_tokens || 0;
+
+        // Calculate cost for this message if we have pricing
+        if (pricing) {
+          // Pricing is stored per 1k tokens, so divide by 1000
+          const promptCost =
+            (message.usage.prompt_tokens / 1000) * parseFloat(pricing.prompt);
+          const completionCost =
+            (message.usage.completion_tokens / 1000) *
+            parseFloat(pricing.completion);
+          totalCost += promptCost + completionCost;
         }
-        
-        let totalPromptTokens = 0;
-        let totalCompletionTokens = 0;
-        let totalCost = 0;
-        
-        // Get current model pricing (may not be loaded yet)
-        const pricing = state.modelPricing && state.selectedModel ? state.modelPricing[state.selectedModel] : null;
-        
-        // Calculate totals from all messages
-        chat.messages.forEach(message => {
-            if (message.usage) {
-                totalPromptTokens += message.usage.prompt_tokens || 0;
-                totalCompletionTokens += message.usage.completion_tokens || 0;
-                
-                // Calculate cost for this message if we have pricing
-                if (pricing) {
-                    // Pricing is stored per 1k tokens, so divide by 1000
-                    const promptCost = (message.usage.prompt_tokens / 1000) * parseFloat(pricing.prompt);
-                    const completionCost = (message.usage.completion_tokens / 1000) * parseFloat(pricing.completion);
-                    totalCost += promptCost + completionCost;
-                }
-            }
-        });
-        
-        // Update token count display
-        const hasStreamingMessages = chat.messages.some(m => m.role === 'assistant' && !m.usage);
-        elements.tokenCount.innerHTML = `
+      }
+    });
+
+    // Update token count display
+    const hasStreamingMessages = chat.messages.some(
+      (m) => m.role === "assistant" && !m.usage
+    );
+    elements.tokenCount.innerHTML = `
             <div style="display: flex; gap: 12px; align-items: center; font-size: 13px;">
-                <span title="Prompt tokens">↓ ${totalPromptTokens.toLocaleString()} tk</span>
-                <span title="Completion tokens">↑ ${totalCompletionTokens.toLocaleString()} tk</span>
-                ${hasStreamingMessages && state.streamEnabled ? '<span style="font-size: 10px; color: var(--text-tertiary);" title="Token counts not available for streaming responses">*</span>' : ''}
+                <span title="Prompt tokens">↓ ${totalPromptTokens.toLocaleString()} tok</span>
+                <span title="Completion tokens">↑ ${totalCompletionTokens.toLocaleString()} tok</span>
+                ${
+                  hasStreamingMessages && state.streamEnabled
+                    ? '<span style="font-size: 10px; color: var(--text-tertiary);" title="Token counts not available for streaming responses">*</span>'
+                    : ""
+                }
             </div>
         `;
-        
-        // Update cost display
-        if (totalCost > 0) {
-            // Format cost with appropriate precision
-            let costDisplay;
-            if (totalCost < 0.01) {
-                costDisplay = `$${totalCost.toFixed(6)}`;
-            } else if (totalCost < 1) {
-                costDisplay = `$${totalCost.toFixed(4)}`;
-            } else {
-                costDisplay = `$${totalCost.toFixed(2)}`;
+
+    // Update cost display
+    if (totalCost > 0) {
+      // Format cost with appropriate precision
+      let costDisplay;
+      if (totalCost < 0.01) {
+        costDisplay = `$${totalCost.toFixed(6)}`;
+      } else if (totalCost < 1) {
+        costDisplay = `$${totalCost.toFixed(4)}`;
+      } else {
+        costDisplay = `$${totalCost.toFixed(2)}`;
+      }
+
+      elements.costEstimate.innerHTML = `<span style="font-size: 13px; font-weight: 500;">Cost: ${costDisplay}</span>`;
+    } else {
+      elements.costEstimate.textContent = "";
+    }
+  }
+
+  // Error Handling
+  function showError(message, error) {
+    elements.toastMessage.textContent = message;
+
+    if (error) {
+      elements.errorJson.textContent = JSON.stringify(error, null, 2);
+    }
+
+    elements.errorToast.style.display = "block";
+
+    // Auto-hide after 10 seconds
+    setTimeout(hideError, 10000);
+  }
+
+  function hideError() {
+    elements.errorToast.style.display = "none";
+    elements.toastDetails.style.display = "none";
+  }
+
+  // Toast notifications
+  function showToast(message, type = "info") {
+    // For now, use the error toast for all notifications
+    elements.toastMessage.textContent = message;
+    elements.errorToast.className = `toast toast-${type}`;
+    elements.errorToast.style.display = "block";
+
+    // Auto-hide after 3 seconds for success messages
+    setTimeout(() => {
+      elements.errorToast.style.display = "none";
+    }, 3000);
+  }
+
+  // Keyboard Shortcuts
+  function handleKeyboardShortcuts(e) {
+    // Cmd/Ctrl + K: Focus search
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault();
+      // TODO: Implement search functionality
+    }
+
+    // Cmd/Ctrl + /: Show shortcuts
+    if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+      e.preventDefault();
+      alert(
+        "Keyboard Shortcuts:\n\n" +
+          "Enter: Send message\n" +
+          "Shift+Enter: New line\n" +
+          "Cmd/Ctrl+K: Search chats\n" +
+          "Cmd/Ctrl+/: Show shortcuts"
+      );
+    }
+  }
+
+  // Storage
+  function saveChats() {
+    try {
+      localStorage.setItem("starport_chats", JSON.stringify(state.chats));
+    } catch (e) {
+      console.error("Failed to save chats:", e);
+      showError("Failed to save chats. Storage may be full.");
+    }
+  }
+
+  function loadChats() {
+    try {
+      const saved = localStorage.getItem("starport_chats");
+      if (saved) {
+        state.chats = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Failed to load chats:", e);
+      state.chats = {};
+    }
+  }
+
+  // Utility Functions
+  function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  function formatDate(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+
+    if (diff < 60000) return "Just now";
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
+
+    return date.toLocaleDateString();
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function formatMessageContent(content, isReasoning = false) {
+    // Check if marked and DOMPurify are available
+    if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
+      // Configure marked options for better security and rendering
+      marked.setOptions({
+        breaks: true, // Convert line breaks to <br>
+        gfm: true, // GitHub Flavored Markdown
+        headerIds: false, // Disable header IDs for security
+        mangle: false, // Don't mangle email addresses
+        sanitize: false, // We'll use DOMPurify for sanitization
+        highlight: function (code, lang) {
+          // Use Prism.js if available
+          if (typeof Prism !== "undefined" && lang) {
+            // Map common language aliases to Prism language names
+            const langMap = {
+              js: "javascript",
+              ts: "typescript",
+              py: "python",
+              rb: "ruby",
+              yml: "yaml",
+              sh: "bash",
+              shell: "bash",
+            };
+            const prismLang = langMap[lang] || lang;
+
+            // Check if language is loaded, if not let autoloader handle it
+            if (Prism.languages[prismLang]) {
+              try {
+                return Prism.highlight(
+                  code,
+                  Prism.languages[prismLang],
+                  prismLang
+                );
+              } catch (err) {
+                console.error("Prism.js error:", err);
+              }
             }
-            
-            elements.costEstimate.innerHTML = `<span style="font-size: 13px; font-weight: 500;">Cost: ${costDisplay}</span>`;
-        } else {
-            elements.costEstimate.textContent = '';
+          }
+          // Fall back to no highlighting but preserve the code for Prism autoloader
+          return code;
+        },
+      });
+
+      // Parse markdown with marked
+      let rawHtml = marked.parse(content);
+
+      // Pre-process Mermaid diagrams before DOMPurify
+      // Replace mermaid code blocks with placeholder divs
+      let mermaidCounter = 0;
+      rawHtml = rawHtml.replace(
+        /<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g,
+        (match, diagram) => {
+          const id = `mermaid-${Date.now()}-${mermaidCounter++}`;
+          // Escape the diagram content for safe storage in data attribute
+          const escapedDiagram = escapeHtml(diagram.trim());
+          return `<div class="mermaid-container" data-mermaid-id="${id}" data-mermaid-content="${escapedDiagram}"><div class="mermaid-loading">Rendering diagram...</div></div>`;
         }
-    }
+      );
 
-    // Error Handling
-    function showError(message, error) {
-        elements.toastMessage.textContent = message;
-        
-        if (error) {
-            elements.errorJson.textContent = JSON.stringify(error, null, 2);
+      // Configure DOMPurify to allow safe HTML elements and attributes
+      const cleanHtml = DOMPurify.sanitize(rawHtml, {
+        ALLOWED_TAGS: [
+          "p",
+          "br",
+          "strong",
+          "em",
+          "b",
+          "i",
+          "code",
+          "pre",
+          "blockquote",
+          "ul",
+          "ol",
+          "li",
+          "a",
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "hr",
+          "table",
+          "thead",
+          "tbody",
+          "tr",
+          "th",
+          "td",
+          "del",
+          "sup",
+          "sub",
+          // KaTeX elements
+          "span",
+          "div",
+          "annotation",
+          "semantics",
+          "math",
+          "mi",
+          "mn",
+          "mo",
+          "ms",
+          "mspace",
+          "mtext",
+          "mglyph",
+          "mrow",
+          "mfrac",
+          "msqrt",
+          "mroot",
+          "msub",
+          "msup",
+          "msubsup",
+          "munder",
+          "mover",
+          "munderover",
+          "mmultiscripts",
+          "mtable",
+          "mtr",
+          "mtd",
+          "maligngroup",
+          "malignmark",
+          "maction",
+          "merror",
+          "mphantom",
+          "mstyle",
+          "menclose",
+        ],
+        ALLOWED_ATTR: [
+          "href",
+          "title",
+          "target",
+          "rel",
+          "class",
+          "style",
+          "data-mermaid-id",
+          "data-mermaid-content",
+        ],
+        ALLOW_DATA_ATTR: false,
+        // Ensure external links open in new tab with security
+        SAFE_FOR_TEMPLATES: true,
+        ADD_ATTR: ["target", "rel"],
+        FORBID_TAGS: ["style", "script", "iframe", "form", "input"],
+        FORBID_ATTR: ["style", "onerror", "onload", "onclick"],
+      });
+
+      // Post-process to ensure external links are safe
+      const tempDiv = document.createElement("div");
+      tempDiv.innerHTML = cleanHtml;
+      tempDiv.querySelectorAll("a").forEach((link) => {
+        const href = link.getAttribute("href");
+        if (
+          href &&
+          (href.startsWith("http://") || href.startsWith("https://"))
+        ) {
+          link.setAttribute("target", "_blank");
+          link.setAttribute("rel", "noopener noreferrer");
         }
-        
-        elements.errorToast.style.display = 'block';
-        
-        // Auto-hide after 10 seconds
-        setTimeout(hideError, 10000);
-    }
+      });
 
-    function hideError() {
-        elements.errorToast.style.display = 'none';
-        elements.toastDetails.style.display = 'none';
-    }
+      // Store the final HTML
+      const finalHtml = tempDiv.innerHTML;
 
-    // Toast notifications
-    function showToast(message, type = 'info') {
-        // For now, use the error toast for all notifications
-        elements.toastMessage.textContent = message;
-        elements.errorToast.className = `toast toast-${type}`;
-        elements.errorToast.style.display = 'block';
-        
-        // Auto-hide after 3 seconds for success messages
+      return finalHtml;
+    } else {
+      // Fallback to basic formatting if libraries aren't loaded
+      let formatted = escapeHtml(content);
+
+      // Code blocks
+      formatted = formatted.replace(/```([\s\S]*?)```/g, (match, code) => {
+        return `<pre><code>${code.trim()}</code></pre>`;
+      });
+
+      // Inline code
+      formatted = formatted.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+      // Bold
+      formatted = formatted.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+      // Italic
+      formatted = formatted.replace(/\*(.*?)\*/g, "<em>$1</em>");
+
+      // Line breaks
+      formatted = formatted.replace(/\n/g, "<br>");
+
+      // Paragraphs
+      formatted = formatted.replace(/<br><br>/g, "</p><p>");
+      formatted = "<p>" + formatted + "</p>";
+
+      return formatted;
+    }
+  }
+
+  function autoResizeTextarea(textarea) {
+    textarea.style.height = "auto";
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + "px";
+  }
+
+  function copyCodeBlock(codeElement, button) {
+    const text = codeElement.textContent || "";
+
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        const originalText = button.textContent;
+        button.textContent = "Copied!";
+        button.classList.add("copied");
+
         setTimeout(() => {
-            elements.errorToast.style.display = 'none';
-        }, 3000);
-    }
+          button.textContent = originalText;
+          button.classList.remove("copied");
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error("Failed to copy code:", err);
+        button.textContent = "Failed";
+        setTimeout(() => {
+          button.textContent = "Copy";
+        }, 2000);
+      });
+  }
 
-    // Keyboard Shortcuts
-    function handleKeyboardShortcuts(e) {
-        // Cmd/Ctrl + K: Focus search
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-            e.preventDefault();
-            // TODO: Implement search functionality
-        }
-        
-        // Cmd/Ctrl + /: Show shortcuts
-        if ((e.metaKey || e.ctrlKey) && e.key === '/') {
-            e.preventDefault();
-            alert('Keyboard Shortcuts:\n\n' +
-                  'Enter: Send message\n' +
-                  'Shift+Enter: New line\n' +
-                  'Cmd/Ctrl+K: Search chats\n' +
-                  'Cmd/Ctrl+/: Show shortcuts');
-        }
-    }
+  function renderMermaidDiagram(container, diagram) {
+    if (!container || !diagram) return;
 
-    // Storage
-    function saveChats() {
-        try {
-            localStorage.setItem('starport_chats', JSON.stringify(state.chats));
-        } catch (e) {
-            console.error('Failed to save chats:', e);
-            showError('Failed to save chats. Storage may be full.');
-        }
-    }
+    try {
+      // Generate unique ID for this render
+      const svgId = `mermaid-svg-${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
 
-    function loadChats() {
-        try {
-            const saved = localStorage.getItem('starport_chats');
-            if (saved) {
-                state.chats = JSON.parse(saved);
-            }
-        } catch (e) {
-            console.error('Failed to load chats:', e);
-            state.chats = {};
-        }
-    }
-
-    // Utility Functions
-    function generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    }
-
-    function formatDate(timestamp) {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diff = now - date;
-        
-        if (diff < 60000) return 'Just now';
-        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-        if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-        
-        return date.toLocaleDateString();
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function formatMessageContent(content) {
-        // Basic markdown-like formatting
-        let formatted = escapeHtml(content);
-        
-        // Code blocks
-        formatted = formatted.replace(/```([\s\S]*?)```/g, (match, code) => {
-            return `<pre><code>${code.trim()}</code></pre>`;
+      // Use mermaid.render with promise
+      mermaid
+        .render(svgId, diagram)
+        .then((result) => {
+          container.innerHTML = result.svg;
+          container.classList.add("mermaid-rendered");
+          container.classList.remove("mermaid-error");
+        })
+        .catch((err) => {
+          console.error("Mermaid rendering error:", err);
+          container.innerHTML = `<div class="mermaid-error">Failed to render diagram: ${escapeHtml(
+            err.message || err.toString()
+          )}</div>`;
+          container.classList.add("mermaid-error");
         });
-        
-        // Inline code
-        formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
-        
-        // Bold
-        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        
-        // Italic
-        formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
-        
-        // Line breaks
-        formatted = formatted.replace(/\n/g, '<br>');
-        
-        // Paragraphs
-        formatted = formatted.replace(/<br><br>/g, '</p><p>');
-        formatted = '<p>' + formatted + '</p>';
-        
-        return formatted;
+    } catch (err) {
+      console.error("Mermaid error:", err);
+      container.innerHTML = `<div class="mermaid-error">Failed to render diagram: ${escapeHtml(
+        err.message || err.toString()
+      )}</div>`;
+      container.classList.add("mermaid-error");
+    }
+  }
+
+  function processPendingMermaidDiagrams() {
+    if (typeof mermaid === "undefined") {
+      console.log("Mermaid not available yet");
+      return;
     }
 
-    function autoResizeTextarea(textarea) {
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+    // Find all unprocessed mermaid containers
+    const containers = document.querySelectorAll(
+      ".mermaid-container:not(.mermaid-rendered):not(.mermaid-error)"
+    );
+
+    containers.forEach((container) => {
+      const diagramContent = container.getAttribute("data-mermaid-content");
+      if (diagramContent) {
+        // Unescape the diagram content
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = diagramContent;
+        const diagram = tempDiv.textContent || tempDiv.innerText || "";
+
+        renderMermaidDiagram(container, diagram);
+      }
+    });
+  }
+
+  function renderSpecialContent(element) {
+    if (!element) return;
+
+    // Render math content
+    renderMathInMessage(element.closest(".message") || element);
+
+    // Render code highlighting and diagrams
+    renderCodeAndDiagrams(element);
+  }
+
+  function renderCodeAndDiagrams(element) {
+    // Render Prism code highlighting
+    if (typeof Prism !== "undefined") {
+      const codeBlocks = element.querySelectorAll(
+        'pre code[class*="language-"]:not([data-prism-highlighted])'
+      );
+      codeBlocks.forEach((block) => {
+        Prism.highlightElement(block);
+        block.setAttribute("data-prism-highlighted", "true");
+
+        // Add copy button to code block
+        const pre = block.parentElement;
+        if (pre && !pre.querySelector(".code-copy-button")) {
+          const copyButton = document.createElement("button");
+          copyButton.className = "code-copy-button";
+          copyButton.textContent = "Copy";
+          copyButton.onclick = () => copyCodeBlock(block, copyButton);
+          pre.appendChild(copyButton);
+        }
+      });
     }
 
-    function formatLatency(ms) {
-        if (ms >= 1000) {
-            return (ms / 1000).toFixed(3) + 's';
-        }
-        return ms + 'ms';
+    // Process any pending Mermaid diagrams
+    processPendingMermaidDiagrams();
+  }
+
+  function renderMathInMessage(messageElement) {
+    if (typeof renderMathInElement === "undefined" || !messageElement) return;
+
+    try {
+      renderMathInElement(messageElement, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\(", right: "\\)", display: false },
+          { left: "\\[", right: "\\]", display: true },
+        ],
+        throwOnError: false,
+        errorColor: "#cc0000",
+        strict: false,
+        trust: false,
+        macros: {
+          "\\eqref": "\\href{#1}{}",
+        },
+      });
+    } catch (err) {
+      console.error("KaTeX rendering error:", err);
+    }
+  }
+
+  function formatLatency(ms) {
+    if (ms >= 1000) {
+      return (ms / 1000).toFixed(3) + "s";
+    }
+    return ms + "ms";
+  }
+
+  // Global functions for inline handlers
+  window.copyMessage = function (timestamp) {
+    const chat = state.chats[state.currentChatId];
+    const message = chat.messages.find(
+      (m) => m.timestamp === parseInt(timestamp)
+    );
+    if (message) {
+      // Copy only the message content
+      navigator.clipboard
+        .writeText(message.content)
+        .then(() => {
+          // Find the copy button and update it
+          const messageEl = document.getElementById(
+            `message-${message.timestamp}`
+          );
+          const copyBtn = messageEl?.querySelector(
+            ".message-actions button:first-child"
+          );
+          if (copyBtn) {
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = "Copied!";
+            copyBtn.style.color = "#10b981"; // Green color
+
+            // Reset after 2 seconds
+            setTimeout(() => {
+              copyBtn.textContent = originalText;
+              copyBtn.style.color = "";
+            }, 2000);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to copy:", err);
+          showError("Failed to copy to clipboard");
+        });
+    }
+  };
+
+  window.toggleReasoning = function (timestamp) {
+    const ts = parseInt(timestamp);
+
+    // Toggle state
+    if (state.expandedReasoning.has(ts)) {
+      state.expandedReasoning.delete(ts);
+    } else {
+      state.expandedReasoning.add(ts);
     }
 
-    // Global functions for inline handlers
-    window.copyMessage = function(timestamp) {
-        const chat = state.chats[state.currentChatId];
-        const message = chat.messages.find(m => m.timestamp === parseInt(timestamp));
-        if (message) {
-            navigator.clipboard.writeText(message.content);
-            // Could show a toast notification here
-        }
-    };
+    // Directly update the DOM for immediate response
+    const messageEl = document.getElementById(`message-${ts}`);
+    if (messageEl) {
+      const toggleBtn = messageEl.querySelector(".reasoning-toggle");
+      const reasoningContent = messageEl.querySelector(".reasoning-content");
 
-    window.regenerateMessage = function(timestamp) {
-        const chat = state.chats[state.currentChatId];
-        const messageIndex = chat.messages.findIndex(m => m.timestamp === parseInt(timestamp));
-        
-        if (messageIndex > 0) {
-            // Remove this message and all following messages
-            chat.messages = chat.messages.slice(0, messageIndex);
-            saveChats();
-            updateMessagesUI();
-            
-            // Resend the last user message
-            const lastUserMessage = chat.messages[chat.messages.length - 1];
-            if (lastUserMessage && lastUserMessage.role === 'user') {
-                elements.messageInput.value = lastUserMessage.content;
-                sendMessage();
-            }
-        }
-    };
+      if (toggleBtn && reasoningContent) {
+        const isExpanded = state.expandedReasoning.has(ts);
+        // Keep the existing icon/text, just update expanded state
+        reasoningContent.className = `reasoning-content ${
+          isExpanded ? "expanded" : "collapsed"
+        }`;
+      }
+    }
 
-    // Initialize on load
-    init();
+    // Save state
+    saveChats();
+  };
+
+  window.regenerateMessage = async function (timestamp) {
+    // Don't regenerate if already generating
+    if (state.isGenerating) return;
+
+    const chat = state.chats[state.currentChatId];
+    const messageIndex = chat.messages.findIndex(
+      (m) => m.timestamp === parseInt(timestamp)
+    );
+
+    if (messageIndex > 0) {
+      // Verify the previous message is from user
+      const previousUserMessage = chat.messages[messageIndex - 1];
+      if (!previousUserMessage || previousUserMessage.role !== "user") return;
+
+      // Remove the assistant message from expanded reasoning set
+      const assistantMessage = chat.messages[messageIndex];
+      if (assistantMessage) {
+        state.expandedReasoning.delete(assistantMessage.timestamp);
+      }
+
+      // Remove this message and all following messages
+      chat.messages = chat.messages.slice(0, messageIndex);
+      saveChats();
+      updateMessagesUI();
+
+      // Create new assistant message
+      const newAssistantMessage = {
+        role: "assistant",
+        content: "",
+        reasoning: "",
+        timestamp: Date.now(),
+        streaming: true,
+        startTime: performance.now(),
+        firstTokenTime: null,
+      };
+      chat.messages.push(newAssistantMessage);
+
+      // Append the assistant message element directly
+      const messageEl = createMessageElement(
+        newAssistantMessage,
+        chat.messages.length - 1
+      );
+      elements.messages.appendChild(messageEl);
+
+      // Scroll to bottom if auto-scroll is enabled
+      if (state.autoScroll) {
+        elements.messages.scrollTop = elements.messages.scrollHeight;
+      }
+
+      // Call the generate function
+      await generate(newAssistantMessage);
+    }
+  };
+
+  // Initialize on load
+  init();
+
+  // Ensure KaTeX and Mermaid run after they're loaded
+  window.addEventListener("load", () => {
+    // Re-render math if KaTeX is available
+    if (typeof renderMathInElement !== "undefined") {
+      const messageElements = document.querySelectorAll(".message");
+      messageElements.forEach((msgEl) => {
+        renderMathInMessage(msgEl);
+      });
+    }
+
+    // Process any mermaid diagrams
+    processPendingMermaidDiagrams();
+  });
 })();
