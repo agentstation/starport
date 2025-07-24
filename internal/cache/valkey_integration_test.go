@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/models"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/assert"
@@ -73,7 +74,7 @@ func TestValkeyIntegration(t *testing.T) {
 
 		// Test API key invalidation across nodes
 		t.Run("API Key Cross-Node Invalidation", func(t *testing.T) {
-			apiKey := &models.APIKey{
+			apiKey := &apikeys.APIKey{
 				ID:     "multi-node-key",
 				Name:   "Multi Node Test Key",
 				Hash:   "hash-multi-node",
@@ -150,7 +151,7 @@ func TestValkeyIntegration(t *testing.T) {
 		t.Run("Flush Operations", func(t *testing.T) {
 			// Add some API keys
 			for i := 0; i < 5; i++ {
-				apiKey := &models.APIKey{
+				apiKey := &apikeys.APIKey{
 					ID:     string(rune('a' + i)),
 					Name:   string(rune('a' + i)),
 					Hash:   string(rune('a' + i)),
@@ -183,7 +184,7 @@ func TestValkeyIntegration(t *testing.T) {
 			// (keys still exist in distributed store)
 			for i := 0; i < 5; i++ {
 				hash := string(rune('a' + i))
-				
+
 				// Should still get from distributed store
 				key, err := cm.GetAPIKey(ctx, hash)
 				require.NoError(t, err)
@@ -207,7 +208,7 @@ func TestValkeyIntegration(t *testing.T) {
 			go func(id int) {
 				defer wg.Done()
 
-				apiKey := &models.APIKey{
+				apiKey := &apikeys.APIKey{
 					ID:     string(rune('0' + id)),
 					Name:   string(rune('0' + id)),
 					Hash:   string(rune('0' + id)),
@@ -357,7 +358,7 @@ func BenchmarkValkeyCache(b *testing.B) {
 	ctx := context.Background()
 
 	// Pre-populate some data
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:     "bench-key",
 		Name:   "Benchmark Key",
 		Hash:   "bench-hash",

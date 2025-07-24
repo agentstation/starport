@@ -207,7 +207,7 @@ func TestHandler_GenerateKey(t *testing.T) {
 		key, ok := response["key"].(string)
 		assert.True(t, ok)
 		assert.True(t, len(key) > 20)
-		assert.Contains(t, key, "sk-starport-")
+		assert.Contains(t, key, "STARPORT_")
 
 		// Check scopes
 		scopes, ok := response["scopes"].([]interface{})

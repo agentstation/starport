@@ -6,9 +6,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// setupRoutes configures all routes for the server
+// registerRoutes registers all routes for the server
 // This provides a clear, centralized view of all API endpoints
-func (s *Server) setupRoutes(mux *chi.Mux) {
+func (s *Server) registerRoutes(mux *chi.Mux) {
+
 	// Global middleware
 	mux.Use(s.setupMiddleware()...)
 
@@ -20,6 +21,7 @@ func (s *Server) setupRoutes(mux *chi.Mux) {
 
 	// OpenAI-compatible API (v1)
 	mux.Route("/v1", func(r chi.Router) {
+
 		// Apply authentication middleware for API routes
 		r.Use(s.requireAPIKey)
 
@@ -36,6 +38,7 @@ func (s *Server) setupRoutes(mux *chi.Mux) {
 
 	// OpenRouter-compatible API (api/v1)
 	mux.Route("/api/v1", func(r chi.Router) {
+
 		// Apply authentication middleware
 		r.Use(s.requireAPIKey)
 

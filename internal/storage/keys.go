@@ -6,7 +6,7 @@ const (
 	KeyPrefixAPIKey = "apikey:"
 
 	// KeyPrefixAPIKeyHash is the prefix for API key hash to ID mappings
-	KeyPrefixAPIKeyHash = "apikey:hash:"
+	KeyPrefixAPIKeyHash = "apikey:hash:" //nolint:gosec // This is a storage key prefix, not a credential
 
 	// KeyPrefixRateLimit is the prefix for rate limit counters
 	KeyPrefixRateLimit = "ratelimit:"

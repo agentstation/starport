@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -62,7 +62,7 @@ func NewHandler(logger *zerolog.Logger, config Config) (*Handler, error) {
 }
 
 // Index serves the main ChatUI page.
-func (h *Handler) Index(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Index(w http.ResponseWriter, _ *http.Request) {
 	// Override CSP for ChatUI to allow inline scripts and CDN resources for markdown/syntax highlighting
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self'; frame-ancestors 'none';")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -149,7 +149,7 @@ func (h *Handler) GenerateKey(w http.ResponseWriter, r *http.Request) {
 	hashStr := hex.EncodeToString(hash[:])
 
 	// Create API key model
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:        keyID,
 		Name:      fmt.Sprintf("ChatUI-Key-%s", time.Now().Format("20060102-1504")),
 		Hash:      hashStr,

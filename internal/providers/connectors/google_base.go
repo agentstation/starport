@@ -317,8 +317,6 @@ type googleStream struct {
 	provider        string
 	closed          bool
 	buffer          []byte
-	decoder         *json.Decoder
-	started         bool
 	excludeReasoning bool
 }
 
@@ -507,9 +505,10 @@ func (s *googleStream) extractNextChunk() ([]byte, []byte, bool) {
 			} else if ch == '\\' && inString {
 				escaped = true
 			} else if !inString {
-				if ch == '{' {
+				switch ch {
+				case '{':
 					braceCount++
-				} else if ch == '}' {
+				case '}':
 					braceCount--
 					if braceCount == 0 {
 						// Found complete object

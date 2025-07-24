@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/pkg/catalog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -519,6 +520,13 @@ func (r *modelRouter) selectBestModel(_ context.Context, models []string, req *R
 
 // extractProvider extracts the provider from a model ID
 func (r *modelRouter) extractProvider(modelID string) string {
+	// Use the catalog to determine the actual provider
+	provider := catalog.GetProviderForModel(modelID)
+	if provider != "" {
+		return provider
+	}
+	
+	// Fall back to extracting from model ID
 	parts := strings.SplitN(modelID, "/", 2)
 	if len(parts) > 0 {
 		return parts[0]

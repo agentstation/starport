@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -196,7 +196,7 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		}
 
 		// Deserialize API key
-		var apiKeyModel models.APIKey
+		var apiKeyModel apikeys.APIKey
 		if err := storage.Deserialize(keyData, &apiKeyModel); err != nil {
 			log.Error().Err(err).Msg("Failed to deserialize API key")
 			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Authentication error")
@@ -259,7 +259,7 @@ func (m *AuthMiddleware) RequireKeyOwnership(next http.Handler) http.Handler {
 func (m *AuthMiddleware) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get API key model from context
-		apiKeyModel, ok := r.Context().Value(ContextKeyAPIKeyModel).(*models.APIKey)
+		apiKeyModel, ok := r.Context().Value(ContextKeyAPIKeyModel).(*apikeys.APIKey)
 		if !ok {
 			dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Not authenticated")
 			return

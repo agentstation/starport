@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/models"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/storage"
@@ -49,14 +50,14 @@ func (h *AdminHandler) ListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get and deserialize keys
-	apiKeys := make([]models.APIKey, 0, len(keyNames))
+	apiKeys := make([]apikeys.APIKey, 0, len(keyNames))
 	for _, keyName := range keyNames {
 		data, err := h.store.Get(ctx, keyName)
 		if err != nil {
 			continue // Skip on error
 		}
 
-		var apiKey models.APIKey
+		var apiKey apikeys.APIKey
 		if err := storage.Deserialize(data, &apiKey); err != nil {
 			log.Error().Err(err).Msg("Failed to deserialize API key")
 			continue
@@ -96,7 +97,7 @@ func (h *AdminHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create API key
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		Name:      req.Name,
 		Scopes:    req.Scopes,
 		Metadata:  convertStringMapToInterface(req.Metadata),
@@ -190,7 +191,7 @@ func (h *AdminHandler) GetKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Deserialize
-	var apiKey models.APIKey
+	var apiKey apikeys.APIKey
 	if err := storage.Deserialize(keyData, &apiKey); err != nil {
 		log.Error().Err(err).Msg("Failed to deserialize API key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to get API key")
@@ -222,7 +223,7 @@ func (h *AdminHandler) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var apiKey models.APIKey
+	var apiKey apikeys.APIKey
 	if err := storage.Deserialize(keyData, &apiKey); err != nil {
 		log.Error().Err(err).Msg("Failed to deserialize API key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to get API key")

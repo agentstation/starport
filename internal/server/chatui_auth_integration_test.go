@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/chatui"
-	"github.com/agentstation/starport/internal/models"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -68,7 +68,7 @@ func TestChatUIToAPIAuthentication(t *testing.T) {
 		keyIDFromContext := r.Context().Value(ContextKeyAPIKeyID).(string)
 		assert.NotEmpty(t, keyIDFromContext)
 
-		modelFromContext := r.Context().Value(ContextKeyAPIKeyModel).(*models.APIKey)
+		modelFromContext := r.Context().Value(ContextKeyAPIKeyModel).(*apikeys.APIKey)
 		assert.NotNil(t, modelFromContext)
 		assert.Contains(t, modelFromContext.Scopes, "chat:write")
 		assert.Contains(t, modelFromContext.Scopes, "models:read")
@@ -96,7 +96,7 @@ func TestChatUIToAPIAuthentication(t *testing.T) {
 	keyData, err := store.Get(context.Background(), storage.APIKeyKey(keyID))
 	require.NoError(t, err)
 
-	var apiKeyModel models.APIKey
+	var apiKeyModel apikeys.APIKey
 	err = storage.Deserialize(keyData, &apiKeyModel)
 	require.NoError(t, err)
 
@@ -173,17 +173,17 @@ func TestMultipleKeyGeneration(t *testing.T) {
 // TestKeyHashVerification verifies that the hash verification works correctly
 func TestKeyHashVerification(t *testing.T) {
 	store := storage.NewMockStore()
-	
+
 	// Manually create a key with known values
 	keyValue := "sk-starport-test-verification"
 	keyID := "STARPORT_verification"
-	
+
 	// Calculate correct hash
 	hash := sha256.Sum256([]byte(keyValue))
 	correctHash := hex.EncodeToString(hash[:])
-	
+
 	// Store the key with WRONG hash
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:        keyID,
 		Name:      "Test Key",
 		Hash:      "intentionally-wrong-hash",
@@ -191,31 +191,31 @@ func TestKeyHashVerification(t *testing.T) {
 		Active:    true,
 		CreatedAt: time.Now(),
 	}
-	
+
 	ctx := context.Background()
 	keyData, err := storage.Serialize(apiKey)
 	require.NoError(t, err)
-	
+
 	// Store the key
 	err = store.Set(ctx, storage.APIKeyKey(keyID), keyData)
 	require.NoError(t, err)
-	
+
 	// Store hash mapping (with correct hash)
 	err = store.Set(ctx, storage.APIKeyHashKey(correctHash), []byte(keyID))
 	require.NoError(t, err)
-	
+
 	// Try to authenticate - should fail due to hash mismatch
 	auth := NewAuthMiddleware(store)
 	handler := auth.RequireAPIKey(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("Handler should not be called with mismatched hash")
 	}))
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req.Header.Set("Authorization", "Bearer "+keyValue)
 	rec := httptest.NewRecorder()
-	
+
 	handler.ServeHTTP(rec, req)
-	
+
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Invalid API key")
 }

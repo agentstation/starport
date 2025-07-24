@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/models"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/assert"
@@ -47,7 +48,7 @@ func TestCacheManagerWithPubSub(t *testing.T) {
 	// Test API key invalidation
 	t.Run("API key invalidation", func(t *testing.T) {
 		// Create an API key
-		apiKey := &models.APIKey{
+		apiKey := &apikeys.APIKey{
 			ID:     "test-key",
 			Name:   "Test Key",
 			Hash:   "hash123",
@@ -199,7 +200,7 @@ func TestCacheManagerMultiNode(t *testing.T) {
 	ctx := context.Background()
 
 	// Node 1 sets an API key
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:     "shared-key",
 		Name:   "Shared Key",
 		Hash:   "shared-hash",
@@ -307,7 +308,7 @@ func TestCacheStats(t *testing.T) {
 	ctx := context.Background()
 
 	// Perform some cache operations
-	apiKey := &models.APIKey{ID: "test", Hash: "test-hash", Active: true}
+	apiKey := &apikeys.APIKey{ID: "test", Hash: "test-hash", Active: true}
 	err = cm.SetAPIKey(ctx, apiKey.Hash, apiKey)
 	require.NoError(t, err)
 
@@ -379,7 +380,7 @@ func BenchmarkCacheManager(b *testing.B) {
 	ctx := context.Background()
 
 	// Prepare test data
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:     "bench-key",
 		Hash:   "bench-hash",
 		Active: true,

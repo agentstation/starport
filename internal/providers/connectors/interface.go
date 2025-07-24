@@ -7,8 +7,8 @@ import (
 
 // Provider name constants
 const (
-	GoogleAIStudioProvider = "google-aistudio"
-	GoogleVertexAIProvider = "google-vertexai"
+	GoogleAIStudioProvider = "google-ai-studio"
+	GoogleVertexAIProvider = "google-vertex"
 )
 
 // Connector defines the interface for LLM provider integrations
@@ -53,9 +53,6 @@ func NewConnector(provider string, config ProviderConfig) (Connector, error) {
 		return NewOpenAIConnector(config)
 	case "anthropic":
 		return NewAnthropicConnector(config)
-	case "gemini", "google":
-		// Legacy support - map to google-aistudio
-		return NewGoogleAIStudioConnector(config)
 	case GoogleAIStudioProvider:
 		return NewGoogleAIStudioConnector(config)
 	case GoogleVertexAIProvider:

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/models"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/rs/zerolog/log"
@@ -207,7 +208,7 @@ func NewCacheManager(config ManagerConfig, store storage.KVStore) (*Manager, err
 }
 
 // GetAPIKey retrieves an API key using hybrid cache
-func (cm *Manager) GetAPIKey(ctx context.Context, hash string) (*models.APIKey, error) {
+func (cm *Manager) GetAPIKey(ctx context.Context, hash string) (*apikeys.APIKey, error) {
 	data, found, err := cm.apiKeys.Get(ctx, hash)
 	if err != nil {
 		return nil, err
@@ -216,7 +217,7 @@ func (cm *Manager) GetAPIKey(ctx context.Context, hash string) (*models.APIKey, 
 		return nil, storage.ErrNotFound
 	}
 
-	var apiKey models.APIKey
+	var apiKey apikeys.APIKey
 	if err := json.Unmarshal(data, &apiKey); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal API key: %w", err)
 	}
@@ -225,7 +226,7 @@ func (cm *Manager) GetAPIKey(ctx context.Context, hash string) (*models.APIKey, 
 }
 
 // SetAPIKey stores an API key in hybrid cache
-func (cm *Manager) SetAPIKey(ctx context.Context, hash string, apiKey *models.APIKey) error {
+func (cm *Manager) SetAPIKey(ctx context.Context, hash string, apiKey *apikeys.APIKey) error {
 	data, err := json.Marshal(apiKey)
 	if err != nil {
 		return fmt.Errorf("failed to marshal API key: %w", err)

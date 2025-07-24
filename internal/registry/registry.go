@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/pkg/catalog"
 )
 
 // Registry manages provider connectors
@@ -133,20 +134,65 @@ func (r *Registry) GetModels(ctx context.Context) ([]connectors.Model, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var allModels []connectors.Model
+	// Get catalog
+	catalog, err := catalog.GetCatalog()
+	if err != nil {
+		// Fall back to dynamic fetching if catalog fails
+		log.Warn().
+			Err(err).
+			Msg("failed to load catalog, falling back to dynamic model fetching")
+		
+		var allModels []connectors.Model
+		for _, connector := range r.connectors {
+			modelsResp, err := connector.Models(ctx)
+			if err != nil {
+				// Log error but continue with other providers
+				log.Warn().
+					Err(err).
+					Msg("failed to get models from provider")
+				continue
+			}
 
-	for _, connector := range r.connectors {
-		modelsResp, err := connector.Models(ctx)
-		if err != nil {
-			// Log error but continue with other providers
-			log.Warn().
-				Err(err).
-				Msg("failed to get models from provider")
-			continue
+			if modelsResp != nil && modelsResp.Data != nil {
+				allModels = append(allModels, modelsResp.Data...)
+			}
 		}
+		return allModels, nil
+	}
 
-		if modelsResp != nil && modelsResp.Data != nil {
-			allModels = append(allModels, modelsResp.Data...)
+	// Filter catalog models to only include those from registered providers
+	var allModels []connectors.Model
+	for provider := range r.connectors {
+		// Use the new mapping function to handle google/ prefix models
+		catalogModels := catalog.GetModelsByProviderWithMapping(provider)
+		for _, catalogModel := range catalogModels {
+			// Convert catalog model to connectors.Model
+			model := connectors.Model{
+				ID:      catalogModel.ID,
+				Object:  "model",
+				Created: catalogModel.Created,
+				OwnedBy: provider,
+			}
+			allModels = append(allModels, model)
+		}
+	}
+
+	// If no models found in catalog, try dynamic fetching
+	if len(allModels) == 0 {
+		log.Warn().Msg("no models found in catalog, trying dynamic fetching")
+		for _, connector := range r.connectors {
+			modelsResp, err := connector.Models(ctx)
+			if err != nil {
+				// Log error but continue with other providers
+				log.Warn().
+					Err(err).
+					Msg("failed to get models from provider")
+				continue
+			}
+
+			if modelsResp != nil && modelsResp.Data != nil {
+				allModels = append(allModels, modelsResp.Data...)
+			}
 		}
 	}
 

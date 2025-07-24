@@ -2,6 +2,8 @@ package routing
 
 import (
 	"strings"
+	
+	"github.com/agentstation/starport/pkg/catalog"
 )
 
 // ModelPricing contains pricing information for a model
@@ -359,6 +361,13 @@ func (s *CostOptimizedSelector) SelectModel(models []string, estimatedPromptToke
 }
 
 func extractProviderFromModel(modelID string) string {
+	// Use the catalog to determine the actual provider
+	provider := catalog.GetProviderForModel(modelID)
+	if provider != "" {
+		return provider
+	}
+	
+	// Fall back to extracting from model ID
 	parts := strings.SplitN(modelID, "/", 2)
 	if len(parts) > 0 {
 		return parts[0]

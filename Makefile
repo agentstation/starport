@@ -1,3 +1,4 @@
+
 # Starport Makefile
 
 # Variables
@@ -161,6 +162,11 @@ test-integration:
 version: build
 	./$(BINARY_NAME) version
 
+## ford: generate catalog.json from provider.json and output to pkg/catalog/catalog.json
+.PHONY: ford
+ford:
+	@ford parse -input ../ford/data -p pkg/catalog/provider.json -o pkg/catalog/catalog.json
+
 # Help target
 .PHONY: help
 help:
@@ -180,5 +186,6 @@ help:
 	@echo "  make dev-docker-logs    - View docker-compose logs"
 	@echo "  make dev-docker-stop    - Stop docker-compose environment"
 	@echo "  make dev-docker-clean   - Clean docker-compose volumes"
+	@echo "  make ford               - Generate catalog.json from provider.json and output to pkg/catalog/catalog.json"
 	@echo "  make version            - Show version"
 	@echo "  make help               - Show this help message"

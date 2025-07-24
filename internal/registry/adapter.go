@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/pkg/catalog"
 )
 
 // Adapter provides server-specific functionality on top of the Registry
@@ -30,42 +31,94 @@ func (a *Adapter) GetRegistry() *Registry {
 	return a.registry
 }
 
+// providerInit holds initialization data for a provider
+type providerInit struct {
+	name      string
+	baseURL   string
+	apiKeyEnv string
+}
+
 // InitializeFromConfig initializes connectors based on configuration
 func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) error {
-	// Initialize OpenAI if configured
-	if cfg.Providers.OpenAI.BaseURL != "" {
-		providerCfg := convertToProviderConfig(cfg.Providers.OpenAI, "OPENAI_API_KEY")
-		connector, err := connectors.NewConnector("openai", providerCfg)
-		if err != nil {
-			return fmt.Errorf("failed to create OpenAI connector: %w", err)
-		}
-		if err := a.registry.Register("openai", connector); err != nil {
-			return fmt.Errorf("failed to register OpenAI connector: %w", err)
-		}
-		log.Info().Msg("initialized OpenAI connector")
+	// Define provider configurations
+	providers := []providerInit{
+		{"openai", cfg.Providers.OpenAI.BaseURL, "OPENAI_API_KEY"},
+		{"anthropic", cfg.Providers.Anthropic.BaseURL, "ANTHROPIC_API_KEY"},
+		{"groq", cfg.Providers.Groq.BaseURL, "GROQ_API_KEY"},
+		{"mistral", cfg.Providers.Mistral.BaseURL, "MISTRAL_API_KEY"},
 	}
 
-	// Initialize Anthropic if configured
-	if cfg.Providers.Anthropic.BaseURL != "" {
-		providerCfg := convertToProviderConfig(cfg.Providers.Anthropic, "ANTHROPIC_API_KEY")
-		connector, err := connectors.NewConnector("anthropic", providerCfg)
-		if err != nil {
-			return fmt.Errorf("failed to create Anthropic connector: %w", err)
+	// Initialize standard providers
+	for _, p := range providers {
+		if err := a.initializeProvider(p, cfg); err != nil {
+			return err
 		}
-		if err := a.registry.Register("anthropic", connector); err != nil {
-			return fmt.Errorf("failed to register Anthropic connector: %w", err)
-		}
-		log.Info().Msg("initialized Anthropic connector")
 	}
 
+	// Handle Google providers separately due to special logic
+	if err := a.initializeGoogleProviders(cfg); err != nil {
+		return err
+	}
+
+	// Initialize Azure OpenAI if configured
+	if cfg.Providers.Azure.BaseURL != "" {
+		if err := a.initializeAzureProvider(cfg); err != nil {
+			return err
+		}
+	}
+
+	// If no providers are configured, use mock connector for development
+	if len(a.registry.ListProviders()) == 0 {
+		if err := a.initializeMockProvider(); err != nil {
+			return err
+		}
+	}
+
+	// Perform initial health checks
+	a.performHealthChecks(ctx)
+
+	return nil
+}
+
+// initializeProvider initializes a standard provider
+func (a *Adapter) initializeProvider(p providerInit, cfg *config.Config) error {
+	if p.baseURL == "" {
+		return nil
+	}
+
+	var providerCfg connectors.ProviderConfig
+	switch p.name {
+	case "openai":
+		providerCfg = convertToProviderConfig(cfg.Providers.OpenAI, p.apiKeyEnv)
+	case "anthropic":
+		providerCfg = convertToProviderConfig(cfg.Providers.Anthropic, p.apiKeyEnv)
+	case "groq":
+		providerCfg = convertToProviderConfig(cfg.Providers.Groq, p.apiKeyEnv)
+	case "mistral":
+		providerCfg = convertToProviderConfig(cfg.Providers.Mistral, p.apiKeyEnv)
+	}
+
+	connector, err := connectors.NewConnector(p.name, providerCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create %s connector: %w", p.name, err)
+	}
+	if err := a.registry.Register(p.name, connector); err != nil {
+		return fmt.Errorf("failed to register %s connector: %w", p.name, err)
+	}
+	log.Info().Msgf("initialized %s connector", p.name)
+	return nil
+}
+
+// initializeGoogleProviders handles Google AI Studio and Vertex AI initialization
+func (a *Adapter) initializeGoogleProviders(cfg *config.Config) error {
 	// Initialize Google AI Studio if configured
 	if cfg.Providers.GoogleAIStudio.BaseURL != "" {
 		providerCfg := convertToProviderConfig(cfg.Providers.GoogleAIStudio, "GOOGLE_API_KEY")
-		connector, err := connectors.NewConnector("google-aistudio", providerCfg)
+		connector, err := connectors.NewConnector("google-ai-studio", providerCfg)
 		if err != nil {
 			return fmt.Errorf("failed to create Google AI Studio connector: %w", err)
 		}
-		if err := a.registry.Register("google-aistudio", connector); err != nil {
+		if err := a.registry.Register("google-ai-studio", connector); err != nil {
 			return fmt.Errorf("failed to register Google AI Studio connector: %w", err)
 		}
 		log.Info().Msg("initialized Google AI Studio connector")
@@ -73,11 +126,11 @@ func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) 
 		// Legacy support: Use deprecated Gemini config for Google AI Studio
 		log.Warn().Msg("using deprecated Gemini config for Google AI Studio - please migrate to STARPORT_PROVIDERS_GOOGLE_AISTUDIO_*")
 		providerCfg := convertToProviderConfig(cfg.Providers.Gemini, "GOOGLE_API_KEY")
-		connector, err := connectors.NewConnector("google-aistudio", providerCfg)
+		connector, err := connectors.NewConnector("google-ai-studio", providerCfg)
 		if err != nil {
 			return fmt.Errorf("failed to create Google AI Studio connector: %w", err)
 		}
-		if err := a.registry.Register("google-aistudio", connector); err != nil {
+		if err := a.registry.Register("google-ai-studio", connector); err != nil {
 			return fmt.Errorf("failed to register Google AI Studio connector: %w", err)
 		}
 		log.Info().Msg("initialized Google AI Studio connector from deprecated Gemini config")
@@ -116,11 +169,11 @@ func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) 
 			providerCfg.Extra["fallback_locations"] = fallbacks
 		}
 		
-		connector, err := connectors.NewConnector("google-vertexai", providerCfg)
+		connector, err := connectors.NewConnector("google-vertex", providerCfg)
 		if err != nil {
 			return fmt.Errorf("failed to create Vertex AI connector: %w", err)
 		}
-		if err := a.registry.Register("google-vertexai", connector); err != nil {
+		if err := a.registry.Register("google-vertex", connector); err != nil {
 			return fmt.Errorf("failed to register Vertex AI connector: %w", err)
 		}
 		logEntry := log.Info().Str("project_id", projectID)
@@ -130,38 +183,12 @@ func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) 
 		logEntry.Msg("initialized Vertex AI connector")
 	}
 
-	// Note: Legacy Gemini config is mapped to Google AI Studio, not Vertex AI
-	// Vertex AI requires additional configuration (project_id, location) that
-	// the deprecated Gemini config doesn't provide
 
-	// Initialize Groq if configured
-	if cfg.Providers.Groq.BaseURL != "" {
-		providerCfg := convertToProviderConfig(cfg.Providers.Groq, "GROQ_API_KEY")
-		connector, err := connectors.NewConnector("groq", providerCfg)
-		if err != nil {
-			return fmt.Errorf("failed to create Groq connector: %w", err)
-		}
-		if err := a.registry.Register("groq", connector); err != nil {
-			return fmt.Errorf("failed to register Groq connector: %w", err)
-		}
-		log.Info().Msg("initialized Groq connector")
-	}
+	return nil
+}
 
-	// Initialize Mistral if configured
-	if cfg.Providers.Mistral.BaseURL != "" {
-		providerCfg := convertToProviderConfig(cfg.Providers.Mistral, "MISTRAL_API_KEY")
-		connector, err := connectors.NewConnector("mistral", providerCfg)
-		if err != nil {
-			return fmt.Errorf("failed to create Mistral connector: %w", err)
-		}
-		if err := a.registry.Register("mistral", connector); err != nil {
-			return fmt.Errorf("failed to register Mistral connector: %w", err)
-		}
-		log.Info().Msg("initialized Mistral connector")
-	}
-
-	// Initialize Azure OpenAI if configured
-	if cfg.Providers.Azure.BaseURL != "" {
+// initializeAzureProvider initializes Azure OpenAI connector
+func (a *Adapter) initializeAzureProvider(cfg *config.Config) error {
 		providerCfg := convertToProviderConfig(cfg.Providers.Azure, "AZURE_OPENAI_API_KEY")
 		connector, err := connectors.NewConnector("azure", providerCfg)
 		if err != nil {
@@ -171,22 +198,25 @@ func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) 
 			return fmt.Errorf("failed to register Azure OpenAI connector: %w", err)
 		}
 		log.Info().Msg("initialized Azure OpenAI connector")
-	}
+		return nil
+}
 
-	// If no providers are configured, use mock connector for development
-	if len(a.registry.ListProviders()) == 0 {
-		log.Warn().Msg("no providers configured, using mock connector")
-		mockConfig := connectors.ProviderConfig{
-			BaseURL: "http://mock",
-			Timeout: 30 * time.Second,
-		}
-		mockConnector := connectors.NewMockConnector(mockConfig)
-		if err := a.registry.Register("mock", mockConnector); err != nil {
-			return fmt.Errorf("failed to register mock connector: %w", err)
-		}
+// initializeMockProvider initializes a mock connector for development
+func (a *Adapter) initializeMockProvider() error {
+	log.Warn().Msg("no providers configured, using mock connector")
+	mockConfig := connectors.ProviderConfig{
+		BaseURL: "http://mock",
+		Timeout: 30 * time.Second,
 	}
+	mockConnector := connectors.NewMockConnector(mockConfig)
+	if err := a.registry.Register("mock", mockConnector); err != nil {
+		return fmt.Errorf("failed to register mock connector: %w", err)
+	}
+	return nil
+}
 
-	// Perform initial health checks
+// performHealthChecks runs health checks on all registered providers
+func (a *Adapter) performHealthChecks(ctx context.Context) {
 	healthResults := a.registry.HealthCheck(ctx)
 	for provider, err := range healthResults {
 		if err != nil {
@@ -200,28 +230,30 @@ func (a *Adapter) InitializeFromConfig(ctx context.Context, cfg *config.Config) 
 				Msg("provider health check passed")
 		}
 	}
-
-	return nil
 }
 
 // GetConnectorForModel returns the appropriate connector for a model ID
 func (a *Adapter) GetConnectorForModel(modelID string) (connectors.Connector, string, error) {
-	// Extract provider from model ID if present
-	provider, model := extractProviderFromModel(modelID)
-
-	if provider != "" {
-		// Direct provider specified
-		conn, err := a.registry.Get(provider)
-		if err != nil {
-			return nil, "", fmt.Errorf("provider not available: %s", provider)
+	// Use the catalog to determine the actual provider for this model
+	actualProvider := catalog.GetProviderForModel(modelID)
+	if actualProvider == "" {
+		// Fall back to extracting from model ID
+		provider, _ := extractProviderFromModel(modelID)
+		if provider != "" {
+			actualProvider = provider
+		} else {
+			return nil, "", fmt.Errorf("unable to determine provider for model: %s", modelID)
 		}
-		return conn, model, nil
 	}
 
-	// No provider specified, need to determine from available providers
-	// This would typically involve model routing logic
-	// For now, return an error indicating model routing is needed
-	return nil, "", fmt.Errorf("model routing required for model: %s", modelID)
+	// Get the connector for the determined provider
+	conn, err := a.registry.Get(actualProvider)
+	if err != nil {
+		return nil, "", fmt.Errorf("provider not available: %s", actualProvider)
+	}
+	
+	// Return the full model ID (not just the model part)
+	return conn, modelID, nil
 }
 
 // extractProviderFromModel extracts provider and model from a model ID
@@ -264,7 +296,7 @@ func getGoogleAPIKey() string {
 func convertToProviderConfig(cfg config.ProviderConfig, apiKeyEnv string) connectors.ProviderConfig {
 	// Special handling for Google/Gemini API keys
 	apiKey := ""
-	if apiKeyEnv == "GOOGLE_API_KEY" {
+	if apiKeyEnv == "GOOGLE_API_KEY" { //nolint:gosec // This is an environment variable name, not a hardcoded key
 		apiKey = getGoogleAPIKey()
 	} else {
 		apiKey = os.Getenv(apiKeyEnv)

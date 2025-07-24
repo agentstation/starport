@@ -75,11 +75,12 @@ starport/
 │   ├── start.go              # Signal handling
 │   └── run.go                # Application setup & CLI
 ├── internal/                  # Private application code
+│   ├── apikey/               # API key management and validation ✅
 │   ├── app/                  # Application lifecycle ✅
 │   ├── byok/                 # BYOK credential management ✅
 │   ├── cache/                # Cache manager (interface only) 🚧
 │   ├── config/               # Configuration system ✅
-│   ├── models/               # Data models ✅
+│   ├── models/               # Data models (presets, provider keys, etc.) ✅
 │   ├── providers/            # Provider implementations
 │   │   ├── connectors/       # LLM provider connectors ✅
 │   │   └── registry/         # Connector registry ✅

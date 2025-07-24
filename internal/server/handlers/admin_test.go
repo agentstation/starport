@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -184,7 +184,7 @@ func TestAdminHandler_ListKeys(t *testing.T) {
 	handler := NewAdminHandler(store)
 
 	// Add some test keys
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:     "test-key-1",
 		Name:   "Test Key 1",
 		Active: true,
@@ -252,7 +252,7 @@ func TestAdminHandler_GetKey(t *testing.T) {
 	handler := NewAdminHandler(store)
 
 	// Add a test key
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:     "test-key-1",
 		Name:   "Test Key 1",
 		Active: true,
@@ -276,7 +276,7 @@ func TestAdminHandler_GetKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Check response
-	var resp models.APIKey
+	var resp apikeys.APIKey
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, "test-key-1", resp.ID)
@@ -290,7 +290,7 @@ func TestAdminHandler_DeleteKey(t *testing.T) {
 	handler := NewAdminHandler(store)
 
 	// Add a test key
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:     "test-key-1",
 		Name:   "Test Key 1",
 		Active: true,

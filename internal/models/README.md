@@ -5,15 +5,19 @@ This package defines the core data models for the Starport gateway.
 ## Overview
 
 The models package provides:
-- Core data structures (APIKey, Preset, BYOKCredential, TokenBucket)
+- Core data structures (Preset, BYOKCredential, TokenBucket)
 - Model validation methods
 - Storage key generation and parsing
 - Encryption/decryption utilities for sensitive data
 - Serialization helpers
 
+Note: APIKey has been moved to the `internal/apikeys` package for better organization.
+
 ## Models
 
 ### APIKey
+**Note: APIKey has been moved to the `internal/apikeys` package for better organization.**
+
 Represents an API key for authenticating with the gateway:
 - Supports scopes for permission control
 - Model restrictions for access control

@@ -58,7 +58,7 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
-data/
+# data/ - keeping data directory in git for provider information
 
 # Badger database
 badger/

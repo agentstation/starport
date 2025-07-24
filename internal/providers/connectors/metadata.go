@@ -1,6 +1,10 @@
 package connectors
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/agentstation/starport/pkg/catalog"
+)
 
 // ModelMetadata represents enhanced model information for OpenRouter compatibility
 type ModelMetadata struct {
@@ -101,7 +105,7 @@ func GetProviderMetadata() []ProviderMetadata {
 		},
 		{
 			Name:                  "Google AI Studio",
-			Slug:                  "google-aistudio",
+			Slug:                  "google-ai-studio",
 			MayLogPrompts:         false,
 			MayTrainOnData:        false,
 			ModeratedByOpenRouter: false,
@@ -111,7 +115,7 @@ func GetProviderMetadata() []ProviderMetadata {
 		},
 		{
 			Name:                  "Google Vertex AI",
-			Slug:                  "google-vertexai",
+			Slug:                  "google-vertex",
 			MayLogPrompts:         false,
 			MayTrainOnData:        false,
 			ModeratedByOpenRouter: false,
@@ -154,748 +158,73 @@ func GetProviderMetadata() []ProviderMetadata {
 
 // GetModelMetadata returns enhanced metadata for a model
 func GetModelMetadata(modelID string) *ModelMetadata {
-	// This will be populated with actual model metadata
-	// For now, return a basic structure that can be enhanced
-	metadata := modelMetadataMap[modelID]
-	if metadata != nil {
-		return metadata
+	// Get catalog
+	catalog, err := catalog.GetCatalog()
+	if err != nil {
+		// Fall back to basic metadata if catalog fails to load
+		return &ModelMetadata{
+			ID:      modelID,
+			Name:    modelID,
+			Created: 1686935002, // Default timestamp
+		}
 	}
 
-	// Return basic metadata if not found in map
-	return &ModelMetadata{
-		ID:      modelID,
-		Name:    modelID,
-		Created: 1686935002, // Default timestamp
+	// Look up model in catalog
+	model := catalog.GetModelByID(modelID)
+	if model == nil {
+		// Return basic metadata if not found
+		return &ModelMetadata{
+			ID:      modelID,
+			Name:    modelID,
+			Created: 1686935002, // Default timestamp
+		}
 	}
-}
 
-// modelMetadataMap contains enhanced metadata for known models
-var modelMetadataMap = map[string]*ModelMetadata{
-	// OpenAI Models
-	"openai/gpt-4": {
-		ID:          "openai/gpt-4",
-		Name:        "OpenAI: GPT-4",
-		Created:     1686935002,
-		Description: "GPT-4 is OpenAI's latest and most powerful model",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00003",
-			Completion: "0.00006",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(8192),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "cl100k_base",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "frequency_penalty",
-			"presence_penalty", "tools", "tool_choice",
-			"response_format", "seed", "max_tokens",
-		},
-	},
-	"openai/gpt-4-turbo": {
-		ID:          "openai/gpt-4-turbo",
-		Name:        "OpenAI: GPT-4 Turbo",
-		Created:     1699593002,
-		Description: "GPT-4 Turbo with 128k context window",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00001",
-			Completion: "0.00003",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(128000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "cl100k_base",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "frequency_penalty",
-			"presence_penalty", "tools", "tool_choice",
-			"response_format", "seed", "max_tokens",
-		},
-	},
-	"openai/gpt-3.5-turbo": {
-		ID:          "openai/gpt-3.5-turbo",
-		Name:        "OpenAI: GPT-3.5 Turbo",
-		Created:     1677649963,
-		Description: "Fast and efficient model for most tasks",
-		Pricing: &ModelPricing{
-			Prompt:     "0.0000005",
-			Completion: "0.0000015",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(16385),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "cl100k_base",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "frequency_penalty",
-			"presence_penalty", "tools", "tool_choice",
-			"response_format", "seed", "max_tokens",
-		},
-	},
+	// Convert catalog model to metadata
+	metadata := &ModelMetadata{
+		ID:          model.ID,
+		Name:        model.Name,
+		Created:     model.Created,
+		Description: model.Description,
+	}
 
-	// Anthropic Models - Claude 4 Series
-	"anthropic/claude-4-opus": {
-		ID:          "anthropic/claude-4-opus",
-		Name:        "Anthropic: Claude 4 Opus",
-		Created:     1736524800, // Jan 2025
-		Description: "Claude 4 Opus - Most advanced model with superior reasoning",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000015",
-			Completion: "0.000075",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
-	"anthropic/claude-4-sonnet": {
-		ID:          "anthropic/claude-4-sonnet",
-		Name:        "Anthropic: Claude 4 Sonnet",
-		Created:     1736524800, // Jan 2025
-		Description: "Claude 4 Sonnet - Balanced performance and cost",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000006",
-			Completion: "0.00003",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
+	// Convert pricing
+	if model.Pricing != nil {
+		metadata.Pricing = &ModelPricing{
+			Prompt:     model.Pricing.Prompt,
+			Completion: model.Pricing.Completion,
+			Image:      model.Pricing.Image,
+			Request:    model.Pricing.Request,
+		}
+	}
 
-	// Anthropic Models - Claude 3 Series
-	"anthropic/claude-3-opus-20240229": {
-		ID:          "anthropic/claude-3-opus-20240229",
-		Name:        "Anthropic: Claude 3 Opus",
-		Created:     1709251200,
-		Description: "Claude 3 Opus - Most powerful model for complex tasks",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000015",
-			Completion: "0.000075",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
-	"anthropic/claude-3-sonnet-20240229": {
-		ID:          "anthropic/claude-3-sonnet-20240229",
-		Name:        "Anthropic: Claude 3 Sonnet",
-		Created:     1709251200,
-		Description: "Claude 3 Sonnet - Balanced performance and cost",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000003",
-			Completion: "0.000015",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
-	"anthropic/claude-3-haiku-20240307": {
-		ID:          "anthropic/claude-3-haiku-20240307",
-		Name:        "Anthropic: Claude 3 Haiku",
-		Created:     1709856000,
-		Description: "Claude 3 Haiku - Fast and cost-effective",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00000025",
-			Completion: "0.00000125",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
+	// Convert context length
+	if model.ContextLength > 0 {
+		ctx := ModelContext(model.ContextLength)
+		metadata.Context = &ctx
+	}
 
-	// Google AI Studio Models
-	"google-aistudio/gemini-2.5-pro": {
-		ID:          "google-aistudio/gemini-2.5-pro",
-		Name:        "Google AI Studio: Gemini 2.5 Pro",
-		Created:     1736121600, // 2025-01-06
-		Description: "Google's most advanced model with 1M+ context",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00125", // $1.25 per 1M tokens
-			Completion: "0.01",    // $10.00 per 1M tokens
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(1048576),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image", "video", "audio"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "gemini",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         true,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences", "candidate_count",
-		},
-	},
-	"google-aistudio/gemini-2.5-flash": {
-		ID:          "google-aistudio/gemini-2.5-flash",
-		Name:        "Google AI Studio: Gemini 2.5 Flash",
-		Created:     1736121600, // 2025-01-06
-		Description: "Ultra-fast multimodal model with 1M+ context",
-		Pricing: &ModelPricing{
-			Prompt:     "0.0000003",
-			Completion: "0.0000025",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(1048576),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image", "video", "audio"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "gemini",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         true,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences", "candidate_count",
-		},
-	},
-	"google-aistudio/gemini-2.0-flash-001": {
-		ID:          "google-aistudio/gemini-2.0-flash-001",
-		Name:        "Google AI Studio: Gemini 2.0 Flash",
-		Created:     1731024000, // 2024-11-08
-		Description: "Previous generation ultra-fast model",
-		Pricing: &ModelPricing{
-			Prompt:     "0.0000001",
-			Completion: "0.0000004",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(1048576),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image", "video", "audio"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "gemini",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         true,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences", "candidate_count",
-		},
-	},
-	"google-aistudio/gemini-1.5-pro": {
-		ID:          "google-aistudio/gemini-1.5-pro",
-		Name:        "Google AI Studio: Gemini 1.5 Pro",
-		Created:     1707868800,
-		Description: "Gemini 1.5 Pro with 1M+ context window",
-		Pricing: &ModelPricing{
-			Prompt:     "0.0000035",
-			Completion: "0.0000105",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(1048576),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image", "video", "audio"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "gemini",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences", "candidate_count",
-		},
-	},
-	"google-aistudio/gemini-1.5-flash": {
-		ID:          "google-aistudio/gemini-1.5-flash",
-		Name:        "Google AI Studio: Gemini 1.5 Flash",
-		Created:     1715299200,
-		Description: "Fast multimodal model optimized for speed",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00000035",
-			Completion: "0.00000105",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(1048576),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image", "video", "audio"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "gemini",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences", "candidate_count",
-		},
-	},
+	// Convert architecture
+	if model.Architecture != nil {
+		metadata.Architecture = &ModelArchitecture{
+			InputModalities:  model.Architecture.InputModalities,
+			OutputModalities: model.Architecture.OutputModalities,
+			Tokenizer:        model.Architecture.Tokenizer,
+		}
+	}
 
-	// Google Vertex AI Models
-	"google-vertexai/gemini-1.5-pro": {
-		ID:          "google-vertexai/gemini-1.5-pro",
-		Name:        "Google Vertex AI: Gemini 1.5 Pro",
-		Created:     1707868800,
-		Description: "Gemini 1.5 Pro on Vertex AI with 1M+ context window",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00000125",
-			Completion: "0.00000375",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(1048576),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image", "video", "audio"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "gemini",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences", "candidate_count",
-		},
-	},
-	"google-vertexai/gemini-1.5-flash": {
-		ID:          "google-vertexai/gemini-1.5-flash",
-		Name:        "Google Vertex AI: Gemini 1.5 Flash",
-		Created:     1715299200,
-		Description: "Fast multimodal model on Vertex AI optimized for speed",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000000125",
-			Completion: "0.000000375",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(1048576),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image", "video", "audio"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "gemini",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences", "candidate_count",
-		},
-	},
-	"google-vertexai/claude-3-opus@20240229": {
-		ID:          "google-vertexai/claude-3-opus@20240229",
-		Name:        "Google Vertex AI: Claude 3 Opus",
-		Created:     1709251200,
-		Description: "Claude 3 Opus available through Vertex AI Model Garden",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000015",
-			Completion: "0.000075",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
-	"google-vertexai/claude-3-sonnet@20240229": {
-		ID:          "google-vertexai/claude-3-sonnet@20240229",
-		Name:        "Google Vertex AI: Claude 3 Sonnet",
-		Created:     1709251200,
-		Description: "Claude 3 Sonnet available through Vertex AI Model Garden",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000003",
-			Completion: "0.000015",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
-	"google-vertexai/claude-3-haiku@20240307": {
-		ID:          "google-vertexai/claude-3-haiku@20240307",
-		Name:        "Google Vertex AI: Claude 3 Haiku",
-		Created:     1709856000,
-		Description: "Claude 3 Haiku available through Vertex AI Model Garden",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00000025",
-			Completion: "0.00000125",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(200000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "claude",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop_sequences", "stream",
-		},
-	},
-	"google-vertexai/text-bison@001": {
-		ID:          "google-vertexai/text-bison@001",
-		Name:        "Google Vertex AI: PaLM 2 for Text",
-		Created:     1683590400,
-		Description: "PaLM 2 text generation model",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000000125",
-			Completion: "0.000000125",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(8192),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "palm",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 1024,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "top_k", "max_tokens",
-			"stop_sequences",
-		},
-	},
-	"google-vertexai/code-bison@001": {
-		ID:          "google-vertexai/code-bison@001",
-		Name:        "Google Vertex AI: Codey for Code Generation",
-		Created:     1683590400,
-		Description: "Codey model for code generation",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000000125",
-			Completion: "0.000000125",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(6144),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "palm",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 1024,
-		},
-		SupportedParameters: []string{
-			"temperature", "max_tokens", "stop_sequences",
-		},
-	},
+	// Convert top provider
+	if model.TopProvider != nil {
+		metadata.TopProvider = &TopProviderInfo{
+			IsModerated:         false, // Not in catalog, defaulting
+			MaxCompletionTokens: model.TopProvider.MaxCompletionTokens,
+		}
+	}
 
-	// Groq Models
-	"groq/llama-3.1-70b-versatile": {
-		ID:          "groq/llama-3.1-70b-versatile",
-		Name:        "Groq: Llama 3.1 70B",
-		Created:     1721692800,
-		Description: "Fast inference of Llama 3.1 70B on Groq LPU",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00000059",
-			Completion: "0.00000079",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(131072),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "llama3",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"frequency_penalty", "presence_penalty",
-			"stop", "stream",
-		},
-	},
-	"groq/mixtral-8x7b-32768": {
-		ID:          "groq/mixtral-8x7b-32768",
-		Name:        "Groq: Mixtral 8x7B",
-		Created:     1702425600,
-		Description: "Fast Mixtral 8x7B inference on Groq",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00000027",
-			Completion: "0.00000027",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(32768),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "mistral",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"frequency_penalty", "presence_penalty",
-			"stop", "stream",
-		},
-	},
+	// Copy supported parameters
+	metadata.SupportedParameters = model.SupportedParameters
 
-	// Mistral Models
-	"mistral/mistral-large-latest": {
-		ID:          "mistral/mistral-large-latest",
-		Name:        "Mistral: Large",
-		Created:     1716336000,
-		Description: "Mistral's most capable model",
-		Pricing: &ModelPricing{
-			Prompt:     "0.000002",
-			Completion: "0.000006",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(128000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "mistral",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"tools", "tool_choice", "response_format",
-			"stop", "stream",
-		},
-	},
-	"mistral/mistral-medium-latest": {
-		ID:          "mistral/mistral-medium-latest",
-		Name:        "Mistral: Medium",
-		Created:     1704412800,
-		Description: "Balanced performance Mistral model",
-		Pricing: &ModelPricing{
-			Prompt:     "0.0000027",
-			Completion: "0.0000081",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(32768),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "mistral",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 8192,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "max_tokens",
-			"stop", "stream",
-		},
-	},
-
-	// Azure Models (mirrors of OpenAI models)
-	"azure/gpt-4": {
-		ID:          "azure/gpt-4",
-		Name:        "Azure: GPT-4",
-		Created:     1686935002,
-		Description: "GPT-4 on Azure OpenAI Service",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00003",
-			Completion: "0.00006",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(8192),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "cl100k_base",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "frequency_penalty",
-			"presence_penalty", "tools", "tool_choice",
-			"response_format", "seed", "max_tokens",
-		},
-	},
-	"azure/gpt-4-turbo": {
-		ID:          "azure/gpt-4-turbo",
-		Name:        "Azure: GPT-4 Turbo",
-		Created:     1699593002,
-		Description: "GPT-4 Turbo on Azure OpenAI Service",
-		Pricing: &ModelPricing{
-			Prompt:     "0.00001",
-			Completion: "0.00003",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(128000),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text", "image"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "cl100k_base",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "frequency_penalty",
-			"presence_penalty", "tools", "tool_choice",
-			"response_format", "seed", "max_tokens",
-		},
-	},
-	"azure/gpt-3.5-turbo": {
-		ID:          "azure/gpt-3.5-turbo",
-		Name:        "Azure: GPT-3.5 Turbo",
-		Created:     1677649963,
-		Description: "GPT-3.5 Turbo on Azure OpenAI Service",
-		Pricing: &ModelPricing{
-			Prompt:     "0.0000005",
-			Completion: "0.0000015",
-			Image:      "0",
-			Request:    "0",
-		},
-		Context: modelContextPtr(16385),
-		Architecture: &ModelArchitecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-			Tokenizer:        "cl100k_base",
-		},
-		TopProvider: &TopProviderInfo{
-			IsModerated:         false,
-			MaxCompletionTokens: 4096,
-		},
-		SupportedParameters: []string{
-			"temperature", "top_p", "frequency_penalty",
-			"presence_penalty", "tools", "tool_choice",
-			"response_format", "seed", "max_tokens",
-		},
-	},
+	return metadata
 }
 
 // Helper function to get pointer to ModelContext
@@ -906,12 +235,21 @@ func modelContextPtr(i int) *ModelContext {
 
 // GetModelsByProvider returns models offered by a specific provider
 func GetModelsByProvider(provider string) []string {
-	models := []string{}
-	for modelID := range modelMetadataMap {
-		if strings.HasPrefix(modelID, provider+"/") {
-			models = append(models, modelID)
-		}
+	// Get catalog
+	cat, err := catalog.GetCatalog()
+	if err != nil {
+		return []string{}
 	}
+
+	// Get models from catalog
+	catalogModels := cat.GetModelsByProvider(provider)
+	
+	// Convert to string slice
+	models := make([]string, 0, len(catalogModels))
+	for _, model := range catalogModels {
+		models = append(models, model.ID)
+	}
+	
 	return models
 }
 
@@ -919,20 +257,41 @@ func GetModelsByProvider(provider string) []string {
 func GetProvidersForModel(modelName string) []ModelProviderInfo {
 	providers := []ModelProviderInfo{}
 
-	// For now, we only have one provider per model
-	// This would be enhanced to support multiple providers per model base
-	for modelID, metadata := range modelMetadataMap {
+	// Get catalog
+	cat, err := catalog.GetCatalog()
+	if err != nil {
+		return providers
+	}
+
+	// Search for models with the given name across all providers
+	for modelID, model := range cat.Models {
 		parts := strings.SplitN(modelID, "/", 2)
 		if len(parts) == 2 && parts[1] == modelName {
 			providerSlug := parts[0]
 			providerMeta := getProviderBySlug(providerSlug)
 			if providerMeta != nil {
-				providers = append(providers, ModelProviderInfo{
+				info := ModelProviderInfo{
 					Provider: providerSlug,
 					Name:     providerMeta.Name,
-					Pricing:  metadata.Pricing,
-					Context:  metadata.Context,
-				})
+				}
+				
+				// Convert pricing
+				if model.Pricing != nil {
+					info.Pricing = &ModelPricing{
+						Prompt:     model.Pricing.Prompt,
+						Completion: model.Pricing.Completion,
+						Image:      model.Pricing.Image,
+						Request:    model.Pricing.Request,
+					}
+				}
+				
+				// Convert context
+				if model.ContextLength > 0 {
+					ctx := ModelContext(model.ContextLength)
+					info.Context = &ctx
+				}
+				
+				providers = append(providers, info)
 			}
 		}
 	}

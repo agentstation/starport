@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/apikeys"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -57,16 +57,16 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupStore: func(store *storage.MockStore) {
 				keyValue := "sk-starport-testkey123"
 				keyID := "STARPORT_test123"
-				
+
 				// Hash the key
 				hash := sha256.Sum256([]byte(keyValue))
 				hashStr := hex.EncodeToString(hash[:])
-				
+
 				// Store hash -> ID mapping
 				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-				
+
 				// Store the API key
-				apiKey := &models.APIKey{
+				apiKey := &apikeys.APIKey{
 					ID:        keyID,
 					Name:      "Test Key",
 					Hash:      hashStr,
@@ -88,16 +88,16 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupStore: func(store *storage.MockStore) {
 				keyValue := "sk-starport-testkey456"
 				keyID := "STARPORT_test456"
-				
+
 				// Hash the key
 				hash := sha256.Sum256([]byte(keyValue))
 				hashStr := hex.EncodeToString(hash[:])
-				
+
 				// Store hash -> ID mapping
 				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-				
+
 				// Store the API key
-				apiKey := &models.APIKey{
+				apiKey := &apikeys.APIKey{
 					ID:        keyID,
 					Name:      "Test Key 2",
 					Hash:      hashStr,
@@ -121,16 +121,16 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupStore: func(store *storage.MockStore) {
 				keyValue := "sk-starport-testkey789"
 				keyID := "STARPORT_test789"
-				
+
 				// Hash the key
 				hash := sha256.Sum256([]byte(keyValue))
 				hashStr := hex.EncodeToString(hash[:])
-				
+
 				// Store hash -> ID mapping
 				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-				
+
 				// Store the API key
-				apiKey := &models.APIKey{
+				apiKey := &apikeys.APIKey{
 					ID:        keyID,
 					Name:      "Test Key 3",
 					Hash:      hashStr,
@@ -152,16 +152,16 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupStore: func(store *storage.MockStore) {
 				keyValue := "sk-starport-disabled"
 				keyID := "STARPORT_disabled"
-				
+
 				// Hash the key
 				hash := sha256.Sum256([]byte(keyValue))
 				hashStr := hex.EncodeToString(hash[:])
-				
+
 				// Store hash -> ID mapping
 				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-				
+
 				// Store the API key (disabled)
-				apiKey := &models.APIKey{
+				apiKey := &apikeys.APIKey{
 					ID:        keyID,
 					Name:      "Disabled Key",
 					Hash:      hashStr,
@@ -184,16 +184,16 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupStore: func(store *storage.MockStore) {
 				keyValue := "sk-starport-mismatch"
 				keyID := "STARPORT_mismatch"
-				
+
 				// Hash the key
 				hash := sha256.Sum256([]byte(keyValue))
 				hashStr := hex.EncodeToString(hash[:])
-				
+
 				// Store hash -> ID mapping
 				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-				
+
 				// Store the API key with WRONG hash
-				apiKey := &models.APIKey{
+				apiKey := &apikeys.APIKey{
 					ID:        keyID,
 					Name:      "Mismatch Key",
 					Hash:      "wronghash",
@@ -224,7 +224,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			var gotContext bool
 			var gotAPIKey string
 			var gotAPIKeyID string
-			var gotAPIKeyModel *models.APIKey
+			var gotAPIKeyModel *apikeys.APIKey
 
 			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotContext = true
@@ -234,7 +234,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 				if id, ok := r.Context().Value(ContextKeyAPIKeyID).(string); ok {
 					gotAPIKeyID = id
 				}
-				if model, ok := r.Context().Value(ContextKeyAPIKeyModel).(*models.APIKey); ok {
+				if model, ok := r.Context().Value(ContextKeyAPIKeyModel).(*apikeys.APIKey); ok {
 					gotAPIKeyModel = model
 				}
 				w.WriteHeader(http.StatusOK)
@@ -274,9 +274,9 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 
 func TestExtractAPIKey(t *testing.T) {
 	tests := []struct {
-		name      string
-		setupReq  func(req *http.Request)
-		wantKey   string
+		name     string
+		setupReq func(req *http.Request)
+		wantKey  string
 	}{
 		{
 			name: "Bearer token",
@@ -350,17 +350,17 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 	// 3. The key can be used for authentication
 
 	store := storage.NewMockStore()
-	
+
 	// Simulate what ChatUI does when generating a key
 	keyValue := "sk-starport-integrationtest123"
 	keyID := "STARPORT_integration123"
-	
+
 	// Hash the key
 	hash := sha256.Sum256([]byte(keyValue))
 	hashStr := hex.EncodeToString(hash[:])
-	
+
 	// Create API key model
-	apiKey := &models.APIKey{
+	apiKey := &apikeys.APIKey{
 		ID:        keyID,
 		Name:      "ChatUI Integration Test Key",
 		Hash:      hashStr,
@@ -371,51 +371,51 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 			"source": "chatui",
 		},
 	}
-	
+
 	// Store the key (what ChatUI handler does)
 	ctx := context.Background()
 	keyData, err := storage.Serialize(apiKey)
 	require.NoError(t, err)
-	
+
 	err = store.Set(ctx, storage.APIKeyKey(keyID), keyData)
 	require.NoError(t, err)
-	
+
 	err = store.Set(ctx, storage.APIKeyHashKey(hashStr), []byte(keyID))
 	require.NoError(t, err)
-	
+
 	// Now test authentication with this key
 	auth := NewAuthMiddleware(store)
-	
+
 	// Create a test handler
 	authenticated := false
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authenticated = true
-		
+
 		// Verify context values
 		ctxKey := r.Context().Value(ContextKeyAPIKey).(string)
 		assert.Equal(t, keyValue, ctxKey)
-		
+
 		ctxKeyID := r.Context().Value(ContextKeyAPIKeyID).(string)
 		assert.Equal(t, keyID, ctxKeyID)
-		
-		ctxModel := r.Context().Value(ContextKeyAPIKeyModel).(*models.APIKey)
+
+		ctxModel := r.Context().Value(ContextKeyAPIKeyModel).(*apikeys.APIKey)
 		assert.Equal(t, apiKey.Name, ctxModel.Name)
 		assert.Equal(t, apiKey.Scopes, ctxModel.Scopes)
-		
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("authenticated"))
 	})
-	
+
 	// Wrap with auth middleware
 	handler := auth.RequireAPIKey(testHandler)
-	
+
 	// Make request with the generated key
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/models", nil)
 	req.Header.Set("Authorization", "Bearer "+keyValue)
-	
+
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	
+
 	// Assert successful authentication
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.True(t, authenticated, "request should have been authenticated")

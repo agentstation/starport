@@ -8,6 +8,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/pkg/catalog"
 )
 
 // ServiceImpl implements the proxy Service interface
@@ -343,6 +344,13 @@ func (w *streamWrapper) Close() error {
 
 // extractProviderFromModelID extracts the provider from a model ID
 func extractProviderFromModelID(modelID string) string {
+	// Use the catalog to determine the actual provider
+	provider := catalog.GetProviderForModel(modelID)
+	if provider != "" {
+		return provider
+	}
+	
+	// Fall back to extracting from model ID
 	parts := strings.SplitN(modelID, "/", 2)
 	if len(parts) > 0 {
 		return parts[0]

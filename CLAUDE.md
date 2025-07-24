@@ -83,7 +83,7 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - 100% test coverage
 
 **✅ Core Storage Models (P1-S2-2.3)**
-- APIKey model with validation and permissions
+- APIKey model with validation and permissions (moved to internal/apikeys package)
 - Preset model with versioning
 - BYOKCredential with AES-256-GCM encryption
 - TokenBucket for rate limiting
@@ -193,11 +193,12 @@ starport/
 │   ├── start.go         # Signal handling
 │   └── run.go           # Application setup & CLI
 ├── internal/            # Private application code
+│   ├── apikeys/        # API key management and validation ✅
 │   ├── app/            # Application lifecycle
 │   ├── byok/           # BYOK credential management ✅
 │   ├── config/         # Configuration system ✅
 │   ├── connectors/     # LLM provider interfaces ✅
-│   ├── models/         # Data models ✅
+│   ├── models/         # Data models (presets, provider keys, etc.) ✅
 │   ├── server/         # HTTP server ✅
 │   └── storage/        # Storage abstraction ✅
 ├── pkg/enterprise/      # Enterprise plugin interfaces

@@ -105,15 +105,15 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 		ChatUIEnabled: s.chatUIConfig != nil,
 		Logger:        &log.Logger,
 	}
-	
+
 	if s.chatUIConfig != nil {
 		handlerConfig.ChatUIConfig = *s.chatUIConfig
 	}
-	
+
 	s.handlers = handlers.NewCollection(handlerConfig)
 
-	// Setup routes using the new centralized routes.go
-	s.setupRoutes(s.router)
+	// Register routes
+	s.registerRoutes(s.router)
 
 	// Create HTTP server
 	s.httpServer = &http.Server{

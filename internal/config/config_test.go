@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+// validChatUIConfig returns a valid ChatUIConfig for testing
+func validChatUIConfig() ChatUIConfig {
+	return ChatUIConfig{
+		Enabled:     false,
+		Title:       "Test Chat",
+		Theme:       "light",
+		AllowKeyGen: false,
+	}
+}
+
 func TestConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -53,6 +63,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
+				ChatUI: validChatUIConfig(),
 			},
 			wantErr: false,
 		},
@@ -97,6 +108,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
+				ChatUI: validChatUIConfig(),
 			},
 			wantErr: true,
 			errMsg:  "invalid port number",
@@ -136,6 +148,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
+				ChatUI: validChatUIConfig(),
 			},
 			wantErr: true,
 			errMsg:  "unsupported storage mode",
@@ -181,6 +194,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
+				ChatUI: validChatUIConfig(),
 			},
 			wantErr: true,
 			errMsg:  "invalid log level",

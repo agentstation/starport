@@ -5,11 +5,13 @@ go 1.23.0
 toolchain go1.24.4
 
 require (
+	github.com/agentstation/uuidkey v1.1.0
 	github.com/dgraph-io/badger/v4 v4.7.0
 	github.com/dgraph-io/ristretto/v2 v2.2.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/cors v1.2.2
+	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.34.0
 	github.com/sethvargo/go-envconfig v1.3.0
@@ -19,11 +21,11 @@ require (
 	github.com/valkey-io/valkey-go/mock v1.0.62
 	go.uber.org/mock v0.5.0
 	golang.org/x/crypto v0.39.0
+	golang.org/x/time v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	github.com/agentstation/uuidkey v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -31,7 +33,6 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
