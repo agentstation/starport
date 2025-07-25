@@ -190,10 +190,10 @@ func TestLoader_PostProcess(t *testing.T) {
 	}
 
 	// Verify default provider URLs are set
-	if cfg.Providers.OpenAI.BaseURL != "https://api.openai.com" {
+	if cfg.Providers.OpenAI.BaseURL != "https://api.openai.com/v1" {
 		t.Errorf("expected OpenAI base URL to be set, got %s", cfg.Providers.OpenAI.BaseURL)
 	}
-	if cfg.Providers.Anthropic.BaseURL != "https://api.anthropic.com" {
+	if cfg.Providers.Anthropic.BaseURL != "https://api.anthropic.com/v1" {
 		t.Errorf("expected Anthropic base URL to be set, got %s", cfg.Providers.Anthropic.BaseURL)
 	}
 	if cfg.Providers.Gemini.BaseURL != "https://us-central1-aiplatform.googleapis.com" {

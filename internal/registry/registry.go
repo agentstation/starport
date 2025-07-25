@@ -255,21 +255,72 @@ func (r *Registry) initializeMockProvider() error {
 	return nil
 }
 
-// performHealthChecks runs health checks on all registered providers
+// performHealthChecks runs health checks on configured providers concurrently
 func (r *Registry) performHealthChecks(ctx context.Context) {
-	healthResults := r.HealthCheck(ctx)
-	for provider, err := range healthResults {
-		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("provider", provider).
-				Msg("provider health check failed")
-		} else {
-			log.Info().
-				Str("provider", provider).
-				Msg("provider health check passed")
+	r.mu.RLock()
+	
+	// Count configured providers
+	configuredCount := 0
+	for provider := range r.connectors {
+		if r.IsProviderConfigured(provider) {
+			configuredCount++
 		}
 	}
+	
+	if configuredCount == 0 {
+		r.mu.RUnlock()
+		log.Info().Msg("no configured providers to health check")
+		return
+	}
+	
+	log.Info().
+		Int("providers", configuredCount).
+		Msg("starting health checks for configured providers")
+	
+	// Use WaitGroup to track health checks
+	var wg sync.WaitGroup
+
+	for provider, connector := range r.connectors {
+		// Only health check configured providers
+		if !r.IsProviderConfigured(provider) {
+			continue
+		}
+
+		// Launch health check in goroutine
+		wg.Add(1)
+		go func(p string, c connectors.Connector) {
+			defer wg.Done()
+
+			// Run health check with timeout
+			checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
+			start := time.Now()
+			err := c.Health(checkCtx)
+			duration := time.Since(start)
+
+			// Log result immediately
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("provider", p).
+					Dur("duration", duration).
+					Msg("provider health check failed")
+			} else {
+				log.Info().
+					Str("provider", p).
+					Dur("duration", duration).
+					Msg("provider health check passed")
+			}
+		}(provider, connector)
+	}
+	
+	r.mu.RUnlock()
+
+	// Wait for all health checks to complete
+	wg.Wait()
+	
+	log.Info().Msg("all health checks completed")
 }
 
 // GetConnectorForModel returns the appropriate connector for a model ID
@@ -385,6 +436,15 @@ func (r *Registry) IsProviderConfigured(provider string) bool {
 		return true
 	}
 
+	// For Azure OpenAI, check both API key and valid resource URL
+	if provider == "azure-openai" {
+		hasAPIKey := config.APIKey != ""
+		hasValidURL := config.BaseURL != "" && 
+			!strings.Contains(config.BaseURL, "YOUR-RESOURCE-NAME") &&
+			!strings.Contains(config.BaseURL, "your-resource-name")
+		return hasAPIKey && hasValidURL
+	}
+
 	// For Vertex AI, check for project ID instead of API key
 	if provider == "google-vertex" && config.Extra != nil {
 		_, hasProjectID := config.Extra["project_id"]
@@ -418,17 +478,44 @@ func (r *Registry) Close() error {
 	return nil
 }
 
-// HealthCheck performs health checks on all registered connectors
+// HealthCheck performs health checks on configured connectors concurrently
 func (r *Registry) HealthCheck(ctx context.Context) map[string]error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	// Create a map to store results with mutex for thread safety
 	results := make(map[string]error)
+	resultsMu := &sync.Mutex{}
+
+	// Use WaitGroup to wait for all health checks to complete
+	var wg sync.WaitGroup
 
 	for provider, connector := range r.connectors {
-		err := connector.Health(ctx)
-		results[provider] = err
+		// Only health check configured providers
+		if !r.IsProviderConfigured(provider) {
+			continue
+		}
+
+		// Launch health check in goroutine
+		wg.Add(1)
+		go func(p string, c connectors.Connector) {
+			defer wg.Done()
+
+			// Run health check with timeout
+			checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
+			err := c.Health(checkCtx)
+
+			// Store result thread-safely
+			resultsMu.Lock()
+			results[p] = err
+			resultsMu.Unlock()
+		}(provider, connector)
 	}
+
+	// Wait for all health checks to complete
+	wg.Wait()
 
 	return results
 }

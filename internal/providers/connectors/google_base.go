@@ -34,8 +34,6 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 	
-	// Debug log the request
-	fmt.Printf("[Gemini] Request body: %s\n", string(body))
 
 	endpoint := getEndpoint(req.Model, false)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
@@ -61,8 +59,6 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	
-	// Debug log usage metadata
-	fmt.Printf("[Gemini] UsageMetadata: %+v\n", geminiResp.UsageMetadata)
 
 	// Convert to OpenAI format
 	return c.convertToOpenAIResponse(&geminiResp, req), nil
@@ -77,8 +73,6 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 	
-	// Debug log the request
-	fmt.Printf("[Gemini] Request body: %s\n", string(body))
 
 	endpoint := getEndpoint(req.Model, true)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
@@ -192,8 +186,6 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 		// Create thinkingConfig for Gemini 2.5 models
 		thinkingConfig := make(map[string]interface{})
 		
-		// Debug log
-		fmt.Printf("[Gemini] Reasoning config: effort=%s, max_tokens=%v\n", req.Reasoning.Effort, req.Reasoning.MaxTokens)
 		
 		// Handle max_tokens if specified (takes precedence over effort)
 		if req.Reasoning.MaxTokens != nil {
@@ -220,7 +212,6 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 		thinkingConfig["includeThoughts"] = true
 		
 		genConfig["thinkingConfig"] = thinkingConfig
-		fmt.Printf("[Gemini] ThinkingConfig: %+v\n", thinkingConfig)
 	}
 	
 	if len(genConfig) > 0 {
@@ -247,8 +238,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 	reasoning := ""
 	
 	// Separate thought parts from content parts
-	for i, part := range candidate.Content.Parts {
-		fmt.Printf("[Gemini] Part %d: Text='%.100s...', Thought=%v\n", i, part.Text, part.Thought)
+	for _, part := range candidate.Content.Parts {
 		if part.Thought {
 			// This is a raw reasoning/thought part
 			if part.Text != "" {
@@ -278,7 +268,6 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 	// Only add reasoning if it's not empty and not excluded
 	if reasoning != "" && (req.Reasoning == nil || !req.Reasoning.Exclude) {
 		message.Reasoning = reasoning
-		fmt.Printf("[Gemini] Found reasoning text (length=%d)\n", len(reasoning))
 	}
 
 	return &ChatResponse{
@@ -382,10 +371,6 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			continue
 		}
 		
-		// Debug log usage metadata in streaming
-		if geminiResp.UsageMetadata.TotalTokenCount > 0 {
-			fmt.Printf("[Gemini Stream] UsageMetadata: %+v\n", geminiResp.UsageMetadata)
-		}
 
 		// Convert to OpenAI format
 		if len(geminiResp.Candidates) > 0 {
@@ -393,10 +378,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			reasoning := ""
 			
 			// Separate thought parts from content parts
-			for i, part := range geminiResp.Candidates[0].Content.Parts {
-				if i == 0 && len(part.Text) > 0 { // Only log first part to avoid spam
-					fmt.Printf("[Gemini Stream] Part %d: Text='%.50s...', Thought=%v\n", i, part.Text, part.Thought)
-				}
+			for _, part := range geminiResp.Candidates[0].Content.Parts {
 				if part.Thought {
 					// This is a raw reasoning/thought part
 					if part.Text != "" {
@@ -428,7 +410,6 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			}
 			if reasoning != "" && !s.excludeReasoning {
 				delta.Reasoning = reasoning
-				fmt.Printf("[Gemini Stream] Found reasoning text in chunk (length=%d)\n", len(reasoning))
 			}
 			
 			chunk := &ChatStreamChunk{

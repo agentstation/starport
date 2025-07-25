@@ -114,10 +114,10 @@ func (l *Loader) loadEnvFiles() error {
 func (l *Loader) postProcess(cfg *Config) error {
 	// Set default provider URLs if not specified
 	if cfg.Providers.OpenAI.BaseURL == "" {
-		cfg.Providers.OpenAI.BaseURL = "https://api.openai.com"
+		cfg.Providers.OpenAI.BaseURL = "https://api.openai.com/v1"
 	}
 	if cfg.Providers.Anthropic.BaseURL == "" {
-		cfg.Providers.Anthropic.BaseURL = "https://api.anthropic.com"
+		cfg.Providers.Anthropic.BaseURL = "https://api.anthropic.com/v1"
 	}
 	if cfg.Providers.Gemini.BaseURL == "" {
 		// Default to US-Central1 regional endpoint for Vertex AI
