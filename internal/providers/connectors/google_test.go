@@ -54,8 +54,8 @@ func TestNewGoogleAIStudioConnector(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewGoogleAIStudioConnector() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if err == nil && connector.Name() != "google-aistudio" {
-				t.Errorf("Expected name 'google-aistudio', got %s", connector.Name())
+			if err == nil && connector.Name() != "google-ai-studio" {
+				t.Errorf("Expected name 'google-ai-studio', got %s", connector.Name())
 			}
 		})
 	}
@@ -109,8 +109,8 @@ func TestNewVertexAIConnector(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewVertexAIConnector() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if err == nil && connector.Name() != "google-vertexai" {
-				t.Errorf("Expected name 'google-vertexai', got %s", connector.Name())
+			if err == nil && connector.Name() != "google-vertex" {
+				t.Errorf("Expected name 'google-vertex', got %s", connector.Name())
 			}
 		})
 	}
@@ -277,7 +277,7 @@ func TestGoogleAIStudioConnector_Models(t *testing.T) {
 
 	// Check that all models have correct prefix
 	for _, model := range models.Data {
-		if !strings.HasPrefix(model.ID, "google-aistudio/") {
+		if !strings.HasPrefix(model.ID, "google-ai-studio/") {
 			t.Errorf("model ID missing prefix: %s", model.ID)
 		}
 	}
@@ -311,7 +311,7 @@ func TestVertexAIConnector_Models(t *testing.T) {
 	foundCodey := false
 
 	for _, model := range models.Data {
-		if !strings.HasPrefix(model.ID, "google-vertexai/") {
+		if !strings.HasPrefix(model.ID, "google-vertex/") {
 			t.Errorf("model ID missing prefix: %s", model.ID)
 		}
 

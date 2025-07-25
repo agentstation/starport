@@ -128,7 +128,7 @@ func TestHelpCommand(t *testing.T) {
 			args: []string{"starport", "help", "serve"},
 			expected: []string{
 				"NAME:",
-				"starport serve - Run the gateway server",
+				"starport serve - Run the llm gateway server",
 			},
 		},
 	}

@@ -37,18 +37,18 @@ func TestNewConnector(t *testing.T) {
 		}
 	})
 
-	t.Run("Create Gemini connector", func(t *testing.T) {
+	t.Run("Create Google AI Studio connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			APIKey: "test-key",
 		}
 
-		connector, err := connectors.NewConnector("gemini", config)
+		connector, err := connectors.NewConnector("google-ai-studio", config)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if connector.Name() != "google-aistudio" {
-			t.Errorf("expected name 'google-aistudio', got %s", connector.Name())
+		if connector.Name() != "google-ai-studio" {
+			t.Errorf("expected name 'google-ai-studio', got %s", connector.Name())
 		}
 	})
 
