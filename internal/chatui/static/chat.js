@@ -639,7 +639,7 @@
           Authorization: `Bearer ${state.apiKey}`,
         },
         body: JSON.stringify({
-          model: "google-aistudio/gemini-1.5-flash",
+          model: "google/gemini-1.5-flash",
           messages: [
             {
               role: "system",

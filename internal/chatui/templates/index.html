@@ -184,25 +184,27 @@
                     </button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label for="api-key">API Key</label>
-                        <div class="input-group">
-                            <input type="password" id="api-key" class="form-input" placeholder="sk-...">
-                            {{if .AllowKeyGen}}
-                            <button id="generate-key" class="btn btn-secondary">Generate</button>
-                            {{end}}
+                    <form autocomplete="off">
+                        <div class="form-group">
+                            <label for="api-key">API Key</label>
+                            <div class="input-group">
+                                <input type="password" id="api-key" class="form-input" placeholder="sk-..." autocomplete="off">
+                                {{if .AllowKeyGen}}
+                                <button type="button" id="generate-key" class="btn btn-secondary">Generate</button>
+                                {{end}}
+                            </div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="api-base">API Base URL</label>
-                        <input type="text" id="api-base" class="form-input" value="{{.APIBaseURL}}" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="stream-enabled" checked>
-                            Enable streaming responses
-                        </label>
-                    </div>
+                        <div class="form-group">
+                            <label for="api-base">API Base URL</label>
+                            <input type="text" id="api-base" class="form-input" value="{{.APIBaseURL}}" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="stream-enabled" checked>
+                                Enable streaming responses
+                            </label>
+                        </div>
+                    </form>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-primary modal-close">Close</button>
