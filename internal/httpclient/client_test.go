@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -238,7 +239,7 @@ func TestCircuitBreaker(t *testing.T) {
 	// Circuit should be open now
 	req, _ := http.NewRequest("GET", server.URL, nil)
 	_, err = client.Do(req)
-	if err != ErrCircuitOpen {
+	if !errors.Is(err, ErrCircuitOpen) {
 		t.Errorf("Expected ErrCircuitOpen, got %v", err)
 	}
 

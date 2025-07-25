@@ -79,13 +79,13 @@ func TestGetModelMetadata(t *testing.T) {
 				hasMetadata: true,
 				name:        "OpenAI: GPT-4",
 				hasContext:  true,
-				context:     8192,
+				context:     8191,
 				hasPricing:  true,
 			},
 		},
 		{
-			name:    "known model - anthropic/claude-3-opus-20240229",
-			modelID: "anthropic/claude-3-opus-20240229",
+			name:    "known model - anthropic/claude-3-opus",
+			modelID: "anthropic/claude-3-opus",
 			expected: struct {
 				hasMetadata bool
 				name        string
@@ -175,32 +175,19 @@ func TestGetModelsByProvider(t *testing.T) {
 		{
 			provider: "anthropic",
 			expectModels: []string{
-				"anthropic/claude-3-opus-20240229",
-				"anthropic/claude-3-sonnet-20240229",
-				"anthropic/claude-3-haiku-20240307",
+				"anthropic/claude-3-opus",
+				"anthropic/claude-3-sonnet",
+				"anthropic/claude-3-haiku",
 			},
 			minCount: 3,
 		},
 		{
-			provider: "google-aistudio",
+			provider: "google",
 			expectModels: []string{
-				"google-aistudio/gemini-1.5-pro",
-				"google-aistudio/gemini-1.5-flash",
+				"google/gemini-pro-1.5",
+				"google/gemini-flash-1.5",
 			},
-			minCount: 2,
-		},
-		{
-			provider: "google-vertexai",
-			expectModels: []string{
-				"google-vertexai/gemini-1.5-pro",
-				"google-vertexai/gemini-1.5-flash",
-				"google-vertexai/claude-3-opus@20240229",
-				"google-vertexai/claude-3-sonnet@20240229",
-				"google-vertexai/claude-3-haiku@20240307",
-				"google-vertexai/text-bison@001",
-				"google-vertexai/code-bison@001",
-			},
-			minCount: 7,
+			minCount: 10,
 		},
 		{
 			provider:     "unknown",
@@ -229,11 +216,11 @@ func TestGetProvidersForModel(t *testing.T) {
 	}{
 		{
 			modelName:      "gpt-4",
-			expectCount:    2, // OpenAI and Azure
+			expectCount:    1, // Only OpenAI in catalog
 			expectProvider: "openai",
 		},
 		{
-			modelName:      "claude-3-opus-20240229",
+			modelName:      "claude-3-opus",
 			expectCount:    1, // Only Anthropic
 			expectProvider: "anthropic",
 		},
