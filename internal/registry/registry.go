@@ -29,9 +29,10 @@ type Config struct {
 
 // Registry manages provider connectors and their lifecycle
 type Registry struct {
-	connectors map[string]connectors.Connector
-	mu         sync.RWMutex
-	config     *Config
+	connectors       map[string]connectors.Connector
+	providerConfigs  map[string]connectors.ProviderConfig
+	mu               sync.RWMutex
+	config           *Config
 }
 
 // providerInit holds initialization data for a provider
@@ -44,8 +45,9 @@ type providerInit struct {
 // New creates and initializes a new connector registry
 func New(cfg *Config) (*Registry, error) {
 	r := &Registry{
-		connectors: make(map[string]connectors.Connector),
-		config:     cfg,
+		connectors:      make(map[string]connectors.Connector),
+		providerConfigs: make(map[string]connectors.ProviderConfig),
+		config:          cfg,
 	}
 
 	// Initialize providers from configuration
@@ -66,7 +68,8 @@ func New(cfg *Config) (*Registry, error) {
 // Useful for testing
 func NewEmpty() *Registry {
 	return &Registry{
-		connectors: make(map[string]connectors.Connector),
+		connectors:      make(map[string]connectors.Connector),
+		providerConfigs: make(map[string]connectors.ProviderConfig),
 	}
 }
 
@@ -140,7 +143,7 @@ func (r *Registry) initializeProvider(p providerInit, cfg *config.Config) error 
 	if err != nil {
 		return fmt.Errorf("failed to create %s connector: %w", p.name, err)
 	}
-	if err := r.Register(p.name, connector); err != nil {
+	if err := r.RegisterWithConfig(p.name, connector, providerCfg); err != nil {
 		return fmt.Errorf("failed to register %s connector: %w", p.name, err)
 	}
 	log.Info().Msgf("initialized %s connector", p.name)
@@ -156,7 +159,7 @@ func (r *Registry) initializeGoogleProviders(cfg *config.Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to create Google AI Studio connector: %w", err)
 		}
-		if err := r.Register("google-ai-studio", connector); err != nil {
+		if err := r.RegisterWithConfig("google-ai-studio", connector, providerCfg); err != nil {
 			return fmt.Errorf("failed to register Google AI Studio connector: %w", err)
 		}
 		log.Info().Msg("initialized Google AI Studio connector")
@@ -168,7 +171,7 @@ func (r *Registry) initializeGoogleProviders(cfg *config.Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to create Google AI Studio connector: %w", err)
 		}
-		if err := r.Register("google-ai-studio", connector); err != nil {
+		if err := r.RegisterWithConfig("google-ai-studio", connector, providerCfg); err != nil {
 			return fmt.Errorf("failed to register Google AI Studio connector: %w", err)
 		}
 		log.Info().Msg("initialized Google AI Studio connector from deprecated Gemini config")
@@ -211,7 +214,7 @@ func (r *Registry) initializeGoogleProviders(cfg *config.Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to create Vertex AI connector: %w", err)
 		}
-		if err := r.Register("google-vertex", connector); err != nil {
+		if err := r.RegisterWithConfig("google-vertex", connector, providerCfg); err != nil {
 			return fmt.Errorf("failed to register Vertex AI connector: %w", err)
 		}
 		logEntry := log.Info().Str("project_id", projectID)
@@ -231,7 +234,7 @@ func (r *Registry) initializeAzureProvider(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to create Azure OpenAI connector: %w", err)
 	}
-	if err := r.Register("azure-openai", connector); err != nil {
+	if err := r.RegisterWithConfig("azure-openai", connector, providerCfg); err != nil {
 		return fmt.Errorf("failed to register Azure OpenAI connector: %w", err)
 	}
 	log.Info().Msg("initialized Azure OpenAI connector")
@@ -246,7 +249,7 @@ func (r *Registry) initializeMockProvider() error {
 		Timeout: 30 * time.Second,
 	}
 	mockConnector := connectors.NewMockConnector(mockConfig)
-	if err := r.Register("mock", mockConnector); err != nil {
+	if err := r.RegisterWithConfig("mock", mockConnector, mockConfig); err != nil {
 		return fmt.Errorf("failed to register mock connector: %w", err)
 	}
 	return nil
@@ -295,6 +298,12 @@ func (r *Registry) GetConnectorForModel(modelID string) (connectors.Connector, s
 
 // Register adds a connector to the registry
 func (r *Registry) Register(provider string, connector connectors.Connector) error {
+	// For backward compatibility, register with empty config
+	return r.RegisterWithConfig(provider, connector, connectors.ProviderConfig{})
+}
+
+// RegisterWithConfig adds a connector to the registry with its configuration
+func (r *Registry) RegisterWithConfig(provider string, connector connectors.Connector, config connectors.ProviderConfig) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -303,6 +312,7 @@ func (r *Registry) Register(provider string, connector connectors.Connector) err
 	}
 
 	r.connectors[provider] = connector
+	r.providerConfigs[provider] = config
 	log.Info().
 		Str("provider", provider).
 		Msg("registered connector")
@@ -359,6 +369,32 @@ func (r *Registry) HasProvider(provider string) bool {
 	return exists
 }
 
+// IsProviderConfigured checks if a provider has an API key configured
+func (r *Registry) IsProviderConfigured(provider string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	config, exists := r.providerConfigs[provider]
+	if !exists {
+		return false
+	}
+
+	// Check if the provider has an API key
+	// Special handling for mock provider which doesn't need an API key
+	if provider == "mock" {
+		return true
+	}
+
+	// For Vertex AI, check for project ID instead of API key
+	if provider == "google-vertex" && config.Extra != nil {
+		_, hasProjectID := config.Extra["project_id"]
+		return hasProjectID
+	}
+
+	// For all other providers, check for API key
+	return config.APIKey != ""
+}
+
 // Close closes all connectors
 func (r *Registry) Close() error {
 	r.mu.Lock()
@@ -411,12 +447,21 @@ func (r *Registry) GetModels(ctx context.Context) ([]connectors.Model, error) {
 			Msg("failed to load catalog, falling back to dynamic model fetching")
 		
 		var allModels []connectors.Model
-		for _, connector := range r.connectors {
+		for provider, connector := range r.connectors {
+			// Skip providers without API keys
+			if !r.IsProviderConfigured(provider) {
+				log.Debug().
+					Str("provider", provider).
+					Msg("skipping provider without API key")
+				continue
+			}
+
 			modelsResp, err := connector.Models(ctx)
 			if err != nil {
 				// Log error but continue with other providers
 				log.Warn().
 					Err(err).
+					Str("provider", provider).
 					Msg("failed to get models from provider")
 				continue
 			}
@@ -428,9 +473,17 @@ func (r *Registry) GetModels(ctx context.Context) ([]connectors.Model, error) {
 		return allModels, nil
 	}
 
-	// Filter catalog models to only include those from registered providers
+	// Filter catalog models to only include those from registered and configured providers
 	var allModels []connectors.Model
 	for provider := range r.connectors {
+		// Skip providers without API keys
+		if !r.IsProviderConfigured(provider) {
+			log.Debug().
+				Str("provider", provider).
+				Msg("skipping provider without API key")
+			continue
+		}
+
 		// Use the new mapping function to handle google/ prefix models
 		catalogModels := catalog.GetModelsByProviderWithMapping(provider)
 		for _, catalogModel := range catalogModels {
@@ -448,12 +501,21 @@ func (r *Registry) GetModels(ctx context.Context) ([]connectors.Model, error) {
 	// If no models found in catalog, try dynamic fetching
 	if len(allModels) == 0 {
 		log.Warn().Msg("no models found in catalog, trying dynamic fetching")
-		for _, connector := range r.connectors {
+		for provider, connector := range r.connectors {
+			// Skip providers without API keys
+			if !r.IsProviderConfigured(provider) {
+				log.Debug().
+					Str("provider", provider).
+					Msg("skipping provider without API key")
+				continue
+			}
+
 			modelsResp, err := connector.Models(ctx)
 			if err != nil {
 				// Log error but continue with other providers
 				log.Warn().
 					Err(err).
+					Str("provider", provider).
 					Msg("failed to get models from provider")
 				continue
 			}

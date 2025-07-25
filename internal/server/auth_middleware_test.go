@@ -145,6 +145,36 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			wantContext: true,
 		},
 		{
+			name: "valid API key via key query parameter",
+			setupAuth: func(req *http.Request) {
+				q := req.URL.Query()
+				q.Set("key", "sk-starport-keytest999")
+				req.URL.RawQuery = q.Encode()
+			},
+			setupStore: func(store *storage.MockStore) {
+				keyValue := "sk-starport-keytest999"
+				keyID := "STARPORT_keytest999"
+				// Hash the key
+				hash := sha256.Sum256([]byte(keyValue))
+				hashStr := hex.EncodeToString(hash[:])
+				// Store hash -> ID mapping
+				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
+				// Store the API key
+				apiKey := &apikeys.APIKey{
+					ID:        keyID,
+					Name:      "Key Test Key",
+					Hash:      hashStr,
+					Scopes:    []string{"models:read"},
+					Active:    true,
+					CreatedAt: time.Now(),
+				}
+				keyData, _ := storage.Serialize(apiKey)
+				store.Set(context.Background(), storage.APIKeyKey(keyID), keyData)
+			},
+			wantStatus:  http.StatusOK,
+			wantContext: true,
+		},
+		{
 			name: "disabled API key",
 			setupAuth: func(req *http.Request) {
 				req.Header.Set("Authorization", "Bearer sk-starport-disabled")
@@ -300,13 +330,22 @@ func TestExtractAPIKey(t *testing.T) {
 			wantKey: "sk-test-789",
 		},
 		{
-			name: "Query parameter",
+			name: "Query parameter api_key",
 			setupReq: func(req *http.Request) {
 				q := req.URL.Query()
 				q.Set("api_key", "sk-test-query")
 				req.URL.RawQuery = q.Encode()
 			},
 			wantKey: "sk-test-query",
+		},
+		{
+			name: "Query parameter key",
+			setupReq: func(req *http.Request) {
+				q := req.URL.Query()
+				q.Set("key", "sk-test-key")
+				req.URL.RawQuery = q.Encode()
+			},
+			wantKey: "sk-test-key",
 		},
 		{
 			name: "No API key",
@@ -325,6 +364,16 @@ func TestExtractAPIKey(t *testing.T) {
 				req.URL.RawQuery = q.Encode()
 			},
 			wantKey: "sk-bearer",
+		},
+		{
+			name: "Prefer api_key over key query parameter",
+			setupReq: func(req *http.Request) {
+				q := req.URL.Query()
+				q.Set("api_key", "sk-api-key-param")
+				q.Set("key", "sk-key-param")
+				req.URL.RawQuery = q.Encode()
+			},
+			wantKey: "sk-api-key-param",
 		},
 	}
 

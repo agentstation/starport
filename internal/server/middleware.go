@@ -306,5 +306,10 @@ func extractAPIKey(r *http.Request) string {
 		return key
 	}
 
+	// Check alternative query parameter
+	if key := r.URL.Query().Get("key"); key != "" {
+		return key
+	}
+
 	return ""
 }
