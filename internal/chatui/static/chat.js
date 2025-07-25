@@ -1011,7 +1011,15 @@
     message.reasoning = data.choices?.[0]?.message?.reasoning || "";
     message.latency = Math.round(performance.now() - message.startTime);
     message.usage = data.usage;
-    message.cacheHit = data.cache_info?.hit;
+    
+    // Check X-Cache header for cache status
+    const cacheHeader = response.headers.get('X-Cache');
+    if (cacheHeader) {
+      message.cacheHit = cacheHeader === 'HIT';
+    } else {
+      // Fallback to response body if header not present
+      message.cacheHit = data.cache_info?.hit;
+    }
 
     // Calculate tokens per second
     if (
