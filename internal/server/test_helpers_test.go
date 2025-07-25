@@ -7,7 +7,7 @@ import (
 
 // newTestServer creates a server with a mock connector registry for testing
 func newTestServer(config *Config) *Server {
-	reg := registry.New()
+	reg := registry.NewEmpty()
 
 	// Add a mock connector for testing
 	mockConfig := connectors.ProviderConfig{

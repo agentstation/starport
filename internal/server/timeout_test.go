@@ -97,7 +97,7 @@ func TestShutdownTimeout(t *testing.T) {
 		},
 	}
 
-	reg := registry.New()
+	reg := registry.NewEmpty()
 	server := New(config, reg)
 
 	// Start server
@@ -134,7 +134,7 @@ func TestContextPropagation(t *testing.T) {
 		},
 	}
 
-	reg := registry.New()
+	reg := registry.NewEmpty()
 	server := New(config, reg)
 
 	// Track if context was cancelled using a channel

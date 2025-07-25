@@ -67,12 +67,14 @@ func New(opts ...Option) (*App, error) {
 		}
 	}
 
-	// Initialize connector registry
-	app.registry = registry.New()
-
-	// Register connectors
-	if err := app.registerConnectors(); err != nil {
-		return nil, fmt.Errorf("failed to initialize connectors: %w", err)
+	// Initialize connector registry with providers
+	registryCfg := &registry.Config{
+		Providers:         cfg.Providers,
+		HealthCheckOnInit: true,
+	}
+	app.registry, err = registry.New(registryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize registry: %w", err)
 	}
 
 	// Initialize cache manager if caching is enabled
@@ -158,25 +160,6 @@ func (a *App) initializeStorage() (storage.KVStore, error) {
 	}
 }
 
-// registerConnectors registers connectors using the registry adapter
-func (a *App) registerConnectors() error {
-	adapter := registry.NewAdapter(a.registry)
-
-	// Create config with providers if they exist
-	cfg := &config.Config{}
-	if a.config.Providers != nil {
-		cfg.Providers = *a.config.Providers
-	}
-
-	// Initialize connectors from configuration
-	// This will use mock connector if no providers are configured
-	ctx := context.Background()
-	if err := adapter.InitializeFromConfig(ctx, cfg); err != nil {
-		return fmt.Errorf("failed to initialize connectors: %w", err)
-	}
-
-	return nil
-}
 
 // Run starts the application
 func (a *App) Run(ctx context.Context) error {

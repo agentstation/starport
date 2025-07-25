@@ -25,6 +25,7 @@ var (
 	goVersion = "unknown"
 )
 
+// run is the entry point for the application. It sets up the context and signal handling.
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -32,6 +33,8 @@ func run() error {
 	return runApp(ctx)
 }
 
+// runApp is the main function for the application. It sets up the CLI app and it's commands
+// including version, serve, and parse.
 func runApp(ctx context.Context) error {
 	cliApp := &cli.App{
 		Name:    "starport",
@@ -72,7 +75,7 @@ func runApp(ctx context.Context) error {
 			{
 				Name:    "serve",
 				Aliases: []string{"server"},
-				Usage:   "Run the gateway server",
+				Usage:   "Run the llm gateway server",
 				Action: func(_ *cli.Context) error {
 					return runServer(ctx)
 				},
@@ -87,6 +90,7 @@ func runApp(ctx context.Context) error {
 	return cliApp.RunContext(ctx, os.Args)
 }
 
+// runServer is the main function for the application. It sets up the server and it's configuration.
 func runServer(ctx context.Context) error {
 	// Load configuration
 	cfg, err := config.LoadWithDefaults(ctx)
@@ -129,6 +133,7 @@ func runServer(ctx context.Context) error {
 	return app.Run(ctx)
 }
 
+// getBuildGoVersion is a helper function to get the build-time Go version.
 func getBuildGoVersion() string {
 	// Use the build-time injected version if available
 	if goVersion != "unknown" {

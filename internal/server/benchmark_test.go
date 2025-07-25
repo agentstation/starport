@@ -19,7 +19,7 @@ func BenchmarkProxyHandler(b *testing.B) {
 		MaxRequestSize: 10 * 1024 * 1024,
 	}
 
-	reg := registry.New()
+	reg := registry.NewEmpty()
 	
 	// Add mock connector
 	mockConfig := connectors.ProviderConfig{
@@ -83,7 +83,7 @@ func BenchmarkMiddlewareChain(b *testing.B) {
 		MaxRequestSize: 10 * 1024 * 1024,
 	}
 
-	reg := registry.New()
+	reg := registry.NewEmpty()
 	server := New(config, reg)
 
 	b.Run("HealthEndpoint", func(b *testing.B) {

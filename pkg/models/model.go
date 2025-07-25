@@ -1,3 +1,9 @@
+// Package models provides data structures and types for LLM model specifications.
+// It defines model capabilities, features, pricing, and metadata that are used
+// throughout the Starport system to represent and work with AI models.
+//
+// The models package is independent of providers and connectors, allowing clean
+// separation between model metadata and provider implementations.
 package models
 
 import (
@@ -9,22 +15,22 @@ import (
 
 // Architecture describes the model's technical capabilities (OpenRouter compatible)
 type Architecture struct {
-	InputModalities  []string `json:"input_modalities"`            // e.g., ["text", "image"]
-	OutputModalities []string `json:"output_modalities"`           // e.g., ["text"]
-	Tokenizer        string   `json:"tokenizer"`                   // e.g., "GPT", "Claude"
-	InstructType     string   `json:"instruct_type,omitempty"`     // e.g., "alpaca", "chatml"
+	InputModalities  []string `json:"input_modalities"`        // e.g., ["text", "image"]
+	OutputModalities []string `json:"output_modalities"`       // e.g., ["text"]
+	Tokenizer        string   `json:"tokenizer"`               // e.g., "GPT", "Claude"
+	InstructType     string   `json:"instruct_type,omitempty"` // e.g., "alpaca", "chatml"
 }
 
 // Pricing represents cost structure (OpenRouter compatible)
 type Pricing struct {
-	Prompt              string `json:"prompt"`                          // Cost per input token as string
-	Completion          string `json:"completion"`                      // Cost per output token as string
-	Image               string `json:"image,omitempty"`                 // Cost per image
-	Request             string `json:"request,omitempty"`               // Fixed cost per request
-	WebSearch           string `json:"web_search,omitempty"`            // Cost per web search
-	InternalReasoning   string `json:"internal_reasoning,omitempty"`    // Cost for reasoning tokens
-	InputCacheRead      string `json:"input_cache_read,omitempty"`      // Cost for cache reads
-	InputCacheWrite     string `json:"input_cache_write,omitempty"`     // Cost for cache writes
+	Prompt            string `json:"prompt"`                       // Cost per input token as string
+	Completion        string `json:"completion"`                   // Cost per output token as string
+	Image             string `json:"image,omitempty"`              // Cost per image
+	Request           string `json:"request,omitempty"`            // Fixed cost per request
+	WebSearch         string `json:"web_search,omitempty"`         // Cost per web search
+	InternalReasoning string `json:"internal_reasoning,omitempty"` // Cost for reasoning tokens
+	InputCacheRead    string `json:"input_cache_read,omitempty"`   // Cost for cache reads
+	InputCacheWrite   string `json:"input_cache_write,omitempty"`  // Cost for cache writes
 }
 
 // TopProvider represents provider-specific configuration (OpenRouter compatible)
@@ -37,18 +43,18 @@ type TopProvider struct {
 // Model represents an AI model with OpenRouter-compatible structure
 type Model struct {
 	// Core identification
-	ID      string `json:"id"`       // Model identifier (e.g., "gpt-4", "anthropic/claude-3-opus")
-	Created int64  `json:"created"`  // Unix timestamp
+	ID      string `json:"id"`      // Model identifier (e.g., "gpt-4", "anthropic/claude-3-opus")
+	Created int64  `json:"created"` // Unix timestamp
 
 	// OpenRouter core fields
-	Name          string `json:"name"`                      // Human-friendly display name
-	CanonicalSlug string `json:"canonical_slug,omitempty"`  // Permanent identifier
-	Description   string `json:"description,omitempty"`     // Model capabilities description
+	Name          string `json:"name"`                     // Human-friendly display name
+	CanonicalSlug string `json:"canonical_slug,omitempty"` // Permanent identifier
+	Description   string `json:"description,omitempty"`    // Model capabilities description
 
 	// Capabilities
-	ContextLength   int64         `json:"context_length"`            // Maximum context window in tokens
-	Architecture    *Architecture `json:"architecture,omitempty"`    // Technical capabilities
-	HuggingFaceID   string        `json:"hugging_face_id,omitempty"` // HuggingFace model ID if applicable
+	ContextLength int64         `json:"context_length"`            // Maximum context window in tokens
+	Architecture  *Architecture `json:"architecture,omitempty"`    // Technical capabilities
+	HuggingFaceID string        `json:"hugging_face_id,omitempty"` // HuggingFace model ID if applicable
 
 	// Pricing
 	Pricing *Pricing `json:"pricing,omitempty"` // Cost structure
@@ -61,12 +67,12 @@ type Model struct {
 	PerRequestLimits    map[string]interface{} `json:"per_request_limits,omitempty"`   // Rate limits
 
 	// Internal fields (not in API responses)
-	Provider         string    `json:"-"` // Parent provider ID for internal use
-	Deprecated       bool      `json:"-"` // Model is deprecated
-	DeprecatedAt     time.Time `json:"-"` // When it was deprecated
-	ReplacedBy       string    `json:"-"` // Suggested replacement model ID
-	UpdatedAt        time.Time `json:"-"` // Last update time
-	
+	Provider     string    `json:"-"` // Parent provider ID for internal use
+	Deprecated   bool      `json:"-"` // Model is deprecated
+	DeprecatedAt time.Time `json:"-"` // When it was deprecated
+	ReplacedBy   string    `json:"-"` // Suggested replacement model ID
+	UpdatedAt    time.Time `json:"-"` // Last update time
+
 	// Additional internal fields (not in API responses)
 	Tags []string `json:"-"` // Tags for categorization
 }
@@ -102,7 +108,7 @@ func (m *Model) hasModalities(expectedInput, expectedOutput []string) bool {
 	if m.Architecture == nil {
 		return false
 	}
-	
+
 	// Check if all expected inputs are present
 	for _, expected := range expectedInput {
 		found := false
@@ -116,7 +122,7 @@ func (m *Model) hasModalities(expectedInput, expectedOutput []string) bool {
 			return false
 		}
 	}
-	
+
 	// Check if all expected outputs are present
 	for _, expected := range expectedOutput {
 		found := false
@@ -130,7 +136,7 @@ func (m *Model) hasModalities(expectedInput, expectedOutput []string) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -206,7 +212,7 @@ func (m *Model) HasVisionSupport() bool {
 // Clone creates a deep copy of the model
 func (m *Model) Clone() *Model {
 	clone := *m
-	
+
 	// Deep copy Architecture
 	if m.Architecture != nil {
 		arch := *m.Architecture
@@ -220,30 +226,30 @@ func (m *Model) Clone() *Model {
 		}
 		clone.Architecture = &arch
 	}
-	
+
 	// Deep copy Pricing
 	if m.Pricing != nil {
 		pricing := *m.Pricing
 		clone.Pricing = &pricing
 	}
-	
+
 	// Deep copy TopProvider
 	if m.TopProvider != nil {
 		provider := *m.TopProvider
 		clone.TopProvider = &provider
 	}
-	
+
 	// Deep copy slices
 	if m.SupportedParameters != nil {
 		clone.SupportedParameters = make([]string, len(m.SupportedParameters))
 		copy(clone.SupportedParameters, m.SupportedParameters)
 	}
-	
+
 	if m.Tags != nil {
 		clone.Tags = make([]string, len(m.Tags))
 		copy(clone.Tags, m.Tags)
 	}
-	
+
 	// Deep copy map
 	if m.PerRequestLimits != nil {
 		clone.PerRequestLimits = make(map[string]interface{}, len(m.PerRequestLimits))
@@ -251,7 +257,7 @@ func (m *Model) Clone() *Model {
 			clone.PerRequestLimits[k] = v
 		}
 	}
-	
+
 	return &clone
 }
 
@@ -296,7 +302,7 @@ func (m *Model) ToOpenAI() OpenAIModel {
 		// Extract provider from ID if it's in provider/model format
 		ownedBy = m.ID[:idx]
 	}
-	
+
 	return OpenAIModel{
 		ID:      m.ID,
 		Object:  "model",
@@ -314,8 +320,6 @@ func (m *Model) ToOpenRouter() *Model {
 			ContextLength: m.ContextLength,
 		}
 	}
-	
+
 	return m
 }
-
-
