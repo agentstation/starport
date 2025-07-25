@@ -213,7 +213,26 @@ func (p *Provider) Clone() *Provider {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	clone := *p
+	// Create new provider instead of copying struct with mutex
+	clone := &Provider{
+		ID:          p.ID,
+		Name:        p.Name,
+		Type:        p.Type,
+		Description: p.Description,
+		Enabled:     p.Enabled,
+		Health:      p.Health,
+		BaseURL:     p.BaseURL,
+		APIKey:      p.APIKey,
+		Config:      nil,
+		RateLimitRPM: p.RateLimitRPM,
+		RateLimitTPM: p.RateLimitTPM,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
+		LastUsedAt:  p.LastUsedAt,
+		RequestCount: p.RequestCount,
+		Connector:   p.Connector,
+		models:      p.models,
+	}
 	
 	// Deep copy config map
 	if p.Config != nil {
@@ -222,9 +241,6 @@ func (p *Provider) Clone() *Provider {
 			clone.Config[k] = v
 		}
 	}
-
-	// Models are shared (they have their own Clone method)
-	clone.models = p.models
 	
-	return &clone
+	return clone
 }

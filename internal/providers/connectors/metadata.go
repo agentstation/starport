@@ -227,11 +227,6 @@ func GetModelMetadata(modelID string) *ModelMetadata {
 	return metadata
 }
 
-// Helper function to get pointer to ModelContext
-func modelContextPtr(i int) *ModelContext {
-	ctx := ModelContext(i)
-	return &ctx
-}
 
 // GetModelsByProvider returns models offered by a specific provider
 func GetModelsByProvider(provider string) []string {

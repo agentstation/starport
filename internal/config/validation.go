@@ -6,7 +6,18 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"regexp"
 )
+
+var hostnameRegex = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
+
+// isValidHostname checks if a string is a valid hostname
+func isValidHostname(hostname string) bool {
+	if len(hostname) > 253 {
+		return false
+	}
+	return hostnameRegex.MatchString(hostname)
+}
 
 // Validate validates ServerConfig
 func (c *ServerConfig) Validate() error {
@@ -16,9 +27,13 @@ func (c *ServerConfig) Validate() error {
 
 	if c.Host != "" {
 		if ip := net.ParseIP(c.Host); ip == nil {
-			// Not an IP, try as hostname
-			if _, err := net.LookupHost(c.Host); err != nil && c.Host != "0.0.0.0" && c.Host != "localhost" {
-				return fmt.Errorf("invalid host: %s", c.Host)
+			// Not an IP, validate as hostname
+			// Skip validation for common localhost values
+			if c.Host != "0.0.0.0" && c.Host != "localhost" && c.Host != "127.0.0.1" {
+				// Basic hostname validation without DNS lookup
+				if !isValidHostname(c.Host) {
+					return fmt.Errorf("invalid host: %s", c.Host)
+				}
 			}
 		}
 	}

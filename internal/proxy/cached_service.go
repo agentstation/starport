@@ -771,7 +771,7 @@ func (r *cachedStreamResponse) GetCacheStatus() string {
 	return r.cacheStatus
 }
 
-// Add interface to check cache status on streams
+// CacheStatusProvider is an interface to check cache status on streams
 type CacheStatusProvider interface {
 	GetCacheStatus() string
 }

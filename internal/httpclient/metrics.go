@@ -38,17 +38,35 @@ type NoOpMetricsCollector struct{}
 
 var _ MetricsCollector = (*NoOpMetricsCollector)(nil)
 
-func (n *NoOpMetricsCollector) RecordConnectionCreated(provider string)                             {}
-func (n *NoOpMetricsCollector) RecordConnectionClosed(provider string)                              {}
-func (n *NoOpMetricsCollector) RecordConnectionReused(provider string)                              {}
-func (n *NoOpMetricsCollector) RecordPoolStats(provider string, stats ConnectionStats)              {}
-func (n *NoOpMetricsCollector) RecordRequestStart(provider, method, path string)                    {}
-func (n *NoOpMetricsCollector) RecordRequestComplete(provider, method, path string, statusCode int, duration time.Duration) {
-}
-func (n *NoOpMetricsCollector) RecordRequestError(provider, method, path string, err error)         {}
-func (n *NoOpMetricsCollector) RecordCircuitBreakerOpen(provider string)                            {}
-func (n *NoOpMetricsCollector) RecordCircuitBreakerClose(provider string)                           {}
-func (n *NoOpMetricsCollector) RecordCircuitBreakerHalfOpen(provider string)                        {}
+// RecordConnectionCreated does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordConnectionCreated(_ string) {}
+
+// RecordConnectionClosed does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordConnectionClosed(_ string) {}
+
+// RecordConnectionReused does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordConnectionReused(_ string) {}
+
+// RecordPoolStats does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordPoolStats(_ string, _ ConnectionStats) {}
+
+// RecordRequestStart does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordRequestStart(_, _, _ string) {}
+
+// RecordRequestComplete does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordRequestComplete(_, _, _ string, _ int, _ time.Duration) {}
+
+// RecordRequestError does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordRequestError(_, _, _ string, _ error) {}
+
+// RecordCircuitBreakerOpen does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordCircuitBreakerOpen(_ string) {}
+
+// RecordCircuitBreakerClose does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordCircuitBreakerClose(_ string) {}
+
+// RecordCircuitBreakerHalfOpen does nothing in NoOpMetricsCollector
+func (n *NoOpMetricsCollector) RecordCircuitBreakerHalfOpen(_ string) {}
 
 // RoundTripper is an interface for HTTP round trippers (copied to avoid circular import)
 type RoundTripper interface {
@@ -71,12 +89,6 @@ func extractPath(req *http.Request) string {
 	return path
 }
 
-// isRetryableError determines if an error should be retried
-func isRetryableError(err error) bool {
-	// This is a simplified version - in practice, you'd check for
-	// specific error types like temporary network errors
-	return err != nil
-}
 
 // isRetryableStatusCode determines if a status code indicates a retryable error
 func isRetryableStatusCode(code int) bool {

@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -121,28 +122,28 @@ func DefaultProviderConfig(provider string) Config {
 // Validate checks if the configuration is valid
 func (c Config) Validate() error {
 	if c.MaxIdleConns <= 0 {
-		c.MaxIdleConns = 100
+		return fmt.Errorf("MaxIdleConns must be positive")
 	}
 	if c.MaxIdleConnsPerHost <= 0 {
-		c.MaxIdleConnsPerHost = 10
+		return fmt.Errorf("MaxIdleConnsPerHost must be positive")
 	}
 	if c.MaxConnsPerHost <= 0 {
-		c.MaxConnsPerHost = 100
+		return fmt.Errorf("MaxConnsPerHost must be positive")
 	}
 	if c.MaxIdleConnsPerHost > c.MaxConnsPerHost {
-		c.MaxIdleConnsPerHost = c.MaxConnsPerHost
+		return fmt.Errorf("MaxIdleConnsPerHost cannot exceed MaxConnsPerHost")
 	}
 	if c.IdleConnTimeout <= 0 {
-		c.IdleConnTimeout = 90 * time.Second
+		return fmt.Errorf("IdleConnTimeout must be positive")
 	}
 	if c.DialTimeout <= 0 {
-		c.DialTimeout = 30 * time.Second
+		return fmt.Errorf("DialTimeout must be positive")
 	}
 	if c.TLSHandshakeTimeout <= 0 {
-		c.TLSHandshakeTimeout = 10 * time.Second
+		return fmt.Errorf("TLSHandshakeTimeout must be positive")
 	}
 	if c.RequestTimeout <= 0 {
-		c.RequestTimeout = 5 * time.Minute
+		return fmt.Errorf("RequestTimeout must be positive")
 	}
 
 	return nil

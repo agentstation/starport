@@ -257,11 +257,3 @@ func TestGetProvidersForModel(t *testing.T) {
 	}
 }
 
-func TestModelContextPtr(t *testing.T) {
-	// Test the helper function
-	contextValue := 8192
-	ptr := modelContextPtr(contextValue)
-
-	require.NotNil(t, ptr)
-	assert.Equal(t, ModelContext(contextValue), *ptr)
-}

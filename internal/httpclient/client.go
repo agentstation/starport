@@ -82,7 +82,7 @@ func New(provider string, config Config) (*Client, error) {
 		Transport: finalTransport,
 		Timeout:   config.RequestTimeout,
 		// Don't follow redirects automatically for API calls
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
@@ -120,7 +120,7 @@ func (c *Client) Stats() ConnectionStats {
 	if !ok {
 		// If wrapped, try to unwrap
 		if wrapper, ok := c.httpClient.Transport.(interface{ Unwrap() RoundTripper }); ok {
-			transport, ok = wrapper.Unwrap().(*MonitoredTransport)
+			transport, _ = wrapper.Unwrap().(*MonitoredTransport)
 		}
 	}
 

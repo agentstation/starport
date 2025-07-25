@@ -90,30 +90,3 @@ func (t *MonitoredTransport) CloseIdleConnections() {
 	}
 }
 
-// connectionTracker tracks connection lifecycle events
-type connectionTracker struct {
-	transport http.RoundTripper
-	metrics   MetricsCollector
-	provider  string
-}
-
-// RoundTrip tracks connection creation and reuse
-func (ct *connectionTracker) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Check if this is a new connection by looking at the request context
-	// In practice, this would require more sophisticated tracking
-	
-	resp, err := ct.transport.RoundTrip(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Track connection reuse based on response headers
-	// HTTP/2 connections are always reused after initial setup
-	if resp.ProtoMajor == 2 || resp.Header.Get("Connection") != "close" {
-		ct.metrics.RecordConnectionReused(ct.provider)
-	} else {
-		ct.metrics.RecordConnectionCreated(ct.provider)
-	}
-
-	return resp, nil
-}

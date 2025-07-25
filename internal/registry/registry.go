@@ -74,7 +74,7 @@ func NewEmpty() *Registry {
 }
 
 // initializeFromConfig initializes connectors based on configuration
-func (r *Registry) initializeFromConfig(ctx context.Context) error {
+func (r *Registry) initializeFromConfig(_ context.Context) error {
 	if r.config == nil || r.config.Providers == nil {
 		// No providers configured, use mock connector
 		return r.initializeMockProvider()

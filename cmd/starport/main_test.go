@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -162,18 +164,49 @@ func TestServeCommand(t *testing.T) {
 		t.Skip("Skipping serve command test in CI environment")
 	}
 
+	// Find an available port to avoid conflicts
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to find available port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	// Make sure port is actually free by waiting a bit
+	time.Sleep(50 * time.Millisecond)
+
+	// Use the available port for testing
+	oldPort := os.Getenv("STARPORT_SERVER_PORT")
+	os.Setenv("STARPORT_SERVER_PORT", fmt.Sprintf("%d", port))
+	t.Logf("Using port %d for test (STARPORT_SERVER_PORT=%s)", port, os.Getenv("STARPORT_SERVER_PORT"))
+	
+	// Also check if port 8080 is in use
+	if l, err := net.Listen("tcp", ":8080"); err != nil {
+		t.Logf("WARNING: Port 8080 is already in use: %v", err)
+	} else {
+		l.Close()
+	}
+	
+	defer func() {
+		if oldPort != "" {
+			os.Setenv("STARPORT_SERVER_PORT", oldPort)
+		} else {
+			os.Unsetenv("STARPORT_SERVER_PORT")
+		}
+	}()
+
 	// Create a context with timeout to prevent hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	done := make(chan bool)
 	started := make(chan bool, 1)
-	var err error
+	var runErr error
 
 	go func() {
 		// Notify that we've started
 		started <- true
-		err = runAppWithArgs(ctx, []string{"starport", "serve"})
+		runErr = runAppWithArgs(ctx, []string{"starport", "serve"})
 		done <- true
 	}()
 
@@ -190,8 +223,8 @@ func TestServeCommand(t *testing.T) {
 	case <-done:
 		// Command finished
 		// We expect either nil (clean shutdown) or context.DeadlineExceeded
-		if err != nil && err != context.DeadlineExceeded && err != context.Canceled {
-			t.Errorf("serve command failed unexpectedly: %v", err)
+		if runErr != nil && runErr != context.DeadlineExceeded && runErr != context.Canceled {
+			t.Errorf("serve command failed unexpectedly: %v", runErr)
 		}
 	case <-time.After(10 * time.Second):
 		// This is a very generous timeout - if we hit this, something is seriously wrong

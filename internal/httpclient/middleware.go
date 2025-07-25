@@ -39,7 +39,7 @@ func (rt *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Body.Close()
+		_ = req.Body.Close()
 	}
 
 	var lastErr error
@@ -77,8 +77,8 @@ func (rt *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		// Consume and close the response body
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
 		lastErr = &httpError{StatusCode: resp.StatusCode}
 	}
 
