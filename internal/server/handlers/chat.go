@@ -76,6 +76,13 @@ func (h *ChatHandler) handleStream(w http.ResponseWriter, r *http.Request, req *
 	}
 	defer func() { _ = stream.Close() }()
 
+	// Check if stream provides cache status
+	if cacheProvider, ok := stream.(proxy.CacheStatusProvider); ok {
+		if cacheStatus := cacheProvider.GetCacheStatus(); cacheStatus != "" {
+			w.Header().Set("X-Cache", cacheStatus)
+		}
+	}
+
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
