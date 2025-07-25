@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/agentstation/starport/internal/proxy"
@@ -28,6 +29,9 @@ func (h *EmbeddingsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check If-None-Match header for conditional request
+	ifNoneMatch := r.Header.Get("If-None-Match")
+
 	// Add context from HTTP request
 	ctx := r.Context()
 	req.APIKey = h.getAPIKey(ctx)
@@ -44,6 +48,20 @@ func (h *EmbeddingsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Set cache headers from response
 	if resp.CacheStatus != "" {
 		w.Header().Set("X-Cache", resp.CacheStatus)
+		if resp.CacheStatus == "HIT" && resp.CacheAge > 0 {
+			w.Header().Set("X-Cache-Age", fmt.Sprintf("%d", resp.CacheAge))
+		}
+	}
+	
+	// Set ETag header
+	if resp.ETag != "" {
+		w.Header().Set("ETag", resp.ETag)
+		
+		// Check for 304 Not Modified
+		if ifNoneMatch != "" && ifNoneMatch == resp.ETag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
 	}
 
 	// Write response

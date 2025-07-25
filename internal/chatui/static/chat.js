@@ -866,6 +866,12 @@
     if (messageIndex === -1) return;
 
     const message = chat.messages[messageIndex]; // Use the actual reference
+    
+    // Check X-Cache header for cache status (for streaming responses)
+    const cacheHeader = response.headers.get('X-Cache');
+    if (cacheHeader) {
+      message.cacheHit = cacheHeader === 'HIT';
+    }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -892,11 +898,12 @@
                 (message.reasoningEndTime - message.reasoningStartTime) / 1000;
             }
 
-            // Calculate tokens per second
+            // Calculate tokens per second (only for non-cache responses)
             if (
               message.latency > 0 &&
               message.usage &&
-              message.usage.total_tokens > 0
+              message.usage.total_tokens > 0 &&
+              !message.cacheHit
             ) {
               message.tokensPerSecond =
                 message.usage.total_tokens / (message.latency / 1000);
@@ -1021,11 +1028,12 @@
       message.cacheHit = data.cache_info?.hit;
     }
 
-    // Calculate tokens per second
+    // Calculate tokens per second (only for non-cache responses)
     if (
       message.latency > 0 &&
       message.usage &&
-      message.usage.total_tokens > 0
+      message.usage.total_tokens > 0 &&
+      !message.cacheHit
     ) {
       message.tokensPerSecond =
         message.usage.total_tokens / (message.latency / 1000);
@@ -1682,7 +1690,8 @@
         message.latency
       )}</span>`;
     }
-    if (message.tokensPerSecond) {
+    // Only show TPS if not from cache (cache hits have unrealistic TPS)
+    if (message.tokensPerSecond && !message.cacheHit) {
       metadataHtml += `<span class="latency-badge" title="Tokens per second (includes reasoning)">TPS: ${message.tokensPerSecond.toFixed(
         1
       )} tok/s</span>`;
@@ -1961,7 +1970,8 @@
         message.latency
       )}</span>`;
     }
-    if (message.tokensPerSecond) {
+    // Only show TPS if not from cache (cache hits have unrealistic TPS)
+    if (message.tokensPerSecond && !message.cacheHit) {
       metadataHtml += `<span class="latency-badge" title="Tokens per second (includes reasoning)">TPS: ${message.tokensPerSecond.toFixed(
         1
       )} tok/s</span>`;

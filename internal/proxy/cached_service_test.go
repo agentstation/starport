@@ -21,8 +21,25 @@ type mockService struct {
 func (m *mockService) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	m.chatCalls++
 	return &ChatCompletionResponse{
-		ID:    "test-response",
-		Model: req.Model,
+		ID:      "test-response",
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   req.Model,
+		Choices: []connectors.Choice{
+			{
+				Index: 0,
+				Message: connectors.Message{
+					Role:    "assistant",
+					Content: "Test response content",
+				},
+				FinishReason: "stop",
+			},
+		},
+		Usage: &connectors.Usage{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+		},
 	}, nil
 }
 
@@ -241,7 +258,40 @@ func TestCacheEnabled(t *testing.T) {
 		
 		// Responses should be identical
 		if resp1.ID != resp2.ID {
-			t.Error("cached response differs from original")
+			t.Error("cached response ID differs from original")
+		}
+		
+		// Verify cache status headers
+		if resp1.CacheStatus != "MISS" {
+			t.Errorf("expected first response to have cache status MISS, got %s", resp1.CacheStatus)
+		}
+		if resp2.CacheStatus != "HIT" {
+			t.Errorf("expected second response to have cache status HIT, got %s", resp2.CacheStatus)
+		}
+		
+		// IMPORTANT: Verify Choices are preserved through cache (this would catch the type conversion bug)
+		if len(resp1.Choices) == 0 {
+			t.Fatal("original response has no choices")
+		}
+		if len(resp2.Choices) == 0 {
+			t.Fatal("cached response has no choices - type conversion issue!")
+		}
+		if len(resp1.Choices) != len(resp2.Choices) {
+			t.Errorf("cached response has different number of choices: %d vs %d", len(resp2.Choices), len(resp1.Choices))
+		}
+		
+		// Verify content is preserved
+		if resp1.Choices[0].Message.Content != resp2.Choices[0].Message.Content {
+			t.Errorf("cached response content differs: %q vs %q", 
+				resp2.Choices[0].Message.Content, resp1.Choices[0].Message.Content)
+		}
+		
+		// Verify Usage is preserved
+		if resp1.Usage == nil || resp2.Usage == nil {
+			t.Error("Usage data missing from response")
+		} else if resp1.Usage.TotalTokens != resp2.Usage.TotalTokens {
+			t.Errorf("cached response usage differs: %d vs %d tokens", 
+				resp2.Usage.TotalTokens, resp1.Usage.TotalTokens)
 		}
 	})
 
@@ -258,6 +308,80 @@ func TestCacheEnabled(t *testing.T) {
 		
 		if mockSvc.embeddingCalls != 1 {
 			t.Errorf("expected 1 embedding call with cache enabled, got %d", mockSvc.embeddingCalls)
+		}
+	})
+}
+
+// TestCacheTypeConversion verifies that type conversions work correctly
+func TestCacheTypeConversion(t *testing.T) {
+	// Test that our type conversion helpers handle various data types correctly
+	t.Run("choices conversion", func(t *testing.T) {
+		// Test with actual connectors.Choice slice
+		choices := []connectors.Choice{
+			{
+				Index: 0,
+				Message: connectors.Message{
+					Role:    "assistant",
+					Content: "test",
+				},
+			},
+		}
+		converted := convertToConnectorChoices(choices)
+		if len(converted) != 1 {
+			t.Errorf("expected 1 choice, got %d", len(converted))
+		}
+		
+		// Test with interface{} containing the data (simulates cache retrieval)
+		var interfaceData interface{} = choices
+		converted = convertToConnectorChoices(interfaceData)
+		if len(converted) != 1 {
+			t.Errorf("expected 1 choice from interface{}, got %d", len(converted))
+		}
+		
+		// Test with map data (simulates JSON unmarshaling)
+		mapData := []interface{}{
+			map[string]interface{}{
+				"index": 0,
+				"message": map[string]interface{}{
+					"role":    "assistant",
+					"content": "test",
+				},
+			},
+		}
+		converted = convertToConnectorChoices(mapData)
+		if len(converted) != 1 {
+			t.Errorf("expected 1 choice from map data, got %d", len(converted))
+		}
+	})
+	
+	t.Run("usage conversion", func(t *testing.T) {
+		// Test with actual Usage pointer
+		usage := &connectors.Usage{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+		}
+		converted := convertToConnectorUsage(usage)
+		if converted == nil || converted.TotalTokens != 15 {
+			t.Error("failed to convert Usage pointer")
+		}
+		
+		// Test with non-pointer Usage
+		nonPointerUsage := connectors.Usage{
+			PromptTokens:     10,
+			CompletionTokens: 5,
+			TotalTokens:      15,
+		}
+		converted = convertToConnectorUsage(nonPointerUsage)
+		if converted == nil || converted.TotalTokens != 15 {
+			t.Error("failed to convert non-pointer Usage")
+		}
+		
+		// Test with interface{} containing the data
+		var interfaceData interface{} = usage
+		converted = convertToConnectorUsage(interfaceData)
+		if converted == nil || converted.TotalTokens != 15 {
+			t.Error("failed to convert Usage from interface{}")
 		}
 	})
 }

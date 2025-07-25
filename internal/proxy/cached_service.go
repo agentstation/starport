@@ -2,10 +2,13 @@ package proxy
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -56,6 +59,12 @@ func NewCachedService(service Service, cm *cache.Manager, config CacheConfig) Se
 
 // ProcessChatCompletion handles chat completions with Manager-based caching
 func (s *CachedService) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
+	log.Info().
+		Str("model", req.Model).
+		Bool("stream", req.Stream).
+		Bool("cache_enabled", s.cacheConfig.EnableChatCache).
+		Msg("CachedService.ProcessChatCompletion called")
+	
 	// Skip cache for streaming requests or if caching is disabled
 	if req.Stream || !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Model) {
 		return s.service.ProcessChatCompletion(ctx, req)
@@ -69,13 +78,23 @@ func (s *CachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	// Try to get from cache
 	cachedResp, err := s.cacheManager.GetChatCompletion(ctx, cacheKey)
 	if err == nil && cachedResp != nil {
-		log.Debug().
+		log.Info().
 			Str("model", req.Model).
+			Str("cache_key", cacheKey).
 			Msg("cache hit for chat completion")
 		resp := fromCacheChatResponse(cachedResp)
 		resp.CacheStatus = CacheStatusHit
+		// Generate ETag for cached response
+		resp.ETag = generateETag(resp)
 		return resp, nil
 	}
+	
+	log.Info().
+		Str("model", req.Model).
+		Str("cache_key", cacheKey).
+		Err(err).
+		Bool("cached_resp_nil", cachedResp == nil).
+		Msg("cache miss for chat completion")
 
 	// Cache miss - call underlying service
 	resp, err := s.service.ProcessChatCompletion(ctx, req)
@@ -83,6 +102,9 @@ func (s *CachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		return nil, err
 	}
 	resp.CacheStatus = CacheStatusMiss
+	
+	// Generate ETag for response
+	resp.ETag = generateETag(resp)
 
 	// Cache successful responses
 	cacheResp := toCacheChatResponse(resp)
@@ -151,6 +173,8 @@ func (s *CachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 			Msg("cache hit for embedding")
 		resp := fromCacheEmbeddingsResponse(cachedResp)
 		resp.CacheStatus = CacheStatusHit
+		// Generate ETag for cached response
+		resp.ETag = generateETag(resp)
 		return resp, nil
 	}
 
@@ -160,6 +184,9 @@ func (s *CachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 		return nil, err
 	}
 	resp.CacheStatus = CacheStatusMiss
+	
+	// Generate ETag for response
+	resp.ETag = generateETag(resp)
 
 	// Cache successful responses
 	cacheResp := toCacheEmbeddingsResponse(resp)
@@ -282,9 +309,10 @@ func (s *CachedService) shouldSkipCache(ctx context.Context, model string) bool 
 func toCacheChatRequest(req *ChatCompletionRequest) cache.ChatCompletionRequest {
 	msgs := make([]cache.Message, len(req.Messages))
 	for i, msg := range req.Messages {
+		content := fmt.Sprintf("%v", msg.Content)
 		msgs[i] = cache.Message{
 			Role:    msg.Role,
-			Content: fmt.Sprintf("%v", msg.Content), // Handle string or complex content
+			Content: content,
 		}
 	}
 
@@ -361,7 +389,7 @@ func toCacheEmbeddingRequest(req *EmbeddingsRequest) cache.EmbeddingRequest {
 
 // fromCacheChatResponse converts cache response to proxy response
 func fromCacheChatResponse(cached *cache.ChatCompletionResponse) *ChatCompletionResponse {
-	return &ChatCompletionResponse{
+	resp := &ChatCompletionResponse{
 		ID:                cached.ID,
 		Object:            cached.Object,
 		Created:           cached.Created,
@@ -371,16 +399,30 @@ func fromCacheChatResponse(cached *cache.ChatCompletionResponse) *ChatCompletion
 		SystemFingerprint: cached.SystemFingerprint,
 		ModelUsed:         cached.ModelUsed,
 	}
+	
+	// Store cache metadata in response for header generation
+	if cached.CachedAt > 0 {
+		resp.CacheAge = int(time.Now().Unix() - cached.CachedAt)
+	}
+	
+	return resp
 }
 
 // fromCacheEmbeddingsResponse converts cache response to proxy response
 func fromCacheEmbeddingsResponse(cached *cache.EmbeddingsResponse) *EmbeddingsResponse {
-	return &EmbeddingsResponse{
+	resp := &EmbeddingsResponse{
 		Object: cached.Object,
 		Data:   convertToConnectorEmbeddings(cached.Data),
 		Model:  cached.Model,
 		Usage:  convertToConnectorUsage(cached.Usage),
 	}
+	
+	// Store cache metadata in response for header generation
+	if cached.CachedAt > 0 {
+		resp.CacheAge = int(time.Now().Unix() - cached.CachedAt)
+	}
+	
+	return resp
 }
 
 // toCacheChatResponse converts proxy response to cache response
@@ -395,17 +437,19 @@ func toCacheChatResponse(resp *ChatCompletionResponse) *cache.ChatCompletionResp
 		SystemFingerprint: resp.SystemFingerprint,
 		ModelUsed:         resp.ModelUsed,
 		// Note: CacheStatus is not cached
+		CachedAt:          time.Now().Unix(),
 	}
 }
 
 // toCacheEmbeddingsResponse converts proxy response to cache response
 func toCacheEmbeddingsResponse(resp *EmbeddingsResponse) *cache.EmbeddingsResponse {
 	return &cache.EmbeddingsResponse{
-		Object: resp.Object,
-		Data:   resp.Data,
-		Model:  resp.Model,
-		Usage:  resp.Usage,
+		Object:   resp.Object,
+		Data:     resp.Data,
+		Model:    resp.Model,
+		Usage:    resp.Usage,
 		// Note: CacheStatus is not cached
+		CachedAt: time.Now().Unix(),
 	}
 }
 
@@ -415,9 +459,21 @@ func convertToConnectorChoices(data interface{}) []connectors.Choice {
 	if choices, ok := data.([]connectors.Choice); ok {
 		return choices
 	}
-	// Otherwise, we need to unmarshal and re-marshal
-	// For now, return empty slice to avoid panics
-	return []connectors.Choice{}
+	
+	// Try to convert via JSON marshaling
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to marshal choices for conversion")
+		return []connectors.Choice{}
+	}
+	
+	var choices []connectors.Choice
+	if err := json.Unmarshal(jsonData, &choices); err != nil {
+		log.Warn().Err(err).Msg("failed to unmarshal choices for conversion")
+		return []connectors.Choice{}
+	}
+	
+	return choices
 }
 
 func convertToConnectorEmbeddings(data interface{}) []connectors.Embedding {
@@ -425,9 +481,21 @@ func convertToConnectorEmbeddings(data interface{}) []connectors.Embedding {
 	if embeddings, ok := data.([]connectors.Embedding); ok {
 		return embeddings
 	}
-	// Otherwise, we need to unmarshal and re-marshal
-	// For now, return empty slice to avoid panics
-	return []connectors.Embedding{}
+	
+	// Try to convert via JSON marshaling
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to marshal embeddings for conversion")
+		return []connectors.Embedding{}
+	}
+	
+	var embeddings []connectors.Embedding
+	if err := json.Unmarshal(jsonData, &embeddings); err != nil {
+		log.Warn().Err(err).Msg("failed to unmarshal embeddings for conversion")
+		return []connectors.Embedding{}
+	}
+	
+	return embeddings
 }
 
 func convertToConnectorUsage(data interface{}) *connectors.Usage {
@@ -435,8 +503,26 @@ func convertToConnectorUsage(data interface{}) *connectors.Usage {
 	if usage, ok := data.(*connectors.Usage); ok {
 		return usage
 	}
-	// Otherwise return nil
-	return nil
+	
+	// Check if it's a non-pointer Usage
+	if usage, ok := data.(connectors.Usage); ok {
+		return &usage
+	}
+	
+	// Try to convert via JSON marshaling
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to marshal usage for conversion")
+		return nil
+	}
+	
+	var usage connectors.Usage
+	if err := json.Unmarshal(jsonData, &usage); err != nil {
+		log.Warn().Err(err).Msg("failed to unmarshal usage for conversion")
+		return nil
+	}
+	
+	return &usage
 }
 
 // cachingStreamWrapper wraps a stream to cache the complete response
@@ -688,5 +774,21 @@ func (r *cachedStreamResponse) GetCacheStatus() string {
 // Add interface to check cache status on streams
 type CacheStatusProvider interface {
 	GetCacheStatus() string
+}
+
+// generateETag generates an ETag from response content
+func generateETag(data interface{}) string {
+	// Marshal the response data
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		// Fallback to empty string
+		return ""
+	}
+	
+	// Generate SHA256 hash
+	hash := sha256.Sum256(jsonData)
+	
+	// Return as hex string with quotes (standard ETag format)
+	return fmt.Sprintf(`"%s"`, hex.EncodeToString(hash[:16])) // Use first 16 bytes for shorter ETag
 }
 

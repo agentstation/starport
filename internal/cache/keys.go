@@ -198,6 +198,9 @@ type ChatCompletionResponse struct {
 	Usage             interface{} `json:"usage,omitempty"`
 	SystemFingerprint string      `json:"system_fingerprint,omitempty"`
 	ModelUsed         string      `json:"model_used,omitempty"`
+	
+	// Cache metadata (not part of the API response)
+	CachedAt          int64       `json:"cached_at,omitempty"`
 }
 
 // EmbeddingsResponse represents a cached embeddings response
@@ -206,4 +209,7 @@ type EmbeddingsResponse struct {
 	Data   interface{} `json:"data"`
 	Model  string      `json:"model"`
 	Usage  interface{} `json:"usage"`
+	
+	// Cache metadata (not part of the API response)
+	CachedAt int64      `json:"cached_at,omitempty"`
 }

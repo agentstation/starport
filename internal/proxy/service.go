@@ -74,6 +74,8 @@ type ChatCompletionResponse struct {
 
 	// Internal fields (not serialized)
 	CacheStatus string `json:"-"`
+	CacheAge    int    `json:"-"` // Seconds since cached
+	ETag        string `json:"-"` // Entity tag for response
 }
 
 // ChatCompletionStreamResponse represents a streaming response
@@ -107,6 +109,8 @@ type EmbeddingsResponse struct {
 
 	// Internal fields (not serialized)
 	CacheStatus string `json:"-"`
+	CacheAge    int    `json:"-"` // Seconds since cached
+	ETag        string `json:"-"` // Entity tag for response
 }
 
 // ModelsResponse represents a list of available models

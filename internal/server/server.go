@@ -97,7 +97,7 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 
 	// Create handler collection with ChatUI config
 	handlerConfig := handlers.Config{
-		Service:       service,
+		Service:       s.service,  // Use s.service which may be wrapped with cache
 		KeyManager:    keyManager,
 		Store:         store,
 		ServiceName:   "starport",
