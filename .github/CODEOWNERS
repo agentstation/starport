@@ -1,0 +1,17 @@
+# CODEOWNERS for Starport
+# This file defines who is responsible for code in this repository
+# and will be automatically requested for review on pull requests
+
+# Default owners for everything in the repo
+* @agentstation/maintainers
+
+# Go module dependencies
+go.mod @agentstation/maintainers
+go.sum @agentstation/maintainers
+
+# GitHub Actions workflows
+.github/workflows/ @agentstation/maintainers
+
+# Documentation
+*.md @agentstation/maintainers
+docs/ @agentstation/maintainers

@@ -7,8 +7,6 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    reviewers:
-      - "agentstation/maintainers"
     labels:
       - "dependencies"
       - "go"
@@ -23,8 +21,6 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    reviewers:
-      - "agentstation/maintainers"
     labels:
       - "dependencies"
       - "github-actions"
