@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -34,6 +35,15 @@ func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatComple
 
 	// Transform to connector request
 	connReq := TransformChatRequest(req)
+	
+	// Check if request has cache control
+	hasCacheControl := false
+	for _, msg := range connReq.Messages {
+		if connectors.HasCacheControl(msg.Content) {
+			hasCacheControl = true
+			break
+		}
+	}
 
 	// Create routing request
 	routingReq := &routing.Request{
@@ -52,11 +62,101 @@ func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatComple
 		}
 	}
 
+	// Extract provider from selected model
+	provider := extractProviderFromModelID(result.ModelUsed)
+
+	// If provider doesn't support cache control, strip it from the request
+	if hasCacheControl && !ProviderSupportsCacheControl(provider) {
+		// Create a copy of the request with cache control stripped
+		strippedMessages := make([]connectors.Message, len(connReq.Messages))
+		for i, msg := range connReq.Messages {
+			strippedContent, err := connectors.StripCacheControl(msg.Content)
+			if err != nil {
+				// Log error but continue with original content
+				strippedContent = msg.Content
+			}
+			strippedMessages[i] = connectors.Message{
+				Role:       msg.Role,
+				Content:    strippedContent,
+				Reasoning:  msg.Reasoning,
+				Name:       msg.Name,
+				ToolCalls:  msg.ToolCalls,
+				ToolCallID: msg.ToolCallID,
+			}
+		}
+		// Re-execute the request with stripped messages
+		strippedReq := &connectors.ChatRequest{
+			Model:            result.ModelUsed,
+			Messages:         strippedMessages,
+			Temperature:      connReq.Temperature,
+			TopP:             connReq.TopP,
+			MaxTokens:        connReq.MaxTokens,
+			Stream:           connReq.Stream,
+			Stop:             connReq.Stop,
+			PresencePenalty:  connReq.PresencePenalty,
+			FrequencyPenalty: connReq.FrequencyPenalty,
+			LogitBias:        connReq.LogitBias,
+			User:             connReq.User,
+			Seed:             connReq.Seed,
+			Tools:            connReq.Tools,
+			ToolChoice:       connReq.ToolChoice,
+			ResponseFormat:   connReq.ResponseFormat,
+			Models:           connReq.Models,
+			Reasoning:        connReq.Reasoning,
+			ProviderOptions:  connReq.ProviderOptions,
+		}
+		// Get connector from registry
+		connector, err := s.registry.Get(provider)
+		if err != nil {
+			return nil, &ProviderError{
+				Provider: provider,
+				Code:     "provider_not_found",
+				Message:  "provider not available",
+				Err:      err,
+			}
+		}
+		// Re-execute with stripped request
+		newResp, err := connector.Chat(ctx, strippedReq)
+		if err != nil {
+			return nil, &ProviderError{
+				Provider: provider,
+				Code:     "chat_failed",
+				Message:  "failed to process chat request",
+				Err:      err,
+			}
+		}
+		result.ChatResponse = newResp
+	}
+
 	// Transform response
 	proxyResp := TransformChatResponse(result.ChatResponse, result.ModelUsed)
 
 	// Add model_used field for OpenRouter compatibility
 	proxyResp.ModelUsed = result.ModelUsed
+	
+	// Calculate cache costs if cache control was used
+	if hasCacheControl && result.ChatResponse != nil && result.Usage.PromptTokens > 0 {
+		cachePricing := connectors.GetCachePricing(result.ModelUsed)
+		if cachePricing != nil {
+			// Calculate cache costs
+			// For now, assume all cached tokens are writes (conservative estimate)
+			// In a real implementation, we'd track cache hits/misses
+			promptCost := float64(result.Usage.PromptTokens) / 1000000.0
+			writeCost := 0.0
+			readCost := 0.0
+			
+			if cachePricing.CacheWrite != "" {
+				writeRate, _ := strconv.ParseFloat(cachePricing.CacheWrite, 64)
+				writeCost = promptCost * writeRate
+			}
+			
+			proxyResp.CacheCost = &CacheCost{
+				WriteTokens: writeCost,
+				ReadTokens:  readCost,
+				TotalCost:   writeCost + readCost,
+			}
+		}
+	}
 
 	return proxyResp, nil
 }
@@ -76,6 +176,15 @@ func (s *ServiceImpl) ProcessChatCompletionStream(ctx context.Context, req *Chat
 	// Transform to connector request
 	connReq := TransformChatRequest(req)
 	connReq.Stream = true
+	
+	// Check if request has cache control
+	hasCacheControl := false
+	for _, msg := range connReq.Messages {
+		if connectors.HasCacheControl(msg.Content) {
+			hasCacheControl = true
+			break
+		}
+	}
 
 	// Create routing request
 	routingReq := &routing.Request{
@@ -99,6 +208,28 @@ func (s *ServiceImpl) ProcessChatCompletionStream(ctx context.Context, req *Chat
 
 	// Update request with selected model
 	connReq.Model = modelID
+	
+	// If provider doesn't support cache control, strip it from the request
+	if hasCacheControl && !ProviderSupportsCacheControl(provider) {
+		// Create a copy of the request with cache control stripped
+		strippedMessages := make([]connectors.Message, len(connReq.Messages))
+		for i, msg := range connReq.Messages {
+			strippedContent, err := connectors.StripCacheControl(msg.Content)
+			if err != nil {
+				// Log error but continue with original content
+				strippedContent = msg.Content
+			}
+			strippedMessages[i] = connectors.Message{
+				Role:       msg.Role,
+				Content:    strippedContent,
+				Reasoning:  msg.Reasoning,
+				Name:       msg.Name,
+				ToolCalls:  msg.ToolCalls,
+				ToolCallID: msg.ToolCallID,
+			}
+		}
+		connReq.Messages = strippedMessages
+	}
 
 	// Start streaming
 	stream, err := connector.ChatStream(ctx, connReq)

@@ -73,9 +73,10 @@ type ChatCompletionResponse struct {
 	ModelUsed string `json:"model_used,omitempty"`
 
 	// Internal fields (not serialized)
-	CacheStatus string `json:"-"`
-	CacheAge    int    `json:"-"` // Seconds since cached
-	ETag        string `json:"-"` // Entity tag for response
+	CacheStatus string     `json:"-"`
+	CacheAge    int        `json:"-"` // Seconds since cached
+	ETag        string     `json:"-"` // Entity tag for response
+	CacheCost   *CacheCost `json:"-"` // Cache pricing information
 }
 
 // ChatCompletionStreamResponse represents a streaming response
@@ -108,9 +109,10 @@ type EmbeddingsResponse struct {
 	Usage  *connectors.Usage      `json:"usage,omitempty"`
 
 	// Internal fields (not serialized)
-	CacheStatus string `json:"-"`
-	CacheAge    int    `json:"-"` // Seconds since cached
-	ETag        string `json:"-"` // Entity tag for response
+	CacheStatus string     `json:"-"`
+	CacheAge    int        `json:"-"` // Seconds since cached
+	ETag        string     `json:"-"` // Entity tag for response
+	CacheCost   *CacheCost `json:"-"` // Cache pricing information
 }
 
 // ModelsResponse represents a list of available models
@@ -192,4 +194,11 @@ type ReasoningConfig struct {
 	Effort    string `json:"effort,omitempty"`     // "high", "medium", "low"
 	MaxTokens *int   `json:"max_tokens,omitempty"` // Alternative to effort
 	Exclude   bool   `json:"exclude,omitempty"`    // Exclude reasoning from response
+}
+
+// CacheCost represents the cost of cache operations
+type CacheCost struct {
+	WriteTokens float64 `json:"write_tokens"` // Cost of writing tokens to cache
+	ReadTokens  float64 `json:"read_tokens"`  // Cost of reading tokens from cache
+	TotalCost   float64 `json:"total_cost"`   // Total cost including cache operations
 }

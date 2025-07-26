@@ -30,6 +30,7 @@ Unlike managed services, Starport gives you:
 - **🤖 Multi-Provider** - OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI
 - **🧠 Smart Routing** - Automatic failover, latency-based, cost-aware routing
 - **🔐 BYOK Support** - Bring your own keys with zero-knowledge security
+- **💾 Prompt Caching** - OpenRouter-compatible cache control to reduce costs
 - **💾 Advanced Caching** - Multi-tier caching with TTL and invalidation
 - **💬 Chat UI** - Built-in web interface for testing and development
 - **🛡️ Enterprise Ready** - Rate limiting, content filtering, audit logs (Enterprise)
@@ -271,6 +272,7 @@ For detailed development setup, testing guidelines, and contribution workflow, p
 | **Top 6 Major Providers** | ✅ | ✅ | ✅ |
 | **Model Routing** | ✅ | ✅ | ✅ |
 | **BYOK Support** | ✅ | ✅ | ✅ |
+| **Prompt Caching** | ✅ | ✅ | ✅ |
 | **Response Caching** | ✅ | 🚧 | ✅ |
 | **Self-hosted** | ❌ | ✅ | ✅ |
 | **Zero Dependencies** | ❌ | ✅ | ✅ |
@@ -333,6 +335,7 @@ See [MODELS.md](MODELS.md) for the complete list of 30+ supported models with pr
 - [Development Plan](docs/PLAN.md) - Implementation roadmap and phases
 - [Task Status](docs/TASKS.md) - Current development status and tasks
 - [Operator Guide](docs/OPERATOR-GUIDE.md) - Development workflow guide
+- [Cache Control](docs/CACHE_CONTROL.md) - OpenRouter-compatible prompt caching
 - [API Reference](docs/api.md) - Complete API documentation (coming soon)
 - [Configuration Guide](docs/configuration.md) - All configuration options (coming soon)
 - [Deployment Guide](docs/deployment.md) - Production deployment (coming soon)

@@ -3,6 +3,8 @@ package proxy
 import (
 	"fmt"
 	"strings"
+
+	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
 // ValidateChatCompletionRequest validates a chat completion request
@@ -53,6 +55,11 @@ func ValidateChatCompletionRequest(req *ChatCompletionRequest) error {
 				Field:   fmt.Sprintf("messages[%d].tool_call_id", i),
 				Message: "tool_call_id is required for tool messages",
 			}
+		}
+
+		// Validate cache_control if present in content
+		if err := validateMessageCacheControl(msg.Content, fmt.Sprintf("messages[%d].content", i)); err != nil {
+			return err
 		}
 	}
 
@@ -243,4 +250,79 @@ func ExtractProviderFromModel(modelID string) (provider, model string) {
 	}
 	// No provider prefix
 	return "", modelID
+}
+
+// validateMessageCacheControl validates cache control in message content
+func validateMessageCacheControl(content connectors.MessageContent, fieldPath string) error {
+	// Parse content to check for cache control
+	parts, err := connectors.ParseMessageContent(content)
+	if err != nil {
+		// If we can't parse it, it's likely a plain string which is fine
+		return nil
+	}
+
+	// Check each content part for cache control
+	for i, part := range parts {
+		if part.CacheControl != nil {
+			// Validate cache control type
+			if part.CacheControl.Type != "ephemeral" {
+				return &ValidationError{
+					Field:   fmt.Sprintf("%s[%d].cache_control.type", fieldPath, i),
+					Message: fmt.Sprintf("invalid cache control type '%s', only 'ephemeral' is supported", part.CacheControl.Type),
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// ProviderSupportsCacheControl returns true if the provider supports cache_control
+func ProviderSupportsCacheControl(provider string) bool {
+	supportedProviders := map[string]bool{
+		"openai":     true,
+		"anthropic":  true,
+		"grok":       true,
+		"groq":       true,  // Assuming Groq is Grok
+		"deepseek":   true,
+		// Google providers use implicit caching, not cache_control
+		"google":           false,
+		"google-ai-studio": false,
+		"google-vertexai":  false,
+		"gemini":           false,
+		// Others - need to verify
+		"mistral":      false,
+		"azure":        true, // Azure OpenAI should support it
+		"azure-openai": true,
+	}
+	
+	return supportedProviders[provider]
+}
+
+// ValidateCacheControlForProvider validates cache control is appropriate for the provider
+func ValidateCacheControlForProvider(provider string, messages []connectors.Message) error {
+	// Count cache control breakpoints for Anthropic
+	if provider == "anthropic" {
+		breakpoints := 0
+		for _, msg := range messages {
+			parts, err := connectors.ParseMessageContent(msg.Content)
+			if err != nil {
+				continue
+			}
+			for _, part := range parts {
+				if part.CacheControl != nil {
+					breakpoints++
+				}
+			}
+		}
+		
+		if breakpoints > 4 {
+			return &ValidationError{
+				Field:   "messages",
+				Message: "Anthropic supports a maximum of 4 cache control breakpoints",
+			}
+		}
+	}
+	
+	return nil
 }

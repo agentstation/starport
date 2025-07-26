@@ -60,9 +60,15 @@ type MessageContent interface{}
 
 // ContentPart represents a part of multimodal content
 type ContentPart struct {
-	Type     string    `json:"type"`
-	Text     string    `json:"text,omitempty"`
-	ImageURL *ImageURL `json:"image_url,omitempty"`
+	Type         string        `json:"type"`
+	Text         string        `json:"text,omitempty"`
+	ImageURL     *ImageURL     `json:"image_url,omitempty"`
+	CacheControl *CacheControl `json:"cache_control,omitempty"`
+}
+
+// CacheControl represents cache control configuration for content parts
+type CacheControl struct {
+	Type string `json:"type"` // Currently only "ephemeral" is supported
 }
 
 // ImageURL represents an image in a message
@@ -298,4 +304,79 @@ type ReasoningConfig struct {
 	Effort    string `json:"effort,omitempty"`     // "high", "medium", "low"
 	MaxTokens *int   `json:"max_tokens,omitempty"` // Alternative to effort
 	Exclude   bool   `json:"exclude,omitempty"`    // Exclude reasoning from response
+}
+
+// ParseMessageContent converts MessageContent to a slice of ContentPart
+func ParseMessageContent(content MessageContent) ([]ContentPart, error) {
+	if content == nil {
+		return nil, nil
+	}
+
+	// Handle string content
+	if str, ok := content.(string); ok {
+		return []ContentPart{{Type: "text", Text: str}}, nil
+	}
+
+	// Handle already parsed content parts
+	if parts, ok := content.([]ContentPart); ok {
+		return parts, nil
+	}
+
+	// Handle []interface{} from JSON unmarshaling
+	if interfaces, ok := content.([]interface{}); ok {
+		parts := make([]ContentPart, 0, len(interfaces))
+		for _, item := range interfaces {
+			// Marshal and unmarshal to convert to ContentPart
+			data, err := json.Marshal(item)
+			if err != nil {
+				return nil, err
+			}
+			var part ContentPart
+			if err := json.Unmarshal(data, &part); err != nil {
+				return nil, err
+			}
+			parts = append(parts, part)
+		}
+		return parts, nil
+	}
+
+	return nil, ErrInvalidMessageContent
+}
+
+// HasCacheControl checks if any content part has cache control
+func HasCacheControl(content MessageContent) bool {
+	parts, err := ParseMessageContent(content)
+	if err != nil {
+		return false
+	}
+	
+	for _, part := range parts {
+		if part.CacheControl != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// StripCacheControl removes cache control from all content parts
+func StripCacheControl(content MessageContent) (MessageContent, error) {
+	parts, err := ParseMessageContent(content)
+	if err != nil {
+		return content, err
+	}
+	
+	// If it was a string, return as-is
+	if _, ok := content.(string); ok {
+		return content, nil
+	}
+	
+	// Remove cache control from parts
+	cleanParts := make([]ContentPart, len(parts))
+	for i, part := range parts {
+		cleanPart := part
+		cleanPart.CacheControl = nil
+		cleanParts[i] = cleanPart
+	}
+	
+	return cleanParts, nil
 }
