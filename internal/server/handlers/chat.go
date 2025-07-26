@@ -75,6 +75,15 @@ func (h *ChatHandler) handleNonStream(w http.ResponseWriter, r *http.Request, re
 			return
 		}
 	}
+	
+	// Set cache pricing headers if available
+	if resp.CacheCost != nil {
+		w.Header().Set("X-Cache-Write-Cost", fmt.Sprintf("%.6f", resp.CacheCost.WriteTokens))
+		w.Header().Set("X-Cache-Read-Cost", fmt.Sprintf("%.6f", resp.CacheCost.ReadTokens))
+		if resp.CacheCost.TotalCost > 0 {
+			w.Header().Set("X-Cache-Total-Cost", fmt.Sprintf("%.6f", resp.CacheCost.TotalCost))
+		}
+	}
 
 	// Write response
 	if err := dto.WriteJSON(w, http.StatusOK, resp); err != nil {

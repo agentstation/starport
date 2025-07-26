@@ -21,10 +21,12 @@ type ModelMetadata struct {
 
 // ModelPricing represents pricing information
 type ModelPricing struct {
-	Prompt     string `json:"prompt"`            // Price per 1k tokens
-	Completion string `json:"completion"`        // Price per 1k tokens
-	Image      string `json:"image,omitempty"`   // Price per image
-	Request    string `json:"request,omitempty"` // Price per request
+	Prompt      string `json:"prompt"`                 // Price per 1k tokens
+	Completion  string `json:"completion"`             // Price per 1k tokens
+	Image       string `json:"image,omitempty"`        // Price per image
+	Request     string `json:"request,omitempty"`      // Price per request
+	CacheWrite  string `json:"cache_write,omitempty"`  // Price per 1k tokens for cache writes
+	CacheRead   string `json:"cache_read,omitempty"`   // Price per 1k tokens for cache reads
 }
 
 // ModelContext represents context window information
@@ -225,6 +227,72 @@ func GetModelMetadata(modelID string) *ModelMetadata {
 	metadata.SupportedParameters = model.SupportedParameters
 
 	return metadata
+}
+
+// GetCachePricing returns cache pricing for a model/provider combination
+func GetCachePricing(modelID string) *ModelPricing {
+	// Extract provider from model ID
+	parts := strings.SplitN(modelID, "/", 2)
+	if len(parts) < 2 {
+		return nil
+	}
+	provider := parts[0]
+	
+	// Cache pricing as of OpenRouter docs
+	// Note: These are illustrative examples, actual pricing should be fetched from provider APIs
+	cachePricing := map[string]map[string]*ModelPricing{
+		"anthropic": {
+			"claude-3-5-sonnet": {
+				Prompt:     "0.003",     // $3 per 1M tokens
+				Completion: "0.015",     // $15 per 1M tokens
+				CacheWrite: "0.00375",   // $3.75 per 1M tokens (1.25x prompt)
+				CacheRead:  "0.0003",    // $0.30 per 1M tokens (1/10 prompt)
+			},
+			"claude-3-haiku": {
+				Prompt:     "0.00025",   // $0.25 per 1M tokens
+				Completion: "0.00125",   // $1.25 per 1M tokens
+				CacheWrite: "0.0003",    // $0.30 per 1M tokens
+				CacheRead:  "0.00003",   // $0.03 per 1M tokens
+			},
+		},
+		"openai": {
+			"gpt-4o": {
+				Prompt:     "0.0025",    // $2.50 per 1M tokens
+				Completion: "0.01",      // $10 per 1M tokens  
+				CacheWrite: "0.00625",   // $6.25 per 1M tokens (2.5x prompt)
+				CacheRead:  "0.00125",   // $1.25 per 1M tokens (0.5x prompt)
+			},
+			"gpt-4o-mini": {
+				Prompt:     "0.00015",   // $0.15 per 1M tokens
+				Completion: "0.0006",    // $0.60 per 1M tokens
+				CacheWrite: "0.000375",  // $0.375 per 1M tokens
+				CacheRead:  "0.000075",  // $0.075 per 1M tokens
+			},
+		},
+		"deepseek": {
+			"deepseek-chat": {
+				Prompt:     "0.00014",   // $0.14 per 1M tokens
+				Completion: "0.00028",   // $0.28 per 1M tokens
+				CacheWrite: "0.00014",   // Same as prompt (free caching)
+				CacheRead:  "0.000014",  // $0.014 per 1M tokens (0.1x prompt)
+			},
+		},
+	}
+	
+	// Look up cache pricing
+	if providerPricing, ok := cachePricing[provider]; ok {
+		// Try exact model match
+		if pricing, ok := providerPricing[parts[1]]; ok {
+			return pricing
+		}
+		// Try without version suffix (e.g., "claude-3-5-sonnet-20241022" -> "claude-3-5-sonnet")
+		baseName := strings.Split(parts[1], "-20")[0] // Simple heuristic for removing date suffixes
+		if pricing, ok := providerPricing[baseName]; ok {
+			return pricing
+		}
+	}
+	
+	return nil
 }
 
 
