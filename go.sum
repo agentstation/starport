@@ -1,5 +1,5 @@
-github.com/agentstation/uuidkey v1.1.0 h1:SssH/2c70LcehqXvG+AxFJ/sjnSC8bzcEW31OZ2Rftg=
-github.com/agentstation/uuidkey v1.1.0/go.mod h1:QbBOewDJeToqo6BgfJEsiVCBVUg9Ef1mpqbgI3NylzQ=
+github.com/agentstation/uuidkey v1.2.0 h1:kR6oaO5irgmo3Nbp0/y68SFFAGSzObLY6x44m5/ff24=
+github.com/agentstation/uuidkey v1.2.0/go.mod h1:V3m9NxH76rWEoNOEIHN/RhsrWssby9H7ThaIPj34fNw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
