@@ -259,6 +259,9 @@ type ProviderConfig struct {
 
 	// Provider-specific settings
 	Extra map[string]interface{} `json:"extra,omitempty"`
+
+	// Enable flag for optional providers (e.g., Ollama)
+	Enabled bool `json:"enabled"`
 }
 
 // Validate checks if the provider config is valid

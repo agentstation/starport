@@ -76,8 +76,15 @@ func runApp(ctx context.Context) error {
 				Name:    "serve",
 				Aliases: []string{"server"},
 				Usage:   "Run the llm gateway server",
-				Action: func(_ *cli.Context) error {
-					return runServer(ctx)
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "enable-ollama",
+						Usage:   "Enable Ollama support for local models",
+						EnvVars: []string{"STARPORT_ENABLE_OLLAMA"},
+					},
+				},
+				Action: func(c *cli.Context) error {
+					return runServer(ctx, c.Bool("enable-ollama"))
 				},
 			},
 		},
@@ -91,11 +98,16 @@ func runApp(ctx context.Context) error {
 }
 
 // runServer is the main function for the application. It sets up the server and it's configuration.
-func runServer(ctx context.Context) error {
+func runServer(ctx context.Context, enableOllama bool) error {
 	// Load configuration
 	cfg, err := config.LoadWithDefaults(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	
+	// Override Ollama setting from command line flag
+	if enableOllama {
+		cfg.Providers.Ollama.Enabled = true
 	}
 
 	// Build app options from loaded config

@@ -5,6 +5,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -409,6 +410,138 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 	return proxyResp, nil
 }
 
+// naturalLess compares two strings with natural ordering (handles numbers properly)
+// Higher numbers come first: "model-10" < "model-2" < "model-1"
+// Letters come before numbers: "model-a" < "model-10" < "model-1"
+func naturalLess(a, b string) bool {
+	// Simple implementation: try to extract and compare version numbers
+	// This handles common patterns like "gemini-2.0" vs "gemini-2.5"
+	
+	// Find common prefix
+	minLen := len(a)
+	if len(b) < minLen {
+		minLen = len(b)
+	}
+	
+	i := 0
+	for i < minLen && a[i] == b[i] {
+		i++
+	}
+	
+	// If one string is a prefix of another
+	if i == minLen {
+		return len(a) < len(b)
+	}
+	
+	// Check what characters we're comparing
+	aIsDigit := i < len(a) && isDigit(a[i])
+	bIsDigit := i < len(b) && isDigit(b[i])
+	
+	// Letters come before numbers
+	if aIsDigit && !bIsDigit {
+		return false  // a has digit, b has letter, so b < a
+	}
+	if !aIsDigit && bIsDigit {
+		return true   // a has letter, b has digit, so a < b
+	}
+	
+	// Both are digits - extract and compare numbers
+	if aIsDigit && bIsDigit {
+		// Extract numbers and compare
+		numA, endA := extractNumber(a[i:])
+		numB, endB := extractNumber(b[i:])
+		
+		if numA != numB {
+			return numA > numB  // Reversed: higher numbers first
+		}
+		
+		// Numbers are equal, continue with rest of string
+		return naturalLess(a[i+endA:], b[i+endB:])
+	}
+	
+	// Both are non-digits - regular string comparison
+	return a < b
+}
+
+func isDigit(ch byte) bool {
+	return ch >= '0' && ch <= '9'
+}
+
+// extractGeminiVersion extracts version number from gemini model names
+// e.g., "gemini-2.0-flash" -> 2000, "gemini-2.5-pro" -> 2500, "gemini-flash-1.5" -> 1500
+func extractGeminiVersion(model string) int {
+	// Look for pattern "gemini-X.Y" or "gemini-<name>-X.Y"
+	if !strings.HasPrefix(model, "gemini-") {
+		return 0
+	}
+	
+	// Skip "gemini-"
+	s := model[7:]
+	
+	// Find any version number in the string (X.Y format)
+	for i := 0; i < len(s); i++ {
+		if isDigit(s[i]) {
+			// Found start of a number
+			major := 0
+			j := i
+			for j < len(s) && isDigit(s[j]) {
+				major = major*10 + int(s[j]-'0')
+				j++
+			}
+			
+			// Check for decimal point
+			if j < len(s) && s[j] == '.' {
+				j++
+				minor := 0
+				k := j
+				for k < len(s) && isDigit(s[k]) {
+					minor = minor*10 + int(s[k]-'0')
+					k++
+				}
+				// Convert to sortable number (2.5 -> 2500, 1.5 -> 1500)
+				return major*1000 + minor*100
+			}
+			
+			// If no decimal, just use major version
+			return major * 1000
+		}
+	}
+	
+	return 0 // No version found
+}
+
+func extractNumber(s string) (int, int) {
+	num := 0
+	i := 0
+	for i < len(s) && isDigit(s[i]) {
+		num = num*10 + int(s[i]-'0')
+		i++
+	}
+	// Skip decimal point and following digits for now
+	// This simplifies comparison of versions like 2.0 vs 2.5
+	if i < len(s) && s[i] == '.' {
+		j := i + 1
+		for j < len(s) && isDigit(s[j]) {
+			j++
+		}
+		// For version comparison, treat 2.5 as 25 and 2.0 as 20
+		if j > i+1 {
+			decimal := 0
+			for k := i + 1; k < j; k++ {
+				decimal = decimal*10 + int(s[k]-'0')
+			}
+			// Normalize to same scale (e.g., 2.5 -> 250, 2.05 -> 205)
+			scale := 1
+			for k := j - i - 1; k < 3; k++ {
+				scale *= 10
+			}
+			num = num*1000 + decimal*scale
+			i = j
+		}
+	}
+	return num, i
+}
+
 // ListModels returns available models based on routing configuration
 func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	models, err := p.registry.GetModels(ctx)
@@ -450,6 +583,31 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 		
 		modelInfos[i] = modelInfo
 	}
+
+	// Sort models with natural ordering (handles version numbers properly)
+	sort.Slice(modelInfos, func(i, j int) bool {
+		// Extract provider names from model IDs
+		providerI, modelI := ExtractProviderFromModel(modelInfos[i].ID)
+		providerJ, modelJ := ExtractProviderFromModel(modelInfos[j].ID)
+		
+		// If same provider, use model comparison
+		if providerI == providerJ {
+			// Special handling for gemini models - higher versions first
+			if strings.HasPrefix(modelI, "gemini-") && strings.HasPrefix(modelJ, "gemini-") {
+				// Extract version from gemini models
+				verI := extractGeminiVersion(modelI)
+				verJ := extractGeminiVersion(modelJ)
+				if verI != verJ {
+					return verI > verJ  // Reversed: higher versions first
+				}
+			}
+			// Fall back to natural sort for other cases
+			return naturalLess(modelI, modelJ)
+		}
+		
+		// Otherwise sort by provider name
+		return providerI < providerJ
+	})
 
 	return &ModelsResponse{
 		Object: "list",

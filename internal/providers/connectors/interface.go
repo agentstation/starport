@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -63,6 +64,12 @@ func NewConnector(provider string, config ProviderConfig) (Connector, error) {
 		return NewMistralConnector(config)
 	case "azure":
 		return NewAzureOpenAIConnector(config)
+	case "ollama":
+		// Only create Ollama connector if explicitly enabled
+		if !config.Enabled {
+			return nil, fmt.Errorf("ollama support is not enabled (use --enable-ollama flag)")
+		}
+		return NewOllamaConnector(config)
 	case "mock":
 		return NewMockConnector(config), nil
 	default:
