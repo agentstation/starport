@@ -22,7 +22,7 @@ The main configuration struct includes:
 
 - **Server**: HTTP server settings (port, timeouts, etc.)
 - **Storage**: Storage backend configuration (Badger or Valkey)
-- **Providers**: LLM provider settings (OpenAI, Anthropic, Gemini, Groq, Mistral, Azure)
+- **Providers**: LLM provider settings (OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure, Ollama)
 - **RateLimiting**: Rate limiting configuration with hot reload support
 - **Security**: Security settings (TLS, CORS, JWT)
 - **Logging**: Logging configuration

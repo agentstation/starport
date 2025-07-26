@@ -27,7 +27,7 @@ Unlike managed services, Starport gives you:
 - **🔄 OpenAI & OpenRouter Compatible** - Drop-in replacement for existing applications
 - **🚀 Blazing Fast** - <1ms P99 latency overhead, 10K+ RPS on a single node
 - **📦 Zero Dependencies** - Single binary with embedded storage (Badger KV)
-- **🤖 Multi-Provider** - OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI
+- **🤖 Multi-Provider** - OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI, Ollama (local)
 - **🧠 Smart Routing** - Automatic failover, latency-based, cost-aware routing
 - **🔐 BYOK Support** - Bring your own keys with zero-knowledge security
 - **💾 Prompt Caching** - OpenRouter-compatible cache control to reduce costs
@@ -44,9 +44,10 @@ Starport is designed as a single binary that includes both server and CLI functi
   - Badger (default) - Zero dependencies, embedded KV store
   - Valkey/Redis - For multi-node deployments
 - **Provider support**:
-  - 6 major providers implemented with full streaming
+  - 7+ providers implemented with full streaming
   - OpenRouter-compatible model routing
   - Dynamic model fetching with caching
+  - Optional Ollama support for local models
 - **Enterprise features** - SSO, RBAC, analytics (separate package)
 
 ## Quick Start
@@ -122,6 +123,65 @@ Once enabled, visit `http://localhost:8080/chat` to access the interface.
 - API key generation should only be enabled in development
 - All chat data is stored locally in the browser
 - No conversation data is sent to external services
+
+## Ollama Support (Local Models)
+
+Starport includes optional support for [Ollama](https://ollama.ai), allowing you to use locally-running models alongside cloud providers.
+
+### Enabling Ollama
+
+1. Install Ollama on your machine: https://ollama.ai/download
+2. Pull models you want to use:
+   ```bash
+   ollama pull llama3.2
+   ollama pull mistral
+   ollama pull codellama
+   ```
+3. Start Starport with Ollama enabled:
+   ```bash
+   # Via command line flag
+   ./starport serve --enable-ollama
+   
+   # Or via environment variable
+   export STARPORT_ENABLE_OLLAMA=true
+   ./starport serve
+   ```
+
+### Configuration
+
+```bash
+# Enable Ollama support
+STARPORT_ENABLE_OLLAMA=true
+
+# Ollama server URL (default: http://localhost:11434)
+STARPORT_PROVIDERS_OLLAMA_BASE_URL=http://localhost:11434
+```
+
+### Using Ollama Models
+
+Ollama models are prefixed with `ollama/` in the model ID:
+
+```python
+response = client.chat.completions.create(
+    model="ollama/llama3.2",  # Use any model you have pulled
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### Features
+
+- **Dynamic Discovery** - Automatically discovers available models at startup
+- **Full Streaming** - Supports streaming responses like all other providers
+- **Token Tracking** - Accurate token usage reporting
+- **Zero Config** - Works out of the box with default Ollama installation
+- **Privacy First** - All inference happens locally on your machine
+
+### Model Sorting
+
+Models are sorted with an intelligent natural ordering:
+- Higher version numbers appear first (e.g., llama3.2 before llama3)
+- Letters come before numbers in names
+- Provider models are grouped together
 
 ## Performance
 
@@ -295,6 +355,7 @@ Starport supports the following AI providers out of the box:
 | **Groq** | Llama 4, Llama 3.3, Mixtral | Ultra-fast inference on LPU |
 | **Mistral** | Devstral, Large, Medium | Code specialist, function calling |
 | **Azure OpenAI** | GPT-4, GPT-3.5 | Enterprise security, compliance |
+| **Ollama** | Any installed models | Local inference, privacy-first |
 
 ### Additional Providers (Coming Soon)
 - **xAI** - Grok models with extended context
