@@ -12,22 +12,27 @@ import (
 	"github.com/agentstation/starport/pkg/catalog"
 )
 
-// ServiceImpl implements the proxy Service interface
-type ServiceImpl struct {
+// proxyImpl implements the proxy Service interface
+type proxyImpl struct {
 	registry *registry.Registry
 	router   routing.ModelRouter
 }
 
-// NewService creates a new proxy service
+// ServiceImpl is deprecated. Use proxyImpl instead.
+// Deprecated: This type is exported for backward compatibility only.
+type ServiceImpl = proxyImpl
+
+// NewService creates a new proxy service.
+// Deprecated: Use proxy.New() instead. This function is kept for backward compatibility.
 func NewService(registry *registry.Registry, router routing.ModelRouter) Service {
-	return &ServiceImpl{
+	return &proxyImpl{
 		registry: registry,
 		router:   router,
 	}
 }
 
 // ProcessChatCompletion handles chat completion requests with routing
-func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
+func (s *proxyImpl) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	// Validate request
 	if err := ValidateChatCompletionRequest(req); err != nil {
 		return nil, err
@@ -162,7 +167,7 @@ func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatComple
 }
 
 // ProcessChatCompletionStream handles streaming chat completion requests
-func (s *ServiceImpl) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
+func (s *proxyImpl) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
 	// Validate request
 	if err := ValidateChatCompletionRequest(req); err != nil {
 		return nil, err
@@ -243,16 +248,11 @@ func (s *ServiceImpl) ProcessChatCompletionStream(ctx context.Context, req *Chat
 	}
 
 	// Wrap the stream to add model_used field
-	wrappedStream := &streamWrapper{
-		stream:  stream,
-		modelID: modelID,
-	}
-
-	return wrappedStream, nil
+	return NewStreamWrapper(stream, modelID), nil
 }
 
 // ProcessEmbeddings handles embedding generation requests
-func (s *ServiceImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
+func (s *proxyImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Validate request
 	if err := ValidateEmbeddingsRequest(req); err != nil {
 		return nil, err
@@ -306,7 +306,7 @@ func (s *ServiceImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequ
 }
 
 // ListModels returns available models based on routing configuration
-func (s *ServiceImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {
+func (s *proxyImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	models, err := s.registry.GetModels(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
@@ -354,7 +354,7 @@ func (s *ServiceImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {
 }
 
 // ListProviders returns available provider information
-func (s *ServiceImpl) ListProviders(_ context.Context) (*ProvidersResponse, error) {
+func (s *proxyImpl) ListProviders(_ context.Context) (*ProvidersResponse, error) {
 	metadata := s.registry.GetProviderMetadata()
 
 	// Transform to response
@@ -375,7 +375,7 @@ func (s *ServiceImpl) ListProviders(_ context.Context) (*ProvidersResponse, erro
 }
 
 // GetModelEndpoints returns provider endpoints for a specific model
-func (s *ServiceImpl) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
+func (s *proxyImpl) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
 	// Extract provider from model ID if present
 	provider, model := ExtractProviderFromModel(modelID)
 
@@ -429,7 +429,7 @@ func (s *ServiceImpl) GetModelEndpoints(ctx context.Context, modelID string) (*M
 }
 
 // findEmbeddingsProvider finds a provider that supports embeddings for the given model
-func (s *ServiceImpl) findEmbeddingsProvider(ctx context.Context, modelID string) (connectors.Connector, string, error) {
+func (s *proxyImpl) findEmbeddingsProvider(ctx context.Context, modelID string) (connectors.Connector, string, error) {
 	// Check each provider for embeddings support
 	for _, provider := range s.registry.ListProviders() {
 		connector, _ := s.registry.Get(provider)
@@ -452,26 +452,6 @@ func (s *ServiceImpl) findEmbeddingsProvider(ctx context.Context, modelID string
 	return nil, "", ErrEmbeddingsNotSupported
 }
 
-// streamWrapper wraps a connector stream to add model_used field
-type streamWrapper struct {
-	stream  connectors.ChatStream
-	modelID string
-}
-
-func (w *streamWrapper) Read() (*connectors.ChatStreamChunk, error) {
-	chunk, err := w.stream.Recv()
-
-	// Add model_used to the chunk if present
-	if chunk != nil && chunk.Model == "" {
-		chunk.Model = w.modelID
-	}
-
-	return chunk, err
-}
-
-func (w *streamWrapper) Close() error {
-	return w.stream.Close()
-}
 
 // extractProviderFromModelID extracts the provider from a model ID
 func extractProviderFromModelID(modelID string) string {

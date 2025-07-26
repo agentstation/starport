@@ -48,7 +48,9 @@ type CacheConfig struct {
 	CacheControlHeader string `env:"CACHE_CONTROL_HEADER,default=X-Cache-Control"`
 }
 
-// NewCachedService creates a new cached service with cache Manager
+// NewCachedService creates a new cached service with cache Manager.
+// Deprecated: Use proxy.New() with proxy.WithCache() option instead.
+// This function is kept for backward compatibility.
 func NewCachedService(service Service, cm *cache.Manager, config CacheConfig) Service {
 	return &CachedService{
 		service:      service,
