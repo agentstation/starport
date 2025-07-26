@@ -8,42 +8,42 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Middleware wraps a Service with additional functionality.
+// Middleware wraps a Proxy with additional functionality.
 // Middlewares can be composed to create a chain of handlers.
 type Middleware interface {
-	// Wrap wraps the given service with the middleware functionality
-	Wrap(Service) Service
+	// Wrap wraps the given proxy with the middleware functionality
+	Wrap(Proxy) Proxy
 }
 
 // MiddlewareFunc is a function that implements the Middleware interface.
-type MiddlewareFunc func(Service) Service
+type MiddlewareFunc func(Proxy) Proxy
 
 // Wrap implements the Middleware interface.
-func (f MiddlewareFunc) Wrap(s Service) Service {
-	return f(s)
+func (f MiddlewareFunc) Wrap(p Proxy) Proxy {
+	return f(p)
 }
 
 // Chain combines multiple middlewares into a single middleware.
 // The middlewares are applied in the order they are provided.
 func Chain(middlewares ...Middleware) Middleware {
-	return MiddlewareFunc(func(service Service) Service {
+	return MiddlewareFunc(func(proxy Proxy) Proxy {
 		// Apply middlewares in reverse order
 		for i := len(middlewares) - 1; i >= 0; i-- {
-			service = middlewares[i].Wrap(service)
+			proxy = middlewares[i].Wrap(proxy)
 		}
-		return service
+		return proxy
 	})
 }
 
-// loggingService wraps a Service with request/response logging.
+// loggingService wraps a Proxy with request/response logging.
 type loggingService struct {
-	service Service
+	proxy Proxy
 }
 
 // LoggingMiddleware creates a middleware that logs requests and responses.
 func LoggingMiddleware() Middleware {
-	return MiddlewareFunc(func(service Service) Service {
-		return &loggingService{service: service}
+	return MiddlewareFunc(func(proxy Proxy) Proxy {
+		return &loggingService{proxy: proxy}
 	})
 }
 
@@ -58,7 +58,7 @@ func (s *loggingService) ProcessChatCompletion(ctx context.Context, req *ChatCom
 		Str("request_id", req.RequestID).
 		Msg("processing chat completion request")
 	
-	resp, err := s.service.ProcessChatCompletion(ctx, req)
+	resp, err := s.proxy.ProcessChatCompletion(ctx, req)
 	
 	duration := time.Since(start)
 	logger := log.Info().
@@ -89,7 +89,7 @@ func (s *loggingService) ProcessChatCompletionStream(ctx context.Context, req *C
 		Str("request_id", req.RequestID).
 		Msg("processing streaming chat completion request")
 	
-	stream, err := s.service.ProcessChatCompletionStream(ctx, req)
+	stream, err := s.proxy.ProcessChatCompletionStream(ctx, req)
 	
 	if err != nil {
 		log.Error().
@@ -119,7 +119,7 @@ func (s *loggingService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsR
 		Str("request_id", req.RequestID).
 		Msg("processing embeddings request")
 	
-	resp, err := s.service.ProcessEmbeddings(ctx, req)
+	resp, err := s.proxy.ProcessEmbeddings(ctx, req)
 	
 	duration := time.Since(start)
 	logger := log.Info().
@@ -146,7 +146,7 @@ func (s *loggingService) ListModels(ctx context.Context) (*ModelsResponse, error
 		Str("method", "ListModels").
 		Msg("listing available models")
 	
-	resp, err := s.service.ListModels(ctx)
+	resp, err := s.proxy.ListModels(ctx)
 	
 	duration := time.Since(start)
 	logger := log.Info().
@@ -172,7 +172,7 @@ func (s *loggingService) ListProviders(ctx context.Context) (*ProvidersResponse,
 		Str("method", "ListProviders").
 		Msg("listing available providers")
 	
-	resp, err := s.service.ListProviders(ctx)
+	resp, err := s.proxy.ListProviders(ctx)
 	
 	duration := time.Since(start)
 	logger := log.Info().
@@ -199,7 +199,7 @@ func (s *loggingService) GetModelEndpoints(ctx context.Context, modelID string) 
 		Str("model_id", modelID).
 		Msg("getting model endpoints")
 	
-	resp, err := s.service.GetModelEndpoints(ctx, modelID)
+	resp, err := s.proxy.GetModelEndpoints(ctx, modelID)
 	
 	duration := time.Since(start)
 	logger := log.Info().
@@ -246,14 +246,14 @@ func (s *loggingStream) Close() error {
 
 // TimingMiddleware creates a middleware that adds timing information to context.
 func TimingMiddleware() Middleware {
-	return MiddlewareFunc(func(service Service) Service {
-		return &timingService{service: service}
+	return MiddlewareFunc(func(proxy Proxy) Proxy {
+		return &timingService{proxy: proxy}
 	})
 }
 
 // timingService adds request timing to context.
 type timingService struct {
-	service Service
+	proxy Proxy
 }
 
 // Define context key for timing
@@ -268,35 +268,35 @@ func GetRequestStartTime(ctx context.Context) (time.Time, bool) {
 // ProcessChatCompletion adds timing to context.
 func (s *timingService) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
-	return s.service.ProcessChatCompletion(ctx, req)
+	return s.proxy.ProcessChatCompletion(ctx, req)
 }
 
 // ProcessChatCompletionStream adds timing to context.
 func (s *timingService) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
-	return s.service.ProcessChatCompletionStream(ctx, req)
+	return s.proxy.ProcessChatCompletionStream(ctx, req)
 }
 
 // ProcessEmbeddings adds timing to context.
 func (s *timingService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
-	return s.service.ProcessEmbeddings(ctx, req)
+	return s.proxy.ProcessEmbeddings(ctx, req)
 }
 
 // ListModels adds timing to context.
 func (s *timingService) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
-	return s.service.ListModels(ctx)
+	return s.proxy.ListModels(ctx)
 }
 
 // ListProviders adds timing to context.
 func (s *timingService) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
-	return s.service.ListProviders(ctx)
+	return s.proxy.ListProviders(ctx)
 }
 
 // GetModelEndpoints adds timing to context.
 func (s *timingService) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
-	return s.service.GetModelEndpoints(ctx, modelID)
+	return s.proxy.GetModelEndpoints(ctx, modelID)
 }

@@ -14,7 +14,7 @@ type EmbeddingsHandler struct {
 }
 
 // NewEmbeddingsHandler creates a new embeddings handler
-func NewEmbeddingsHandler(service proxy.Service) *EmbeddingsHandler {
+func NewEmbeddingsHandler(service proxy.Proxy) *EmbeddingsHandler {
 	return &EmbeddingsHandler{
 		BaseHandler: NewBaseHandler(service),
 	}

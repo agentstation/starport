@@ -17,7 +17,7 @@ type ModelsHandler struct {
 }
 
 // NewModelsHandler creates a new models handler
-func NewModelsHandler(service proxy.Service) *ModelsHandler {
+func NewModelsHandler(service proxy.Proxy) *ModelsHandler {
 	return &ModelsHandler{
 		BaseHandler: NewBaseHandler(service),
 	}

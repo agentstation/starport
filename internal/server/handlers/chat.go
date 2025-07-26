@@ -16,7 +16,7 @@ type ChatHandler struct {
 }
 
 // NewChatHandler creates a new chat handler
-func NewChatHandler(service proxy.Service) *ChatHandler {
+func NewChatHandler(service proxy.Proxy) *ChatHandler {
 	return &ChatHandler{
 		BaseHandler: NewBaseHandler(service),
 	}
@@ -60,7 +60,7 @@ func (h *ChatHandler) handleNonStream(w http.ResponseWriter, r *http.Request, re
 	// Set cache headers from response
 	if resp.CacheStatus != "" {
 		w.Header().Set("X-Cache", resp.CacheStatus)
-		if resp.CacheStatus == "HIT" && resp.CacheAge > 0 {
+		if resp.CacheStatus == proxy.CacheStatusHit && resp.CacheAge > 0 {
 			w.Header().Set("X-Cache-Age", fmt.Sprintf("%d", resp.CacheAge))
 		}
 	}
@@ -106,6 +106,12 @@ func (h *ChatHandler) handleStream(w http.ResponseWriter, r *http.Request, req *
 	if cacheProvider, ok := stream.(proxy.CacheStatusProvider); ok {
 		if cacheStatus := cacheProvider.GetCacheStatus(); cacheStatus != "" {
 			w.Header().Set("X-Cache", cacheStatus)
+			// Also set cache age if it's a hit
+			if cacheStatus == "HIT" {
+				if cacheAge := cacheProvider.GetCacheAge(); cacheAge > 0 {
+					w.Header().Set("X-Cache-Age", fmt.Sprintf("%d", cacheAge))
+				}
+			}
 		}
 	}
 

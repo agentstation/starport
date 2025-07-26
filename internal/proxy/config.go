@@ -213,6 +213,6 @@ func (b *Builder) WithOptions(opts *Options) *Builder {
 }
 
 // Build creates the proxy service with the configured options.
-func (b *Builder) Build() Service {
+func (b *Builder) Build() Proxy {
 	return NewFromConfig(b.config)
 }

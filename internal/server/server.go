@@ -27,7 +27,7 @@ type Server struct {
 
 	// Core dependencies
 	registry   *registry.Registry
-	service    proxy.Service
+	service    proxy.Proxy
 	store      storage.KVStore
 	keyManager providers.KeyManager
 

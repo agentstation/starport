@@ -22,7 +22,7 @@ type Collection struct {
 
 // Config holds configuration for creating handlers
 type Config struct {
-	Service       proxy.Service
+	Service       proxy.Proxy
 	KeyManager    providers.KeyManager
 	Store         storage.KVStore
 	ServiceName   string
