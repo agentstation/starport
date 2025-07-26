@@ -136,6 +136,10 @@ func (l *Loader) postProcess(cfg *Config) error {
 		// Users MUST override this with their specific resource URL
 		cfg.Providers.Azure.BaseURL = "https://YOUR-RESOURCE-NAME.openai.azure.com"
 	}
+	if cfg.Providers.Ollama.Enabled && cfg.Providers.Ollama.BaseURL == "" {
+		// Ollama runs locally by default
+		cfg.Providers.Ollama.BaseURL = "http://localhost:11434"
+	}
 
 	// Ensure storage path is absolute
 	if cfg.Storage.Mode == "badger" && cfg.Storage.Badger.Path != "" {

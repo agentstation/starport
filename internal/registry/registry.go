@@ -111,6 +111,14 @@ func (r *Registry) initializeFromConfig(_ context.Context) error {
 		}
 	}
 
+	// Initialize Ollama if enabled
+	if cfg.Providers.Ollama.Enabled {
+		if err := r.initializeOllamaProvider(cfg); err != nil {
+			log.Warn().Err(err).Msg("failed to initialize Ollama connector - continuing without Ollama support")
+			// Don't fail startup if Ollama is not available
+		}
+	}
+
 	// If no providers are configured, use mock connector for development
 	if len(r.ListProviders()) == 0 {
 		if err := r.initializeMockProvider(); err != nil {
@@ -238,6 +246,58 @@ func (r *Registry) initializeAzureProvider(cfg *config.Config) error {
 		return fmt.Errorf("failed to register Azure OpenAI connector: %w", err)
 	}
 	log.Info().Msg("initialized Azure OpenAI connector")
+	return nil
+}
+
+// initializeOllamaProvider initializes Ollama connector
+func (r *Registry) initializeOllamaProvider(cfg *config.Config) error {
+	providerCfg := convertToProviderConfig(cfg.Providers.Ollama, "")
+	providerCfg.Enabled = true // Ensure enabled flag is set
+	
+	connector, err := connectors.NewConnector("ollama", providerCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create Ollama connector: %w", err)
+	}
+	
+	// Check if Ollama is actually running
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	
+	if err := connector.Health(ctx); err != nil {
+		return fmt.Errorf("ollama server not reachable at %s: %w", providerCfg.BaseURL, err)
+	}
+	
+	if err := r.RegisterWithConfig("ollama", connector, providerCfg); err != nil {
+		return fmt.Errorf("failed to register Ollama connector: %w", err)
+	}
+	
+	// Fetch available models from Ollama and register them
+	modelsResp, err := connector.Models(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to fetch Ollama models during initialization")
+	} else if modelsResp != nil && modelsResp.Data != nil {
+		// Register Ollama models with the catalog
+		for _, model := range modelsResp.Data {
+			modelInfo := catalog.DynamicModelInfo{
+				ID:      model.ID,
+				Created: model.Created,
+				OwnedBy: model.OwnedBy,
+			}
+			if err := catalog.RegisterDynamicModel("ollama", modelInfo); err != nil {
+				log.Warn().
+					Err(err).
+					Str("model", model.ID).
+					Msg("failed to register Ollama model")
+			}
+		}
+		log.Info().
+			Int("count", len(modelsResp.Data)).
+			Str("base_url", providerCfg.BaseURL).
+			Msg("initialized Ollama connector and registered models")
+	} else {
+		log.Info().Str("base_url", providerCfg.BaseURL).Msg("initialized Ollama connector (no models available)")
+	}
+	
 	return nil
 }
 
@@ -431,8 +491,8 @@ func (r *Registry) IsProviderConfigured(provider string) bool {
 	}
 
 	// Check if the provider has an API key
-	// Special handling for mock provider which doesn't need an API key
-	if provider == "mock" {
+	// Special handling for providers that don't need an API key
+	if provider == "mock" || provider == "ollama" {
 		return true
 	}
 
@@ -526,7 +586,7 @@ func (r *Registry) GetModels(ctx context.Context) ([]connectors.Model, error) {
 	defer r.mu.RUnlock()
 
 	// Get catalog
-	catalog, err := catalog.GetCatalog()
+	_, err := catalog.GetCatalog()
 	if err != nil {
 		// Fall back to dynamic fetching if catalog fails
 		log.Warn().
@@ -571,8 +631,8 @@ func (r *Registry) GetModels(ctx context.Context) ([]connectors.Model, error) {
 			continue
 		}
 
-		// Use the new mapping function to handle google/ prefix models
-		catalogModels := catalog.GetModelsByProviderWithMapping(provider)
+		// Use the new function to get both static and dynamic models
+		catalogModels := catalog.GetModelsByProviderWithDynamic(provider)
 		for _, catalogModel := range catalogModels {
 			// Convert catalog model to connectors.Model
 			model := connectors.Model{
@@ -691,5 +751,6 @@ func convertToProviderConfig(cfg config.ProviderConfig, apiKeyEnv string) connec
 		RetryDelay:        cfg.RetryDelay,
 		BackoffMultiplier: cfg.BackoffMultiplier,
 		APIKey:            apiKey,
+		Enabled:           cfg.Enabled,
 	}
 }

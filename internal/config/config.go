@@ -71,6 +71,7 @@ type ProvidersConfig struct {
 	Groq           ProviderConfig `env:",prefix=GROQ_"`
 	Mistral        ProviderConfig `env:",prefix=MISTRAL_"`
 	Azure          ProviderConfig `env:",prefix=AZURE_"`
+	Ollama         ProviderConfig `env:",prefix=OLLAMA_"`
 }
 
 // ProviderConfig defines settings for a single LLM provider
@@ -81,6 +82,7 @@ type ProviderConfig struct {
 	MaxRetries        int           `env:"MAX_RETRIES,default=3"`
 	RetryDelay        time.Duration `env:"RETRY_DELAY,default=1s"`
 	BackoffMultiplier float64       `env:"BACKOFF_MULTIPLIER,default=2.0"`
+	Enabled           bool          `env:"ENABLED"` // Used for optional providers like Ollama
 }
 
 // RateLimitingConfig defines rate limiting settings
