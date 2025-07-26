@@ -13,11 +13,11 @@ import (
 
 // BaseHandler provides common functionality for all handlers
 type BaseHandler struct {
-	service proxy.Service
+	service proxy.Proxy
 }
 
 // NewBaseHandler creates a new base handler
-func NewBaseHandler(service proxy.Service) *BaseHandler {
+func NewBaseHandler(service proxy.Proxy) *BaseHandler {
 	return &BaseHandler{
 		service: service,
 	}

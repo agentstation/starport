@@ -8,20 +8,22 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/handlers"
 )
 
-// mockProxyService implements proxy.Service for testing
-type mockProxyService struct {
+// mockProxy implements proxy.Proxy for testing
+type mockProxy struct {
 	processChatFunc       func(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error)
 	processChatStreamFunc func(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error)
 }
 
-func (m *mockProxyService) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
+func (m *mockProxy) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
 	if m.processChatFunc != nil {
 		return m.processChatFunc(ctx, req)
 	}
@@ -32,26 +34,26 @@ func (m *mockProxyService) ProcessChatCompletion(ctx context.Context, req *proxy
 	}, nil
 }
 
-func (m *mockProxyService) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
+func (m *mockProxy) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
 	if m.processChatStreamFunc != nil {
 		return m.processChatStreamFunc(ctx, req)
 	}
 	return nil, errors.New("streaming not implemented in mock")
 }
 
-func (m *mockProxyService) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
+func (m *mockProxy) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockProxyService) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
+func (m *mockProxy) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockProxyService) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
+func (m *mockProxy) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockProxyService) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
+func (m *mockProxy) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -59,7 +61,7 @@ func TestChatHandler_Create(t *testing.T) {
 	tests := []struct {
 		name           string
 		requestBody    interface{}
-		mockService    func() *mockProxyService
+		mockService    func() *mockProxy
 		expectedStatus int
 		validateBody   func(t *testing.T, body []byte)
 	}{
@@ -71,8 +73,8 @@ func TestChatHandler_Create(t *testing.T) {
 					{"role": "user", "content": "Hello"},
 				},
 			},
-			mockService: func() *mockProxyService {
-				return &mockProxyService{
+			mockService: func() *mockProxy {
+				return &mockProxy{
 					processChatFunc: func(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
 						return &proxy.ChatCompletionResponse{
 							ID:     "test-123",
@@ -96,7 +98,7 @@ func TestChatHandler_Create(t *testing.T) {
 		{
 			name:           "invalid request body",
 			requestBody:    "invalid json",
-			mockService:    func() *mockProxyService { return &mockProxyService{} },
+			mockService:    func() *mockProxy { return &mockProxy{} },
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
@@ -107,8 +109,8 @@ func TestChatHandler_Create(t *testing.T) {
 				},
 				// missing model
 			},
-			mockService: func() *mockProxyService {
-				return &mockProxyService{
+			mockService: func() *mockProxy {
+				return &mockProxy{
 					processChatFunc: func(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
 						return nil, &proxy.ValidationError{
 							Field:   "model",
@@ -127,8 +129,8 @@ func TestChatHandler_Create(t *testing.T) {
 					{"role": "user", "content": "Hello"},
 				},
 			},
-			mockService: func() *mockProxyService {
-				return &mockProxyService{
+			mockService: func() *mockProxy {
+				return &mockProxy{
 					processChatFunc: func(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
 						return nil, errors.New("internal error")
 					},
@@ -206,7 +208,7 @@ func (m *mockStreamResponse) Close() error {
 
 func TestChatHandler_Streaming(t *testing.T) {
 	// Create mock service that returns a stream
-	mockService := &mockProxyService{
+	mockService := &mockProxy{
 		processChatStreamFunc: func(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
 			return &mockStreamResponse{
 				chunks: []interface{}{
@@ -262,4 +264,122 @@ func TestChatHandler_Streaming(t *testing.T) {
 	if !bytes.Contains([]byte(respBody), []byte("[DONE]")) {
 		t.Error("expected [DONE] marker in response")
 	}
+}
+
+// TestChatHandler_StreamingCacheHeaders verifies that cache headers are set correctly for streaming responses
+func TestChatHandler_StreamingCacheHeaders(t *testing.T) {
+	tests := []struct {
+		name               string
+		setupStream        func() proxy.ChatCompletionStreamResponse
+		expectedCacheHeader string
+		expectedAgeHeader   string
+	}{
+		{
+			name: "cache hit with age",
+			setupStream: func() proxy.ChatCompletionStreamResponse {
+				return &mockStreamWithCacheInfo{
+					chunks: []connectors.ChatStreamChunk{
+						{
+							ID:      "test-123",
+							Object:  "chat.completion.chunk",
+							Created: time.Now().Unix(),
+							Model:   "gpt-4",
+							Choices: []connectors.StreamChoice{
+								{Index: 0, Delta: connectors.MessageDelta{Content: "Hello"}},
+							},
+						},
+					},
+					cacheStatus: "HIT",
+					cacheAge:    120,
+				}
+			},
+			expectedCacheHeader: "HIT",
+			expectedAgeHeader:   "120",
+		},
+		{
+			name: "cache miss no age",
+			setupStream: func() proxy.ChatCompletionStreamResponse {
+				return &mockStreamWithCacheInfo{
+					chunks: []connectors.ChatStreamChunk{
+						{
+							ID:      "test-123",
+							Object:  "chat.completion.chunk",
+							Created: time.Now().Unix(),
+							Model:   "gpt-4",
+							Choices: []connectors.StreamChoice{
+								{Index: 0, Delta: connectors.MessageDelta{Content: "Hello"}},
+							},
+						},
+					},
+					cacheStatus: "MISS",
+					cacheAge:    0,
+				}
+			},
+			expectedCacheHeader: "MISS",
+			expectedAgeHeader:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockProxyInstance := &mockProxy{
+				processChatStreamFunc: func(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
+					return tt.setupStream(), nil
+				},
+			}
+
+			handler := handlers.NewChatHandler(mockProxyInstance)
+
+			body := `{"model":"gpt-4","messages":[{"role":"user","content":"Hi"}],"stream":true}`
+			req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+			handler.Create(w, req)
+
+			// Check cache headers
+			if got := w.Header().Get("X-Cache"); got != tt.expectedCacheHeader {
+				t.Errorf("X-Cache header = %v, want %v", got, tt.expectedCacheHeader)
+			}
+			
+			if tt.expectedAgeHeader != "" {
+				if got := w.Header().Get("X-Cache-Age"); got != tt.expectedAgeHeader {
+					t.Errorf("X-Cache-Age header = %v, want %v", got, tt.expectedAgeHeader)
+				}
+			} else {
+				if got := w.Header().Get("X-Cache-Age"); got != "" {
+					t.Errorf("X-Cache-Age header = %v, want empty", got)
+				}
+			}
+		})
+	}
+}
+
+// mockStreamWithCacheInfo implements both ChatCompletionStreamResponse and CacheStatusProvider
+type mockStreamWithCacheInfo struct {
+	chunks      []connectors.ChatStreamChunk
+	position    int
+	cacheStatus string
+	cacheAge    int
+}
+
+func (m *mockStreamWithCacheInfo) Read() (*connectors.ChatStreamChunk, error) {
+	if m.position >= len(m.chunks) {
+		return nil, io.EOF
+	}
+	chunk := m.chunks[m.position]
+	m.position++
+	return &chunk, nil
+}
+
+func (m *mockStreamWithCacheInfo) Close() error {
+	return nil
+}
+
+func (m *mockStreamWithCacheInfo) GetCacheStatus() string {
+	return m.cacheStatus
+}
+
+func (m *mockStreamWithCacheInfo) GetCacheAge() int {
+	return m.cacheAge
 }

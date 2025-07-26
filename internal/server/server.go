@@ -27,7 +27,7 @@ type Server struct {
 
 	// Core dependencies
 	registry   *registry.Registry
-	service    proxy.Service
+	service    proxy.Proxy
 	store      storage.KVStore
 	keyManager providers.KeyManager
 
@@ -47,16 +47,22 @@ type Option func(*Server)
 // WithCache enables caching with the cache Manager
 func WithCache(cm *cache.Manager) Option {
 	return func(s *Server) {
-		// Wrap service with caching layer using cache manager
-		cacheConfig := proxy.CacheConfig{
+		// Create a new proxy service with caching enabled
+		cacheConfig := &proxy.CacheConfig{
 			EnableChatCache:      true,
 			EnableEmbeddingCache: true,
 			EnableModelCache:     true,
 			EnableProviderCache:  true,
 			CacheControlHeader:   "X-Cache-Control",
 		}
-		s.service = proxy.NewCachedService(s.service, cm, cacheConfig)
-		log.Info().Msg("cache manager option applied - service wrapped with caching layer")
+		
+		// Get registry and router from the server
+		reg := s.registry
+		router := routing.NewRouter(newRegistryAdapter(reg))
+		
+		// Create new proxy service with cache
+		s.service = proxy.New(reg, router, proxy.WithCache(cm, cacheConfig))
+		log.Info().Msg("cache manager option applied - proxy service created with caching enabled")
 	}
 }
 
@@ -76,8 +82,8 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 	// Create routing with adapter
 	router := routing.NewRouter(newRegistryAdapter(reg))
 
-	// Create proxy service
-	service := proxy.NewService(reg, router)
+	// Create proxy service using the new constructor
+	service := proxy.New(reg, router)
 
 	// Create server instance
 	s := &Server{

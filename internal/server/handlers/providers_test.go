@@ -13,33 +13,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockProvidersService implements the proxy.Service interface for testing
-type mockProvidersService struct {
+// mockProviders implements proxy.Proxy for testing
+type mockProviders struct {
 	providers *proxy.ProvidersResponse
 	err       error
 }
 
-func (m *mockProvidersService) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
+func (m *mockProviders) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockProvidersService) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
+func (m *mockProviders) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockProvidersService) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
+func (m *mockProviders) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockProvidersService) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
+func (m *mockProviders) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockProvidersService) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
+func (m *mockProviders) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
 	return m.providers, m.err
 }
 
-func (m *mockProvidersService) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
+func (m *mockProviders) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -136,7 +136,7 @@ func TestProvidersHandler_List(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock service
-			mockService := &mockProvidersService{
+			mockService := &mockProviders{
 				providers: tt.mockResponse,
 				err:       tt.mockError,
 			}
@@ -186,7 +186,7 @@ func TestProvidersHandler_CacheHeaders(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock service
-			mockService := &mockProvidersService{
+			mockService := &mockProviders{
 				providers: &proxy.ProvidersResponse{
 					Providers: []proxy.ProviderInfo{},
 				},
@@ -258,7 +258,7 @@ func TestProvidersHandler_ErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock service
-			mockService := &mockProvidersService{
+			mockService := &mockProviders{
 				err: tt.mockError,
 			}
 

@@ -7,8 +7,15 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
-// Service defines the core proxy service interface
-type Service interface {
+// Proxy defines the core proxy interface for LLM request handling.
+// This interface serves three primary purposes:
+// 1. Testing - allows easy mocking in unit tests
+// 2. Middleware composition - enables wrapping with caching, logging, metrics, etc.
+// 3. Dependency injection - provides clean separation for HTTP handlers
+//
+// The proxy handles routing requests to appropriate LLM providers,
+// managing fallbacks, and transforming between different API formats.
+type Proxy interface {
 	// ProcessChatCompletion handles chat completion requests with routing and processing
 	ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error)
 
@@ -202,3 +209,35 @@ type CacheCost struct {
 	ReadTokens  float64 `json:"read_tokens"`  // Cost of reading tokens from cache
 	TotalCost   float64 `json:"total_cost"`   // Total cost including cache operations
 }
+
+// CacheStatusProvider is an interface to check cache status on streams
+type CacheStatusProvider interface {
+	GetCacheStatus() string
+	GetCacheAge() int // Returns cache age in seconds, or 0 if not cached
+}
+
+// CacheConfig defines caching behavior
+type CacheConfig struct {
+	// Enable caching for different endpoints
+	EnableChatCache      bool `env:"ENABLE_CHAT_CACHE,default=true"`
+	EnableEmbeddingCache bool `env:"ENABLE_EMBEDDING_CACHE,default=true"`
+	EnableModelCache     bool `env:"ENABLE_MODEL_CACHE,default=true"`
+	EnableProviderCache  bool `env:"ENABLE_PROVIDER_CACHE,default=true"`
+	// Skip cache for specific models or patterns
+	SkipCacheModels []string `env:"SKIP_CACHE_MODELS"`
+	// Force cache refresh header
+	CacheControlHeader string `env:"CACHE_CONTROL_HEADER,default=X-Cache-Control"`
+}
+
+// Define typed context keys
+type contextKey string
+
+const (
+	// CacheStatusKey is the context key for cache status
+	CacheStatusKey contextKey = "X-Cache"
+
+	// CacheStatusHit indicates a cache hit
+	CacheStatusHit = "HIT"
+	// CacheStatusMiss indicates a cache miss
+	CacheStatusMiss = "MISS"
+)

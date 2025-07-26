@@ -1,3 +1,5 @@
+// Package proxy provides a high-performance LLM request proxy with support for
+// multiple providers, intelligent routing, caching, and extensible middleware.
 package proxy
 
 import (
@@ -6,28 +8,135 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/pkg/catalog"
 )
 
-// ServiceImpl implements the proxy Service interface
-type ServiceImpl struct {
+// Config holds the configuration for creating a new proxy service.
+type Config struct {
+	// Registry provides access to LLM provider connectors
+	Registry *registry.Registry
+	
+	// Router handles intelligent model selection and failover
+	Router routing.ModelRouter
+	
+	// CacheManager handles response caching (optional)
+	CacheManager *cache.Manager
+	
+	// CacheConfig configures caching behavior (optional)
+	CacheConfig *CacheConfig
+	
+	// Middlewares to apply to the proxy service
+	Middlewares []Middleware
+}
+
+// Option configures the proxy service.
+type Option func(*Config)
+
+// WithCache enables caching with the specified cache manager and configuration.
+func WithCache(manager *cache.Manager, config *CacheConfig) Option {
+	return func(c *Config) {
+		c.CacheManager = manager
+		c.CacheConfig = config
+	}
+}
+
+// WithCacheConfig sets custom cache configuration.
+// If a cache manager is not provided separately, a default one will be created.
+func WithCacheConfig(config *CacheConfig) Option {
+	return func(c *Config) {
+		c.CacheConfig = config
+	}
+}
+
+// WithMiddleware adds a middleware to the proxy service.
+// Middlewares are applied in the order they are added.
+func WithMiddleware(m Middleware) Option {
+	return func(c *Config) {
+		c.Middlewares = append(c.Middlewares, m)
+	}
+}
+
+// New creates a new proxy service with the given registry and router.
+// Additional functionality can be added using options.
+//
+// Example:
+//
+//	// Basic proxy
+//	proxy := proxy.New(registry, router)
+//	
+//	// Proxy with caching
+//	proxy := proxy.New(registry, router,
+//	    proxy.WithCache(cacheManager, cacheConfig),
+//	)
+//	
+//	// Proxy with custom middleware
+//	proxy := proxy.New(registry, router,
+//	    proxy.WithMiddleware(loggingMiddleware),
+//	    proxy.WithMiddleware(metricsMiddleware),
+//	)
+func New(registry *registry.Registry, router routing.ModelRouter, opts ...Option) Proxy {
+	// Initialize config with required dependencies
+	cfg := &Config{
+		Registry: registry,
+		Router:   router,
+	}
+	
+	// Apply options
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	
+	// Create the core proxy implementation
+	core := &proxy{
+		registry: cfg.Registry,
+		router:   cfg.Router,
+	}
+	
+	// Build the proxy with middleware chain
+	var p Proxy = core
+	
+	// Apply custom middlewares in reverse order so the first middleware
+	// added is the outermost (called first)
+	for i := len(cfg.Middlewares) - 1; i >= 0; i-- {
+		p = cfg.Middlewares[i].Wrap(p)
+	}
+	
+	// Add cache middleware if configured
+	if cfg.CacheManager != nil && cfg.CacheConfig != nil {
+		cacheMiddleware := NewCacheMiddleware(cfg.CacheManager, cfg.CacheConfig)
+		p = cacheMiddleware.Wrap(p)
+	}
+	
+	return p
+}
+
+// NewFromConfig creates a new proxy service from a configuration struct.
+// This is useful when you have a pre-built configuration.
+func NewFromConfig(config *Config) Proxy {
+	if config.Registry == nil || config.Router == nil {
+		panic("proxy: Registry and Router are required")
+	}
+	
+	return New(config.Registry, config.Router,
+		WithCache(config.CacheManager, config.CacheConfig),
+		func(c *Config) {
+			c.Middlewares = config.Middlewares
+		},
+	)
+}
+
+// proxy implements the Proxy interface
+type proxy struct {
 	registry *registry.Registry
 	router   routing.ModelRouter
 }
 
-// NewService creates a new proxy service
-func NewService(registry *registry.Registry, router routing.ModelRouter) Service {
-	return &ServiceImpl{
-		registry: registry,
-		router:   router,
-	}
-}
-
 // ProcessChatCompletion handles chat completion requests with routing
-func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
+func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	// Validate request
 	if err := ValidateChatCompletionRequest(req); err != nil {
 		return nil, err
@@ -53,7 +162,7 @@ func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatComple
 	}
 
 	// Route the request with fallback
-	result, err := s.router.RouteWithFallback(ctx, routingReq)
+	result, err := p.router.RouteWithFallback(ctx, routingReq)
 	if err != nil {
 		return nil, &RoutingError{
 			Model:  req.Model,
@@ -106,7 +215,7 @@ func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatComple
 			ProviderOptions:  connReq.ProviderOptions,
 		}
 		// Get connector from registry
-		connector, err := s.registry.Get(provider)
+		connector, err := p.registry.Get(provider)
 		if err != nil {
 			return nil, &ProviderError{
 				Provider: provider,
@@ -162,7 +271,7 @@ func (s *ServiceImpl) ProcessChatCompletion(ctx context.Context, req *ChatComple
 }
 
 // ProcessChatCompletionStream handles streaming chat completion requests
-func (s *ServiceImpl) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
+func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
 	// Validate request
 	if err := ValidateChatCompletionRequest(req); err != nil {
 		return nil, err
@@ -194,7 +303,7 @@ func (s *ServiceImpl) ProcessChatCompletionStream(ctx context.Context, req *Chat
 	}
 
 	// Select model using router
-	modelID, connector, err := s.router.SelectModel(ctx, routingReq)
+	modelID, connector, err := p.router.SelectModel(ctx, routingReq)
 	if err != nil {
 		return nil, &RoutingError{
 			Model:  req.Model,
@@ -243,16 +352,11 @@ func (s *ServiceImpl) ProcessChatCompletionStream(ctx context.Context, req *Chat
 	}
 
 	// Wrap the stream to add model_used field
-	wrappedStream := &streamWrapper{
-		stream:  stream,
-		modelID: modelID,
-	}
-
-	return wrappedStream, nil
+	return NewStreamWrapper(stream, modelID), nil
 }
 
 // ProcessEmbeddings handles embedding generation requests
-func (s *ServiceImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
+func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Validate request
 	if err := ValidateEmbeddingsRequest(req); err != nil {
 		return nil, err
@@ -269,7 +373,7 @@ func (s *ServiceImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequ
 
 	if provider != "" {
 		// Direct provider specified
-		connector, err = s.registry.Get(provider)
+		connector, err = p.registry.Get(provider)
 		if err != nil {
 			return nil, &ProviderError{
 				Provider: provider,
@@ -282,7 +386,7 @@ func (s *ServiceImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequ
 	} else {
 		// Need to find a provider that supports this model
 		// For embeddings, we'll use a simplified approach
-		connector, provider, err = s.findEmbeddingsProvider(ctx, req.Model)
+		connector, provider, err = p.findEmbeddingsProvider(ctx, req.Model)
 		if err != nil {
 			return nil, err
 		}
@@ -306,8 +410,8 @@ func (s *ServiceImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequ
 }
 
 // ListModels returns available models based on routing configuration
-func (s *ServiceImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {
-	models, err := s.registry.GetModels(ctx)
+func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
+	models, err := p.registry.GetModels(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get models: %w", err)
 	}
@@ -354,8 +458,8 @@ func (s *ServiceImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {
 }
 
 // ListProviders returns available provider information
-func (s *ServiceImpl) ListProviders(_ context.Context) (*ProvidersResponse, error) {
-	metadata := s.registry.GetProviderMetadata()
+func (p *proxy) ListProviders(_ context.Context) (*ProvidersResponse, error) {
+	metadata := p.registry.GetProviderMetadata()
 
 	// Transform to response
 	providerInfos := make([]ProviderInfo, len(metadata))
@@ -375,7 +479,7 @@ func (s *ServiceImpl) ListProviders(_ context.Context) (*ProvidersResponse, erro
 }
 
 // GetModelEndpoints returns provider endpoints for a specific model
-func (s *ServiceImpl) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
+func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
 	// Extract provider from model ID if present
 	provider, model := ExtractProviderFromModel(modelID)
 
@@ -383,8 +487,8 @@ func (s *ServiceImpl) GetModelEndpoints(ctx context.Context, modelID string) (*M
 
 	if provider != "" {
 		// Check if this specific provider supports the model
-		if s.registry.HasProvider(provider) {
-			connector, _ := s.registry.Get(provider)
+		if p.registry.HasProvider(provider) {
+			connector, _ := p.registry.Get(provider)
 			modelsResp, _ := connector.Models(ctx)
 
 			if modelsResp != nil && modelsResp.Data != nil {
@@ -402,16 +506,16 @@ func (s *ServiceImpl) GetModelEndpoints(ctx context.Context, modelID string) (*M
 		}
 	} else {
 		// Check all providers for this model
-		for _, p := range s.registry.ListProviders() {
-			connector, _ := s.registry.Get(p)
+		for _, prov := range p.registry.ListProviders() {
+			connector, _ := p.registry.Get(prov)
 			modelsResp, _ := connector.Models(ctx)
 
 			if modelsResp != nil && modelsResp.Data != nil {
 				for _, m := range modelsResp.Data {
 					// Check if model ID matches (with or without provider prefix)
-					if m.ID == modelID || m.ID == fmt.Sprintf("%s/%s", p, modelID) {
+					if m.ID == modelID || m.ID == fmt.Sprintf("%s/%s", prov, modelID) {
 						endpoints = append(endpoints, EndpointInfo{
-							Provider:  p,
+							Provider:  prov,
 							Endpoint:  "/api/v1/chat/completions",
 							Available: true,
 						})
@@ -429,10 +533,10 @@ func (s *ServiceImpl) GetModelEndpoints(ctx context.Context, modelID string) (*M
 }
 
 // findEmbeddingsProvider finds a provider that supports embeddings for the given model
-func (s *ServiceImpl) findEmbeddingsProvider(ctx context.Context, modelID string) (connectors.Connector, string, error) {
+func (p *proxy) findEmbeddingsProvider(ctx context.Context, modelID string) (connectors.Connector, string, error) {
 	// Check each provider for embeddings support
-	for _, provider := range s.registry.ListProviders() {
-		connector, _ := s.registry.Get(provider)
+	for _, provider := range p.registry.ListProviders() {
+		connector, _ := p.registry.Get(provider)
 
 		// Check if provider has the model
 		modelsResp, err := connector.Models(ctx)
@@ -450,27 +554,6 @@ func (s *ServiceImpl) findEmbeddingsProvider(ctx context.Context, modelID string
 	}
 
 	return nil, "", ErrEmbeddingsNotSupported
-}
-
-// streamWrapper wraps a connector stream to add model_used field
-type streamWrapper struct {
-	stream  connectors.ChatStream
-	modelID string
-}
-
-func (w *streamWrapper) Read() (*connectors.ChatStreamChunk, error) {
-	chunk, err := w.stream.Recv()
-
-	// Add model_used to the chunk if present
-	if chunk != nil && chunk.Model == "" {
-		chunk.Model = w.modelID
-	}
-
-	return chunk, err
-}
-
-func (w *streamWrapper) Close() error {
-	return w.stream.Close()
 }
 
 // extractProviderFromModelID extracts the provider from a model ID

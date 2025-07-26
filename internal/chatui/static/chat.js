@@ -871,6 +871,13 @@
     const cacheHeader = response.headers.get('X-Cache');
     if (cacheHeader) {
       message.cacheHit = cacheHeader === 'HIT';
+      // Get cache age if it's a hit
+      if (message.cacheHit) {
+        const cacheAgeHeader = response.headers.get('X-Cache-Age');
+        if (cacheAgeHeader) {
+          message.cacheAge = parseInt(cacheAgeHeader, 10);
+        }
+      }
     }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -985,8 +992,8 @@
               updateMessageDirectly(message);
             }
 
-            // Check for cache info
-            if (parsed.cache_info) {
+            // Check for cache info (only if not already set from headers)
+            if (parsed.cache_info && message.cacheHit === undefined) {
               message.cacheHit = parsed.cache_info.hit;
             }
           } catch (e) {
@@ -1023,6 +1030,13 @@
     const cacheHeader = response.headers.get('X-Cache');
     if (cacheHeader) {
       message.cacheHit = cacheHeader === 'HIT';
+      // Get cache age if it's a hit
+      if (message.cacheHit) {
+        const cacheAgeHeader = response.headers.get('X-Cache-Age');
+        if (cacheAgeHeader) {
+          message.cacheAge = parseInt(cacheAgeHeader, 10);
+        }
+      }
     } else {
       // Fallback to response body if header not present
       message.cacheHit = data.cache_info?.hit;
@@ -1700,8 +1714,17 @@
       metadataHtml += `<span class="cache-badge ${
         message.cacheHit ? "hit" : "miss"
       }" title="Whether this response was served from cache">${
-        message.cacheHit ? "Cache Hit" : "Cache Miss"
+        message.cacheHit ? "Cache: HIT" : "Cache: MISS"
       }</span>`;
+      
+      // Show cache age if available
+      if (message.cacheHit && message.cacheAge !== undefined) {
+        const ageText = formatCacheAge(message.cacheAge);
+        if (ageText) {
+          metadataHtml += `<span class="cache-age-badge" title="How long ago this response was cached">${ageText}</span>`;
+        }
+      }
+      
     }
 
     metadataEl.innerHTML = metadataHtml;
@@ -1980,8 +2003,17 @@
       metadataHtml += `<span class="cache-badge ${
         message.cacheHit ? "hit" : "miss"
       }" title="Whether this response was served from cache">${
-        message.cacheHit ? "Cache Hit" : "Cache Miss"
+        message.cacheHit ? "Cache: HIT" : "Cache: MISS"
       }</span>`;
+      
+      // Show cache age if available
+      if (message.cacheHit && message.cacheAge !== undefined) {
+        const ageText = formatCacheAge(message.cacheAge);
+        if (ageText) {
+          metadataHtml += `<span class="cache-age-badge" title="How long ago this response was cached">${ageText}</span>`;
+        }
+      }
+      
     }
 
     div.innerHTML = `
@@ -2471,6 +2503,23 @@
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function formatCacheAge(seconds) {
+    if (!seconds || seconds < 0) return '';
+    
+    if (seconds < 60) {
+      return `Cache-Age: ${seconds}s ago`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      return `Cache-Age: ${minutes}m ago`;
+    } else if (seconds < 86400) {
+      const hours = Math.floor(seconds / 3600);
+      return `Cache-Age: ${hours}h ago`;
+    } else {
+      const days = Math.floor(seconds / 86400);
+      return `Cache-Age: ${days}d ago`;
+    }
   }
 
   function formatMessageContent(content, isReasoning = false) {

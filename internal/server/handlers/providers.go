@@ -13,7 +13,7 @@ type ProvidersHandler struct {
 }
 
 // NewProvidersHandler creates a new providers handler
-func NewProvidersHandler(service proxy.Service) *ProvidersHandler {
+func NewProvidersHandler(service proxy.Proxy) *ProvidersHandler {
 	return &ProvidersHandler{
 		BaseHandler: NewBaseHandler(service),
 	}

@@ -15,35 +15,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockEmbeddingsService implements the proxy.Service interface for testing
-type mockEmbeddingsService struct {
+// mockEmbeddings implements proxy.Proxy for testing
+type mockEmbeddings struct {
 	embeddings  *proxy.EmbeddingsResponse
 	err         error
 	lastRequest *proxy.EmbeddingsRequest
 }
 
-func (m *mockEmbeddingsService) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
+func (m *mockEmbeddings) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockEmbeddingsService) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
+func (m *mockEmbeddings) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockEmbeddingsService) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
+func (m *mockEmbeddings) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
 	m.lastRequest = req
 	return m.embeddings, m.err
 }
 
-func (m *mockEmbeddingsService) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
+func (m *mockEmbeddings) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockEmbeddingsService) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
+func (m *mockEmbeddings) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockEmbeddingsService) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
+func (m *mockEmbeddings) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -136,7 +136,7 @@ func TestEmbeddingsHandler_Create(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock service
-			mockService := &mockEmbeddingsService{
+			mockService := &mockEmbeddings{
 				embeddings: tt.mockResponse,
 				err:        tt.mockError,
 			}
@@ -183,7 +183,7 @@ func TestEmbeddingsHandler_CacheHeaders(t *testing.T) {
 	// Test cache hit
 	t.Run("cache hit", func(t *testing.T) {
 		// Create mock service that returns response with cache status
-		mockService := &mockEmbeddingsService{
+		mockService := &mockEmbeddings{
 			embeddings: &proxy.EmbeddingsResponse{
 				Object:      "list",
 				Data:        []connectors.Embedding{},
@@ -216,7 +216,7 @@ func TestEmbeddingsHandler_CacheHeaders(t *testing.T) {
 	// Test cache miss
 	t.Run("cache miss", func(t *testing.T) {
 		// Create mock service that returns response with cache status
-		mockService := &mockEmbeddingsService{
+		mockService := &mockEmbeddings{
 			embeddings: &proxy.EmbeddingsResponse{
 				Object:      "list",
 				Data:        []connectors.Embedding{},

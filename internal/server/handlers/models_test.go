@@ -14,34 +14,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockModelsService implements the proxy.Service interface for testing
-type mockModelsService struct {
+// mockModels implements proxy.Proxy for testing
+type mockModels struct {
 	models    *proxy.ModelsResponse
 	endpoints *proxy.ModelEndpointsResponse
 	err       error
 }
 
-func (m *mockModelsService) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
+func (m *mockModels) ProcessChatCompletion(ctx context.Context, req *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockModelsService) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
+func (m *mockModels) ProcessChatCompletionStream(ctx context.Context, req *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockModelsService) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
+func (m *mockModels) ProcessEmbeddings(ctx context.Context, req *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockModelsService) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
+func (m *mockModels) ListModels(ctx context.Context) (*proxy.ModelsResponse, error) {
 	return m.models, m.err
 }
 
-func (m *mockModelsService) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
+func (m *mockModels) ListProviders(ctx context.Context) (*proxy.ProvidersResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockModelsService) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
+func (m *mockModels) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
 	return m.endpoints, m.err
 }
 
@@ -171,7 +171,7 @@ func TestModelsHandler_List(t *testing.T) {
 			}
 
 			// Create mock service
-			mockService := &mockModelsService{
+			mockService := &mockModels{
 				models: mockResp,
 				err:    tt.mockError,
 			}
@@ -325,7 +325,7 @@ func TestModelsHandler_Get(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock service
-			mockService := &mockModelsService{
+			mockService := &mockModels{
 				models: tt.mockResponse,
 				err:    tt.mockError,
 			}
@@ -412,7 +412,7 @@ func TestModelsHandler_GetEndpoints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create mock service
-			mockService := &mockModelsService{
+			mockService := &mockModels{
 				endpoints: tt.mockResponse,
 				err:       tt.mockError,
 			}

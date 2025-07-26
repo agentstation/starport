@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
 // KeyGenerator generates cache keys for different types of requests
@@ -190,14 +192,14 @@ type EmbeddingRequest struct {
 
 // ChatCompletionResponse represents a cached chat completion response
 type ChatCompletionResponse struct {
-	ID                string      `json:"id"`
-	Object            string      `json:"object"`
-	Created           int64       `json:"created"`
-	Model             string      `json:"model"`
-	Choices           interface{} `json:"choices"`
-	Usage             interface{} `json:"usage,omitempty"`
-	SystemFingerprint string      `json:"system_fingerprint,omitempty"`
-	ModelUsed         string      `json:"model_used,omitempty"`
+	ID                string              `json:"id"`
+	Object            string              `json:"object"`
+	Created           int64               `json:"created"`
+	Model             string              `json:"model"`
+	Choices           []connectors.Choice `json:"choices"`
+	Usage             *connectors.Usage   `json:"usage,omitempty"`
+	SystemFingerprint string              `json:"system_fingerprint,omitempty"`
+	ModelUsed         string              `json:"model_used,omitempty"`
 	
 	// Cache metadata (not part of the API response)
 	CachedAt          int64       `json:"cached_at,omitempty"`
@@ -205,10 +207,10 @@ type ChatCompletionResponse struct {
 
 // EmbeddingsResponse represents a cached embeddings response
 type EmbeddingsResponse struct {
-	Object string      `json:"object"`
-	Data   interface{} `json:"data"`
-	Model  string      `json:"model"`
-	Usage  interface{} `json:"usage"`
+	Object string                 `json:"object"`
+	Data   []connectors.Embedding `json:"data"`
+	Model  string                 `json:"model"`
+	Usage  *connectors.Usage      `json:"usage"`
 	
 	// Cache metadata (not part of the API response)
 	CachedAt int64      `json:"cached_at,omitempty"`
