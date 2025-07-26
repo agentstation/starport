@@ -24,14 +24,8 @@ func LoadEmbeddedCatalog() (*Catalog, error) {
 	if catalog.Providers == nil {
 		catalog.Providers = make(map[string]*Provider)
 	}
-	if catalog.EndpointsByModel == nil {
-		catalog.EndpointsByModel = make(map[string][]*Endpoint)
-	}
-	if catalog.EndpointsByProviderModel == nil {
-		catalog.EndpointsByProviderModel = make(map[string][]*Endpoint)
-	}
-	if catalog.EndpointsByTag == nil {
-		catalog.EndpointsByTag = make(map[string][]*Endpoint)
+	if catalog.Endpoints == nil {
+		catalog.Endpoints = make(map[string][]*Endpoint)
 	}
 
 	return &catalog, nil

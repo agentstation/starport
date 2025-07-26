@@ -84,6 +84,48 @@ type ModelProviderInfo struct {
 
 // GetProviderMetadata returns metadata for all supported providers
 func GetProviderMetadata() []ProviderMetadata {
+	// Get catalog
+	cat, err := catalog.GetCatalog()
+	if err != nil {
+		// Fall back to hardcoded providers if catalog fails
+		return getDefaultProviderMetadata()
+	}
+
+	// Convert catalog providers to metadata
+	providers := make([]ProviderMetadata, 0, len(cat.Providers))
+	for _, provider := range cat.Providers {
+		metadata := ProviderMetadata{
+			Name:                  provider.Name,
+			Slug:                  provider.Slug,
+			MayLogPrompts:         provider.MayLogPrompts,
+			MayTrainOnData:        provider.MayTrainOnData,
+			ModeratedByOpenRouter: provider.ModeratedByOpenRouter,
+		}
+		
+		// Handle optional string pointers
+		if provider.PrivacyPolicyURL != nil {
+			metadata.PrivacyPolicyURL = *provider.PrivacyPolicyURL
+		}
+		if provider.TermsOfServiceURL != nil {
+			metadata.TermsOfServiceURL = *provider.TermsOfServiceURL
+		}
+		if provider.StatusPageURL != nil {
+			metadata.StatusPageURL = *provider.StatusPageURL
+		}
+		
+		providers = append(providers, metadata)
+	}
+	
+	// If no providers in catalog, fall back to defaults
+	if len(providers) == 0 {
+		return getDefaultProviderMetadata()
+	}
+	
+	return providers
+}
+
+// getDefaultProviderMetadata returns hardcoded provider metadata as fallback
+func getDefaultProviderMetadata() []ProviderMetadata {
 	return []ProviderMetadata{
 		{
 			Name:                  "OpenAI",
