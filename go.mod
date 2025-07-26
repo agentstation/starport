@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.24.4
 
 require (
-	github.com/agentstation/uuidkey v1.1.0
+	github.com/agentstation/uuidkey v1.2.0
 	github.com/dgraph-io/badger/v4 v4.8.0
 	github.com/dgraph-io/ristretto/v2 v2.2.0
 	github.com/fsnotify/fsnotify v1.9.0
