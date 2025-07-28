@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/pkg/catalog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -137,6 +138,16 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	// Execute the request
 	resp, err := s.service.ProcessChatCompletion(ctx, req)
 	if err != nil {
+		// Check if this is a 404 model not found error
+		if provErr, ok := err.(*ProviderError); ok && provErr.Err != nil {
+			if apiErr, ok := provErr.Err.(*connectors.APIError); ok && apiErr.StatusCode == 404 {
+				// Mark the model as invalid
+				catalog.MarkModelInvalid(req.Model)
+				log.Warn().
+					Str("model", req.Model).
+					Msg("marking model as invalid due to 404 error in cached non-streaming")
+			}
+		}
 		return nil, err
 	}
 
@@ -195,6 +206,16 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		// Continue without cache on error
 		stream, err := s.service.ProcessChatCompletionStream(ctx, req)
 		if err != nil {
+			// Check if this is a 404 model not found error
+			if provErr, ok := err.(*ProviderError); ok && provErr.Err != nil {
+				if apiErr, ok := provErr.Err.(*connectors.APIError); ok && apiErr.StatusCode == 404 {
+					// Mark the model as invalid
+					catalog.MarkModelInvalid(req.Model)
+					log.Warn().
+						Str("model", req.Model).
+						Msg("marking model as invalid due to 404 error in cached streaming (cache error path)")
+				}
+			}
 			return nil, err
 		}
 		return newCachingStreamWrapper(ctx, stream, s.cacheManager, cacheKey, req.Model), nil
@@ -218,6 +239,16 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 	// Cache miss - get stream from service
 	stream, err := s.service.ProcessChatCompletionStream(ctx, req)
 	if err != nil {
+		// Check if this is a 404 model not found error
+		if provErr, ok := err.(*ProviderError); ok && provErr.Err != nil {
+			if apiErr, ok := provErr.Err.(*connectors.APIError); ok && apiErr.StatusCode == 404 {
+				// Mark the model as invalid
+				catalog.MarkModelInvalid(req.Model)
+				log.Warn().
+					Str("model", req.Model).
+					Msg("marking model as invalid due to 404 error in cached streaming")
+			}
+		}
 		return nil, err
 	}
 

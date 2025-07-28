@@ -87,3 +87,17 @@ func (c *Catalog) GetModelsByProvider(provider string) []*Model {
 	}
 	return result
 }
+
+// ResolveModelAlias resolves a model ID to its canonical form
+// If the model has a canonical_slug, returns that; otherwise returns the original ID
+func (c *Catalog) ResolveModelAlias(modelID string) string {
+	if model := c.GetModelByID(modelID); model != nil {
+		if model.CanonicalSlug != "" {
+			return model.CanonicalSlug
+		}
+		if model.Permaslug != "" {
+			return model.Permaslug
+		}
+	}
+	return modelID
+}

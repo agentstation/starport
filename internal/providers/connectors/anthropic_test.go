@@ -361,12 +361,13 @@ func TestAnthropicConnector_Models(t *testing.T) {
 	}
 
 	expectedModels := []string{
-		"anthropic/claude-3-opus-20240229",
-		"anthropic/claude-3-sonnet-20240229",
-		"anthropic/claude-3-haiku-20240307",
-		"anthropic/claude-2.1",
-		"anthropic/claude-2.0",
-		"anthropic/claude-instant-1.2",
+		"anthropic/claude-3-opus",
+		"anthropic/claude-3-sonnet",
+		"anthropic/claude-3-haiku",
+		"anthropic/claude-3.5-sonnet",
+		"anthropic/claude-3.5-haiku",
+		"anthropic/claude-opus-4",
+		"anthropic/claude-sonnet-4",
 	}
 
 	for _, expected := range expectedModels {

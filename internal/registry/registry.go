@@ -428,6 +428,11 @@ func (r *Registry) RegisterWithConfig(provider string, connector connectors.Conn
 		Str("provider", provider).
 		Msg("registered connector")
 
+	// Validate models for this provider (except Ollama which handles its own)
+	if provider != "ollama" && provider != "mock" {
+		go r.validateProviderModels(provider, connector)
+	}
+
 	return nil
 }
 
@@ -693,6 +698,89 @@ func (r *Registry) GetProviderMetadata() []connectors.ProviderMetadata {
 	}
 
 	return registeredMetadata
+}
+
+// validateProviderModels fetches actual models from the provider and updates the catalog
+func (r *Registry) validateProviderModels(provider string, connector connectors.Connector) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	log.Info().
+		Str("provider", provider).
+		Msg("starting model validation for provider")
+
+	// Fetch actual models from the provider
+	modelsResp, err := connector.Models(ctx)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("provider", provider).
+			Msg("failed to fetch models from provider during validation")
+		return
+	}
+
+	if modelsResp == nil || modelsResp.Data == nil {
+		log.Warn().
+			Str("provider", provider).
+			Msg("no models returned from provider")
+		return
+	}
+
+	// Get catalog models for this provider
+	catalogModels := catalog.GetModelsByProviderWithDynamic(provider)
+	catalogModelMap := make(map[string]bool)
+	for _, model := range catalogModels {
+		catalogModelMap[model.ID] = true
+	}
+
+	// Check which provider models exist in catalog
+	providerModelMap := make(map[string]bool)
+	newModels := 0
+	for _, model := range modelsResp.Data {
+		providerModelMap[model.ID] = true
+		
+		// If model not in catalog, register it as dynamic
+		if !catalogModelMap[model.ID] {
+			modelInfo := catalog.DynamicModelInfo{
+				ID:      model.ID,
+				Created: model.Created,
+				OwnedBy: model.OwnedBy,
+			}
+			if err := catalog.RegisterDynamicModel(provider, modelInfo); err != nil {
+				log.Warn().
+					Err(err).
+					Str("provider", provider).
+					Str("model", model.ID).
+					Msg("failed to register new model")
+			} else {
+				newModels++
+				log.Debug().
+					Str("provider", provider).
+					Str("model", model.ID).
+					Msg("registered new model not found in catalog")
+			}
+		}
+	}
+
+	// Find catalog models that don't exist in provider
+	missingModels := 0
+	for _, model := range catalogModels {
+		if !providerModelMap[model.ID] {
+			missingModels++
+			log.Warn().
+				Str("provider", provider).
+				Str("model", model.ID).
+				Msg("catalog model not found in provider API")
+		}
+	}
+
+	log.Info().
+		Str("provider", provider).
+		Int("provider_models", len(modelsResp.Data)).
+		Int("catalog_models", len(catalogModels)).
+		Int("new_models", newModels).
+		Int("missing_models", missingModels).
+		Msg("completed model validation for provider")
 }
 
 // Helper functions
