@@ -787,7 +787,7 @@ a.btn-icon {
 
 /* Messages container with max-width constraint */
 .messages-container {
-  max-width: 48rem; /* 768px - equivalent to max-w-3xl */
+  max-width: 56rem; /* 896px - equivalent to max-w-4xl */
   margin: 0 auto;
   width: 100%;
   padding: 0 16px; /* Horizontal padding for edge spacing */
@@ -1390,7 +1390,7 @@ a.btn-icon {
 
 /* Input container inner wrapper with max-width constraint */
 .input-container-inner {
-  max-width: 48rem; /* 768px - same as messages container */
+  max-width: 56rem; /* 896px - same as messages container */
   margin: 0 auto;
   width: 100%;
   padding: 0 16px; /* Horizontal padding for edge spacing */
@@ -1741,7 +1741,7 @@ a.btn-icon {
 .scroll-to-bottom {
   position: absolute;
   bottom: 120px;
-  right: max(20px, calc((100vw - 48rem) / 2 + 20px)); /* Calculate position based on max-width container */
+  right: max(20px, calc((100vw - 56rem) / 2 + 20px)); /* Calculate position based on max-width container */
   width: 40px;
   height: 40px;
   border-radius: 50%;
