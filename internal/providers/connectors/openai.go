@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
+
+	"github.com/agentstation/starport/pkg/httpclient"
 )
 
 // OpenAIConnector implements the Connector interface for OpenAI
@@ -24,21 +25,17 @@ func NewOpenAIConnector(config ProviderConfig) (*OpenAIConnector, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client with connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxConnections,
-		MaxIdleConnsPerHost: config.MaxConnections,
-		IdleConnTimeout:     90 * time.Second,
+	// Create HTTP client using httpclient package
+	client, err := httpclient.New("openai", httpclient.DefaultProviderConfig("openai"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	return &OpenAIConnector{
 		OpenAICompatibleConnector: OpenAICompatibleConnector{
-			config:   config,
-			provider: "openai",
-			httpClient: &http.Client{
-				Transport: transport,
-				Timeout:   config.Timeout,
-			},
+			config:     config,
+			provider:   "openai",
+			httpClient: client.GetHTTPClient(),
 		},
 	}, nil
 }

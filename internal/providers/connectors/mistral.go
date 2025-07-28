@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
+
+	"github.com/agentstation/starport/pkg/httpclient"
 )
 
 // MistralConnector implements the Connector interface for Mistral
@@ -24,21 +25,17 @@ func NewMistralConnector(config ProviderConfig) (*MistralConnector, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client with connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxConnections,
-		MaxIdleConnsPerHost: config.MaxConnections,
-		IdleConnTimeout:     90 * time.Second,
+	// Create HTTP client using httpclient package
+	client, err := httpclient.New("mistral", httpclient.DefaultProviderConfig("mistral"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	return &MistralConnector{
 		OpenAICompatibleConnector: OpenAICompatibleConnector{
-			config:   config,
-			provider: "mistral",
-			httpClient: &http.Client{
-				Transport: transport,
-				Timeout:   config.Timeout,
-			},
+			config:     config,
+			provider:   "mistral",
+			httpClient: client.GetHTTPClient(),
 		},
 	}, nil
 }

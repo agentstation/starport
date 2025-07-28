@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/agentstation/starport/pkg/httpclient"
 )
 
 // GoogleAIStudioConnector implements the Connector interface for Google AI Studio (Gemini)
@@ -24,21 +26,17 @@ func NewGoogleAIStudioConnector(config ProviderConfig) (*GoogleAIStudioConnector
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client with connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxConnections,
-		MaxIdleConnsPerHost: config.MaxConnections,
-		IdleConnTimeout:     90 * time.Second,
+	// Create HTTP client using httpclient package
+	client, err := httpclient.New("google-aistudio", httpclient.DefaultProviderConfig("google"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	return &GoogleAIStudioConnector{
 		googleBaseConnector: googleBaseConnector{
-			config: config,
-			httpClient: &http.Client{
-				Transport: transport,
-				Timeout:   config.Timeout,
-			},
-			name: GoogleAIStudioProvider,
+			config:     config,
+			httpClient: client.GetHTTPClient(),
+			name:       GoogleAIStudioProvider,
 		},
 	}, nil
 }

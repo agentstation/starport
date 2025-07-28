@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/pkg/catalog"
+	"github.com/agentstation/starport/pkg/httpclient"
 )
 
 // AnthropicConnector implements the Connector interface for Anthropic
@@ -31,19 +32,15 @@ func NewAnthropicConnector(config ProviderConfig) (*AnthropicConnector, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client with connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxConnections,
-		MaxIdleConnsPerHost: config.MaxConnections,
-		IdleConnTimeout:     90 * time.Second,
+	// Create HTTP client using httpclient package
+	client, err := httpclient.New("anthropic", httpclient.DefaultProviderConfig("anthropic"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	return &AnthropicConnector{
-		config: config,
-		httpClient: &http.Client{
-			Transport: transport,
-			Timeout:   config.Timeout,
-		},
+		config:     config,
+		httpClient: client.GetHTTPClient(),
 	}, nil
 }
 

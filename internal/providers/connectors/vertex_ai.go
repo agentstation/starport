@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/agentstation/starport/pkg/httpclient"
 )
 
 // VertexAIConnector implements the Connector interface for Google Vertex AI
@@ -60,21 +62,17 @@ func NewVertexAIConnector(config ProviderConfig) (*VertexAIConnector, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client with connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxConnections,
-		MaxIdleConnsPerHost: config.MaxConnections,
-		IdleConnTimeout:     90 * time.Second,
+	// Create HTTP client using httpclient package
+	client, err := httpclient.New("vertex-ai", httpclient.DefaultProviderConfig("vertex-ai"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	return &VertexAIConnector{
 		googleBaseConnector: googleBaseConnector{
-			config: config,
-			httpClient: &http.Client{
-				Transport: transport,
-				Timeout:   config.Timeout,
-			},
-			name: GoogleVertexAIProvider,
+			config:     config,
+			httpClient: client.GetHTTPClient(),
+			name:       GoogleVertexAIProvider,
 		},
 		projectID:         projectID,
 		location:          location,
