@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/agentstation/starport/pkg/httpclient"
 )
 
 // OllamaConnector implements the Connector interface for Ollama
@@ -36,19 +38,21 @@ func NewOllamaConnector(config ProviderConfig) (*OllamaConnector, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client with connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxConnections,
-		MaxIdleConnsPerHost: config.MaxConnections,
-		IdleConnTimeout:     90 * time.Second,
+	// Create HTTP client using httpclient package
+	// Ollama typically runs locally, so we can use more aggressive connection settings
+	ollamaConfig := httpclient.DefaultConfig()
+	ollamaConfig.MaxConnsPerHost = 50      // Lower for local service
+	ollamaConfig.MaxIdleConnsPerHost = 20  // Lower for local service
+	ollamaConfig.EnableCircuitBreaker = false // Disable for local service
+	
+	client, err := httpclient.New("ollama", ollamaConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	return &OllamaConnector{
-		config: config,
-		httpClient: &http.Client{
-			Transport: transport,
-			Timeout:   config.Timeout,
-		},
+		config:       config,
+		httpClient:   client.GetHTTPClient(),
 		modelListTTL: 5 * time.Minute, // Cache model list for 5 minutes
 	}, nil
 }
