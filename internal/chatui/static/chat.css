@@ -811,22 +811,26 @@ a.btn-icon {
 }
 
 .message {
-  margin-bottom: 24px;
+  margin-bottom: 16px; /* Reduced from 24px for tighter spacing */
   display: flex;
-  gap: 12px;
+  gap: 8px; /* Reduced from 12px */
 }
 
+/* User messages - align right */
+.message.user {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+/* Assistant messages - keep left */
+.message.assistant {
+  flex-direction: row;
+  justify-content: flex-start;
+}
+
+/* Hide avatars for cleaner bubble design */
 .message-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background-color: var(--bg-tertiary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 14px;
-  font-weight: 600;
+  display: none;
 }
 
 .message.user .message-avatar {
@@ -852,8 +856,31 @@ a.btn-icon {
 }
 
 .message-content {
-  flex: 1;
+  max-width: 70%; /* Prevent full-width messages */
+  padding: 12px 16px;
+  border-radius: 18px;
+  position: relative;
+  background-color: var(--bg-secondary);
   min-width: 0;
+}
+
+/* User message bubble */
+.message.user .message-content {
+  background-color: var(--primary-color);
+  color: white;
+  border-bottom-right-radius: 4px; /* Squared corner for tail effect */
+  margin-left: auto; /* Push to right */
+  margin-right: 0;
+}
+
+/* Assistant message bubble */
+.message.assistant .message-content {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-bottom-left-radius: 4px; /* Squared corner for tail effect */
+  margin-right: auto; /* Keep on left */
+  margin-left: 0;
+  border: 1px solid var(--border-color);
 }
 
 .message-header {
@@ -861,11 +888,17 @@ a.btn-icon {
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
 }
 
+/* Adjust header for user messages */
+.message.user .message-header {
+  flex-direction: row-reverse;
+}
+
+/* Hide role labels as they're implied by position */
 .message-role {
-  font-weight: 600;
-  font-size: 14px;
+  display: none;
 }
 
 .message-metadata {
@@ -873,6 +906,11 @@ a.btn-icon {
   gap: 12px;
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+/* Fix metadata colors for user messages */
+.message.user .message-metadata {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .latency-badge,
@@ -883,6 +921,13 @@ a.btn-icon {
   border-radius: 4px;
   background-color: var(--bg-secondary);
   cursor: help; /* Show help cursor for tooltips */
+}
+
+/* Fix badge colors for user messages */
+.message.user .latency-badge,
+.message.user .token-badge {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 .cache-badge.hit {
@@ -904,6 +949,12 @@ a.btn-icon {
 
 .message-text {
   line-height: 1.6;
+}
+
+/* Fix text colors for user messages */
+.message.user .message-text,
+.message.user .message-text * {
+  color: white !important;
 }
 
 /* Preserve line breaks in user messages without preserving HTML indentation */
@@ -928,6 +979,16 @@ a.btn-icon {
   overflow-x: auto;
   margin: 12px 0;
   position: relative;
+}
+
+/* Code blocks in user messages */
+.message.user .message-text pre {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.message.user .message-text pre code {
+  color: white !important;
 }
 
 /* Code copy button */
@@ -1134,12 +1195,35 @@ a.btn-icon {
   margin-top: 8px;
   display: flex;
   gap: 8px;
+  justify-content: flex-start;
+}
+
+/* Right-align actions for user messages */
+.message.user .message-actions {
   justify-content: flex-end;
 }
 
-.message-actions button {
+/* Smaller action buttons for bubbles */
+.message-actions .btn {
+  padding: 4px 12px;
   font-size: 12px;
-  padding: 4px 8px;
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+}
+
+.message-actions .btn:hover {
+  background-color: var(--bg-secondary);
+}
+
+/* Action buttons in user messages */
+.message.user .message-actions .btn {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.message.user .message-actions .btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
 }
 
 /* Reasoning Display */
@@ -1162,6 +1246,18 @@ a.btn-icon {
   font-family: inherit;
   border-radius: 6px;
   font-weight: 500;
+}
+
+/* Reasoning toggle in user messages */
+.message.user .reasoning-toggle {
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.message.user .reasoning-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
 }
 
 .reasoning-toggle .icon {
@@ -1841,6 +1937,48 @@ a.btn-icon {
   );
 }
 
+/* Dark mode adjustments for message bubbles */
+[data-theme="dark"] .message.user .message-content {
+  background-color: var(--primary-color);
+  /* User messages stay blue in dark mode */
+}
+
+[data-theme="dark"] .message.assistant .message-content {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+/* Dark mode adjustments for user message elements */
+[data-theme="dark"] .message.user .message-text,
+[data-theme="dark"] .message.user .message-text * {
+  color: white !important;
+}
+
+[data-theme="dark"] .message.user .message-metadata {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="dark"] .message.user .latency-badge,
+[data-theme="dark"] .message.user .token-badge {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+[data-theme="dark"] .message.user .message-text pre {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="dark"] .message.user .message-actions .btn {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+[data-theme="dark"] .message.user .message-actions .btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
 /* Disable Grammarly interference */
 grammarly-extension,
 grammarly-desktop-integration,
@@ -1927,6 +2065,23 @@ grammarly-desktop-integration,
   
   .scroll-to-bottom {
     right: 20px; /* Fixed position on mobile */
+  }
+  
+  /* Adjust message bubbles on mobile */
+  .message-content {
+    max-width: 85%; /* Allow wider messages on mobile */
+    padding: 10px 14px; /* Reduce padding */
+  }
+  
+  /* Smaller text on mobile */
+  .message-text {
+    font-size: 14px;
+  }
+  
+  /* Adjust action buttons on mobile */
+  .message-actions .btn {
+    padding: 3px 10px;
+    font-size: 11px;
   }
 
   .modal-content {
