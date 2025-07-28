@@ -229,6 +229,21 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		attemptStart := time.Now()
 		provider := r.extractProvider(modelID)
 
+		// Check if model is marked as invalid
+		if catalog.IsModelInvalid(modelID) {
+			attempts = append(attempts, ModelAttempt{
+				Model:    modelID,
+				Provider: provider,
+				Status:   "skipped",
+				Error:    "model marked as invalid (404)",
+				Duration: time.Since(attemptStart),
+			})
+			log.Ctx(ctx).Debug().
+				Str("model", modelID).
+				Msg("skipping invalid model")
+			continue
+		}
+
 		// Check provider health
 		if !r.isProviderHealthy(provider) {
 			attempts = append(attempts, ModelAttempt{
@@ -310,6 +325,16 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		// Check if we should fallback
 		trigger, shouldFallback := IsFallbackError(err)
 		errorMsg := err.Error()
+
+		// If this is a 404 model not found error, mark the model as invalid
+		if trigger == FallbackModelUnavailable {
+			// Import catalog to mark model as invalid
+			catalog.MarkModelInvalid(modelID)
+			log.Ctx(ctx).Warn().
+				Str("model", modelID).
+				Str("provider", provider).
+				Msg("marking model as invalid due to 404 error")
+		}
 
 		attempts = append(attempts, ModelAttempt{
 			Model:    modelID,

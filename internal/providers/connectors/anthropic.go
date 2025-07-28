@@ -8,7 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/agentstation/starport/pkg/catalog"
 )
 
 // AnthropicConnector implements the Connector interface for Anthropic
@@ -143,118 +146,59 @@ func (c *AnthropicConnector) Models(ctx context.Context) (*ModelsResponse, error
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			// Fall back to static list on error
-			return c.staticModelsList(), nil
+			// Fall back to catalog models on error
+			return c.modelsFromCatalog(), nil
 		}
 		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != http.StatusOK {
-			// Fall back to static list on error
-			return c.staticModelsList(), nil
+			// Fall back to catalog models on error
+			return c.modelsFromCatalog(), nil
 		}
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			// Fall back to static list on error
-			return c.staticModelsList(), nil
+			// Fall back to catalog models on error
+			return c.modelsFromCatalog(), nil
 		}
 
 		// Parse the response
 		models, err := parseModelsResponse(body, "anthropic")
 		if err != nil {
-			// Fall back to static list on error
-			return c.staticModelsList(), nil
+			// Fall back to catalog models on error
+			return c.modelsFromCatalog(), nil
 		}
 
 		return models, nil
 	})
 }
 
-// staticModelsList returns the hardcoded list of models as fallback
-func (c *AnthropicConnector) staticModelsList() *ModelsResponse {
-	models := []Model{
-		// Claude Opus 4
-		{
-			ID:      "anthropic/claude-opus-4-20250514",
+// modelsFromCatalog returns models from the catalog as fallback
+func (c *AnthropicConnector) modelsFromCatalog() *ModelsResponse {
+	// Use the dynamic catalog helper that includes both static and dynamic models
+	models := catalog.GetModelsByProviderWithDynamic("anthropic")
+	
+	// Convert catalog models to connector models
+	result := make([]Model, 0, len(models))
+	for _, m := range models {
+		result = append(result, Model{
+			ID:      m.ID,
 			Object:  "model",
-			Created: time.Now().Unix(),
+			Created: m.Created,
 			OwnedBy: "anthropic",
-		},
-		// Claude Sonnet 4
-		{
-			ID:      "anthropic/claude-sonnet-4-20250514",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		// Claude 3.5 models
-		{
-			ID:      "anthropic/claude-3-5-sonnet-20241022",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		{
-			ID:      "anthropic/claude-3-5-sonnet-20240620",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		{
-			ID:      "anthropic/claude-3-5-haiku-20241022",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		// Claude 3 models
-		{
-			ID:      "anthropic/claude-3-opus-20240229",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		{
-			ID:      "anthropic/claude-3-sonnet-20240229",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		{
-			ID:      "anthropic/claude-3-haiku-20240307",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		// Legacy models
-		{
-			ID:      "anthropic/claude-2.1",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		{
-			ID:      "anthropic/claude-2.0",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
-		{
-			ID:      "anthropic/claude-instant-1.2",
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "anthropic",
-		},
+		})
 	}
 
 	return &ModelsResponse{
 		Object: "list",
-		Data:   models,
+		Data:   result,
 	}
 }
 
 // Health checks the health of the connector
 func (c *AnthropicConnector) Health(ctx context.Context) error {
 	// Simple health check - try to get response with minimal request
+	// Use a stable model that's likely to exist
 	req := &ChatRequest{
 		Model: "anthropic/claude-3-haiku-20240307",
 		Messages: []Message{
@@ -268,6 +212,19 @@ func (c *AnthropicConnector) Health(ctx context.Context) error {
 		// Check if it's an auth error (which means the service is up)
 		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == http.StatusUnauthorized {
 			return nil // Service is up, just no valid key
+		}
+		// Check if it's a model not found error
+		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == http.StatusNotFound {
+			// Try with a basic claude-3 model
+			req.Model = "anthropic/claude-3-sonnet-20240229"
+			_, err2 := c.Chat(ctx, req)
+			if err2 != nil {
+				if apiErr2, ok := err2.(*APIError); ok && apiErr2.StatusCode == http.StatusUnauthorized {
+					return nil // Service is up, just no valid key
+				}
+				return err2
+			}
+			return nil
 		}
 		return err
 	}
@@ -317,8 +274,20 @@ func (c *AnthropicConnector) handleError(resp *http.Response) error {
 func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[string]interface{} {
 	anthropicReq := make(map[string]interface{})
 
-	// Model
-	anthropicReq["model"] = req.Model
+	// Model - resolve alias and strip provider prefix
+	modelID := req.Model
+	// Try to resolve alias from catalog
+	if cat, err := catalog.GetCatalog(); err == nil {
+		modelID = cat.ResolveModelAlias(modelID)
+	}
+	// Strip provider prefix for Anthropic API
+	model := strings.TrimPrefix(modelID, "anthropic/")
+	// Anthropic API expects dots to be replaced with hyphens in model names
+	// specifically for Claude 3.5 models (e.g., "claude-3.5-sonnet" becomes "claude-3-5-sonnet")
+	if strings.Contains(model, "claude-3.5-") {
+		model = strings.ReplaceAll(model, ".", "-")
+	}
+	anthropicReq["model"] = model
 
 	// Convert messages
 	var messages []map[string]interface{}

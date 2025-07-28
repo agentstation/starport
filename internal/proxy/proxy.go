@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
@@ -344,6 +346,16 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 	// Start streaming
 	stream, err := connector.ChatStream(ctx, connReq)
 	if err != nil {
+		// Check if this is a 404 model not found error
+		if apiErr, ok := err.(*connectors.APIError); ok && apiErr.StatusCode == 404 {
+			// Mark the model as invalid
+			catalog.MarkModelInvalid(modelID)
+			log.Ctx(ctx).Warn().
+				Str("model", modelID).
+				Str("provider", provider).
+				Msg("marking model as invalid due to 404 error in streaming")
+		}
+		
 		return nil, &ProviderError{
 			Provider: provider,
 			Code:     "stream_failed",

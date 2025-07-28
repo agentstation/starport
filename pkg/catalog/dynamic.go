@@ -9,6 +9,10 @@ var (
 	// dynamicModels stores models discovered at runtime (e.g., from Ollama)
 	dynamicModels = make(map[string]*Model)
 	dynamicMutex  sync.RWMutex
+	
+	// invalidModels tracks models that have been verified as invalid/non-existent
+	invalidModels = make(map[string]time.Time)
+	invalidMutex  sync.RWMutex
 )
 
 // DynamicModelInfo represents the minimal info needed to register a dynamic model
@@ -70,13 +74,24 @@ func GetModelsByProviderWithDynamic(provider string) []*Model {
 		var models []*Model
 		for id, model := range dynamicModels {
 			if len(id) > len(provider)+1 && id[:len(provider)+1] == provider+"/" {
-				models = append(models, model)
+				// Skip invalid models
+				if !IsModelInvalid(id) {
+					models = append(models, model)
+				}
 			}
 		}
 		return models
 	}
 	
 	staticModels := cat.GetModelsByProviderWithMapping(provider)
+	
+	// Filter out invalid models from static list
+	var validModels []*Model
+	for _, model := range staticModels {
+		if !IsModelInvalid(model.ID) {
+			validModels = append(validModels, model)
+		}
+	}
 	
 	// Then add dynamic models for this provider
 	dynamicMutex.RLock()
@@ -85,11 +100,14 @@ func GetModelsByProviderWithDynamic(provider string) []*Model {
 	for id, model := range dynamicModels {
 		// Check if this model belongs to the requested provider
 		if len(id) > len(provider)+1 && id[:len(provider)+1] == provider+"/" {
-			staticModels = append(staticModels, model)
+			// Skip invalid models
+			if !IsModelInvalid(id) {
+				validModels = append(validModels, model)
+			}
 		}
 	}
 	
-	return staticModels
+	return validModels
 }
 
 // ClearDynamicModels clears all dynamic models (useful for testing)
@@ -97,4 +115,35 @@ func ClearDynamicModels() {
 	dynamicMutex.Lock()
 	defer dynamicMutex.Unlock()
 	dynamicModels = make(map[string]*Model)
+}
+
+// MarkModelInvalid marks a model as invalid/non-existent
+func MarkModelInvalid(modelID string) {
+	invalidMutex.Lock()
+	defer invalidMutex.Unlock()
+	invalidModels[modelID] = time.Now()
+}
+
+// IsModelInvalid checks if a model has been marked as invalid
+func IsModelInvalid(modelID string) bool {
+	invalidMutex.RLock()
+	defer invalidMutex.RUnlock()
+	
+	invalidTime, exists := invalidModels[modelID]
+	if !exists {
+		return false
+	}
+	
+	// Consider models invalid for 1 hour, then retry
+	if time.Since(invalidTime) > time.Hour {
+		// Remove expired entry
+		invalidMutex.RUnlock()
+		invalidMutex.Lock()
+		delete(invalidModels, modelID)
+		invalidMutex.Unlock()
+		invalidMutex.RLock()
+		return false
+	}
+	
+	return true
 }
