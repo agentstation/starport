@@ -704,6 +704,8 @@ a.btn-icon {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  width: 100%; /* Ensure it doesn't exceed parent width */
+  position: relative; /* For scroll button positioning */
 }
 
 /* ===========================
@@ -780,14 +782,22 @@ a.btn-icon {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px;
+  padding: 16px; /* Padding on all sides for edge spacing */
   min-height: 0; /* Important for flex children with overflow */
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  width: 100%; /* Ensure it doesn't exceed parent width */
+}
+
+/* Messages container with max-width constraint */
+.messages-container {
+  max-width: 64rem; /* 1024px - equivalent to max-w-5xl */
+  margin: 0 auto;
+  width: 100%;
 }
 
 .welcome-message {
   text-align: center;
-  padding: 48px;
+  padding: 48px 0; /* Remove horizontal padding - container handles it */
   color: var(--text-secondary);
 }
 
@@ -806,6 +816,8 @@ a.btn-icon {
   margin-bottom: 24px;
   display: flex;
   gap: 12px;
+  width: 100%;
+  overflow: hidden; /* Prevent content from overflowing */
 }
 
 .message-avatar {
@@ -902,6 +914,8 @@ a.btn-icon {
 .message.user .message-text {
   white-space: pre-line;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .message-text p {
@@ -1375,9 +1389,16 @@ a.btn-icon {
 
 /* Input Container */
 .input-container {
-  padding: 16px;
+  padding: 16px; /* Padding on all sides for edge spacing */
   border-top: 1px solid var(--border-color);
   background-color: var(--bg-secondary);
+}
+
+/* Input container inner wrapper with max-width constraint */
+.input-container-inner {
+  max-width: 64rem; /* 1024px - same as messages container */
+  margin: 0 auto;
+  width: 100%;
 }
 
 .input-wrapper {
@@ -1725,7 +1746,7 @@ a.btn-icon {
 .scroll-to-bottom {
   position: absolute;
   bottom: 120px;
-  right: 20px;
+  right: max(20px, calc((100vw - 64rem) / 2 + 20px)); /* Calculate position based on max-width container */
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -1900,7 +1921,17 @@ grammarly-desktop-integration,
   }
 
   .messages {
-    padding: 12px;
+    padding: 12px 0; /* Keep vertical padding only on mobile */
+  }
+  
+  /* Mobile adjustments - screens smaller than 768px */
+  .messages-container,
+  .input-container-inner {
+    max-width: 100%; /* Full width on mobile */
+  }
+  
+  .scroll-to-bottom {
+    right: 20px; /* Fixed position on mobile */
   }
 
   .modal-content {

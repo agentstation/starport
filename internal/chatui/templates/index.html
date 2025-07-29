@@ -121,49 +121,53 @@
                     <main class="chat-container">
 
                         <div class="messages" id="messages" data-gramm="false">
-                            <div class="welcome-message">
-                                <h2>Welcome to {{.Title}}</h2>
-                                <p>To get started:</p>
-                                <ol>
-                                    <li>Click the settings icon (⚙️) in the header</li>
-                                    {{if .AllowKeyGen}}
-                                    <li>Click "Generate" to create a new API key, or enter an existing one</li>
-                                    {{else}}
-                                    <li>Enter your API key</li>
-                                    {{end}}
-                                    <li>Select a model from the dropdown</li>
-                                    <li>Start chatting!</li>
-                                </ol>
+                            <div class="messages-container">
+                                <div class="welcome-message">
+                                    <h2>Welcome to {{.Title}}</h2>
+                                    <p>To get started:</p>
+                                    <ol>
+                                        <li>Click the settings icon (⚙️) in the header</li>
+                                        {{if .AllowKeyGen}}
+                                        <li>Click "Generate" to create a new API key, or enter an existing one</li>
+                                        {{else}}
+                                        <li>Enter your API key</li>
+                                        {{end}}
+                                        <li>Select a model from the dropdown</li>
+                                        <li>Start chatting!</li>
+                                    </ol>
+                                </div>
                             </div>
                         </div>
 
                         <div class="input-container">
-                            <div class="input-wrapper">
-                                <textarea 
-                                    id="message-input" 
-                                    class="message-input" 
-                                    placeholder="Type your message..."
-                                    rows="1"
-                                    data-gramm="false"
-                                ></textarea>
-                                <button id="send-btn" class="btn btn-primary send-btn" disabled>
-                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                                    </svg>
-                                </button>
-                                <button id="stop-btn" class="btn btn-danger send-btn hidden">
-                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="6" y="6" width="12" height="12"></rect>
-                                    </svg>
-                                </button>
-                            </div>
-                            <div class="input-info">
-                                <span id="token-count">Tokens: 0</span>
-                                <span class="attribution">
-                                    made by <a href="https://agentstation.ai" target="_blank" rel="noopener noreferrer">agentstation.ai</a> with <span class="heart">❤️</span>
-                                </span>
-                                <span id="cost-estimate">Cost: $0.00</span>
+                            <div class="input-container-inner">
+                                <div class="input-wrapper">
+                                    <textarea 
+                                        id="message-input" 
+                                        class="message-input" 
+                                        placeholder="Type your message..."
+                                        rows="1"
+                                        data-gramm="false"
+                                    ></textarea>
+                                    <button id="send-btn" class="btn btn-primary send-btn" disabled>
+                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                        </svg>
+                                    </button>
+                                    <button id="stop-btn" class="btn btn-danger send-btn hidden">
+                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="6" y="6" width="12" height="12"></rect>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="input-info">
+                                    <span id="token-count">Tokens: 0</span>
+                                    <span class="attribution">
+                                        made by <a href="https://agentstation.ai" target="_blank" rel="noopener noreferrer">agentstation.ai</a> with <span class="heart">❤️</span>
+                                    </span>
+                                    <span id="cost-estimate">Cost: $0.00</span>
+                                </div>
                             </div>
                         </div>
                     </main>

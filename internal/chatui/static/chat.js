@@ -839,7 +839,17 @@
       assistantMessage,
       chat.messages.length - 1
     );
-    elements.messages.appendChild(messageEl);
+    
+    // Get or create the messages container
+    let container = elements.messages.querySelector('.messages-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'messages-container';
+      elements.messages.innerHTML = '';
+      elements.messages.appendChild(container);
+    }
+    
+    container.appendChild(messageEl);
 
     // Scroll to bottom if auto-scroll is enabled
     if (state.autoScroll) {
@@ -1408,10 +1418,20 @@
     const chat = state.chats[state.currentChatId];
     if (!chat) return;
 
-    elements.messages.innerHTML = "";
+    // Get or create the messages container
+    let container = elements.messages.querySelector('.messages-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'messages-container';
+      elements.messages.innerHTML = '';
+      elements.messages.appendChild(container);
+    }
+
+    // Clear the container content
+    container.innerHTML = "";
 
     if (chat.messages.length === 0) {
-      elements.messages.innerHTML = `
+      container.innerHTML = `
                 <div class="welcome-message">
                     <h2>Welcome to ${escapeHtml(
                       config.title || "Starport Chat"
@@ -1424,7 +1444,7 @@
 
     chat.messages.forEach((message, index) => {
       const messageEl = createMessageElement(message, index);
-      elements.messages.appendChild(messageEl);
+      container.appendChild(messageEl);
     });
 
     // Render math in all messages
@@ -2974,7 +2994,17 @@
         newAssistantMessage,
         chat.messages.length - 1
       );
-      elements.messages.appendChild(messageEl);
+      
+      // Get or create the messages container
+      let container = elements.messages.querySelector('.messages-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.className = 'messages-container';
+        elements.messages.innerHTML = '';
+        elements.messages.appendChild(container);
+      }
+      
+      container.appendChild(messageEl);
 
       // Scroll to bottom if auto-scroll is enabled
       if (state.autoScroll) {
