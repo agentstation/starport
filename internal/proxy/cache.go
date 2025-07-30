@@ -63,7 +63,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		Bool("stream", req.Stream).
 		Bool("cache_enabled", s.cacheConfig.EnableChatCache).
 		Msg("CachedService.ProcessChatCompletion called")
-	
+
 	// Skip cache for streaming requests or if caching is disabled
 	if req.Stream || !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Model) {
 		return s.service.ProcessChatCompletion(ctx, req)
@@ -89,13 +89,13 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 			Str("model", req.Model).
 			Str("cache_key", cacheKey).
 			Msg("cache hit for chat completion")
-		
+
 		// Calculate cache age
 		cacheAge := 0
 		if cachedResp.CachedAt > 0 {
 			cacheAge = int(time.Now().Unix() - cachedResp.CachedAt)
 		}
-		
+
 		// Convert cache.ChatCompletionResponse to proxy.ChatCompletionResponse
 		resp := &ChatCompletionResponse{
 			ID:                cachedResp.ID,
@@ -107,7 +107,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 			CacheStatus:       CacheStatusHit,
 			CacheAge:          cacheAge,
 		}
-		
+
 		// Copy choices and usage from cached response with all fields
 		resp.Choices = make([]connectors.Choice, len(cachedResp.Choices))
 		for i, choice := range cachedResp.Choices {
@@ -126,7 +126,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 			}
 		}
 		resp.Usage = cachedResp.Usage
-		
+
 		return resp, nil
 	}
 
@@ -158,7 +158,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		// Convert proxy response to cache response
 		cacheResp := &cache.ChatCompletionResponse{
 			ID:                resp.ID,
@@ -171,7 +171,7 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 			ModelUsed:         resp.ModelUsed,
 			CachedAt:          time.Now().Unix(),
 		}
-		
+
 		if err := s.cacheManager.SetChatCompletion(cacheCtx, cacheKey, cacheResp); err != nil {
 			log.Warn().Err(err).Str("key", cacheKey).Msg("failed to cache response")
 		}
@@ -226,7 +226,7 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 			Str("model", req.Model).
 			Str("cache_key", cacheKey).
 			Msg("cache hit for streaming chat completion")
-		
+
 		// Convert cached response to streaming response
 		return newCachedStreamResponse(cachedResp, req.Model, CacheStatusHit), nil
 	}
@@ -281,7 +281,7 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 		log.Debug().
 			Str("model", req.Model).
 			Msg("cache hit for embedding")
-		
+
 		// Convert cache.EmbeddingsResponse to proxy.EmbeddingsResponse
 		resp := &EmbeddingsResponse{
 			Object:      cachedResp.Object,
@@ -289,7 +289,7 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 			CacheStatus: CacheStatusHit,
 			CacheAge:    0, // TODO: Calculate actual cache age
 		}
-		
+
 		// Copy data and usage from cached response
 		resp.Data = cachedResp.Data
 		resp.Usage = cachedResp.Usage
@@ -308,7 +308,7 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		// Convert proxy response to cache response
 		cacheResp := &cache.EmbeddingsResponse{
 			Object: resp.Object,
@@ -316,7 +316,7 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 			Model:  resp.Model,
 			Usage:  resp.Usage,
 		}
-		
+
 		if err := s.cacheManager.SetEmbedding(cacheCtx, cacheKey, cacheResp); err != nil {
 			log.Warn().Err(err).Str("key", cacheKey).Msg("failed to cache embeddings")
 		}
@@ -344,7 +344,7 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 				log.Warn().Err(err).Msg("failed to marshal cached data")
 				return fetchFunc()
 			}
-			
+
 			// Determine the type based on cache key and unmarshal
 			switch cacheKey {
 			case "models:list":
@@ -365,7 +365,7 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 				return &resp, nil
 			}
 		}
-		
+
 		// If it's already the correct type (shouldn't happen with current cache implementation)
 		switch v := cached.(type) {
 		case *ModelsResponse:
@@ -375,7 +375,7 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 			v.CacheStatus = CacheStatusHit
 			return v, nil
 		}
-		
+
 		// If we can't handle the cached data, fetch fresh
 		log.Warn().Msgf("unexpected cache type for %s: %T", cacheKey, cached)
 		return fetchFunc()
@@ -399,7 +399,7 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		if err := s.cacheManager.SetModel(cacheCtx, cacheKey, resp); err != nil {
 			log.Warn().Err(err).Msgf("failed to cache %s", cacheMsg)
 		}
@@ -414,7 +414,7 @@ func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error)
 		return s.service.ListModels(ctx)
 	}
 
-	resp, err := s.cacheListResponse(ctx, "models:list", "models", 
+	resp, err := s.cacheListResponse(ctx, "models:list", "models",
 		func() (interface{}, error) { return s.service.ListModels(ctx) })
 	if err != nil {
 		return nil, err
@@ -466,7 +466,7 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		if err := s.cacheManager.SetModel(cacheCtx, cacheKey, resp); err != nil {
 			log.Warn().Err(err).Msg("failed to cache model endpoints")
 		}
@@ -593,13 +593,13 @@ func newCachedStreamResponse(response *cache.ChatCompletionResponse, modelID, ca
 		content, _ = response.Choices[0].Message.Content.(string)
 		reasoning = response.Choices[0].Message.Reasoning
 	}
-	
+
 	// Calculate cache age
 	cacheAge := 0
 	if response.CachedAt > 0 {
 		cacheAge = int(time.Now().Unix() - response.CachedAt)
 	}
-	
+
 	return &cachedStreamResponse{
 		response:          response,
 		modelID:           modelID,
@@ -619,7 +619,7 @@ func (r *cachedStreamResponse) Read() (*connectors.ChatStreamChunk, error) {
 	if r.sentUsage {
 		return nil, io.EOF
 	}
-	
+
 	// If we're done with both reasoning and content, send usage data
 	if r.sentRole && r.reasoningPosition >= len(r.reasoning) && r.contentPosition >= len(r.content) && !r.sentUsage {
 		r.sentUsage = true
@@ -761,12 +761,12 @@ func newCachingStreamWrapper(ctx context.Context, stream ChatCompletionStreamRes
 // Read implements ChatCompletionStreamResponse
 func (w *cachingStreamWrapper) Read() (*connectors.ChatStreamChunk, error) {
 	chunk, err := w.stream.Read()
-	
+
 	// Store chunk even if it comes with EOF (final chunk often has usage data)
 	if chunk != nil {
 		w.chunks = append(w.chunks, *chunk)
 	}
-	
+
 	if err != nil {
 		if err == io.EOF && len(w.chunks) > 0 {
 			// Stream completed, cache the accumulated response
@@ -814,11 +814,11 @@ func (w *cachingStreamWrapper) cacheResponse() {
 		ModelUsed:         response.ModelUsed,
 		CachedAt:          time.Now().Unix(),
 	}
-	
+
 	// Use a new context with timeout for caching
 	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	// Cache the response
 	if err := w.cacheManager.SetChatCompletion(cacheCtx, w.cacheKey, cacheResp); err != nil {
 		log.Warn().
@@ -841,7 +841,7 @@ func (w *cachingStreamWrapper) reconstructResponse() *ChatCompletionResponse {
 
 	// Get basic info from first chunk
 	firstChunk := w.chunks[0]
-	
+
 	// Find the last chunk with usage data
 	var usage *connectors.Usage
 	for i := len(w.chunks) - 1; i >= 0; i-- {
@@ -877,7 +877,7 @@ func (w *cachingStreamWrapper) reconstructResponse() *ChatCompletionResponse {
 	if len(w.chunks) > 0 && w.chunks[0].Model != "" {
 		modelUsed = w.chunks[0].Model
 	}
-	
+
 	// Build the complete response
 	return &ChatCompletionResponse{
 		ID:        firstChunk.ID,

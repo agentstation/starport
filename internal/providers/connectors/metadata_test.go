@@ -250,4 +250,3 @@ func TestGetProvidersForModel(t *testing.T) {
 		})
 	}
 }
-

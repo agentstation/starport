@@ -20,7 +20,7 @@ func BenchmarkProxyHandler(b *testing.B) {
 	}
 
 	reg := registry.NewEmpty()
-	
+
 	// Add mock connector
 	mockConfig := connectors.ProviderConfig{
 		BaseURL: "http://mock",

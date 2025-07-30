@@ -104,8 +104,8 @@ func TestModel_CalculateCost(t *testing.T) {
 			name: "standard pricing",
 			model: models.Model{
 				Pricing: &models.Pricing{
-					Prompt:     "0.00001",    // $0.00001 per token = $0.01 per 1K tokens = $10 per million
-					Completion: "0.00003",    // $0.00003 per token = $0.03 per 1K tokens = $30 per million
+					Prompt:     "0.00001", // $0.00001 per token = $0.01 per 1K tokens = $10 per million
+					Completion: "0.00003", // $0.00003 per token = $0.03 per 1K tokens = $30 per million
 				},
 			},
 			inputTokens:  1000,
@@ -128,8 +128,8 @@ func TestModel_CalculateCost(t *testing.T) {
 			name: "large token count",
 			model: models.Model{
 				Pricing: &models.Pricing{
-					Prompt:     "0.000002",  // $0.000002 per token = $0.002 per 1K tokens = $2 per million
-					Completion: "0.000006",  // $0.000006 per token = $0.006 per 1K tokens = $6 per million
+					Prompt:     "0.000002", // $0.000002 per token = $0.002 per 1K tokens = $2 per million
+					Completion: "0.000006", // $0.000006 per token = $0.006 per 1K tokens = $6 per million
 				},
 			},
 			inputTokens:  100000,
@@ -151,15 +151,15 @@ func TestModel_CalculateCost(t *testing.T) {
 
 func TestModel_Clone(t *testing.T) {
 	original := &models.Model{
-		ID:              "test-model",
-		Name:            "Test Model",
-		Provider:        "test-provider",
-		ContextLength:   4096,
+		ID:            "test-model",
+		Name:          "Test Model",
+		Provider:      "test-provider",
+		ContextLength: 4096,
 		Architecture: &models.Architecture{
 			InputModalities:  []string{"text", "image"},
 			OutputModalities: []string{"text"},
-			Tokenizer:       "GPT",
-			InstructType:    "chatml",
+			Tokenizer:        "GPT",
+			InstructType:     "chatml",
 		},
 		Pricing: &models.Pricing{
 			Prompt:     "0.00001",
@@ -175,12 +175,12 @@ func TestModel_Clone(t *testing.T) {
 			"rpm": 100,
 			"tpm": 100000,
 		},
-		Deprecated:      false,
-		DeprecatedAt:    time.Now(),
-		ReplacedBy:      "new-model",
-		Tags:            []string{"latest", "stable"},
-		Created:         time.Now().Unix(),
-		UpdatedAt:       time.Now(),
+		Deprecated:   false,
+		DeprecatedAt: time.Now(),
+		ReplacedBy:   "new-model",
+		Tags:         []string{"latest", "stable"},
+		Created:      time.Now().Unix(),
+		UpdatedAt:    time.Now(),
 	}
 
 	clone := original.Clone()
@@ -255,14 +255,14 @@ func TestModel_Validation(t *testing.T) {
 		{
 			name: "valid model",
 			model: models.Model{
-				ID:              "valid-model",
+				ID: "valid-model",
 				Architecture: &models.Architecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-		},
-				Name:            "Valid Model",
-				Provider:        "test-provider",
-				ContextLength:   4096,
+					InputModalities:  []string{"text"},
+					OutputModalities: []string{"text"},
+				},
+				Name:          "Valid Model",
+				Provider:      "test-provider",
+				ContextLength: 4096,
 			},
 			wantErr: false,
 		},
@@ -270,12 +270,12 @@ func TestModel_Validation(t *testing.T) {
 			name: "missing ID",
 			model: models.Model{
 				Architecture: &models.Architecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-		},
-				Name:            "Missing ID",
-				Provider:        "test-provider",
-				ContextLength:   4096,
+					InputModalities:  []string{"text"},
+					OutputModalities: []string{"text"},
+				},
+				Name:          "Missing ID",
+				Provider:      "test-provider",
+				ContextLength: 4096,
 			},
 			wantErr: true,
 			errMsg:  "ID is required",
@@ -283,10 +283,10 @@ func TestModel_Validation(t *testing.T) {
 		{
 			name: "missing architecture",
 			model: models.Model{
-				ID:              "missing-architecture",
-				Name:            "Missing Architecture",
-				Provider:        "test-provider",
-				ContextLength:   4096,
+				ID:            "missing-architecture",
+				Name:          "Missing Architecture",
+				Provider:      "test-provider",
+				ContextLength: 4096,
 			},
 			wantErr: true,
 			errMsg:  "Architecture is required",
@@ -294,14 +294,14 @@ func TestModel_Validation(t *testing.T) {
 		{
 			name: "negative context length",
 			model: models.Model{
-				ID:              "negative-context",
+				ID: "negative-context",
 				Architecture: &models.Architecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-		},
-				Name:            "Negative Context",
-				Provider:        "test-provider",
-				ContextLength:   -1,
+					InputModalities:  []string{"text"},
+					OutputModalities: []string{"text"},
+				},
+				Name:          "Negative Context",
+				Provider:      "test-provider",
+				ContextLength: -1,
 			},
 			wantErr: true,
 			errMsg:  "ContextLength must be positive",
@@ -309,10 +309,10 @@ func TestModel_Validation(t *testing.T) {
 		{
 			name: "valid with architecture only",
 			model: models.Model{
-				ID:              "arch-only",
-				Name:            "Architecture Only",
-				Provider:        "test-provider",
-				ContextLength:   4096,
+				ID:            "arch-only",
+				Name:          "Architecture Only",
+				Provider:      "test-provider",
+				ContextLength: 4096,
 				Architecture: &models.Architecture{
 					InputModalities:  []string{"text"},
 					OutputModalities: []string{"text"},
@@ -323,14 +323,14 @@ func TestModel_Validation(t *testing.T) {
 		{
 			name: "invalid pricing",
 			model: models.Model{
-				ID:              "invalid-pricing",
+				ID: "invalid-pricing",
 				Architecture: &models.Architecture{
-			InputModalities:  []string{"text"},
-			OutputModalities: []string{"text"},
-		},
-				Name:            "Invalid Pricing",
-				Provider:        "test-provider",
-				ContextLength:   4096,
+					InputModalities:  []string{"text"},
+					OutputModalities: []string{"text"},
+				},
+				Name:          "Invalid Pricing",
+				Provider:      "test-provider",
+				ContextLength: 4096,
 				Pricing: &models.Pricing{
 					Prompt:     "invalid",
 					Completion: "0.00003",
@@ -353,7 +353,6 @@ func TestModel_Validation(t *testing.T) {
 		})
 	}
 }
-
 
 func TestModel_ToOpenAI(t *testing.T) {
 	tests := []struct {
@@ -438,12 +437,12 @@ func TestModel_ToOpenAI(t *testing.T) {
 
 func TestModel_ToOpenRouter(t *testing.T) {
 	model := &models.Model{
-		ID:              "test-model",
+		ID: "test-model",
 		Architecture: &models.Architecture{
 			InputModalities:  []string{"text"},
 			OutputModalities: []string{"text"},
 		},
-		ContextLength:   4096,
+		ContextLength:       4096,
 		SupportedParameters: []string{"tools", "json_mode"},
 	}
 
@@ -487,8 +486,8 @@ func TestModel_GetInputCost(t *testing.T) {
 			expected: 0.01,
 		},
 		{
-			name: "no pricing",
-			model: models.Model{},
+			name:     "no pricing",
+			model:    models.Model{},
 			expected: 0,
 		},
 		{
@@ -537,8 +536,8 @@ func TestModel_HasVisionSupport(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "no architecture or flag",
-			model: models.Model{},
+			name:     "no architecture or flag",
+			model:    models.Model{},
 			expected: false,
 		},
 	}

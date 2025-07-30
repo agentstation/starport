@@ -280,11 +280,11 @@ func validateMessageCacheControl(content connectors.MessageContent, fieldPath st
 // ProviderSupportsCacheControl returns true if the provider supports cache_control
 func ProviderSupportsCacheControl(provider string) bool {
 	supportedProviders := map[string]bool{
-		"openai":     true,
-		"anthropic":  true,
-		"grok":       true,
-		"groq":       true,  // Assuming Groq is Grok
-		"deepseek":   true,
+		"openai":    true,
+		"anthropic": true,
+		"grok":      true,
+		"groq":      true, // Assuming Groq is Grok
+		"deepseek":  true,
 		// Google providers use implicit caching, not cache_control
 		"google":           false,
 		"google-ai-studio": false,
@@ -295,7 +295,7 @@ func ProviderSupportsCacheControl(provider string) bool {
 		"azure":        true, // Azure OpenAI should support it
 		"azure-openai": true,
 	}
-	
+
 	return supportedProviders[provider]
 }
 
@@ -315,7 +315,7 @@ func ValidateCacheControlForProvider(provider string, messages []connectors.Mess
 				}
 			}
 		}
-		
+
 		if breakpoints > 4 {
 			return &ValidationError{
 				Field:   "messages",
@@ -323,6 +323,6 @@ func ValidateCacheControlForProvider(provider string, messages []connectors.Mess
 			}
 		}
 	}
-	
+
 	return nil
 }

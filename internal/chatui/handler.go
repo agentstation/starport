@@ -66,7 +66,7 @@ func (h *Handler) Index(w http.ResponseWriter, _ *http.Request) {
 	// Override CSP for ChatUI to allow inline scripts and CDN resources for markdown/syntax highlighting
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self'; frame-ancestors 'none';")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	
+
 	data := struct {
 		Title       string
 		Theme       string
@@ -88,7 +88,7 @@ func (h *Handler) Index(w http.ResponseWriter, _ *http.Request) {
 // Static serves static assets.
 func (h *Handler) Static(w http.ResponseWriter, r *http.Request) {
 	path := chi.URLParam(r, "*")
-	
+
 	var content string
 	var contentType string
 
@@ -106,7 +106,7 @@ func (h *Handler) Static(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	
+
 	if _, err := w.Write([]byte(content)); err != nil {
 		h.logger.Error().Err(err).Msg("failed to write static content")
 	}
@@ -129,7 +129,7 @@ func (h *Handler) GenerateKey(w http.ResponseWriter, r *http.Request) {
 
 	// Generate UUID for the key
 	keyUUID := uuid.New().String()
-	
+
 	// Create API key using uuidkey with STARPORT prefix
 	apiKeyObj, err := uuidkey.NewAPIKey("STARPORT", keyUUID)
 	if err != nil {
@@ -137,13 +137,13 @@ func (h *Handler) GenerateKey(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to generate API key", http.StatusInternalServerError)
 		return
 	}
-	
+
 	// The actual key value (only shown once)
 	keyValue := apiKeyObj.String()
-	
+
 	// Use the prefix_key format as the ID (without entropy for storage key)
 	keyID := fmt.Sprintf("%s_%s", apiKeyObj.Prefix, apiKeyObj.Key)
-	
+
 	// Hash the full key value for storage
 	hash := sha256.Sum256([]byte(keyValue))
 	hashStr := hex.EncodeToString(hash[:])
@@ -214,13 +214,13 @@ func (h *Handler) GenerateKey(w http.ResponseWriter, r *http.Request) {
 // Routes returns a chi router with all ChatUI routes.
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
-	
+
 	r.Get("/", h.Index)
 	r.Get("/static/*", h.Static)
-	
+
 	if h.config.AllowKeyGen {
 		r.Post("/generate-key", h.GenerateKey)
 	}
-	
+
 	return r
 }

@@ -9,7 +9,7 @@ var (
 	// dynamicModels stores models discovered at runtime (e.g., from Ollama)
 	dynamicModels = make(map[string]*Model)
 	dynamicMutex  sync.RWMutex
-	
+
 	// invalidModels tracks models that have been verified as invalid/non-existent
 	invalidModels = make(map[string]time.Time)
 	invalidMutex  sync.RWMutex
@@ -32,7 +32,7 @@ func RegisterDynamicModel(_ string, modelInfo DynamicModelInfo) error {
 		ID:            modelInfo.ID,
 		Name:          modelInfo.ID, // Use ID as name for dynamic models
 		Created:       modelInfo.Created,
-		ContextLength: 4096,     // Default context length for Ollama models
+		ContextLength: 4096, // Default context length for Ollama models
 		// Add minimal pricing info (Ollama is free/local)
 		Pricing: &Pricing{
 			Prompt:     "0",
@@ -70,7 +70,7 @@ func GetModelsByProviderWithDynamic(provider string) []*Model {
 		// If catalog fails, just return dynamic models
 		dynamicMutex.RLock()
 		defer dynamicMutex.RUnlock()
-		
+
 		var models []*Model
 		for id, model := range dynamicModels {
 			if len(id) > len(provider)+1 && id[:len(provider)+1] == provider+"/" {
@@ -82,9 +82,9 @@ func GetModelsByProviderWithDynamic(provider string) []*Model {
 		}
 		return models
 	}
-	
+
 	staticModels := cat.GetModelsByProviderWithMapping(provider)
-	
+
 	// Filter out invalid models from static list
 	var validModels []*Model
 	for _, model := range staticModels {
@@ -92,11 +92,11 @@ func GetModelsByProviderWithDynamic(provider string) []*Model {
 			validModels = append(validModels, model)
 		}
 	}
-	
+
 	// Then add dynamic models for this provider
 	dynamicMutex.RLock()
 	defer dynamicMutex.RUnlock()
-	
+
 	for id, model := range dynamicModels {
 		// Check if this model belongs to the requested provider
 		if len(id) > len(provider)+1 && id[:len(provider)+1] == provider+"/" {
@@ -106,7 +106,7 @@ func GetModelsByProviderWithDynamic(provider string) []*Model {
 			}
 		}
 	}
-	
+
 	return validModels
 }
 
@@ -128,12 +128,12 @@ func MarkModelInvalid(modelID string) {
 func IsModelInvalid(modelID string) bool {
 	invalidMutex.RLock()
 	defer invalidMutex.RUnlock()
-	
+
 	invalidTime, exists := invalidModels[modelID]
 	if !exists {
 		return false
 	}
-	
+
 	// Consider models invalid for 1 hour, then retry
 	if time.Since(invalidTime) > time.Hour {
 		// Remove expired entry
@@ -144,6 +144,6 @@ func IsModelInvalid(modelID string) bool {
 		invalidMutex.RLock()
 		return false
 	}
-	
+
 	return true
 }

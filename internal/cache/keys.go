@@ -200,9 +200,9 @@ type ChatCompletionResponse struct {
 	Usage             *connectors.Usage   `json:"usage,omitempty"`
 	SystemFingerprint string              `json:"system_fingerprint,omitempty"`
 	ModelUsed         string              `json:"model_used,omitempty"`
-	
+
 	// Cache metadata (not part of the API response)
-	CachedAt          int64       `json:"cached_at,omitempty"`
+	CachedAt int64 `json:"cached_at,omitempty"`
 }
 
 // EmbeddingsResponse represents a cached embeddings response
@@ -211,7 +211,7 @@ type EmbeddingsResponse struct {
 	Data   []connectors.Embedding `json:"data"`
 	Model  string                 `json:"model"`
 	Usage  *connectors.Usage      `json:"usage"`
-	
+
 	// Cache metadata (not part of the API response)
-	CachedAt int64      `json:"cached_at,omitempty"`
+	CachedAt int64 `json:"cached_at,omitempty"`
 }

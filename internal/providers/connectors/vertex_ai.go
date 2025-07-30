@@ -406,60 +406,60 @@ func (c *VertexAIConnector) handleError(resp *http.Response) error {
 // chatWithFailover tries to complete a chat request using fallback locations
 func (c *VertexAIConnector) chatWithFailover(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	var lastErr error
-	
+
 	// Try each fallback location
 	for i, fallbackLocation := range c.fallbackLocations {
 		// Update the base URL to use the fallback location
 		oldBaseURL := c.config.BaseURL
 		c.config.BaseURL = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s",
 			fallbackLocation, c.projectID, fallbackLocation)
-		
+
 		resp, err := c.googleBaseConnector.Chat(ctx, req, c.getEndpoint, c.setHeaders)
 		if err == nil {
 			// Success! Update current location for future requests
 			c.currentLocation = i + 1 // +1 because 0 is the primary location
 			return resp, nil
 		}
-		
+
 		lastErr = err
 		c.config.BaseURL = oldBaseURL
-		
+
 		// If it's not a retryable error, stop trying
 		if !c.isRetryableError(err) {
 			return nil, err
 		}
 	}
-	
+
 	return nil, fmt.Errorf("all locations failed, last error: %w", lastErr)
 }
 
 // chatStreamWithFailover tries to complete a streaming request using fallback locations
 func (c *VertexAIConnector) chatStreamWithFailover(ctx context.Context, req *ChatRequest) (ChatStream, error) {
 	var lastErr error
-	
+
 	// Try each fallback location
 	for i, fallbackLocation := range c.fallbackLocations {
 		// Update the base URL to use the fallback location
 		oldBaseURL := c.config.BaseURL
 		c.config.BaseURL = fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s",
 			fallbackLocation, c.projectID, fallbackLocation)
-		
+
 		stream, err := c.googleBaseConnector.ChatStream(ctx, req, c.getEndpoint, c.setHeaders)
 		if err == nil {
 			// Success! Update current location for future requests
 			c.currentLocation = i + 1 // +1 because 0 is the primary location
 			return stream, nil
 		}
-		
+
 		lastErr = err
 		c.config.BaseURL = oldBaseURL
-		
+
 		// If it's not a retryable error, stop trying
 		if !c.isRetryableError(err) {
 			return nil, err
 		}
 	}
-	
+
 	return nil, fmt.Errorf("all locations failed, last error: %w", lastErr)
 }
 
@@ -468,14 +468,14 @@ func (c *VertexAIConnector) isRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	// Check if it's an API error
 	apiErr, ok := err.(*APIError)
 	if !ok {
 		// Network errors are retryable
 		return true
 	}
-	
+
 	// Retry on server errors and rate limits
 	switch apiErr.StatusCode {
 	case 429, 500, 502, 503, 504:
@@ -493,27 +493,27 @@ func getDefaultFallbackLocations(primaryLocation string) []string {
 		"us-east4":    {"us-central1", "us-west1", "us-west4"},
 		"us-west1":    {"us-west4", "us-central1", "us-east4"},
 		"us-west4":    {"us-west1", "us-central1", "us-east4"},
-		
+
 		// Europe regions
-		"europe-west1": {"europe-west4", "europe-west2", "europe-north1"},
-		"europe-west2": {"europe-west1", "europe-west4", "europe-north1"},
-		"europe-west4": {"europe-west1", "europe-west2", "europe-north1"},
+		"europe-west1":  {"europe-west4", "europe-west2", "europe-north1"},
+		"europe-west2":  {"europe-west1", "europe-west4", "europe-north1"},
+		"europe-west4":  {"europe-west1", "europe-west2", "europe-north1"},
 		"europe-north1": {"europe-west4", "europe-west1", "europe-west2"},
-		
+
 		// Asia regions
 		"asia-southeast1": {"asia-northeast1", "asia-east1", "asia-south1"},
 		"asia-northeast1": {"asia-southeast1", "asia-east1", "asia-south1"},
 		"asia-east1":      {"asia-southeast1", "asia-northeast1", "asia-south1"},
 		"asia-south1":     {"asia-southeast1", "asia-northeast1", "asia-east1"},
-		
+
 		// Cross-region fallbacks (if primary region group is down)
 		"global": {"us-central1", "europe-west1", "asia-southeast1"},
 	}
-	
+
 	if fallbacks, ok := fallbackMap[primaryLocation]; ok {
 		return fallbacks
 	}
-	
+
 	// Default fallback order if location not in map
 	return []string{"us-central1", "europe-west4", "asia-southeast1"}
 }

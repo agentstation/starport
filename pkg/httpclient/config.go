@@ -21,9 +21,9 @@ type Config struct {
 	RequestTimeout        time.Duration // Overall timeout for entire request
 
 	// Feature flags
-	EnableHTTP2        bool // Enable HTTP/2 support
-	EnableCompression  bool // Enable transparent compression
-	EnableKeepAlives   bool // Enable connection keep-alive
+	EnableHTTP2       bool // Enable HTTP/2 support
+	EnableCompression bool // Enable transparent compression
+	EnableKeepAlives  bool // Enable connection keep-alive
 
 	// Monitoring and observability
 	MetricsCollector MetricsCollector // Optional metrics collector
@@ -50,9 +50,9 @@ type TransportWrapper func(transport RoundTripper) RoundTripper
 func DefaultConfig() Config {
 	return Config{
 		// Connection pool settings optimized for gateway
-		MaxIdleConns:        500,  // Total across all hosts
-		MaxIdleConnsPerHost: 50,   // Per provider endpoint
-		MaxConnsPerHost:     200,  // Allow bursts per provider
+		MaxIdleConns:        500, // Total across all hosts
+		MaxIdleConnsPerHost: 50,  // Per provider endpoint
+		MaxConnsPerHost:     200, // Allow bursts per provider
 		IdleConnTimeout:     90 * time.Second,
 
 		// Timeouts suitable for LLM providers
@@ -63,9 +63,9 @@ func DefaultConfig() Config {
 		RequestTimeout:        5 * time.Minute, // Long timeout for streaming
 
 		// Features
-		EnableHTTP2:       true,  // Critical for multiplexing
-		EnableCompression: true,  // Let provider decide
-		EnableKeepAlives:  true,  // Reuse connections
+		EnableHTTP2:       true, // Critical for multiplexing
+		EnableCompression: true, // Let provider decide
+		EnableKeepAlives:  true, // Reuse connections
 
 		// Circuit breaker defaults
 		EnableCircuitBreaker: true,

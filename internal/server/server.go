@@ -55,11 +55,11 @@ func WithCache(cm *cache.Manager) Option {
 			EnableProviderCache:  true,
 			CacheControlHeader:   "X-Cache-Control",
 		}
-		
+
 		// Get registry and router from the server
 		reg := s.registry
 		router := routing.NewRouter(newRegistryAdapter(reg))
-		
+
 		// Create new proxy service with cache
 		s.service = proxy.New(reg, router, proxy.WithCache(cm, cacheConfig))
 		log.Info().Msg("cache manager option applied - proxy service created with caching enabled")
@@ -103,7 +103,7 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 
 	// Create handler collection with ChatUI config
 	handlerConfig := handlers.Config{
-		Service:       s.service,  // Use s.service which may be wrapped with cache
+		Service:       s.service, // Use s.service which may be wrapped with cache
 		KeyManager:    keyManager,
 		Store:         store,
 		ServiceName:   "starport",

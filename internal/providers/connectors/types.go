@@ -352,7 +352,7 @@ func HasCacheControl(content MessageContent) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	for _, part := range parts {
 		if part.CacheControl != nil {
 			return true
@@ -367,12 +367,12 @@ func StripCacheControl(content MessageContent) (MessageContent, error) {
 	if err != nil {
 		return content, err
 	}
-	
+
 	// If it was a string, return as-is
 	if _, ok := content.(string); ok {
 		return content, nil
 	}
-	
+
 	// Remove cache control from parts
 	cleanParts := make([]ContentPart, len(parts))
 	for i, part := range parts {
@@ -380,6 +380,6 @@ func StripCacheControl(content MessageContent) (MessageContent, error) {
 		cleanPart.CacheControl = nil
 		cleanParts[i] = cleanPart
 	}
-	
+
 	return cleanParts, nil
 }

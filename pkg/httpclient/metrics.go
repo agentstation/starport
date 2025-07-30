@@ -78,17 +78,16 @@ func extractPath(req *http.Request) string {
 	if req.URL == nil {
 		return "unknown"
 	}
-	
+
 	// For LLM providers, we typically want to track the API endpoint
 	// e.g., "/v1/chat/completions" or "/v1/embeddings"
 	path := req.URL.Path
 	if path == "" {
 		path = "/"
 	}
-	
+
 	return path
 }
-
 
 // isRetryableStatusCode determines if a status code indicates a retryable error
 func isRetryableStatusCode(code int) bool {

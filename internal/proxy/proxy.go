@@ -22,16 +22,16 @@ import (
 type Config struct {
 	// Registry provides access to LLM provider connectors
 	Registry *registry.Registry
-	
+
 	// Router handles intelligent model selection and failover
 	Router routing.ModelRouter
-	
+
 	// CacheManager handles response caching (optional)
 	CacheManager *cache.Manager
-	
+
 	// CacheConfig configures caching behavior (optional)
 	CacheConfig *CacheConfig
-	
+
 	// Middlewares to apply to the proxy service
 	Middlewares []Middleware
 }
@@ -70,12 +70,12 @@ func WithMiddleware(m Middleware) Option {
 //
 //	// Basic proxy
 //	proxy := proxy.New(registry, router)
-//	
+//
 //	// Proxy with caching
 //	proxy := proxy.New(registry, router,
 //	    proxy.WithCache(cacheManager, cacheConfig),
 //	)
-//	
+//
 //	// Proxy with custom middleware
 //	proxy := proxy.New(registry, router,
 //	    proxy.WithMiddleware(loggingMiddleware),
@@ -87,33 +87,33 @@ func New(registry *registry.Registry, router routing.ModelRouter, opts ...Option
 		Registry: registry,
 		Router:   router,
 	}
-	
+
 	// Apply options
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	
+
 	// Create the core proxy implementation
 	core := &proxy{
 		registry: cfg.Registry,
 		router:   cfg.Router,
 	}
-	
+
 	// Build the proxy with middleware chain
 	var p Proxy = core
-	
+
 	// Apply custom middlewares in reverse order so the first middleware
 	// added is the outermost (called first)
 	for i := len(cfg.Middlewares) - 1; i >= 0; i-- {
 		p = cfg.Middlewares[i].Wrap(p)
 	}
-	
+
 	// Add cache middleware if configured
 	if cfg.CacheManager != nil && cfg.CacheConfig != nil {
 		cacheMiddleware := NewCacheMiddleware(cfg.CacheManager, cfg.CacheConfig)
 		p = cacheMiddleware.Wrap(p)
 	}
-	
+
 	return p
 }
 
@@ -123,7 +123,7 @@ func NewFromConfig(config *Config) Proxy {
 	if config.Registry == nil || config.Router == nil {
 		panic("proxy: Registry and Router are required")
 	}
-	
+
 	return New(config.Registry, config.Router,
 		WithCache(config.CacheManager, config.CacheConfig),
 		func(c *Config) {
@@ -147,7 +147,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	// Transform to connector request
 	connReq := TransformChatRequest(req)
-	
+
 	// Check if request has cache control
 	hasCacheControl := false
 	for _, msg := range connReq.Messages {
@@ -245,7 +245,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	// Add model_used field for OpenRouter compatibility
 	proxyResp.ModelUsed = result.ModelUsed
-	
+
 	// Calculate cache costs if cache control was used
 	if hasCacheControl && result.ChatResponse != nil && result.Usage.PromptTokens > 0 {
 		cachePricing := connectors.GetCachePricing(result.ModelUsed)
@@ -256,12 +256,12 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 			promptCost := float64(result.Usage.PromptTokens) / 1000000.0
 			writeCost := 0.0
 			readCost := 0.0
-			
+
 			if cachePricing.CacheWrite != "" {
 				writeRate, _ := strconv.ParseFloat(cachePricing.CacheWrite, 64)
 				writeCost = promptCost * writeRate
 			}
-			
+
 			proxyResp.CacheCost = &CacheCost{
 				WriteTokens: writeCost,
 				ReadTokens:  readCost,
@@ -288,7 +288,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 	// Transform to connector request
 	connReq := TransformChatRequest(req)
 	connReq.Stream = true
-	
+
 	// Check if request has cache control
 	hasCacheControl := false
 	for _, msg := range connReq.Messages {
@@ -320,7 +320,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 
 	// Update request with selected model
 	connReq.Model = modelID
-	
+
 	// If provider doesn't support cache control, strip it from the request
 	if hasCacheControl && !ProviderSupportsCacheControl(provider) {
 		// Create a copy of the request with cache control stripped
@@ -355,7 +355,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 				Str("provider", provider).
 				Msg("marking model as invalid due to 404 error in streaming")
 		}
-		
+
 		return nil, &ProviderError{
 			Provider: provider,
 			Code:     "stream_failed",
@@ -428,49 +428,49 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 func naturalLess(a, b string) bool {
 	// Simple implementation: try to extract and compare version numbers
 	// This handles common patterns like "gemini-2.0" vs "gemini-2.5"
-	
+
 	// Find common prefix
 	minLen := len(a)
 	if len(b) < minLen {
 		minLen = len(b)
 	}
-	
+
 	i := 0
 	for i < minLen && a[i] == b[i] {
 		i++
 	}
-	
+
 	// If one string is a prefix of another
 	if i == minLen {
 		return len(a) < len(b)
 	}
-	
+
 	// Check what characters we're comparing
 	aIsDigit := i < len(a) && isDigit(a[i])
 	bIsDigit := i < len(b) && isDigit(b[i])
-	
+
 	// Letters come before numbers
 	if aIsDigit && !bIsDigit {
-		return false  // a has digit, b has letter, so b < a
+		return false // a has digit, b has letter, so b < a
 	}
 	if !aIsDigit && bIsDigit {
-		return true   // a has letter, b has digit, so a < b
+		return true // a has letter, b has digit, so a < b
 	}
-	
+
 	// Both are digits - extract and compare numbers
 	if aIsDigit && bIsDigit {
 		// Extract numbers and compare
 		numA, endA := extractNumber(a[i:])
 		numB, endB := extractNumber(b[i:])
-		
+
 		if numA != numB {
-			return numA > numB  // Reversed: higher numbers first
+			return numA > numB // Reversed: higher numbers first
 		}
-		
+
 		// Numbers are equal, continue with rest of string
 		return naturalLess(a[i+endA:], b[i+endB:])
 	}
-	
+
 	// Both are non-digits - regular string comparison
 	return a < b
 }
@@ -486,10 +486,10 @@ func extractGeminiVersion(model string) int {
 	if !strings.HasPrefix(model, "gemini-") {
 		return 0
 	}
-	
+
 	// Skip "gemini-"
 	s := model[7:]
-	
+
 	// Find any version number in the string (X.Y format)
 	for i := 0; i < len(s); i++ {
 		if isDigit(s[i]) {
@@ -500,7 +500,7 @@ func extractGeminiVersion(model string) int {
 				major = major*10 + int(s[j]-'0')
 				j++
 			}
-			
+
 			// Check for decimal point
 			if j < len(s) && s[j] == '.' {
 				j++
@@ -513,12 +513,12 @@ func extractGeminiVersion(model string) int {
 				// Convert to sortable number (2.5 -> 2500, 1.5 -> 1500)
 				return major*1000 + minor*100
 			}
-			
+
 			// If no decimal, just use major version
 			return major * 1000
 		}
 	}
-	
+
 	return 0 // No version found
 }
 
@@ -570,7 +570,7 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 			Created: m.Created,
 			OwnedBy: m.OwnedBy,
 		}
-		
+
 		// Enrich with metadata if available
 		metadata := connectors.GetModelMetadata(m.ID)
 		if metadata != nil {
@@ -592,7 +592,7 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 			// Note: Architecture field not available in ModelInfo struct
 			// Would need to extend ModelInfo to include architecture data
 		}
-		
+
 		modelInfos[i] = modelInfo
 	}
 
@@ -601,7 +601,7 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 		// Extract provider names from model IDs
 		providerI, modelI := ExtractProviderFromModel(modelInfos[i].ID)
 		providerJ, modelJ := ExtractProviderFromModel(modelInfos[j].ID)
-		
+
 		// If same provider, use model comparison
 		if providerI == providerJ {
 			// Special handling for gemini models - higher versions first
@@ -610,13 +610,13 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 				verI := extractGeminiVersion(modelI)
 				verJ := extractGeminiVersion(modelJ)
 				if verI != verJ {
-					return verI > verJ  // Reversed: higher versions first
+					return verI > verJ // Reversed: higher versions first
 				}
 			}
 			// Fall back to natural sort for other cases
 			return naturalLess(modelI, modelJ)
 		}
-		
+
 		// Otherwise sort by provider name
 		return providerI < providerJ
 	})
@@ -733,7 +733,7 @@ func extractProviderFromModelID(modelID string) string {
 	if provider != "" {
 		return provider
 	}
-	
+
 	// Fall back to extracting from model ID
 	parts := strings.SplitN(modelID, "/", 2)
 	if len(parts) > 0 {

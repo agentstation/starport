@@ -179,14 +179,14 @@ func TestServeCommand(t *testing.T) {
 	oldPort := os.Getenv("STARPORT_SERVER_PORT")
 	os.Setenv("STARPORT_SERVER_PORT", fmt.Sprintf("%d", port))
 	t.Logf("Using port %d for test (STARPORT_SERVER_PORT=%s)", port, os.Getenv("STARPORT_SERVER_PORT"))
-	
+
 	// Also check if port 8080 is in use
 	if l, err := net.Listen("tcp", ":8080"); err != nil {
 		t.Logf("WARNING: Port 8080 is already in use: %v", err)
 	} else {
 		l.Close()
 	}
-	
+
 	defer func() {
 		if oldPort != "" {
 			os.Setenv("STARPORT_SERVER_PORT", oldPort)

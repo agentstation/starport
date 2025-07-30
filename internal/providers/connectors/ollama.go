@@ -19,7 +19,7 @@ import (
 type OllamaConnector struct {
 	config     ProviderConfig
 	httpClient *http.Client
-	
+
 	// Cache for model list with TTL
 	modelListMu    sync.RWMutex
 	modelListCache *ModelsResponse
@@ -41,10 +41,10 @@ func NewOllamaConnector(config ProviderConfig) (*OllamaConnector, error) {
 	// Create HTTP client using httpclient package
 	// Ollama typically runs locally, so we can use more aggressive connection settings
 	ollamaConfig := httpclient.DefaultConfig()
-	ollamaConfig.MaxConnsPerHost = 50      // Lower for local service
-	ollamaConfig.MaxIdleConnsPerHost = 20  // Lower for local service
+	ollamaConfig.MaxConnsPerHost = 50         // Lower for local service
+	ollamaConfig.MaxIdleConnsPerHost = 20     // Lower for local service
 	ollamaConfig.EnableCircuitBreaker = false // Disable for local service
-	
+
 	client, err := httpclient.New("ollama", ollamaConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
@@ -66,7 +66,7 @@ func (c *OllamaConnector) Name() string {
 func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	// Strip provider prefix from model name if present
 	model := strings.TrimPrefix(req.Model, "ollama/")
-	
+
 	// Convert to Ollama format
 	ollamaReq := map[string]interface{}{
 		"model":    model,
@@ -76,15 +76,15 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 			"temperature": req.Temperature,
 		},
 	}
-	
+
 	if req.MaxTokens != nil {
 		ollamaReq["options"].(map[string]interface{})["num_predict"] = *req.MaxTokens
 	}
-	
+
 	if req.TopP != nil {
 		ollamaReq["options"].(map[string]interface{})["top_p"] = *req.TopP
 	}
-	
+
 	body, err := json.Marshal(ollamaReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -155,7 +155,7 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error) {
 	// Strip provider prefix from model name if present
 	model := strings.TrimPrefix(req.Model, "ollama/")
-	
+
 	// Convert to Ollama format
 	ollamaReq := map[string]interface{}{
 		"model":    model,
@@ -165,15 +165,15 @@ func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 			"temperature": req.Temperature,
 		},
 	}
-	
+
 	if req.MaxTokens != nil {
 		ollamaReq["options"].(map[string]interface{})["num_predict"] = *req.MaxTokens
 	}
-	
+
 	if req.TopP != nil {
 		ollamaReq["options"].(map[string]interface{})["top_p"] = *req.TopP
 	}
-	
+
 	body, err := json.Marshal(ollamaReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -207,12 +207,12 @@ func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Ollama supports embeddings via /api/embeddings endpoint
 	model := strings.TrimPrefix(req.Model, "ollama/")
-	
+
 	ollamaReq := map[string]interface{}{
 		"model":  model,
 		"prompt": req.Input,
 	}
-	
+
 	body, err := json.Marshal(ollamaReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -421,10 +421,10 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 			Role    string `json:"role"`
 			Content string `json:"content"`
 		} `json:"message"`
-		Done               bool  `json:"done"`
-		DoneReason         string `json:"done_reason,omitempty"`
-		PromptEvalCount    int   `json:"prompt_eval_count,omitempty"`
-		EvalCount          int   `json:"eval_count,omitempty"`
+		Done            bool   `json:"done"`
+		DoneReason      string `json:"done_reason,omitempty"`
+		PromptEvalCount int    `json:"prompt_eval_count,omitempty"`
+		EvalCount       int    `json:"eval_count,omitempty"`
 	}
 
 	if err := json.Unmarshal(line, &ollamaChunk); err != nil {
@@ -440,7 +440,7 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 		if ollamaChunk.EvalCount > 0 {
 			s.completionTokens = ollamaChunk.EvalCount
 		}
-		
+
 		// Send a final chunk with usage data if we have it
 		if s.promptTokens > 0 || s.completionTokens > 0 {
 			return &ChatStreamChunk{
@@ -462,7 +462,7 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 				},
 			}, nil
 		}
-		
+
 		return nil, io.EOF
 	}
 

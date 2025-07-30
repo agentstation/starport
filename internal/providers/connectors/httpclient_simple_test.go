@@ -22,7 +22,7 @@ func TestConnectorsUseHTTPClient(t *testing.T) {
 	defer server.Close()
 
 	tests := []struct {
-		name           string
+		name            string
 		createConnector func() (Connector, error)
 	}{
 		{
@@ -138,7 +138,7 @@ func TestConnectorsUseHTTPClient(t *testing.T) {
 
 			// Verify at least one request was made
 			count := atomic.LoadInt32(&requestCount)
-			
+
 			// Special cases: some connectors don't make HTTP requests for Models()
 			if tt.name == "Vertex AI" || tt.name == "Azure" {
 				// These connectors return static model lists, so no HTTP request expected

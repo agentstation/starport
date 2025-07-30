@@ -24,7 +24,7 @@ func main() {
 				},
 			},
 			map[string]interface{}{
-				"role": "user",
+				"role":    "user",
 				"content": "What is the capital of France?",
 			},
 		},
@@ -47,9 +47,9 @@ func main() {
 	fmt.Println("4. Show cache pricing in X-Cache-Write-Cost and X-Cache-Read-Cost headers")
 
 	// To make the actual request, you would use:
-	// resp, err := http.Post("http://localhost:8080/v1/chat/completions", 
+	// resp, err := http.Post("http://localhost:8080/v1/chat/completions",
 	//     "application/json", bytes.NewBuffer(jsonData))
-	// 
+	//
 	// Then check the cache headers:
 	// X-Cache: Cache status (HIT/MISS)
 	// X-Cache-Write-Cost: Cost of writing to cache

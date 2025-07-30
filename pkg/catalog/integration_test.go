@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package catalog
@@ -53,7 +54,7 @@ func TestCatalogIntegration(t *testing.T) {
 		}
 
 		if model.ContextLength < km.minContext {
-			t.Errorf("Model %s: expected context >= %d, got %d", 
+			t.Errorf("Model %s: expected context >= %d, got %d",
 				km.id, km.minContext, model.ContextLength)
 		}
 

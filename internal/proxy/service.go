@@ -56,10 +56,10 @@ type ChatCompletionRequest struct {
 	ResponseFormat   *connectors.ResponseFormat `json:"response_format,omitempty"`
 
 	// OpenRouter-compatible fields
-	Models    []string               `json:"models,omitempty"`
-	Route     string                 `json:"route,omitempty"`
-	Provider  *ProviderPreferences   `json:"provider,omitempty"`
-	Reasoning *ReasoningConfig       `json:"reasoning,omitempty"`
+	Models    []string             `json:"models,omitempty"`
+	Route     string               `json:"route,omitempty"`
+	Provider  *ProviderPreferences `json:"provider,omitempty"`
+	Reasoning *ReasoningConfig     `json:"reasoning,omitempty"`
 
 	// Internal fields
 	APIKey    string `json:"-"`

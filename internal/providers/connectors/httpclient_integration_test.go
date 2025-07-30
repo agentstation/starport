@@ -15,9 +15,9 @@ import (
 // TestConnectorHTTPClientIntegration verifies that connectors properly use httpclient features
 func TestConnectorHTTPClientIntegration(t *testing.T) {
 	tests := []struct {
-		name            string
-		connectorType   string
-		setupConnector  func(config ProviderConfig) (Connector, error)
+		name               string
+		connectorType      string
+		setupConnector     func(config ProviderConfig) (Connector, error)
 		wantCircuitBreaker bool
 	}{
 		{
@@ -96,17 +96,17 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 			// Create test server that can simulate errors
 			var requestCount int32
 			var shouldFail atomic.Bool
-			
+
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				atomic.AddInt32(&requestCount, 1)
-				
+
 				// Simulate failures for circuit breaker testing
 				if shouldFail.Load() {
 					w.WriteHeader(http.StatusInternalServerError)
 					json.NewEncoder(w).Encode(map[string]string{"error": "simulated error"})
 					return
 				}
-				
+
 				// Return success response based on endpoint
 				switch {
 				// OpenAI-style endpoints
@@ -125,30 +125,30 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 						"choices": []map[string]interface{}{
 							{
 								"message": map[string]string{
-									"role": "assistant",
+									"role":    "assistant",
 									"content": "test response",
 								},
 								"finish_reason": "stop",
 							},
 						},
 						"usage": map[string]int{
-							"prompt_tokens": 10,
+							"prompt_tokens":     10,
 							"completion_tokens": 5,
-							"total_tokens": 15,
+							"total_tokens":      15,
 						},
 					})
 				// Anthropic messages endpoint
 				case r.URL.Path == "/v1/messages" || r.URL.Path == "/messages":
 					w.WriteHeader(http.StatusOK)
 					json.NewEncoder(w).Encode(map[string]interface{}{
-						"id": "test-response",
+						"id":   "test-response",
 						"type": "message",
 						"role": "assistant",
 						"content": []map[string]string{
 							{"type": "text", "text": "test response"},
 						},
 						"usage": map[string]int{
-							"input_tokens": 10,
+							"input_tokens":  10,
 							"output_tokens": 5,
 						},
 					})
@@ -158,7 +158,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 					json.NewEncoder(w).Encode(map[string]interface{}{
 						"models": []map[string]interface{}{
 							{
-								"name": "models/test-model",
+								"name":                       "models/test-model",
 								"supportedGenerationMethods": []string{"generateContent"},
 							},
 						},
@@ -179,7 +179,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 					w.WriteHeader(http.StatusOK)
 					json.NewEncoder(w).Encode(map[string]interface{}{
 						"message": map[string]string{
-							"role": "assistant",
+							"role":    "assistant",
 							"content": "test response",
 						},
 						"done": true,
@@ -194,7 +194,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 							"choices": []map[string]interface{}{
 								{
 									"message": map[string]string{
-										"role": "assistant",
+										"role":    "assistant",
 										"content": "test response",
 									},
 									"finish_reason": "stop",
@@ -217,7 +217,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				Timeout:        5 * time.Second,
 				MaxConnections: 10,
 			}
-			
+
 			connector, err := tt.setupConnector(config)
 			if err != nil {
 				t.Fatalf("Failed to create connector: %v", err)
@@ -234,25 +234,25 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 			// Test 2: Verify connection pooling by making multiple requests
 			// Reset counter
 			atomic.StoreInt32(&requestCount, 0)
-			
+
 			// Make multiple concurrent requests
 			concurrency := 5
 			done := make(chan error, concurrency)
-			
+
 			for i := 0; i < concurrency; i++ {
 				go func() {
 					_, err := connector.Models(ctx)
 					done <- err
 				}()
 			}
-			
+
 			// Wait for all requests
 			for i := 0; i < concurrency; i++ {
 				if err := <-done; err != nil {
 					t.Errorf("Models request failed: %v", err)
 				}
 			}
-			
+
 			// Verify requests were made
 			finalCount := atomic.LoadInt32(&requestCount)
 			if finalCount == 0 {
@@ -264,7 +264,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				// Enable failures
 				shouldFail.Store(true)
 				atomic.StoreInt32(&requestCount, 0)
-				
+
 				// Make requests that should fail
 				failureCount := 0
 				for i := 0; i < 10; i++ {
@@ -274,7 +274,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 					}
 					time.Sleep(10 * time.Millisecond) // Small delay between requests
 				}
-				
+
 				// Circuit breaker should eventually stop making requests
 				requestsMade := atomic.LoadInt32(&requestCount)
 				if requestsMade == 10 {
@@ -290,11 +290,11 @@ func TestHTTPClientConnectionPooling(t *testing.T) {
 	// Track active connections
 	var activeConnections int32
 	var maxConcurrent int32
-	
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Increment active connections
 		current := atomic.AddInt32(&activeConnections, 1)
-		
+
 		// Track max concurrent
 		for {
 			max := atomic.LoadInt32(&maxConcurrent)
@@ -302,14 +302,14 @@ func TestHTTPClientConnectionPooling(t *testing.T) {
 				break
 			}
 		}
-		
+
 		// Simulate some work
 		time.Sleep(50 * time.Millisecond)
-		
+
 		// Response
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
-		
+
 		// Decrement active connections
 		atomic.AddInt32(&activeConnections, -1)
 	}))
@@ -322,7 +322,7 @@ func TestHTTPClientConnectionPooling(t *testing.T) {
 		Timeout:        5 * time.Second,
 		MaxConnections: 5, // Limit connections
 	}
-	
+
 	connector, err := NewOpenAIConnector(config)
 	if err != nil {
 		t.Fatalf("Failed to create connector: %v", err)
@@ -332,7 +332,7 @@ func TestHTTPClientConnectionPooling(t *testing.T) {
 	// Make many concurrent requests
 	concurrency := 20
 	done := make(chan error, concurrency)
-	
+
 	ctx := context.Background()
 	for i := 0; i < concurrency; i++ {
 		go func() {
@@ -340,18 +340,18 @@ func TestHTTPClientConnectionPooling(t *testing.T) {
 			done <- err
 		}()
 	}
-	
+
 	// Wait for all requests
 	for i := 0; i < concurrency; i++ {
 		if err := <-done; err != nil {
 			t.Errorf("Request failed: %v", err)
 		}
 	}
-	
+
 	// Verify connection pooling limited concurrent connections
 	max := atomic.LoadInt32(&maxConcurrent)
 	t.Logf("Max concurrent connections: %d", max)
-	
+
 	// With proper connection pooling, we shouldn't exceed our limit by much
 	// (some overhead is expected)
 	if max > 10 {
@@ -364,23 +364,23 @@ func TestHTTPClientRetryBehavior(t *testing.T) {
 	var requestCount int32
 	var failureCount int32
 	maxFailures := int32(2) // Fail first 2 requests
-	
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		count := atomic.AddInt32(&requestCount, 1)
-		
+
 		// Fail first N requests
 		if atomic.LoadInt32(&failureCount) < maxFailures {
 			atomic.AddInt32(&failureCount, 1)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
-		
+
 		// Success
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"data": []map[string]string{{"id": "model1"}},
 		})
-		
+
 		t.Logf("Request %d succeeded", count)
 	}))
 	defer server.Close()
@@ -393,7 +393,7 @@ func TestHTTPClientRetryBehavior(t *testing.T) {
 		MaxRetries:     3,
 		RetryDelay:     100 * time.Millisecond,
 	}
-	
+
 	connector, err := NewOpenAIConnector(config)
 	if err != nil {
 		t.Fatalf("Failed to create connector: %v", err)
@@ -403,11 +403,11 @@ func TestHTTPClientRetryBehavior(t *testing.T) {
 	// Make request that should succeed after retries
 	ctx := context.Background()
 	_, err = connector.Models(ctx)
-	
+
 	if err != nil {
 		t.Errorf("Request failed after retries: %v", err)
 	}
-	
+
 	// Verify retries happened
 	totalRequests := atomic.LoadInt32(&requestCount)
 	if totalRequests != maxFailures+1 {
@@ -431,7 +431,7 @@ func TestHTTPClientTimeouts(t *testing.T) {
 		Timeout:        500 * time.Millisecond, // Short timeout
 		MaxConnections: 10,
 	}
-	
+
 	connector, err := NewAnthropicConnector(config)
 	if err != nil {
 		t.Fatalf("Failed to create connector: %v", err)
@@ -443,11 +443,11 @@ func TestHTTPClientTimeouts(t *testing.T) {
 	start := time.Now()
 	_, err = connector.Models(ctx)
 	duration := time.Since(start)
-	
+
 	if err == nil {
 		t.Error("Expected timeout error, got nil")
 	}
-	
+
 	// Verify it actually timed out quickly
 	if duration > 1*time.Second {
 		t.Errorf("Timeout took too long: %v", duration)

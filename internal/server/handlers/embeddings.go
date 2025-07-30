@@ -52,11 +52,11 @@ func (h *EmbeddingsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Cache-Age", fmt.Sprintf("%d", resp.CacheAge))
 		}
 	}
-	
+
 	// Set ETag header
 	if resp.ETag != "" {
 		w.Header().Set("ETag", resp.ETag)
-		
+
 		// Check for 304 Not Modified
 		if ifNoneMatch != "" && ifNoneMatch == resp.ETag {
 			w.WriteHeader(http.StatusNotModified)

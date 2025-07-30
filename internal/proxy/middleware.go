@@ -3,7 +3,7 @@ package proxy
 import (
 	"context"
 	"time"
-	
+
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/rs/zerolog/log"
 )
@@ -50,22 +50,22 @@ func LoggingMiddleware() Middleware {
 // ProcessChatCompletion logs the request and response.
 func (s *loggingService) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	start := time.Now()
-	
+
 	log.Info().
 		Str("method", "ProcessChatCompletion").
 		Str("model", req.Model).
 		Int("messages", len(req.Messages)).
 		Str("request_id", req.RequestID).
 		Msg("processing chat completion request")
-	
+
 	resp, err := s.proxy.ProcessChatCompletion(ctx, req)
-	
+
 	duration := time.Since(start)
 	logger := log.Info().
 		Str("method", "ProcessChatCompletion").
 		Dur("duration", duration).
 		Str("request_id", req.RequestID)
-	
+
 	if err != nil {
 		logger.Err(err).Msg("chat completion failed")
 	} else {
@@ -74,23 +74,23 @@ func (s *loggingService) ProcessChatCompletion(ctx context.Context, req *ChatCom
 			Int("choices", len(resp.Choices)).
 			Msg("chat completion succeeded")
 	}
-	
+
 	return resp, err
 }
 
 // ProcessChatCompletionStream logs the streaming request.
 func (s *loggingService) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
 	start := time.Now()
-	
+
 	log.Info().
 		Str("method", "ProcessChatCompletionStream").
 		Str("model", req.Model).
 		Int("messages", len(req.Messages)).
 		Str("request_id", req.RequestID).
 		Msg("processing streaming chat completion request")
-	
+
 	stream, err := s.proxy.ProcessChatCompletionStream(ctx, req)
-	
+
 	if err != nil {
 		log.Error().
 			Str("method", "ProcessChatCompletionStream").
@@ -100,7 +100,7 @@ func (s *loggingService) ProcessChatCompletionStream(ctx context.Context, req *C
 			Msg("streaming chat completion failed")
 		return nil, err
 	}
-	
+
 	// Wrap the stream to log when it completes
 	return &loggingStream{
 		stream:    stream,
@@ -112,21 +112,21 @@ func (s *loggingService) ProcessChatCompletionStream(ctx context.Context, req *C
 // ProcessEmbeddings logs the embeddings request and response.
 func (s *loggingService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	start := time.Now()
-	
+
 	log.Info().
 		Str("method", "ProcessEmbeddings").
 		Str("model", req.Model).
 		Str("request_id", req.RequestID).
 		Msg("processing embeddings request")
-	
+
 	resp, err := s.proxy.ProcessEmbeddings(ctx, req)
-	
+
 	duration := time.Since(start)
 	logger := log.Info().
 		Str("method", "ProcessEmbeddings").
 		Dur("duration", duration).
 		Str("request_id", req.RequestID)
-	
+
 	if err != nil {
 		logger.Err(err).Msg("embeddings generation failed")
 	} else {
@@ -134,25 +134,25 @@ func (s *loggingService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsR
 			Int("embeddings", len(resp.Data)).
 			Msg("embeddings generation succeeded")
 	}
-	
+
 	return resp, err
 }
 
 // ListModels logs the list models request.
 func (s *loggingService) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	start := time.Now()
-	
+
 	log.Info().
 		Str("method", "ListModels").
 		Msg("listing available models")
-	
+
 	resp, err := s.proxy.ListModels(ctx)
-	
+
 	duration := time.Since(start)
 	logger := log.Info().
 		Str("method", "ListModels").
 		Dur("duration", duration)
-	
+
 	if err != nil {
 		logger.Err(err).Msg("list models failed")
 	} else {
@@ -160,25 +160,25 @@ func (s *loggingService) ListModels(ctx context.Context) (*ModelsResponse, error
 			Int("models", len(resp.Data)).
 			Msg("list models succeeded")
 	}
-	
+
 	return resp, err
 }
 
 // ListProviders logs the list providers request.
 func (s *loggingService) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	start := time.Now()
-	
+
 	log.Info().
 		Str("method", "ListProviders").
 		Msg("listing available providers")
-	
+
 	resp, err := s.proxy.ListProviders(ctx)
-	
+
 	duration := time.Since(start)
 	logger := log.Info().
 		Str("method", "ListProviders").
 		Dur("duration", duration)
-	
+
 	if err != nil {
 		logger.Err(err).Msg("list providers failed")
 	} else {
@@ -186,27 +186,27 @@ func (s *loggingService) ListProviders(ctx context.Context) (*ProvidersResponse,
 			Int("providers", len(resp.Providers)).
 			Msg("list providers succeeded")
 	}
-	
+
 	return resp, err
 }
 
 // GetModelEndpoints logs the get model endpoints request.
 func (s *loggingService) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
 	start := time.Now()
-	
+
 	log.Info().
 		Str("method", "GetModelEndpoints").
 		Str("model_id", modelID).
 		Msg("getting model endpoints")
-	
+
 	resp, err := s.proxy.GetModelEndpoints(ctx, modelID)
-	
+
 	duration := time.Since(start)
 	logger := log.Info().
 		Str("method", "GetModelEndpoints").
 		Str("model_id", modelID).
 		Dur("duration", duration)
-	
+
 	if err != nil {
 		logger.Err(err).Msg("get model endpoints failed")
 	} else {
@@ -214,7 +214,7 @@ func (s *loggingService) GetModelEndpoints(ctx context.Context, modelID string) 
 			Int("endpoints", len(resp.Endpoints)).
 			Msg("get model endpoints succeeded")
 	}
-	
+
 	return resp, err
 }
 
@@ -233,14 +233,14 @@ func (s *loggingStream) Read() (*connectors.ChatStreamChunk, error) {
 // Close logs the stream completion and closes the underlying stream.
 func (s *loggingStream) Close() error {
 	err := s.stream.Close()
-	
+
 	log.Info().
 		Str("method", "ProcessChatCompletionStream").
 		Dur("duration", time.Since(s.startTime)).
 		Str("request_id", s.requestID).
 		Err(err).
 		Msg("streaming chat completion completed")
-	
+
 	return err
 }
 

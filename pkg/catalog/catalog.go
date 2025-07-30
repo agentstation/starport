@@ -12,59 +12,59 @@ type Catalog struct {
 
 // Model represents a model with OpenRouter-compatible fields and frontend fields
 type Model struct {
-	ID                  string           `json:"id"`
-	CanonicalSlug       string           `json:"canonical_slug,omitempty"`
-	Name                string           `json:"name"`
-	Created             int64            `json:"created,omitempty"`
-	Description         string           `json:"description,omitempty"`
-	ContextLength       int              `json:"context_length"`
-	Architecture        *Architecture    `json:"architecture,omitempty"`
-	Pricing             *Pricing         `json:"pricing,omitempty"`
-	TopProvider         *TopProvider     `json:"top_provider,omitempty"`
-	SupportedParameters []string         `json:"supported_parameters,omitempty"`
-	HuggingFaceID       string           `json:"hugging_face_id,omitempty"`
+	ID                  string        `json:"id"`
+	CanonicalSlug       string        `json:"canonical_slug,omitempty"`
+	Name                string        `json:"name"`
+	Created             int64         `json:"created,omitempty"`
+	Description         string        `json:"description,omitempty"`
+	ContextLength       int           `json:"context_length"`
+	Architecture        *Architecture `json:"architecture,omitempty"`
+	Pricing             *Pricing      `json:"pricing,omitempty"`
+	TopProvider         *TopProvider  `json:"top_provider,omitempty"`
+	SupportedParameters []string      `json:"supported_parameters,omitempty"`
+	HuggingFaceID       string        `json:"hugging_face_id,omitempty"`
 	// Frontend fields
-	ShortName            string           `json:"short_name,omitempty"`
-	Author               string           `json:"author,omitempty"`
-	Group                string           `json:"group,omitempty"`
-	DefaultSystem        *string          `json:"default_system,omitempty"`
-	DefaultStops         []string         `json:"default_stops,omitempty"`
-	Hidden               bool             `json:"hidden,omitempty"`
-	Router               *string          `json:"router,omitempty"`
-	WarningMessage       *string          `json:"warning_message,omitempty"`
-	Permaslug            string           `json:"permaslug,omitempty"`
-	ReasoningConfig      *ReasoningConfig `json:"reasoning_config,omitempty"`
-	Features             *Features        `json:"features,omitempty"`
-	HasTextOutput        bool             `json:"has_text_output,omitempty"`
-	UpdatedAt            string           `json:"updated_at,omitempty"`
-	HFUpdatedAt          *string          `json:"hf_updated_at,omitempty"`
-	ModelVersionGroupID  *string          `json:"model_version_group_id,omitempty"`
+	ShortName           string           `json:"short_name,omitempty"`
+	Author              string           `json:"author,omitempty"`
+	Group               string           `json:"group,omitempty"`
+	DefaultSystem       *string          `json:"default_system,omitempty"`
+	DefaultStops        []string         `json:"default_stops,omitempty"`
+	Hidden              bool             `json:"hidden,omitempty"`
+	Router              *string          `json:"router,omitempty"`
+	WarningMessage      *string          `json:"warning_message,omitempty"`
+	Permaslug           string           `json:"permaslug,omitempty"`
+	ReasoningConfig     *ReasoningConfig `json:"reasoning_config,omitempty"`
+	Features            *Features        `json:"features,omitempty"`
+	HasTextOutput       bool             `json:"has_text_output,omitempty"`
+	UpdatedAt           string           `json:"updated_at,omitempty"`
+	HFUpdatedAt         *string          `json:"hf_updated_at,omitempty"`
+	ModelVersionGroupID *string          `json:"model_version_group_id,omitempty"`
 }
 
 // Provider represents a provider with OpenRouter-compatible fields and frontend fields
 type Provider struct {
-	Name                  string                 `json:"name"`
-	Slug                  string                 `json:"slug"`
-	PrivacyPolicyURL      *string                `json:"privacy_policy_url,omitempty"`
-	TermsOfServiceURL     *string                `json:"terms_of_service_url,omitempty"`
-	StatusPageURL         *string                `json:"status_page_url,omitempty"`
-	MayLogPrompts         bool                   `json:"may_log_prompts"`
-	MayTrainOnData        bool                   `json:"may_train_on_data"`
-	ModeratedByOpenRouter bool                   `json:"moderated_by_openrouter"`
+	Name                  string  `json:"name"`
+	Slug                  string  `json:"slug"`
+	PrivacyPolicyURL      *string `json:"privacy_policy_url,omitempty"`
+	TermsOfServiceURL     *string `json:"terms_of_service_url,omitempty"`
+	StatusPageURL         *string `json:"status_page_url,omitempty"`
+	MayLogPrompts         bool    `json:"may_log_prompts"`
+	MayTrainOnData        bool    `json:"may_train_on_data"`
+	ModeratedByOpenRouter bool    `json:"moderated_by_openrouter"`
 	// Frontend fields
-	DisplayName          string                 `json:"display_name,omitempty"`
-	BaseURL              string                 `json:"base_url,omitempty"`
-	Headquarters         string                 `json:"headquarters,omitempty"`
-	HasChatCompletions   bool                   `json:"has_chat_completions,omitempty"`
-	HasCompletions       bool                   `json:"has_completions,omitempty"`
-	IsAbortable          bool                   `json:"is_abortable,omitempty"`
-	ModerationRequired   bool                   `json:"moderation_required,omitempty"`
-	AdapterName          string                 `json:"adapter_name,omitempty"`
-	IsMultipartSupported bool                   `json:"is_multipart_supported,omitempty"`
-	ByokEnabled          bool                   `json:"byok_enabled,omitempty"`
-	Icon                 *ProviderIcon          `json:"icon,omitempty"`
-	DataPolicy           *ExtendedDataPolicy    `json:"data_policy,omitempty"`
-	IgnoredProviderModels []string              `json:"ignored_provider_models,omitempty"`
+	DisplayName           string              `json:"display_name,omitempty"`
+	BaseURL               string              `json:"base_url,omitempty"`
+	Headquarters          string              `json:"headquarters,omitempty"`
+	HasChatCompletions    bool                `json:"has_chat_completions,omitempty"`
+	HasCompletions        bool                `json:"has_completions,omitempty"`
+	IsAbortable           bool                `json:"is_abortable,omitempty"`
+	ModerationRequired    bool                `json:"moderation_required,omitempty"`
+	AdapterName           string              `json:"adapter_name,omitempty"`
+	IsMultipartSupported  bool                `json:"is_multipart_supported,omitempty"`
+	ByokEnabled           bool                `json:"byok_enabled,omitempty"`
+	Icon                  *ProviderIcon       `json:"icon,omitempty"`
+	DataPolicy            *ExtendedDataPolicy `json:"data_policy,omitempty"`
+	IgnoredProviderModels []string            `json:"ignored_provider_models,omitempty"`
 }
 
 // Endpoint represents an endpoint with provider context
@@ -154,11 +154,11 @@ type ProviderIcon struct {
 
 // ExtendedDataPolicy represents extended data policy information from frontend
 type ExtendedDataPolicy struct {
-	DataPolicyURL    string           `json:"data_policy_url,omitempty"`
-	PrivacyPolicyURL string           `json:"privacy_policy_url,omitempty"`
-	TermsOfServiceURL string          `json:"terms_of_service_url,omitempty"`
-	RequiresUserIDs  bool             `json:"requires_user_ids,omitempty"`
-	PaidModels       *PaidModelsPolicy `json:"paid_models,omitempty"`
+	DataPolicyURL     string            `json:"data_policy_url,omitempty"`
+	PrivacyPolicyURL  string            `json:"privacy_policy_url,omitempty"`
+	TermsOfServiceURL string            `json:"terms_of_service_url,omitempty"`
+	RequiresUserIDs   bool              `json:"requires_user_ids,omitempty"`
+	PaidModels        *PaidModelsPolicy `json:"paid_models,omitempty"`
 }
 
 // PaidModelsPolicy represents paid models data policy

@@ -107,7 +107,7 @@ func (h *AdminHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 
 	// Generate UUID for the key
 	keyUUID := uuid.New().String()
-	
+
 	// Create API key using uuidkey with STARPORT prefix
 	apiKeyObj, err := uuidkey.NewAPIKey("STARPORT", keyUUID)
 	if err != nil {
@@ -115,13 +115,13 @@ func (h *AdminHandler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to generate API key")
 		return
 	}
-	
+
 	// The actual key value (only shown once)
 	keyValue := apiKeyObj.String()
-	
+
 	// Use the prefix_key format as the ID (without entropy for storage key)
 	apiKey.ID = fmt.Sprintf("%s_%s", apiKeyObj.Prefix, apiKeyObj.Key)
-	
+
 	// Hash the full key value for storage
 	hash := sha256.Sum256([]byte(keyValue))
 	apiKey.Hash = hex.EncodeToString(hash[:])

@@ -21,12 +21,12 @@ type ModelMetadata struct {
 
 // ModelPricing represents pricing information
 type ModelPricing struct {
-	Prompt      string `json:"prompt"`                 // Price per 1k tokens
-	Completion  string `json:"completion"`             // Price per 1k tokens
-	Image       string `json:"image,omitempty"`        // Price per image
-	Request     string `json:"request,omitempty"`      // Price per request
-	CacheWrite  string `json:"cache_write,omitempty"`  // Price per 1k tokens for cache writes
-	CacheRead   string `json:"cache_read,omitempty"`   // Price per 1k tokens for cache reads
+	Prompt     string `json:"prompt"`                // Price per 1k tokens
+	Completion string `json:"completion"`            // Price per 1k tokens
+	Image      string `json:"image,omitempty"`       // Price per image
+	Request    string `json:"request,omitempty"`     // Price per request
+	CacheWrite string `json:"cache_write,omitempty"` // Price per 1k tokens for cache writes
+	CacheRead  string `json:"cache_read,omitempty"`  // Price per 1k tokens for cache reads
 }
 
 // ModelContext represents context window information
@@ -101,7 +101,7 @@ func GetProviderMetadata() []ProviderMetadata {
 			MayTrainOnData:        provider.MayTrainOnData,
 			ModeratedByOpenRouter: provider.ModeratedByOpenRouter,
 		}
-		
+
 		// Handle optional string pointers
 		if provider.PrivacyPolicyURL != nil {
 			metadata.PrivacyPolicyURL = *provider.PrivacyPolicyURL
@@ -112,15 +112,15 @@ func GetProviderMetadata() []ProviderMetadata {
 		if provider.StatusPageURL != nil {
 			metadata.StatusPageURL = *provider.StatusPageURL
 		}
-		
+
 		providers = append(providers, metadata)
 	}
-	
+
 	// If no providers in catalog, fall back to defaults
 	if len(providers) == 0 {
 		return getDefaultProviderMetadata()
 	}
-	
+
 	return providers
 }
 
@@ -279,48 +279,48 @@ func GetCachePricing(modelID string) *ModelPricing {
 		return nil
 	}
 	provider := parts[0]
-	
+
 	// Cache pricing as of OpenRouter docs
 	// Note: These are illustrative examples, actual pricing should be fetched from provider APIs
 	cachePricing := map[string]map[string]*ModelPricing{
 		"anthropic": {
 			"claude-3-5-sonnet": {
-				Prompt:     "0.003",     // $3 per 1M tokens
-				Completion: "0.015",     // $15 per 1M tokens
-				CacheWrite: "0.00375",   // $3.75 per 1M tokens (1.25x prompt)
-				CacheRead:  "0.0003",    // $0.30 per 1M tokens (1/10 prompt)
+				Prompt:     "0.003",   // $3 per 1M tokens
+				Completion: "0.015",   // $15 per 1M tokens
+				CacheWrite: "0.00375", // $3.75 per 1M tokens (1.25x prompt)
+				CacheRead:  "0.0003",  // $0.30 per 1M tokens (1/10 prompt)
 			},
 			"claude-3-haiku": {
-				Prompt:     "0.00025",   // $0.25 per 1M tokens
-				Completion: "0.00125",   // $1.25 per 1M tokens
-				CacheWrite: "0.0003",    // $0.30 per 1M tokens
-				CacheRead:  "0.00003",   // $0.03 per 1M tokens
+				Prompt:     "0.00025", // $0.25 per 1M tokens
+				Completion: "0.00125", // $1.25 per 1M tokens
+				CacheWrite: "0.0003",  // $0.30 per 1M tokens
+				CacheRead:  "0.00003", // $0.03 per 1M tokens
 			},
 		},
 		"openai": {
 			"gpt-4o": {
-				Prompt:     "0.0025",    // $2.50 per 1M tokens
-				Completion: "0.01",      // $10 per 1M tokens  
-				CacheWrite: "0.00625",   // $6.25 per 1M tokens (2.5x prompt)
-				CacheRead:  "0.00125",   // $1.25 per 1M tokens (0.5x prompt)
+				Prompt:     "0.0025",  // $2.50 per 1M tokens
+				Completion: "0.01",    // $10 per 1M tokens
+				CacheWrite: "0.00625", // $6.25 per 1M tokens (2.5x prompt)
+				CacheRead:  "0.00125", // $1.25 per 1M tokens (0.5x prompt)
 			},
 			"gpt-4o-mini": {
-				Prompt:     "0.00015",   // $0.15 per 1M tokens
-				Completion: "0.0006",    // $0.60 per 1M tokens
-				CacheWrite: "0.000375",  // $0.375 per 1M tokens
-				CacheRead:  "0.000075",  // $0.075 per 1M tokens
+				Prompt:     "0.00015",  // $0.15 per 1M tokens
+				Completion: "0.0006",   // $0.60 per 1M tokens
+				CacheWrite: "0.000375", // $0.375 per 1M tokens
+				CacheRead:  "0.000075", // $0.075 per 1M tokens
 			},
 		},
 		"deepseek": {
 			"deepseek-chat": {
-				Prompt:     "0.00014",   // $0.14 per 1M tokens
-				Completion: "0.00028",   // $0.28 per 1M tokens
-				CacheWrite: "0.00014",   // Same as prompt (free caching)
-				CacheRead:  "0.000014",  // $0.014 per 1M tokens (0.1x prompt)
+				Prompt:     "0.00014",  // $0.14 per 1M tokens
+				Completion: "0.00028",  // $0.28 per 1M tokens
+				CacheWrite: "0.00014",  // Same as prompt (free caching)
+				CacheRead:  "0.000014", // $0.014 per 1M tokens (0.1x prompt)
 			},
 		},
 	}
-	
+
 	// Look up cache pricing
 	if providerPricing, ok := cachePricing[provider]; ok {
 		// Try exact model match
@@ -333,10 +333,9 @@ func GetCachePricing(modelID string) *ModelPricing {
 			return pricing
 		}
 	}
-	
+
 	return nil
 }
-
 
 // GetModelsByProvider returns models offered by a specific provider
 func GetModelsByProvider(provider string) []string {
@@ -348,13 +347,13 @@ func GetModelsByProvider(provider string) []string {
 
 	// Get models from catalog
 	catalogModels := cat.GetModelsByProvider(provider)
-	
+
 	// Convert to string slice
 	models := make([]string, 0, len(catalogModels))
 	for _, model := range catalogModels {
 		models = append(models, model.ID)
 	}
-	
+
 	return models
 }
 
@@ -379,7 +378,7 @@ func GetProvidersForModel(modelName string) []ModelProviderInfo {
 					Provider: providerSlug,
 					Name:     providerMeta.Name,
 				}
-				
+
 				// Convert pricing
 				if model.Pricing != nil {
 					info.Pricing = &ModelPricing{
@@ -389,13 +388,13 @@ func GetProvidersForModel(modelName string) []ModelProviderInfo {
 						Request:    model.Pricing.Request,
 					}
 				}
-				
+
 				// Convert context
 				if model.ContextLength > 0 {
 					ctx := ModelContext(model.ContextLength)
 					info.Context = &ctx
 				}
-				
+
 				providers = append(providers, info)
 			}
 		}

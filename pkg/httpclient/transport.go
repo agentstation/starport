@@ -44,12 +44,12 @@ func (t *MonitoredTransport) RoundTrip(req *http.Request) (*http.Response, error
 	// Handle errors
 	if err != nil {
 		t.metrics.RecordRequestError(t.provider, req.Method, path, err)
-		
+
 		// Record circuit breaker failure
 		if t.breaker != nil {
 			t.breaker.RecordFailure()
 		}
-		
+
 		return nil, err
 	}
 
@@ -89,4 +89,3 @@ func (t *MonitoredTransport) CloseIdleConnections() {
 		t.metrics.RecordConnectionClosed(t.provider)
 	}
 }
-

@@ -79,19 +79,19 @@ func TestCatalogGetModelByID(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		modelID  string
-		wantNil  bool
+		name    string
+		modelID string
+		wantNil bool
 	}{
 		{
-			name:     "existing model",
-			modelID:  "anthropic/claude-3-haiku",
-			wantNil:  false,
+			name:    "existing model",
+			modelID: "anthropic/claude-3-haiku",
+			wantNil: false,
 		},
 		{
-			name:     "non-existing model",
-			modelID:  "fake/model-does-not-exist",
-			wantNil:  true,
+			name:    "non-existing model",
+			modelID: "fake/model-does-not-exist",
+			wantNil: true,
 		},
 	}
 
@@ -115,24 +115,24 @@ func TestCatalogGetModelsByProvider(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		provider      string
-		wantMinCount  int
+		name         string
+		provider     string
+		wantMinCount int
 	}{
 		{
-			name:          "anthropic provider",
-			provider:      "anthropic",
-			wantMinCount:  1, // Should have at least one Anthropic model
+			name:         "anthropic provider",
+			provider:     "anthropic",
+			wantMinCount: 1, // Should have at least one Anthropic model
 		},
 		{
-			name:          "openai provider",
-			provider:      "openai",
-			wantMinCount:  1, // Should have at least one OpenAI model
+			name:         "openai provider",
+			provider:     "openai",
+			wantMinCount: 1, // Should have at least one OpenAI model
 		},
 		{
-			name:          "non-existing provider",
-			provider:      "fakeprovider",
-			wantMinCount:  0,
+			name:         "non-existing provider",
+			provider:     "fakeprovider",
+			wantMinCount: 0,
 		},
 	}
 
@@ -140,7 +140,7 @@ func TestCatalogGetModelsByProvider(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			models := catalog.GetModelsByProvider(tt.provider)
 			if len(models) < tt.wantMinCount {
-				t.Errorf("Expected at least %d models for provider %s, got %d", 
+				t.Errorf("Expected at least %d models for provider %s, got %d",
 					tt.wantMinCount, tt.provider, len(models))
 			}
 

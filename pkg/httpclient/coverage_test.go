@@ -113,12 +113,12 @@ func TestCircuitBreakerIsOpen(t *testing.T) {
 
 	// Wait for timeout to transition to half-open
 	time.Sleep(150 * time.Millisecond)
-	
+
 	// Try to make a request - this should transition to half-open
 	if !cb.Allow() {
 		t.Log("Circuit breaker is not allowing requests after timeout")
 	}
-	
+
 	// Record success to close it
 	cb.RecordSuccess()
 
@@ -236,7 +236,7 @@ func TestMiddlewareChaining(t *testing.T) {
 	// ChainTransportWrappers returns a wrapper function, apply it to base
 	chainedWrapper := ChainTransportWrappers(wrapper1, wrapper2)
 	chained := chainedWrapper(base)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
 	_, err := chained.RoundTrip(req)
 	if err != nil {
@@ -267,10 +267,10 @@ func TestWithRetry(t *testing.T) {
 
 	// WithRetry takes maxRetries and backoff duration
 	wrapped := WithRetry(3, 10*time.Millisecond)(base)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
 	resp, err := wrapped.RoundTrip(req)
-	
+
 	if err != nil {
 		t.Fatalf("Request failed after retries: %v", err)
 	}
@@ -296,10 +296,10 @@ func TestWithTimeout(t *testing.T) {
 
 	// Add timeout shorter than delay
 	wrapped := WithTimeout(50 * time.Millisecond)(base)
-	
+
 	req, _ := http.NewRequest("GET", "http://example.com", nil)
 	_, err := wrapped.RoundTrip(req)
-	
+
 	if err == nil {
 		t.Error("Expected timeout error, got nil")
 	}
@@ -323,7 +323,6 @@ func TestRequestIDGeneration(t *testing.T) {
 		t.Error("Request ID too short")
 	}
 }
-
 
 // RoundTripperFunc is a helper to create RoundTripper from a function
 type RoundTripperFunc func(*http.Request) (*http.Response, error)

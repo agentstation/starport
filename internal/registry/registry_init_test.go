@@ -29,7 +29,7 @@ func TestNewRegistry_EmptyProviders(t *testing.T) {
 	cfg := &Config{
 		Providers: &config.ProvidersConfig{},
 	}
-	
+
 	reg, err := New(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, reg)
@@ -53,7 +53,7 @@ func TestNewRegistry_WithProviders(t *testing.T) {
 		},
 		HealthCheckOnInit: false, // Skip health check in test
 	}
-	
+
 	reg, err := New(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, reg)
@@ -129,7 +129,7 @@ func TestNewRegistry_GoogleProviders(t *testing.T) {
 				Providers:         tt.providers,
 				HealthCheckOnInit: false,
 			}
-			
+
 			reg, err := New(cfg)
 			require.NoError(t, err)
 			require.NotNil(t, reg)
@@ -167,7 +167,7 @@ func TestNewRegistry_MultipleProviders(t *testing.T) {
 		},
 		HealthCheckOnInit: false,
 	}
-	
+
 	reg, err := New(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, reg)
@@ -181,7 +181,7 @@ func TestNewRegistry_MultipleProviders(t *testing.T) {
 
 func TestRegistry_GetConnectorForModel(t *testing.T) {
 	reg := NewEmpty()
-	
+
 	// Add mock connector
 	mockConfig := connectors.ProviderConfig{
 		BaseURL: "http://mock",
@@ -199,7 +199,7 @@ func TestRegistry_GetConnectorForModel(t *testing.T) {
 
 func TestRegistry_HealthCheck(t *testing.T) {
 	reg := NewEmpty()
-	
+
 	// Add mock connector
 	mockConfig := connectors.ProviderConfig{
 		BaseURL: "http://mock",
@@ -211,7 +211,7 @@ func TestRegistry_HealthCheck(t *testing.T) {
 	// Perform health check
 	ctx := context.Background()
 	results := reg.HealthCheck(ctx)
-	
+
 	// Mock connector should pass health check
 	assert.Contains(t, results, "mock")
 	assert.NoError(t, results["mock"])
@@ -220,9 +220,8 @@ func TestRegistry_HealthCheck(t *testing.T) {
 func TestNewEmpty(t *testing.T) {
 	reg := NewEmpty()
 	require.NotNil(t, reg)
-	
+
 	// Should have no providers
 	providers := reg.ListProviders()
 	assert.Empty(t, providers)
 }
-

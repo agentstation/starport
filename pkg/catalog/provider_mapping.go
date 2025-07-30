@@ -14,10 +14,10 @@ func GetProviderForModel(modelID string) string {
 	if len(parts) < 2 {
 		return ""
 	}
-	
+
 	prefix := parts[0]
 	modelName := parts[1]
-	
+
 	// Special handling for Google models
 	if prefix == "google" {
 		// Vertex AI specific models
@@ -30,12 +30,12 @@ func GetProviderForModel(modelID string) string {
 		// Default to AI Studio for Gemini models
 		return "google-ai-studio"
 	}
-	
+
 	// Direct mapping for other providers
 	if mapped, ok := providerMapping[prefix]; ok {
 		return mapped
 	}
-	
+
 	// Return the prefix as-is for other providers
 	return prefix
 }
@@ -43,13 +43,13 @@ func GetProviderForModel(modelID string) string {
 // GetModelsByProviderWithMapping returns models for a provider, handling prefix mappings
 func (c *Catalog) GetModelsByProviderWithMapping(provider string) []*Model {
 	var result []*Model
-	
+
 	for modelID, model := range c.Models {
 		modelProvider := GetProviderForModel(modelID)
 		if modelProvider == provider {
 			result = append(result, model)
 		}
 	}
-	
+
 	return result
 }
