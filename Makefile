@@ -1,5 +1,5 @@
-
 # Starport Makefile
+MAKEFLAGS += --no-print-directory
 
 # Variables
 BINARY_NAME=starport
@@ -28,67 +28,50 @@ LDFLAGS = -ldflags "\
 
 # Default target
 .PHONY: all
-all: build
+all: help
 
-# Build the binary
+##@ General
+
+.PHONY: help
+help: ## Display this help message
+	@awk 'BEGIN {FS = ":.*##"; printf "\n\033[1mUsage:\033[0m\n  make \033[36m<target>\033[0m\n"} \
+		/^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 } \
+		/^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } \
+		/^###/ { printf "  \033[90m%s\033[0m\n", substr($$0, 4) }' $(MAKEFILE_LIST)
+
+##@ Development
+### Use 'make dev' for hot-reload development mode
+
+.PHONY: dev
+dev: check-air ## Start development server with hot-reloading (recommended)
+	@echo "Starting development server with hot reload..."
+	@air
+
+.PHONY: run
+run: build ## Build and run the server (no hot reload)
+	./$(BINARY_NAME) serve
+
+.PHONY: build-run
+build-run: ## Build and run in one command
+	@$(MAKE) build
+	@$(MAKE) run
+
+##@ Build
+
 .PHONY: build
-build:
+build: ## Build the binary
 	@echo "Building $(BINARY_NAME)..."
 	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
-# Run tests
-.PHONY: test
-test:
-	@echo "Running tests..."
-	$(GO) test $(GOFLAGS) ./...
-
-# Run tests with coverage
-.PHONY: test-coverage
-test-coverage:
-	@echo "Running tests with coverage..."
-	$(GO) test -coverprofile=coverage.out ./...
-	$(GO) tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
-	@$(GO) tool cover -func=coverage.out | grep total | awk '{print "Total coverage: " $$3}'
-
-# Clean build artifacts
-.PHONY: clean
-clean:
-	@echo "Cleaning..."
-	rm -f $(BUILD_DIR)/$(BINARY_NAME)
-	$(GO) clean -testcache
-	@echo "Clean complete"
-
-# Format code
-.PHONY: fmt
-fmt:
-	@echo "Formatting code..."
-	$(GO) fmt ./...
-	@echo "Format complete"
-
-# Lint code
-.PHONY: lint
-lint:
-	@echo "Linting code..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not installed, running basic go vet..."; \
-		$(GO) vet ./...; \
-	fi
-	@echo "Lint complete"
-
-# Development build (with race detector)
-.PHONY: dev
-dev:
-	@echo "Building development version with race detector..."
+.PHONY: build-race
+build-race: ## Build with race detector enabled
+	@echo "Building with race detector..."
 	$(GO) build -race $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
-	@echo "Development build complete"
+	@echo "Build complete with race detector"
 
-# Release build (optimized, stripped)
 .PHONY: release
-release:
+release: ## Build optimized production binary
 	@echo "Building release version..."
 	$(GO) build -trimpath -ldflags "-s -w \
 		-X main.version=$(VERSION) \
@@ -100,51 +83,32 @@ release:
 	@echo "Release build complete"
 	@echo "Binary size: $$(du -h $(BUILD_DIR)/$(BINARY_NAME) | cut -f1)"
 
-# Install dependencies
-.PHONY: deps
-deps:
-	@echo "Installing dependencies..."
-	$(GO) mod download
-	$(GO) mod tidy
-	@echo "Dependencies installed"
+##@ Testing & Quality
+### Run 'make check' for all quality checks
 
-# Run the server
-.PHONY: run
-run: build
-	./$(BINARY_NAME) serve
+.PHONY: test
+test: ## Run all tests
+	@echo "Running tests..."
+	$(GO) test $(GOFLAGS) ./...
 
-# Run with docker-compose
-.PHONY: dev-docker
-dev-docker:
-	@echo "Starting development environment with docker-compose..."
-	docker-compose up -d
-	@echo "Development environment started:"
-	@echo "  - Starport: http://localhost:8080"
-	@echo "  - Valkey: localhost:6379"
-	@echo "Use 'make dev-docker-logs' to view logs"
+.PHONY: tests
+tests: test ## Alias for test
 
-# View docker-compose logs
-.PHONY: dev-docker-logs
-dev-docker-logs:
-	docker-compose logs -f
+.PHONY: test-race
+test-race: ## Run tests with race detector
+	@echo "Running tests with race detector..."
+	$(GO) test -race $(GOFLAGS) ./...
 
-# Stop docker-compose
-.PHONY: dev-docker-stop
-dev-docker-stop:
-	@echo "Stopping development environment..."
-	docker-compose down
-	@echo "Development environment stopped"
+.PHONY: test-coverage
+test-coverage: ## Run tests with coverage report
+	@echo "Running tests with coverage..."
+	$(GO) test -coverprofile=coverage.out ./...
+	$(GO) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+	@$(GO) tool cover -func=coverage.out | grep total | awk '{print "Total coverage: " $$3}'
 
-# Clean docker-compose volumes
-.PHONY: dev-docker-clean
-dev-docker-clean:
-	@echo "Cleaning development environment..."
-	docker-compose down -v
-	@echo "Development environment cleaned"
-
-# Run integration tests with docker-compose
 .PHONY: test-integration
-test-integration:
+test-integration: ## Run integration tests with docker-compose
 	@echo "Starting Valkey for integration tests..."
 	docker-compose up -d valkey
 	@echo "Waiting for Valkey to be ready..."
@@ -157,35 +121,118 @@ test-integration:
 	docker-compose stop valkey
 	@echo "Integration tests complete"
 
-# Show version
+.PHONY: check
+check: format lint test ## Run all checks (format, lint, test)
+
+.PHONY: check-race
+check-race: format lint test-race ## Run all checks with race detection
+
+.PHONY: format
+format: ## Format code using goimports (or go fmt)
+	@echo "Formatting code..."
+	@if command -v goimports >/dev/null 2>&1; then \
+		echo "Using goimports..."; \
+		goimports -w $$(find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./tmp/*"); \
+	else \
+		echo "Using go fmt..."; \
+		$(GO) fmt ./...; \
+	fi
+	@echo "Format complete"
+
+.PHONY: fmt
+fmt: format ## Alias for format
+
+.PHONY: lint
+lint: ## Lint code
+	@echo "Linting code..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run; \
+	else \
+		echo "golangci-lint not installed, running basic go vet..."; \
+		$(GO) vet ./...; \
+	fi
+	@echo "Lint complete"
+
+##@ Tools
+### Install development tools with 'make tools'
+
+.PHONY: check-air
+check-air:
+	@if ! command -v air &> /dev/null; then \
+		echo "Error: Air not found."; \
+		echo "Install with: make install-air"; \
+		exit 1; \
+	fi
+
+.PHONY: install-air
+install-air: ## Install Air for hot-reloading
+	@echo "Installing Air..."
+	@go install github.com/cosmtrek/air@latest
+	@echo "Air installed successfully!"
+
+.PHONY: tools
+tools: install-air ## Install all development tools
+	@echo "Installing development tools..."
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install golang.org/x/tools/cmd/goimports@latest
+	@echo "Optional: Install gofumpt for stricter formatting:"
+	@echo "  go install mvdan.cc/gofumpt@latest"
+	@echo "All tools installed!"
+
+##@ Dependencies
+
+.PHONY: deps
+deps: ## Install dependencies
+	@echo "Installing dependencies..."
+	$(GO) mod download
+	$(GO) mod tidy
+	@echo "Dependencies installed"
+
+##@ Docker
+### Requires: Docker and docker-compose installed
+
+.PHONY: dev-docker
+dev-docker: ## Start development environment with docker-compose
+	@echo "Starting development environment with docker-compose..."
+	docker-compose up -d
+	@echo "Development environment started:"
+	@echo "  - Starport: http://localhost:8080"
+	@echo "  - Valkey: localhost:6379"
+	@echo "Use 'make dev-docker-logs' to view logs"
+
+.PHONY: dev-docker-logs
+dev-docker-logs: ## View docker-compose logs
+	docker-compose logs -f
+
+.PHONY: dev-docker-stop
+dev-docker-stop: ## Stop docker-compose environment
+	@echo "Stopping development environment..."
+	docker-compose down
+	@echo "Development environment stopped"
+
+.PHONY: dev-docker-clean
+dev-docker-clean: ## Clean docker-compose volumes
+	@echo "Cleaning development environment..."
+	docker-compose down -v
+	@echo "Development environment cleaned"
+
+##@ Utilities
+
+.PHONY: clean
+clean: ## Clean build artifacts
+	@echo "Cleaning..."
+	rm -f $(BUILD_DIR)/$(BINARY_NAME)
+	rm -rf tmp/
+	rm -f coverage.out coverage.html
+	rm -f build-errors.log
+	$(GO) clean -testcache
+	@echo "Clean complete"
+
 .PHONY: version
-version: build
+version: build ## Show version information
 	./$(BINARY_NAME) version
 
-## ford: generate catalog.json from provider.json and output to pkg/catalog/catalog.json
 .PHONY: ford
-ford:
+ford: ## Generate catalog.json from provider.json
 	@ford parse -input ../ford/data -p pkg/catalog/provider.json -o pkg/catalog/catalog.json
 
-# Help target
-.PHONY: help
-help:
-	@echo "Available targets:"
-	@echo "  make build              - Build the binary"
-	@echo "  make release            - Build optimized release binary"
-	@echo "  make test               - Run tests"
-	@echo "  make test-coverage      - Run tests with coverage report"
-	@echo "  make test-integration   - Run integration tests with docker-compose"
-	@echo "  make clean              - Clean build artifacts"
-	@echo "  make fmt                - Format code"
-	@echo "  make lint               - Lint code"
-	@echo "  make dev                - Build with race detector"
-	@echo "  make deps               - Install dependencies"
-	@echo "  make run                - Build and run the server"
-	@echo "  make dev-docker         - Start development environment with docker-compose"
-	@echo "  make dev-docker-logs    - View docker-compose logs"
-	@echo "  make dev-docker-stop    - Stop docker-compose environment"
-	@echo "  make dev-docker-clean   - Clean docker-compose volumes"
-	@echo "  make ford               - Generate catalog.json from provider.json and output to pkg/catalog/catalog.json"
-	@echo "  make version            - Show version"
-	@echo "  make help               - Show this help message"

@@ -248,24 +248,36 @@ go tool pprof cpu.prof
 4. **Enable circuit breakers** to avoid cascading failures
 5. **Monitor memory usage** - current implementation uses ~8KB per request
 
-## Contributing
+## Development
 
-We welcome contributions! Please see our [Contributing Guidelines](docs/CONTRIBUTING.md) for details.
+For comprehensive development instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ### Quick Start
 
 ```bash
-# Clone and setup
+# Clone the repository
 git clone https://github.com/agentstation/starport.git
 cd starport
-go mod download
 
-# Run tests and build
+# Install dependencies and tools
+make deps
+make tools
+
+# Start development with hot reload
+make dev
+
+# Run tests
 make test
-make build
+
+# See all available commands
+make help
 ```
 
-For detailed development setup, testing guidelines, and contribution workflow, please refer to [CONTRIBUTING.md](docs/CONTRIBUTING.md).
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](docs/CONTRIBUTING.md) for the contribution process, code of conduct, and how to submit pull requests.
+
+For technical development details, refer to [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Roadmap
 

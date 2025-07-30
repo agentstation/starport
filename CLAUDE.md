@@ -593,30 +593,22 @@ func NewMockStore() *MockStore {
 
 ## Commands to Remember
 
+For comprehensive development commands and workflow, see [DEVELOPMENT.md](../DEVELOPMENT.md).
+
+### Essential Commands
+
 ```bash
-# Development workflow
-make dev              # Run with hot reload
-make test            # Run all tests
-make test-coverage   # Run tests with coverage report
-make lint            # Run linter (golangci-lint)
-make fmt             # Format code
+# Development
+make dev              # Start with hot reload
+make test             # Run tests
+make check            # Run all checks
 
-# Build commands
-make build           # Build binary
-make build-enterprise # Build with enterprise features
-make docker-build    # Build Docker image
-
-# Running locally
-./starport serve     # Start server (default port 3333)
-./starport serve --port 8080  # Custom port
-./starport version   # Show version
-
-# API key management
+# API key management  
 ./starport keys create --name dev-key  # Create new API key
 ./starport keys list                   # List all keys
 ./starport keys revoke <key-id>        # Revoke a key
 
-# Testing providers
+# Testing endpoints
 curl http://localhost:3333/api/v1/models  # List all models
 curl http://localhost:3333/health/live    # Health check
 
