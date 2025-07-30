@@ -14,7 +14,7 @@ import (
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
-	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/pkg/catalog"
 )
 
@@ -24,7 +24,7 @@ type Config struct {
 	Registry *registry.Registry
 
 	// Router handles intelligent model selection and failover
-	Router routing.ModelRouter
+	Router router.ModelRouter
 
 	// CacheManager handles response caching (optional)
 	CacheManager *cache.Manager
@@ -81,7 +81,7 @@ func WithMiddleware(m Middleware) Option {
 //	    proxy.WithMiddleware(loggingMiddleware),
 //	    proxy.WithMiddleware(metricsMiddleware),
 //	)
-func New(registry *registry.Registry, router routing.ModelRouter, opts ...Option) Proxy {
+func New(registry *registry.Registry, router router.ModelRouter, opts ...Option) Proxy {
 	// Initialize config with required dependencies
 	cfg := &Config{
 		Registry: registry,
@@ -135,7 +135,7 @@ func NewFromConfig(config *Config) Proxy {
 // proxy implements the Proxy interface
 type proxy struct {
 	registry *registry.Registry
-	router   routing.ModelRouter
+	router   router.ModelRouter
 }
 
 // ProcessChatCompletion handles chat completion requests with routing
@@ -158,7 +158,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	}
 
 	// Create routing request
-	routingReq := &routing.Request{
+	routingReq := &router.Request{
 		ChatRequest: connReq,
 		Models:      req.Models,
 		// TODO: Add provider preferences and API key config from context
@@ -299,7 +299,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 	}
 
 	// Create routing request
-	routingReq := &routing.Request{
+	routingReq := &router.Request{
 		ChatRequest: connReq,
 		Models:      req.Models,
 		// TODO: Add provider preferences and API key config from context

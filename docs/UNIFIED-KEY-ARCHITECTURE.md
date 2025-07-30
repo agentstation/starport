@@ -2,13 +2,13 @@
 
 ## Executive Summary
 
-This document outlines the transformation of Starport's key system to use [uuidkey](https://github.com/agentstation/uuidkey) for API key generation while simplifying the credential architecture. The design unifies BYOK credentials and gateway default keys into a single model, maintaining full compatibility with [OpenRouter's BYOK specification](https://openrouter.ai/docs/use-cases/byok) while reducing code complexity.
+This document outlines the transformation of Starport's key system to use [uuidkey](https://github.com/agentstation/uuidkey) for API key generation while simplifying the credential architecture. The design unifies provider keys and gateway default keys into a single model, maintaining full compatibility with [OpenRouter's BYOK specification](https://openrouter.ai/docs/use-cases/byok) while reducing code complexity.
 
 ## Table of Contents
 
 1. [Current State Analysis](#current-state-analysis)
 2. [Proposed Architecture](#proposed-architecture)
-3. [OpenRouter BYOK Compatibility](#openrouter-byok-compatibility)
+3. [OpenRouter Compatibility](#openrouter-compatibility)
 4. [Data Models](#data-models)
 5. [KV Storage Schema](#kv-storage-schema)
 6. [Implementation Phases](#implementation-phases)
@@ -22,8 +22,8 @@ This document outlines the transformation of Starport's key system to use [uuidk
 ### Current Architecture
 
 1. **API Keys**: Basic hash-based authentication with scopes
-2. **BYOK Credentials**: User-provided provider keys (encrypted, tied to API keys)
-3. **Default Keys**: Gateway-wide provider keys (separate model, duplicates BYOK functionality)
+2. **Provider Keys**: User-provided provider keys (encrypted, tied to API keys)
+3. **Default Keys**: Gateway-wide provider keys (separate model, duplicates provider key functionality)
 
 ### Key Improvements Needed
 
@@ -38,8 +38,8 @@ This document outlines the transformation of Starport's key system to use [uuidk
 ### Core Changes
 
 1. **API Keys use UUIDKey**: Format `STARPRT_38QARV01ET0G6Z2CJD9VA2ZZAR0XJJLSO7WBNWY3F_A1B2C3D8`
-2. **Unified Credentials**: Merge BYOK and Default keys into single `ProviderCredential` model
-   - User BYOK: Has `api_key_id` linking to user's API key
+2. **Unified Credentials**: Merge provider keys and default keys into single `ProviderCredential` model
+   - User Provider Keys: Has `api_key_id` linking to user's API key
    - Gateway Default: Has empty `api_key_id` field
 3. **Enhanced Permissions**: Add RBAC fields to API keys for future enterprise integration
 
@@ -71,16 +71,16 @@ This document outlines the transformation of Starport's key system to use [uuidk
 └─────────────────┘
 ```
 
-## OpenRouter BYOK Compatibility
+## OpenRouter Compatibility
 
 ### Maintained Features
 
 1. **5% Pricing Model**: User-provided keys incur 5% of standard pricing
 2. **Response Headers**:
    ```
-   X-Key-Type: byok|gateway|default
+   X-Key-Type: user|gateway|default
    X-Provider-Used: openai|anthropic|...
-   X-BYOK-Cost: 0.00001 (5% of standard cost)
+   X-Provider-Key-Cost: 0.00001 (5% of standard cost)
    ```
 3. **Fallback Behavior**: Keys can be configured as primary or fallback
 4. **Provider Formats**: Support for OpenAI, Azure, AWS Bedrock key formats
@@ -167,14 +167,14 @@ credential:by-provider:{provider}:{api_key_id}   -> {credential_id}
 
 # Usage Tracking (enhanced)
 usage:apikey:{id}:{date}                         -> DailyUsage
-usage:byok:{api_key_id}:{provider}:{date}        -> DailyUsage
+usage:provider:{api_key_id}:{provider}:{date}    -> DailyUsage
 
 # Rate Limiting (unchanged)
 ratelimit:apikey:{id}:{window}:{bucket}          -> TokenBucket
 
 # Audit Log (enhanced)
 audit:apikey:{id}:{timestamp}                    -> AuditEntry
-audit:byok:{api_key_id}:{provider}:{timestamp}   -> AuditEntry
+audit:provider:{api_key_id}:{provider}:{timestamp} -> AuditEntry
 ```
 
 ### Access Resolution Algorithm

@@ -3,7 +3,7 @@
 ## Current Problem
 
 We have two separate models for essentially the same thing:
-- `BYOKCredential` - User-provided provider keys (tied to API keys)
+- `ProviderKey` - User-provided provider keys (tied to API keys)
 - `DefaultKey` - Gateway-wide provider keys
 
 This creates unnecessary duplication and complexity.
@@ -43,7 +43,7 @@ type ProviderCredential struct {
 
 ## How It Works
 
-### User BYOK Credentials
+### User Provider Keys
 ```go
 {
     "id": "cred_abc123",
@@ -93,8 +93,8 @@ credential:defaults:{provider} -> {id}
 
 ## Migration Path
 
-1. Update `BYOKCredential` to include `RateLimit` field
-2. Migrate existing `DefaultKey` entries to `BYOKCredential` with empty `api_key_id`
+1. Update `ProviderKey` to include `RateLimit` field
+2. Migrate existing `DefaultKey` entries to `ProviderKey` with empty `scope`
 3. Update credential lookup logic to handle both cases
 4. Remove `DefaultKey` model entirely
 
@@ -102,7 +102,7 @@ credential:defaults:{provider} -> {id}
 
 ```go
 func ResolveCredential(apiKeyID, provider string) (*ProviderCredential, error) {
-    // 1. Try user's BYOK credentials first
+    // 1. Try user's provider keys first
     userCreds := getCredentials(provider, apiKeyID)
     
     // 2. Sort by priority and fallback status

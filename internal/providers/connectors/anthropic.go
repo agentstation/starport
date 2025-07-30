@@ -268,8 +268,8 @@ func (c *AnthropicConnector) handleError(resp *http.Response) error {
 }
 
 // convertToAnthropicRequest converts OpenAI format to Anthropic format
-func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[string]interface{} {
-	anthropicReq := make(map[string]interface{})
+func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[string]any {
+	anthropicReq := make(map[string]any)
 
 	// Model - resolve alias and strip provider prefix
 	modelID := req.Model
@@ -287,7 +287,7 @@ func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[str
 	anthropicReq["model"] = model
 
 	// Convert messages
-	var messages []map[string]interface{}
+	var messages []map[string]any
 	var system string
 
 	for _, msg := range req.Messages {
@@ -299,7 +299,7 @@ func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[str
 			continue
 		}
 
-		anthropicMsg := map[string]interface{}{
+		anthropicMsg := map[string]any{
 			"role": msg.Role,
 		}
 
@@ -308,17 +308,17 @@ func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[str
 			anthropicMsg["content"] = strContent
 		} else if parts, ok := msg.Content.([]ContentPart); ok {
 			// Handle multimodal content
-			var content []map[string]interface{}
+			var content []map[string]any
 			for _, part := range parts {
 				if part.Type == "text" {
-					content = append(content, map[string]interface{}{
+					content = append(content, map[string]any{
 						"type": "text",
 						"text": part.Text,
 					})
 				} else if part.Type == "image_url" && part.ImageURL != nil {
-					content = append(content, map[string]interface{}{
+					content = append(content, map[string]any{
 						"type": "image",
-						"source": map[string]interface{}{
+						"source": map[string]any{
 							"type":       "base64",
 							"media_type": "image/jpeg",      // TODO: detect from URL
 							"data":       part.ImageURL.URL, // Assuming base64 data

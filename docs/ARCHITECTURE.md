@@ -77,7 +77,7 @@ starport/
 ├── internal/                  # Private application code
 │   ├── apikey/               # API key management and validation ✅
 │   ├── app/                  # Application lifecycle ✅
-│   ├── byok/                 # BYOK credential management ✅
+│   ├── providers/            # Provider key management (includes BYOK) ✅
 │   ├── cache/                # Cache manager (interface only) 🚧
 │   ├── config/               # Configuration system ✅
 │   ├── models/               # Data models (presets, provider keys, etc.) ✅
@@ -322,7 +322,7 @@ Current test coverage by package:
 - `server`: 93% ✅
 - `models`: 91.9% ✅
 - `routing`: 76.2% ✅
-- `byok`: 75%+ ✅
+- `providers`: 75%+ ✅
 - `cache`: Interface only, no tests 🚧
 
 ## 10. Production Readiness Assessment

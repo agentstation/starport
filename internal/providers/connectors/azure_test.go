@@ -33,7 +33,7 @@ func TestNewAzureOpenAIConnector(t *testing.T) {
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
-				Extra: map[string]interface{}{
+				Extra: map[string]any{
 					"api_version": "2024-03-01-preview",
 				},
 			},
@@ -198,7 +198,7 @@ func TestAzureOpenAIConnector_APIVersion(t *testing.T) {
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		Extra: map[string]interface{}{
+		Extra: map[string]any{
 			"api_version": "2024-03-01-preview",
 		},
 	})
@@ -219,8 +219,8 @@ func TestAzureOpenAIConnector_ErrorHandling(t *testing.T) {
 	// Azure should handle errors like OpenAI but with Azure-specific error format
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
 				"message": "Access denied due to invalid subscription key",
 				"type":    "invalid_request_error",
 				"code":    "401",

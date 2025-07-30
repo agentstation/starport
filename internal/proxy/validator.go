@@ -181,7 +181,7 @@ func ValidateEmbeddingsRequest(req *EmbeddingsRequest) error {
 				}
 			}
 		}
-	case []interface{}:
+	case []any:
 		if len(v) == 0 {
 			return &ValidationError{
 				Field:   "input",

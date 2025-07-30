@@ -310,14 +310,14 @@ func (cm *Manager) SetResponse(ctx context.Context, key string, response []byte)
 }
 
 // GetModel retrieves model metadata (local cache only)
-func (cm *Manager) GetModel(ctx context.Context, modelID string) (interface{}, bool, error) {
+func (cm *Manager) GetModel(ctx context.Context, modelID string) (any, bool, error) {
 	data, found, err := cm.models.Get(ctx, modelID)
 	if err != nil || !found {
 		return nil, found, err
 	}
 
 	// Unmarshal the data
-	var model interface{}
+	var model any
 	if err := json.Unmarshal(data, &model); err != nil {
 		return nil, false, fmt.Errorf("failed to unmarshal model: %w", err)
 	}
@@ -326,7 +326,7 @@ func (cm *Manager) GetModel(ctx context.Context, modelID string) (interface{}, b
 }
 
 // SetModel caches model metadata (local cache only)
-func (cm *Manager) SetModel(ctx context.Context, modelID string, model interface{}) error {
+func (cm *Manager) SetModel(ctx context.Context, modelID string, model any) error {
 	data, err := json.Marshal(model)
 	if err != nil {
 		return fmt.Errorf("failed to marshal model: %w", err)

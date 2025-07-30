@@ -63,8 +63,8 @@ type Model struct {
 	TopProvider *TopProvider `json:"top_provider,omitempty"` // Provider configuration
 
 	// Parameters and limits
-	SupportedParameters []string               `json:"supported_parameters,omitempty"` // e.g., ["temperature", "top_p"]
-	PerRequestLimits    map[string]interface{} `json:"per_request_limits,omitempty"`   // Rate limits
+	SupportedParameters []string       `json:"supported_parameters,omitempty"` // e.g., ["temperature", "top_p"]
+	PerRequestLimits    map[string]any `json:"per_request_limits,omitempty"`   // Rate limits
 
 	// Internal fields (not in API responses)
 	Provider     string    `json:"-"` // Parent provider ID for internal use
@@ -252,7 +252,7 @@ func (m *Model) Clone() *Model {
 
 	// Deep copy map
 	if m.PerRequestLimits != nil {
-		clone.PerRequestLimits = make(map[string]interface{}, len(m.PerRequestLimits))
+		clone.PerRequestLimits = make(map[string]any, len(m.PerRequestLimits))
 		for k, v := range m.PerRequestLimits {
 			clone.PerRequestLimits[k] = v
 		}

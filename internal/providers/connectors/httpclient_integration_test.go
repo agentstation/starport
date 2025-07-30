@@ -64,7 +64,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 			name:          "vertex-ai uses httpclient with circuit breaker",
 			connectorType: "vertex-ai",
 			setupConnector: func(config ProviderConfig) (Connector, error) {
-				config.Extra = map[string]interface{}{
+				config.Extra = map[string]any{
 					"project_id": "test-project",
 					"location":   "us-central1",
 				}
@@ -112,7 +112,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				// OpenAI-style endpoints
 				case r.URL.Path == "/v1/models" || r.URL.Path == "/openai/v1/models":
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
 						"data": []map[string]string{
 							{"id": "test-model"},
 						},
@@ -120,9 +120,9 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				// OpenAI chat completions
 				case r.URL.Path == "/v1/chat/completions" || r.URL.Path == "/openai/v1/chat/completions":
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
 						"id": "test-response",
-						"choices": []map[string]interface{}{
+						"choices": []map[string]any{
 							{
 								"message": map[string]string{
 									"role":    "assistant",
@@ -140,7 +140,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				// Anthropic messages endpoint
 				case r.URL.Path == "/v1/messages" || r.URL.Path == "/messages":
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
 						"id":   "test-response",
 						"type": "message",
 						"role": "assistant",
@@ -155,8 +155,8 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				// Google/Gemini models endpoint
 				case strings.Contains(r.URL.Path, "/models"):
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"models": []map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
+						"models": []map[string]any{
 							{
 								"name":                       "models/test-model",
 								"supportedGenerationMethods": []string{"generateContent"},
@@ -166,8 +166,8 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				// Ollama API endpoints
 				case r.URL.Path == "/api/tags":
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"models": []map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
+						"models": []map[string]any{
 							{
 								"name": "test-model",
 								"size": 1000000,
@@ -177,7 +177,7 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 				// Ollama chat endpoint
 				case r.URL.Path == "/api/chat":
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
 						"message": map[string]string{
 							"role":    "assistant",
 							"content": "test response",
@@ -189,9 +189,9 @@ func TestConnectorHTTPClientIntegration(t *testing.T) {
 					if strings.Contains(r.URL.Path, "/chat/completions") {
 						// Azure chat completion
 						w.WriteHeader(http.StatusOK)
-						json.NewEncoder(w).Encode(map[string]interface{}{
+						json.NewEncoder(w).Encode(map[string]any{
 							"id": "test-response",
-							"choices": []map[string]interface{}{
+							"choices": []map[string]any{
 								{
 									"message": map[string]string{
 										"role":    "assistant",
@@ -377,7 +377,7 @@ func TestHTTPClientRetryBehavior(t *testing.T) {
 
 		// Success
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]string{{"id": "model1"}},
 		})
 

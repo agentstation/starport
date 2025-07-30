@@ -297,7 +297,7 @@ func TestValkeyIntegration(t *testing.T) {
 	t.Run("Models Cache", func(t *testing.T) {
 		// Test model metadata caching
 		modelID := "test-provider/model1"
-		model := map[string]interface{}{
+		model := map[string]any{
 			"id":   "model1",
 			"name": "Model 1",
 		}

@@ -28,7 +28,7 @@ Last Updated: 2025-01-11
 | P1-S3-3.3 | Backend | #15 | 2025-01-08 | Proxy endpoints implemented with /v1 and /api/v1 routes, streaming support, request validation, connector initialization from config, 85.4% test coverage |
 | P1-S3-3.2 | Backend | #13 | 2025-01-08 | All 6 LLM provider connectors implemented with streaming, OpenRouter-compatible model IDs, 84.0% test coverage |
 | P1-S3-3.1 | Backend | #12 | 2025-01-08 | Model Connector Interface with streaming support, health checks, mock implementation, 90.6% test coverage |
-| P1-S2-2.3 | Storage | #10 | 2025-01-08 | Core storage models with APIKey, Preset, BYOKCredential, TokenBucket, AES-256-GCM encryption, 91.9% test coverage |
+| P1-S2-2.3 | Storage | #10 | 2025-01-08 | Core storage models with APIKey, Preset, ProviderKey, TokenBucket, AES-256-GCM encryption, 91.9% test coverage |
 | P1-S2-2.2 | Storage | #7 | 2025-01-08 | Badger DB integration with full KVStore implementation, TTL support, backup/restore, compaction, 100% test coverage |
 | P1-S2-2.1 | Storage | #6 | 2025-01-08 | Storage interface with KVStore abstraction, error types, serialization, mock implementation, 82.4% test coverage |
 | P1-S1-1.5 | API | #5 | 2025-01-07 | Configuration system with env vars, .env files, validation, and hot reload for rate limits |
@@ -106,7 +106,7 @@ Last Updated: 2025-01-11
 ### Code Quality
 - **Average Test Coverage**: 82.4%
 - **Packages > 90%**: storage (100%), server (93%), models (91.9%)
-- **Packages < 80%**: routing (76.2%), byok (75%), cache (0%)
+- **Packages < 80%**: routing (76.2%), providers (75%), cache (0%)
 
 ### Implementation Status
 - **API Endpoints**: 90% complete (missing management APIs)

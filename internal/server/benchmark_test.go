@@ -31,9 +31,9 @@ func BenchmarkProxyHandler(b *testing.B) {
 	server := New(config, reg)
 
 	// Prepare test request
-	chatReq := map[string]interface{}{
+	chatReq := map[string]any{
 		"model": "mock/test-model",
-		"messages": []map[string]interface{}{
+		"messages": []map[string]any{
 			{
 				"role":    "user",
 				"content": "Hello",
@@ -105,23 +105,23 @@ func BenchmarkMiddlewareChain(b *testing.B) {
 // BenchmarkRequestDeserialization measures JSON parsing overhead
 func BenchmarkRequestDeserialization(b *testing.B) {
 	// Small request
-	smallReq := map[string]interface{}{
+	smallReq := map[string]any{
 		"model": "gpt-3.5-turbo",
-		"messages": []map[string]interface{}{
+		"messages": []map[string]any{
 			{"role": "user", "content": "Hello"},
 		},
 	}
 	smallBody, _ := json.Marshal(smallReq)
 
 	// Large request with many messages
-	largeMessages := make([]map[string]interface{}, 100)
+	largeMessages := make([]map[string]any, 100)
 	for i := range largeMessages {
-		largeMessages[i] = map[string]interface{}{
+		largeMessages[i] = map[string]any{
 			"role":    "user",
 			"content": "This is a longer message to simulate real-world usage patterns in production environments.",
 		}
 	}
-	largeReq := map[string]interface{}{
+	largeReq := map[string]any{
 		"model":    "gpt-4",
 		"messages": largeMessages,
 	}
@@ -131,7 +131,7 @@ func BenchmarkRequestDeserialization(b *testing.B) {
 		b.SetBytes(int64(len(smallBody)))
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			var req map[string]interface{}
+			var req map[string]any
 			if err := json.Unmarshal(smallBody, &req); err != nil {
 				b.Fatal(err)
 			}
@@ -143,7 +143,7 @@ func BenchmarkRequestDeserialization(b *testing.B) {
 		b.SetBytes(int64(len(largeBody)))
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			var req map[string]interface{}
+			var req map[string]any
 			if err := json.Unmarshal(largeBody, &req); err != nil {
 				b.Fatal(err)
 			}

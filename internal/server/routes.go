@@ -15,8 +15,8 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 
 	// Health check endpoints (no auth required)
 	mux.Route("/health", func(r chi.Router) {
-		r.Get("/live", s.handlers.Health.Live)
-		r.Get("/ready", s.handlers.Health.Ready)
+		r.Get("/live", s.controllers.Health.Live)
+		r.Get("/ready", s.controllers.Health.Ready)
 	})
 
 	// OpenAI-compatible API (v1)
@@ -26,14 +26,14 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		r.Use(s.requireAPIKey)
 
 		// Chat completions
-		r.Post("/chat/completions", s.handlers.Chat.Create)
+		r.Post("/chat/completions", s.controllers.Chat.Create)
 
 		// Embeddings
-		r.Post("/embeddings", s.handlers.Embeddings.Create)
+		r.Post("/embeddings", s.controllers.Embeddings.Create)
 
 		// Models
-		r.Get("/models", s.handlers.Models.List)
-		r.Get("/models/{model}", s.handlers.Models.Get)
+		r.Get("/models", s.controllers.Models.List)
+		r.Get("/models/{model}", s.controllers.Models.Get)
 	})
 
 	// OpenRouter-compatible API (api/v1)
@@ -43,37 +43,37 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		r.Use(s.requireAPIKey)
 
 		// Chat completions with routing
-		r.Post("/chat/completions", s.handlers.Chat.Create)
+		r.Post("/chat/completions", s.controllers.Chat.Create)
 
 		// Embeddings
-		r.Post("/embeddings", s.handlers.Embeddings.Create)
+		r.Post("/embeddings", s.controllers.Embeddings.Create)
 
 		// Models with enhanced metadata
-		r.Get("/models", s.handlers.Models.List)
-		r.Get("/models/{model}", s.handlers.Models.Get)
-		r.Get("/models/{model}/endpoints", s.handlers.Models.GetEndpoints)
+		r.Get("/models", s.controllers.Models.List)
+		r.Get("/models/{model}", s.controllers.Models.Get)
+		r.Get("/models/{model}/endpoints", s.controllers.Models.GetEndpoints)
 
 		// Providers metadata
-		r.Get("/providers", s.handlers.Providers.List)
+		r.Get("/providers", s.controllers.Providers.List)
 
 		// Key management endpoints
 		r.Route("/keys/{key_id}/provider-keys", func(r chi.Router) {
 			r.Use(s.requireKeyOwnership) // Additional middleware to verify key ownership
 
-			r.Get("/", s.handlers.ProviderKeys.List)
-			r.Post("/", s.handlers.ProviderKeys.Create)
-			r.Get("/{provider}", s.handlers.ProviderKeys.Get)
-			r.Put("/{provider}", s.handlers.ProviderKeys.Update)
-			r.Delete("/{provider}", s.handlers.ProviderKeys.Delete)
-			r.Post("/{provider}/validate", s.handlers.ProviderKeys.Validate)
+			r.Get("/", s.controllers.ProviderKeys.List)
+			r.Post("/", s.controllers.ProviderKeys.Create)
+			r.Get("/{provider}", s.controllers.ProviderKeys.Get)
+			r.Put("/{provider}", s.controllers.ProviderKeys.Update)
+			r.Delete("/{provider}", s.controllers.ProviderKeys.Delete)
+			r.Post("/{provider}/validate", s.controllers.ProviderKeys.Validate)
 		})
 
 		// Usage endpoints
 		r.Route("/keys/{key_id}/usage", func(r chi.Router) {
 			r.Use(s.requireKeyOwnership)
 
-			r.Get("/provider-keys", s.handlers.ProviderKeys.GetUsage)
-			r.Get("/comparison", s.handlers.ProviderKeys.GetUsageComparison)
+			r.Get("/provider-keys", s.controllers.ProviderKeys.GetUsage)
+			r.Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
 		})
 
 		// Admin endpoints (requires admin privileges)
@@ -82,22 +82,22 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 
 			// API key management
 			r.Route("/keys", func(r chi.Router) {
-				r.Get("/", s.handlers.Admin.ListKeys)
-				r.Post("/", s.handlers.Admin.CreateKey)
-				r.Get("/{key_id}", s.handlers.Admin.GetKey)
-				r.Put("/{key_id}", s.handlers.Admin.UpdateKey)
-				r.Delete("/{key_id}", s.handlers.Admin.DeleteKey)
+				r.Get("/", s.controllers.Admin.ListKeys)
+				r.Post("/", s.controllers.Admin.CreateKey)
+				r.Get("/{key_id}", s.controllers.Admin.GetKey)
+				r.Put("/{key_id}", s.controllers.Admin.UpdateKey)
+				r.Delete("/{key_id}", s.controllers.Admin.DeleteKey)
 			})
 
 			// System information
-			r.Get("/info", s.handlers.Admin.SystemInfo)
-			r.Get("/metrics", s.handlers.Admin.Metrics)
+			r.Get("/info", s.controllers.Admin.SystemInfo)
+			r.Get("/metrics", s.controllers.Admin.Metrics)
 		})
 	})
 
 	// ChatUI endpoints (optional feature)
-	if s.handlers.ChatUI != nil {
-		mux.Mount("/chat", s.handlers.ChatUI.Routes())
+	if s.controllers.ChatUI != nil {
+		mux.Mount("/chat", s.controllers.ChatUI.Routes())
 	}
 
 	// Legacy compatibility routes (deprecated)

@@ -94,7 +94,7 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 **✅ Core Storage Models (P1-S2-2.3)**
 - APIKey model with validation and permissions (moved to internal/apikeys package)
 - Preset model with versioning
-- BYOKCredential with AES-256-GCM encryption
+- ProviderKey with AES-256-GCM encryption (used for user keys)
 - TokenBucket for rate limiting
 - Encryption service with Argon2 key derivation
 - Storage key helpers and parsers
@@ -166,14 +166,14 @@ When you receive a task (e.g., P1-S1-1.2), follow these steps:
 - Maintains optimal connection state after successful failover
 - Comprehensive test coverage for multi-region scenarios
 
-**✅ BYOK Implementation (P1-S4-4.1)**
+**✅ Provider Key Management (P1-S4-4.1)**
 - OpenRouter-compatible BYOK with 5% pricing model
 - AES-256-GCM encryption with Argon2id key derivation
 - Zero-knowledge security design with per-API-key credential isolation
-- Three fallback strategies: Gateway First, BYOK First, BYOK Only
+- Three fallback strategies: Gateway First, User First, User Only
 - Provider-specific credential validation for all supported providers
-- BYOK manager with priority-based credential ordering
-- REST API endpoints for credential management
+- Provider key manager with priority-based key ordering
+- REST API endpoints for provider key management
 - Usage tracking and cost calculation
 - Response headers (X-Key-Type, X-BYOK-Cost)
 - 75%+ test coverage with security-focused tests
@@ -217,13 +217,12 @@ starport/
 ├── internal/            # Private application code
 │   ├── apikeys/        # API key management and validation ✅
 │   ├── app/            # Application lifecycle ✅
-│   ├── byok/           # BYOK credential management ✅
 │   ├── cache/          # Cache manager and strategies ✅
 │   ├── chatui/         # Chat UI handler ✅
 │   ├── config/         # Configuration system ✅
 │   ├── httpclient/     # HTTP client with retries ✅
 │   ├── models/         # Data models (presets, provider keys, etc.) ✅
-│   ├── providers/      # Provider implementations
+│   ├── providers/      # Provider key management and connectors ✅
 │   │   └── connectors/ # LLM provider connectors ✅
 │   ├── proxy/          # Request proxy with caching ✅
 │   ├── registry/       # Provider registry ✅
@@ -264,7 +263,7 @@ All configuration via environment variables or .env files:
 - ✅ 8 LLM provider connectors with full streaming support
 - ✅ OpenAI/OpenRouter compatible API endpoints
 - ✅ Smart routing with circuit breakers and fallback
-- ✅ BYOK implementation with AES-256-GCM encryption
+- ✅ Provider key management with AES-256-GCM encryption
 - ✅ Valkey/Redis distributed storage with pub/sub
 - ✅ Comprehensive caching with streaming support
 - ✅ Invalid model tracking and automatic filtering
@@ -559,7 +558,7 @@ func NewMockStore() *MockStore {
   - Thread-safe global caches need proper mutex protection
   - Consider making cache TTL configurable for different deployment scenarios
   - Separate connectors allow for provider-specific features (e.g., Vertex AI's Model Garden)
-- **Lessons from P1-S4-4.1 (BYOK Implementation):**
+- **Lessons from P1-S4-4.1 (Provider Key Management):**
   - Make defensive copies of sensitive data (e.g., master keys) to ensure immutability
   - Use `defer func() { _ = resp.Body.Close() }()` to satisfy errcheck linter for deferred closes
   - Mark unused parameters with `_` when they're reserved for future use or interface compliance

@@ -19,7 +19,7 @@ func TestPreset_Validate(t *testing.T) {
 				ID:          "test-id",
 				Name:        "test-preset",
 				Description: "Test preset",
-				Config:      map[string]interface{}{"model": "gpt-4"},
+				Config:      map[string]any{"model": "gpt-4"},
 				Version:     1,
 				CreatedAt:   now,
 				UpdatedAt:   now,
@@ -30,7 +30,7 @@ func TestPreset_Validate(t *testing.T) {
 			name: "missing id",
 			preset: &Preset{
 				Name:      "test-preset",
-				Config:    map[string]interface{}{"model": "gpt-4"},
+				Config:    map[string]any{"model": "gpt-4"},
 				Version:   1,
 				CreatedAt: now,
 				UpdatedAt: now,
@@ -43,7 +43,7 @@ func TestPreset_Validate(t *testing.T) {
 			preset: &Preset{
 				ID:        "test-id",
 				Name:      "test-preset",
-				Config:    map[string]interface{}{"model": "gpt-4"},
+				Config:    map[string]any{"model": "gpt-4"},
 				Version:   0,
 				CreatedAt: now,
 				UpdatedAt: now,
@@ -56,7 +56,7 @@ func TestPreset_Validate(t *testing.T) {
 			preset: &Preset{
 				ID:        "test-id",
 				Name:      "test-preset",
-				Config:    map[string]interface{}{},
+				Config:    map[string]any{},
 				Version:   1,
 				CreatedAt: now,
 				UpdatedAt: now,
@@ -69,7 +69,7 @@ func TestPreset_Validate(t *testing.T) {
 			preset: &Preset{
 				ID:        "test-id",
 				Name:      "test-preset",
-				Config:    map[string]interface{}{"model": "gpt-4"},
+				Config:    map[string]any{"model": "gpt-4"},
 				Version:   1,
 				CreatedAt: now,
 				UpdatedAt: now.Add(-time.Hour),

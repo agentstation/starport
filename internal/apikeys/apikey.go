@@ -10,16 +10,16 @@ import (
 
 // APIKey represents an API key for authenticating with the gateway
 type APIKey struct {
-	ID              string                 `json:"id"`
-	Name            string                 `json:"name"`
-	Hash            string                 `json:"hash"`
-	Scopes          []string               `json:"scopes"`
-	AllowedModels   []string               `json:"allowed_models,omitempty"`
-	RateLimitConfig map[string]interface{} `json:"rate_limit_config,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Active          bool                   `json:"active"`
-	CreatedAt       time.Time              `json:"created_at"`
-	ExpiresAt       *time.Time             `json:"expires_at,omitempty"`
+	ID              string         `json:"id"`
+	Name            string         `json:"name"`
+	Hash            string         `json:"hash"`
+	Scopes          []string       `json:"scopes"`
+	AllowedModels   []string       `json:"allowed_models,omitempty"`
+	RateLimitConfig map[string]any `json:"rate_limit_config,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+	Active          bool           `json:"active"`
+	CreatedAt       time.Time      `json:"created_at"`
+	ExpiresAt       *time.Time     `json:"expires_at,omitempty"`
 }
 
 // Common validation errors

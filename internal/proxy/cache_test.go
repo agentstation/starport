@@ -20,7 +20,7 @@ type mockCacheManager struct {
 	storage     map[string][]byte
 	calls       map[string]int
 	shouldError bool
-	returnAsMap bool // Simulate real behavior of returning map[string]interface{}
+	returnAsMap bool // Simulate real behavior of returning map[string]any
 }
 
 func newMockCacheManager() *mockCacheManager {
@@ -31,7 +31,7 @@ func newMockCacheManager() *mockCacheManager {
 	}
 }
 
-func (m *mockCacheManager) GetModel(ctx context.Context, key string) (interface{}, bool, error) {
+func (m *mockCacheManager) GetModel(ctx context.Context, key string) (any, bool, error) {
 	m.calls["GetModel"]++
 	if m.shouldError {
 		return nil, false, errors.New("cache error")
@@ -44,7 +44,7 @@ func (m *mockCacheManager) GetModel(ctx context.Context, key string) (interface{
 
 	if m.returnAsMap {
 		// Simulate real cache manager behavior
-		var result interface{}
+		var result any
 		err := json.Unmarshal(data, &result)
 		return result, true, err
 	}
@@ -55,7 +55,7 @@ func (m *mockCacheManager) GetModel(ctx context.Context, key string) (interface{
 	return &result, true, err
 }
 
-func (m *mockCacheManager) SetModel(ctx context.Context, key string, value interface{}) error {
+func (m *mockCacheManager) SetModel(ctx context.Context, key string, value any) error {
 	m.calls["SetModel"]++
 	if m.shouldError {
 		return errors.New("cache error")
@@ -212,7 +212,7 @@ func TestCachedService_ListModels(t *testing.T) {
 	// Wait for async cache write
 	time.Sleep(100 * time.Millisecond)
 
-	// Second call - cache hit (with map[string]interface{} conversion)
+	// Second call - cache hit (with map[string]any conversion)
 	resp2, err := service.ListModels(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, CacheStatusHit, resp2.CacheStatus)
@@ -782,7 +782,7 @@ func TestCachedService_PreservesAllFields(t *testing.T) {
 
 func TestCacheListResponse_HandlesMapFromCache(t *testing.T) {
 	// This test verifies that cacheListResponse correctly handles the
-	// map[string]interface{} that the real cache manager returns
+	// map[string]any that the real cache manager returns
 
 	ctx := context.Background()
 	mockCache := &mockCacheManagerForTest{
@@ -801,14 +801,14 @@ func TestCacheListResponse_HandlesMapFromCache(t *testing.T) {
 	err := mockCache.SetModel(ctx, "models:list", testResponse)
 	require.NoError(t, err)
 
-	// Retrieve it - this returns map[string]interface{} just like real cache
+	// Retrieve it - this returns map[string]any just like real cache
 	cached, found, err := mockCache.GetModel(ctx, "models:list")
 	require.NoError(t, err)
 	require.True(t, found)
 
 	// Verify it's a map (not the original type)
-	_, isMap := cached.(map[string]interface{})
-	assert.True(t, isMap, "Should be map[string]interface{}, got %T", cached)
+	_, isMap := cached.(map[string]any)
+	assert.True(t, isMap, "Should be map[string]any, got %T", cached)
 
 	// This demonstrates the panic that would occur without our fix:
 	assert.Panics(t, func() {
@@ -820,7 +820,7 @@ func TestCacheIntegration_ReproducesPanicScenario(t *testing.T) {
 	// This integration test reproduces the exact scenario that caused the panic:
 	// 1. A proxy response is cached
 	// 2. The cache manager stores it as JSON
-	// 3. When retrieved, it returns map[string]interface{} instead of the original type
+	// 3. When retrieved, it returns map[string]any instead of the original type
 	// 4. The type assertion fails and causes a panic
 
 	// Create real cache manager with correct config structure
@@ -874,9 +874,9 @@ func TestCacheIntegration_ReproducesPanicScenario(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, found)
 
-	// This demonstrates the problem: the cache returns map[string]interface{}
-	mapData, isMap := cached.(map[string]interface{})
-	assert.True(t, isMap, "Cache should return map[string]interface{}, got %T", cached)
+	// This demonstrates the problem: the cache returns map[string]any
+	mapData, isMap := cached.(map[string]any)
+	assert.True(t, isMap, "Cache should return map[string]any, got %T", cached)
 
 	// This would panic without our fix:
 	// resp := cached.(*ModelsResponse) // panic!
@@ -884,11 +884,11 @@ func TestCacheIntegration_ReproducesPanicScenario(t *testing.T) {
 	// Verify the map contains the expected data
 	assert.Equal(t, "list", mapData["object"])
 
-	dataArray, ok := mapData["data"].([]interface{})
+	dataArray, ok := mapData["data"].([]any)
 	require.True(t, ok, "data should be an array")
 	require.Len(t, dataArray, 1)
 
-	firstModel, ok := dataArray[0].(map[string]interface{})
+	firstModel, ok := dataArray[0].(map[string]any)
 	require.True(t, ok, "model should be a map")
 	assert.Equal(t, "gpt-4", firstModel["id"])
 }
@@ -898,19 +898,19 @@ type mockCacheManagerForTest struct {
 	storage map[string][]byte
 }
 
-func (m *mockCacheManagerForTest) GetModel(ctx context.Context, key string) (interface{}, bool, error) {
+func (m *mockCacheManagerForTest) GetModel(ctx context.Context, key string) (any, bool, error) {
 	data, found := m.storage[key]
 	if !found {
 		return nil, false, nil
 	}
 
-	// Simulate real cache manager: unmarshal to interface{}
-	var result interface{}
+	// Simulate real cache manager: unmarshal to any
+	var result any
 	err := json.Unmarshal(data, &result)
 	return result, true, err
 }
 
-func (m *mockCacheManagerForTest) SetModel(ctx context.Context, key string, value interface{}) error {
+func (m *mockCacheManagerForTest) SetModel(ctx context.Context, key string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err

@@ -27,7 +27,7 @@ func NewKeyGenerator(namespace string) *KeyGenerator {
 // The key is based on the model, messages, and relevant parameters.
 func (kg *KeyGenerator) ChatCompletionKey(req ChatCompletionRequest) string {
 	// Create a normalized representation of the request
-	normalized := map[string]interface{}{
+	normalized := map[string]any{
 		"model":    req.Model,
 		"messages": req.Messages,
 	}
@@ -78,7 +78,7 @@ func (kg *KeyGenerator) ChatCompletionKey(req ChatCompletionRequest) string {
 
 // EmbeddingKey generates a cache key for embedding requests.
 func (kg *KeyGenerator) EmbeddingKey(req EmbeddingRequest) string {
-	normalized := map[string]interface{}{
+	normalized := map[string]any{
 		"model": req.Model,
 		"input": kg.normalizeInput(req.Input),
 	}
@@ -99,14 +99,14 @@ func (kg *KeyGenerator) EmbeddingKey(req EmbeddingRequest) string {
 // ModelListKey generates a cache key for model list requests.
 func (kg *KeyGenerator) ModelListKey(provider string) string {
 	if provider == "" {
-		return kg.generateKey("models", map[string]interface{}{"all": true})
+		return kg.generateKey("models", map[string]any{"all": true})
 	}
-	return kg.generateKey("models", map[string]interface{}{"provider": provider})
+	return kg.generateKey("models", map[string]any{"provider": provider})
 }
 
 // ProviderListKey generates a cache key for provider list requests.
 func (kg *KeyGenerator) ProviderListKey() string {
-	return kg.generateKey("providers", map[string]interface{}{"all": true})
+	return kg.generateKey("providers", map[string]any{"all": true})
 }
 
 // InvalidatePattern generates a pattern for cache invalidation.
@@ -121,7 +121,7 @@ func (kg *KeyGenerator) InvalidatePattern(cacheType, model string) string {
 }
 
 // generateKey creates a deterministic cache key from the input data
-func (kg *KeyGenerator) generateKey(cacheType string, data interface{}) string {
+func (kg *KeyGenerator) generateKey(cacheType string, data any) string {
 	// Serialize the data to JSON for consistent hashing
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -138,7 +138,7 @@ func (kg *KeyGenerator) generateKey(cacheType string, data interface{}) string {
 }
 
 // normalizeInput normalizes the input field which can be string or []string
-func (kg *KeyGenerator) normalizeInput(input interface{}) interface{} {
+func (kg *KeyGenerator) normalizeInput(input any) any {
 	switch v := input.(type) {
 	case string:
 		return []string{v}
@@ -163,15 +163,15 @@ type ChatCompletionRequest struct {
 	MaxTokens        *int               `json:"max_tokens,omitempty"`
 	TopP             *float32           `json:"top_p,omitempty"`
 	N                *int               `json:"n,omitempty"`
-	Stop             interface{}        `json:"stop,omitempty"`
+	Stop             any                `json:"stop,omitempty"`
 	PresencePenalty  *float32           `json:"presence_penalty,omitempty"`
 	FrequencyPenalty *float32           `json:"frequency_penalty,omitempty"`
 	LogitBias        map[string]float32 `json:"logit_bias,omitempty"`
 	User             *string            `json:"user,omitempty"`
 	Seed             *int               `json:"seed,omitempty"`
-	Tools            []interface{}      `json:"tools,omitempty"`
-	ToolChoice       interface{}        `json:"tool_choice,omitempty"`
-	ResponseFormat   interface{}        `json:"response_format,omitempty"`
+	Tools            []any              `json:"tools,omitempty"`
+	ToolChoice       any                `json:"tool_choice,omitempty"`
+	ResponseFormat   any                `json:"response_format,omitempty"`
 }
 
 // Message represents a chat message
@@ -183,11 +183,11 @@ type Message struct {
 
 // EmbeddingRequest represents an embedding request
 type EmbeddingRequest struct {
-	Model          string      `json:"model"`
-	Input          interface{} `json:"input"`
-	EncodingFormat *string     `json:"encoding_format,omitempty"`
-	Dimensions     *int        `json:"dimensions,omitempty"`
-	User           *string     `json:"user,omitempty"`
+	Model          string  `json:"model"`
+	Input          any     `json:"input"`
+	EncodingFormat *string `json:"encoding_format,omitempty"`
+	Dimensions     *int    `json:"dimensions,omitempty"`
+	User           *string `json:"user,omitempty"`
 }
 
 // ChatCompletionResponse represents a cached chat completion response

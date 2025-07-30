@@ -102,7 +102,7 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 			defer cancel()
 
 			done := make(chan struct{})
-			panicChan := make(chan interface{}, 1)
+			panicChan := make(chan any, 1)
 
 			go func() {
 				defer func() {

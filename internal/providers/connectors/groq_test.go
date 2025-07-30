@@ -146,8 +146,8 @@ func TestGroqConnector_Health(t *testing.T) {
 
 				if tt.mockError {
 					w.WriteHeader(tt.mockStatus)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"error": map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
+						"error": map[string]any{
 							"message": "Test error",
 							"type":    "error",
 						},

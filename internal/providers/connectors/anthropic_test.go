@@ -69,7 +69,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 	tests := []struct {
 		name         string
 		request      *ChatRequest
-		mockResponse interface{}
+		mockResponse any
 		mockStatus   int
 		wantErr      bool
 	}{
@@ -138,8 +138,8 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 					{Role: "user", Content: "Hello"},
 				},
 			},
-			mockResponse: map[string]interface{}{
-				"error": map[string]interface{}{
+			mockResponse: map[string]any{
+				"error": map[string]any{
 					"type":    "invalid_request_error",
 					"message": "Invalid API key",
 				},
@@ -155,8 +155,8 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 					{Role: "user", Content: "Hello"},
 				},
 			},
-			mockResponse: map[string]interface{}{
-				"error": map[string]interface{}{
+			mockResponse: map[string]any{
+				"error": map[string]any{
 					"type":    "rate_limit_error",
 					"message": "Rate limit exceeded",
 				},
@@ -181,7 +181,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 				}
 
 				// Verify request body
-				var reqBody map[string]interface{}
+				var reqBody map[string]any
 				if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 					t.Errorf("Failed to decode request body: %v", err)
 				}
@@ -233,7 +233,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 func TestAnthropicConnector_ChatStream(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify streaming request
-		var reqBody map[string]interface{}
+		var reqBody map[string]any
 		json.NewDecoder(r.Body).Decode(&reqBody)
 		if !reqBody["stream"].(bool) {
 			t.Error("Expected stream to be true for streaming request")
@@ -409,8 +409,8 @@ func TestAnthropicConnector_Health(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if tt.mockError {
 					w.WriteHeader(tt.mockStatus)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"error": map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
+						"error": map[string]any{
 							"type":    "error",
 							"message": "Test error",
 						},
@@ -448,26 +448,26 @@ func TestAnthropicConnector_Health(t *testing.T) {
 
 func TestAnthropicConnector_ConvertMessageContent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var reqBody map[string]interface{}
+		var reqBody map[string]any
 		json.NewDecoder(r.Body).Decode(&reqBody)
 
 		// Check multimodal content conversion
-		messages := reqBody["messages"].([]interface{})
-		msg := messages[0].(map[string]interface{})
-		content := msg["content"].([]interface{})
+		messages := reqBody["messages"].([]any)
+		msg := messages[0].(map[string]any)
+		content := msg["content"].([]any)
 
 		if len(content) != 2 {
 			t.Errorf("Expected 2 content parts, got %d", len(content))
 		}
 
 		// Check text part
-		textPart := content[0].(map[string]interface{})
+		textPart := content[0].(map[string]any)
 		if textPart["type"] != "text" {
 			t.Errorf("Expected text type, got %v", textPart["type"])
 		}
 
 		// Check image part
-		imagePart := content[1].(map[string]interface{})
+		imagePart := content[1].(map[string]any)
 		if imagePart["type"] != "image" {
 			t.Errorf("Expected image type, got %v", imagePart["type"])
 		}

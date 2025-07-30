@@ -73,7 +73,7 @@ func TestNewVertexAIConnector(t *testing.T) {
 				APIKey:         "test-token",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
-				Extra: map[string]interface{}{
+				Extra: map[string]any{
 					"project_id": "my-project",
 					"location":   "us-central1",
 				},
@@ -95,7 +95,7 @@ func TestNewVertexAIConnector(t *testing.T) {
 				APIKey:         "test-token",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
-				Extra: map[string]interface{}{
+				Extra: map[string]any{
 					"project_id": "my-project",
 				},
 			},
@@ -222,7 +222,7 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 		BaseURL: server.URL,
 		APIKey:  "test-token",
 		Timeout: 10 * time.Second,
-		Extra: map[string]interface{}{
+		Extra: map[string]any{
 			"project_id": "test-project",
 			"location":   "us-central1",
 		},
@@ -287,7 +287,7 @@ func TestVertexAIConnector_Models(t *testing.T) {
 	connector, err := NewVertexAIConnector(ProviderConfig{
 		APIKey:  "test-token",
 		Timeout: 10 * time.Second,
-		Extra: map[string]interface{}{
+		Extra: map[string]any{
 			"project_id": "test-project",
 		},
 	})

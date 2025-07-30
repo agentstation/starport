@@ -88,7 +88,7 @@ func TestConnectorsUseHTTPClient(t *testing.T) {
 					APIKey:         "test-key",
 					Timeout:        5 * time.Second,
 					MaxConnections: 10,
-					Extra: map[string]interface{}{
+					Extra: map[string]any{
 						"project_id": "test-project",
 						"location":   "us-central1",
 					},

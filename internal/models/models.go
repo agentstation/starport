@@ -10,29 +10,29 @@ import (
 
 // Preset represents a reusable configuration template
 type Preset struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Config      map[string]interface{} `json:"config"`
-	Version     int                    `json:"version"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Config      map[string]any `json:"config"`
+	Version     int            `json:"version"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 // ProviderKey represents an encrypted API key for an external LLM provider
 // Keys can be scoped to specific users (scope = "user:id") or globally (scope = "*")
 type ProviderKey struct {
-	Scope               string                 `json:"scope"` // "*" for global, "user:id" for user-specific
-	Provider            string                 `json:"provider"`
-	EncryptedCredential string                 `json:"encrypted_credential"`
-	Config              map[string]interface{} `json:"config,omitempty"`     // Provider-specific config (endpoints, versions, etc)
-	IsFallback          bool                   `json:"is_fallback"`          // Use as fallback when rate limited
-	Priority            int                    `json:"priority"`             // Order preference (lower = higher priority)
-	RateLimit           *RateLimitConfig       `json:"rate_limit,omitempty"` // Rate limits (typically for global keys)
-	CreatedAt           time.Time              `json:"created_at"`
-	LastUsed            *time.Time             `json:"last_used,omitempty"`
-	UsageCount          int64                  `json:"usage_count"`
-	UpdatedAt           time.Time              `json:"updated_at"`
+	Scope               string           `json:"scope"` // "*" for global, "user:id" for user-specific
+	Provider            string           `json:"provider"`
+	EncryptedCredential string           `json:"encrypted_credential"`
+	Config              map[string]any   `json:"config,omitempty"`     // Provider-specific config (endpoints, versions, etc)
+	IsFallback          bool             `json:"is_fallback"`          // Use as fallback when rate limited
+	Priority            int              `json:"priority"`             // Order preference (lower = higher priority)
+	RateLimit           *RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (typically for global keys)
+	CreatedAt           time.Time        `json:"created_at"`
+	LastUsed            *time.Time       `json:"last_used,omitempty"`
+	UsageCount          int64            `json:"usage_count"`
+	UpdatedAt           time.Time        `json:"updated_at"`
 }
 
 // RateLimitConfig defines rate limiting for a default key

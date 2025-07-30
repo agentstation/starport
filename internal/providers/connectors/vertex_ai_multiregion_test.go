@@ -20,7 +20,7 @@ func TestVertexAI_MultiRegionConfiguration(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL: "",
 				Timeout: 30 * time.Second,
-				Extra: map[string]interface{}{
+				Extra: map[string]any{
 					"project_id": "test-project",
 				},
 			},
@@ -33,7 +33,7 @@ func TestVertexAI_MultiRegionConfiguration(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL: "",
 				Timeout: 30 * time.Second,
-				Extra: map[string]interface{}{
+				Extra: map[string]any{
 					"project_id": "test-project",
 					"location":   "europe-west1",
 				},
@@ -47,10 +47,10 @@ func TestVertexAI_MultiRegionConfiguration(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL: "",
 				Timeout: 30 * time.Second,
-				Extra: map[string]interface{}{
+				Extra: map[string]any{
 					"project_id": "test-project",
 					"location":   "us-central1",
-					"fallback_locations": []interface{}{
+					"fallback_locations": []any{
 						"asia-southeast1",
 						"europe-west4",
 					},
@@ -65,7 +65,7 @@ func TestVertexAI_MultiRegionConfiguration(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL: "",
 				Timeout: 30 * time.Second,
-				Extra:   map[string]interface{}{},
+				Extra:   map[string]any{},
 			},
 			wantErr: true,
 		},

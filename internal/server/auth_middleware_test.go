@@ -416,7 +416,7 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 		Scopes:    []string{"chat:write", "models:read"},
 		Active:    true,
 		CreatedAt: time.Now(),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"source": "chatui",
 		},
 	}

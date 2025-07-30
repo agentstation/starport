@@ -171,7 +171,7 @@ func TestModel_Clone(t *testing.T) {
 			MaxCompletionTokens: 1024,
 		},
 		SupportedParameters: []string{"temperature", "top_p", "tools"},
-		PerRequestLimits: map[string]interface{}{
+		PerRequestLimits: map[string]any{
 			"rpm": 100,
 			"tpm": 100000,
 		},

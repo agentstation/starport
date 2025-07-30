@@ -37,15 +37,15 @@ type ChatRequest struct {
 	// Features
 	Stream         bool            `json:"stream,omitempty"`          // Enable streaming
 	Tools          []Tool          `json:"tools,omitempty"`           // Available tools
-	ToolChoice     interface{}     `json:"tool_choice,omitempty"`     // "auto", "none", or specific tool
+	ToolChoice     any             `json:"tool_choice,omitempty"`     // "auto", "none", or specific tool
 	ResponseFormat *ResponseFormat `json:"response_format,omitempty"` // JSON mode
 	Seed           *int            `json:"seed,omitempty"`            // For reproducibility
 
 	// OpenRouter extensions
-	ProviderOrder       []string               `json:"provider_order,omitempty"`  // Preferred providers
-	ProviderIgnore      []string               `json:"provider_ignore,omitempty"` // Providers to skip
-	ProviderAllow       []string               `json:"provider_allow,omitempty"`  // Allowed providers
-	ProviderPreferences map[string]interface{} `json:"provider_preferences,omitempty"`
+	ProviderOrder       []string       `json:"provider_order,omitempty"`  // Preferred providers
+	ProviderIgnore      []string       `json:"provider_ignore,omitempty"` // Providers to skip
+	ProviderAllow       []string       `json:"provider_allow,omitempty"`  // Allowed providers
+	ProviderPreferences map[string]any `json:"provider_preferences,omitempty"`
 
 	// Metadata
 	User     string            `json:"user,omitempty"`     // User identifier
@@ -127,9 +127,9 @@ type Tool struct {
 
 // FunctionDef represents a function definition
 type FunctionDef struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"` // JSON Schema
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"` // JSON Schema
 }
 
 // ToolCall represents a tool call made by the assistant
@@ -172,11 +172,11 @@ type TopLogProb struct {
 
 // EmbeddingsRequest represents an embeddings request
 type EmbeddingsRequest struct {
-	Input          interface{} `json:"input"` // string or []string
-	Model          string      `json:"model"`
-	EncodingFormat string      `json:"encoding_format,omitempty"` // "float" or "base64"
-	Dimensions     int         `json:"dimensions,omitempty"`      // For models that support it
-	User           string      `json:"user,omitempty"`
+	Input          any    `json:"input"` // string or []string
+	Model          string `json:"model"`
+	EncodingFormat string `json:"encoding_format,omitempty"` // "float" or "base64"
+	Dimensions     int    `json:"dimensions,omitempty"`      // For models that support it
+	User           string `json:"user,omitempty"`
 }
 
 // EmbeddingsResponse represents an embeddings response
@@ -253,8 +253,8 @@ type Segment struct {
 
 // ModerationsRequest represents a moderation request
 type ModerationsRequest struct {
-	Input interface{} `json:"input"` // string or []string
-	Model string      `json:"model,omitempty"`
+	Input any    `json:"input"` // string or []string
+	Model string `json:"model,omitempty"`
 }
 
 // ModerationsResponse represents a moderation response

@@ -132,7 +132,7 @@ func TestCacheManagerWithPubSub(t *testing.T) {
 	// Test model metadata (local only)
 	t.Run("Model metadata local cache", func(t *testing.T) {
 		modelID := "gpt-4"
-		modelData := map[string]interface{}{
+		modelData := map[string]any{
 			"id":             modelID,
 			"context_length": 8192,
 		}
@@ -147,7 +147,7 @@ func TestCacheManagerWithPubSub(t *testing.T) {
 		assert.True(t, found)
 
 		// Verify the data
-		cachedMap, ok := cached.(map[string]interface{})
+		cachedMap, ok := cached.(map[string]any)
 		require.True(t, ok, "cached type: %T", cached)
 		assert.Equal(t, modelID, cachedMap["id"])
 

@@ -198,7 +198,7 @@ func (r *Registry) initializeGoogleProviders(cfg *config.Config) error {
 		providerCfg := convertToProviderConfig(cfg.Providers.GoogleVertexAI, "GOOGLE_APPLICATION_CREDENTIALS")
 
 		// Add Vertex AI specific configuration
-		providerCfg.Extra = make(map[string]interface{})
+		providerCfg.Extra = make(map[string]any)
 		providerCfg.Extra["project_id"] = projectID
 
 		// Check for location configuration
@@ -211,7 +211,7 @@ func (r *Registry) initializeGoogleProviders(cfg *config.Config) error {
 		fallbackLocations := os.Getenv("STARPORT_PROVIDERS_GOOGLE_VERTEXAI_FALLBACK_LOCATIONS")
 		if fallbackLocations != "" {
 			locations := strings.Split(fallbackLocations, ",")
-			var fallbacks []interface{}
+			var fallbacks []any
 			for _, loc := range locations {
 				fallbacks = append(fallbacks, strings.TrimSpace(loc))
 			}

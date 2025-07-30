@@ -134,8 +134,8 @@
 ```bash
 # Terminal 1
 ./spawn-agent.sh P1-S4-4.1
-# Auto-creates: ~/starport-development/starport-byok/
-# Creates: BYOK implementation
+# Auto-creates: ~/starport-development/starport-provider-keys/
+# Creates: Provider key implementation (includes BYOK)
 # Time: ~6 hours
 
 # Terminal 2
@@ -278,7 +278,7 @@ All agent workspaces are created under `~/starport-development/`:
 - `P1-S3-3.4` → `~/starport-development/starport-routing/`
 
 **Features:**
-- `P1-S4-4.1` → `~/starport-development/starport-byok/`
+- `P1-S4-4.1` → `~/starport-development/starport-provider-keys/`
 - `P1-S4-4.2` → `~/starport-development/starport-cache/`
 - `P1-S4-4.3` → `~/starport-development/starport-filters/`
 - `P1-S4-4.4` → `~/starport-development/starport-presets/`

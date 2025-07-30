@@ -32,7 +32,7 @@ type ChatRequest struct {
 	User             string          `json:"user,omitempty"`
 	Seed             *int            `json:"seed,omitempty"`
 	Tools            []Tool          `json:"tools,omitempty"`
-	ToolChoice       interface{}     `json:"tool_choice,omitempty"`
+	ToolChoice       any             `json:"tool_choice,omitempty"`
 	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`
 
 	// OpenRouter-compatible model routing
@@ -42,7 +42,7 @@ type ChatRequest struct {
 	Reasoning *ReasoningConfig `json:"reasoning,omitempty"`
 
 	// Provider-specific extensions
-	ProviderOptions map[string]interface{} `json:"provider_options,omitempty"`
+	ProviderOptions map[string]any `json:"provider_options,omitempty"`
 }
 
 // Message represents a chat message
@@ -56,7 +56,7 @@ type Message struct {
 }
 
 // MessageContent can be a string or array of content parts for multimodal
-type MessageContent interface{}
+type MessageContent any
 
 // ContentPart represents a part of multimodal content
 type ContentPart struct {
@@ -85,9 +85,9 @@ type Tool struct {
 
 // Function represents a callable function
 type Function struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
-	Parameters  interface{} `json:"parameters,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Parameters  any    `json:"parameters,omitempty"`
 }
 
 // ToolCall represents a tool call in a message
@@ -189,11 +189,11 @@ type MessageDelta struct {
 
 // EmbeddingsRequest represents an embeddings request
 type EmbeddingsRequest struct {
-	Model          string      `json:"model"`
-	Input          interface{} `json:"input"`
-	EncodingFormat string      `json:"encoding_format,omitempty"`
-	Dimensions     *int        `json:"dimensions,omitempty"`
-	User           string      `json:"user,omitempty"`
+	Model          string `json:"model"`
+	Input          any    `json:"input"`
+	EncodingFormat string `json:"encoding_format,omitempty"`
+	Dimensions     *int   `json:"dimensions,omitempty"`
+	User           string `json:"user,omitempty"`
 }
 
 // EmbeddingsResponse represents an embeddings response
@@ -258,7 +258,7 @@ type ProviderConfig struct {
 	APIKey string `json:"-"` // Never log or serialize
 
 	// Provider-specific settings
-	Extra map[string]interface{} `json:"extra,omitempty"`
+	Extra map[string]any `json:"extra,omitempty"`
 
 	// Enable flag for optional providers (e.g., Ollama)
 	Enabled bool `json:"enabled"`
@@ -325,8 +325,8 @@ func ParseMessageContent(content MessageContent) ([]ContentPart, error) {
 		return parts, nil
 	}
 
-	// Handle []interface{} from JSON unmarshaling
-	if interfaces, ok := content.([]interface{}); ok {
+	// Handle []any from JSON unmarshaling
+	if interfaces, ok := content.([]any); ok {
 		parts := make([]ContentPart, 0, len(interfaces))
 		for _, item := range interfaces {
 			// Marshal and unmarshal to convert to ContentPart

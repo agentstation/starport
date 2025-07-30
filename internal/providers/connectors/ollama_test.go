@@ -18,7 +18,7 @@ func TestOllamaConnector_Chat(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/chat":
 			// Verify request
-			var req map[string]interface{}
+			var req map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -31,7 +31,7 @@ func TestOllamaConnector_Chat(t *testing.T) {
 			}
 
 			// Send response
-			resp := map[string]interface{}{
+			resp := map[string]any{
 				"model":      req["model"],
 				"created_at": time.Now().Format(time.RFC3339),
 				"message": map[string]string{
@@ -119,7 +119,7 @@ func TestOllamaConnector_ChatStream(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/chat":
 			// Verify request
-			var req map[string]interface{}
+			var req map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -135,7 +135,7 @@ func TestOllamaConnector_ChatStream(t *testing.T) {
 			w.Header().Set("Content-Type", "application/x-ndjson")
 
 			// Send chunks
-			chunks := []map[string]interface{}{
+			chunks := []map[string]any{
 				{
 					"model":      req["model"],
 					"created_at": time.Now().Format(time.RFC3339),
@@ -242,14 +242,14 @@ func TestOllamaConnector_Models(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/tags":
 			// Send model list
-			resp := map[string]interface{}{
-				"models": []map[string]interface{}{
+			resp := map[string]any{
+				"models": []map[string]any{
 					{
 						"name":        "llama2",
 						"modified_at": time.Now().Format(time.RFC3339),
 						"size":        4000000000,
 						"digest":      "abc123",
-						"details": map[string]interface{}{
+						"details": map[string]any{
 							"format":             "gguf",
 							"family":             "llama",
 							"families":           []string{"llama"},
@@ -262,7 +262,7 @@ func TestOllamaConnector_Models(t *testing.T) {
 						"modified_at": time.Now().Add(-time.Hour).Format(time.RFC3339),
 						"size":        7000000000,
 						"digest":      "def456",
-						"details": map[string]interface{}{
+						"details": map[string]any{
 							"format":             "gguf",
 							"family":             "mistral",
 							"families":           []string{"mistral"},
@@ -338,8 +338,8 @@ func TestOllamaConnector_Health(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/tags":
 			// Return empty model list for health check
-			resp := map[string]interface{}{
-				"models": []interface{}{},
+			resp := map[string]any{
+				"models": []any{},
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(resp)

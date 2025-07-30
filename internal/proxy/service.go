@@ -52,7 +52,7 @@ type ChatCompletionRequest struct {
 	User             string                     `json:"user,omitempty"`
 	Seed             *int                       `json:"seed,omitempty"`
 	Tools            []connectors.Tool          `json:"tools,omitempty"`
-	ToolChoice       interface{}                `json:"tool_choice,omitempty"`
+	ToolChoice       any                        `json:"tool_choice,omitempty"`
 	ResponseFormat   *connectors.ResponseFormat `json:"response_format,omitempty"`
 
 	// OpenRouter-compatible fields
@@ -97,11 +97,11 @@ type ChatCompletionStreamResponse interface {
 
 // EmbeddingsRequest represents an embeddings request
 type EmbeddingsRequest struct {
-	Model          string      `json:"model"`
-	Input          interface{} `json:"input"`
-	EncodingFormat string      `json:"encoding_format,omitempty"`
-	Dimensions     *int        `json:"dimensions,omitempty"`
-	User           string      `json:"user,omitempty"`
+	Model          string `json:"model"`
+	Input          any    `json:"input"`
+	EncodingFormat string `json:"encoding_format,omitempty"`
+	Dimensions     *int   `json:"dimensions,omitempty"`
+	User           string `json:"user,omitempty"`
 
 	// Internal fields
 	APIKey    string `json:"-"`

@@ -1,12 +1,12 @@
 # Credential Unification Summary
 
 ## Overview
-Task P1-S4-4.5 has been implemented to unify the credential model in Starport. The key insight was recognizing that "default keys" are conceptually just globally-scoped BYOK credentials.
+Task P1-S4-4.5 has been implemented to unify the credential model in Starport. The key insight was recognizing that "default keys" are conceptually just globally-scoped provider keys.
 
 ## Changes Made
 
 ### 1. Model Updates
-- **Added to BYOKCredential**:
+- **Added to ProviderKey**:
   - `RateLimit` field for rate limiting (typically used by global credentials)
   - `IsGlobal()` helper method to check if credential has global scope
   - Updated validation to allow empty or "global" api_key_id
@@ -40,14 +40,14 @@ Task P1-S4-4.5 has been implemented to unify the credential model in Starport. T
 
 ### 6. Migration Support
 - Created `MigrateDefaultKeysToGlobalCredentials()` function
-- Safely converts existing DefaultKey entries to BYOKCredential with global scope
+- Safely converts existing DefaultKey entries to ProviderKey with global scope
 - Preserves all existing data including rate limits and configuration
 
 ## Benefits
 
 1. **Simplified Architecture**: Single credential model with scope-based differentiation
 2. **Consistent Features**: All credentials support encryption, rate limits, and priorities
-3. **Better Flexibility**: Global credentials can be managed like any other BYOK
+3. **Better Flexibility**: Global credentials can be managed like any other provider key
 4. **Cleaner Code**: Removed duplicate logic for handling different credential types
 
 ## Remaining Work

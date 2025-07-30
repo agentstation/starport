@@ -5,7 +5,7 @@
 This document summarizes the key architecture decisions for Starport:
 
 1. **API Keys**: Moving to UUIDKey format
-2. **Provider Credentials**: Unifying BYOK and Default keys into single model
+2. **Provider Credentials**: Unifying provider keys and default keys into single model
 
 ## API Keys (Authentication)
 
@@ -26,14 +26,14 @@ This document summarizes the key architecture decisions for Starport:
 ## Provider Credentials (LLM Keys)
 
 ### The Realization
-All provider credentials are just BYOK credentials with different scopes:
-- **User BYOK**: Scoped to specific API key
-- **Gateway Defaults**: BYOK with global scope that admins set up
+All provider credentials are just provider keys with different scopes:
+- **User Provider Keys**: Scoped to specific API key
+- **Gateway Defaults**: Provider keys with global scope that admins set up
 
 ### Current (Duplicated Models)
 ```go
-// User's BYOK credentials
-type BYOKCredential struct {
+// User's provider keys
+type ProviderKey struct {
     APIKeyID    string  // Links to user's API key
     Provider    string
     EncryptedCredential string
@@ -51,8 +51,8 @@ type DefaultKey struct {
 
 ### New (Just BYOK with Scopes)
 ```go
-// All provider credentials are BYOK
-type BYOKCredential struct {
+// All provider credentials are provider keys
+type ProviderKey struct {
     APIKeyID    string  // Empty/"global" = gateway-wide scope
     Provider    string
     EncryptedCredential string
@@ -65,19 +65,19 @@ type BYOKCredential struct {
 
 ### User BYOK Credentials
 ```
-credential:STARPRT_xxx:openai -> BYOKCredential{api_key_id: "STARPRT_xxx", ...}
+provider_key:STARPRT_xxx:openai -> ProviderKey{scope: "STARPRT_xxx", ...}
 ```
 
 ### Gateway BYOK Credentials (Global Scope)
 ```
-credential:global:openai -> BYOKCredential{api_key_id: "global", ...}
+provider_key:global:openai -> ProviderKey{scope: "global", ...}
 ```
 
-All credentials are BYOK - the only difference is scope!
+All credentials are provider keys - the only difference is scope!
 
 ## Benefits
 
-1. **Conceptual Clarity**: Gateway defaults are just globally-scoped BYOK
+1. **Conceptual Clarity**: Gateway defaults are just globally-scoped provider keys
 2. **Simpler Code**: One model, one set of logic
 3. **Easier Testing**: Single code path for all credentials
 4. **Better Maintainability**: No duplicate logic
@@ -86,8 +86,8 @@ All credentials are BYOK - the only difference is scope!
 
 ## Migration
 
-1. Add `RateLimit` field to `BYOKCredential` (if missing)
-2. Migrate `DefaultKey` entries to `BYOKCredential` with `api_key_id = "global"`
+1. Add `RateLimit` field to `ProviderKey` (if missing)
+2. Migrate `DefaultKey` entries to `ProviderKey` with `scope = "global"
 3. Update lookup logic to include global scope
 4. Remove `DefaultKey` model entirely
 

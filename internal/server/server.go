@@ -10,12 +10,12 @@ import (
 
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/chatui"
-	"github.com/agentstation/starport/internal/providers"
+	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/registry"
-	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/router"
+	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/server/dto"
-	"github.com/agentstation/starport/internal/server/handlers"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -26,13 +26,13 @@ type Server struct {
 	httpServer *http.Server
 
 	// Core dependencies
-	registry   *registry.Registry
-	service    proxy.Proxy
-	store      storage.KVStore
-	keyManager providers.KeyManager
+	registry     *registry.Registry
+	service      proxy.Proxy
+	store        storage.KVStore
+	providerKeys byok.ProviderKeys
 
 	// Handler collection
-	handlers *handlers.Collection
+	controllers *controllers.Controllers
 
 	// Middleware
 	auth *AuthMiddleware
@@ -58,7 +58,7 @@ func WithCache(cm *cache.Manager) Option {
 
 		// Get registry and router from the server
 		reg := s.registry
-		router := routing.NewRouter(newRegistryAdapter(reg))
+		router := router.New(newRegistryAdapter(reg))
 
 		// Create new proxy service with cache
 		s.service = proxy.New(reg, router, proxy.WithCache(cm, cacheConfig))
@@ -76,24 +76,24 @@ func WithChatUI(config *chatui.Config) Option {
 // New creates a new server instance with improved handler organization
 func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 	// Create dependencies
-	store := storage.NewMockStore()                      // TODO: Get from config
-	keyManager, _ := providers.NewKeyManager(store, nil) // TODO: Get encryption service
+	store := storage.NewMockStore()                     // TODO: Get from config
+	providerKeys, _ := byok.NewProviderKeys(store, nil) // TODO: Get encryption service
 
 	// Create routing with adapter
-	router := routing.NewRouter(newRegistryAdapter(reg))
+	router := router.New(newRegistryAdapter(reg))
 
 	// Create proxy service using the new constructor
 	service := proxy.New(reg, router)
 
 	// Create server instance
 	s := &Server{
-		router:     chi.NewRouter(),
-		cfg:        config,
-		registry:   reg,
-		service:    service,
-		store:      store,
-		keyManager: keyManager,
-		auth:       NewAuthMiddleware(store),
+		router:       chi.NewRouter(),
+		cfg:          config,
+		registry:     reg,
+		service:      service,
+		store:        store,
+		providerKeys: providerKeys,
+		auth:         NewAuthMiddleware(store),
 	}
 
 	// Apply options first to get ChatUI config
@@ -101,10 +101,10 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 		opt(s)
 	}
 
-	// Create handler collection with ChatUI config
-	handlerConfig := handlers.Config{
+	// Create controller collection with ChatUI config
+	handlerConfig := controllers.Config{
 		Service:       s.service, // Use s.service which may be wrapped with cache
-		KeyManager:    keyManager,
+		ProviderKeys:  providerKeys,
 		Store:         store,
 		ServiceName:   "starport",
 		Version:       "1.0.0",
@@ -116,7 +116,7 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 		handlerConfig.ChatUIConfig = *s.chatUIConfig
 	}
 
-	s.handlers = handlers.NewCollection(handlerConfig)
+	s.controllers = controllers.NewControllers(handlerConfig)
 
 	// Register routes
 	s.registerRoutes(s.router)

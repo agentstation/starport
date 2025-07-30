@@ -4,28 +4,28 @@
 
 All provider credentials are fundamentally the same thing - encrypted API keys for LLM providers. The only difference is their **scope**:
 
-1. **User BYOK**: Scoped to a specific API key (user)
+1. **User Provider Keys**: Scoped to a specific API key (user)
 2. **Gateway Defaults**: Scoped globally (available to all users)
 
 ## Unified Mental Model
 
 ```
-All Provider Credentials are BYOK
+All Provider Credentials are Provider Keys
 │
-├── User Scope (api_key_id = "STARPRT_xxx")
+├── User Scope (scope = "STARPRT_xxx")
 │   └── Only available to that specific API key holder
 │
-└── Global Scope (api_key_id = "" or "global")
+└── Global Scope (scope = "" or "global")
     └── Available to all API key holders as fallback
 ```
 
 ## Implementation
 
 ```go
-// All provider credentials are BYOK credentials
-type BYOKCredential struct {
+// All provider credentials are provider keys
+type ProviderKey struct {
     // Scope
-    APIKeyID    string    `json:"api_key_id"`   // Empty/global = gateway-wide
+    Scope       string    `json:"scope"`        // Empty/global = gateway-wide
     Provider    string    `json:"provider"`     
     
     // The actual credential (always encrypted)
@@ -49,7 +49,7 @@ type BYOKCredential struct {
 ## Admin Workflow
 
 ```bash
-# Admin adds a gateway-wide OpenAI key (just a BYOK with global scope)
+# Admin adds a gateway-wide OpenAI key (just a provider key with global scope)
 POST /api/v1/admin/credentials
 {
   "provider": "openai",
@@ -64,17 +64,17 @@ POST /api/v1/admin/credentials
   }
 }
 
-# This creates a BYOKCredential with api_key_id = "" (global scope)
+# This creates a ProviderKey with scope = "" (global scope)
 ```
 
 ## Resolution Logic
 
 ```go
-func ResolveCredential(apiKeyID, provider string) (*BYOKCredential, error) {
-    // 1. Get user-specific BYOK credentials
+func ResolveCredential(apiKeyID, provider string) (*ProviderKey, error) {
+    // 1. Get user-specific provider keys
     userCreds := getCredentials(apiKeyID, provider)
     
-    // 2. Get globally-scoped BYOK credentials (gateway defaults)
+    // 2. Get globally-scoped provider keys (gateway defaults)
     globalCreds := getCredentials("", provider)  // or "global"
     
     // 3. Combine and sort by priority
@@ -88,7 +88,7 @@ func ResolveCredential(apiKeyID, provider string) (*BYOKCredential, error) {
 
 ## Benefits of This Mental Model
 
-1. **Conceptual Simplicity**: Only one type of credential - BYOK
+1. **Conceptual Simplicity**: Only one type of credential - provider keys
 2. **Code Simplicity**: No special "DefaultKey" type needed
 3. **Flexibility**: Admins can set rate limits, priority, etc. on gateway keys
 4. **Consistency**: Same encryption, validation, and management for all keys
@@ -97,13 +97,13 @@ func ResolveCredential(apiKeyID, provider string) (*BYOKCredential, error) {
 ## Storage
 
 ```
-# User BYOK
-credential:{api_key_id}:{provider} -> BYOKCredential
+# User provider keys
+provider_key:{scope}:{provider} -> ProviderKey
 
-# Gateway BYOK (global scope)
-credential:global:{provider} -> BYOKCredential
+# Gateway provider keys (global scope)
+provider_key:global:{provider} -> ProviderKey
 # or
-credential::{provider} -> BYOKCredential  # empty api_key_id
+provider_key::{provider} -> ProviderKey  # empty scope
 
 # Index for quick lookups
 credential:by-scope:user:{api_key_id} -> Set[credential_ids]
@@ -112,13 +112,13 @@ credential:by-scope:global -> Set[credential_ids]
 
 ## Migration Path
 
-Since we're keeping the same `BYOKCredential` model:
+Since we're keeping the same `ProviderKey` model:
 
-1. Add `RateLimit` field to `BYOKCredential` (if not already there)
-2. Migrate any existing `DefaultKey` entries to `BYOKCredential` with empty/global `api_key_id`
-3. Update admin UI/API to manage global BYOK credentials
+1. Add `RateLimit` field to `ProviderKey` (if not already there)
+2. Migrate any existing `DefaultKey` entries to `ProviderKey` with empty/global `scope`
+3. Update admin UI/API to manage global provider keys
 4. Remove `DefaultKey` model entirely
 
 ## Summary
 
-Gateway default keys aren't a special type - they're just BYOK credentials that admins set up with global scope. This makes the entire system simpler and more consistent.
+Gateway default keys aren't a special type - they're just provider keys that admins set up with global scope. This makes the entire system simpler and more consistent.

@@ -39,7 +39,7 @@ func NewVertexAIConnector(config ProviderConfig) (*VertexAIConnector, error) {
 	}
 
 	// Extract fallback locations
-	if fallbacks, ok := config.Extra["fallback_locations"].([]interface{}); ok {
+	if fallbacks, ok := config.Extra["fallback_locations"].([]any); ok {
 		for _, fb := range fallbacks {
 			if fbStr, ok := fb.(string); ok {
 				fallbackLocations = append(fallbackLocations, fbStr)
@@ -123,8 +123,8 @@ func (c *VertexAIConnector) ChatStream(ctx context.Context, req *ChatRequest) (C
 // Embeddings generates embeddings for the given input
 func (c *VertexAIConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Convert to Vertex AI embeddings request format
-	vertexReq := map[string]interface{}{
-		"instances": []map[string]interface{}{
+	vertexReq := map[string]any{
+		"instances": []map[string]any{
 			{
 				"content": req.Input.(string),
 			},

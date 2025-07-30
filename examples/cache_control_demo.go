@@ -8,13 +8,13 @@ import (
 
 func main() {
 	// Example request with cache control for Anthropic
-	request := map[string]interface{}{
+	request := map[string]any{
 		"model": "anthropic/claude-3-5-sonnet",
-		"messages": []interface{}{
-			map[string]interface{}{
+		"messages": []any{
+			map[string]any{
 				"role": "system",
-				"content": []interface{}{
-					map[string]interface{}{
+				"content": []any{
+					map[string]any{
 						"type": "text",
 						"text": "You are a helpful assistant. Here is some context that should be cached for future requests...",
 						"cache_control": map[string]string{
@@ -23,7 +23,7 @@ func main() {
 					},
 				},
 			},
-			map[string]interface{}{
+			map[string]any{
 				"role":    "user",
 				"content": "What is the capital of France?",
 			},

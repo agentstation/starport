@@ -37,7 +37,7 @@ func TestHandler_GenerateKey_UUIDKeyFormat(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -86,7 +86,7 @@ func TestHandler_GenerateKey_UUIDKeyFormat(t *testing.T) {
 	assert.NotEmpty(t, storedKey, "stored key data should not be empty")
 
 	// Verify scopes
-	scopes, ok := response["scopes"].([]interface{})
+	scopes, ok := response["scopes"].([]any)
 	require.True(t, ok, "response should contain scopes")
 	assert.Contains(t, scopes, "chat:write")
 	assert.Contains(t, scopes, "models:read")

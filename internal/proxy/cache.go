@@ -18,8 +18,8 @@ import (
 
 // CacheManager interface defines the cache operations used by the proxy
 type CacheManager interface {
-	GetModel(ctx context.Context, key string) (interface{}, bool, error)
-	SetModel(ctx context.Context, key string, value interface{}) error
+	GetModel(ctx context.Context, key string) (any, bool, error)
+	SetModel(ctx context.Context, key string, value any) error
 	GetChatCompletion(ctx context.Context, key string) (*cache.ChatCompletionResponse, error)
 	SetChatCompletion(ctx context.Context, key string, response *cache.ChatCompletionResponse) error
 	GetEmbedding(ctx context.Context, key string) (*cache.EmbeddingsResponse, error)
@@ -326,7 +326,7 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 }
 
 // cacheListResponse is a helper for caching list responses (models, providers)
-func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMsg string, fetchFunc func() (interface{}, error)) (interface{}, error) {
+func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMsg string, fetchFunc func() (any, error)) (any, error) {
 	// Try to get from cache
 	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)
 	if err != nil {
@@ -337,7 +337,7 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 	if found {
 		// The cache returns a generic map, we need to convert it back to the proper type
 		// Try to convert from map to the appropriate response type
-		if mapData, ok := cached.(map[string]interface{}); ok {
+		if mapData, ok := cached.(map[string]any); ok {
 			// Marshal back to JSON then unmarshal to proper type
 			jsonData, err := json.Marshal(mapData)
 			if err != nil {
@@ -415,7 +415,7 @@ func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error)
 	}
 
 	resp, err := s.cacheListResponse(ctx, "models:list", "models",
-		func() (interface{}, error) { return s.service.ListModels(ctx) })
+		func() (any, error) { return s.service.ListModels(ctx) })
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +429,7 @@ func (s *cachedService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 	}
 
 	resp, err := s.cacheListResponse(ctx, "providers:list", "providers",
-		func() (interface{}, error) { return s.service.ListProviders(ctx) })
+		func() (any, error) { return s.service.ListProviders(ctx) })
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +506,7 @@ func (s *cachedService) generateChatCacheKey(req *ChatCompletionRequest) (string
 		Stop             []string
 		Seed             *int
 		Tools            []connectors.Tool
-		ToolChoice       interface{}
+		ToolChoice       any
 		ResponseFormat   *connectors.ResponseFormat
 	}{
 		Model:            req.Model,
@@ -536,7 +536,7 @@ func (s *cachedService) generateChatCacheKey(req *ChatCompletionRequest) (string
 func (s *cachedService) generateEmbeddingsCacheKey(req *EmbeddingsRequest) (string, error) {
 	normalized := struct {
 		Model          string
-		Input          interface{}
+		Input          any
 		EncodingFormat string
 		Dimensions     *int
 	}{

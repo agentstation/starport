@@ -121,8 +121,8 @@ func (c *googleBaseConnector) handleError(resp *http.Response) error {
 }
 
 // convertToGeminiRequest converts OpenAI format to Gemini format
-func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[string]interface{} {
-	var contents []map[string]interface{}
+func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[string]any {
+	var contents []map[string]any
 
 	for _, msg := range req.Messages {
 		var role string
@@ -138,9 +138,9 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 			role = RoleUser
 		}
 
-		content := map[string]interface{}{
+		content := map[string]any{
 			"role": role,
-			"parts": []map[string]interface{}{
+			"parts": []map[string]any{
 				{"text": msg.Content.(string)},
 			},
 		}
@@ -152,19 +152,19 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 		if msg.Role == "system" && i+1 < len(req.Messages) {
 			systemText := msg.Content.(string)
 			if len(contents) > 0 && contents[0]["role"] == "user" {
-				parts := contents[0]["parts"].([]map[string]interface{})
+				parts := contents[0]["parts"].([]map[string]any)
 				parts[0]["text"] = systemText + "\n\n" + parts[0]["text"].(string)
 			}
 			break
 		}
 	}
 
-	geminiReq := map[string]interface{}{
+	geminiReq := map[string]any{
 		"contents": contents,
 	}
 
 	// Generation config
-	genConfig := make(map[string]interface{})
+	genConfig := make(map[string]any)
 	if req.Temperature != nil {
 		genConfig["temperature"] = *req.Temperature
 	}
@@ -181,7 +181,7 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 	// Handle OpenRouter-style reasoning configuration
 	if req.Reasoning != nil && !req.Reasoning.Exclude {
 		// Create thinkingConfig for Gemini 2.5 models
-		thinkingConfig := make(map[string]interface{})
+		thinkingConfig := make(map[string]any)
 
 		// Handle max_tokens if specified (takes precedence over effort)
 		if req.Reasoning.MaxTokens != nil {

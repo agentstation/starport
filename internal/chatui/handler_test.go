@@ -194,7 +194,7 @@ func TestHandler_GenerateKey(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
-		var response map[string]interface{}
+		var response map[string]any
 		err = json.Unmarshal(rec.Body.Bytes(), &response)
 		require.NoError(t, err)
 
@@ -210,7 +210,7 @@ func TestHandler_GenerateKey(t *testing.T) {
 		assert.Contains(t, key, "STARPORT_")
 
 		// Check scopes
-		scopes, ok := response["scopes"].([]interface{})
+		scopes, ok := response["scopes"].([]any)
 		assert.True(t, ok)
 		assert.Contains(t, scopes, "chat:write")
 		assert.Contains(t, scopes, "models:read")

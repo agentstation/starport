@@ -5,7 +5,7 @@ import (
 
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/registry"
-	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/router"
 )
 
 // DefaultConfig returns a default proxy configuration.
@@ -183,7 +183,7 @@ type Builder struct {
 }
 
 // NewBuilder creates a new proxy configuration builder.
-func NewBuilder(registry *registry.Registry, router routing.ModelRouter) *Builder {
+func NewBuilder(registry *registry.Registry, router router.ModelRouter) *Builder {
 	return &Builder{
 		config: &Config{
 			Registry:    registry,

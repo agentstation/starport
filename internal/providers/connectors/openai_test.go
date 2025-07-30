@@ -79,7 +79,7 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 	tests := []struct {
 		name         string
 		request      *ChatRequest
-		mockResponse interface{}
+		mockResponse any
 		mockStatus   int
 		wantErr      bool
 	}{
@@ -120,8 +120,8 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 					{Role: "user", Content: "Hello"},
 				},
 			},
-			mockResponse: map[string]interface{}{
-				"error": map[string]interface{}{
+			mockResponse: map[string]any{
+				"error": map[string]any{
 					"message": "Invalid API key",
 					"type":    "invalid_request_error",
 					"code":    "invalid_api_key",
@@ -138,8 +138,8 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 					{Role: "user", Content: "Hello"},
 				},
 			},
-			mockResponse: map[string]interface{}{
-				"error": map[string]interface{}{
+			mockResponse: map[string]any{
+				"error": map[string]any{
 					"message": "Rate limit exceeded",
 					"type":    "rate_limit_error",
 				},
@@ -476,8 +476,8 @@ func TestOpenAIConnector_ChatStreamErrors(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if tt.mockError {
 					w.WriteHeader(tt.mockStatus)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"error": map[string]interface{}{
+					json.NewEncoder(w).Encode(map[string]any{
+						"error": map[string]any{
 							"message": "Test error",
 							"type":    "error",
 						},
@@ -512,8 +512,8 @@ func TestOpenAIConnector_ChatStreamErrors(t *testing.T) {
 func TestOpenAIConnector_EmbeddingsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
 				"message": "Invalid model",
 				"type":    "invalid_request_error",
 			},
@@ -549,8 +549,8 @@ func TestOpenAIConnector_EmbeddingsError(t *testing.T) {
 func TestOpenAIConnector_ModelsError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error": map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
 				"message": "Invalid API key",
 				"type":    "invalid_request_error",
 			},

@@ -7,7 +7,7 @@ import (
 )
 
 // Serialize converts any value to bytes using JSON encoding
-func Serialize(v interface{}) ([]byte, error) {
+func Serialize(v any) ([]byte, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize value: %w", err)
@@ -16,7 +16,7 @@ func Serialize(v interface{}) ([]byte, error) {
 }
 
 // Deserialize converts bytes to the specified type using JSON decoding
-func Deserialize(data []byte, v interface{}) error {
+func Deserialize(data []byte, v any) error {
 	if err := json.Unmarshal(data, v); err != nil {
 		return fmt.Errorf("failed to deserialize value: %w", err)
 	}
@@ -57,11 +57,11 @@ func DeserializeInt64(data []byte) (int64, error) {
 }
 
 // SerializeModel is an alias for Serialize for clarity when working with models
-func SerializeModel(v interface{}) ([]byte, error) {
+func SerializeModel(v any) ([]byte, error) {
 	return Serialize(v)
 }
 
 // DeserializeModel is an alias for Deserialize for clarity when working with models
-func DeserializeModel(data []byte, v interface{}) error {
+func DeserializeModel(data []byte, v any) error {
 	return Deserialize(data, v)
 }

@@ -7,7 +7,7 @@ import (
 func TestSerialize(t *testing.T) {
 	tests := []struct {
 		name    string
-		input   interface{}
+		input   any
 		wantErr bool
 	}{
 		{
@@ -27,7 +27,7 @@ func TestSerialize(t *testing.T) {
 		},
 		{
 			name:    "map",
-			input:   map[string]interface{}{"key": "value"},
+			input:   map[string]any{"key": "value"},
 			wantErr: false,
 		},
 		{
@@ -70,16 +70,16 @@ func TestDeserialize(t *testing.T) {
 	tests := []struct {
 		name    string
 		data    []byte
-		target  interface{}
+		target  any
 		wantErr bool
-		check   func(t *testing.T, v interface{})
+		check   func(t *testing.T, v any)
 	}{
 		{
 			name:    "string",
 			data:    []byte(`"test string"`),
 			target:  new(string),
 			wantErr: false,
-			check: func(t *testing.T, v interface{}) {
+			check: func(t *testing.T, v any) {
 				if got := *v.(*string); got != "test string" {
 					t.Errorf("Expected 'test string', got %s", got)
 				}
@@ -90,7 +90,7 @@ func TestDeserialize(t *testing.T) {
 			data:    []byte(`42`),
 			target:  new(int),
 			wantErr: false,
-			check: func(t *testing.T, v interface{}) {
+			check: func(t *testing.T, v any) {
 				if got := *v.(*int); got != 42 {
 					t.Errorf("Expected 42, got %d", got)
 				}
@@ -101,7 +101,7 @@ func TestDeserialize(t *testing.T) {
 			data:    []byte(`{"name":"test","value":123}`),
 			target:  new(testStruct),
 			wantErr: false,
-			check: func(t *testing.T, v interface{}) {
+			check: func(t *testing.T, v any) {
 				got := v.(*testStruct)
 				if got.Name != "test" || got.Value != 123 {
 					t.Errorf("Expected {test 123}, got %+v", got)
@@ -150,11 +150,11 @@ func TestDeserialize(t *testing.T) {
 
 func TestSerializeDeserializeRoundTrip(t *testing.T) {
 	type complexStruct struct {
-		ID       string                 `json:"id"`
-		Name     string                 `json:"name"`
-		Age      int                    `json:"age"`
-		Tags     []string               `json:"tags"`
-		Metadata map[string]interface{} `json:"metadata"`
+		ID       string         `json:"id"`
+		Name     string         `json:"name"`
+		Age      int            `json:"age"`
+		Tags     []string       `json:"tags"`
+		Metadata map[string]any `json:"metadata"`
 	}
 
 	original := complexStruct{
@@ -162,7 +162,7 @@ func TestSerializeDeserializeRoundTrip(t *testing.T) {
 		Name: "Test User",
 		Age:  30,
 		Tags: []string{"tag1", "tag2", "tag3"},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"key1": "value1",
 			"key2": 42,
 			"key3": true,

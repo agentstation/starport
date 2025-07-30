@@ -45,7 +45,7 @@ func TestChatUIToAPIAuthentication(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code, "Key generation should succeed")
 
-	var keyResponse map[string]interface{}
+	var keyResponse map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &keyResponse)
 	require.NoError(t, err)
 
@@ -144,7 +144,7 @@ func TestMultipleKeyGeneration(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rec.Code)
 
-		var keyResponse map[string]interface{}
+		var keyResponse map[string]any
 		err = json.Unmarshal(rec.Body.Bytes(), &keyResponse)
 		require.NoError(t, err)
 

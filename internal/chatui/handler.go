@@ -156,7 +156,7 @@ func (h *Handler) GenerateKey(w http.ResponseWriter, r *http.Request) {
 		Scopes:    []string{"chat:write", "models:read"},
 		Active:    true,
 		CreatedAt: time.Now(),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"source": "chatui",
 			"ip":     r.RemoteAddr,
 		},
@@ -197,7 +197,7 @@ func (h *Handler) GenerateKey(w http.ResponseWriter, r *http.Request) {
 		Str("name", apiKey.Name).
 		Msg("API key generated via ChatUI")
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"key":     keyValue,
 		"key_id":  apiKey.ID,
 		"message": "API key generated successfully. Save this key as it won't be shown again.",

@@ -329,7 +329,7 @@ func TestMistralConnector_Health(t *testing.T) {
 func TestMistralConnector_ErrorHandling(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"message": "Rate limit exceeded",
 			"type":    "rate_limit_error",
 			"code":    "rate_limit",

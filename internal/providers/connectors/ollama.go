@@ -68,21 +68,21 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 	model := strings.TrimPrefix(req.Model, "ollama/")
 
 	// Convert to Ollama format
-	ollamaReq := map[string]interface{}{
+	ollamaReq := map[string]any{
 		"model":    model,
 		"messages": req.Messages,
 		"stream":   false,
-		"options": map[string]interface{}{
+		"options": map[string]any{
 			"temperature": req.Temperature,
 		},
 	}
 
 	if req.MaxTokens != nil {
-		ollamaReq["options"].(map[string]interface{})["num_predict"] = *req.MaxTokens
+		ollamaReq["options"].(map[string]any)["num_predict"] = *req.MaxTokens
 	}
 
 	if req.TopP != nil {
-		ollamaReq["options"].(map[string]interface{})["top_p"] = *req.TopP
+		ollamaReq["options"].(map[string]any)["top_p"] = *req.TopP
 	}
 
 	body, err := json.Marshal(ollamaReq)
@@ -157,21 +157,21 @@ func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 	model := strings.TrimPrefix(req.Model, "ollama/")
 
 	// Convert to Ollama format
-	ollamaReq := map[string]interface{}{
+	ollamaReq := map[string]any{
 		"model":    model,
 		"messages": req.Messages,
 		"stream":   true,
-		"options": map[string]interface{}{
+		"options": map[string]any{
 			"temperature": req.Temperature,
 		},
 	}
 
 	if req.MaxTokens != nil {
-		ollamaReq["options"].(map[string]interface{})["num_predict"] = *req.MaxTokens
+		ollamaReq["options"].(map[string]any)["num_predict"] = *req.MaxTokens
 	}
 
 	if req.TopP != nil {
-		ollamaReq["options"].(map[string]interface{})["top_p"] = *req.TopP
+		ollamaReq["options"].(map[string]any)["top_p"] = *req.TopP
 	}
 
 	body, err := json.Marshal(ollamaReq)
@@ -208,7 +208,7 @@ func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 	// Ollama supports embeddings via /api/embeddings endpoint
 	model := strings.TrimPrefix(req.Model, "ollama/")
 
-	ollamaReq := map[string]interface{}{
+	ollamaReq := map[string]any{
 		"model":  model,
 		"prompt": req.Input,
 	}
