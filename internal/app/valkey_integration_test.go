@@ -189,7 +189,7 @@ func TestCacheManagerLifecycle(t *testing.T) {
 
 	// Create context for shutdown
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	// Start app
 	go func() {
 		_ = app.Run(ctx)

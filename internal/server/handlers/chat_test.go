@@ -269,8 +269,8 @@ func TestChatHandler_Streaming(t *testing.T) {
 // TestChatHandler_StreamingCacheHeaders verifies that cache headers are set correctly for streaming responses
 func TestChatHandler_StreamingCacheHeaders(t *testing.T) {
 	tests := []struct {
-		name               string
-		setupStream        func() proxy.ChatCompletionStreamResponse
+		name                string
+		setupStream         func() proxy.ChatCompletionStreamResponse
 		expectedCacheHeader string
 		expectedAgeHeader   string
 	}{
@@ -341,7 +341,7 @@ func TestChatHandler_StreamingCacheHeaders(t *testing.T) {
 			if got := w.Header().Get("X-Cache"); got != tt.expectedCacheHeader {
 				t.Errorf("X-Cache header = %v, want %v", got, tt.expectedCacheHeader)
 			}
-			
+
 			if tt.expectedAgeHeader != "" {
 				if got := w.Header().Get("X-Cache-Age"); got != tt.expectedAgeHeader {
 					t.Errorf("X-Cache-Age header = %v, want %v", got, tt.expectedAgeHeader)

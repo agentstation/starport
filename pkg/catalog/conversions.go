@@ -9,11 +9,11 @@ import (
 // ToModel converts a catalog Model to the internal models.Model type
 func (m *Model) ToModel() *models.Model {
 	model := &models.Model{
-		ID:      m.ID,
-		Created: m.Created,
-		Name:    m.Name,
+		ID:            m.ID,
+		Created:       m.Created,
+		Name:          m.Name,
 		CanonicalSlug: m.CanonicalSlug,
-		Description: m.Description,
+		Description:   m.Description,
 		ContextLength: int64(m.ContextLength),
 		HuggingFaceID: m.HuggingFaceID,
 	}

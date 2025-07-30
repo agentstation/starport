@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"time"
-	
+
 	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/routing"
@@ -19,16 +19,16 @@ func DefaultConfig() *Config {
 type Options struct {
 	// RequestTimeout is the timeout for individual requests
 	RequestTimeout time.Duration
-	
+
 	// EnableMetrics enables metrics collection
 	EnableMetrics bool
-	
+
 	// EnableLogging enables request/response logging
 	EnableLogging bool
-	
+
 	// MaxRetries is the maximum number of retry attempts
 	MaxRetries int
-	
+
 	// RetryDelay is the delay between retry attempts
 	RetryDelay time.Duration
 }
@@ -74,13 +74,13 @@ func WithRequestTimeout(timeout time.Duration) Option {
 type ValidationConfig struct {
 	// StrictMode enables strict validation of requests
 	StrictMode bool
-	
+
 	// MaxTokensLimit is the maximum allowed max_tokens value
 	MaxTokensLimit int
-	
+
 	// MaxMessagesLimit is the maximum number of messages allowed
 	MaxMessagesLimit int
-	
+
 	// MaxMessageLength is the maximum length of a single message
 	MaxMessageLength int
 }
@@ -108,16 +108,16 @@ func WithValidation(config *ValidationConfig) Option {
 type RoutingConfig struct {
 	// EnableFailover enables automatic failover to other providers
 	EnableFailover bool
-	
+
 	// PreferredProviders is an ordered list of preferred providers
 	PreferredProviders []string
-	
+
 	// ExcludedProviders is a list of providers to exclude
 	ExcludedProviders []string
-	
+
 	// EnableLoadBalancing enables load balancing across providers
 	EnableLoadBalancing bool
-	
+
 	// EnableStickyRouting enables sticky routing for conversations
 	EnableStickyRouting bool
 }
@@ -144,16 +144,16 @@ func WithRouting(config *RoutingConfig) Option {
 type SecurityConfig struct {
 	// EnableRateLimiting enables rate limiting
 	EnableRateLimiting bool
-	
+
 	// RateLimitPerMinute is the number of requests allowed per minute
 	RateLimitPerMinute int
-	
+
 	// EnableContentFiltering enables content filtering
 	EnableContentFiltering bool
-	
+
 	// BlockedPatterns is a list of regex patterns to block
 	BlockedPatterns []string
-	
+
 	// EnableAPIKeyValidation enables API key validation
 	EnableAPIKeyValidation bool
 }

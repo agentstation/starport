@@ -7,6 +7,7 @@ import (
 )
 
 // Embed the catalog.json file directly
+//
 //go:embed catalog.json
 var catalogJSON []byte
 

@@ -49,7 +49,7 @@ func NewCollection(cfg Config) *Collection {
 		// Add store to ChatUI config
 		chatUIConfig := cfg.ChatUIConfig
 		chatUIConfig.Store = cfg.Store
-		
+
 		handler, err := chatui.NewHandler(cfg.Logger, chatUIConfig)
 		if err != nil {
 			cfg.Logger.Error().Err(err).Msg("failed to initialize ChatUI handler")

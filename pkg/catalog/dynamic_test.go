@@ -38,7 +38,7 @@ func TestGetModelsByProviderWithDynamic_FiltersInvalid(t *testing.T) {
 	dynamicMutex.Lock()
 	dynamicModels = make(map[string]*Model)
 	dynamicMutex.Unlock()
-	
+
 	invalidMutex.Lock()
 	invalidModels = make(map[string]time.Time)
 	invalidMutex.Unlock()
@@ -48,7 +48,7 @@ func TestGetModelsByProviderWithDynamic_FiltersInvalid(t *testing.T) {
 
 	// Get models - should filter out the invalid one
 	models := GetModelsByProviderWithDynamic("anthropic")
-	
+
 	// Check that invalid model is not in the list
 	for _, model := range models {
 		if model.ID == "anthropic/claude-4-opus" {

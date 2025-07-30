@@ -18,7 +18,7 @@ import (
 func TestHandler_GenerateKey_UUIDKeyFormat(t *testing.T) {
 	logger := zerolog.Nop()
 	store := storage.NewMockStore()
-	
+
 	config := Config{
 		Title:       "Test Chat",
 		Theme:       "light",

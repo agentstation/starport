@@ -174,7 +174,7 @@ func (c *AnthropicConnector) Models(ctx context.Context) (*ModelsResponse, error
 func (c *AnthropicConnector) modelsFromCatalog() *ModelsResponse {
 	// Use the dynamic catalog helper that includes both static and dynamic models
 	models := catalog.GetModelsByProviderWithDynamic("anthropic")
-	
+
 	// Convert catalog models to connector models
 	result := make([]Model, 0, len(models))
 	for _, m := range models {

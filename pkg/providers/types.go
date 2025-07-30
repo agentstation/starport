@@ -5,13 +5,13 @@ import "time"
 // Message represents a chat message
 type Message struct {
 	// Standard fields
-	Role    string `json:"role"`              // "system", "user", "assistant", "tool"
-	Content string `json:"content"`           // Message content
-	Name    string `json:"name,omitempty"`    // Optional name for the message
+	Role    string `json:"role"`           // "system", "user", "assistant", "tool"
+	Content string `json:"content"`        // Message content
+	Name    string `json:"name,omitempty"` // Optional name for the message
 
 	// Tool/Function calling
-	ToolCalls   []ToolCall   `json:"tool_calls,omitempty"`   // Tool calls made by assistant
-	ToolCallID  string       `json:"tool_call_id,omitempty"` // ID when responding to tool call
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // Tool calls made by assistant
+	ToolCallID string     `json:"tool_call_id,omitempty"` // ID when responding to tool call
 
 	// Multimodal
 	Images []string `json:"images,omitempty"` // Base64 encoded images or URLs
@@ -27,24 +27,24 @@ type ChatRequest struct {
 	Messages []Message `json:"messages"`
 
 	// Generation parameters
-	Temperature      float32 `json:"temperature,omitempty"`       // 0.0 to 2.0
-	MaxTokens        int     `json:"max_tokens,omitempty"`        // Maximum tokens to generate
-	TopP             float32 `json:"top_p,omitempty"`             // Nucleus sampling
-	FrequencyPenalty float32 `json:"frequency_penalty,omitempty"` // -2.0 to 2.0
-	PresencePenalty  float32 `json:"presence_penalty,omitempty"`  // -2.0 to 2.0
-	Stop             []string `json:"stop,omitempty"`             // Stop sequences
+	Temperature      float32  `json:"temperature,omitempty"`       // 0.0 to 2.0
+	MaxTokens        int      `json:"max_tokens,omitempty"`        // Maximum tokens to generate
+	TopP             float32  `json:"top_p,omitempty"`             // Nucleus sampling
+	FrequencyPenalty float32  `json:"frequency_penalty,omitempty"` // -2.0 to 2.0
+	PresencePenalty  float32  `json:"presence_penalty,omitempty"`  // -2.0 to 2.0
+	Stop             []string `json:"stop,omitempty"`              // Stop sequences
 
 	// Features
-	Stream         bool                   `json:"stream,omitempty"`          // Enable streaming
-	Tools          []Tool                 `json:"tools,omitempty"`           // Available tools
-	ToolChoice     interface{}            `json:"tool_choice,omitempty"`     // "auto", "none", or specific tool
-	ResponseFormat *ResponseFormat        `json:"response_format,omitempty"` // JSON mode
-	Seed           *int                   `json:"seed,omitempty"`            // For reproducibility
+	Stream         bool            `json:"stream,omitempty"`          // Enable streaming
+	Tools          []Tool          `json:"tools,omitempty"`           // Available tools
+	ToolChoice     interface{}     `json:"tool_choice,omitempty"`     // "auto", "none", or specific tool
+	ResponseFormat *ResponseFormat `json:"response_format,omitempty"` // JSON mode
+	Seed           *int            `json:"seed,omitempty"`            // For reproducibility
 
 	// OpenRouter extensions
-	ProviderOrder      []string `json:"provider_order,omitempty"`       // Preferred providers
-	ProviderIgnore     []string `json:"provider_ignore,omitempty"`      // Providers to skip
-	ProviderAllow      []string `json:"provider_allow,omitempty"`       // Allowed providers
+	ProviderOrder       []string               `json:"provider_order,omitempty"`  // Preferred providers
+	ProviderIgnore      []string               `json:"provider_ignore,omitempty"` // Providers to skip
+	ProviderAllow       []string               `json:"provider_allow,omitempty"`  // Allowed providers
 	ProviderPreferences map[string]interface{} `json:"provider_preferences,omitempty"`
 
 	// Metadata
@@ -55,12 +55,12 @@ type ChatRequest struct {
 // ChatResponse represents a chat completion response with all fields
 type ChatResponse struct {
 	// OpenAI standard fields
-	ID      string    `json:"id"`
-	Object  string    `json:"object"` // "chat.completion"
-	Created int64     `json:"created"`
-	Model   string    `json:"model"`
-	Choices []Choice  `json:"choices"`
-	Usage   Usage     `json:"usage"`
+	ID      string   `json:"id"`
+	Object  string   `json:"object"` // "chat.completion"
+	Created int64    `json:"created"`
+	Model   string   `json:"model"`
+	Choices []Choice `json:"choices"`
+	Usage   Usage    `json:"usage"`
 
 	// OpenRouter extensions
 	ModelUsed    string `json:"model_used,omitempty"`    // Actual model used
@@ -75,10 +75,10 @@ type ChatResponse struct {
 
 // Choice represents a completion choice
 type Choice struct {
-	Index        int         `json:"index"`
-	Message      Message     `json:"message"`
-	FinishReason string      `json:"finish_reason"` // "stop", "length", "tool_calls", etc.
-	LogProbs     *LogProbs   `json:"logprobs,omitempty"`
+	Index        int       `json:"index"`
+	Message      Message   `json:"message"`
+	FinishReason string    `json:"finish_reason"` // "stop", "length", "tool_calls", etc.
+	LogProbs     *LogProbs `json:"logprobs,omitempty"`
 }
 
 // Usage represents token usage statistics
@@ -106,10 +106,10 @@ type ChatChunk struct {
 
 // ChunkChoice represents a streaming choice
 type ChunkChoice struct {
-	Index        int           `json:"index"`
-	Delta        MessageDelta  `json:"delta"`
-	FinishReason *string       `json:"finish_reason,omitempty"`
-	LogProbs     *LogProbs     `json:"logprobs,omitempty"`
+	Index        int          `json:"index"`
+	Delta        MessageDelta `json:"delta"`
+	FinishReason *string      `json:"finish_reason,omitempty"`
+	LogProbs     *LogProbs    `json:"logprobs,omitempty"`
 }
 
 // MessageDelta represents incremental message content
@@ -157,10 +157,10 @@ type LogProbs struct {
 
 // TokenLogProb represents log probability for a token
 type TokenLogProb struct {
-	Token       string         `json:"token"`
-	LogProb     float64        `json:"logprob"`
-	Bytes       []int          `json:"bytes,omitempty"`
-	TopLogProbs []TopLogProb   `json:"top_logprobs,omitempty"`
+	Token       string       `json:"token"`
+	LogProb     float64      `json:"logprob"`
+	Bytes       []int        `json:"bytes,omitempty"`
+	TopLogProbs []TopLogProb `json:"top_logprobs,omitempty"`
 }
 
 // TopLogProb represents top log probabilities
@@ -172,7 +172,7 @@ type TopLogProb struct {
 
 // EmbeddingsRequest represents an embeddings request
 type EmbeddingsRequest struct {
-	Input          interface{} `json:"input"`           // string or []string
+	Input          interface{} `json:"input"` // string or []string
 	Model          string      `json:"model"`
 	EncodingFormat string      `json:"encoding_format,omitempty"` // "float" or "base64"
 	Dimensions     int         `json:"dimensions,omitempty"`      // For models that support it
@@ -266,7 +266,7 @@ type ModerationsResponse struct {
 
 // ModerationResult represents moderation results for one input
 type ModerationResult struct {
-	Flagged        bool                       `json:"flagged"`
-	Categories     map[string]bool            `json:"categories"`
-	CategoryScores map[string]float64         `json:"category_scores"`
+	Flagged        bool               `json:"flagged"`
+	Categories     map[string]bool    `json:"categories"`
+	CategoryScores map[string]float64 `json:"category_scores"`
 }

@@ -133,7 +133,7 @@ func TestValkeyStoreWithMock(t *testing.T) {
 
 	t.Run("Scan Operations", func(t *testing.T) {
 		pattern := "test:*"
-		
+
 		// Scan - first call
 		client.EXPECT().Do(ctx, mock.Match("SCAN", "0", "MATCH", pattern, "COUNT", "100")).Return(
 			mock.Result(mock.ValkeyArray(
@@ -145,7 +145,7 @@ func TestValkeyStoreWithMock(t *testing.T) {
 				),
 			)),
 		)
-		// Scan - second call 
+		// Scan - second call
 		client.EXPECT().Do(ctx, mock.Match("SCAN", "5", "MATCH", pattern, "COUNT", "100")).Return(
 			mock.Result(mock.ValkeyArray(
 				mock.ValkeyString("0"), // cursor 0 means done
@@ -195,7 +195,7 @@ func TestValkeyStoreWithMock(t *testing.T) {
 		err := store.CompareAndSwap(ctx, key, oldValue, newValue)
 		assert.NoError(t, err)
 
-		// For CAS failure test, we'll skip it as the mock behavior 
+		// For CAS failure test, we'll skip it as the mock behavior
 		// with ValkeyNil is complex to simulate correctly
 		// The integration tests cover this scenario
 	})
@@ -273,7 +273,7 @@ func TestValkeyTransactionWithMock(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	t.Run("Transaction Structure", func(t *testing.T) {
 		// Begin transaction
 		tx, err := store.BeginTransaction(ctx)
@@ -327,7 +327,7 @@ func TestPubSubWithMock(t *testing.T) {
 		message := "test message"
 
 		client.EXPECT().Do(ctx, mock.Match("PUBLISH", channel, message)).Return(mock.Result(mock.ValkeyInt64(1)))
-		
+
 		err := pubsub.Publish(ctx, channel, message)
 		assert.NoError(t, err)
 	})

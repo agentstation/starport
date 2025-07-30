@@ -33,7 +33,6 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
 
 	endpoint := getEndpoint(req.Model, false)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
@@ -58,7 +57,6 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-	
 
 	// Convert to OpenAI format
 	return c.convertToOpenAIResponse(&geminiResp, req), nil
@@ -72,7 +70,6 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
 
 	endpoint := getEndpoint(req.Model, true)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
@@ -185,8 +182,7 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 	if req.Reasoning != nil && !req.Reasoning.Exclude {
 		// Create thinkingConfig for Gemini 2.5 models
 		thinkingConfig := make(map[string]interface{})
-		
-		
+
 		// Handle max_tokens if specified (takes precedence over effort)
 		if req.Reasoning.MaxTokens != nil {
 			thinkingConfig["thinkingBudget"] = *req.Reasoning.MaxTokens
@@ -207,13 +203,13 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 			// Default to dynamic thinking if no effort or max_tokens specified
 			thinkingConfig["thinkingBudget"] = -1
 		}
-		
+
 		// IMPORTANT: Request thought summaries to be included
 		thinkingConfig["includeThoughts"] = true
-		
+
 		genConfig["thinkingConfig"] = thinkingConfig
 	}
-	
+
 	if len(genConfig) > 0 {
 		geminiReq["generationConfig"] = genConfig
 	}
@@ -236,7 +232,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 	candidate := resp.Candidates[0]
 	content := ""
 	reasoning := ""
-	
+
 	// Separate thought parts from content parts
 	for _, part := range candidate.Content.Parts {
 		if part.Thought {
@@ -264,7 +260,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 		Role:    "assistant",
 		Content: content,
 	}
-	
+
 	// Only add reasoning if it's not empty and not excluded
 	if reasoning != "" && (req.Reasoning == nil || !req.Reasoning.Exclude) {
 		message.Reasoning = reasoning
@@ -300,22 +296,22 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 
 // googleStream implements ChatStream for Google responses
 type googleStream struct {
-	response        *http.Response
-	reader          *bufio.Reader
-	model           string
-	provider        string
-	closed          bool
-	buffer          []byte
+	response         *http.Response
+	reader           *bufio.Reader
+	model            string
+	provider         string
+	closed           bool
+	buffer           []byte
 	excludeReasoning bool
 }
 
 func newGoogleStream(resp *http.Response, model, provider string, excludeReasoning bool) *googleStream {
 	return &googleStream{
-		response:        resp,
-		reader:          bufio.NewReader(resp.Body),
-		model:           model,
-		provider:        provider,
-		buffer:          make([]byte, 0),
+		response:         resp,
+		reader:           bufio.NewReader(resp.Body),
+		model:            model,
+		provider:         provider,
+		buffer:           make([]byte, 0),
 		excludeReasoning: excludeReasoning,
 	}
 }
@@ -337,12 +333,12 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 		if n > 0 {
 			s.buffer = append(s.buffer, chunk[:n]...)
 		}
-		
+
 		if err == io.EOF && len(s.buffer) == 0 {
 			s.closed = true
 			return nil, io.EOF
 		}
-		
+
 		if err != nil && err != io.EOF {
 			return nil, &StreamError{
 				Err:    err,
@@ -370,13 +366,12 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			// Skip malformed chunks
 			continue
 		}
-		
 
 		// Convert to OpenAI format
 		if len(geminiResp.Candidates) > 0 {
 			content := ""
 			reasoning := ""
-			
+
 			// Separate thought parts from content parts
 			for _, part := range geminiResp.Candidates[0].Content.Parts {
 				if part.Thought {
@@ -411,7 +406,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			if reasoning != "" && !s.excludeReasoning {
 				delta.Reasoning = reasoning
 			}
-			
+
 			chunk := &ChatStreamChunk{
 				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
 				Object:  "chat.completion.chunk",
@@ -425,7 +420,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 					},
 				},
 			}
-			
+
 			// Include usage metadata if available (typically in the final chunk)
 			if geminiResp.UsageMetadata.TotalTokenCount > 0 {
 				chunk.Usage = &Usage{
@@ -442,7 +437,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 					}(),
 				}
 			}
-			
+
 			return chunk, nil
 		}
 	}
@@ -477,7 +472,7 @@ func (s *googleStream) extractNextChunk() ([]byte, []byte, bool) {
 
 	for end < len(s.buffer) {
 		ch := s.buffer[end]
-		
+
 		if !escaped {
 			if ch == '"' && !inString {
 				inString = true
@@ -500,7 +495,7 @@ func (s *googleStream) extractNextChunk() ([]byte, []byte, bool) {
 		} else {
 			escaped = false
 		}
-		
+
 		end++
 	}
 
@@ -543,7 +538,7 @@ func mapVertexFinishReason(reason string) string {
 func extractThoughtSummary(text string) (content, reasoning string) {
 	content = text
 	reasoning = ""
-	
+
 	// Pattern 1: <thinking>...</thinking> tags
 	if start := strings.Index(text, "<thinking>"); start != -1 {
 		if end := strings.Index(text[start:], "</thinking>"); end != -1 {
@@ -553,7 +548,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 			return
 		}
 	}
-	
+
 	// Pattern 2: Thought: prefix at the beginning
 	if strings.HasPrefix(text, "Thought:") || strings.HasPrefix(text, "Thinking:") {
 		lines := strings.Split(text, "\n")
@@ -566,7 +561,7 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 			}
 		}
 	}
-	
+
 	// Pattern 3: [Thinking Process] or similar markers
 	markers := []string{"[Thinking Process]", "[Thought Process]", "[Internal Reasoning]"}
 	for _, marker := range markers {
@@ -578,11 +573,11 @@ func extractThoughtSummary(text string) (content, reasoning string) {
 			} else {
 				endIdx += idx
 			}
-			reasoning = strings.TrimSpace(text[idx : endIdx])
+			reasoning = strings.TrimSpace(text[idx:endIdx])
 			content = strings.TrimSpace(text[:idx] + text[endIdx:])
 			return
 		}
 	}
-	
+
 	return content, reasoning
 }

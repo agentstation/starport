@@ -135,7 +135,7 @@ func TestClient_ConcurrentRequests(t *testing.T) {
 	// Create client with limited connections
 	config := DefaultConfig()
 	config.MaxConnsPerHost = 5
-	config.MaxIdleConnsPerHost = 2  // Must be less than MaxConnsPerHost
+	config.MaxIdleConnsPerHost = 2 // Must be less than MaxConnsPerHost
 	config.EnableCircuitBreaker = false
 	client, err := New("test", config)
 	if err != nil {

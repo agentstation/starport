@@ -19,9 +19,9 @@ import (
 
 // App represents the main application with new handler structure
 type App struct {
-	config       *Config
-	httpServer   *server.Server
-	hotReloader  interface {
+	config      *Config
+	httpServer  *server.Server
+	hotReloader interface {
 		Start(context.Context) error
 		Stop()
 	}
@@ -96,7 +96,7 @@ func New(opts ...Option) (*App, error) {
 	if app.cacheManager != nil {
 		serverOpts = append(serverOpts, server.WithCache(app.cacheManager))
 	}
-	
+
 	// Add ChatUI configuration if enabled
 	if cfg.ChatUI != nil && cfg.ChatUI.Enabled {
 		chatUIConfig := chatui.Config{
@@ -112,7 +112,7 @@ func New(opts ...Option) (*App, error) {
 			Bool("allow_key_gen", cfg.ChatUI.AllowKeyGen).
 			Msg("ChatUI enabled")
 	}
-	
+
 	app.httpServer = server.New(&app.config.Server, app.registry, serverOpts...)
 
 	return app, nil
@@ -130,7 +130,7 @@ func (a *App) initializeStorage() (storage.KVStore, error) {
 		if a.config.Storage == nil {
 			return nil, fmt.Errorf("valkey storage configuration not provided")
 		}
-		
+
 		// Convert config.ValkeyConfig to storage.ValkeyConfig
 		valkeyConfig := storage.ValkeyConfig{
 			URL:          a.config.Storage.Valkey.URL,
@@ -159,7 +159,6 @@ func (a *App) initializeStorage() (storage.KVStore, error) {
 		return nil, fmt.Errorf("unknown storage mode: %s", a.config.StorageMode)
 	}
 }
-
 
 // Run starts the application
 func (a *App) Run(ctx context.Context) error {

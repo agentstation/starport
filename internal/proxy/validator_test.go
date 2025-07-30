@@ -233,14 +233,14 @@ func TestServiceProcessChatCompletionWithCacheControl(t *testing.T) {
 		// Validate that the provider doesn't support cache control
 		provider, _ := ExtractProviderFromModel(req.Model)
 		assert.False(t, ProviderSupportsCacheControl(provider))
-		
+
 		// Verify the request has cache control
 		assert.True(t, connectors.HasCacheControl(req.Messages[0].Content))
-		
+
 		// Strip cache control as the service would do
 		strippedContent, err := connectors.StripCacheControl(req.Messages[0].Content)
 		require.NoError(t, err)
-		
+
 		// Verify cache control was removed
 		assert.False(t, connectors.HasCacheControl(strippedContent))
 	})
@@ -251,32 +251,32 @@ func TestCachePricingCalculation(t *testing.T) {
 		// Test with Anthropic model
 		pricing := connectors.GetCachePricing("anthropic/claude-3-5-sonnet")
 		require.NotNil(t, pricing)
-		
+
 		// Verify pricing values
 		assert.Equal(t, "0.003", pricing.Prompt)
 		assert.Equal(t, "0.015", pricing.Completion)
 		assert.Equal(t, "0.00375", pricing.CacheWrite)
 		assert.Equal(t, "0.0003", pricing.CacheRead)
 	})
-	
+
 	t.Run("calculates cache pricing for OpenAI", func(t *testing.T) {
 		// Test with OpenAI model
 		pricing := connectors.GetCachePricing("openai/gpt-4o")
 		require.NotNil(t, pricing)
-		
+
 		// Verify pricing values
 		assert.Equal(t, "0.0025", pricing.Prompt)
 		assert.Equal(t, "0.01", pricing.Completion)
 		assert.Equal(t, "0.00625", pricing.CacheWrite)
 		assert.Equal(t, "0.00125", pricing.CacheRead)
 	})
-	
+
 	t.Run("returns nil for unsupported provider", func(t *testing.T) {
 		// Test with provider that doesn't support cache pricing
 		pricing := connectors.GetCachePricing("mistral/mistral-large")
 		assert.Nil(t, pricing)
 	})
-	
+
 	t.Run("handles model with date suffix", func(t *testing.T) {
 		// Test with model that has a date suffix
 		pricing := connectors.GetCachePricing("anthropic/claude-3-5-sonnet-20241022")
@@ -291,16 +291,16 @@ func TestCacheCostCalculation(t *testing.T) {
 		tokens := 1000
 		writeRate := 0.00375
 		expectedCost := float64(tokens) / 1000000.0 * writeRate
-		
+
 		assert.InDelta(t, 0.00000375, expectedCost, 0.00000001)
 	})
-	
+
 	t.Run("calculates read cost correctly", func(t *testing.T) {
 		// For 1000 tokens at $0.30 per million
 		tokens := 1000
 		readRate := 0.0003
 		expectedCost := float64(tokens) / 1000000.0 * readRate
-		
+
 		assert.InDelta(t, 0.0000003, expectedCost, 0.00000001)
 	})
 }

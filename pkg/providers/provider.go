@@ -17,7 +17,7 @@ type Provider struct {
 	Description string // Human-readable description
 
 	// Status
-	Enabled bool      // Whether this provider is active
+	Enabled bool         // Whether this provider is active
 	Health  HealthStatus // Current health status
 
 	// Configuration
@@ -34,9 +34,9 @@ type Provider struct {
 	models map[string]*models.Model
 
 	// Statistics
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	LastUsedAt  time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	LastUsedAt   time.Time
 	RequestCount int64
 
 	// Embedded connector provides the actual API implementation
@@ -46,10 +46,10 @@ type Provider struct {
 
 // HealthStatus represents the health status of a provider
 type HealthStatus struct {
-	Healthy    bool
-	LastCheck  time.Time
-	LastError  error
-	Latency    time.Duration
+	Healthy   bool
+	LastCheck time.Time
+	LastError error
+	Latency   time.Duration
 }
 
 // AddModel adds a model to this provider
@@ -203,7 +203,7 @@ func (p *Provider) UpdateHealth(healthy bool, latency time.Duration, err error) 
 func (p *Provider) IncrementRequestCount() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.RequestCount++
 	p.LastUsedAt = time.Now()
 }
@@ -215,25 +215,25 @@ func (p *Provider) Clone() *Provider {
 
 	// Create new provider instead of copying struct with mutex
 	clone := &Provider{
-		ID:          p.ID,
-		Name:        p.Name,
-		Type:        p.Type,
-		Description: p.Description,
-		Enabled:     p.Enabled,
-		Health:      p.Health,
-		BaseURL:     p.BaseURL,
-		APIKey:      p.APIKey,
-		Config:      nil,
+		ID:           p.ID,
+		Name:         p.Name,
+		Type:         p.Type,
+		Description:  p.Description,
+		Enabled:      p.Enabled,
+		Health:       p.Health,
+		BaseURL:      p.BaseURL,
+		APIKey:       p.APIKey,
+		Config:       nil,
 		RateLimitRPM: p.RateLimitRPM,
 		RateLimitTPM: p.RateLimitTPM,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
-		LastUsedAt:  p.LastUsedAt,
+		CreatedAt:    p.CreatedAt,
+		UpdatedAt:    p.UpdatedAt,
+		LastUsedAt:   p.LastUsedAt,
 		RequestCount: p.RequestCount,
-		Connector:   p.Connector,
-		models:      p.models,
+		Connector:    p.Connector,
+		models:       p.models,
 	}
-	
+
 	// Deep copy config map
 	if p.Config != nil {
 		clone.Config = make(map[string]string, len(p.Config))
@@ -241,6 +241,6 @@ func (p *Provider) Clone() *Provider {
 			clone.Config[k] = v
 		}
 	}
-	
+
 	return clone
 }

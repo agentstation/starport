@@ -29,10 +29,10 @@ type Config struct {
 
 // Registry manages provider connectors and their lifecycle
 type Registry struct {
-	connectors       map[string]connectors.Connector
-	providerConfigs  map[string]connectors.ProviderConfig
-	mu               sync.RWMutex
-	config           *Config
+	connectors      map[string]connectors.Connector
+	providerConfigs map[string]connectors.ProviderConfig
+	mu              sync.RWMutex
+	config          *Config
 }
 
 // providerInit holds initialization data for a provider
@@ -193,20 +193,20 @@ func (r *Registry) initializeGoogleProviders(cfg *config.Config) error {
 	if projectID == "" {
 		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
 	}
-	
+
 	if projectID != "" {
 		providerCfg := convertToProviderConfig(cfg.Providers.GoogleVertexAI, "GOOGLE_APPLICATION_CREDENTIALS")
-		
+
 		// Add Vertex AI specific configuration
 		providerCfg.Extra = make(map[string]interface{})
 		providerCfg.Extra["project_id"] = projectID
-		
+
 		// Check for location configuration
 		location := os.Getenv("STARPORT_PROVIDERS_GOOGLE_VERTEXAI_LOCATION")
 		if location != "" {
 			providerCfg.Extra["location"] = location
 		}
-		
+
 		// Check for fallback locations (comma-separated)
 		fallbackLocations := os.Getenv("STARPORT_PROVIDERS_GOOGLE_VERTEXAI_FALLBACK_LOCATIONS")
 		if fallbackLocations != "" {
@@ -217,7 +217,7 @@ func (r *Registry) initializeGoogleProviders(cfg *config.Config) error {
 			}
 			providerCfg.Extra["fallback_locations"] = fallbacks
 		}
-		
+
 		connector, err := connectors.NewConnector("google-vertex", providerCfg)
 		if err != nil {
 			return fmt.Errorf("failed to create Vertex AI connector: %w", err)
@@ -253,24 +253,24 @@ func (r *Registry) initializeAzureProvider(cfg *config.Config) error {
 func (r *Registry) initializeOllamaProvider(cfg *config.Config) error {
 	providerCfg := convertToProviderConfig(cfg.Providers.Ollama, "")
 	providerCfg.Enabled = true // Ensure enabled flag is set
-	
+
 	connector, err := connectors.NewConnector("ollama", providerCfg)
 	if err != nil {
 		return fmt.Errorf("failed to create Ollama connector: %w", err)
 	}
-	
+
 	// Check if Ollama is actually running
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := connector.Health(ctx); err != nil {
 		return fmt.Errorf("ollama server not reachable at %s: %w", providerCfg.BaseURL, err)
 	}
-	
+
 	if err := r.RegisterWithConfig("ollama", connector, providerCfg); err != nil {
 		return fmt.Errorf("failed to register Ollama connector: %w", err)
 	}
-	
+
 	// Fetch available models from Ollama and register them
 	modelsResp, err := connector.Models(ctx)
 	if err != nil {
@@ -297,7 +297,7 @@ func (r *Registry) initializeOllamaProvider(cfg *config.Config) error {
 	} else {
 		log.Info().Str("base_url", providerCfg.BaseURL).Msg("initialized Ollama connector (no models available)")
 	}
-	
+
 	return nil
 }
 
@@ -318,7 +318,7 @@ func (r *Registry) initializeMockProvider() error {
 // performHealthChecks runs health checks on configured providers concurrently
 func (r *Registry) performHealthChecks(ctx context.Context) {
 	r.mu.RLock()
-	
+
 	// Count configured providers
 	configuredCount := 0
 	for provider := range r.connectors {
@@ -326,17 +326,17 @@ func (r *Registry) performHealthChecks(ctx context.Context) {
 			configuredCount++
 		}
 	}
-	
+
 	if configuredCount == 0 {
 		r.mu.RUnlock()
 		log.Info().Msg("no configured providers to health check")
 		return
 	}
-	
+
 	log.Info().
 		Int("providers", configuredCount).
 		Msg("starting health checks for configured providers")
-	
+
 	// Use WaitGroup to track health checks
 	var wg sync.WaitGroup
 
@@ -374,12 +374,12 @@ func (r *Registry) performHealthChecks(ctx context.Context) {
 			}
 		}(provider, connector)
 	}
-	
+
 	r.mu.RUnlock()
 
 	// Wait for all health checks to complete
 	wg.Wait()
-	
+
 	log.Info().Msg("all health checks completed")
 }
 
@@ -402,7 +402,7 @@ func (r *Registry) GetConnectorForModel(modelID string) (connectors.Connector, s
 	if err != nil {
 		return nil, "", fmt.Errorf("provider not available: %s", actualProvider)
 	}
-	
+
 	// Return the full model ID (not just the model part)
 	return conn, modelID, nil
 }
@@ -504,7 +504,7 @@ func (r *Registry) IsProviderConfigured(provider string) bool {
 	// For Azure OpenAI, check both API key and valid resource URL
 	if provider == "azure-openai" {
 		hasAPIKey := config.APIKey != ""
-		hasValidURL := config.BaseURL != "" && 
+		hasValidURL := config.BaseURL != "" &&
 			!strings.Contains(config.BaseURL, "YOUR-RESOURCE-NAME") &&
 			!strings.Contains(config.BaseURL, "your-resource-name")
 		return hasAPIKey && hasValidURL
@@ -597,7 +597,7 @@ func (r *Registry) GetModels(ctx context.Context) ([]connectors.Model, error) {
 		log.Warn().
 			Err(err).
 			Msg("failed to load catalog, falling back to dynamic model fetching")
-		
+
 		var allModels []connectors.Model
 		for provider, connector := range r.connectors {
 			// Skip providers without API keys
@@ -738,7 +738,7 @@ func (r *Registry) validateProviderModels(provider string, connector connectors.
 	newModels := 0
 	for _, model := range modelsResp.Data {
 		providerModelMap[model.ID] = true
-		
+
 		// If model not in catalog, register it as dynamic
 		if !catalogModelMap[model.ID] {
 			modelInfo := catalog.DynamicModelInfo{

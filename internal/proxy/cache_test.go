@@ -17,10 +17,10 @@ import (
 
 // mockCacheManager implements the cache manager interface for testing
 type mockCacheManager struct {
-	storage      map[string][]byte
-	calls        map[string]int
-	shouldError  bool
-	returnAsMap  bool // Simulate real behavior of returning map[string]interface{}
+	storage     map[string][]byte
+	calls       map[string]int
+	shouldError bool
+	returnAsMap bool // Simulate real behavior of returning map[string]interface{}
 }
 
 func newMockCacheManager() *mockCacheManager {
@@ -36,19 +36,19 @@ func (m *mockCacheManager) GetModel(ctx context.Context, key string) (interface{
 	if m.shouldError {
 		return nil, false, errors.New("cache error")
 	}
-	
+
 	data, found := m.storage[key]
 	if !found {
 		return nil, false, nil
 	}
-	
+
 	if m.returnAsMap {
 		// Simulate real cache manager behavior
 		var result interface{}
 		err := json.Unmarshal(data, &result)
 		return result, true, err
 	}
-	
+
 	// For testing direct type returns
 	var result ModelsResponse
 	err := json.Unmarshal(data, &result)
@@ -60,7 +60,7 @@ func (m *mockCacheManager) SetModel(ctx context.Context, key string, value inter
 	if m.shouldError {
 		return errors.New("cache error")
 	}
-	
+
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -74,12 +74,12 @@ func (m *mockCacheManager) GetChatCompletion(ctx context.Context, key string) (*
 	if m.shouldError {
 		return nil, errors.New("cache error")
 	}
-	
+
 	data, found := m.storage[key]
 	if !found {
 		return nil, nil
 	}
-	
+
 	var resp cache.ChatCompletionResponse
 	err := json.Unmarshal(data, &resp)
 	return &resp, err
@@ -90,7 +90,7 @@ func (m *mockCacheManager) SetChatCompletion(ctx context.Context, key string, re
 	if m.shouldError {
 		return errors.New("cache error")
 	}
-	
+
 	data, err := json.Marshal(response)
 	if err != nil {
 		return err
@@ -104,12 +104,12 @@ func (m *mockCacheManager) GetEmbedding(ctx context.Context, key string) (*cache
 	if m.shouldError {
 		return nil, errors.New("cache error")
 	}
-	
+
 	data, found := m.storage[key]
 	if !found {
 		return nil, nil
 	}
-	
+
 	var resp cache.EmbeddingsResponse
 	err := json.Unmarshal(data, &resp)
 	return &resp, err
@@ -120,7 +120,7 @@ func (m *mockCacheManager) SetEmbedding(ctx context.Context, key string, respons
 	if m.shouldError {
 		return errors.New("cache error")
 	}
-	
+
 	data, err := json.Marshal(response)
 	if err != nil {
 		return err
@@ -144,34 +144,34 @@ func TestCachedService_ProcessChatCompletion(t *testing.T) {
 			},
 		},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableChatCache: true,
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	req := &ChatCompletionRequest{
 		Model: "gpt-4",
 		Messages: []connectors.Message{
 			{Role: "user", Content: "Hi"},
 		},
 	}
-	
+
 	// First call - cache miss
 	resp1, err := service.ProcessChatCompletion(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, CacheStatusMiss, resp1.CacheStatus)
 	assert.Equal(t, "test-123", resp1.ID)
 	assert.Equal(t, 1, mockProxy.calls["ProcessChatCompletion"])
-	
+
 	// Wait for async cache write
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Second call - cache hit
 	resp2, err := service.ProcessChatCompletion(ctx, req)
 	require.NoError(t, err)
@@ -191,27 +191,27 @@ func TestCachedService_ListModels(t *testing.T) {
 			},
 		},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableModelCache: true,
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	// First call - cache miss
 	resp1, err := service.ListModels(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, CacheStatusMiss, resp1.CacheStatus)
 	assert.Len(t, resp1.Data, 1)
 	assert.Equal(t, 1, mockProxy.calls["ListModels"])
-	
+
 	// Wait for async cache write
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Second call - cache hit (with map[string]interface{} conversion)
 	resp2, err := service.ListModels(ctx)
 	require.NoError(t, err)
@@ -227,24 +227,24 @@ func TestCachedService_CacheDisabled(t *testing.T) {
 	mockProxy := &mockProxyImpl{
 		modelsResponse: &ModelsResponse{Object: "list"},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableModelCache: false, // Cache disabled
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	// Multiple calls should all go to the underlying service
 	for i := 0; i < 3; i++ {
 		resp, err := service.ListModels(ctx)
 		require.NoError(t, err)
 		assert.Empty(t, resp.CacheStatus, "Should not set cache status when cache is disabled")
 	}
-	
+
 	assert.Equal(t, 3, mockProxy.calls["ListModels"], "All calls should go to underlying service when cache is disabled")
 	assert.Equal(t, 0, mockCache.calls["GetModel"], "Should not use cache when disabled")
 }
@@ -253,21 +253,21 @@ func TestCachedService_CacheError(t *testing.T) {
 	ctx := context.Background()
 	mockCache := newMockCacheManager()
 	mockCache.shouldError = true
-	
+
 	mockProxy := &mockProxyImpl{
 		modelsResponse: &ModelsResponse{Object: "list"},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableModelCache: true,
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	// Should fall back to underlying service on cache error
 	resp, err := service.ListModels(ctx)
 	require.NoError(t, err)
@@ -295,17 +295,17 @@ func TestCachedService_ProcessChatCompletionStream(t *testing.T) {
 			},
 		},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableChatCache: true,
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	req := &ChatCompletionRequest{
 		Model: "gpt-4",
 		Messages: []connectors.Message{
@@ -313,13 +313,13 @@ func TestCachedService_ProcessChatCompletionStream(t *testing.T) {
 		},
 		Stream: true,
 	}
-	
+
 	// First call - cache miss, should call underlying service
 	stream1, err := service.ProcessChatCompletionStream(ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, stream1)
 	assert.Equal(t, 1, mockProxy.calls["ProcessChatCompletionStream"])
-	
+
 	// Read all chunks to trigger caching
 	var chunks1 []connectors.ChatStreamChunk
 	for {
@@ -333,33 +333,33 @@ func TestCachedService_ProcessChatCompletionStream(t *testing.T) {
 		require.NoError(t, err)
 		chunks1 = append(chunks1, *chunk)
 	}
-	
+
 	// Verify we got all expected chunks
 	assert.Len(t, chunks1, 3) // role, content, usage
 	assert.Equal(t, "assistant", chunks1[0].Choices[0].Delta.Role)
 	assert.Equal(t, "Hello from stream!", chunks1[1].Choices[0].Delta.Content)
 	assert.NotNil(t, chunks1[2].Usage)
 	assert.Equal(t, 5, chunks1[2].Usage.CompletionTokens)
-	
+
 	// Check cache status
 	if cacheProvider, ok := stream1.(CacheStatusProvider); ok {
 		assert.Equal(t, CacheStatusMiss, cacheProvider.GetCacheStatus())
 	}
-	
+
 	// Wait for async caching
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Second call - cache hit, should NOT call underlying service
 	stream2, err := service.ProcessChatCompletionStream(ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, stream2)
 	assert.Equal(t, 1, mockProxy.calls["ProcessChatCompletionStream"], "Should not call underlying service on cache hit")
-	
+
 	// Check cache status
 	if cacheProvider, ok := stream2.(CacheStatusProvider); ok {
 		assert.Equal(t, CacheStatusHit, cacheProvider.GetCacheStatus())
 	}
-	
+
 	// Read all chunks from cached stream
 	var chunks2 []connectors.ChatStreamChunk
 	for {
@@ -370,23 +370,23 @@ func TestCachedService_ProcessChatCompletionStream(t *testing.T) {
 		require.NoError(t, err)
 		chunks2 = append(chunks2, *chunk)
 	}
-	
+
 	// Verify cached stream returns proper chunks
 	require.Greater(t, len(chunks2), 2, "Should have role, content chunks, and usage")
-	
+
 	// Debug: print all chunks
 	for i, chunk := range chunks2 {
-		t.Logf("Chunk %d: role=%q content=%q finish=%q usage=%v", 
-			i, 
+		t.Logf("Chunk %d: role=%q content=%q finish=%q usage=%v",
+			i,
 			chunk.Choices[0].Delta.Role,
 			chunk.Choices[0].Delta.Content,
 			chunk.Choices[0].FinishReason,
 			chunk.Usage != nil)
 	}
-	
+
 	// Check first chunk has role
 	assert.Equal(t, "assistant", chunks2[0].Choices[0].Delta.Role)
-	
+
 	// Check content is streamed in chunks
 	var totalContent string
 	var usageChunkIndex = -1
@@ -399,7 +399,7 @@ func TestCachedService_ProcessChatCompletionStream(t *testing.T) {
 		}
 	}
 	assert.Equal(t, "Hello from stream!", totalContent)
-	
+
 	// Check we have a chunk with usage data
 	require.NotEqual(t, -1, usageChunkIndex, "Should have a chunk with usage data")
 	usageChunk := chunks2[usageChunkIndex]
@@ -413,7 +413,7 @@ func TestCachedService_StreamingResponseIsCached(t *testing.T) {
 	ctx := context.Background()
 	mockCache := newMockCacheManager()
 	mockCache.returnAsMap = false // For easier verification
-	
+
 	mockProxy := &mockProxyImpl{
 		chatResponse: &ChatCompletionResponse{
 			ID:     "test-stream-cache",
@@ -428,13 +428,13 @@ func TestCachedService_StreamingResponseIsCached(t *testing.T) {
 			},
 		},
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  CacheConfig{EnableChatCache: true},
 	}
-	
+
 	req := &ChatCompletionRequest{
 		Model: "gpt-4",
 		Messages: []connectors.Message{
@@ -442,11 +442,11 @@ func TestCachedService_StreamingResponseIsCached(t *testing.T) {
 		},
 		Stream: true,
 	}
-	
+
 	// Process streaming request
 	stream, err := service.ProcessChatCompletionStream(ctx, req)
 	require.NoError(t, err)
-	
+
 	// Read entire stream
 	for {
 		_, err := stream.Read()
@@ -455,22 +455,22 @@ func TestCachedService_StreamingResponseIsCached(t *testing.T) {
 		}
 		require.NoError(t, err)
 	}
-	
+
 	// Wait for async caching
 	time.Sleep(200 * time.Millisecond)
-	
+
 	// Verify response was cached
 	assert.Equal(t, 1, mockCache.calls["SetChatCompletion"], "Should cache streaming response")
-	
+
 	// Verify cached response has correct content
 	cacheKey, _ := service.generateChatCacheKey(req)
 	cachedData, found := mockCache.storage[cacheKey]
 	require.True(t, found, "Response should be in cache")
-	
+
 	var cachedResp cache.ChatCompletionResponse
 	err = json.Unmarshal(cachedData, &cachedResp)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "test-stream-cache", cachedResp.ID)
 	assert.Equal(t, "Cached content", cachedResp.Choices[0].Message.Content)
 	assert.Equal(t, 10, cachedResp.Usage.CompletionTokens)
@@ -505,34 +505,34 @@ func TestCachedService_PreservesReasoningContent(t *testing.T) {
 			},
 		},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableChatCache: true,
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	req := &ChatCompletionRequest{
 		Model: "claude-3.5-sonnet",
 		Messages: []connectors.Message{
 			{Role: "user", Content: "What is the meaning of life?"},
 		},
 	}
-	
+
 	// First call - cache miss
 	resp1, err := service.ProcessChatCompletion(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, CacheStatusMiss, resp1.CacheStatus)
 	assert.Equal(t, "Let me think about this step by step...", resp1.Choices[0].Message.Reasoning)
 	assert.Equal(t, 15, resp1.Usage.CompletionTokensDetails.ReasoningTokens)
-	
+
 	// Wait for async cache write
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Second call - cache hit
 	resp2, err := service.ProcessChatCompletion(ctx, req)
 	require.NoError(t, err)
@@ -571,17 +571,17 @@ func TestCachedService_PreservesReasoningInStreamCache(t *testing.T) {
 			},
 		},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableChatCache: true,
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	req := &ChatCompletionRequest{
 		Model: "claude-3.5-sonnet",
 		Messages: []connectors.Message{
@@ -589,11 +589,11 @@ func TestCachedService_PreservesReasoningInStreamCache(t *testing.T) {
 		},
 		Stream: true,
 	}
-	
+
 	// First call - cache miss
 	stream1, err := service.ProcessChatCompletionStream(ctx, req)
 	require.NoError(t, err)
-	
+
 	// Read all chunks
 	var chunks []connectors.ChatStreamChunk
 	for {
@@ -607,19 +607,19 @@ func TestCachedService_PreservesReasoningInStreamCache(t *testing.T) {
 		require.NoError(t, err)
 		chunks = append(chunks, *chunk)
 	}
-	
+
 	// Wait for async cache write
 	time.Sleep(200 * time.Millisecond)
-	
+
 	// Second call - cache hit
 	stream2, err := service.ProcessChatCompletionStream(ctx, req)
 	require.NoError(t, err)
-	
+
 	// Check cache status
 	if cacheProvider, ok := stream2.(CacheStatusProvider); ok {
 		assert.Equal(t, CacheStatusHit, cacheProvider.GetCacheStatus())
 	}
-	
+
 	// Read cached stream
 	var cachedChunks []connectors.ChatStreamChunk
 	var totalReasoning, totalContent string
@@ -630,18 +630,18 @@ func TestCachedService_PreservesReasoningInStreamCache(t *testing.T) {
 		}
 		require.NoError(t, err)
 		cachedChunks = append(cachedChunks, *chunk)
-		
+
 		// Accumulate reasoning and content
 		if len(chunk.Choices) > 0 {
 			totalReasoning += chunk.Choices[0].Delta.Reasoning
 			totalContent += chunk.Choices[0].Delta.Content
 		}
 	}
-	
+
 	// Verify reasoning and content are preserved
 	assert.Equal(t, "Let me think step by step about the meaning of life...", totalReasoning, "Reasoning should be preserved in cached stream")
 	assert.Equal(t, "The answer is 42", totalContent, "Content should be preserved in cached stream")
-	
+
 	// Find usage chunk
 	var usageChunk *connectors.ChatStreamChunk
 	for i := len(cachedChunks) - 1; i >= 0; i-- {
@@ -650,7 +650,7 @@ func TestCachedService_PreservesReasoningInStreamCache(t *testing.T) {
 			break
 		}
 	}
-	
+
 	require.NotNil(t, usageChunk, "Should have usage data in cached stream")
 	assert.Equal(t, 25, usageChunk.Usage.CompletionTokensDetails.ReasoningTokens, "Reasoning tokens should be preserved in cached stream")
 }
@@ -698,37 +698,37 @@ func TestCachedService_PreservesAllFields(t *testing.T) {
 			},
 		},
 	}
-	
+
 	cacheConfig := CacheConfig{
 		EnableChatCache: true,
 	}
-	
+
 	service := &cachedService{
 		service:      mockProxy,
 		cacheManager: mockCache,
 		cacheConfig:  cacheConfig,
 	}
-	
+
 	req := &ChatCompletionRequest{
 		Model: "gpt-4",
 		Messages: []connectors.Message{
 			{Role: "user", Content: "Test all fields"},
 		},
 	}
-	
+
 	// First call - cache miss
 	resp1, err := service.ProcessChatCompletion(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, CacheStatusMiss, resp1.CacheStatus)
-	
+
 	// Wait for async cache write
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Second call - cache hit
 	resp2, err := service.ProcessChatCompletion(ctx, req)
 	require.NoError(t, err)
 	assert.Equal(t, CacheStatusHit, resp2.CacheStatus)
-	
+
 	// Verify all fields are preserved
 	assert.Equal(t, "test-all-fields", resp2.ID)
 	assert.Equal(t, "chat.completion", resp2.Object)
@@ -736,42 +736,42 @@ func TestCachedService_PreservesAllFields(t *testing.T) {
 	assert.Equal(t, "gpt-4", resp2.Model)
 	assert.Equal(t, "gpt-4-0613", resp2.ModelUsed, "ModelUsed should be preserved")
 	assert.Equal(t, "fp_1234567890", resp2.SystemFingerprint)
-	
+
 	// Check Choice fields
 	require.Len(t, resp2.Choices, 1)
 	choice := resp2.Choices[0]
 	assert.Equal(t, 0, choice.Index)
 	assert.Equal(t, "stop", choice.FinishReason)
-	
+
 	// Check Message fields
 	assert.Equal(t, "assistant", choice.Message.Role)
 	assert.Equal(t, "Test response", choice.Message.Content)
 	assert.Equal(t, "Test reasoning", choice.Message.Reasoning)
 	assert.Equal(t, "TestBot", choice.Message.Name, "Name field should be preserved")
 	assert.Equal(t, "tool_call_456", choice.Message.ToolCallID, "ToolCallID should be preserved")
-	
+
 	// Check ToolCalls
 	require.Len(t, choice.Message.ToolCalls, 1, "ToolCalls should be preserved")
 	toolCall := choice.Message.ToolCalls[0]
 	assert.Equal(t, "tool_123", toolCall.ID)
 	assert.Equal(t, "function", toolCall.Type)
 	assert.Equal(t, "test_func", toolCall.Function.Name)
-	
+
 	// Check LogProbs
 	require.NotNil(t, choice.LogProbs, "LogProbs should be preserved")
 	require.Len(t, choice.LogProbs.Content, 1)
 	assert.Equal(t, "Test", choice.LogProbs.Content[0].Token)
 	assert.Equal(t, -0.5, choice.LogProbs.Content[0].LogProb)
-	
+
 	// Check Usage
 	assert.Equal(t, 10, resp2.Usage.PromptTokens)
 	assert.Equal(t, 20, resp2.Usage.CompletionTokens)
 	assert.Equal(t, 30, resp2.Usage.TotalTokens)
 	assert.Equal(t, 5, resp2.Usage.CompletionTokensDetails.ReasoningTokens)
-	
+
 	// Check cache age is reasonable (should be >= 0, as test might run very fast)
 	assert.GreaterOrEqual(t, resp2.CacheAge, 0, "CacheAge should be calculated")
-	
+
 	// Verify the CachedAt was stored by checking the raw cache
 	cacheKey, _ := service.generateChatCacheKey(req)
 	rawCached, _ := mockCache.GetChatCompletion(ctx, cacheKey)
@@ -783,12 +783,12 @@ func TestCachedService_PreservesAllFields(t *testing.T) {
 func TestCacheListResponse_HandlesMapFromCache(t *testing.T) {
 	// This test verifies that cacheListResponse correctly handles the
 	// map[string]interface{} that the real cache manager returns
-	
+
 	ctx := context.Background()
 	mockCache := &mockCacheManagerForTest{
 		storage: make(map[string][]byte),
 	}
-	
+
 	// Create a test response
 	testResponse := &ModelsResponse{
 		Object: "list",
@@ -796,20 +796,20 @@ func TestCacheListResponse_HandlesMapFromCache(t *testing.T) {
 			{ID: "model-1", Object: "model", OwnedBy: "test"},
 		},
 	}
-	
+
 	// Store it (this simulates what happens on cache miss)
 	err := mockCache.SetModel(ctx, "models:list", testResponse)
 	require.NoError(t, err)
-	
+
 	// Retrieve it - this returns map[string]interface{} just like real cache
 	cached, found, err := mockCache.GetModel(ctx, "models:list")
 	require.NoError(t, err)
 	require.True(t, found)
-	
+
 	// Verify it's a map (not the original type)
 	_, isMap := cached.(map[string]interface{})
 	assert.True(t, isMap, "Should be map[string]interface{}, got %T", cached)
-	
+
 	// This demonstrates the panic that would occur without our fix:
 	assert.Panics(t, func() {
 		_ = cached.(*ModelsResponse) // This panics!
@@ -822,7 +822,7 @@ func TestCacheIntegration_ReproducesPanicScenario(t *testing.T) {
 	// 2. The cache manager stores it as JSON
 	// 3. When retrieved, it returns map[string]interface{} instead of the original type
 	// 4. The type assertion fails and causes a panic
-	
+
 	// Create real cache manager with correct config structure
 	store := storage.NewMockStore()
 	config := cache.ManagerConfig{
@@ -845,7 +845,7 @@ func TestCacheIntegration_ReproducesPanicScenario(t *testing.T) {
 			SizeMB:   10,
 		},
 	}
-	
+
 	cacheManager, err := cache.NewCacheManager(config, store)
 	require.NoError(t, err)
 	defer cacheManager.Close()
@@ -880,14 +880,14 @@ func TestCacheIntegration_ReproducesPanicScenario(t *testing.T) {
 
 	// This would panic without our fix:
 	// resp := cached.(*ModelsResponse) // panic!
-	
+
 	// Verify the map contains the expected data
 	assert.Equal(t, "list", mapData["object"])
-	
+
 	dataArray, ok := mapData["data"].([]interface{})
 	require.True(t, ok, "data should be an array")
 	require.Len(t, dataArray, 1)
-	
+
 	firstModel, ok := dataArray[0].(map[string]interface{})
 	require.True(t, ok, "model should be a map")
 	assert.Equal(t, "gpt-4", firstModel["id"])
@@ -903,7 +903,7 @@ func (m *mockCacheManagerForTest) GetModel(ctx context.Context, key string) (int
 	if !found {
 		return nil, false, nil
 	}
-	
+
 	// Simulate real cache manager: unmarshal to interface{}
 	var result interface{}
 	err := json.Unmarshal(data, &result)
@@ -921,12 +921,12 @@ func (m *mockCacheManagerForTest) SetModel(ctx context.Context, key string, valu
 
 // mockProxyImpl implements Proxy for testing
 type mockProxyImpl struct {
-	calls             map[string]int
-	chatResponse      *ChatCompletionResponse
-	modelsResponse    *ModelsResponse
-	providersResponse *ProvidersResponse
+	calls              map[string]int
+	chatResponse       *ChatCompletionResponse
+	modelsResponse     *ModelsResponse
+	providersResponse  *ProvidersResponse
 	embeddingsResponse *EmbeddingsResponse
-	shouldError       bool
+	shouldError        bool
 }
 
 func (m *mockProxyImpl) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
@@ -934,7 +934,7 @@ func (m *mockProxyImpl) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		m.calls = make(map[string]int)
 	}
 	m.calls["ProcessChatCompletion"]++
-	
+
 	if m.shouldError {
 		return nil, errors.New("proxy error")
 	}
@@ -946,16 +946,16 @@ func (m *mockProxyImpl) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		m.calls = make(map[string]int)
 	}
 	m.calls["ProcessChatCompletionStream"]++
-	
+
 	if m.shouldError {
 		return nil, errors.New("proxy error")
 	}
-	
+
 	// Return a mock stream that returns the chat response in chunks
 	if m.chatResponse != nil {
 		return newMockStream(m.chatResponse), nil
 	}
-	
+
 	return nil, errors.New("no response configured")
 }
 
@@ -964,7 +964,7 @@ func (m *mockProxyImpl) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 		m.calls = make(map[string]int)
 	}
 	m.calls["ProcessEmbeddings"]++
-	
+
 	if m.shouldError {
 		return nil, errors.New("proxy error")
 	}
@@ -976,7 +976,7 @@ func (m *mockProxyImpl) ListModels(ctx context.Context) (*ModelsResponse, error)
 		m.calls = make(map[string]int)
 	}
 	m.calls["ListModels"]++
-	
+
 	if m.shouldError {
 		return nil, errors.New("proxy error")
 	}
@@ -988,7 +988,7 @@ func (m *mockProxyImpl) ListProviders(ctx context.Context) (*ProvidersResponse, 
 		m.calls = make(map[string]int)
 	}
 	m.calls["ListProviders"]++
-	
+
 	if m.shouldError {
 		return nil, errors.New("proxy error")
 	}
@@ -1018,7 +1018,7 @@ func newMockStream(response *ChatCompletionResponse) *mockStream {
 			},
 		},
 	}
-	
+
 	// Add reasoning chunk if present
 	if len(response.Choices) > 0 && response.Choices[0].Message.Reasoning != "" {
 		chunks = append(chunks, connectors.ChatStreamChunk{
@@ -1031,7 +1031,7 @@ func newMockStream(response *ChatCompletionResponse) *mockStream {
 			},
 		})
 	}
-	
+
 	// Content chunk
 	content := ""
 	if len(response.Choices) > 0 {
@@ -1050,7 +1050,7 @@ func newMockStream(response *ChatCompletionResponse) *mockStream {
 			},
 		})
 	}
-	
+
 	// Final chunk with usage
 	chunks = append(chunks, connectors.ChatStreamChunk{
 		ID:      response.ID,
@@ -1062,7 +1062,7 @@ func newMockStream(response *ChatCompletionResponse) *mockStream {
 		},
 		Usage: response.Usage,
 	})
-	
+
 	return &mockStream{chunks: chunks, position: 0}
 }
 

@@ -48,7 +48,7 @@ func (h *ChatHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *ChatHandler) handleNonStream(w http.ResponseWriter, r *http.Request, req *proxy.ChatCompletionRequest) {
 	// Check If-None-Match header for conditional request
 	ifNoneMatch := r.Header.Get("If-None-Match")
-	
+
 	// Process the request
 	resp, err := h.service.ProcessChatCompletion(r.Context(), req)
 	if err != nil {
@@ -64,18 +64,18 @@ func (h *ChatHandler) handleNonStream(w http.ResponseWriter, r *http.Request, re
 			w.Header().Set("X-Cache-Age", fmt.Sprintf("%d", resp.CacheAge))
 		}
 	}
-	
+
 	// Set ETag header
 	if resp.ETag != "" {
 		w.Header().Set("ETag", resp.ETag)
-		
+
 		// Check for 304 Not Modified
 		if ifNoneMatch != "" && ifNoneMatch == resp.ETag {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
 	}
-	
+
 	// Set cache pricing headers if available
 	if resp.CacheCost != nil {
 		w.Header().Set("X-Cache-Write-Cost", fmt.Sprintf("%.6f", resp.CacheCost.WriteTokens))

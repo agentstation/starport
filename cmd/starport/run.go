@@ -104,7 +104,7 @@ func runServer(ctx context.Context, enableOllama bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
+
 	// Override Ollama setting from command line flag
 	if enableOllama {
 		cfg.Providers.Ollama.Enabled = true

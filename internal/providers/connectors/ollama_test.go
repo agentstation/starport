@@ -38,12 +38,12 @@ func TestOllamaConnector_Chat(t *testing.T) {
 					"role":    "assistant",
 					"content": "Hello! How can I help you?",
 				},
-				"total_duration":      1000000000, // 1 second in nanoseconds
-				"load_duration":       100000000,
-				"prompt_eval_count":   10,
+				"total_duration":       1000000000, // 1 second in nanoseconds
+				"load_duration":        100000000,
+				"prompt_eval_count":    10,
 				"prompt_eval_duration": 50000000,
-				"eval_count":          15,
-				"eval_duration":       100000000,
+				"eval_count":           15,
+				"eval_duration":        100000000,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(resp)
@@ -133,7 +133,7 @@ func TestOllamaConnector_ChatStream(t *testing.T) {
 
 			// Send streaming response
 			w.Header().Set("Content-Type", "application/x-ndjson")
-			
+
 			// Send chunks
 			chunks := []map[string]interface{}{
 				{
@@ -250,11 +250,11 @@ func TestOllamaConnector_Models(t *testing.T) {
 						"size":        4000000000,
 						"digest":      "abc123",
 						"details": map[string]interface{}{
-							"format":              "gguf",
-							"family":              "llama",
-							"families":            []string{"llama"},
-							"parameter_size":      "7B",
-							"quantization_level":  "Q4_0",
+							"format":             "gguf",
+							"family":             "llama",
+							"families":           []string{"llama"},
+							"parameter_size":     "7B",
+							"quantization_level": "Q4_0",
 						},
 					},
 					{
@@ -263,11 +263,11 @@ func TestOllamaConnector_Models(t *testing.T) {
 						"size":        7000000000,
 						"digest":      "def456",
 						"details": map[string]interface{}{
-							"format":              "gguf",
-							"family":              "mistral",
-							"families":            []string{"mistral"},
-							"parameter_size":      "7B",
-							"quantization_level":  "Q4_0",
+							"format":             "gguf",
+							"family":             "mistral",
+							"families":           []string{"mistral"},
+							"parameter_size":     "7B",
+							"quantization_level": "Q4_0",
 						},
 					},
 				},
@@ -441,12 +441,12 @@ func TestOllamaConnector_DisabledError(t *testing.T) {
 		BaseURL: "http://localhost:11434",
 		Enabled: false,
 	}
-	
+
 	_, err := NewConnector("ollama", config)
 	if err == nil {
 		t.Fatal("expected error when ollama not enabled")
 	}
-	
+
 	if !strings.Contains(err.Error(), "ollama support is not enabled") {
 		t.Errorf("expected 'ollama support is not enabled' error, got: %v", err)
 	}

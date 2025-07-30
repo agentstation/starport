@@ -38,9 +38,9 @@ func New(provider string, config Config) (*Client, error) {
 		ExpectContinueTimeout: config.ExpectContinueTimeout,
 
 		// Features
-		ForceAttemptHTTP2:     config.EnableHTTP2,
-		DisableCompression:    !config.EnableCompression,
-		DisableKeepAlives:     !config.EnableKeepAlives,
+		ForceAttemptHTTP2:  config.EnableHTTP2,
+		DisableCompression: !config.EnableCompression,
+		DisableKeepAlives:  !config.EnableKeepAlives,
 
 		// Custom dialer with timeout
 		DialContext: (&net.Dialer{

@@ -49,7 +49,7 @@ func TestHandler_Index(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
-	
+
 	// Check that the template was rendered with correct values
 	body := rec.Body.String()
 	assert.Contains(t, body, "Test Chat")
@@ -102,7 +102,7 @@ func TestHandler_Static(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/static/"+tt.path, nil)
 			rec := httptest.NewRecorder()
 
-			// Set URL param for chi router  
+			// Set URL param for chi router
 			ctx := context.WithValue(req.Context(), chi.RouteCtxKey, &chi.Context{
 				URLParams: chi.RouteParams{
 					Keys:   []string{"*"},

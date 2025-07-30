@@ -109,14 +109,14 @@ func TestProvider_ModelManagement(t *testing.T) {
 
 	// Test adding models
 	model1 := &models.Model{
-		ID:            "gpt-4",
+		ID: "gpt-4",
 		Architecture: &models.Architecture{
 			InputModalities:  []string{"text"},
 			OutputModalities: []string{"text"},
 		},
 		ContextLength: 128000,
 	}
-	
+
 	err := provider.AddModel(model1)
 	if err != nil {
 		t.Errorf("AddModel() error = %v", err)
@@ -163,7 +163,7 @@ func TestProvider_WithEmbeddedConnector(t *testing.T) {
 
 	// Add chat model
 	provider.AddModel(&models.Model{
-		ID:   "test-model",
+		ID: "test-model",
 		Architecture: &models.Architecture{
 			InputModalities:  []string{"text"},
 			OutputModalities: []string{"text"},
@@ -306,15 +306,15 @@ func TestRegistry(t *testing.T) {
 
 func TestModel_Capabilities(t *testing.T) {
 	model := &models.Model{
-		ID:              "test-model",
+		ID: "test-model",
 		Architecture: &models.Architecture{
 			InputModalities:  []string{"text"},
 			OutputModalities: []string{"text"},
 		},
-		ContextLength:   4096,
+		ContextLength: 4096,
 		Pricing: &models.Pricing{
-			Prompt:     "0.00001",  // $0.01 per 1K tokens
-			Completion: "0.00003",  // $0.03 per 1K tokens
+			Prompt:     "0.00001", // $0.01 per 1K tokens
+			Completion: "0.00003", // $0.03 per 1K tokens
 		},
 		SupportedParameters: []string{"reasoning", "code-execution"},
 	}

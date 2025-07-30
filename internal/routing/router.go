@@ -550,7 +550,7 @@ func (r *modelRouter) extractProvider(modelID string) string {
 	if provider != "" {
 		return provider
 	}
-	
+
 	// Fall back to extracting from model ID
 	parts := strings.SplitN(modelID, "/", 2)
 	if len(parts) > 0 {

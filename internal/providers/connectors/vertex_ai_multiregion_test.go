@@ -105,19 +105,19 @@ func TestVertexAI_DefaultFallbackLocations(t *testing.T) {
 		{"us-east4", []string{"us-central1", "us-west1", "us-west4"}},
 		{"us-west1", []string{"us-west4", "us-central1", "us-east4"}},
 		{"us-west4", []string{"us-west1", "us-central1", "us-east4"}},
-		
+
 		// Europe regions
 		{"europe-west1", []string{"europe-west4", "europe-west2", "europe-north1"}},
 		{"europe-west2", []string{"europe-west1", "europe-west4", "europe-north1"}},
 		{"europe-west4", []string{"europe-west1", "europe-west2", "europe-north1"}},
 		{"europe-north1", []string{"europe-west4", "europe-west1", "europe-west2"}},
-		
+
 		// Asia regions
 		{"asia-southeast1", []string{"asia-northeast1", "asia-east1", "asia-south1"}},
 		{"asia-northeast1", []string{"asia-southeast1", "asia-east1", "asia-south1"}},
 		{"asia-east1", []string{"asia-southeast1", "asia-northeast1", "asia-south1"}},
 		{"asia-south1", []string{"asia-southeast1", "asia-northeast1", "asia-east1"}},
-		
+
 		// Unknown region
 		{"unknown-region", []string{"us-central1", "europe-west4", "asia-southeast1"}},
 	}
