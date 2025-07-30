@@ -24,14 +24,14 @@ Unlike managed services, Starport gives you:
 
 ### Key Features
 
-- **🔄 OpenAI & OpenRouter Compatible** - Drop-in replacement for existing applications
+- **🔌 OpenAI & OpenRouter Compatible** - Drop-in replacement for chat completions API
 - **🚀 Blazing Fast** - <1ms P99 latency overhead, 10K+ RPS on a single node
 - **📦 Zero Dependencies** - Single binary with embedded storage (Badger KV)
-- **🤖 Multi-Provider** - OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI, Ollama (local)
+- **⭐ Core Providers** - OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI, Ollama (local)
 - **🧠 Smart Routing** - Automatic failover, latency-based, cost-aware routing
 - **🔐 BYOK Support** - Bring your own keys with zero-knowledge security
-- **💾 Prompt Caching** - OpenRouter-compatible cache control to reduce costs
-- **💾 Advanced Caching** - Multi-tier caching with TTL and invalidation
+- **⚡ Prompt Caching** - OpenRouter-compatible cache control to reduce costs
+- **🗄️ Advanced Caching** - Multi-tier caching with TTL and invalidation
 - **💬 Chat UI** - Built-in web interface for testing and development
 - **🛡️ Enterprise Ready** - Rate limiting, content filtering, audit logs (Enterprise)
 
