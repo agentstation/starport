@@ -78,9 +78,43 @@
                 <header class="header">
                     <div class="header-content">
                         <div class="header-model-section">
-                            <select id="model-select" class="model-select">
-                                <option value="">Loading models...</option>
-                            </select>
+                            <div class="model-dropdown-wrapper">
+                                <button id="model-select-button" class="model-select-button" aria-haspopup="menu" aria-expanded="false" data-state="closed">
+                                    <div class="model-select-display">
+                                        <div class="model-select-name">Loading models...</div>
+                                    </div>
+                                    <svg class="model-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="m6 9 6 6 6-6"></path>
+                                    </svg>
+                                </button>
+                                <div id="model-dropdown" class="model-dropdown hidden">
+                                    <div class="model-dropdown-header">
+                                        <div class="model-search-wrapper">
+                                            <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="11" cy="11" r="8"></circle>
+                                                <path d="m21 21-4.3-4.3"></path>
+                                            </svg>
+                                            <input type="text" id="model-search-input" class="model-search-input" placeholder="Search models..." autocomplete="off">
+                                        </div>
+                                    </div>
+                                    <div class="model-dropdown-content" id="model-dropdown-content">
+                                        <!-- Model list will be populated here -->
+                                    </div>
+                                    <div class="model-dropdown-footer">
+                                        <button id="show-all-models" class="btn-text">
+                                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polyline points="6 9 12 15 18 9"></polyline>
+                                            </svg>
+                                            <span>Show all</span>
+                                        </button>
+                                        <button id="filter-models" class="btn-icon btn-small" title="Filter models">
+                                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                             <div id="model-pricing" class="model-pricing"></div>
                         </div>
                         <div class="header-actions">
@@ -230,6 +264,44 @@
                 </div>
                 <div class="search-results" id="search-results">
                     <!-- Search results will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Selector Expanded Modal -->
+        <div id="model-expanded-modal" class="modal model-expanded-modal">
+            <div class="model-expanded-content">
+                <div class="model-expanded-header">
+                    <div class="model-expanded-search-wrapper">
+                        <svg class="model-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.3-4.3"></path>
+                        </svg>
+                        <input type="text" id="model-expanded-search" class="model-expanded-search" placeholder="Search models..." autocomplete="off">
+                    </div>
+                    <button class="btn-icon model-expanded-close" aria-label="Close model selector">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="model-expanded-body" id="model-expanded-body">
+                    <!-- Model grid will be populated here -->
+                </div>
+                <div class="model-expanded-footer">
+                    <button id="expanded-favorites-toggle" class="btn-text">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m15 18-6-6 6-6"></path>
+                        </svg>
+                        <span>Favorites</span>
+                        <div class="favorites-indicator"></div>
+                    </button>
+                    <button id="expanded-filter-btn" class="btn-icon btn-small" title="Filter models">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>

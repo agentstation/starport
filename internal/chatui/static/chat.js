@@ -23,6 +23,20 @@
     pinnedChats: JSON.parse(
       localStorage.getItem("starport_pinned_chats") || "[]"
     ), // Track pinned chat IDs
+    favoriteModels: new Set(
+      JSON.parse(localStorage.getItem("starport_favorite_models") || "[]")
+    ), // Track favorite model IDs
+    models: [], // All available models
+    modelPricing: {}, // Model pricing lookup
+    showAllModels: false, // Show all models in dropdown
+    modelDropdownOpen: false, // Track dropdown state
+    modelFilters: {
+      providers: [],
+      capabilities: []
+    }, // Active filters
+    expandedFavoritesOnly: false, // Filter to show only favorites in expanded view
+    activeProviderFilters: new Set(), // Active provider filters in expanded view
+    activeCapabilityFilters: new Set(), // Active capability filters in expanded view
   };
 
   // DOM Elements
@@ -49,7 +63,13 @@
     sidebarSearchInput: document.getElementById("sidebar-search-input"),
 
     // Chat
-    modelSelect: document.getElementById("model-select"),
+    modelSelectButton: document.getElementById("model-select-button"),
+    modelSelectValue: document.querySelector(".model-select-name"),
+    modelDropdown: document.getElementById("model-dropdown"),
+    modelDropdownContent: document.getElementById("model-dropdown-content"),
+    modelSearchInput: document.getElementById("model-search-input"),
+    showAllModelsBtn: document.getElementById("show-all-models"),
+    filterModelsBtn: document.getElementById("filter-models"),
     modelPricing: document.getElementById("model-pricing"),
     messages: document.getElementById("messages"),
     messageInput: document.getElementById("message-input"),
@@ -270,13 +290,59 @@
       }
     });
 
-    // Model selection
-    elements.modelSelect.addEventListener("change", (e) => {
-      state.selectedModel = e.target.value;
-      localStorage.setItem("starport_model", state.selectedModel);
-      updateUI();
-      updateModelPricing();
-      updateConversationStats();
+    // Model dropdown
+    elements.modelSelectButton.addEventListener("click", toggleModelDropdown);
+    elements.modelSearchInput.addEventListener("input", filterModels);
+    elements.showAllModelsBtn.addEventListener("click", toggleShowAllModels);
+    elements.filterModelsBtn.addEventListener("click", showFilterOptions);
+    
+    // Close dropdown on click outside
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".model-dropdown-wrapper") && state.modelDropdownOpen) {
+        closeModelDropdown();
+      }
+    });
+    
+    // Close dropdown on escape
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && state.modelDropdownOpen) {
+        closeModelDropdown();
+      }
+    });
+    
+    // Expanded modal event listeners
+    const expandedModal = document.getElementById("model-expanded-modal");
+    const expandedCloseBtn = expandedModal.querySelector(".model-expanded-close");
+    const expandedSearchInput = document.getElementById("model-expanded-search");
+    const expandedFavoritesToggle = document.getElementById("expanded-favorites-toggle");
+    const expandedFilterBtn = document.getElementById("expanded-filter-btn");
+    
+    // Close expanded modal
+    expandedCloseBtn.addEventListener("click", closeExpandedModal);
+    
+    // Close on escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && expandedModal.classList.contains("show")) {
+        closeExpandedModal();
+      }
+    });
+    
+    // Search in expanded view
+    expandedSearchInput.addEventListener("input", (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      filterExpandedModels(searchTerm);
+    });
+    
+    // Toggle favorites in expanded view
+    expandedFavoritesToggle.addEventListener("click", () => {
+      state.expandedFavoritesOnly = !state.expandedFavoritesOnly;
+      createExpandedModelView();
+    });
+    
+    // Filter button in expanded view
+    expandedFilterBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showExpandedFilterOptions();
     });
 
     // Message input
@@ -2143,13 +2209,131 @@
   }
 
   // Model Management
+  
+  function formatModelDisplayName(modelId) {
+    const [provider, modelName] = modelId.split("/");
+    
+    // Helper function to capitalize words
+    const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+    
+    // Special formatting for different providers
+    switch(provider) {
+      case 'openai':
+        // Handle GPT models
+        if (modelName.startsWith('gpt-')) {
+          const parts = modelName.split('-');
+          if (parts[0] === 'gpt' && parts[1]) {
+            // Format like "GPT-4" or "GPT-3.5 Turbo"
+            let formatted = `GPT-${parts[1].toUpperCase()}`;
+            if (parts.length > 2) {
+              formatted += ' ' + parts.slice(2).map(p => capitalize(p)).join(' ');
+            }
+            return formatted;
+          }
+        } else if (modelName.startsWith('o1') || modelName.startsWith('o3')) {
+          // Format O1/O3 models
+          return modelName.toUpperCase().replace('-', ' ');
+        }
+        // Default formatting for other OpenAI models
+        return modelName.split('-').map(p => capitalize(p)).join(' ');
+        
+      case 'anthropic':
+        // Format Claude models
+        if (modelName.startsWith('claude-')) {
+          // Handle suffix like :beta, :thinking, etc.
+          let suffix = '';
+          let baseName = modelName;
+          if (modelName.includes(':')) {
+            const colonIndex = modelName.indexOf(':');
+            baseName = modelName.substring(0, colonIndex);
+            suffix = ' ' + capitalize(modelName.substring(colonIndex + 1));
+          }
+          
+          const parts = baseName.split('-');
+          // Start with 'Claude'
+          let formatted = ['Claude'];
+          
+          // Add all remaining parts, handling version numbers specially
+          for (let i = 1; i < parts.length; i++) {
+            if (/^\d/.test(parts[i])) {
+              // Check if we should combine with previous number (e.g., 3-5 should become 3.5)
+              // Only combine if both numbers are 1-2 digits (version parts), not dates/long numbers
+              if (i > 1 && /^\d{1,2}$/.test(parts[i-1]) && /^\d{1,2}$/.test(parts[i]) && formatted[formatted.length-1].match(/^\d/)) {
+                // Combine with previous number using a dot
+                formatted[formatted.length-1] += '.' + parts[i];
+              } else {
+                formatted.push(parts[i]);
+              }
+            } else {
+              formatted.push(capitalize(parts[i]));
+            }
+          }
+          
+          return formatted.join(' ') + suffix;
+        }
+        return modelName.split('-').map(p => capitalize(p)).join(' ');
+        
+      case 'google-ai-studio':
+      case 'google':
+        // Format Gemini models
+        if (modelName.startsWith('gemini-')) {
+          return 'Gemini ' + modelName.substring(7).replace(/-/g, ' ').replace(/(\d+)\.(\d+)/, '$1.$2');
+        } else if (modelName.startsWith('gemma-')) {
+          return 'Gemma ' + modelName.substring(6).replace(/-/g, ' ');
+        }
+        return modelName.split('-').map(p => capitalize(p)).join(' ');
+        
+      case 'groq':
+        // Format Groq models
+        if (modelName.includes('llama')) {
+          // Format Llama models
+          const parts = modelName.split('-');
+          return parts.map((p, i) => {
+            if (p === 'llama' || p === 'llama3') return 'Llama';
+            if (p.match(/^\d+b$/)) return p.toUpperCase();
+            if (/^\d/.test(p)) return p; // Keep version numbers as-is
+            return capitalize(p);
+          }).join(' ');
+        } else if (modelName.includes('mixtral')) {
+          const parts = modelName.split('-');
+          return parts.map(p => {
+            if (p === 'mixtral') return 'Mixtral';
+            if (p.match(/^\d+x\d+b$/)) return p.toUpperCase();
+            if (/^\d/.test(p)) return p;
+            return capitalize(p);
+          }).join(' ');
+        }
+        return modelName.split('-').map(p => {
+          if (/^\d/.test(p)) return p;
+          return capitalize(p);
+        }).join(' ');
+        
+      case 'mistral':
+        // Format Mistral models
+        if (modelName.startsWith('mistral-')) {
+          return 'Mistral ' + modelName.substring(8).split('-').map(p => capitalize(p)).join(' ');
+        }
+        return modelName.split('-').map(p => capitalize(p)).join(' ');
+        
+      case 'ollama':
+        // Format Ollama models - typically already well-formatted
+        return modelName.split('-').map(p => capitalize(p)).join(' ');
+        
+      default:
+        // Default formatting - capitalize each word but keep numbers as-is
+        return modelName.split('-').map(p => {
+          if (/^\d/.test(p)) return p; // Keep version numbers as-is
+          return capitalize(p);
+        }).join(' ');
+    }
+  }
+  
   async function loadModels() {
     try {
       // If no API key is set, show a helpful message
       if (!state.apiKey) {
-        updateModelSelect([]);
-        elements.modelSelect.innerHTML =
-          '<option value="">Set API key in settings first</option>';
+        updateModelDropdown([]);
+        elements.modelSelectValue.textContent = "Set API key in settings first";
         return;
       }
 
@@ -2159,9 +2343,8 @@
 
       if (!response.ok) {
         if (response.status === 401) {
-          updateModelSelect([]);
-          elements.modelSelect.innerHTML =
-            '<option value="">Invalid API key - check settings</option>';
+          updateModelDropdown([]);
+          elements.modelSelectValue.textContent = "Invalid API key - check settings";
           return;
         }
         throw new Error(`Failed to load models: ${response.status}`);
@@ -2178,62 +2361,823 @@
         }
       });
 
-      updateModelSelect(state.models);
+      updateModelDropdown(state.models);
       updateModelPricing();
       updateConversationStats();
     } catch (error) {
       console.error("Failed to load models:", error);
-      updateModelSelect([]);
-      elements.modelSelect.innerHTML =
-        '<option value="">Error loading models</option>';
+      updateModelDropdown([]);
+      elements.modelSelectValue.textContent = "Error loading models";
     }
   }
 
-  function updateModelSelect(models) {
-    elements.modelSelect.innerHTML = "";
-
-    if (models.length === 0) {
-      elements.modelSelect.innerHTML =
-        '<option value="">No models available</option>';
-      return;
+  // Model Dropdown Functions
+  function toggleModelDropdown() {
+    if (state.modelDropdownOpen) {
+      closeModelDropdown();
+    } else {
+      openModelDropdown();
     }
+  }
 
+  function openModelDropdown() {
+    state.modelDropdownOpen = true;
+    elements.modelDropdown.classList.remove("hidden");
+    elements.modelSelectButton.setAttribute("aria-expanded", "true");
+    elements.modelSelectButton.setAttribute("data-state", "open");
+    elements.modelSearchInput.focus();
+    elements.modelSearchInput.value = "";
+    filterModels();
+  }
+
+  function closeModelDropdown() {
+    state.modelDropdownOpen = false;
+    elements.modelDropdown.classList.add("hidden");
+    elements.modelSelectButton.setAttribute("aria-expanded", "false");
+    elements.modelSelectButton.setAttribute("data-state", "closed");
+  }
+
+  function selectModel(modelId) {
+    state.selectedModel = modelId;
+    localStorage.setItem("starport_model", state.selectedModel);
+    
+    // Update the button text with formatted name
+    const model = state.models.find(m => m.id === modelId);
+    if (model) {
+      elements.modelSelectValue.textContent = formatModelDisplayName(model.id);
+    }
+    
+    closeModelDropdown();
+    updateUI();
+    updateModelPricing();
+    updateConversationStats();
+  }
+
+  function toggleFavoriteModel(modelId) {
+    if (state.favoriteModels.has(modelId)) {
+      state.favoriteModels.delete(modelId);
+    } else {
+      state.favoriteModels.add(modelId);
+    }
+    localStorage.setItem("starport_favorite_models", JSON.stringify(Array.from(state.favoriteModels)));
+    updateModelDropdown(state.models);
+  }
+  
+  function toggleFavorite(modelId) {
+    // Alias for toggleFavoriteModel
+    toggleFavoriteModel(modelId);
+  }
+
+  function filterModels() {
+    const searchTerm = elements.modelSearchInput.value.toLowerCase();
+    
+    // If there's a search term, show all models that match (including hidden ones)
+    if (searchTerm) {
+      // Temporarily disable the "show limited" restriction for search
+      const originalShowAll = state.showAllModels;
+      state.showAllModels = true;
+      
+      // Filter all models based on search term
+      const filteredModels = state.models.filter(model => {
+        const modelId = model.id.toLowerCase();
+        const displayName = formatModelDisplayName(model.id).toLowerCase();
+        
+        // Check for exact match or partial match
+        if (modelId.includes(searchTerm) || displayName.includes(searchTerm)) {
+          return true;
+        }
+        
+        // Check if search term is trying to match a model without version suffix
+        // e.g., "claude-opus-4" should match "claude-opus-4-20250514"
+        const searchParts = searchTerm.split('/');
+        if (searchParts.length === 2) {
+          const [searchProvider, searchModel] = searchParts;
+          const [modelProvider, modelName] = model.id.toLowerCase().split('/');
+          
+          // Check if provider matches and model name starts with search model
+          if (searchProvider === modelProvider && modelName.startsWith(searchModel)) {
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
+      // Rebuild the dropdown with filtered models
+      updateModelDropdown(filteredModels);
+      
+      // Restore the original showAll state
+      state.showAllModels = originalShowAll;
+    } else {
+      // If no search term, restore original view with filters
+      updateModelDropdown(state.models);
+    }
+  }
+  
+  function filterModelsDOM() {
+    // This is the old DOM-based filtering, kept for compatibility
+    const searchTerm = elements.modelSearchInput.value.toLowerCase();
+    const modelItems = elements.modelDropdownContent.querySelectorAll(".model-item");
+    
+    modelItems.forEach(item => {
+      const modelId = item.dataset.modelId;
+      const modelName = modelId.toLowerCase();
+      if (modelName.includes(searchTerm)) {
+        item.style.display = "";
+      } else {
+        item.style.display = "none";
+      }
+    });
+
+    // Update section visibility
+    const sections = elements.modelDropdownContent.querySelectorAll(".model-section");
+    sections.forEach(section => {
+      const visibleItems = section.querySelectorAll(".model-item:not([style*='display: none'])");
+      if (visibleItems.length === 0) {
+        section.style.display = "none";
+      } else {
+        section.style.display = "";
+      }
+    });
+  }
+
+  function toggleShowAllModels() {
+    console.log("toggleShowAllModels called - opening full-screen modal");
+    // Close the dropdown first
+    closeModelDropdown();
+    
+    // Get the modal elements
+    const modal = document.getElementById("model-expanded-modal");
+    const modalBody = document.getElementById("model-expanded-body");
+    const searchInput = document.getElementById("model-expanded-search");
+    
+    // Show the modal
+    modal.classList.add("show");
+    document.body.style.overflow = "hidden"; // Prevent background scrolling
+    
+    // Create the expanded model view
+    createExpandedModelView();
+    
+    // Focus on search input
+    setTimeout(() => searchInput.focus(), 100);
+  }
+  
+  function createExpandedModelView() {
+    const modalBody = document.getElementById("model-expanded-body");
+    const searchInput = document.getElementById("model-expanded-search");
+    const favoritesToggle = document.getElementById("expanded-favorites-toggle");
+    
+    // Clear previous content
+    modalBody.innerHTML = "";
+    searchInput.value = "";
+    
+    // Filter models based on current state
+    let filteredModels = state.models;
+    
+    // Apply favorites filter if active
+    if (state.expandedFavoritesOnly) {
+      filteredModels = filteredModels.filter(model => state.favoriteModels.has(model.id));
+    }
+    
+    // Apply provider and capability filters
+    if (state.activeProviderFilters.size > 0) {
+      filteredModels = filteredModels.filter(model => {
+        const provider = getProviderFromModel(model.id);
+        return state.activeProviderFilters.has(provider);
+      });
+    }
+    
+    if (state.activeCapabilityFilters.size > 0) {
+      filteredModels = filteredModels.filter(model => {
+        const capabilities = getModelCapabilities(model);
+        return Array.from(state.activeCapabilityFilters).some(filter => 
+          capabilities[filter]
+        );
+      });
+    }
+    
     // Group models by provider
     const modelsByProvider = {};
-    models.forEach((model) => {
-      const [provider] = model.id.split("/");
+    filteredModels.forEach(model => {
+      const provider = getProviderFromModel(model.id);
       if (!modelsByProvider[provider]) {
         modelsByProvider[provider] = [];
       }
       modelsByProvider[provider].push(model);
     });
-
-    // Create optgroups
-    Object.entries(modelsByProvider).forEach(([provider, providerModels]) => {
-      const optgroup = document.createElement("optgroup");
-      optgroup.label = provider.charAt(0).toUpperCase() + provider.slice(1);
-
-      providerModels.forEach((model) => {
-        const option = document.createElement("option");
-        option.value = model.id;
-        option.textContent = model.id.split("/")[1];
-
-        if (model.id === state.selectedModel) {
-          option.selected = true;
-        }
-
-        optgroup.appendChild(option);
+    
+    // Create sections for each provider
+    Object.entries(modelsByProvider).forEach(([provider, models]) => {
+      const section = document.createElement("div");
+      section.className = "model-provider-section";
+      section.innerHTML = `
+        <h3 class="model-provider-title">
+          ${getProviderIcon(provider)}
+          <span>${provider}</span>
+        </h3>
+        <div class="model-cards-grid">
+          ${models.map(model => createModelCard(model)).join("")}
+        </div>
+      `;
+      
+      modalBody.appendChild(section);
+    });
+    
+    // Add click handlers to model cards
+    modalBody.querySelectorAll(".model-card").forEach(card => {
+      card.addEventListener("click", () => {
+        const modelId = card.dataset.modelId;
+        selectModel(modelId);
+        closeExpandedModal();
       });
+      
+      // Add favorite toggle handler
+      const favoriteBtn = card.querySelector(".model-card-favorite");
+      if (favoriteBtn) {
+        favoriteBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const modelId = card.dataset.modelId;
+          toggleFavorite(modelId);
+          // Update the button state
+          const isFavorite = state.favoriteModels.has(modelId);
+          favoriteBtn.classList.toggle("active", isFavorite);
+        });
+      }
+    });
+    
+    // Update favorites toggle state
+    updateFavoritesToggle();
+    
+    // Update filter button state
+    const filterBtn = document.getElementById("expanded-filter-btn");
+    if (state.activeProviderFilters.size > 0 || state.activeCapabilityFilters.size > 0) {
+      filterBtn.classList.add("has-filters");
+    } else {
+      filterBtn.classList.remove("has-filters");
+    }
+  }
+  
+  function createModelCard(model) {
+    const isFavorite = state.favoriteModels.has(model.id);
+    const isSelected = model.id === state.selectedModel;
+    const capabilities = getModelCapabilities(model);
+    const pricing = model.pricing || {};
+    
+    return `
+      <div class="model-card ${isSelected ? 'selected' : ''}" data-model-id="${model.id}">
+        <div class="model-card-header">
+          <h4 class="model-card-name">${model.name || model.id}</h4>
+          <button class="model-card-favorite ${isFavorite ? 'active' : ''}" aria-label="Toggle favorite">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="model-card-id">${model.id}</div>
+        ${Object.entries(capabilities).filter(([_, has]) => has).length > 0 ? `
+          <div class="model-card-capabilities">
+            ${Object.entries(capabilities).filter(([cap, has]) => has).map(([cap]) => 
+              `<span class="capability-badge">${cap}</span>`
+            ).join("")}
+          </div>
+        ` : ''}
+        ${model.context_length ? `
+          <div class="model-card-context">Context: ${formatNumber(model.context_length)} tokens</div>
+        ` : ''}
+        ${pricing.prompt || pricing.completion ? `
+          <div class="model-card-pricing">
+            ${pricing.prompt ? `Input: $${pricing.prompt}/1K` : ''}
+            ${pricing.prompt && pricing.completion ? ' • ' : ''}
+            ${pricing.completion ? `Output: $${pricing.completion}/1K` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+  
+  function closeExpandedModal() {
+    const modal = document.getElementById("model-expanded-modal");
+    modal.classList.remove("show");
+    document.body.style.overflow = ""; // Restore scrolling
+  }
+  
+  function updateFavoritesToggle() {
+    const toggle = document.getElementById("expanded-favorites-toggle");
+    const indicator = toggle.querySelector(".favorites-indicator");
+    const text = toggle.querySelector("span");
+    
+    if (state.expandedFavoritesOnly) {
+      toggle.classList.add("active");
+      text.textContent = `Favorites (${state.favoriteModels.size})`;
+    } else {
+      toggle.classList.remove("active");
+      text.textContent = "Favorites";
+    }
+    
+    // Update indicator
+    indicator.style.display = state.favoriteModels.size > 0 ? "block" : "none";
+  }
+  
+  function filterExpandedModels(searchTerm) {
+    const modalBody = document.getElementById("model-expanded-body");
+    const sections = modalBody.querySelectorAll(".model-provider-section");
+    
+    sections.forEach(section => {
+      const cards = section.querySelectorAll(".model-card");
+      let hasVisibleCards = false;
+      
+      cards.forEach(card => {
+        const modelId = card.dataset.modelId;
+        const modelName = card.querySelector(".model-card-name").textContent.toLowerCase();
+        const modelIdText = card.querySelector(".model-card-id").textContent.toLowerCase();
+        
+        const matches = modelName.includes(searchTerm) || modelIdText.includes(searchTerm);
+        card.style.display = matches ? "" : "none";
+        
+        if (matches) hasVisibleCards = true;
+      });
+      
+      // Hide section if no visible cards
+      section.style.display = hasVisibleCards ? "" : "none";
+    });
+  }
+  
+  function showExpandedFilterOptions() {
+    // Remove any existing filter dropdown
+    const existingDropdown = document.querySelector(".expanded-filter-dropdown");
+    if (existingDropdown) {
+      existingDropdown.remove();
+      return;
+    }
+    
+    // Get all unique providers and capabilities from models
+    const providers = new Set();
+    const capabilities = new Set();
+    
+    state.models.forEach(model => {
+      providers.add(getProviderFromModel(model.id));
+      const modelCaps = getModelCapabilities(model);
+      if (modelCaps.vision) capabilities.add("vision");
+      if (modelCaps.reasoning) capabilities.add("reasoning");
+      if (modelCaps.artifacts) capabilities.add("artifacts");
+    });
+    
+    // Create filter dropdown
+    const filterDropdown = document.createElement("div");
+    filterDropdown.className = "expanded-filter-dropdown";
+    filterDropdown.innerHTML = `
+      <div class="filter-section">
+        <h4>Providers</h4>
+        ${Array.from(providers).map((provider, i) => `
+          <label class="filter-option">
+            <input type="checkbox" id="expanded-provider-${i}" name="expanded-provider-${i}" value="${provider}" data-filter-type="provider"
+              ${state.activeProviderFilters.has(provider) ? 'checked' : ''}>
+            <span>${provider}</span>
+          </label>
+        `).join("")}
+      </div>
+      <div class="filter-section">
+        <h4>Capabilities</h4>
+        ${Array.from(capabilities).map((capability, i) => `
+          <label class="filter-option">
+            <input type="checkbox" id="expanded-capability-${i}" name="expanded-capability-${i}" value="${capability}" data-filter-type="capability"
+              ${state.activeCapabilityFilters.has(capability) ? 'checked' : ''}>
+            <span>${capability}</span>
+          </label>
+        `).join("")}
+      </div>
+      <div class="filter-actions">
+        <button class="btn-small btn-secondary" id="expanded-clear-filters">Clear</button>
+        <button class="btn-small btn-primary" id="expanded-apply-filters">Apply</button>
+      </div>
+    `;
+    
+    // Position near the filter button
+    const filterBtn = document.getElementById("expanded-filter-btn");
+    const footer = filterBtn.closest(".model-expanded-footer");
+    footer.appendChild(filterDropdown);
+    
+    // Position above the footer
+    const btnRect = filterBtn.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    filterDropdown.style.position = "absolute";
+    filterDropdown.style.bottom = "60px";
+    filterDropdown.style.right = "24px";
+    
+    // Add event listeners
+    document.getElementById("expanded-clear-filters").addEventListener("click", () => {
+      state.activeProviderFilters.clear();
+      state.activeCapabilityFilters.clear();
+      filterDropdown.remove();
+      createExpandedModelView();
+    });
+    
+    document.getElementById("expanded-apply-filters").addEventListener("click", () => {
+      // Update filters based on checkboxes
+      state.activeProviderFilters.clear();
+      state.activeCapabilityFilters.clear();
+      
+      filterDropdown.querySelectorAll("input[type='checkbox']:checked").forEach(checkbox => {
+        const value = checkbox.value;
+        const filterType = checkbox.dataset.filterType;
+        
+        if (filterType === "provider") {
+          state.activeProviderFilters.add(value);
+        } else if (filterType === "capability") {
+          state.activeCapabilityFilters.add(value);
+        }
+      });
+      
+      filterDropdown.remove();
+      createExpandedModelView();
+    });
+    
+    // Close on click outside
+    setTimeout(() => {
+      document.addEventListener("click", function closeFilter(e) {
+        if (!filterDropdown.contains(e.target) && e.target.id !== "expanded-filter-btn") {
+          filterDropdown.remove();
+          document.removeEventListener("click", closeFilter);
+        }
+      });
+    }, 0);
+  }
+  
+  function formatNumber(num) {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + "M";
+    } else if (num >= 1000) {
+      return (num / 1000).toFixed(0) + "K";
+    }
+    return num.toString();
+  }
 
-      elements.modelSelect.appendChild(optgroup);
+  function showFilterOptions() {
+    // Remove any existing filter dropdown
+    const existingDropdown = document.querySelector(".filter-dropdown");
+    if (existingDropdown) {
+      existingDropdown.remove();
+      return;
+    }
+    
+    // Create filter dropdown
+    const filterDropdown = document.createElement("div");
+    filterDropdown.className = "filter-dropdown";
+    filterDropdown.innerHTML = `
+      <div class="filter-section">
+        <div class="filter-header">Providers</div>
+        <div class="filter-options" id="provider-filters"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-header">Capabilities</div>
+        <div class="filter-options">
+          <label class="filter-option">
+            <input type="checkbox" id="filter-cap-vision" name="filter-cap-vision" value="vision" ${state.modelFilters.capabilities.includes("vision") ? "checked" : ""}>
+            <span>👁️ Vision</span>
+          </label>
+          <label class="filter-option">
+            <input type="checkbox" id="filter-cap-reasoning" name="filter-cap-reasoning" value="reasoning" ${state.modelFilters.capabilities.includes("reasoning") ? "checked" : ""}>
+            <span>🧠 Reasoning</span>
+          </label>
+          <label class="filter-option">
+            <input type="checkbox" id="filter-cap-artifacts" name="filter-cap-artifacts" value="artifacts" ${state.modelFilters.capabilities.includes("artifacts") ? "checked" : ""}>
+            <span>📄 Function Calling</span>
+          </label>
+        </div>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-secondary btn-small" id="clear-filters">Clear All</button>
+        <button class="btn btn-primary btn-small" id="apply-filters">Apply</button>
+      </div>
+    `;
+
+    // Get unique providers
+    const providers = [...new Set(state.models.map(m => m.id.split("/")[0]))].sort();
+    const providerFilters = filterDropdown.querySelector("#provider-filters");
+    
+    providers.forEach((provider, index) => {
+      const label = document.createElement("label");
+      label.className = "filter-option";
+      label.innerHTML = `
+        <input type="checkbox" id="filter-provider-${index}" name="filter-provider-${index}" value="${provider}" ${state.modelFilters.providers.includes(provider) ? "checked" : ""}>
+        <span>${provider.charAt(0).toUpperCase() + provider.slice(1)}</span>
+      `;
+      providerFilters.appendChild(label);
     });
 
-    // If no model is selected, select the first one
-    if (!state.selectedModel && models.length > 0) {
-      state.selectedModel = models[0].id;
-      elements.modelSelect.value = state.selectedModel;
-      localStorage.setItem("starport_model", state.selectedModel);
+    // Position the dropdown relative to the model dropdown
+    filterDropdown.style.bottom = "44px"; // Position above the footer
+    filterDropdown.style.right = "8px";
+    
+    // Add to dropdown
+    elements.modelDropdown.appendChild(filterDropdown);
+
+    // Handle filter actions
+    const applyBtn = filterDropdown.querySelector("#apply-filters");
+    const clearBtn = filterDropdown.querySelector("#clear-filters");
+    
+    applyBtn.onclick = () => {
+      // Update provider filters
+      state.modelFilters.providers = Array.from(filterDropdown.querySelectorAll('#provider-filters input:checked'))
+        .map(input => input.value);
+      
+      // Update capability filters
+      state.modelFilters.capabilities = Array.from(filterDropdown.querySelectorAll('.filter-section:nth-child(2) input:checked'))
+        .map(input => input.value);
+      
+      // Update dropdown
+      updateModelDropdown(state.models);
+      filterDropdown.remove();
+    };
+    
+    clearBtn.onclick = () => {
+      state.modelFilters.providers = [];
+      state.modelFilters.capabilities = [];
+      updateModelDropdown(state.models);
+      filterDropdown.remove();
+    };
+
+    // Close on click outside
+    const closeHandler = (e) => {
+      if (!filterDropdown.contains(e.target) && e.target !== elements.filterModelsBtn) {
+        filterDropdown.remove();
+        document.removeEventListener("click", closeHandler);
+      }
+    };
+    setTimeout(() => document.addEventListener("click", closeHandler), 0);
+  }
+
+  function updateModelDropdown(models) {
+    elements.modelDropdownContent.innerHTML = "";
+
+    if (models.length === 0) {
+      elements.modelDropdownContent.innerHTML = 
+        '<div class="model-empty">No models available</div>';
+      return;
     }
+
+    // Apply filters
+    let filteredModels = models;
+    
+    // Filter by providers
+    if (state.modelFilters.providers.length > 0) {
+      filteredModels = filteredModels.filter(model => {
+        const provider = model.id.split("/")[0];
+        return state.modelFilters.providers.includes(provider);
+      });
+    }
+    
+    // Filter by capabilities
+    if (state.modelFilters.capabilities.length > 0) {
+      filteredModels = filteredModels.filter(model => {
+        const capabilities = getModelCapabilities(model);
+        return state.modelFilters.capabilities.every(cap => capabilities[cap]);
+      });
+    }
+
+    // Separate favorites and others
+    const favoriteModels = filteredModels.filter(m => state.favoriteModels.has(m.id));
+    const otherModels = filteredModels.filter(m => !state.favoriteModels.has(m.id));
+
+    // Show counts if not showing all
+    const totalModels = favoriteModels.length + otherModels.length;
+    const displayedModels = state.showAllModels ? totalModels : Math.min(6, favoriteModels.length) + Math.min(10, otherModels.length);
+    
+    // Create favorites section if any
+    if (favoriteModels.length > 0) {
+      const favSection = createModelSection("Favorites", favoriteModels, true);
+      elements.modelDropdownContent.appendChild(favSection);
+    }
+
+    // Create other models section
+    if (otherModels.length > 0) {
+      const othersSection = createModelSection("Others", otherModels, false);
+      elements.modelDropdownContent.appendChild(othersSection);
+    }
+
+    // Update show all button visibility and text
+    if (totalModels > 16) { // Only show if more than default display count
+      elements.showAllModelsBtn.style.display = "flex";
+      const hiddenCount = totalModels - displayedModels;
+      if (!state.showAllModels && hiddenCount > 0) {
+        elements.showAllModelsBtn.querySelector("span").textContent = `Show all (${hiddenCount} more)`;
+      }
+    } else {
+      elements.showAllModelsBtn.style.display = "none";
+    }
+
+    // Show filter indicator if filters are active
+    if (state.modelFilters.providers.length > 0 || state.modelFilters.capabilities.length > 0) {
+      elements.filterModelsBtn.classList.add("active");
+    } else {
+      elements.filterModelsBtn.classList.remove("active");
+    }
+
+    // Update selected model display
+    if (state.selectedModel) {
+      const model = models.find(m => m.id === state.selectedModel);
+      if (model) {
+        elements.modelSelectValue.textContent = formatModelDisplayName(model.id);
+      }
+    } else if (filteredModels.length > 0) {
+      // Select first model if none selected
+      selectModel(filteredModels[0].id);
+    }
+  }
+
+  function createModelSection(title, models, isFavorites) {
+    const section = document.createElement("div");
+    section.className = "model-section";
+    
+    const header = document.createElement("div");
+    header.className = "model-section-header";
+    header.textContent = title;
+    section.appendChild(header);
+    
+    const grid = document.createElement("div");
+    grid.className = isFavorites ? "model-grid" : "model-list";
+    
+    // Limit display if not showing all
+    const displayModels = state.showAllModels ? models : models.slice(0, isFavorites ? 6 : 10);
+    
+    displayModels.forEach(model => {
+      const item = createModelItem(model, isFavorites);
+      grid.appendChild(item);
+    });
+    
+    section.appendChild(grid);
+    return section;
+  }
+
+  function createModelItem(model, isInFavorites) {
+    const item = document.createElement("div");
+    item.className = "model-item";
+    item.dataset.modelId = model.id;
+    
+    const [provider, modelName] = model.id.split("/");
+    
+    // Model info container
+    const modelInfo = document.createElement("div");
+    modelInfo.className = "model-info";
+    
+    // Provider icon
+    const providerIcon = createProviderIcon(provider);
+    modelInfo.appendChild(providerIcon);
+    
+    // Model name
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "model-name";
+    nameSpan.textContent = modelName;
+    modelInfo.appendChild(nameSpan);
+    
+    // Premium badge if applicable
+    if (model.premium) {
+      const premiumBadge = document.createElement("svg");
+      premiumBadge.className = "model-premium";
+      premiumBadge.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>';
+      modelInfo.appendChild(premiumBadge);
+    }
+    
+    item.appendChild(modelInfo);
+    
+    // Capabilities container
+    const capabilities = document.createElement("div");
+    capabilities.className = "model-capabilities";
+    
+    // Add capability badges based on model architecture and features
+    const modelCapabilities = getModelCapabilities(model);
+    if (modelCapabilities.vision) {
+      capabilities.appendChild(createCapabilityBadge("vision", "👁️"));
+    }
+    if (modelCapabilities.reasoning) {
+      capabilities.appendChild(createCapabilityBadge("reasoning", "🧠"));
+    }
+    if (modelCapabilities.artifacts) {
+      capabilities.appendChild(createCapabilityBadge("artifacts", "📄"));
+    }
+    
+    // Favorite button
+    const favoriteBtn = document.createElement("button");
+    favoriteBtn.className = "model-favorite";
+    favoriteBtn.innerHTML = state.favoriteModels.has(model.id) 
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+    favoriteBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleFavoriteModel(model.id);
+    };
+    capabilities.appendChild(favoriteBtn);
+    
+    item.appendChild(capabilities);
+    
+    // Click handler
+    item.onclick = () => selectModel(model.id);
+    
+    // Mark as selected
+    if (model.id === state.selectedModel) {
+      item.classList.add("selected");
+    }
+    
+    // Mark as disabled if not available
+    if (model.disabled) {
+      item.classList.add("disabled");
+      item.onclick = null;
+    }
+    
+    return item;
+  }
+
+  function createProviderIcon(provider) {
+    const icon = document.createElement("div");
+    icon.className = "model-provider-icon";
+    
+    // Simple colored circles for now - can be replaced with actual SVG icons
+    const colors = {
+      openai: "#10a37f",
+      anthropic: "#d97757",
+      google: "#4285f4",
+      groq: "#f55036",
+      mistral: "#ff7000",
+      ollama: "#000000",
+      azure: "#0078d4",
+      vertexai: "#4285f4"
+    };
+    
+    icon.style.backgroundColor = colors[provider] || "#666";
+    icon.textContent = provider.charAt(0).toUpperCase();
+    
+    return icon;
+  }
+
+  function createCapabilityBadge(type, emoji) {
+    const badge = document.createElement("div");
+    badge.className = `model-capability model-capability-${type}`;
+    badge.textContent = emoji;
+    badge.title = type.charAt(0).toUpperCase() + type.slice(1);
+    return badge;
+  }
+
+  function getModelCapabilities(model) {
+    const capabilities = {
+      vision: false,
+      reasoning: false,
+      artifacts: false
+    };
+
+    // Check for vision capability
+    if (model.architecture && model.architecture.input_modalities) {
+      capabilities.vision = model.architecture.input_modalities.includes("image");
+    }
+    
+    // Check model ID for known vision models
+    const modelId = model.id.toLowerCase();
+    if (modelId.includes("vision") || 
+        modelId.includes("gpt-4o") || 
+        modelId.includes("claude-3") ||
+        modelId.includes("gemini") ||
+        modelId.includes("llava")) {
+      capabilities.vision = true;
+    }
+
+    // Check for reasoning capability (o1 models, etc)
+    if (modelId.includes("o1") || 
+        modelId.includes("o3") ||
+        modelId.includes("reasoning") ||
+        modelId.includes("deepseek-r1")) {
+      capabilities.reasoning = true;
+    }
+
+    // Check for artifacts/function calling capability
+    if (modelId.includes("gpt-4") || 
+        modelId.includes("gpt-3.5") ||
+        modelId.includes("claude") ||
+        modelId.includes("mistral") ||
+        (model.supported_parameters && model.supported_parameters.includes("tools"))) {
+      capabilities.artifacts = true;
+    }
+
+    return capabilities;
+  }
+  
+  function getProviderFromModel(modelId) {
+    // Extract provider from model ID (e.g., "openai/gpt-4" -> "openai")
+    const parts = modelId.split("/");
+    return parts.length > 1 ? parts[0] : "unknown";
+  }
+  
+  function getProviderIcon(provider) {
+    const icons = {
+      openai: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.975 5.975 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681v6.737zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>',
+      anthropic: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>',
+      google: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>',
+      "google-ai-studio": '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>',
+      groq: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>',
+      mistral: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
+      ollama: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>',
+      azure: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>',
+      "azure-openai": '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/></svg>'
+    };
+    return icons[provider] || '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>';
   }
 
   // API Key Generation
