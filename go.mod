@@ -17,7 +17,7 @@ require (
 	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v2 v2.27.7
-	github.com/valkey-io/valkey-go v1.0.63
+	github.com/valkey-io/valkey-go v1.0.67
 	github.com/valkey-io/valkey-go/mock v1.0.63
 	go.uber.org/mock v0.5.2
 	golang.org/x/crypto v0.40.0
