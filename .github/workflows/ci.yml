@@ -146,7 +146,7 @@ jobs:
           sarif_file: gosec-results.sarif
 
       - name: Upload gosec results as artifact (for PRs)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: github.event_name == 'pull_request'
         with:
           name: gosec-results
@@ -173,7 +173,7 @@ jobs:
           ./starport version
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: starport-linux-amd64
           path: starport
