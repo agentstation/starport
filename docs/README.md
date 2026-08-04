@@ -6,7 +6,6 @@ Documentation for the Starport open source LLM gateway.
 
 - **[Architecture](ARCHITECTURE.md)** - Technical design and system architecture
 - **[Architecture Control Plane](ARCHITECTURE_CONTROL_PLANE.md)** - Historical architecture-hardening ledger
-- **[Starport v1 Architecture Plan](STARPORT_V1_ARCHITECTURE_PLAN.md)** - Active concept-seam migration and verification ledger
 - **[Development Plan](PLAN.md)** - Implementation phases and roadmap
 - **[Task Status](TASKS.md)** - Current development status and task tracking
 - **[Operator Guide](OPERATOR-GUIDE.md)** - Deployment, bootstrap, operation, and release checks
@@ -14,7 +13,7 @@ Documentation for the Starport open source LLM gateway.
 ## Architecture Decision Records
 
 - [Architecture](ARCHITECTURE.md) is the canonical v1 design.
-- The active plan records accepted architectural decisions and their proof.
+- [Architecture Control Plane](ARCHITECTURE_CONTROL_PLANE.md) records the architecture-hardening history.
 - Starport has no pre-v1 compatibility or data-migration contract.
 
 ## User Guides (Coming Soon)
