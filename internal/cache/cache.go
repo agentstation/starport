@@ -121,6 +121,7 @@ func (lc *layeredCache) Delete(ctx context.Context, key string) error {
 
 	// Delete from local cache
 	lc.local.Del(key)
+	lc.local.Wait()
 
 	// Delete from KV store
 	if err := lc.kv.Delete(ctx, key); err != nil && err != storage.ErrNotFound {
@@ -224,6 +225,7 @@ func (lc *layeredCache) Invalidate(ctx context.Context, pattern string) error {
 		for _, key := range keys {
 			lc.local.Del(key)
 		}
+		lc.local.Wait()
 
 		lc.stats.deletes.Add(uint64(len(keys)))
 

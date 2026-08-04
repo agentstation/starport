@@ -17,10 +17,10 @@ func TestLayeredCache(t *testing.T) {
 
 	// Create cache with small size for testing
 	config := Config{
-		MaxSize:         100,
-		MaxSizeInMB:     1,
-		DefaultTTL:      1 * time.Hour,
-		EnableMetrics:   true,
+		MaxSize:       100,
+		MaxSizeInMB:   1,
+		DefaultTTL:    1 * time.Hour,
+		EnableMetrics: true,
 	}
 
 	cache, err := New(config, mockKV)
@@ -74,27 +74,23 @@ func TestLayeredCache(t *testing.T) {
 	})
 
 	t.Run("delete operation", func(t *testing.T) {
-		key := "test:delete"
-		value := []byte("to be deleted")
+		for i := range 100 {
+			key := fmt.Sprintf("test:delete:%d", i)
+			value := []byte("to be deleted")
 
-		// Set value
-		err := cache.Set(ctx, key, value, 1*time.Hour)
-		assert.NoError(t, err)
+			require.NoError(t, cache.Set(ctx, key, value, time.Hour))
 
-		// Verify it exists
-		exists, err := cache.Exists(ctx, key)
-		assert.NoError(t, err)
-		assert.True(t, exists)
+			exists, err := cache.Exists(ctx, key)
+			require.NoError(t, err)
+			require.True(t, exists)
 
-		// Delete
-		err = cache.Delete(ctx, key)
-		assert.NoError(t, err)
+			require.NoError(t, cache.Delete(ctx, key))
 
-		// Verify deleted
-		val, found, err := cache.Get(ctx, key)
-		assert.NoError(t, err)
-		assert.False(t, found)
-		assert.Nil(t, val)
+			val, found, err := cache.Get(ctx, key)
+			require.NoError(t, err)
+			require.False(t, found)
+			require.Nil(t, val)
+		}
 	})
 
 	t.Run("batch operations", func(t *testing.T) {

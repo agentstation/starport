@@ -127,6 +127,7 @@ func (h *HybridCache) Delete(ctx context.Context, key string) error {
 
 	// 2. Delete from local cache
 	h.local.Del(key)
+	h.local.Wait()
 
 	// 3. Publish invalidation if pub/sub is available
 	if h.pubsub != nil && h.invalidateCh != "" {
@@ -157,6 +158,7 @@ func (h *HybridCache) Invalidate(_ context.Context, _ string) error {
 // InvalidateLocal removes a key from local cache only (used by invalidation handler)
 func (h *HybridCache) InvalidateLocal(key string) {
 	h.local.Del(key)
+	h.local.Wait()
 	log.Debug().
 		Str("key", key).
 		Msg("invalidated local cache")
@@ -470,6 +472,7 @@ func (l *LocalCache) Set(_ context.Context, key string, value []byte, ttl time.D
 // Delete removes a value from the local cache
 func (l *LocalCache) Delete(_ context.Context, key string) error {
 	l.cache.Del(key)
+	l.cache.Wait()
 	return nil
 }
 
