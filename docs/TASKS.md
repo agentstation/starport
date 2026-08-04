@@ -9,7 +9,7 @@ Last Updated: 2026-08-04
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-| Architecture | Starport v1 final pull request | codex/starport-v1-starmap | 🟢 In Progress | - | - |
+| Architecture | Starport v1 final pull request | codex/starport-v1-starmap | 🟢 In Progress | - | #69 |
 
 The durable status ledger and acceptance evidence are in `docs/STARPORT_V1_ARCHITECTURE_PLAN.md`.
 

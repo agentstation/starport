@@ -10,7 +10,7 @@ Baseline: master @ bf6b09e11369 with 75 pre-existing dirty worktree entries
 
 Proof root: `docs/proof/starport-v1-architecture/`
 
-Next action: push branch `codex/starport-v1-starmap`, merge the protected final pull request after its checks pass, and execute SVA11 cleanup.
+Next action: merge Starport PR #69 after its checks pass, then execute SVA11 cleanup.
 
 ## Outcome
 
@@ -464,3 +464,4 @@ Append rows at the end. This section stays last.
 | 2026-08-03 | SVA16 | Resumed publication after the owner authorized a Starmap pull request, merge, v0.3.0 release, and Starport update. | SVA16 is `in_progress`; publication will use the repository release workflow after the Starmap change merges to `main`. |
 | 2026-08-04 | SVA16 | Published the provider contract, recovered the immutable release with scoped Homebrew credentials, pinned Starport to v0.3.0, and completed every final gate. | Starmap PRs #64 and #65; release and recovery run `30881177476`; both terminal verifiers 12/12; full, race, fuzz, vulnerability, vet, lint, build, and raw protocol gates pass. SVA11 now waits for the final Starport pull request merge. |
 | 2026-08-04 | SVA16 | Completed the isolated pre-PR review, fixed every in-scope defect, and verified commit `ee252ff`. | Claude Opus 5 high reviewed ten bounded baseline slices and two correction deltas. Accepted findings repaired atomic storage, identity policy, protocol fidelity, startup resilience, connector ownership, and verification scripts. Two final findings were false against adjacent source. One non-regression P3 operator-repair gap remains outside this pull request. Both verifiers report 12/12; full and expanded race suites, vet, zero-issue lint, build, raw smoke, zero-reachable-vulnerability analysis, 7,900,796 fuzz executions, writing, and diff gates pass. |
+| 2026-08-04 | SVA16 | Opened the protected Starport pull request. | PR #69 targets `master` from `codex/starport-v1-starmap`. SVA11 waits for its merge and then removes this active control plane. |

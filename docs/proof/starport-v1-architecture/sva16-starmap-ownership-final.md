@@ -173,7 +173,7 @@ scope expansion after two correction cycles, so this gap is not part of SVA16.
 
 The reviewed Starport code tree is commit `ee252ff` on branch
 `codex/starport-v1-starmap`. This evidence update follows that code commit.
-The branch is ready for the protected pull request. Starmap maintainers merged
+Starport PR #69 is the protected final pull request. Starmap maintainers merged
 PRs #64 and #65. Starmap v0.3.0 is public and immutable.
 
 ## Completion Audit
