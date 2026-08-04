@@ -5,12 +5,10 @@ run:
   timeout: 5m
   tests: false
 
-issues:
-  # Exclude the scripts directory from all linting
-  exclude-dirs:
-    - scripts
-
 linters:
+  exclusions:
+    paths:
+      - ^scripts/
   enable:
     - govet
     - errcheck
