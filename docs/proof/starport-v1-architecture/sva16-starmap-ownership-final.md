@@ -110,7 +110,8 @@ Summary: 12 passed, 0 failed
 go test ./...
 go test -race ./internal/catalog ./internal/proxy ./internal/routing \
   ./internal/providers/connectors ./internal/app ./internal/server \
-  ./internal/router ./internal/registry ./internal/httpclient
+  ./internal/storage ./internal/identity ./internal/ratelimit \
+  ./internal/repositorytest
 go vet ./...
 make lint
 make build
@@ -121,11 +122,11 @@ Starport pins `github.com/agentstation/starmap v0.3.0`. The hardened V01 check
 confirms the semantic version and rejects local replacements. `make lint`
 reported zero issues. The three repeated 10-second fuzz gates passed:
 
-- `FuzzCanonicalInference`: 3,740,733 executions.
-- `FuzzRoutePlanner`: 1,737,167 executions.
-- `FuzzSemanticKey`: 1,605,257 executions.
+- `FuzzCanonicalInference`: 4,260,623 executions.
+- `FuzzRoutePlanner`: 1,677,590 executions.
+- `FuzzSemanticKey`: 1,962,583 executions.
 
-The repeated fuzzers completed 7,083,157 executions and wrote no failing
+The repeated fuzzers completed 7,900,796 executions and wrote no failing
 corpus entry.
 
 The vulnerability scan reported zero reachable vulnerabilities. It found one
@@ -136,10 +137,43 @@ and embeddings. Python, TypeScript, and Go OpenRouter SDK checks are
 `UNVERIFIED` because those SDK packages are not installed or part of this Go
 module. This proof does not count an absent SDK as compatible.
 
+## Isolated Pre-PR Review
+
+The repository-wide review used Claude Opus 5 with high reasoning. Ten bounded
+commits exposed the complete original tree because deletion-only legacy test
+fixtures made one monolithic secret scan fail closed. Two exact-tree correction
+deltas then reviewed all accepted fixes. Every synthetic final tree matched the
+real commit tree.
+
+The review repairs include:
+
+- Atomic multi-key compare-and-swap for identity creation, deletion, and rate
+  limits across memory, Badger, and Valkey.
+- Fail-closed embedding identity policy and tenant-safe cache identity.
+- Exact OpenAI extension placement, response log probabilities, and
+  OpenAI/OpenRouter stream usage shapes.
+- Bounded credential compare-and-swap retries and sticky-session storage.
+- Exact Vertex Anthropic request bodies and exact Starmap provider IDs in the
+  Chat UI.
+- Explicit, resilient startup catalog refresh and nil-safe bootstrap factories.
+- Wildcard CORS without credentials.
+- Fail-closed negative verifiers and a leak-free raw protocol smoke process.
+
+The first correction review reported four findings. It accepted the Valkey
+unbounded-scan and identity hash-index findings. It rejected the registry map
+and log-probability findings because adjacent source and tests already proved
+those contracts. A follow-up review rated the correction correct. Its one P3
+finding describes a pre-existing operator-repair gap: a corrupt or foreign
+identity hash index still needs direct storage repair before identity deletion.
+
+Authorization already fails closed in that state. The review workflow stopped
+scope expansion after two correction cycles, so this gap is not part of SVA16.
+
 ## Worktree State
 
-The verified Starport changes are on branch `codex/starport-v1-starmap` and are
-ready for the final commit and protected pull request. Starmap maintainers merged
+The reviewed Starport code tree is commit `ee252ff` on branch
+`codex/starport-v1-starmap`. This evidence update follows that code commit.
+The branch is ready for the protected pull request. Starmap maintainers merged
 PRs #64 and #65. Starmap v0.3.0 is public and immutable.
 
 ## Completion Audit
