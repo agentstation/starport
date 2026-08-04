@@ -11,9 +11,6 @@ permissions:
   pull-requests: read
   security-events: write
 
-env:
-  GO_VERSION_STABLE: "1.23"
-
 jobs:
   lint:
     name: Lint
@@ -23,33 +20,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION_STABLE }}
+          go-version-file: go.mod
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.2.1
+          version: v2.11.4
           args: --timeout=5m
 
   test:
-    name: Test (Go ${{ matrix.go-version }} on ${{ matrix.os }})
+    name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        go-version: ["1.23"]
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
           cache: true
 
       - name: Download dependencies
@@ -64,11 +60,11 @@ jobs:
         run: go test -v -race "-coverprofile=coverage.txt" "-covermode=atomic" ./...
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.go-version == env.GO_VERSION_STABLE
+        if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          file: ./coverage.txt
+          files: ./coverage.txt
           flags: unittests
           name: codecov-umbrella
 
@@ -81,9 +77,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION_STABLE }}
+          go-version-file: go.mod
           cache: true
 
       - name: Build binary
@@ -110,7 +106,7 @@ jobs:
           size=$(stat -c%s starport 2>/dev/null || stat -f%z starport)
           echo "Binary size: $size bytes"
           # Fail if binary is larger than 10MB
-          if [ $size -gt 10485760 ]; then
+          if [ "$size" -gt 10485760 ]; then
             echo "Binary size exceeds 10MB limit"
             exit 1
           fi
@@ -162,9 +158,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION_STABLE }}
+          go-version-file: go.mod
           cache: true
 
       - name: Test release build
