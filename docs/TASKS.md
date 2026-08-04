@@ -9,8 +9,7 @@ Last Updated: 2026-08-04
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-
-No work is active.
+| DevOps | CI-001 Restore SARIF upload | codex/ci-sarif-permissions | 🟢 In Progress | 2026-08-04 | - |
 
 ### Recently Completed
 
