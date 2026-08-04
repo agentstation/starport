@@ -2,9 +2,9 @@
 
 Last updated: 2026-08-03
 
-Status: superseded by [Starport v1 Architecture Plan](STARPORT_V1_ARCHITECTURE_PLAN.md).
-The ledger below is historical evidence. Do not use its goal prompt or target
-architecture to resume current work.
+Status: historical. [Architecture](ARCHITECTURE.md) defines the canonical v1
+design. Do not use this ledger's goal prompt or target architecture to resume
+current work.
 
 This document is the durable control plane for the Starport architecture hardening effort. It is written so a future agent can continue after context compaction without relying on chat history.
 
