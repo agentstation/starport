@@ -21,59 +21,63 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 
 	// OpenAI-compatible API (v1)
 	mux.Route("/v1", func(r chi.Router) {
+		r.Use(selectProtocol(openAIProtocol))
 
 		// Apply authentication middleware for API routes
 		r.Use(s.requireAPIKey)
+		r.Use(s.rateLimit)
 
 		// Chat completions
-		r.Post("/chat/completions", s.controllers.Chat.Create)
+		r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.Chat.Create)
 
 		// Embeddings
-		r.Post("/embeddings", s.controllers.Embeddings.Create)
+		r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.Embeddings.Create)
 
 		// Models
-		r.Get("/models", s.controllers.Models.List)
-		r.Get("/models/{model}", s.controllers.Models.Get)
+		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.Models.List)
+		r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.Models.Get)
 	})
 
 	// OpenRouter-compatible API (api/v1)
 	mux.Route("/api/v1", func(r chi.Router) {
+		r.Use(selectProtocol(openRouterProtocol))
 
 		// Apply authentication middleware
 		r.Use(s.requireAPIKey)
+		r.Use(s.rateLimit)
 
 		// Chat completions with routing
-		r.Post("/chat/completions", s.controllers.Chat.Create)
+		r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.OpenRouterChat.Create)
 
 		// Embeddings
-		r.Post("/embeddings", s.controllers.Embeddings.Create)
+		r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.OpenRouterEmbeddings.Create)
 
 		// Models with enhanced metadata
-		r.Get("/models", s.controllers.Models.List)
-		r.Get("/models/{model}", s.controllers.Models.Get)
-		r.Get("/models/{model}/endpoints", s.controllers.Models.GetEndpoints)
+		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.OpenRouterModels.List)
+		r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.OpenRouterModels.Get)
+		r.With(s.requireAnyScope("models:read")).Get("/models/{model}/endpoints", s.controllers.OpenRouterModels.GetEndpoints)
 
 		// Providers metadata
-		r.Get("/providers", s.controllers.Providers.List)
+		r.With(s.requireAnyScope("models:read")).Get("/providers", s.controllers.Providers.List)
 
 		// Key management endpoints
 		r.Route("/keys/{key_id}/provider-keys", func(r chi.Router) {
 			r.Use(s.requireKeyOwnership) // Additional middleware to verify key ownership
 
-			r.Get("/", s.controllers.ProviderKeys.List)
-			r.Post("/", s.controllers.ProviderKeys.Create)
-			r.Get("/{provider}", s.controllers.ProviderKeys.Get)
-			r.Put("/{provider}", s.controllers.ProviderKeys.Update)
-			r.Delete("/{provider}", s.controllers.ProviderKeys.Delete)
-			r.Post("/{provider}/validate", s.controllers.ProviderKeys.Validate)
+			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/", s.controllers.ProviderKeys.List)
+			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/", s.controllers.ProviderKeys.Create)
+			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/{provider}", s.controllers.ProviderKeys.Get)
+			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Put("/{provider}", s.controllers.ProviderKeys.Update)
+			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Delete("/{provider}", s.controllers.ProviderKeys.Delete)
+			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/{provider}/validate", s.controllers.ProviderKeys.Validate)
 		})
 
 		// Usage endpoints
 		r.Route("/keys/{key_id}/usage", func(r chi.Router) {
 			r.Use(s.requireKeyOwnership)
 
-			r.Get("/provider-keys", s.controllers.ProviderKeys.GetUsage)
-			r.Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
+			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/provider-keys", s.controllers.ProviderKeys.GetUsage)
+			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
 		})
 
 		// Admin endpoints (requires admin privileges)
@@ -100,19 +104,6 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		mux.Mount("/chat", s.controllers.ChatUI.Routes())
 	}
 
-	// Legacy compatibility routes (deprecated)
-	mux.Route("/openai/v1", func(r chi.Router) {
-		r.Use(s.requireAPIKey)
-		r.HandleFunc("/*", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("X-Deprecated", "true")
-			w.Header().Set("X-Deprecated-Use", "/v1")
-
-			// Return deprecation notice
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"error": "This endpoint is deprecated. Please use /v1 instead."}`))
-		})
-	})
-
 	// Catch-all for undefined routes
 	mux.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		s.handleNotFound(w, r)
@@ -127,12 +118,12 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 // setupMiddleware returns the middleware chain for the server
 func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 	return []func(http.Handler) http.Handler{
-		RequestID,                     // Generate request ID
-		RealIP,                        // Extract real client IP
-		LoggingMiddleware,             // Log requests
-		Recoverer,                     // Recover from panics
-		SecurityHeaders,               // Add security headers
-		SizeLimiter(10 * 1024 * 1024), // 10MB request size limit
+		RequestID,         // Generate request ID
+		ClientIP,          // Trust only the direct TCP peer address
+		LoggingMiddleware, // Log requests
+		Recoverer,         // Recover from panics
+		SecurityHeaders,   // Add security headers
+		SizeLimiter(s.cfg.MaxRequestSize),
 		Timeout(s.cfg.RequestTimeout), // Request timeout
 		CORS(s.cfg.CORS),              // CORS handling
 		Compress(5),                   // Response compression

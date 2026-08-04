@@ -20,7 +20,6 @@ func TestLayeredCache(t *testing.T) {
 		MaxSize:         100,
 		MaxSizeInMB:     1,
 		DefaultTTL:      1 * time.Hour,
-		CleanupInterval: 0, // Disable cleanup for tests
 		EnableMetrics:   true,
 	}
 

@@ -1,411 +1,343 @@
 # Starport Architecture
 
-**Summary**  
-Starport is a high-performance, open-source LLM gateway built in Go that provides unified access to multiple model providers with sub-millisecond latency overhead. The current implementation includes complete provider integration for 6 major LLM providers, full OpenAI/OpenRouter API compatibility, advanced routing with circuit breakers, and BYOK support with encryption. The storage layer supports both embedded Badger (zero dependencies) and Valkey/Redis for distributed deployments. Critical features like authentication, caching, and rate limiting are partially implemented and need completion before production use.
+Last updated: 2026-08-03
 
-## 1. Current Implementation Status
+Starport is a single-binary Go LLM gateway. It exposes OpenAI-compatible and OpenRouter-compatible APIs over one provider-neutral inference core. `cmd/starport` loads configuration and starts the application. `internal/app` owns production composition and lifecycle. The OpenAI and OpenRouter HTTP adapters own their wire formats. `internal/proxy` owns gateway use cases. `internal/router` adapts requests to the pure planner and attempt executor. Starmap owns catalog facts. Concept repositories own durable schemas. `internal/storage` owns KV adapters only.
 
-### ✅ Fully Implemented
-- **HTTP Server**: Chi router with middleware, health checks, graceful shutdown
-- **Configuration**: Environment-based config with validation and hot reload
-- **Storage Layer**: Complete KVStore interface with Badger and Valkey implementations
-- **Provider Connectors**: All 6 providers (OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure)
-- **API Endpoints**: Both OpenAI (`/v1`) and OpenRouter (`/api/v1`) compatible endpoints
-- **Model Routing**: Smart routing with fallback chains, circuit breakers, sticky sessions
-- **BYOK Support**: Encrypted credential storage with 5% pricing model
-- **Provider Metadata**: Dynamic model fetching, pricing information, provider listings
+## Current Status
 
-### 🚧 Partially Implemented
-- **Authentication**: Middleware exists but is broken (treats API key as ID instead of hash lookup)
-- **Caching**: Interface and structure defined, but no actual cache implementation
-- **Rate Limiting**: Models and storage exist, but no enforcement middleware
+Implemented:
 
-### ❌ Not Implemented
-- **Content Filtering**: No implementation
-- **Preset Management**: Model exists but no API endpoints
-- **Observability**: Basic health endpoint only, no metrics or tracing
-- **Management API**: No admin endpoints for configuration
-- **CLI Commands**: Only basic serve and version commands
+- HTTP server with chi routing, security controls, health checks, and graceful HTTP shutdown.
+- Header-only API-key authentication using SHA-256 hash lookup. Query-string API keys are intentionally rejected.
+- Per-API-key rate-limit enforcement using authenticated API key ID and an atomic rate-limit repository.
+- Badger and Valkey KV storage backends behind a shared `KVStore` interface.
+- Versioned repositories for identities, provider credentials, rate limits, and presets.
+- Tenant-safe response caching with canonical chat and embedding records, catalog-generation invalidation, and stream reconstruction.
+- Provider connectors for OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI, and Ollama.
+- Shared provider HTTP-client construction for timeout and connection-pool semantics.
+- Separate OpenAI `/v1` and OpenRouter `/api/v1` protocol adapters for chat, embeddings, models, errors, and streaming events.
+- Routing uses provider preferences, fallback chains, one attempt budget, and offering-level availability. It supports cost, latency, affinity, and restrictions.
+- BYOK provider-key management with encrypted credential storage, provider validation, fallback strategies, usage tracking, and admin/provider-key HTTP endpoints.
+- Starmap-backed model, provider, capability, context, and price discovery from one immutable generation.
+- Raw HTTP compatibility smoke checks and optional official OpenRouter SDK runners.
 
-## 2. Core Architecture Overview
+Not implemented or still planned:
+
+- Content filtering and moderation pipeline.
+- Preset management REST endpoints.
+- OpenTelemetry metrics and distributed tracing.
+- Full usage analytics, billing, and admin dashboard UI.
+- Webhook notifications.
+- Enterprise SSO/RBAC and relational audit-log features.
+
+## Runtime Shape
 
 ```mermaid
 graph TD
-  subgraph "Current Implementation"
-    Client[API Clients] --> Gateway[API Gateway]
-    Gateway --> Auth[Auth Middleware ⚠️]
-    Auth --> Router[Model Router]
-    Router --> Connectors[Provider Connectors]
-    
-    Connectors --> OpenAI[OpenAI ✅]
-    Connectors --> Anthropic[Anthropic ✅]
-    Connectors --> GoogleAI[Google AI Studio ✅]
-    Connectors --> VertexAI[Vertex AI ✅]
-    Connectors --> Groq[Groq ✅]
-    Connectors --> Mistral[Mistral ✅]
-    Connectors --> Azure[Azure OpenAI ✅]
-    
-    Gateway --> Cache[Cache Manager 🚧]
-    Cache --> Storage{Storage Layer}
-    Storage -->|Embedded| Badger[(Badger KV ✅)]
-    Storage -->|Distributed| Valkey[(Valkey ✅)]
-    
-    Gateway --> BYOK[BYOK Manager ✅]
-    BYOK --> Encryption[AES-256-GCM ✅]
-    
-    Storage -.->|Stores| Data[API Keys, BYOK Creds, Presets, Rate Limits]
-  end
-  
-  subgraph "Not Implemented"
-    style NotImpl fill:#f99,stroke:#333,stroke-width:2px
-    RateLimit[Rate Limiter ❌]
-    Filter[Content Filter ❌]
-    Metrics[Prometheus Metrics ❌]
-    Admin[Admin API ❌]
-    CLI[CLI Commands ❌]
-  end
+  App["internal/app composition and lifecycle"] -. "constructs" .-> Server
+  App -. "constructs" .-> Proxy
+  App -. "constructs" .-> Router
+  App -. "constructs" .-> Registry
+  App -. "constructs" .-> Storage
+  Client["API clients"] --> Server["internal/server HTTP transport"]
+  Server --> Auth["API key auth"]
+  Auth --> RateLimit["Rate limit middleware"]
+  RateLimit --> Controllers["HTTP controllers"]
+  Controllers --> Proxy["internal/proxy gateway use cases"]
+  Proxy --> Router["internal/router model router"]
+  Router --> Planner["internal/routing pure route planner"]
+  Router --> Executor["internal/execution attempt executor"]
+  Executor --> Availability["internal/availability offering state"]
+  Availability --> Catalog["internal/catalog derived routable view"]
+  Catalog --> Starmap["Starmap immutable catalog generation"]
+  Router --> Registry["internal/registry connector registry"]
+  Registry --> Connectors["internal/providers/connectors"]
+  Connectors --> OpenAI["OpenAI"]
+  Connectors --> Anthropic["Anthropic"]
+  Connectors --> GoogleAI["Google AI Studio"]
+  Connectors --> Vertex["Vertex AI"]
+  Connectors --> Groq["Groq"]
+  Connectors --> Mistral["Mistral"]
+  Connectors --> Azure["Azure OpenAI"]
+  Connectors --> Ollama["Ollama"]
+  Proxy --> ResponseCache["internal/responsecache semantic records"]
+  ResponseCache --> Cache["internal/cache byte storage"]
+  Auth --> IdentityRepo["internal/identity repository"]
+  RateLimit --> RateLimitRepo["internal/ratelimit repository"]
+  Cache --> Storage
+  Server --> ProviderKeys["BYOK provider-key handlers"]
+  ProviderKeys --> CredentialRepo["internal/credentials repository"]
+  IdentityRepo --> Storage["internal/storage KVStore adapters"]
+  RateLimitRepo --> Storage
+  CredentialRepo --> Storage
 ```
 
-## 3. Directory Structure (Actual)
+## Package Boundaries
 
-```
+```text
 starport/
-├── cmd/starport/              # Single binary entry point
-│   ├── main.go               # Minimal main function
-│   ├── start.go              # Signal handling
-│   └── run.go                # Application setup & CLI
-├── internal/                  # Private application code
-│   ├── apikey/               # API key management and validation ✅
-│   ├── app/                  # Application lifecycle ✅
-│   ├── providers/            # Provider key management (includes BYOK) ✅
-│   ├── cache/                # Cache manager (interface only) 🚧
-│   ├── config/               # Configuration system ✅
-│   ├── models/               # Data models (presets, provider keys, etc.) ✅
-│   ├── providers/            # Provider implementations
-│   │   ├── connectors/       # LLM provider connectors ✅
-│   │   └── registry/         # Connector registry ✅
-│   ├── routing/              # Model routing logic ✅
-│   ├── server/               # HTTP server & handlers ✅
-│   └── storage/              # Storage abstraction ✅
-├── pkg/enterprise/           # Enterprise interfaces (empty) ❌
-├── Makefile                  # Build automation ✅
-├── docker-compose.yml        # Local development ✅
-└── .github/workflows/        # CI/CD pipeline ✅
+├── cmd/starport/              # CLI and composition root
+├── internal/app/              # application lifecycle and dependency ownership
+├── internal/server/           # HTTP server, middleware, routes, controllers, DTO helpers
+├── internal/httpapi/openai/   # OpenAI wire DTOs and codecs
+├── internal/httpapi/openrouter/ # OpenRouter wire DTOs and codecs
+├── internal/proxy/            # chat, streaming, embeddings, model/provider use cases
+├── internal/inference/        # canonical chat, embedding, and stream values
+├── internal/failure/          # canonical safe failures and provider evidence
+├── internal/router/           # use-case adapter for planning and execution
+├── internal/routing/          # pure route policy and immutable plans
+├── internal/execution/        # attempt state, budgets, fallback, and stream commitment
+├── internal/availability/     # offering-level runtime availability state
+├── internal/catalog/          # Starmap facts and derived routable generations
+├── internal/registry/         # configured connector registry and adapter availability
+├── internal/providers/        # BYOK provider keys and concrete LLM connectors
+├── internal/httpclient/       # shared provider HTTP transport policy
+├── internal/responsecache/    # eligibility, semantic keys, canonical records, stream replay
+├── internal/cache/            # local and distributed cache byte storage
+├── internal/identity/         # gateway identity model and versioned repository
+├── internal/credentials/      # provider credentials, encryption, and repository
+├── internal/ratelimit/        # atomic rate-limit policy state and repository
+├── internal/presets/          # preset model and versioned repository
+├── internal/storage/          # KVStore adapter interface and implementations
+├── internal/config/           # environment/.env config loading and validation
+└── internal/architecture/     # executable import and package-boundary rules
 ```
 
-## 4. Key Implementation Details
+The repository has no public Go package. Starport v1 is a binary-first product. `TestPublicPackageBoundary` rejects a repository `pkg` directory and protocol imports outside approved adapter seams. A public SDK requires a named consumer, version owner, and separate plan.
 
-### 4.1 Storage Architecture
+The protocol packages can repeat wire fields. Each package converts once through `internal/inference` and `internal/failure`. They do not own routing, storage, provider, retry, or cache policy.
 
-The storage layer is fully implemented with a clean interface:
+## Lifecycle Ownership
+
+`internal/app.New` receives one validated configuration value. It maps that
+value to adapter configuration. It then constructs storage, the Starmap
+control plane, repositories, providers, cache, routing, and HTTP.
+
+Production needs storage, a catalog, a credential master key, and one explicit
+provider. Empty identity storage also needs a bootstrap API key. Production
+composition never selects mock dependencies. Tests can replace factories
+through an explicit test-only builder.
+
+`internal/app.App` owns shared dependency lifecycle:
+
+- Storage backend.
+- Cache manager.
+- Connector registry.
+- Hot reload worker.
+- HTTP server.
+
+`App.Run` seals provider registration, starts optional catalog refresh and hot
+reload work, and starts the HTTP listener. `App.Close` closes owned resources
+once in reverse construction order. Constructor rollback uses the same
+ownership ledger.
+
+`internal/server.Server` receives ready use-case and repository ports. It owns
+only the HTTP listener and route tree. `Server.Shutdown` drains HTTP requests
+and does not close the registry, storage, or cache. `internal/registry`
+receives explicit connector registrations. It does not read environment
+values, select fallback mocks, discover models, or probe provider health.
+`Registry.Start` prevents later registrations. `Registry.Close` closes each
+registered inference adapter.
+
+## Storage
+
+The `KVStore` interface supports:
+
+- Basic CRUD.
+- TTL and `ExpireAt`.
+- Atomic increment/decrement and compare-and-swap.
+- Batch operations.
+- Transactions.
+- Prefix scanning.
+- health and close lifecycle.
+
+Backends:
+
+- `MockStore` for deterministic unit tests.
+- Badger for embedded single-node deployments.
+- Valkey/Redis for distributed state, pub/sub invalidation, and multi-node deployments.
+
+The default contract suite tests mock and Badger storage. Set
+`TEST_VALKEY_URL` to test Valkey with the same suite.
+
+Concept repositories own these version 1 namespaces:
+
+- `internal/identity`: `identity:v1:`
+- `internal/credentials`: `credentials:v1:`
+- `internal/ratelimit`: `ratelimit:v1:subject:`
+- `internal/presets`: `presets:v1:name:`
+
+Each repository owns its key encoding, record envelope, validation, revisions, and compare-and-swap rules. Controllers and business services use repository contracts. They do not construct durable keys or serialize durable records. The cache package stores response and model-cache data only.
+
+Starport has no released durable-data contract. Therefore, the version 1 repositories do not read old namespaces or run compatibility branches. A future released schema change must use an explicit migration and a new version.
+
+## Response Cache
+
+`internal/responsecache` owns response-cache eligibility, semantic identity, versioned records, and canonical stream reconstruction. `internal/cache` owns only byte storage, TTL, and local/distributed layering. The proxy converts current request and response types at this seam.
+
+Chat and embedding keys use the full SHA-256 digest in the `responsecache:v1:<kind>:` namespace. Identity includes the authenticated API key ID as tenant, the immutable catalog generation, canonical inference input, provider policy, model chains and overrides, and API-key restrictions. Ordered inputs keep their order. Set-like restrictions use sorted copies. Stream delivery options do not change the completed-result identity, so streaming and non-streaming requests can use one canonical record.
+
+The cache fails closed. It skips requests without tenant or catalog identity. It also skips unsupported chat requests. These include provider extensions, image inputs, and invalid tool or output schemas. Starport cannot prove stable result identity for those shapes.
+
+A cache record has its own schema version, semantic key, kind, timestamp, and canonical inference result. A read rejects corrupt, stale-version, wrong-key, and wrong-kind records.
+
+Completed canonical results are the only response-cache value. A streaming miss accumulates canonical events and writes only after clean end-of-stream. A cached streaming request derives fresh delivery events from the completed result and emits usage only when `stream_options.include_usage` requests it.
+
+## Provider Connectors
+
+Connectors implement:
 
 ```go
-type KVStore interface {
-    // Basic operations
-    Get(ctx context.Context, key string) ([]byte, error)
-    Set(ctx context.Context, key string, value []byte) error
-    Delete(ctx context.Context, key string) error
-    Exists(ctx context.Context, key string) (bool, error)
-    
-    // TTL operations (for rate limiting)
-    SetWithTTL(ctx context.Context, key string, value []byte, ttl time.Duration) error
-    GetTTL(ctx context.Context, key string) (time.Duration, error)
-    
-    // Atomic operations
-    Increment(ctx context.Context, key string, delta int64) (int64, error)
-    CompareAndSwap(ctx context.Context, key string, old, new []byte) error
-    
-    // Batch operations
-    BatchGet(ctx context.Context, keys []string) (map[string][]byte, error)
-    BatchSet(ctx context.Context, items map[string][]byte) error
-    BatchDelete(ctx context.Context, keys []string) error
-    
-    // Advanced features
-    Scan(ctx context.Context, pattern string, limit int) ([]string, error)
-    Watch(ctx context.Context, keys []string) (<-chan WatchEvent, error)
-    Subscribe(ctx context.Context, channels ...string) (PubSub, error)
-    Publish(ctx context.Context, channel string, message []byte) error
-    
-    // Lifecycle
+type Connector interface {
+    Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error)
+    ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error)
+    Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error)
+    Name() string
     Close() error
 }
 ```
 
-### 4.2 Provider Integration
+Provider constructors use one shared HTTP-client construction seam. It maps
+operator timeout and connection settings into the provider transport. One
+connector call makes one outbound request attempt.
 
-All providers implement a common interface with full streaming support:
+Each inference request carries an exact provider model ID and a bound Starmap
+endpoint. A connector does not discover models, select a catalog endpoint, or
+probe provider health. Starmap acquisition is the only dynamic catalog-update
+path. The attempt executor reports inference results to the Starport runtime
+availability tracker.
 
-```go
-type Connector interface {
-    // Chat completion with streaming
-    Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error)
-    ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error)
-    
-    // Embeddings (not all providers support this)
-    Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error)
-    
-    // Model information
-    Models(ctx context.Context) (*ModelsResponse, error)
-    
-    // Health check
-    Health(ctx context.Context) error
-}
+Starmap uses its catalog-acquisition API keys, cloud credential chains, and
+workload identity to build catalog generations. Starport stores separate
+gateway and provider inference credentials. Neither credential plane reads or
+reuses secret values from the other plane.
+
+## Routing
+
+The router accepts a `router.Request` with:
+
+- Connector chat request.
+- Fallback model chain.
+- Provider preferences (`order`, `only`, `ignore`, `allow_fallbacks`).
+- API-key restrictions (`AllowedProviders`, `AllowedModels`, model overrides).
+- routing metadata such as estimated tokens, required features, and sticky affinity key.
+
+`openrouter/auto` lets the planner consider every route in the current routable Starmap snapshot. In a mixed model array, explicit models stay ahead of the automatic fallback set. Cost, latency, capabilities, context limits, availability, and provider affinity order routes within one model rank. Provider policy uses exact adapter IDs such as `google-ai-studio`, `google-vertex`, and `azure-openai`. There are no pre-launch aliases.
+
+Starport supports the `fallback` route mode. Validation rejects other modes
+until Starport implements their semantics. A stream can use fallback only
+before HTTP receives it. Starport does not use fallback after it can send
+bytes.
+
+The pure planner returns one immutable route plan. The executor applies one total attempt limit. It also applies one total elapsed-time limit. Same-route retries and fallback routes consume the same attempt budget. Provider adapters make one request. The HTTP transport has no circuit breaker.
+
+Streaming and non-streaming requests use the same planner and executor. A stream can change routes only before Starport returns the first canonical event. A stream failure after this commitment point is terminal.
+
+Provider errors become canonical failures before execution policy uses them.
+The `internal/availability` tracker owns all offering health transitions. It
+keys state by provider ID and provider model ID. It admits one half-open probe.
+
+The tracker publishes immutable state to the derived routable view. Vertex AI
+uses one configured location for each offering. An explicit planned route
+must represent location failover.
+
+## Security
+
+Implemented:
+
+- The identity repository owns the SHA-256 hash index and atomic identity changes.
+- Startup requires a bootstrap key for empty identity storage. It stores only the SHA-256 hash and creates one wildcard identity.
+- Operators use the bootstrap identity to create the first named administrator key. They can then remove the bootstrap value from configuration.
+- Starport accepts API keys from `Authorization` and `X-API-Key` headers only.
+- The HTTP edge derives client IP from the direct TCP peer. It ignores untrusted forwarding headers.
+- Authentication stores the API key model in request context for ownership and routing checks.
+- The credential repository encrypts provider keys with AES-256-GCM. `STARPORT_SECURITY_MASTER_KEY` supplies the production secret.
+- The encryption service uses Argon2id when it derives a key from a password value.
+- Rate limiting uses the authenticated API key ID, not the raw secret.
+- The BYOK repository isolates provider keys by API-key scope.
+
+Still planned:
+
+- Moderation/content filtering.
+- OpenTelemetry metrics/traces.
+- Enterprise SSO/RBAC and audit logs.
+
+## API Surface
+
+The route group selects the wire dialect before request decoding. Shared gateway behavior returns through the selected codec. OpenRouter middleware and stream errors use the OpenRouter error contract. OpenAI routes use the OpenAI contract.
+
+OpenAI-compatible:
+
+```text
+POST /v1/chat/completions
+POST /v1/embeddings
+GET  /v1/models
+GET  /v1/models/{model}
 ```
 
-### 4.3 Routing System
+OpenRouter-compatible:
 
-The routing system is fully implemented with advanced features:
-
-```go
-type ModelRouter struct {
-    providers      map[string]Provider
-    routingConfig  RoutingConfig
-    healthTracker  *HealthTracker
-    latencyTracker *LatencyTracker
-    stickySession  *StickySessionManager
-}
-
-// Features implemented:
-// - Model-based routing (provider/model format)
-// - Fallback chains with configurable retry
-// - Circuit breaker per provider
-// - Latency-based routing with EMA
-// - Cost-aware routing
-// - Sticky sessions for conversation continuity
-// - Provider preferences (order, only, ignore)
+```text
+POST /api/v1/chat/completions
+POST /api/v1/embeddings
+GET  /api/v1/models
+GET  /api/v1/models/{model}
+GET  /api/v1/models/{model}/endpoints
+GET  /api/v1/providers
 ```
 
-### 4.4 BYOK Implementation
+Provider-key and admin surfaces:
 
-BYOK is fully implemented with security best practices:
-
-```go
-type BYOKManager struct {
-    store        storage.KVStore
-    masterKey    []byte  // Derived from config using Argon2id
-    validator    *CredentialValidator
-}
-
-// Features:
-// - AES-256-GCM encryption for credentials
-// - Per-API-key credential isolation
-// - Multiple fallback strategies
-// - 5% pricing model for BYOK usage
-// - Provider-specific validation
-// - Usage tracking and cost calculation
+```text
+GET    /api/v1/keys/{key_id}/provider-keys
+POST   /api/v1/keys/{key_id}/provider-keys
+GET    /api/v1/keys/{key_id}/provider-keys/{provider}
+PUT    /api/v1/keys/{key_id}/provider-keys/{provider}
+DELETE /api/v1/keys/{key_id}/provider-keys/{provider}
+POST   /api/v1/keys/{key_id}/provider-keys/{provider}/validate
+GET    /api/v1/keys/{key_id}/usage/provider-keys
+GET    /api/v1/keys/{key_id}/usage/comparison
+GET    /api/v1/admin/keys/
+POST   /api/v1/admin/keys/
+GET    /api/v1/admin/keys/{key_id}
+PUT    /api/v1/admin/keys/{key_id}
+DELETE /api/v1/admin/keys/{key_id}
+GET    /api/v1/admin/info
+GET    /api/v1/admin/metrics
 ```
 
-### 4.5 Authentication (Broken)
+Health and optional UI:
 
-The authentication middleware exists but has a critical bug:
-
-```go
-// CURRENT (BROKEN):
-func (s *Server) authenticate(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        apiKey := extractAPIKey(r)
-        
-        // BUG: This looks up by the raw API key, not by hash!
-        key, err := s.store.Get(ctx, fmt.Sprintf("api_key:%s", apiKey))
-        if err != nil {
-            http.Error(w, "Unauthorized", http.StatusUnauthorized)
-            return
-        }
-        
-        next.ServeHTTP(w, r)
-    })
-}
-
-// SHOULD BE:
-// 1. Extract API key from Authorization header
-// 2. Validate format (uuidkey)
-// 3. Hash the key (SHA256)
-// 4. Look up by hash
-// 5. Validate permissions and expiry
+```text
+GET /health/live
+GET /health/ready
+GET /chat/*   # when ChatUI is enabled
 ```
 
-## 5. Configuration System
+## Release Verification
 
-The configuration system is fully implemented with validation:
+The active v1 plan and its proof files record exact results. The final local gate is:
 
-```go
-type Config struct {
-    Server       ServerConfig       `env:",prefix=SERVER_"`
-    Storage      StorageConfig      `env:",prefix=STORAGE_"`
-    Providers    ProvidersConfig    `env:",prefix=PROVIDERS_"`
-    RateLimiting RateLimitingConfig `env:",prefix=RATE_LIMITING_"`
-    Security     SecurityConfig     `env:",prefix=SECURITY_"`
-    Logging      LoggingConfig      `env:",prefix=LOGGING_"`
-    Cache        CacheConfig        `env:",prefix=CACHE_"`
-}
+```bash
+cd /path/to/starmap
+make verify
 
-// Features:
-// - Environment variable loading
-// - .env file support (local.env > .env)
-// - Comprehensive validation
-// - Hot reload for rate limits
-// - Type-safe with defaults
+cd /path/to/starport
+bash scripts/verify-starmap-ownership.sh
+bash scripts/verify-v1-architecture.sh
+go test ./...
+go test -race ./internal/catalog ./internal/proxy ./internal/routing \
+  ./internal/providers/connectors ./internal/app ./internal/server
+go vet ./...
+make lint
+make build
+bash scripts/smoke-openrouter-sdks.sh
 ```
 
-## 6. API Endpoints (Implemented)
+The release gate requires the raw HTTP smoke checks. Official SDK checks
+report `UNVERIFIED` when their packages are not installed. An absent optional
+dependency is never a green result.
 
-### 6.1 LLM Proxy Endpoints ✅
-
-```yaml
-# OpenAI Compatible
-POST   /v1/chat/completions
-POST   /v1/embeddings
-GET    /v1/models              # Basic format
-
-# OpenRouter Compatible  
-POST   /api/v1/chat/completions
-POST   /api/v1/embeddings
-GET    /api/v1/models          # Enhanced with metadata
-GET    /api/v1/providers       # Provider listing
-GET    /api/v1/models/{model}/endpoints
-
-# Admin Endpoints
-GET    /health/live
-GET    /health/ready
-POST   /admin/providers/{provider}/keys
-```
-
-### 6.2 Management Endpoints (Not Implemented) ❌
-
-```yaml
-# These endpoints are defined but not implemented:
-POST   /api/v1/keys            # Create API key
-GET    /api/v1/keys            # List keys
-DELETE /api/v1/keys/{id}       # Delete key
-
-POST   /api/v1/presets         # Create preset
-GET    /api/v1/presets         # List presets
-PUT    /api/v1/presets/{id}    # Update preset
-
-POST   /api/v1/filters         # Create filter
-GET    /api/v1/filters         # List filters
-```
-
-## 7. Performance Characteristics
-
-### 7.1 Current Performance
-
-Based on the implementation:
-- **Routing Overhead**: <1ms for provider selection
-- **Streaming Latency**: Minimal buffering, direct passthrough
-- **Connection Pooling**: Configured for all providers
-- **Circuit Breaker**: 3 failures trigger 30s cooldown
-
-### 7.2 Bottlenecks
-
-1. **No Caching**: Every request hits providers directly
-2. **No Rate Limiting**: System vulnerable to abuse
-3. **Authentication Overhead**: Broken implementation adds latency
-
-## 8. Security Implementation
-
-### 8.1 Implemented Security ✅
-- **BYOK Encryption**: AES-256-GCM with Argon2id key derivation
-- **Secure Configuration**: Sensitive data in environment variables
-- **TLS Support**: Configured but optional
-
-### 8.2 Missing Security ❌
-- **API Key Hashing**: Keys stored/looked up in plain text
-- **Rate Limiting**: No protection against abuse
-- **Input Validation**: Limited request validation
-
-## 9. Testing Coverage
-
-Current test coverage by package:
-- `storage`: 82.4% ✅
-- `providers/connectors`: 84.0% ✅
-- `server`: 93% ✅
-- `models`: 91.9% ✅
-- `routing`: 76.2% ✅
-- `providers`: 75%+ ✅
-- `cache`: Interface only, no tests 🚧
-
-## 10. Production Readiness Assessment
-
-### Ready for Production ✅
-- Provider integration and routing
-- Storage layer (both Badger and Valkey)
-- API compatibility (OpenAI/OpenRouter)
-- BYOK implementation
-
-### NOT Production Ready ❌
-- **Authentication**: Critical bug prevents API key validation
-- **Caching**: No implementation despite interface
-- **Rate Limiting**: No enforcement mechanism
-- **Monitoring**: No metrics or distributed tracing
-- **Admin API**: No management capabilities
-
-### Recommended Priority Fixes
-
-1. **Fix Authentication** (Critical)
-   - Implement proper API key generation with uuidkey
-   - Store keys by SHA256 hash
-   - Add validation middleware
-
-2. **Implement Caching** (High)
-   - Add in-memory cache (Ristretto)
-   - Implement response caching
-   - Add cache metrics
-
-3. **Add Rate Limiting** (High)
-   - Implement token bucket algorithm
-   - Add middleware enforcement
-   - Configure per-key limits
-
-4. **Basic Monitoring** (Medium)
-   - Add Prometheus metrics
-   - Implement request logging
-   - Add performance tracking
-
-## 11. Migration Path
-
-For teams considering Starport:
-
-### From OpenRouter
-```python
-# Current
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=OPENROUTER_KEY
-)
-
-# With Starport (after auth fix)
-client = OpenAI(
-    base_url="http://your-starport:8080/api/v1",
-    api_key=STARPORT_KEY
-)
-```
-
-### Current Limitations
-1. No API key management (must manually create in storage)
-2. No caching (all requests hit providers)
-3. No rate limiting (careful with costs)
-4. No usage tracking or analytics
-
-## 12. Future Architecture (Enterprise)
-
-The enterprise package is planned but not implemented:
-
-```
-starport-enterprise/
-├── auth/          # SSO, RBAC, PostgreSQL integration
-├── analytics/     # ClickHouse usage tracking
-├── filters/       # ML-powered content filtering
-├── ui/           # React admin dashboard
-└── notify/       # Multi-channel alerting
-```
-
-This will add:
-- PostgreSQL for relational data
-- WorkOS for SSO
-- ClickHouse for analytics
-- React UI with shadcn/ui
-
----
-
-This architecture document reflects the actual state of the codebase. While significant progress has been made on the core proxy functionality, critical features needed for production use (authentication, caching, rate limiting) require immediate attention.
+The final Starport module must use a published Starmap version. A local module
+replacement is valid only for the cross-repository development worktree.

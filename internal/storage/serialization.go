@@ -55,13 +55,3 @@ func DeserializeInt64(data []byte) (int64, error) {
 	}
 	return n, nil
 }
-
-// SerializeModel is an alias for Serialize for clarity when working with models
-func SerializeModel(v any) ([]byte, error) {
-	return Serialize(v)
-}
-
-// DeserializeModel is an alias for Deserialize for clarity when working with models
-func DeserializeModel(data []byte, v any) error {
-	return Deserialize(data, v)
-}

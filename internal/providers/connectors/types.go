@@ -3,6 +3,8 @@ package connectors
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
 // Common role constants
@@ -17,12 +19,18 @@ const (
 	SSEDone = "[DONE]"
 )
 
+// StreamOptions configures streaming response behavior
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage,omitempty"`
+}
+
 // ChatRequest represents a chat completion request
 type ChatRequest struct {
 	Model            string          `json:"model"`
 	Messages         []Message       `json:"messages"`
 	Temperature      *float32        `json:"temperature,omitempty"`
 	TopP             *float32        `json:"top_p,omitempty"`
+	N                *int            `json:"n,omitempty"`
 	MaxTokens        *int            `json:"max_tokens,omitempty"`
 	Stream           bool            `json:"stream,omitempty"`
 	Stop             []string        `json:"stop,omitempty"`
@@ -38,11 +46,17 @@ type ChatRequest struct {
 	// OpenRouter-compatible model routing
 	Models []string `json:"models,omitempty"` // Fallback model chain
 
+	// Streaming options
+	StreamOptions *StreamOptions `json:"stream_options,omitempty"`
+
 	// OpenRouter reasoning configuration
 	Reasoning *ReasoningConfig `json:"reasoning,omitempty"`
 
-	// Provider-specific extensions
-	ProviderOptions map[string]any `json:"provider_options,omitempty"`
+	// ProviderOptions are provider-specific top-level wire extensions.
+	ProviderOptions map[string]any `json:"-"`
+
+	// Endpoint is the exact Starmap offering endpoint selected by the route plan.
+	Endpoint InferenceEndpoint `json:"-"`
 }
 
 // Message represents a chat message
@@ -105,7 +119,16 @@ type FunctionCall struct {
 
 // ResponseFormat specifies the format of the response
 type ResponseFormat struct {
-	Type string `json:"type"`
+	Type       string              `json:"type"`
+	JSONSchema *ResponseJSONSchema `json:"json_schema,omitempty"`
+}
+
+// ResponseJSONSchema describes an OpenAI-compatible structured output schema.
+type ResponseJSONSchema struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Schema      json.RawMessage `json:"schema"`
+	Strict      bool            `json:"strict,omitempty"`
 }
 
 // ChatResponse represents a chat completion response
@@ -189,11 +212,18 @@ type MessageDelta struct {
 
 // EmbeddingsRequest represents an embeddings request
 type EmbeddingsRequest struct {
-	Model          string `json:"model"`
-	Input          any    `json:"input"`
-	EncodingFormat string `json:"encoding_format,omitempty"`
-	Dimensions     *int   `json:"dimensions,omitempty"`
-	User           string `json:"user,omitempty"`
+	Model          string            `json:"model"`
+	Input          any               `json:"input"`
+	EncodingFormat string            `json:"encoding_format,omitempty"`
+	Dimensions     *int              `json:"dimensions,omitempty"`
+	User           string            `json:"user,omitempty"`
+	Endpoint       InferenceEndpoint `json:"-"`
+}
+
+// InferenceEndpoint is a selected provider endpoint and wire protocol.
+type InferenceEndpoint struct {
+	Type catalogs.EndpointType
+	URL  string
 }
 
 // EmbeddingsResponse represents an embeddings response
@@ -211,54 +241,18 @@ type Embedding struct {
 	Embedding []float32 `json:"embedding"`
 }
 
-// ModelsResponse represents a models list response
-type ModelsResponse struct {
-	Object string  `json:"object"`
-	Data   []Model `json:"data"`
-}
-
-// Model represents a model
-type Model struct {
-	ID         string            `json:"id"`
-	Object     string            `json:"object"`
-	Created    int64             `json:"created"`
-	OwnedBy    string            `json:"owned_by"`
-	Permission []ModelPermission `json:"permission,omitempty"`
-	Root       string            `json:"root,omitempty"`
-	Parent     string            `json:"parent,omitempty"`
-}
-
-// ModelPermission represents model permissions
-type ModelPermission struct {
-	ID                 string  `json:"id"`
-	Object             string  `json:"object"`
-	Created            int64   `json:"created"`
-	AllowCreateEngine  bool    `json:"allow_create_engine"`
-	AllowSampling      bool    `json:"allow_sampling"`
-	AllowLogprobs      bool    `json:"allow_logprobs"`
-	AllowSearchIndices bool    `json:"allow_search_indices"`
-	AllowView          bool    `json:"allow_view"`
-	AllowFineTuning    bool    `json:"allow_fine_tuning"`
-	Organization       string  `json:"organization"`
-	Group              *string `json:"group"`
-	IsBlocking         bool    `json:"is_blocking"`
-}
-
 // ProviderConfig represents configuration for a specific provider
 type ProviderConfig struct {
 	// Common settings from internal/config/config.go
-	BaseURL           string        `json:"base_url"`
-	Timeout           time.Duration `json:"timeout"`
-	MaxConnections    int           `json:"max_connections"`
-	MaxRetries        int           `json:"max_retries"`
-	RetryDelay        time.Duration `json:"retry_delay"`
-	BackoffMultiplier float64       `json:"backoff_multiplier"`
+	BaseURL        string        `json:"base_url"`
+	Timeout        time.Duration `json:"timeout"`
+	MaxConnections int           `json:"max_connections"`
 
 	// Authentication
 	APIKey string `json:"-"` // Never log or serialize
 
-	// Provider-specific settings
-	Extra map[string]any `json:"extra,omitempty"`
+	// EndpointBindings supplies tenant-specific values for Starmap URL templates.
+	EndpointBindings map[string]string `json:"endpoint_bindings,omitempty"`
 
 	// Enable flag for optional providers (e.g., Ollama)
 	Enabled bool `json:"enabled"`
@@ -274,15 +268,6 @@ func (c *ProviderConfig) Validate() error {
 	}
 	if c.MaxConnections <= 0 {
 		c.MaxConnections = 100
-	}
-	if c.MaxRetries < 0 {
-		c.MaxRetries = 3
-	}
-	if c.RetryDelay <= 0 {
-		c.RetryDelay = 1 * time.Second
-	}
-	if c.BackoffMultiplier <= 1 {
-		c.BackoffMultiplier = 2.0
 	}
 	return nil
 }

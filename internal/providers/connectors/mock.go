@@ -11,15 +11,12 @@ import (
 type MockConnector struct {
 	name           string
 	config         ProviderConfig
-	healthError    error
 	chatError      error
 	streamError    error
 	embeddingError error
-	modelsError    error
 	chatResponse   *ChatResponse
 	streamChunks   []ChatStreamChunk
 	embeddingResp  *EmbeddingsResponse
-	modelsResp     *ModelsResponse
 	closed         bool
 	mu             sync.RWMutex
 }
@@ -110,23 +107,6 @@ func NewMockConnector(config ProviderConfig) *MockConnector {
 				TotalTokens:  5,
 			},
 		},
-		modelsResp: &ModelsResponse{
-			Object: "list",
-			Data: []Model{
-				{
-					ID:      "mock-model",
-					Object:  "model",
-					Created: time.Now().Unix(),
-					OwnedBy: "mock",
-				},
-				{
-					ID:      "mock-embedding-model",
-					Object:  "model",
-					Created: time.Now().Unix(),
-					OwnedBy: "mock",
-				},
-			},
-		},
 	}
 }
 
@@ -196,50 +176,6 @@ func (m *MockConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) 
 	}
 }
 
-// Models lists available models
-func (m *MockConnector) Models(ctx context.Context) (*ModelsResponse, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.closed {
-		return nil, ErrConnectorClosed
-	}
-
-	if m.modelsError != nil {
-		return nil, m.modelsError
-	}
-
-	// Simulate processing time
-	select {
-	case <-time.After(5 * time.Millisecond):
-		return m.modelsResp, nil
-	case <-ctx.Done():
-		return nil, ErrContextCanceled
-	}
-}
-
-// Health checks the health of the mock connector
-func (m *MockConnector) Health(ctx context.Context) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if m.closed {
-		return ErrConnectorClosed
-	}
-
-	if m.healthError != nil {
-		return m.healthError
-	}
-
-	// Simulate health check
-	select {
-	case <-time.After(5 * time.Millisecond):
-		return nil
-	case <-ctx.Done():
-		return ErrContextCanceled
-	}
-}
-
 // Name returns the provider name
 func (m *MockConnector) Name() string {
 	return m.name
@@ -254,13 +190,6 @@ func (m *MockConnector) Close() error {
 }
 
 // Mock-specific methods for testing
-
-// SetHealthError sets an error to be returned by Health()
-func (m *MockConnector) SetHealthError(err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.healthError = err
-}
 
 // SetChatError sets an error to be returned by Chat()
 func (m *MockConnector) SetChatError(err error) {

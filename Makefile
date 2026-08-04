@@ -232,7 +232,3 @@ clean: ## Clean build artifacts
 version: build ## Show version information
 	./$(BINARY_NAME) version
 
-.PHONY: ford
-ford: ## Generate catalog.json from provider.json
-	@ford parse -input ../ford/data -p pkg/catalog/provider.json -o pkg/catalog/catalog.json
-

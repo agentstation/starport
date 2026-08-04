@@ -24,6 +24,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
 			Str("remote_addr", r.RemoteAddr).
+			Str("client_ip", middleware.GetClientIP(r.Context())).
 			Str("request_id", middleware.GetReqID(r.Context())).
 			Int("status", ww.Status()).
 			Int("bytes", ww.BytesWritten()).

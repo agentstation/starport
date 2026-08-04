@@ -8,10 +8,9 @@ import (
 // validChatUIConfig returns a valid ChatUIConfig for testing
 func validChatUIConfig() ChatUIConfig {
 	return ChatUIConfig{
-		Enabled:     false,
-		Title:       "Test Chat",
-		Theme:       "light",
-		AllowKeyGen: false,
+		Enabled: false,
+		Title:   "Test Chat",
+		Theme:   "light",
 	}
 }
 

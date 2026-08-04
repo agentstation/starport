@@ -13,7 +13,6 @@ import (
 
 	"github.com/agentstation/starport/internal/app"
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/server"
 )
 
 // Build-time variables injected via ldflags
@@ -78,9 +77,8 @@ func runApp(ctx context.Context) error {
 				Usage:   "Run the llm gateway server",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
-						Name:    "enable-ollama",
-						Usage:   "Enable Ollama support for local models",
-						EnvVars: []string{"STARPORT_ENABLE_OLLAMA"},
+						Name:  "enable-ollama",
+						Usage: "Enable Ollama support for local models",
 					},
 				},
 				Action: func(c *cli.Context) error {
@@ -89,8 +87,13 @@ func runApp(ctx context.Context) error {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			// If no subcommand is provided, show help
-			return cli.ShowAppHelp(c)
+			if c.NArg() > 0 {
+				if err := cli.ShowAppHelp(c); err != nil {
+					return err
+				}
+				return fmt.Errorf("unknown command: %s", c.Args().First())
+			}
+			return runServer(ctx, false)
 		},
 	}
 
@@ -110,39 +113,12 @@ func runServer(ctx context.Context, enableOllama bool) error {
 		cfg.Providers.Ollama.Enabled = true
 	}
 
-	// Build app options from loaded config
-	opts := []app.Option{
-		app.WithServerConfig(server.Config{
-			Port: cfg.Server.Port,
-			Host: cfg.Server.Host,
-		}),
-		app.WithStorageMode(cfg.Storage.Mode),
-		app.WithStorageConfig(&cfg.Storage),
-		app.WithLogLevel(cfg.Logging.Level),
-		app.WithProvidersConfig(&cfg.Providers),
-		app.WithCache(cfg.Cache.Enabled),
-	}
-
-	// Add hot reload config if enabled
-	if cfg.RateLimiting.EnableHotReload {
-		opts = append(opts, app.WithHotReload(&app.HotReloadConfig{
-			Enabled:       true,
-			ConfigPath:    cfg.RateLimiting.ConfigPath,
-			CheckInterval: cfg.RateLimiting.ReloadCheckInterval,
-		}))
-	}
-
-	// Add ChatUI config if enabled
-	if cfg.ChatUI.Enabled {
-		opts = append(opts, app.WithChatUI(&cfg.ChatUI))
-	}
-
-	app, err := app.New(opts...)
+	application, err := app.New(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create app: %w", err)
 	}
 
-	return app.Run(ctx)
+	return application.Run(ctx)
 }
 
 // getBuildGoVersion is a helper function to get the build-time Go version.

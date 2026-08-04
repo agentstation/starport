@@ -112,35 +112,6 @@ func (l *Loader) loadEnvFiles() error {
 
 // postProcess applies any post-processing to the configuration
 func (l *Loader) postProcess(cfg *Config) error {
-	// Set default provider URLs if not specified
-	if cfg.Providers.OpenAI.BaseURL == "" {
-		cfg.Providers.OpenAI.BaseURL = "https://api.openai.com/v1"
-	}
-	if cfg.Providers.Anthropic.BaseURL == "" {
-		cfg.Providers.Anthropic.BaseURL = "https://api.anthropic.com/v1"
-	}
-	if cfg.Providers.Gemini.BaseURL == "" {
-		// Default to US-Central1 regional endpoint for Vertex AI
-		// Users should override with their specific project and location
-		cfg.Providers.Gemini.BaseURL = "https://us-central1-aiplatform.googleapis.com"
-	}
-	if cfg.Providers.Groq.BaseURL == "" {
-		cfg.Providers.Groq.BaseURL = "https://api.groq.com/openai/v1"
-	}
-	if cfg.Providers.Mistral.BaseURL == "" {
-		cfg.Providers.Mistral.BaseURL = "https://api.mistral.ai/v1"
-	}
-	if cfg.Providers.Azure.BaseURL == "" {
-		// Azure OpenAI requires resource-specific URLs
-		// Format: https://{resource-name}.openai.azure.com
-		// Users MUST override this with their specific resource URL
-		cfg.Providers.Azure.BaseURL = "https://YOUR-RESOURCE-NAME.openai.azure.com"
-	}
-	if cfg.Providers.Ollama.Enabled && cfg.Providers.Ollama.BaseURL == "" {
-		// Ollama runs locally by default
-		cfg.Providers.Ollama.BaseURL = "http://localhost:11434"
-	}
-
 	// Ensure storage path is absolute
 	if cfg.Storage.Mode == "badger" && cfg.Storage.Badger.Path != "" {
 		if !filepath.IsAbs(cfg.Storage.Badger.Path) {
@@ -151,17 +122,17 @@ func (l *Loader) postProcess(cfg *Config) error {
 			cfg.Storage.Badger.Path = absPath
 		}
 	}
+	if cfg.Catalog.WorkspacePath != "" && !filepath.IsAbs(cfg.Catalog.WorkspacePath) {
+		absPath, err := filepath.Abs(cfg.Catalog.WorkspacePath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve catalog workspace path: %w", err)
+		}
+		cfg.Catalog.WorkspacePath = absPath
+	}
 
 	// Parse allowed origins
 	if cfg.Security.AllowedOrigins == "" {
 		cfg.Security.AllowedOrigins = "*"
-	}
-
-	// Load master key from environment if specified
-	if cfg.Security.MasterKeyEnv != "" {
-		// Note: In a real implementation, we'd store the master key securely
-		// For now, we just validate it exists
-		_ = os.Getenv(cfg.Security.MasterKeyEnv)
 	}
 
 	return nil

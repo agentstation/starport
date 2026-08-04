@@ -1,9 +1,9 @@
 package server
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -13,25 +13,24 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starport/internal/apikeys"
-	"github.com/agentstation/starport/internal/server/dto"
-	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/server/requestctx"
 )
 
-// Context key type for middleware values
-type contextKey string
+// Context key type for middleware values.
+type contextKey = requestctx.Key
 
 // Context keys for middleware
 const (
-	ContextKeyAPIKey      contextKey = "api_key"
-	ContextKeyAPIKeyID    contextKey = "api_key_id"
-	ContextKeyAPIKeyModel contextKey = "api_key_model" // #nosec G101 - not a credential, just a context key identifier
+	ContextKeyAPIKey      contextKey = requestctx.APIKey
+	ContextKeyAPIKeyID    contextKey = requestctx.APIKeyID
+	ContextKeyAPIKeyModel contextKey = requestctx.APIKeyModel
 )
 
-// Middleware aliases for chi middleware
+// Middleware aliases for chi middleware.
 var (
 	RequestID = middleware.RequestID
-	RealIP    = middleware.RealIP
+	ClientIP  = middleware.ClientIPFromRemoteAddr
 	Recoverer = middleware.Recoverer
 	Compress  = middleware.Compress
 )
@@ -83,52 +82,14 @@ func SizeLimiter(maxSize int64) func(http.Handler) http.Handler {
 	}
 }
 
-// RequestSizeLimiter is an alias for SizeLimiter for backward compatibility
-func RequestSizeLimiter(maxBytes int64) func(http.Handler) http.Handler {
-	return SizeLimiter(maxBytes)
-}
-
 // Timeout adds a timeout to requests
 func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// If no timeout is set, pass through without timeout
-			if timeout <= 0 {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			ctx, cancel := context.WithTimeout(r.Context(), timeout)
-			defer cancel()
-
-			done := make(chan struct{})
-			panicChan := make(chan any, 1)
-
-			go func() {
-				defer func() {
-					if p := recover(); p != nil {
-						panicChan <- p
-					}
-				}()
-
-				r = r.WithContext(ctx)
-				next.ServeHTTP(w, r)
-				close(done)
-			}()
-
-			select {
-			case <-done:
-				// Request completed normally
-			case p := <-panicChan:
-				// Re-panic to let the recoverer handle it
-				panic(p)
-			case <-ctx.Done():
-				// Timeout occurred
-				w.WriteHeader(http.StatusGatewayTimeout)
-				_, _ = w.Write([]byte("Request timeout"))
-			}
-		})
+	if timeout <= 0 {
+		return func(next http.Handler) http.Handler {
+			return next
+		}
 	}
+	return middleware.Timeout(timeout)
 }
 
 // CORS returns a configured CORS handler
@@ -145,23 +106,24 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
-	store storage.KVStore
+	identities identity.Repository
 }
 
 // NewAuthMiddleware creates a new authentication middleware
-func NewAuthMiddleware(store storage.KVStore) *AuthMiddleware {
+func NewAuthMiddleware(identities identity.Repository) *AuthMiddleware {
 	return &AuthMiddleware{
-		store: store,
+		identities: identities,
 	}
 }
 
 // RequireAPIKey validates API key authentication
 func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract API key from header or query parameter
+		// Extract API key from headers. Query-string credentials are intentionally
+		// unsupported because URLs are commonly logged by proxies and clients.
 		apiKey := extractAPIKey(r)
 		if apiKey == "" {
-			dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Missing API key")
+			writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Missing API key")
 			return
 		}
 
@@ -169,60 +131,34 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		hash := sha256.Sum256([]byte(apiKey))
 		hashStr := hex.EncodeToString(hash[:])
 
-		// Look up the key ID by hash
-		keyIDData, err := m.store.Get(r.Context(), storage.APIKeyHashKey(hashStr))
+		record, err := m.identities.GetByHash(r.Context(), hashStr)
 		if err != nil {
-			if err == storage.ErrNotFound {
-				dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Invalid API key")
+			if errors.Is(err, identity.ErrNotFound) {
+				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 				return
 			}
 			log.Error().Err(err).Msg("Failed to lookup API key hash")
-			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Authentication error")
+			writeProtocolError(w, r, http.StatusInternalServerError, "server_error", "Authentication error")
 			return
 		}
 
-		keyID := string(keyIDData)
-
-		// Get the full API key data by ID
-		keyData, err := m.store.Get(r.Context(), storage.APIKeyKey(keyID))
-		if err != nil {
-			if err == storage.ErrNotFound {
-				dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Invalid API key")
-				return
-			}
-			log.Error().Err(err).Msg("Failed to validate API key")
-			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Authentication error")
-			return
-		}
-
-		// Deserialize API key
-		var apiKeyModel apikeys.APIKey
-		if err := storage.Deserialize(keyData, &apiKeyModel); err != nil {
-			log.Error().Err(err).Msg("Failed to deserialize API key")
-			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Authentication error")
-			return
-		}
-
-		// Verify the hash matches (extra security check)
-		if apiKeyModel.Hash != hashStr {
-			log.Error().
-				Str("expected_hash", apiKeyModel.Hash).
-				Str("actual_hash", hashStr).
-				Msg("API key hash mismatch")
-			dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Invalid API key")
-			return
-		}
+		apiKeyModel := record.APIKey
 
 		// Check if key is active
 		if !apiKeyModel.Active {
-			dto.WriteError(w, http.StatusForbidden, dto.ErrorTypePermissionError, "API key is disabled")
+			writeProtocolError(w, r, http.StatusForbidden, "permission_error", "API key is disabled")
+			return
+		}
+
+		if apiKeyModel.IsExpired() {
+			writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "API key has expired")
 			return
 		}
 
 		// Add API key info to context
-		ctx := context.WithValue(r.Context(), ContextKeyAPIKey, apiKey)
-		ctx = context.WithValue(ctx, ContextKeyAPIKeyID, apiKeyModel.ID)
-		ctx = context.WithValue(ctx, ContextKeyAPIKeyModel, &apiKeyModel)
+		ctx := requestctx.WithAPIKey(r.Context(), apiKey)
+		ctx = requestctx.WithAPIKeyID(ctx, apiKeyModel.ID)
+		ctx = requestctx.WithAPIKeyModel(ctx, &apiKeyModel)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -232,22 +168,22 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 func (m *AuthMiddleware) RequireKeyOwnership(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated key ID from context
-		authKeyID, ok := r.Context().Value(ContextKeyAPIKeyID).(string)
+		authKeyID, ok := requestctx.GetAPIKeyID(r.Context())
 		if !ok {
-			dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Not authenticated")
+			writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Not authenticated")
 			return
 		}
 
 		// Get key ID from URL
 		urlKeyID := chi.URLParam(r, "key_id")
 		if urlKeyID == "" {
-			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Missing key ID")
+			writeProtocolError(w, r, http.StatusBadRequest, "invalid_request_error", "Missing key ID")
 			return
 		}
 
 		// Check ownership
 		if authKeyID != urlKeyID {
-			dto.WriteError(w, http.StatusForbidden, dto.ErrorTypePermissionError, "Access denied")
+			writeProtocolError(w, r, http.StatusForbidden, "permission_error", "Access denied")
 			return
 		}
 
@@ -259,28 +195,42 @@ func (m *AuthMiddleware) RequireKeyOwnership(next http.Handler) http.Handler {
 func (m *AuthMiddleware) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get API key model from context
-		apiKeyModel, ok := r.Context().Value(ContextKeyAPIKeyModel).(*apikeys.APIKey)
+		apiKeyModel, ok := requestctx.GetAPIKeyModel(r.Context())
 		if !ok {
-			dto.WriteError(w, http.StatusUnauthorized, dto.ErrorTypeAuthenticationError, "Not authenticated")
+			writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Not authenticated")
 			return
 		}
 
-		// Check for admin scope
-		hasAdmin := false
-		for _, scope := range apiKeyModel.Scopes {
-			if scope == "admin" || scope == "*" {
-				hasAdmin = true
-				break
-			}
-		}
-
-		if !hasAdmin {
-			dto.WriteError(w, http.StatusForbidden, dto.ErrorTypePermissionError, "Admin access required")
+		if !apiKeyModel.HasScope("admin") {
+			writeProtocolError(w, r, http.StatusForbidden, "permission_error", "Admin access required")
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequireAnyScope validates that the authenticated API key has at least one
+// accepted scope. The wildcard "*" grants access to all scopes.
+func (m *AuthMiddleware) RequireAnyScope(scopes ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			apiKeyModel, ok := requestctx.GetAPIKeyModel(r.Context())
+			if !ok || apiKeyModel == nil {
+				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Not authenticated")
+				return
+			}
+
+			for _, scope := range scopes {
+				if apiKeyModel.HasScope(scope) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+
+			writeProtocolError(w, r, http.StatusForbidden, "permission_error", "Insufficient API key scope")
+		})
+	}
 }
 
 // extractAPIKey extracts the API key from the request
@@ -298,16 +248,6 @@ func extractAPIKey(r *http.Request) string {
 
 	// Check X-API-Key header
 	if key := r.Header.Get("X-API-Key"); key != "" {
-		return key
-	}
-
-	// Check query parameter
-	if key := r.URL.Query().Get("api_key"); key != "" {
-		return key
-	}
-
-	// Check alternative query parameter
-	if key := r.URL.Query().Get("key"); key != "" {
 		return key
 	}
 

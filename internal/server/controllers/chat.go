@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/agentstation/starport/internal/httpapi/openai"
+	"github.com/agentstation/starport/internal/httpapi/openrouter"
+	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
-	"github.com/agentstation/starport/internal/server/dto"
 )
 
 // ChatController handles chat completion endpoints
@@ -17,31 +20,69 @@ type ChatController struct {
 
 // NewChatController creates a new chat controller
 func NewChatController(service proxy.Proxy) *ChatController {
+	return newChatController(service, ProtocolOpenAI)
+}
+
+// NewOpenRouterChatController creates an OpenRouter chat controller.
+func NewOpenRouterChatController(service proxy.Proxy) *ChatController {
+	return newChatController(service, ProtocolOpenRouter)
+}
+
+func newChatController(service proxy.Proxy, protocol Protocol) *ChatController {
 	return &ChatController{
-		BaseHandler: NewBaseHandler(service),
+		BaseHandler: NewProtocolBaseHandler(service, protocol),
 	}
 }
 
 // Create handles POST /v1/chat/completions and /api/v1/chat/completions
 func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
-	// Parse request
-	req, err := dto.ParseChatCompletionRequest(r)
+	req, err := h.decodeRequest(r)
 	if err != nil {
-		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
+		h.writeInvalidRequest(w, "Invalid request body: "+err.Error())
 		return
 	}
 
 	// Add context from HTTP request
 	ctx := r.Context()
 	req.APIKey = h.getAPIKey(ctx)
+	req.TenantID = h.getTenantID(ctx)
+	req.APIKeyConfig = h.getAPIKeyRoutingConfig(ctx)
 	req.RequestID = h.getRequestID(ctx)
 
 	// Handle streaming vs non-streaming
-	if req.Stream {
+	if req.Request.Stream {
 		h.handleStream(w, r, req)
 	} else {
 		h.handleNonStream(w, r, req)
 	}
+}
+
+func (h *ChatController) decodeRequest(r *http.Request) (*proxy.ChatCompletionRequest, error) {
+	if h.protocol == ProtocolOpenRouter {
+		decoded, err := openrouter.DecodeChat(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		request := &proxy.ChatCompletionRequest{Request: decoded.Inference, Route: decoded.Route}
+		if decoded.Provider != nil {
+			allowFallback := true
+			if decoded.Provider.AllowFallbacks != nil {
+				allowFallback = *decoded.Provider.AllowFallbacks
+			}
+			request.Provider = &proxy.ProviderPreferences{
+				Order:         append([]string(nil), decoded.Provider.Order...),
+				Only:          append([]string(nil), decoded.Provider.Only...),
+				Ignore:        append([]string(nil), decoded.Provider.Ignore...),
+				AllowFallback: allowFallback,
+			}
+		}
+		return request, nil
+	}
+	decoded, err := openai.DecodeChat(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	return &proxy.ChatCompletionRequest{Request: decoded}, nil
 }
 
 // handleNonStream handles non-streaming chat completions
@@ -85,10 +126,16 @@ func (h *ChatController) handleNonStream(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	// Write response
-	if err := dto.WriteJSON(w, http.StatusOK, resp); err != nil {
+	if err := h.writeChatResponse(w, resp.Response); err != nil {
 		h.logError(r.Context(), err, "failed to write response")
 	}
+}
+
+func (h *ChatController) writeChatResponse(w http.ResponseWriter, response inference.ChatResponse) error {
+	if h.protocol == ProtocolOpenRouter {
+		return openrouter.WriteJSON(w, http.StatusOK, openrouter.EncodeChat(response))
+	}
+	return openai.WriteJSON(w, http.StatusOK, openai.EncodeChat(response))
 }
 
 // handleStream handles streaming chat completions
@@ -101,6 +148,10 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 	defer func() { _ = stream.Close() }()
+
+	// http.Server.WriteTimeout applies to the whole response by default. Clear
+	// the write deadline for SSE so healthy long-running streams are not cut off.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 
 	// Check if stream provides cache status
 	if cacheProvider, ok := stream.(proxy.CacheStatusProvider); ok {
@@ -126,9 +177,9 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 		flusher.Flush()
 	}
 
-	// Stream chunks
+	var lastEvent inference.StreamEvent
 	for {
-		chunk, err := stream.Read()
+		event, err := stream.Read()
 		if err == io.EOF {
 			// End of stream
 			_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
@@ -139,13 +190,23 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 		}
 
 		if err != nil {
-			// Log error but don't write it to stream
 			h.logError(r.Context(), err, "stream read error")
+			if h.protocol == ProtocolOpenRouter {
+				h.writeOpenRouterStreamError(w, lastEvent)
+			}
 			break
 		}
+		if event == nil {
+			err = io.ErrUnexpectedEOF
+			h.logError(r.Context(), err, "stream returned an empty event")
+			if h.protocol == ProtocolOpenRouter {
+				h.writeOpenRouterStreamError(w, lastEvent)
+			}
+			break
+		}
+		lastEvent = event.Clone()
 
-		// Write chunk as SSE
-		data, err := json.Marshal(chunk)
+		data, err := h.encodeStreamEvent(*event)
 		if err != nil {
 			h.logError(r.Context(), err, "failed to marshal chunk")
 			continue
@@ -158,4 +219,22 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 			flusher.Flush()
 		}
 	}
+}
+
+func (h *ChatController) encodeStreamEvent(event inference.StreamEvent) ([]byte, error) {
+	if h.protocol == ProtocolOpenRouter {
+		return json.Marshal(openrouter.EncodeStream(event))
+	}
+	return json.Marshal(openai.EncodeStream(event))
+}
+
+func (h *ChatController) writeOpenRouterStreamError(w http.ResponseWriter, event inference.StreamEvent) {
+	chunk := openrouter.EncodeStreamError(event, http.StatusBadGateway, "Provider stream failed", map[string]any{
+		"error_type": "provider_error",
+	})
+	data, err := json.Marshal(chunk)
+	if err != nil {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 }

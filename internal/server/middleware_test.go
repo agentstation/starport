@@ -20,7 +20,7 @@ func TestMiddlewareChain(t *testing.T) {
 		},
 	}
 
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 
 	// Test request with all middleware
 	// Use health endpoint which doesn't require auth
@@ -39,13 +39,34 @@ func TestMiddlewareChain(t *testing.T) {
 	}
 }
 
+func TestClientIPIgnoresUntrustedForwardingHeaders(t *testing.T) {
+	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20})
+	server.router.Get("/test-client-ip", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(middleware.GetClientIP(r.Context())))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test-client-ip", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.10")
+	req.Header.Set("X-Real-IP", "203.0.113.11")
+	recorder := httptest.NewRecorder()
+	server.router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d", recorder.Code)
+	}
+	if recorder.Body.String() != "192.168.1.1" {
+		t.Fatalf("client IP = %q", recorder.Body.String())
+	}
+}
+
 func TestPanicRecovery(t *testing.T) {
 	config := &Config{
 		Port:           8080,
 		RequestTimeout: 5 * time.Second,  // Longer timeout to allow panic recovery
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 
 	// Add a route that panics
 	server.router.Get("/panic", func(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +90,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 		Port:           8080,
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 
 	// Create a test endpoint that returns the request ID
 	server.router.Get("/test-request-id", func(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +118,7 @@ func TestCompressionMiddleware(t *testing.T) {
 		Port:           8080,
 		MaxRequestSize: 10 * 1024 * 1024, // 10MB
 	}
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 
 	// Add a route that returns compressible content
 	server.router.Get("/large", func(w http.ResponseWriter, r *http.Request) {

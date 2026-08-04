@@ -2,17 +2,16 @@ package proxy
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"time"
 
-	"github.com/agentstation/starport/internal/cache"
-	"github.com/agentstation/starport/internal/providers/connectors"
-	"github.com/agentstation/starport/pkg/catalog"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/responsecache"
 	"github.com/rs/zerolog/log"
 )
 
@@ -20,23 +19,27 @@ import (
 type CacheManager interface {
 	GetModel(ctx context.Context, key string) (any, bool, error)
 	SetModel(ctx context.Context, key string, value any) error
-	GetChatCompletion(ctx context.Context, key string) (*cache.ChatCompletionResponse, error)
-	SetChatCompletion(ctx context.Context, key string, response *cache.ChatCompletionResponse) error
-	GetEmbedding(ctx context.Context, key string) (*cache.EmbeddingsResponse, error)
-	SetEmbedding(ctx context.Context, key string, response *cache.EmbeddingsResponse) error
+	GetResponse(ctx context.Context, key string) ([]byte, bool, error)
+	SetResponse(ctx context.Context, key string, response []byte) error
+}
+
+type catalogGenerationSource interface {
+	Current() *runtimecatalog.RoutableSnapshot
 }
 
 // CacheMiddleware provides caching functionality for proxy services.
 type CacheMiddleware struct {
 	manager CacheManager
 	config  *CacheConfig
+	catalog catalogGenerationSource
 }
 
 // NewCacheMiddleware creates a new cache middleware.
-func NewCacheMiddleware(manager CacheManager, config *CacheConfig) Middleware {
+func NewCacheMiddleware(manager CacheManager, config *CacheConfig, catalog catalogGenerationSource) Middleware {
 	return &CacheMiddleware{
 		manager: manager,
 		config:  config,
+		catalog: catalog,
 	}
 }
 
@@ -46,6 +49,7 @@ func (m *CacheMiddleware) Wrap(next Proxy) Proxy {
 		service:      next,
 		cacheManager: m.manager,
 		cacheConfig:  *m.config,
+		catalog:      m.catalog,
 	}
 }
 
@@ -54,18 +58,20 @@ type cachedService struct {
 	service      Proxy
 	cacheManager CacheManager
 	cacheConfig  CacheConfig
+	catalog      catalogGenerationSource
+	generation   string
 }
 
 // ProcessChatCompletion handles chat completions with Manager-based caching
 func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	log.Info().
-		Str("model", req.Model).
-		Bool("stream", req.Stream).
+		Str("model", req.Request.Model).
+		Bool("stream", req.Request.Stream).
 		Bool("cache_enabled", s.cacheConfig.EnableChatCache).
 		Msg("CachedService.ProcessChatCompletion called")
 
 	// Skip cache for streaming requests or if caching is disabled
-	if req.Stream || !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Model) {
+	if req.Request.Stream || !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Request.Model) {
 		return s.service.ProcessChatCompletion(ctx, req)
 	}
 
@@ -76,106 +82,58 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		return s.service.ProcessChatCompletion(ctx, req)
 	}
 
-	// Try to get from cache using the cache.Manager's GetChatCompletion method
-	cachedResp, err := s.cacheManager.GetChatCompletion(ctx, cacheKey)
+	repository, err := responsecache.Open(s.cacheManager, nil)
+	if err != nil {
+		return s.service.ProcessChatCompletion(ctx, req)
+	}
+	cachedResp, cachedAt, found, err := repository.GetChat(ctx, cacheKey)
 	if err != nil {
 		log.Warn().Err(err).Str("key", cacheKey).Msg("cache get error")
 		// Continue without cache on error
 		return s.service.ProcessChatCompletion(ctx, req)
 	}
 
-	if cachedResp != nil {
+	if found {
 		log.Info().
-			Str("model", req.Model).
+			Str("model", req.Request.Model).
 			Str("cache_key", cacheKey).
 			Msg("cache hit for chat completion")
 
-		// Calculate cache age
-		cacheAge := 0
-		if cachedResp.CachedAt > 0 {
-			cacheAge = int(time.Now().Unix() - cachedResp.CachedAt)
+		resp, err := chatResponseFromCanonical(cachedResp)
+		if err != nil {
+			return s.service.ProcessChatCompletion(ctx, req)
 		}
-
-		// Convert cache.ChatCompletionResponse to proxy.ChatCompletionResponse
-		resp := &ChatCompletionResponse{
-			ID:                cachedResp.ID,
-			Object:            cachedResp.Object,
-			Created:           cachedResp.Created,
-			Model:             cachedResp.Model,
-			SystemFingerprint: cachedResp.SystemFingerprint,
-			ModelUsed:         cachedResp.ModelUsed,
-			CacheStatus:       CacheStatusHit,
-			CacheAge:          cacheAge,
-		}
-
-		// Copy choices and usage from cached response with all fields
-		resp.Choices = make([]connectors.Choice, len(cachedResp.Choices))
-		for i, choice := range cachedResp.Choices {
-			resp.Choices[i] = connectors.Choice{
-				Index: choice.Index,
-				Message: connectors.Message{
-					Role:       choice.Message.Role,
-					Content:    choice.Message.Content,
-					Reasoning:  choice.Message.Reasoning,
-					Name:       choice.Message.Name,
-					ToolCalls:  choice.Message.ToolCalls,
-					ToolCallID: choice.Message.ToolCallID,
-				},
-				FinishReason: choice.FinishReason,
-				LogProbs:     choice.LogProbs,
-			}
-		}
-		resp.Usage = cachedResp.Usage
-
+		resp.CacheStatus = CacheStatusHit
+		resp.CacheAge = cacheAge(cachedAt)
 		return resp, nil
 	}
 
 	log.Info().
-		Str("model", req.Model).
+		Str("model", req.Request.Model).
 		Str("cache_key", cacheKey).
 		Msg("cache miss for chat completion")
 
 	// Execute the request
 	resp, err := s.service.ProcessChatCompletion(ctx, req)
 	if err != nil {
-		// Check if this is a 404 model not found error
-		if provErr, ok := err.(*ProviderError); ok && provErr.Err != nil {
-			if apiErr, ok := provErr.Err.(*connectors.APIError); ok && apiErr.StatusCode == 404 {
-				// Mark the model as invalid
-				catalog.MarkModelInvalid(req.Model)
-				log.Warn().
-					Str("model", req.Model).
-					Msg("marking model as invalid due to 404 error in cached non-streaming")
-			}
-		}
 		return nil, err
 	}
 
 	// Mark as cache miss
 	resp.CacheStatus = CacheStatusMiss
 
-	// Cache the response (async to not block)
-	go func() {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		// Convert proxy response to cache response
-		cacheResp := &cache.ChatCompletionResponse{
-			ID:                resp.ID,
-			Object:            resp.Object,
-			Created:           resp.Created,
-			Model:             resp.Model,
-			Choices:           resp.Choices,
-			Usage:             resp.Usage,
-			SystemFingerprint: resp.SystemFingerprint,
-			ModelUsed:         resp.ModelUsed,
-			CachedAt:          time.Now().Unix(),
-		}
-
-		if err := s.cacheManager.SetChatCompletion(cacheCtx, cacheKey, cacheResp); err != nil {
-			log.Warn().Err(err).Str("key", cacheKey).Msg("failed to cache response")
-		}
-	}()
+	// Cache the response after the upstream request completes. This is
+	// intentionally synchronous so cache writes remain owned by the request
+	// path and race tests can reason about completion deterministically.
+	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	canonical, conversionErr := chatResponseToCanonical(resp)
+	if conversionErr == nil {
+		conversionErr = repository.PutChat(cacheCtx, cacheKey, canonical)
+	}
+	if conversionErr != nil {
+		log.Warn().Err(conversionErr).Str("key", cacheKey).Msg("failed to cache response")
+	}
 
 	return resp, nil
 }
@@ -183,12 +141,12 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 // ProcessChatCompletionStream handles streaming requests with caching
 func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
 	log.Info().
-		Str("model", req.Model).
+		Str("model", req.Request.Model).
 		Bool("cache_enabled", s.cacheConfig.EnableChatCache).
 		Msg("CachedService.ProcessChatCompletionStream called")
 
 	// Skip cache if disabled or should skip
-	if !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Model) {
+	if !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Request.Model) {
 		return s.service.ProcessChatCompletionStream(ctx, req)
 	}
 
@@ -199,67 +157,57 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		return s.service.ProcessChatCompletionStream(ctx, req)
 	}
 
-	// Try to get from cache
-	cachedResp, err := s.cacheManager.GetChatCompletion(ctx, cacheKey)
+	repository, err := responsecache.Open(s.cacheManager, nil)
+	if err != nil {
+		return s.service.ProcessChatCompletionStream(ctx, req)
+	}
+	canonicalRequest, err := canonicalChatRequest(req)
+	if err != nil {
+		return s.service.ProcessChatCompletionStream(ctx, req)
+	}
+	cachedResp, cachedAt, found, err := repository.GetChat(ctx, cacheKey)
 	if err != nil {
 		log.Warn().Err(err).Str("key", cacheKey).Msg("cache get error for streaming")
 		// Continue without cache on error
 		stream, err := s.service.ProcessChatCompletionStream(ctx, req)
 		if err != nil {
-			// Check if this is a 404 model not found error
-			if provErr, ok := err.(*ProviderError); ok && provErr.Err != nil {
-				if apiErr, ok := provErr.Err.(*connectors.APIError); ok && apiErr.StatusCode == 404 {
-					// Mark the model as invalid
-					catalog.MarkModelInvalid(req.Model)
-					log.Warn().
-						Str("model", req.Model).
-						Msg("marking model as invalid due to 404 error in cached streaming (cache error path)")
-				}
-			}
 			return nil, err
 		}
-		return newCachingStreamWrapper(ctx, stream, s.cacheManager, cacheKey, req.Model), nil
+		return newCachingStreamWrapper(stream, repository, cacheKey), nil
 	}
 
-	if cachedResp != nil {
+	if found {
 		log.Info().
-			Str("model", req.Model).
+			Str("model", req.Request.Model).
 			Str("cache_key", cacheKey).
 			Msg("cache hit for streaming chat completion")
 
-		// Convert cached response to streaming response
-		return newCachedStreamResponse(cachedResp, req.Model, CacheStatusHit), nil
+		events, err := responsecache.StreamEvents(cachedResp, canonicalRequest.StreamOptions)
+		if err != nil {
+			return s.service.ProcessChatCompletionStream(ctx, req)
+		}
+		return newCachedEventStream(events, cachedAt), nil
 	}
 
 	log.Info().
-		Str("model", req.Model).
+		Str("model", req.Request.Model).
 		Str("cache_key", cacheKey).
 		Msg("cache miss for streaming chat completion")
 
 	// Cache miss - get stream from service
 	stream, err := s.service.ProcessChatCompletionStream(ctx, req)
 	if err != nil {
-		// Check if this is a 404 model not found error
-		if provErr, ok := err.(*ProviderError); ok && provErr.Err != nil {
-			if apiErr, ok := provErr.Err.(*connectors.APIError); ok && apiErr.StatusCode == 404 {
-				// Mark the model as invalid
-				catalog.MarkModelInvalid(req.Model)
-				log.Warn().
-					Str("model", req.Model).
-					Msg("marking model as invalid due to 404 error in cached streaming")
-			}
-		}
 		return nil, err
 	}
 
 	// Wrap stream to cache the response
-	return newCachingStreamWrapper(ctx, stream, s.cacheManager, cacheKey, req.Model), nil
+	return newCachingStreamWrapper(stream, repository, cacheKey), nil
 }
 
 // ProcessEmbeddings handles embeddings with caching
 func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Skip cache if disabled
-	if !s.cacheConfig.EnableEmbeddingCache || s.shouldSkipCache(ctx, req.Model) {
+	if !s.cacheConfig.EnableEmbeddingCache || s.shouldSkipCache(ctx, req.Request.Model) {
 		return s.service.ProcessEmbeddings(ctx, req)
 	}
 
@@ -270,29 +218,24 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 		return s.service.ProcessEmbeddings(ctx, req)
 	}
 
-	// Try to get from cache
-	cachedResp, err := s.cacheManager.GetEmbedding(ctx, cacheKey)
+	repository, err := responsecache.Open(s.cacheManager, nil)
+	if err != nil {
+		return s.service.ProcessEmbeddings(ctx, req)
+	}
+	cachedResp, cachedAt, found, err := repository.GetEmbedding(ctx, cacheKey)
 	if err != nil {
 		log.Warn().Err(err).Str("key", cacheKey).Msg("embeddings cache get error")
 		return s.service.ProcessEmbeddings(ctx, req)
 	}
 
-	if cachedResp != nil {
+	if found {
 		log.Debug().
-			Str("model", req.Model).
+			Str("model", req.Request.Model).
 			Msg("cache hit for embedding")
 
-		// Convert cache.EmbeddingsResponse to proxy.EmbeddingsResponse
-		resp := &EmbeddingsResponse{
-			Object:      cachedResp.Object,
-			Model:       cachedResp.Model,
-			CacheStatus: CacheStatusHit,
-			CacheAge:    0, // TODO: Calculate actual cache age
-		}
-
-		// Copy data and usage from cached response
-		resp.Data = cachedResp.Data
-		resp.Usage = cachedResp.Usage
+		resp := embeddingResponseFromCanonical(cachedResp)
+		resp.CacheStatus = CacheStatusHit
+		resp.CacheAge = cacheAge(cachedAt)
 		return resp, nil
 	}
 
@@ -304,23 +247,11 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 
 	resp.CacheStatus = CacheStatusMiss
 
-	// Cache the response
-	go func() {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		// Convert proxy response to cache response
-		cacheResp := &cache.EmbeddingsResponse{
-			Object: resp.Object,
-			Data:   resp.Data,
-			Model:  resp.Model,
-			Usage:  resp.Usage,
-		}
-
-		if err := s.cacheManager.SetEmbedding(cacheCtx, cacheKey, cacheResp); err != nil {
-			log.Warn().Err(err).Str("key", cacheKey).Msg("failed to cache embeddings")
-		}
-	}()
+	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := repository.PutEmbedding(cacheCtx, cacheKey, embeddingResponseToCanonical(resp)); err != nil {
+		log.Warn().Err(err).Str("key", cacheKey).Msg("failed to cache embeddings")
+	}
 
 	return resp, nil
 }
@@ -395,15 +326,11 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 		v.CacheStatus = CacheStatusMiss
 	}
 
-	// Cache asynchronously
-	go func() {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		if err := s.cacheManager.SetModel(cacheCtx, cacheKey, resp); err != nil {
-			log.Warn().Err(err).Msgf("failed to cache %s", cacheMsg)
-		}
-	}()
+	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.cacheManager.SetModel(cacheCtx, cacheKey, resp); err != nil {
+		log.Warn().Err(err).Msgf("failed to cache %s", cacheMsg)
+	}
 
 	return resp, nil
 }
@@ -463,14 +390,11 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 		return nil, err
 	}
 
-	go func() {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		if err := s.cacheManager.SetModel(cacheCtx, cacheKey, resp); err != nil {
-			log.Warn().Err(err).Msg("failed to cache model endpoints")
-		}
-	}()
+	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.cacheManager.SetModel(cacheCtx, cacheKey, resp); err != nil {
+		log.Warn().Err(err).Msg("failed to cache model endpoints")
+	}
 
 	return resp, nil
 }
@@ -494,413 +418,180 @@ func (s *cachedService) shouldSkipCache(ctx context.Context, model string) bool 
 
 // generateChatCacheKey generates a cache key for chat completions
 func (s *cachedService) generateChatCacheKey(req *ChatCompletionRequest) (string, error) {
-	// Create a normalized version of the request for consistent hashing
-	normalized := struct {
-		Model            string
-		Messages         []connectors.Message
-		Temperature      *float32
-		TopP             *float32
-		MaxTokens        *int
-		PresencePenalty  *float32
-		FrequencyPenalty *float32
-		Stop             []string
-		Seed             *int
-		Tools            []connectors.Tool
-		ToolChoice       any
-		ResponseFormat   *connectors.ResponseFormat
-	}{
-		Model:            req.Model,
-		Messages:         req.Messages,
-		Temperature:      req.Temperature,
-		TopP:             req.TopP,
-		MaxTokens:        req.MaxTokens,
-		PresencePenalty:  req.PresencePenalty,
-		FrequencyPenalty: req.FrequencyPenalty,
-		Stop:             req.Stop,
-		Seed:             req.Seed,
-		Tools:            req.Tools,
-		ToolChoice:       req.ToolChoice,
-		ResponseFormat:   req.ResponseFormat,
-	}
-
-	data, err := json.Marshal(normalized)
+	canonical, err := canonicalChatRequest(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return "", err
 	}
-
-	hash := sha256.Sum256(data)
-	return fmt.Sprintf("chat:%s", hex.EncodeToString(hash[:16])), nil
+	return responsecache.ChatKey(responsecache.ChatIdentity{
+		TenantID:          req.TenantID,
+		CatalogGeneration: s.catalogGeneration(),
+		Request:           canonical,
+		Policy:            cachePolicy(req.Route, req.Provider, req.APIKeyConfig),
+	})
 }
 
 // generateEmbeddingsCacheKey generates a cache key for embeddings
 func (s *cachedService) generateEmbeddingsCacheKey(req *EmbeddingsRequest) (string, error) {
-	normalized := struct {
-		Model          string
-		Input          any
-		EncodingFormat string
-		Dimensions     *int
-	}{
-		Model:          req.Model,
-		Input:          req.Input,
-		EncodingFormat: req.EncodingFormat,
-		Dimensions:     req.Dimensions,
+	return responsecache.EmbeddingKey(responsecache.EmbeddingIdentity{
+		TenantID:          req.TenantID,
+		CatalogGeneration: s.catalogGeneration(),
+		Request:           req.Request,
+		Policy:            cachePolicy("", nil, req.APIKeyConfig),
+	})
+}
+
+func (s *cachedService) catalogGeneration() string {
+	if s.catalog != nil {
+		if snapshot := s.catalog.Current(); snapshot != nil {
+			return snapshot.GenerationID()
+		}
 	}
+	return s.generation
+}
 
-	data, err := json.Marshal(normalized)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+func canonicalChatRequest(req *ChatCompletionRequest) (inference.ChatRequest, error) {
+	if req == nil {
+		return inference.ChatRequest{}, errors.New("canonical chat request is required")
 	}
-
-	hash := sha256.Sum256(data)
-	return fmt.Sprintf("embedding:%s", hex.EncodeToString(hash[:16])), nil
+	return req.Request.Clone(), nil
 }
 
-// cachedStream wraps a stream to track metrics but doesn't cache
-type cachedStream struct {
-	stream ChatCompletionStreamResponse
-}
-
-func (s *cachedStream) Read() (*connectors.ChatStreamChunk, error) {
-	return s.stream.Read()
-}
-
-func (s *cachedStream) Close() error {
-	return s.stream.Close()
-}
-
-var _ io.Closer = (*cachedStream)(nil)
-
-// cachedStreamResponse serves a cached response as a stream
-type cachedStreamResponse struct {
-	response          *cache.ChatCompletionResponse
-	modelID           string
-	cacheStatus       string
-	cacheAge          int
-	reasoningPosition int
-	contentPosition   int
-	chunkSize         int
-	sentRole          bool
-	sentUsage         bool
-	content           string
-	reasoning         string
-}
-
-// newCachedStreamResponse creates a stream from a cached response
-func newCachedStreamResponse(response *cache.ChatCompletionResponse, modelID, cacheStatus string) *cachedStreamResponse {
-	// Extract content from the response
-	var content, reasoning string
-	if len(response.Choices) > 0 {
-		content, _ = response.Choices[0].Message.Content.(string)
-		reasoning = response.Choices[0].Message.Reasoning
+func cachePolicy(route string, provider *ProviderPreferences, tenant *APIKeyRoutingConfig) responsecache.Policy {
+	policy := responsecache.Policy{}
+	policy.Provider.Route = route
+	if provider != nil {
+		policy.Provider.Order = append([]string(nil), provider.Order...)
+		policy.Provider.Only = append([]string(nil), provider.Only...)
+		policy.Provider.Ignore = append([]string(nil), provider.Ignore...)
+		policy.Provider.AllowFallbacks = provider.AllowFallback
 	}
-
-	// Calculate cache age
-	cacheAge := 0
-	if response.CachedAt > 0 {
-		cacheAge = int(time.Now().Unix() - response.CachedAt)
+	if tenant != nil {
+		policy.Tenant.AllowedModels = append([]string(nil), tenant.AllowedModels...)
+		policy.Tenant.AllowedProviders = append([]string(nil), tenant.AllowedProviders...)
+		policy.Tenant.RateLimitTier = tenant.RateLimitTier
+		policy.Provider.ModelOverrides = make(map[string]string, len(tenant.ModelOverrides))
+		for model, override := range tenant.ModelOverrides {
+			policy.Provider.ModelOverrides[model] = override
+		}
+		if len(policy.Provider.ModelOverrides) == 0 {
+			policy.Provider.ModelOverrides = nil
+		}
 	}
-
-	return &cachedStreamResponse{
-		response:          response,
-		modelID:           modelID,
-		cacheStatus:       cacheStatus,
-		cacheAge:          cacheAge,
-		reasoningPosition: 0,
-		contentPosition:   0,
-		chunkSize:         20, // Emit chunks of roughly 20 characters
-		content:           content,
-		reasoning:         reasoning,
-	}
+	return policy
 }
 
-// Read implements ChatCompletionStreamResponse
-func (r *cachedStreamResponse) Read() (*connectors.ChatStreamChunk, error) {
-	// If we've sent everything, return EOF
-	if r.sentUsage {
+func chatResponseToCanonical(response *ChatCompletionResponse) (inference.ChatResponse, error) {
+	if response == nil {
+		return inference.ChatResponse{}, errors.New("canonical chat response is required")
+	}
+	return response.Response.Clone(), nil
+}
+
+func chatResponseFromCanonical(response inference.ChatResponse) (*ChatCompletionResponse, error) {
+	return &ChatCompletionResponse{Response: response.Clone()}, nil
+}
+
+func embeddingResponseToCanonical(response *EmbeddingsResponse) inference.EmbeddingResponse {
+	if response == nil {
+		return inference.EmbeddingResponse{}
+	}
+	return response.Response.Clone()
+}
+
+func embeddingResponseFromCanonical(response inference.EmbeddingResponse) *EmbeddingsResponse {
+	return &EmbeddingsResponse{Response: response.Clone()}
+}
+
+func cacheAge(cachedAt time.Time) int {
+	if cachedAt.IsZero() {
+		return 0
+	}
+	age := time.Since(cachedAt)
+	if age < 0 {
+		return 0
+	}
+	return int(age / time.Second)
+}
+
+// cachedEventStream replays canonical events from one completed result.
+type cachedEventStream struct {
+	events   []inference.StreamEvent
+	position int
+	cachedAt time.Time
+}
+
+func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time) *cachedEventStream {
+	clones := make([]inference.StreamEvent, len(events))
+	for index, event := range events {
+		clones[index] = event.Clone()
+	}
+	return &cachedEventStream{events: clones, cachedAt: cachedAt}
+}
+
+func (s *cachedEventStream) Read() (*inference.StreamEvent, error) {
+	if s.position >= len(s.events) {
 		return nil, io.EOF
 	}
-
-	// If we're done with both reasoning and content, send usage data
-	if r.sentRole && r.reasoningPosition >= len(r.reasoning) && r.contentPosition >= len(r.content) && !r.sentUsage {
-		r.sentUsage = true
-		// Send final chunk with usage data
-		return &connectors.ChatStreamChunk{
-			ID:      r.response.ID,
-			Object:  "chat.completion.chunk",
-			Created: r.response.Created,
-			Model:   r.modelID,
-			Choices: []connectors.StreamChoice{
-				{
-					Index:        0,
-					Delta:        connectors.MessageDelta{},
-					FinishReason: "stop",
-				},
-			},
-			Usage: r.response.Usage,
-		}, nil
-	}
-
-	// First chunk - send role
-	if !r.sentRole {
-		r.sentRole = true
-		return &connectors.ChatStreamChunk{
-			ID:      r.response.ID,
-			Object:  "chat.completion.chunk",
-			Created: r.response.Created,
-			Model:   r.modelID,
-			Choices: []connectors.StreamChoice{
-				{
-					Index: 0,
-					Delta: connectors.MessageDelta{
-						Role: "assistant",
-					},
-				},
-			},
-		}, nil
-	}
-
-	// Stream reasoning chunks if present
-	if r.reasoning != "" && r.reasoningPosition < len(r.reasoning) {
-		endPos := r.reasoningPosition + r.chunkSize
-		if endPos > len(r.reasoning) {
-			endPos = len(r.reasoning)
-		}
-
-		chunk := r.reasoning[r.reasoningPosition:endPos]
-		r.reasoningPosition = endPos
-
-		return &connectors.ChatStreamChunk{
-			ID:      r.response.ID,
-			Object:  "chat.completion.chunk",
-			Created: r.response.Created,
-			Model:   r.modelID,
-			Choices: []connectors.StreamChoice{
-				{
-					Index: 0,
-					Delta: connectors.MessageDelta{
-						Reasoning: chunk,
-					},
-				},
-			},
-		}, nil
-	}
-
-	// Stream content chunks
-	if r.contentPosition < len(r.content) {
-		endPos := r.contentPosition + r.chunkSize
-		if endPos > len(r.content) {
-			endPos = len(r.content)
-		}
-
-		chunk := r.content[r.contentPosition:endPos]
-		r.contentPosition = endPos
-
-		return &connectors.ChatStreamChunk{
-			ID:      r.response.ID,
-			Object:  "chat.completion.chunk",
-			Created: r.response.Created,
-			Model:   r.modelID,
-			Choices: []connectors.StreamChoice{
-				{
-					Index: 0,
-					Delta: connectors.MessageDelta{
-						Content: chunk,
-					},
-				},
-			},
-		}, nil
-	}
-
-	// This should not happen
-	return nil, io.EOF
+	event := s.events[s.position].Clone()
+	s.position++
+	return &event, nil
 }
 
-// Close implements io.Closer
-func (r *cachedStreamResponse) Close() error {
-	return nil
-}
+func (s *cachedEventStream) Close() error           { return nil }
+func (s *cachedEventStream) GetCacheStatus() string { return CacheStatusHit }
+func (s *cachedEventStream) GetCacheAge() int       { return cacheAge(s.cachedAt) }
 
-// GetCacheStatus implements CacheStatusProvider
-func (r *cachedStreamResponse) GetCacheStatus() string {
-	return r.cacheStatus
-}
+var _ ChatCompletionStreamResponse = (*cachedEventStream)(nil)
+var _ CacheStatusProvider = (*cachedEventStream)(nil)
 
-// GetCacheAge implements CacheStatusProvider
-func (r *cachedStreamResponse) GetCacheAge() int {
-	return r.cacheAge
-}
-
-// Ensure cachedStreamResponse implements our interfaces
-var _ ChatCompletionStreamResponse = (*cachedStreamResponse)(nil)
-var _ CacheStatusProvider = (*cachedStreamResponse)(nil)
-
-// cachingStreamWrapper wraps a stream to cache the complete response
+// cachingStreamWrapper stores only a successfully completed canonical stream.
 type cachingStreamWrapper struct {
-	ctx          context.Context
-	stream       ChatCompletionStreamResponse
-	cacheManager CacheManager
-	cacheKey     string
-	modelID      string
-	chunks       []connectors.ChatStreamChunk
-	cacheStatus  string
+	stream     ChatCompletionStreamResponse
+	repository responsecache.Repository
+	cacheKey   string
+	events     []inference.StreamEvent
+	cached     bool
 }
 
-// newCachingStreamWrapper creates a wrapper that caches the streamed response
-func newCachingStreamWrapper(ctx context.Context, stream ChatCompletionStreamResponse, cm CacheManager, cacheKey, modelID string) *cachingStreamWrapper {
+func newCachingStreamWrapper(
+	stream ChatCompletionStreamResponse,
+	repository responsecache.Repository,
+	cacheKey string,
+) *cachingStreamWrapper {
 	return &cachingStreamWrapper{
-		ctx:          ctx,
-		stream:       stream,
-		cacheManager: cm,
-		cacheKey:     cacheKey,
-		modelID:      modelID,
-		chunks:       make([]connectors.ChatStreamChunk, 0),
-		cacheStatus:  CacheStatusMiss,
+		stream: stream, repository: repository, cacheKey: cacheKey,
+		events: make([]inference.StreamEvent, 0),
 	}
 }
 
-// Read implements ChatCompletionStreamResponse
-func (w *cachingStreamWrapper) Read() (*connectors.ChatStreamChunk, error) {
-	chunk, err := w.stream.Read()
-
-	// Store chunk even if it comes with EOF (final chunk often has usage data)
-	if chunk != nil {
-		w.chunks = append(w.chunks, *chunk)
+func (w *cachingStreamWrapper) Read() (*inference.StreamEvent, error) {
+	event, err := w.stream.Read()
+	if event != nil {
+		w.events = append(w.events, event.Clone())
 	}
-
-	if err != nil {
-		if err == io.EOF && len(w.chunks) > 0 {
-			// Stream completed, cache the accumulated response
-			go w.cacheResponse()
-		}
-		return chunk, err
+	if err == io.EOF && !w.cached && len(w.events) > 0 {
+		w.cached = true
+		w.cacheResponse()
 	}
-
-	return chunk, nil
+	return event, err
 }
 
-// Close implements io.Closer
-func (w *cachingStreamWrapper) Close() error {
-	return w.stream.Close()
-}
+func (w *cachingStreamWrapper) Close() error           { return w.stream.Close() }
+func (w *cachingStreamWrapper) GetCacheStatus() string { return CacheStatusMiss }
+func (w *cachingStreamWrapper) GetCacheAge() int       { return 0 }
 
-// GetCacheStatus implements CacheStatusProvider
-func (w *cachingStreamWrapper) GetCacheStatus() string {
-	return w.cacheStatus
-}
-
-// GetCacheAge implements CacheStatusProvider
-func (w *cachingStreamWrapper) GetCacheAge() int {
-	// For cache misses, return 0
-	return 0
-}
-
-// cacheResponse reconstructs and caches the complete response
 func (w *cachingStreamWrapper) cacheResponse() {
-	// Reconstruct the complete response from chunks
-	response := w.reconstructResponse()
-	if response == nil {
+	response, err := responsecache.CompleteStream(w.events)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to reconstruct canonical cached stream")
 		return
 	}
-
-	// Convert to cache response
-	cacheResp := &cache.ChatCompletionResponse{
-		ID:                response.ID,
-		Object:            response.Object,
-		Created:           response.Created,
-		Model:             response.Model,
-		Choices:           response.Choices,
-		Usage:             response.Usage,
-		SystemFingerprint: response.SystemFingerprint,
-		ModelUsed:         response.ModelUsed,
-		CachedAt:          time.Now().Unix(),
-	}
-
-	// Use a new context with timeout for caching
 	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	// Cache the response
-	if err := w.cacheManager.SetChatCompletion(cacheCtx, w.cacheKey, cacheResp); err != nil {
-		log.Warn().
-			Err(err).
-			Str("model", w.modelID).
-			Msg("failed to cache streaming response")
-	} else {
-		log.Info().
-			Str("model", w.modelID).
-			Str("cache_key", w.cacheKey).
-			Msg("cached streaming response")
+	if err := w.repository.PutChat(cacheCtx, w.cacheKey, response); err != nil {
+		log.Warn().Err(err).Str("model", response.ModelUsed).Msg("failed to cache streaming response")
 	}
 }
 
-// reconstructResponse builds a complete response from accumulated chunks
-func (w *cachingStreamWrapper) reconstructResponse() *ChatCompletionResponse {
-	if len(w.chunks) == 0 {
-		return nil
-	}
-
-	// Get basic info from first chunk
-	firstChunk := w.chunks[0]
-
-	// Find the last chunk with usage data
-	var usage *connectors.Usage
-	for i := len(w.chunks) - 1; i >= 0; i-- {
-		if w.chunks[i].Usage != nil {
-			usage = w.chunks[i].Usage
-			break
-		}
-	}
-
-	// Accumulate content and reasoning
-	var content, reasoning, finishReason string
-	var role string
-	for _, chunk := range w.chunks {
-		if len(chunk.Choices) > 0 {
-			choice := chunk.Choices[0]
-			if choice.Delta.Role != "" {
-				role = choice.Delta.Role
-			}
-			if choice.Delta.Content != "" {
-				content += choice.Delta.Content
-			}
-			if choice.Delta.Reasoning != "" {
-				reasoning += choice.Delta.Reasoning
-			}
-			if choice.FinishReason != "" {
-				finishReason = choice.FinishReason
-			}
-		}
-	}
-
-	// Get the actual model used from the chunks (may differ from requested model)
-	modelUsed := ""
-	if len(w.chunks) > 0 && w.chunks[0].Model != "" {
-		modelUsed = w.chunks[0].Model
-	}
-
-	// Build the complete response
-	return &ChatCompletionResponse{
-		ID:        firstChunk.ID,
-		Object:    "chat.completion",
-		Created:   firstChunk.Created,
-		Model:     w.modelID,
-		ModelUsed: modelUsed,
-		Choices: []connectors.Choice{
-			{
-				Index: 0,
-				Message: connectors.Message{
-					Role:      role,
-					Content:   content,
-					Reasoning: reasoning,
-				},
-				FinishReason: finishReason,
-			},
-		},
-		Usage:       usage,
-		CacheStatus: CacheStatusMiss,
-	}
-}
-
-// Ensure cachingStreamWrapper implements our interfaces
 var _ ChatCompletionStreamResponse = (*cachingStreamWrapper)(nil)
 var _ CacheStatusProvider = (*cachingStreamWrapper)(nil)

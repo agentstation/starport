@@ -12,15 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/apikeys"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/storage"
 )
 
 func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
+	expiresAt := time.Now().Add(-time.Hour)
 	tests := []struct {
 		name           string
 		setupAuth      func(req *http.Request)
-		setupStore     func(store *storage.MockStore)
+		storedSecret   string
+		storedIdentity *identity.APIKey
 		wantStatus     int
 		wantErrMessage string
 		wantContext    bool
@@ -29,9 +31,6 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			name: "missing API key",
 			setupAuth: func(req *http.Request) {
 				// Don't set any auth header
-			},
-			setupStore: func(store *storage.MockStore) {
-				// No setup needed
 			},
 			wantStatus:     http.StatusUnauthorized,
 			wantErrMessage: "Missing API key",
@@ -42,9 +41,6 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupAuth: func(req *http.Request) {
 				req.Header.Set("Authorization", "Bearer invalid-key")
 			},
-			setupStore: func(store *storage.MockStore) {
-				// Don't store anything - the key lookup will naturally fail
-			},
 			wantStatus:     http.StatusUnauthorized,
 			wantErrMessage: "Invalid API key",
 			wantContext:    false,
@@ -54,28 +50,13 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupAuth: func(req *http.Request) {
 				req.Header.Set("Authorization", "Bearer sk-starport-testkey123")
 			},
-			setupStore: func(store *storage.MockStore) {
-				keyValue := "sk-starport-testkey123"
-				keyID := "STARPORT_test123"
-
-				// Hash the key
-				hash := sha256.Sum256([]byte(keyValue))
-				hashStr := hex.EncodeToString(hash[:])
-
-				// Store hash -> ID mapping
-				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-
-				// Store the API key
-				apiKey := &apikeys.APIKey{
-					ID:        keyID,
-					Name:      "Test Key",
-					Hash:      hashStr,
-					Scopes:    []string{"chat:write", "models:read"},
-					Active:    true,
-					CreatedAt: time.Now(),
-				}
-				keyData, _ := storage.Serialize(apiKey)
-				store.Set(context.Background(), storage.APIKeyKey(keyID), keyData)
+			storedSecret: "sk-starport-testkey123",
+			storedIdentity: &identity.APIKey{
+				ID:        "STARPORT_test123",
+				Name:      "Test-Key",
+				Scopes:    []string{"chat:write", "models:read"},
+				Active:    true,
+				CreatedAt: time.Now(),
 			},
 			wantStatus:  http.StatusOK,
 			wantContext: true,
@@ -85,157 +66,72 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 			setupAuth: func(req *http.Request) {
 				req.Header.Set("X-API-Key", "sk-starport-testkey456")
 			},
-			setupStore: func(store *storage.MockStore) {
-				keyValue := "sk-starport-testkey456"
-				keyID := "STARPORT_test456"
-
-				// Hash the key
-				hash := sha256.Sum256([]byte(keyValue))
-				hashStr := hex.EncodeToString(hash[:])
-
-				// Store hash -> ID mapping
-				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-
-				// Store the API key
-				apiKey := &apikeys.APIKey{
-					ID:        keyID,
-					Name:      "Test Key 2",
-					Hash:      hashStr,
-					Scopes:    []string{"chat:write"},
-					Active:    true,
-					CreatedAt: time.Now(),
-				}
-				keyData, _ := storage.Serialize(apiKey)
-				store.Set(context.Background(), storage.APIKeyKey(keyID), keyData)
+			storedSecret: "sk-starport-testkey456",
+			storedIdentity: &identity.APIKey{
+				ID:        "STARPORT_test456",
+				Name:      "Test-Key-2",
+				Scopes:    []string{"chat:write"},
+				Active:    true,
+				CreatedAt: time.Now(),
 			},
 			wantStatus:  http.StatusOK,
 			wantContext: true,
 		},
 		{
-			name: "valid API key via query parameter",
+			name: "reject API key via query parameter",
 			setupAuth: func(req *http.Request) {
 				q := req.URL.Query()
 				q.Set("api_key", "sk-starport-testkey789")
 				req.URL.RawQuery = q.Encode()
 			},
-			setupStore: func(store *storage.MockStore) {
-				keyValue := "sk-starport-testkey789"
-				keyID := "STARPORT_test789"
-
-				// Hash the key
-				hash := sha256.Sum256([]byte(keyValue))
-				hashStr := hex.EncodeToString(hash[:])
-
-				// Store hash -> ID mapping
-				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-
-				// Store the API key
-				apiKey := &apikeys.APIKey{
-					ID:        keyID,
-					Name:      "Test Key 3",
-					Hash:      hashStr,
-					Scopes:    []string{"models:read"},
-					Active:    true,
-					CreatedAt: time.Now(),
-				}
-				keyData, _ := storage.Serialize(apiKey)
-				store.Set(context.Background(), storage.APIKeyKey(keyID), keyData)
-			},
-			wantStatus:  http.StatusOK,
-			wantContext: true,
+			wantStatus:     http.StatusUnauthorized,
+			wantErrMessage: "Missing API key",
+			wantContext:    false,
 		},
 		{
-			name: "valid API key via key query parameter",
+			name: "reject API key via key query parameter",
 			setupAuth: func(req *http.Request) {
 				q := req.URL.Query()
 				q.Set("key", "sk-starport-keytest999")
 				req.URL.RawQuery = q.Encode()
 			},
-			setupStore: func(store *storage.MockStore) {
-				keyValue := "sk-starport-keytest999"
-				keyID := "STARPORT_keytest999"
-				// Hash the key
-				hash := sha256.Sum256([]byte(keyValue))
-				hashStr := hex.EncodeToString(hash[:])
-				// Store hash -> ID mapping
-				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-				// Store the API key
-				apiKey := &apikeys.APIKey{
-					ID:        keyID,
-					Name:      "Key Test Key",
-					Hash:      hashStr,
-					Scopes:    []string{"models:read"},
-					Active:    true,
-					CreatedAt: time.Now(),
-				}
-				keyData, _ := storage.Serialize(apiKey)
-				store.Set(context.Background(), storage.APIKeyKey(keyID), keyData)
-			},
-			wantStatus:  http.StatusOK,
-			wantContext: true,
+			wantStatus:     http.StatusUnauthorized,
+			wantErrMessage: "Missing API key",
+			wantContext:    false,
 		},
 		{
 			name: "disabled API key",
 			setupAuth: func(req *http.Request) {
 				req.Header.Set("Authorization", "Bearer sk-starport-disabled")
 			},
-			setupStore: func(store *storage.MockStore) {
-				keyValue := "sk-starport-disabled"
-				keyID := "STARPORT_disabled"
-
-				// Hash the key
-				hash := sha256.Sum256([]byte(keyValue))
-				hashStr := hex.EncodeToString(hash[:])
-
-				// Store hash -> ID mapping
-				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-
-				// Store the API key (disabled)
-				apiKey := &apikeys.APIKey{
-					ID:        keyID,
-					Name:      "Disabled Key",
-					Hash:      hashStr,
-					Scopes:    []string{"chat:write"},
-					Active:    false, // Disabled
-					CreatedAt: time.Now(),
-				}
-				keyData, _ := storage.Serialize(apiKey)
-				store.Set(context.Background(), storage.APIKeyKey(keyID), keyData)
+			storedSecret: "sk-starport-disabled",
+			storedIdentity: &identity.APIKey{
+				ID:        "STARPORT_disabled",
+				Name:      "Disabled-Key",
+				Scopes:    []string{"chat:write"},
+				Active:    false,
+				CreatedAt: time.Now(),
 			},
 			wantStatus:     http.StatusForbidden,
 			wantErrMessage: "API key is disabled",
 			wantContext:    false,
 		},
 		{
-			name: "hash mismatch",
+			name: "expired API key",
 			setupAuth: func(req *http.Request) {
-				req.Header.Set("Authorization", "Bearer sk-starport-mismatch")
+				req.Header.Set("Authorization", "Bearer sk-starport-expired")
 			},
-			setupStore: func(store *storage.MockStore) {
-				keyValue := "sk-starport-mismatch"
-				keyID := "STARPORT_mismatch"
-
-				// Hash the key
-				hash := sha256.Sum256([]byte(keyValue))
-				hashStr := hex.EncodeToString(hash[:])
-
-				// Store hash -> ID mapping
-				store.Set(context.Background(), storage.APIKeyHashKey(hashStr), []byte(keyID))
-
-				// Store the API key with WRONG hash
-				apiKey := &apikeys.APIKey{
-					ID:        keyID,
-					Name:      "Mismatch Key",
-					Hash:      "wronghash",
-					Scopes:    []string{"chat:write"},
-					Active:    true,
-					CreatedAt: time.Now(),
-				}
-				keyData, _ := storage.Serialize(apiKey)
-				store.Set(context.Background(), storage.APIKeyKey(keyID), keyData)
+			storedSecret: "sk-starport-expired",
+			storedIdentity: &identity.APIKey{
+				ID:        "STARPORT_expired",
+				Name:      "Expired-Key",
+				Scopes:    []string{"chat:write"},
+				Active:    true,
+				CreatedAt: time.Now().Add(-2 * time.Hour),
+				ExpiresAt: &expiresAt,
 			},
 			wantStatus:     http.StatusUnauthorized,
-			wantErrMessage: "Invalid API key",
+			wantErrMessage: "API key has expired",
 			wantContext:    false,
 		},
 	}
@@ -243,18 +139,23 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			store := storage.NewMockStore()
-			if tt.setupStore != nil {
-				tt.setupStore(store)
+			identities, err := identity.Open(storage.NewMockStore())
+			require.NoError(t, err)
+			if tt.storedIdentity != nil {
+				storedIdentity := *tt.storedIdentity
+				hash := sha256.Sum256([]byte(tt.storedSecret))
+				storedIdentity.Hash = hex.EncodeToString(hash[:])
+				_, err := identities.Create(context.Background(), storedIdentity)
+				require.NoError(t, err)
 			}
 
-			auth := NewAuthMiddleware(store)
+			auth := NewAuthMiddleware(identities)
 
 			// Create a test handler that checks context
 			var gotContext bool
 			var gotAPIKey string
 			var gotAPIKeyID string
-			var gotAPIKeyModel *apikeys.APIKey
+			var gotAPIKeyModel *identity.APIKey
 
 			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotContext = true
@@ -264,7 +165,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 				if id, ok := r.Context().Value(ContextKeyAPIKeyID).(string); ok {
 					gotAPIKeyID = id
 				}
-				if model, ok := r.Context().Value(ContextKeyAPIKeyModel).(*apikeys.APIKey); ok {
+				if model, ok := r.Context().Value(ContextKeyAPIKeyModel).(*identity.APIKey); ok {
 					gotAPIKeyModel = model
 				}
 				w.WriteHeader(http.StatusOK)
@@ -330,22 +231,22 @@ func TestExtractAPIKey(t *testing.T) {
 			wantKey: "sk-test-789",
 		},
 		{
-			name: "Query parameter api_key",
+			name: "Ignore query parameter api_key",
 			setupReq: func(req *http.Request) {
 				q := req.URL.Query()
 				q.Set("api_key", "sk-test-query")
 				req.URL.RawQuery = q.Encode()
 			},
-			wantKey: "sk-test-query",
+			wantKey: "",
 		},
 		{
-			name: "Query parameter key",
+			name: "Ignore query parameter key",
 			setupReq: func(req *http.Request) {
 				q := req.URL.Query()
 				q.Set("key", "sk-test-key")
 				req.URL.RawQuery = q.Encode()
 			},
-			wantKey: "sk-test-key",
+			wantKey: "",
 		},
 		{
 			name: "No API key",
@@ -366,14 +267,14 @@ func TestExtractAPIKey(t *testing.T) {
 			wantKey: "sk-bearer",
 		},
 		{
-			name: "Prefer api_key over key query parameter",
+			name: "Ignore query parameters without headers",
 			setupReq: func(req *http.Request) {
 				q := req.URL.Query()
 				q.Set("api_key", "sk-api-key-param")
 				q.Set("key", "sk-key-param")
 				req.URL.RawQuery = q.Encode()
 			},
-			wantKey: "sk-api-key-param",
+			wantKey: "",
 		},
 	}
 
@@ -390,6 +291,57 @@ func TestExtractAPIKey(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_RequireAnyScope(t *testing.T) {
+	identities, err := identity.Open(storage.NewMockStore())
+	require.NoError(t, err)
+	auth := NewAuthMiddleware(identities)
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := auth.RequireAnyScope("chat:write", "embeddings:write")(next)
+
+	tests := []struct {
+		name       string
+		apiKey     *identity.APIKey
+		wantStatus int
+	}{
+		{
+			name:       "allowed explicit scope",
+			apiKey:     &identity.APIKey{Scopes: []string{"chat:write"}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "allowed wildcard scope",
+			apiKey:     &identity.APIKey{Scopes: []string{"*"}},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "denied missing scope",
+			apiKey:     &identity.APIKey{Scopes: []string{"models:read"}},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "denied missing authentication context",
+			apiKey:     nil,
+			wantStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			if tt.apiKey != nil {
+				req = req.WithContext(context.WithValue(req.Context(), ContextKeyAPIKeyModel, tt.apiKey))
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.wantStatus, rec.Code)
+		})
+	}
+}
+
 // TestAuthIntegrationWithChatUI tests the full flow of generating a key via ChatUI
 // and then using it for authentication
 func TestAuthIntegrationWithChatUI(t *testing.T) {
@@ -398,7 +350,8 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 	// 2. The key is stored with proper hash mapping
 	// 3. The key can be used for authentication
 
-	store := storage.NewMockStore()
+	identities, err := identity.Open(storage.NewMockStore())
+	require.NoError(t, err)
 
 	// Simulate what ChatUI does when generating a key
 	keyValue := "sk-starport-integrationtest123"
@@ -409,9 +362,9 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 	hashStr := hex.EncodeToString(hash[:])
 
 	// Create API key model
-	apiKey := &apikeys.APIKey{
+	apiKey := &identity.APIKey{
 		ID:        keyID,
-		Name:      "ChatUI Integration Test Key",
+		Name:      "ChatUI-Integration-Test-Key",
 		Hash:      hashStr,
 		Scopes:    []string{"chat:write", "models:read"},
 		Active:    true,
@@ -423,17 +376,11 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 
 	// Store the key (what ChatUI handler does)
 	ctx := context.Background()
-	keyData, err := storage.Serialize(apiKey)
-	require.NoError(t, err)
-
-	err = store.Set(ctx, storage.APIKeyKey(keyID), keyData)
-	require.NoError(t, err)
-
-	err = store.Set(ctx, storage.APIKeyHashKey(hashStr), []byte(keyID))
+	_, err = identities.Create(ctx, *apiKey)
 	require.NoError(t, err)
 
 	// Now test authentication with this key
-	auth := NewAuthMiddleware(store)
+	auth := NewAuthMiddleware(identities)
 
 	// Create a test handler
 	authenticated := false
@@ -447,7 +394,7 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 		ctxKeyID := r.Context().Value(ContextKeyAPIKeyID).(string)
 		assert.Equal(t, keyID, ctxKeyID)
 
-		ctxModel := r.Context().Value(ContextKeyAPIKeyModel).(*apikeys.APIKey)
+		ctxModel := r.Context().Value(ContextKeyAPIKeyModel).(*identity.APIKey)
 		assert.Equal(t, apiKey.Name, ctxModel.Name)
 		assert.Equal(t, apiKey.Scopes, ctxModel.Scopes)
 

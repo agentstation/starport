@@ -24,11 +24,6 @@ func TestMockConnector(t *testing.T) {
 			t.Errorf("expected name 'mock', got %s", mock.Name())
 		}
 
-		// Test health check
-		ctx := context.Background()
-		if err := mock.Health(ctx); err != nil {
-			t.Errorf("expected healthy, got error: %v", err)
-		}
 	})
 
 	t.Run("Chat with custom response", func(t *testing.T) {
@@ -220,9 +215,6 @@ func TestMockConnector(t *testing.T) {
 			t.Error("expected error for closed connector")
 		}
 
-		if err := mock.Health(ctx); err == nil {
-			t.Error("expected error for closed connector")
-		}
 	})
 
 	t.Run("Stream close", func(t *testing.T) {

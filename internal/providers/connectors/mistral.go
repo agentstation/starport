@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/agentstation/starport/pkg/httpclient"
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
 // MistralConnector implements the Connector interface for Mistral
@@ -16,26 +16,20 @@ type MistralConnector struct {
 
 // NewMistralConnector creates a new Mistral connector
 func NewMistralConnector(config ProviderConfig) (*MistralConnector, error) {
-	// Set default base URL if not provided
-	if config.BaseURL == "" {
-		config.BaseURL = "https://api.mistral.ai/v1"
-	}
-
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client using httpclient package
-	client, err := httpclient.New("mistral", httpclient.DefaultProviderConfig("mistral"))
+	httpClient, err := newProviderHTTPClient("mistral", config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+		return nil, err
 	}
 
 	return &MistralConnector{
 		OpenAICompatibleConnector: OpenAICompatibleConnector{
 			config:     config,
 			provider:   "mistral",
-			httpClient: client.GetHTTPClient(),
+			httpClient: httpClient,
 		},
 	}, nil
 }
@@ -60,30 +54,6 @@ func (c *MistralConnector) Embeddings(ctx context.Context, req *EmbeddingsReques
 	return c.OpenAICompatibleConnector.Embeddings(ctx, req, c.setHeaders, c.handleError)
 }
 
-// Models lists available models from the provider
-func (c *MistralConnector) Models(ctx context.Context) (*ModelsResponse, error) {
-	return c.OpenAICompatibleConnector.Models(ctx, c.setHeaders, c.handleError)
-}
-
-// Health checks the health of the connector
-func (c *MistralConnector) Health(ctx context.Context) error {
-	// Use a minimal chat request as health check for Mistral
-	resp, err := c.Chat(ctx, &ChatRequest{
-		Model:     "mistral/mistral-tiny",
-		Messages:  []Message{{Role: RoleUser, Content: "Hi"}},
-		MaxTokens: intPtr(1),
-	})
-	if err != nil {
-		// If it's an auth error, the service is up
-		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == http.StatusUnauthorized {
-			return nil
-		}
-		return fmt.Errorf("%w: %v", ErrHealthCheckFailed, err)
-	}
-	_ = resp // resp is intentionally unused
-	return nil
-}
-
 // Close closes the connector
 func (c *MistralConnector) Close() error {
 	c.httpClient.CloseIdleConnections()
@@ -92,7 +62,7 @@ func (c *MistralConnector) Close() error {
 
 // setHeaders sets Mistral-specific headers
 func (c *MistralConnector) setHeaders(req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
+	applyRegisteredInferenceAuth(catalogs.ProviderIDMistralAI, req, c.config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 }
 

@@ -1,0 +1,241 @@
+// Package routing plans deterministic provider attempts from immutable inputs.
+// It owns no connectors, network operations, clocks, randomness, or mutable health state.
+package routing
+
+import (
+	"errors"
+	"fmt"
+	"time"
+)
+
+var (
+	// ErrNoCandidate reports that policy rejected every requested route.
+	ErrNoCandidate = errors.New("no route candidate satisfies the request")
+	// ErrInvalidRequest reports invalid route-planning input.
+	ErrInvalidRequest = errors.New("invalid route-planning request")
+	// ErrInvalidSnapshot reports invalid or generation-inconsistent candidates.
+	ErrInvalidSnapshot = errors.New("invalid route-planning snapshot")
+	// ErrInvalidPlan reports incomplete or duplicate attempt identities.
+	ErrInvalidPlan = errors.New("invalid route plan")
+)
+
+// Route identifies one provider offering in one immutable catalog generation.
+type Route struct {
+	CatalogGenerationID string
+	ModelID             string
+	ProviderID          string
+	ProviderModelID     string
+	Operation           Operation
+	Endpoint            Endpoint
+	PromptCacheKnown    bool
+	PromptCache         bool
+}
+
+// ID returns Starport's provider-scoped route ID.
+func (r Route) ID() string {
+	return r.ProviderID + "/" + r.ProviderModelID
+}
+
+// TokenCost contains provider prices per input and output token.
+type TokenCost struct {
+	InputPerToken  float64
+	OutputPerToken float64
+}
+
+// Operation is one provider inference operation selected from catalog facts.
+type Operation string
+
+const (
+	// OperationChatCompletions generates chat completions.
+	OperationChatCompletions Operation = "chat-completions"
+	// OperationEmbeddings generates vector embeddings.
+	OperationEmbeddings Operation = "embeddings"
+)
+
+// Endpoint is the exact offering endpoint and wire protocol selected for an attempt.
+type Endpoint struct {
+	Protocol  string
+	URL       string
+	StreamURL string
+}
+
+// Candidate contains facts and runtime measurements for one route. The
+// planner does not change this value.
+type Candidate struct {
+	Route         Route
+	Operations    []Operation
+	Endpoints     map[Operation]Endpoint
+	PromptCache   *bool
+	Capabilities  []string
+	ContextWindow int
+	Cost          *TokenCost
+	Latency       *time.Duration
+	Unavailable   bool
+	Unhealthy     bool
+}
+
+// Snapshot binds all planning candidates to one catalog generation and one
+// runtime availability revision.
+type Snapshot struct {
+	CatalogGenerationID  string
+	AvailabilityRevision uint64
+	Candidates           []Candidate
+}
+
+// TenantPolicy defines the caller's hard model and provider boundaries.
+type TenantPolicy struct {
+	AllowedModels    []string
+	AllowedProviders []string
+	ModelOverrides   map[string]string
+}
+
+// ProviderPolicy defines request-scoped provider constraints and order.
+type ProviderPolicy struct {
+	Order          []string
+	Only           []string
+	Ignore         []string
+	AllowFallbacks bool
+}
+
+// OptimizationPolicy defines deterministic soft preferences.
+type OptimizationPolicy struct {
+	PreferLowestCost    bool
+	PreferLowestLatency bool
+}
+
+// Request contains all policy and requirements used by the pure planner.
+type Request struct {
+	Models                []string
+	Operation             Operation
+	AllowModelFallbacks   bool
+	AllowAnyModelFallback bool
+	RequiredCapabilities  []string
+	RequiredContextTokens int
+	EstimatedInputTokens  int
+	EstimatedOutputTokens int
+	Tenant                TenantPolicy
+	Providers             ProviderPolicy
+	AffinityProvider      string
+	Optimization          OptimizationPolicy
+}
+
+// RejectionCode is a stable reason that excluded one route.
+type RejectionCode string
+
+const (
+	// RejectionUnavailable means runtime state disabled the offering.
+	RejectionUnavailable RejectionCode = "unavailable"
+	// RejectionUnhealthy means runtime health disabled the offering.
+	RejectionUnhealthy RejectionCode = "unhealthy"
+	// RejectionTenantModel means tenant policy denied the model.
+	RejectionTenantModel RejectionCode = "tenant_model"
+	// RejectionTenantProvider means tenant policy denied the provider.
+	RejectionTenantProvider RejectionCode = "tenant_provider"
+	// RejectionProviderPolicy means request provider policy denied the route.
+	RejectionProviderPolicy RejectionCode = "provider_policy"
+	// RejectionMissingCapability means the route lacks a required capability.
+	RejectionMissingCapability RejectionCode = "missing_capability"
+	// RejectionMissingOperation means the exact offering or adapter cannot perform the request.
+	RejectionMissingOperation RejectionCode = "missing_operation"
+	// RejectionMissingEndpoint means the exact offering has no usable operation endpoint.
+	RejectionMissingEndpoint RejectionCode = "missing_endpoint"
+	// RejectionInsufficientContext means the route cannot accept the required context.
+	RejectionInsufficientContext RejectionCode = "insufficient_context"
+)
+
+// Rejection records why one considered route was not planned.
+type Rejection struct {
+	Route  Route
+	Code   RejectionCode
+	Detail string
+}
+
+// SelectionEvidence records the pure ranks and measurements used to order an attempt.
+type SelectionEvidence struct {
+	ModelRank        int
+	ProviderRank     int
+	AffinityMatched  bool
+	EstimatedCost    float64
+	HasCost          bool
+	EstimatedLatency time.Duration
+	HasLatency       bool
+}
+
+// Attempt is one ordered provider attempt in a route plan.
+type Attempt struct {
+	Route    Route
+	Evidence SelectionEvidence
+}
+
+// Plan is an immutable ordered attempt list with rejection evidence.
+type Plan struct {
+	catalogGenerationID  string
+	availabilityRevision uint64
+	attempts             []Attempt
+	rejections           []Rejection
+}
+
+// NewPlan creates an immutable plan from an already ordered attempt set.
+// Composition adapters use it when no catalog-backed planner is available.
+func NewPlan(
+	catalogGenerationID string,
+	availabilityRevision uint64,
+	attempts []Attempt,
+	rejections []Rejection,
+) (*Plan, error) {
+	if catalogGenerationID == "" {
+		return nil, fmt.Errorf("%w: catalog generation ID is required", ErrInvalidPlan)
+	}
+	seen := make(map[string]struct{}, len(attempts))
+	for index, attempt := range attempts {
+		route := attempt.Route
+		if route.CatalogGenerationID != catalogGenerationID || route.ModelID == "" || route.ProviderID == "" || route.ProviderModelID == "" {
+			return nil, fmt.Errorf("%w: attempt %d has incomplete route identity", ErrInvalidPlan, index)
+		}
+		if route.Operation != "" && (route.Endpoint.Protocol == "" || route.Endpoint.URL == "") {
+			return nil, fmt.Errorf("%w: attempt %d has incomplete endpoint", ErrInvalidPlan, index)
+		}
+		if _, exists := seen[route.ID()]; exists {
+			return nil, fmt.Errorf("%w: duplicate route %q", ErrInvalidPlan, route.ID())
+		}
+		seen[route.ID()] = struct{}{}
+	}
+	return &Plan{
+		catalogGenerationID:  catalogGenerationID,
+		availabilityRevision: availabilityRevision,
+		attempts:             append([]Attempt(nil), attempts...),
+		rejections:           append([]Rejection(nil), rejections...),
+	}, nil
+}
+
+// CatalogGenerationID returns the generation that supplied every planned route.
+func (p *Plan) CatalogGenerationID() string {
+	if p == nil {
+		return ""
+	}
+	return p.catalogGenerationID
+}
+
+// AvailabilityRevision returns the runtime revision used for this plan.
+func (p *Plan) AvailabilityRevision() uint64 {
+	if p == nil {
+		return 0
+	}
+	return p.availabilityRevision
+}
+
+// Attempts returns a caller-owned copy in execution order.
+func (p *Plan) Attempts() []Attempt {
+	if p == nil {
+		return nil
+	}
+	return append([]Attempt(nil), p.attempts...)
+}
+
+// Rejections returns a caller-owned copy in stable route order.
+func (p *Plan) Rejections() []Rejection {
+	if p == nil {
+		return nil
+	}
+	return append([]Rejection(nil), p.rejections...)
+}

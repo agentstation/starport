@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/server/dto"
-	"github.com/agentstation/starport/internal/storage"
 )
 
 // ProviderKeysController handles provider key management endpoints
@@ -25,8 +25,21 @@ func NewProviderKeysController(providerKeys byok.ProviderKeys) *ProviderKeysCont
 	}
 }
 
+func (h *ProviderKeysController) requireProviderKeys(w http.ResponseWriter) bool {
+	if h.providerKeys != nil {
+		return true
+	}
+
+	dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, "Provider key management is not configured")
+	return false
+}
+
 // List handles GET /api/v1/keys/{key_id}/provider-keys
 func (h *ProviderKeysController) List(w http.ResponseWriter, r *http.Request) {
+	if !h.requireProviderKeys(w) {
+		return
+	}
+
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
 
@@ -77,6 +90,10 @@ func (h *ProviderKeysController) List(w http.ResponseWriter, r *http.Request) {
 
 // Create handles POST /api/v1/keys/{key_id}/provider-keys
 func (h *ProviderKeysController) Create(w http.ResponseWriter, r *http.Request) {
+	if !h.requireProviderKeys(w) {
+		return
+	}
+
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
 
@@ -149,13 +166,17 @@ func (h *ProviderKeysController) Create(w http.ResponseWriter, r *http.Request) 
 
 // Get handles GET /api/v1/keys/{key_id}/provider-keys/{provider}
 func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
+	if !h.requireProviderKeys(w) {
+		return
+	}
+
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
 	provider := chi.URLParam(r, "provider")
 
 	key, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
@@ -188,6 +209,10 @@ func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/keys/{key_id}/provider-keys/{provider}
 func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) {
+	if !h.requireProviderKeys(w) {
+		return
+	}
+
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
 	provider := chi.URLParam(r, "provider")
@@ -207,7 +232,7 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 	// Check if key exists
 	_, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
@@ -259,12 +284,16 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 
 // Delete handles DELETE /api/v1/keys/{key_id}/provider-keys/{provider}
 func (h *ProviderKeysController) Delete(w http.ResponseWriter, r *http.Request) {
+	if !h.requireProviderKeys(w) {
+		return
+	}
+
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
 	provider := chi.URLParam(r, "provider")
 
 	if err := h.providerKeys.DeleteKey(ctx, "user:"+apiKeyID, provider); err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
@@ -285,13 +314,17 @@ func (h *ProviderKeysController) Delete(w http.ResponseWriter, r *http.Request) 
 
 // Validate handles POST /api/v1/keys/{key_id}/provider-keys/{provider}/validate
 func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request) {
+	if !h.requireProviderKeys(w) {
+		return
+	}
+
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
 	provider := chi.URLParam(r, "provider")
 
 	_, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}

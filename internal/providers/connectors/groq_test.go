@@ -26,18 +26,19 @@ func TestNewGroqConnector(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid config with default base URL",
+			name: "missing catalog base URL",
 			config: ProviderConfig{
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "inherits OpenAI config validation",
 			config: ProviderConfig{
-				APIKey: "test-key",
+				BaseURL: "https://provider.test",
+				APIKey:  "test-key",
 			},
 			wantErr: false,
 		},
@@ -62,134 +63,9 @@ func TestNewGroqConnector(t *testing.T) {
 	}
 }
 
-func TestGroqConnector_Models(t *testing.T) {
-	connector, err := NewGroqConnector(ProviderConfig{
-		APIKey:         "test-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-	})
-	if err != nil {
-		t.Fatalf("NewGroqConnector() error = %v", err)
-	}
-
-	resp, err := connector.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models() error = %v", err)
-	}
-
-	if resp.Object != "list" {
-		t.Errorf("Expected object 'list', got '%s'", resp.Object)
-	}
-
-	// Check for expected Groq models
-	modelMap := make(map[string]bool)
-	for _, model := range resp.Data {
-		modelMap[model.ID] = true
-	}
-
-	expectedModels := []string{
-		"groq/llama-3.1-8b-instant",
-		"groq/llama-3.3-70b-versatile",
-		"groq/gemma2-9b-it",
-		"groq/deepseek-r1-distill-llama-70b",
-		"groq/llama3-8b-8192",
-		"groq/llama3-70b-8192",
-	}
-
-	for _, expected := range expectedModels {
-		if !modelMap[expected] {
-			t.Errorf("Expected model %s not found", expected)
-		}
-	}
-}
-
-func TestGroqConnector_Health(t *testing.T) {
-	tests := []struct {
-		name       string
-		mockStatus int
-		mockError  bool
-		apiKey     string
-		wantErr    bool
-	}{
-		{
-			name:       "service healthy",
-			mockStatus: http.StatusOK,
-			mockError:  false,
-			apiKey:     "test-key",
-			wantErr:    false,
-		},
-		{
-			name:       "service up but unauthorized",
-			mockStatus: http.StatusUnauthorized,
-			mockError:  true,
-			apiKey:     "invalid-key",
-			wantErr:    false, // Auth error means service is up
-		},
-		{
-			name:       "service down",
-			mockStatus: http.StatusInternalServerError,
-			mockError:  true,
-			apiKey:     "test-key",
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Check the request is for chat completions with minimal params
-				var reqBody ChatRequest
-				json.NewDecoder(r.Body).Decode(&reqBody)
-				if reqBody.MaxTokens == nil || *reqBody.MaxTokens != 1 {
-					t.Error("Expected MaxTokens to be 1 for health check")
-				}
-
-				if tt.mockError {
-					w.WriteHeader(tt.mockStatus)
-					json.NewEncoder(w).Encode(map[string]any{
-						"error": map[string]any{
-							"message": "Test error",
-							"type":    "error",
-						},
-					})
-					return
-				}
-
-				w.WriteHeader(tt.mockStatus)
-				json.NewEncoder(w).Encode(ChatResponse{
-					ID:      "chatcmpl-123",
-					Object:  "chat.completion",
-					Created: time.Now().Unix(),
-					Model:   "llama-3.1-8b-instant",
-					Choices: []Choice{
-						{
-							Index:        0,
-							Message:      Message{Role: "assistant", Content: "H"},
-							FinishReason: "stop",
-						},
-					},
-				})
-			}))
-			defer server.Close()
-
-			connector, _ := NewGroqConnector(ProviderConfig{
-				BaseURL:        server.URL + "/openai/v1",
-				APIKey:         tt.apiKey,
-				Timeout:        5 * time.Second,
-				MaxConnections: 10,
-				MaxRetries:     0,
-			})
-
-			err := connector.Health(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Health() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestGroqConnector_Embeddings(t *testing.T) {
 	connector, _ := NewGroqConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
@@ -257,11 +133,14 @@ func TestGroqConnector_Chat(t *testing.T) {
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		MaxRetries:     0,
 	})
 
 	resp, err := connector.Chat(context.Background(), &ChatRequest{
 		Model: "llama-3.1-8b-instant",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/openai/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},

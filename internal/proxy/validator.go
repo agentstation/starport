@@ -4,325 +4,115 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/agentstation/starport/internal/providers/connectors"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/inference"
 )
 
-// ValidateChatCompletionRequest validates a chat completion request
+// ValidateChatCompletionRequest validates one canonical gateway chat request.
 func ValidateChatCompletionRequest(req *ChatCompletionRequest) error {
-	// Check that either model or models is specified
-	if req.Model == "" && len(req.Models) == 0 {
-		return &ValidationError{
-			Field:   "model",
-			Message: "either 'model' or 'models' must be specified",
-		}
+	if req == nil {
+		return validationError("request", "request is required")
 	}
-
-	// Validate messages
-	if len(req.Messages) == 0 {
-		return &ValidationError{
-			Field:   "messages",
-			Message: "messages array cannot be empty",
-		}
+	request := req.Request
+	if request.Model == "" && len(request.FallbackModels) == 0 {
+		return validationError("model", "either 'model' or 'models' must be specified")
 	}
-
-	// Validate each message
-	for i, msg := range req.Messages {
-		if msg.Role == "" {
-			return &ValidationError{
-				Field:   fmt.Sprintf("messages[%d].role", i),
-				Message: "role is required",
-			}
-		}
-
-		// Validate role is one of the allowed values
-		validRoles := map[string]bool{
-			"system":    true,
-			"user":      true,
-			"assistant": true,
-			"tool":      true,
-		}
-
-		if !validRoles[msg.Role] {
-			return &ValidationError{
-				Field:   fmt.Sprintf("messages[%d].role", i),
-				Message: fmt.Sprintf("invalid role '%s', must be one of: system, user, assistant, tool", msg.Role),
-			}
-		}
-
-		// Validate content based on role
-		if msg.Role == "tool" && msg.ToolCallID == "" {
-			return &ValidationError{
-				Field:   fmt.Sprintf("messages[%d].tool_call_id", i),
-				Message: "tool_call_id is required for tool messages",
-			}
-		}
-
-		// Validate cache_control if present in content
-		if err := validateMessageCacheControl(msg.Content, fmt.Sprintf("messages[%d].content", i)); err != nil {
-			return err
-		}
+	if len(request.Messages) == 0 {
+		return validationError("messages", "messages array cannot be empty")
 	}
-
-	// Validate temperature if provided
-	if req.Temperature != nil {
-		if *req.Temperature < 0 || *req.Temperature > 2 {
-			return &ValidationError{
-				Field:   "temperature",
-				Message: "temperature must be between 0 and 2",
+	for index, message := range request.Messages {
+		field := fmt.Sprintf("messages[%d]", index)
+		switch message.Role {
+		case inference.RoleSystem, inference.RoleUser, inference.RoleAssistant, inference.RoleTool:
+		default:
+			return validationError(field+".role", "role must be system, user, assistant, or tool")
+		}
+		if message.Role == inference.RoleTool && message.ToolCallID == "" {
+			return validationError(field+".tool_call_id", "tool_call_id is required for tool messages")
+		}
+		for partIndex, part := range message.Content {
+			if part.CacheControl != "" && part.CacheControl != "ephemeral" {
+				return validationError(
+					fmt.Sprintf("%s.content[%d].cache_control.type", field, partIndex),
+					"cache control type must be ephemeral",
+				)
 			}
 		}
 	}
-
-	// Validate top_p if provided
-	if req.TopP != nil {
-		if *req.TopP < 0 || *req.TopP > 1 {
-			return &ValidationError{
-				Field:   "top_p",
-				Message: "top_p must be between 0 and 1",
-			}
-		}
+	if value := request.Sampling.Temperature; value != nil && (*value < 0 || *value > 2) {
+		return validationError("temperature", "temperature must be between 0 and 2")
 	}
-
-	// Validate n if provided
-	if req.N != nil && *req.N < 1 {
-		return &ValidationError{
-			Field:   "n",
-			Message: "n must be at least 1",
-		}
+	if value := request.Sampling.TopP; value != nil && (*value < 0 || *value > 1) {
+		return validationError("top_p", "top_p must be between 0 and 1")
 	}
-
-	// Validate max_tokens if provided
-	if req.MaxTokens != nil && *req.MaxTokens < 1 {
-		return &ValidationError{
-			Field:   "max_tokens",
-			Message: "max_tokens must be at least 1",
-		}
+	if value := request.Sampling.CandidateCount; value != nil && *value < 1 {
+		return validationError("n", "n must be at least 1")
 	}
-
-	// Validate presence_penalty if provided
-	if req.PresencePenalty != nil {
-		if *req.PresencePenalty < -2 || *req.PresencePenalty > 2 {
-			return &ValidationError{
-				Field:   "presence_penalty",
-				Message: "presence_penalty must be between -2 and 2",
-			}
-		}
+	if value := request.Sampling.MaxTokens; value != nil && *value < 1 {
+		return validationError("max_tokens", "max_tokens must be at least 1")
 	}
-
-	// Validate frequency_penalty if provided
-	if req.FrequencyPenalty != nil {
-		if *req.FrequencyPenalty < -2 || *req.FrequencyPenalty > 2 {
-			return &ValidationError{
-				Field:   "frequency_penalty",
-				Message: "frequency_penalty must be between -2 and 2",
-			}
-		}
+	if value := request.Sampling.PresencePenalty; value != nil && (*value < -2 || *value > 2) {
+		return validationError("presence_penalty", "presence_penalty must be between -2 and 2")
 	}
-
-	// Validate route if provided
-	if req.Route != "" {
-		validRoutes := map[string]bool{
-			"fallback": true,
-			"balanced": true,
-			"priority": true,
-			"random":   true,
-		}
-
-		if !validRoutes[req.Route] {
-			return &ValidationError{
-				Field:   "route",
-				Message: fmt.Sprintf("invalid route '%s', must be one of: fallback, balanced, priority, random", req.Route),
-			}
-		}
+	if value := request.Sampling.FrequencyPenalty; value != nil && (*value < -2 || *value > 2) {
+		return validationError("frequency_penalty", "frequency_penalty must be between -2 and 2")
 	}
-
+	if req.Route != "" && req.Route != "fallback" {
+		return validationError("route", "supported route is fallback")
+	}
 	return nil
 }
 
-// ValidateEmbeddingsRequest validates an embeddings request
+// ValidateEmbeddingsRequest validates one canonical embedding request.
 func ValidateEmbeddingsRequest(req *EmbeddingsRequest) error {
-	// Model is required
-	if req.Model == "" {
-		return &ValidationError{
-			Field:   "model",
-			Message: "model is required",
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	request := req.Request
+	if request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	textInputs := len(request.Input.Texts)
+	tokenInputs := len(request.Input.TokenIDs)
+	if textInputs == 0 && tokenInputs == 0 {
+		return validationError("input", "input is required")
+	}
+	if textInputs > 0 && tokenInputs > 0 {
+		return validationError("input", "input must use text or token IDs, not both")
+	}
+	for index, input := range request.Input.Texts {
+		if input == "" {
+			return validationError(fmt.Sprintf("input[%d]", index), "input string cannot be empty")
 		}
 	}
-
-	// Input is required
-	if req.Input == nil {
-		return &ValidationError{
-			Field:   "input",
-			Message: "input is required",
+	for index, input := range request.Input.TokenIDs {
+		if len(input) == 0 {
+			return validationError(fmt.Sprintf("input[%d]", index), "token input cannot be empty")
 		}
 	}
-
-	// Validate input type - should be string or []string
-	switch v := req.Input.(type) {
-	case string:
-		if v == "" {
-			return &ValidationError{
-				Field:   "input",
-				Message: "input string cannot be empty",
-			}
-		}
-	case []string:
-		if len(v) == 0 {
-			return &ValidationError{
-				Field:   "input",
-				Message: "input array cannot be empty",
-			}
-		}
-		for i, s := range v {
-			if s == "" {
-				return &ValidationError{
-					Field:   fmt.Sprintf("input[%d]", i),
-					Message: "input string cannot be empty",
-				}
-			}
-		}
-	case []any:
-		if len(v) == 0 {
-			return &ValidationError{
-				Field:   "input",
-				Message: "input array cannot be empty",
-			}
-		}
-		// Validate each element is a string
-		for i, elem := range v {
-			if s, ok := elem.(string); !ok || s == "" {
-				return &ValidationError{
-					Field:   fmt.Sprintf("input[%d]", i),
-					Message: "input must be a non-empty string",
-				}
-			}
-		}
-	default:
-		return &ValidationError{
-			Field:   "input",
-			Message: "input must be a string or array of strings",
-		}
+	if request.EncodingFormat != "" && request.EncodingFormat != "float" && request.EncodingFormat != "base64" {
+		return validationError("encoding_format", "encoding_format must be float or base64")
 	}
-
-	// Validate encoding_format if provided
-	if req.EncodingFormat != "" {
-		validFormats := map[string]bool{
-			"float":  true,
-			"base64": true,
-		}
-
-		if !validFormats[req.EncodingFormat] {
-			return &ValidationError{
-				Field:   "encoding_format",
-				Message: fmt.Sprintf("invalid encoding_format '%s', must be one of: float, base64", req.EncodingFormat),
-			}
-		}
+	if request.Dimensions != nil && *request.Dimensions < 1 {
+		return validationError("dimensions", "dimensions must be at least 1")
 	}
-
-	// Validate dimensions if provided
-	if req.Dimensions != nil && *req.Dimensions < 1 {
-		return &ValidationError{
-			Field:   "dimensions",
-			Message: "dimensions must be at least 1",
-		}
-	}
-
 	return nil
 }
 
-// NormalizeModelID ensures the model ID has the correct format
-func NormalizeModelID(modelID string) string {
-	// If the model already has a provider prefix, return as-is
-	if strings.Contains(modelID, "/") {
-		return modelID
-	}
+func validationError(field, message string) error {
+	return &ValidationError{Field: field, Message: message}
+}
 
-	// Otherwise, we need to determine the provider from context
-	// This will be handled by the routing logic
+// NormalizeModelID preserves provider-scoped and canonical model IDs.
+func NormalizeModelID(modelID string) string {
 	return modelID
 }
 
-// ExtractProviderFromModel extracts the provider name from a model ID
+// ExtractProviderFromModel extracts a provider-scoped model ID.
 func ExtractProviderFromModel(modelID string) (provider, model string) {
-	parts := strings.SplitN(modelID, "/", 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1]
+	provider, model, ok := runtimecatalog.SplitModelID(modelID)
+	if ok {
+		return provider, model
 	}
-	// No provider prefix
-	return "", modelID
-}
-
-// validateMessageCacheControl validates cache control in message content
-func validateMessageCacheControl(content connectors.MessageContent, fieldPath string) error {
-	// Parse content to check for cache control
-	parts, err := connectors.ParseMessageContent(content)
-	if err != nil {
-		// If we can't parse it, it's likely a plain string which is fine
-		return nil
-	}
-
-	// Check each content part for cache control
-	for i, part := range parts {
-		if part.CacheControl != nil {
-			// Validate cache control type
-			if part.CacheControl.Type != "ephemeral" {
-				return &ValidationError{
-					Field:   fmt.Sprintf("%s[%d].cache_control.type", fieldPath, i),
-					Message: fmt.Sprintf("invalid cache control type '%s', only 'ephemeral' is supported", part.CacheControl.Type),
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-// ProviderSupportsCacheControl returns true if the provider supports cache_control
-func ProviderSupportsCacheControl(provider string) bool {
-	supportedProviders := map[string]bool{
-		"openai":    true,
-		"anthropic": true,
-		"grok":      true,
-		"groq":      true, // Assuming Groq is Grok
-		"deepseek":  true,
-		// Google providers use implicit caching, not cache_control
-		"google":           false,
-		"google-ai-studio": false,
-		"google-vertexai":  false,
-		"gemini":           false,
-		// Others - need to verify
-		"mistral":      false,
-		"azure":        true, // Azure OpenAI should support it
-		"azure-openai": true,
-	}
-
-	return supportedProviders[provider]
-}
-
-// ValidateCacheControlForProvider validates cache control is appropriate for the provider
-func ValidateCacheControlForProvider(provider string, messages []connectors.Message) error {
-	// Count cache control breakpoints for Anthropic
-	if provider == "anthropic" {
-		breakpoints := 0
-		for _, msg := range messages {
-			parts, err := connectors.ParseMessageContent(msg.Content)
-			if err != nil {
-				continue
-			}
-			for _, part := range parts {
-				if part.CacheControl != nil {
-					breakpoints++
-				}
-			}
-		}
-
-		if breakpoints > 4 {
-			return &ValidationError{
-				Field:   "messages",
-				Message: "Anthropic supports a maximum of 4 cache control breakpoints",
-			}
-		}
-	}
-
-	return nil
+	return "", strings.TrimSpace(modelID)
 }

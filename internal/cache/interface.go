@@ -73,8 +73,6 @@ type Config struct {
 	MaxSizeInMB int64 `env:"MAX_SIZE_MB,default=256"`
 	// DefaultTTL is the default TTL for cached items
 	DefaultTTL time.Duration `env:"DEFAULT_TTL,default=1h"`
-	// CleanupInterval is how often to run the cleanup process
-	CleanupInterval time.Duration `env:"CLEANUP_INTERVAL,default=10m"`
 	// EnableMetrics enables detailed metrics collection
 	EnableMetrics bool `env:"ENABLE_METRICS,default=true"`
 	// WarmupKeys is a list of keys to pre-load on startup

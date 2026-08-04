@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2025-01-11
+Last Updated: 2026-08-04
 
 ## 🚀 Current Sprint: Phase 1 - Core Foundation
 
@@ -9,9 +9,9 @@ Last Updated: 2025-01-11
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-| - | - | - | - | - | - |
+| Architecture | Starport v1 final pull request | codex/starport-v1-starmap | 🟢 In Progress | - | - |
 
-*No active tasks - Phase 1 core features complete, awaiting Phase 2 planning*
+The durable status ledger and acceptance evidence are in `docs/STARPORT_V1_ARCHITECTURE_PLAN.md`.
 
 ### Recently Completed
 
@@ -24,7 +24,7 @@ Last Updated: 2025-01-11
 | P1-S3-3.7 | Backend | #19 | 2025-01-08 | Dynamic model fetching for Anthropic/Gemini/Groq, split GeminiConnector into GoogleAIStudioConnector and VertexAIConnector, 1-hour cache TTL, Vertex AI models (PaLM, Codey, Claude), 85%+ test coverage |
 | P1-S3-3.6 | Backend | #18 | 2025-01-08 | Provider metadata & /api/v1/providers endpoint, enhanced /api/v1/models with full metadata (pricing, context, architecture), /api/v1/models/{model}/endpoints, 85%+ test coverage |
 | P1-S3-3.5 | Backend | #17 | 2025-01-08 | Provider routing with preferences (order/only/ignore), health tracking, latency-based routing, cost optimization, sticky sessions, 76.2% test coverage |
-| P1-S3-3.4 | Backend | #16 | 2025-01-08 | OpenRouter-compatible model routing with fallback chains, auto model selection, provider preferences, circuit breaker, model_used field in responses |
+| P1-S3-3.4 | Backend | #16 | 2025-01-08 | OpenRouter-compatible model routing with fallback chains, auto model selection, provider preferences, bounded availability, model_used field in responses |
 | P1-S3-3.3 | Backend | #15 | 2025-01-08 | Proxy endpoints implemented with /v1 and /api/v1 routes, streaming support, request validation, connector initialization from config, 85.4% test coverage |
 | P1-S3-3.2 | Backend | #13 | 2025-01-08 | All 6 LLM provider connectors implemented with streaming, OpenRouter-compatible model IDs, 84.0% test coverage |
 | P1-S3-3.1 | Backend | #12 | 2025-01-08 | Model Connector Interface with streaming support, health checks, mock implementation, 90.6% test coverage |
@@ -56,7 +56,7 @@ Last Updated: 2025-01-11
 - Storage layer (Badger & Valkey)
 - All 6 LLM provider connectors
 - OpenAI/OpenRouter compatible endpoints
-- Smart routing with circuit breakers
+- Smart routing with one attempt budget and offering-level availability
 - BYOK implementation with encryption
 - Cache architecture (interface only)
 
@@ -126,7 +126,7 @@ Last Updated: 2025-01-11
 ### Should Have
 - [ ] Content filtering
 - [ ] Preset management
-- [ ] Comprehensive logging
+- [ ] Operational logging
 - [ ] Performance benchmarks
 - [ ] Deployment documentation
 
@@ -163,4 +163,5 @@ Implement proper API key generation, storage, and validation using uuidkey libra
 
 ---
 
-This document reflects the current state of the Starport project. While significant progress has been made on core features, critical components (authentication, caching, rate limiting) must be completed before the system can be considered production-ready.
+This file keeps the Phase 1 task history. The active durable plan owns the
+current architecture status and acceptance evidence.

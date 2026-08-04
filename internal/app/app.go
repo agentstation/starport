@@ -1,262 +1,591 @@
-// Package app contains the core application logic for Starport.
+// Package app owns Starport production composition and lifecycle.
 package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starmap/pkg/sources"
+	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/cache"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/chatui"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/proxy"
+	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/registry"
+	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server"
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// App represents the main application with new handler structure
+var (
+	// ErrConfigRequired reports an absent application configuration.
+	ErrConfigRequired = errors.New("application config is required")
+	// ErrStorageRequired reports a storage factory that returned no adapter.
+	ErrStorageRequired = errors.New("storage factory returned no storage")
+	// ErrCatalogRequired reports a catalog factory that returned no control plane.
+	ErrCatalogRequired = errors.New("catalog factory returned no catalog")
+	// ErrCredentialsRequired reports an absent provider-credential master key.
+	ErrCredentialsRequired = errors.New("provider credential master key is required")
+	// ErrBootstrapRequired reports empty identity storage without a bootstrap key.
+	ErrBootstrapRequired = errors.New("bootstrap API key is required when identity storage is empty")
+)
+
+type lifecycleEntry struct {
+	name  string
+	close func(context.Context) error
+}
+
+// App owns all constructed runtime dependencies.
 type App struct {
-	config      *Config
-	httpServer  *server.Server
-	hotReloader interface {
-		Start(context.Context) error
-		Stop()
-	}
-	registry     *registry.Registry
-	store        storage.KVStore
-	cacheManager *cache.Manager
+	config           *config.Config
+	httpServer       httpRuntime
+	hotReloader      hotReloadRuntime
+	registry         *registry.Registry
+	catalogRuntime   catalogRuntime
+	catalog          *runtimecatalog.ControlPlane
+	store            storage.KVStore
+	cacheManager     *cache.Manager
+	adapters         *connectors.AdapterRegistry
+	lifecycle        []lifecycleEntry
+	catalogRefreshWG sync.WaitGroup
+	closeOnce        sync.Once
+	closeErr         error
 }
 
-// New creates a new App instance with improved handler organization
-func New(opts ...Option) (*App, error) {
-	// Apply options to default config
-	cfg := DefaultConfig.Apply(opts...)
-
-	app := &App{
-		config: &cfg,
+// New creates the complete production runtime without starting background work.
+func New(cfg *config.Config, options ...Option) (*App, error) {
+	factories, err := prepareComposition(cfg, options)
+	if err != nil {
+		return nil, err
 	}
+	adapterRegistry, err := connectors.ProductionAdapterRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("open adapter registry: %w", err)
+	}
+	application := &App{
+		config: cfg, adapters: adapterRegistry, lifecycle: make([]lifecycleEntry, 0, 5),
+	}
+	builder := runtimeBuilder{application: application, config: cfg, factories: factories}
+	if err := builder.compose(); err != nil {
+		rollbackErr := application.closeLifecycle(context.Background())
+		if rollbackErr != nil {
+			err = errors.Join(err, fmt.Errorf("rollback application construction: %w", rollbackErr))
+		}
+		return nil, err
+	}
+	return application, nil
+}
 
-	// Validate configuration
+func prepareComposition(cfg *config.Config, options []Option) (bootstrapFactories, error) {
+	if cfg == nil {
+		return bootstrapFactories{}, ErrConfigRequired
+	}
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
+		return bootstrapFactories{}, fmt.Errorf("validate application config: %w", err)
+	}
+	if strings.TrimSpace(cfg.Security.MasterKey) == "" {
+		return bootstrapFactories{}, ErrCredentialsRequired
 	}
 
-	// Initialize storage
-	store, err := app.initializeStorage()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize storage: %w", err)
+	build := buildOptions{factories: defaultBootstrapFactories()}
+	for _, option := range options {
+		option(&build)
 	}
-	app.store = store
-
-	// Initialize hot reloader if configured
-	if cfg.HotReload != nil && cfg.HotReload.Enabled {
-		hotReloader, err := config.NewHotReloader(
-			cfg.HotReload.ConfigPath,
-			cfg.HotReload.CheckInterval,
-		)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize rate limit hot reloader")
-		} else {
-			app.hotReloader = hotReloader
-			log.Info().
-				Str("config_path", cfg.HotReload.ConfigPath).
-				Msg("Rate limit hot reload configured")
-		}
+	if err := validateFactories(build.factories); err != nil {
+		return bootstrapFactories{}, err
 	}
-
-	// Initialize connector registry with providers
-	registryCfg := &registry.Config{
-		Providers:         cfg.Providers,
-		HealthCheckOnInit: true,
-	}
-	app.registry, err = registry.New(registryCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize registry: %w", err)
-	}
-
-	// Initialize cache manager if caching is enabled
-	if cfg.EnableCache {
-		cacheConfig := cache.ManagerConfig{
-			// Use default cache configuration
-		}
-		cacheManager, err := cache.NewCacheManager(cacheConfig, app.store)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize cache manager")
-		} else {
-			app.cacheManager = cacheManager
-			log.Info().Msg("Cache manager initialized")
-		}
-	}
-
-	// Initialize HTTP server with new structure
-	serverOpts := []server.Option{}
-	if app.cacheManager != nil {
-		serverOpts = append(serverOpts, server.WithCache(app.cacheManager))
-	}
-
-	// Add ChatUI configuration if enabled
-	if cfg.ChatUI != nil && cfg.ChatUI.Enabled {
-		chatUIConfig := chatui.Config{
-			Title:       cfg.ChatUI.Title,
-			Theme:       cfg.ChatUI.Theme,
-			AllowKeyGen: cfg.ChatUI.AllowKeyGen,
-			APIBaseURL:  fmt.Sprintf("http://localhost:%d", cfg.Server.Port),
-		}
-		serverOpts = append(serverOpts, server.WithChatUI(&chatUIConfig))
-		log.Info().
-			Str("title", cfg.ChatUI.Title).
-			Str("theme", cfg.ChatUI.Theme).
-			Bool("allow_key_gen", cfg.ChatUI.AllowKeyGen).
-			Msg("ChatUI enabled")
-	}
-
-	app.httpServer = server.New(&app.config.Server, app.registry, serverOpts...)
-
-	return app, nil
+	return build.factories, nil
 }
 
-// initializeStorage initializes the storage backend based on configuration
-func (a *App) initializeStorage() (storage.KVStore, error) {
-	switch a.config.StorageMode {
-	case "badger":
-		// TODO: Initialize Badger storage when implemented
-		log.Warn().Msg("Badger storage not yet implemented, using mock storage")
-		return storage.NewMockStore(), nil
-
-	case "valkey":
-		if a.config.Storage == nil {
-			return nil, fmt.Errorf("valkey storage configuration not provided")
-		}
-
-		// Convert config.ValkeyConfig to storage.ValkeyConfig
-		valkeyConfig := storage.ValkeyConfig{
-			URL:          a.config.Storage.Valkey.URL,
-			Password:     a.config.Storage.Valkey.Password,
-			DB:           0, // Default DB
-			MaxRetries:   3,
-			MinIdleConns: a.config.Storage.Valkey.MinIdleConns,
-			ReadTimeout:  a.config.Storage.Valkey.ReadTimeout,
-			WriteTimeout: a.config.Storage.Valkey.WriteTimeout,
-			ClusterMode:  a.config.Storage.Valkey.ClusterMode,
-		}
-
-		store, err := storage.OpenValkey(valkeyConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open valkey storage: %w", err)
-		}
-
-		log.Info().
-			Str("url", valkeyConfig.URL).
-			Bool("cluster", valkeyConfig.ClusterMode).
-			Msg("initialized valkey storage")
-
-		return store, nil
-
-	default:
-		return nil, fmt.Errorf("unknown storage mode: %s", a.config.StorageMode)
-	}
+type runtimeBuilder struct {
+	application  *App
+	config       *config.Config
+	factories    bootstrapFactories
+	identities   identity.Repository
+	providerKeys byok.ProviderKeys
+	rateLimits   ratelimit.Repository
+	gateway      proxy.Proxy
+	chatUI       *chatui.Handler
 }
 
-// Run starts the application
-func (a *App) Run(ctx context.Context) error {
-	log.Info().
-		Str("storage_mode", a.config.StorageMode).
-		Str("log_level", a.config.LogLevel).
-		Int("port", a.config.Server.Port).
-		Msg("starting starport application")
-
-	// Start hot reloader if configured
-	if a.hotReloader != nil {
-		if err := a.hotReloader.Start(ctx); err != nil {
-			log.Warn().Err(err).Msg("Failed to start rate limit hot reloader")
-		} else {
-			log.Info().Msg("Rate limit hot reload started")
+func (b *runtimeBuilder) compose() error {
+	steps := []func() error{
+		b.openStorage,
+		b.openConcepts,
+		b.openRegistry,
+		b.openCache,
+		b.buildGateway,
+		b.openChatUI,
+		b.openHotReload,
+		b.openHTTPServer,
+	}
+	for _, step := range steps {
+		if err := step(); err != nil {
+			return err
 		}
 	}
-
-	// Create error channel for server errors
-	errChan := make(chan error, 1)
-
-	// Start HTTP server in a goroutine
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := a.httpServer.Start(); err != nil {
-			errChan <- fmt.Errorf("HTTP server error: %w", err)
-		}
-	}()
-
-	// Wait for context cancellation or server error
-	select {
-	case <-ctx.Done():
-		log.Info().Msg("shutting down Starport application")
-
-		// Stop hot reloader if present
-		if a.hotReloader != nil {
-			a.hotReloader.Stop()
-		}
-
-		// Create shutdown context with timeout
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		// Shutdown HTTP server
-		if err := a.httpServer.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("failed to shutdown HTTP server: %w", err)
-		}
-
-		// Wait for goroutines to finish
-		wg.Wait()
-
-		// Close all connectors
-		if err := a.registry.Close(); err != nil {
-			log.Error().Err(err).Msg("failed to close connectors")
-		}
-
-		// Close cache manager
-		if a.cacheManager != nil {
-			if err := a.cacheManager.Close(); err != nil {
-				log.Error().Err(err).Msg("failed to close cache manager")
-			}
-		}
-
-		// Close storage
-		if err := a.store.Close(); err != nil {
-			log.Error().Err(err).Msg("failed to close storage")
-		}
-
-		log.Info().Msg("Starport application stopped successfully")
-		return nil
-
-	case err := <-errChan:
-		// Server encountered an error
-		return err
-	}
-}
-
-// Validate validates the configuration
-func (c *Config) Validate() error {
-	// Add validation logic here
-	if c.Server.Port < 1 || c.Server.Port > 65535 {
-		return fmt.Errorf("invalid port: %d", c.Server.Port)
-	}
-	if c.StorageMode != "badger" && c.StorageMode != "valkey" {
-		return fmt.Errorf("invalid storage mode: %s", c.StorageMode)
-	}
-
-	// Validate hot reload config
-	if c.HotReload != nil && c.HotReload.Enabled {
-		if c.HotReload.ConfigPath == "" {
-			return fmt.Errorf("hot reload config path cannot be empty when enabled")
-		}
-		if c.HotReload.CheckInterval <= 0 {
-			return fmt.Errorf("hot reload check interval must be positive")
-		}
-	}
-
 	return nil
 }
+
+func (b *runtimeBuilder) openStorage() error {
+	store, err := b.factories.openStorage(b.config.Storage)
+	if err != nil {
+		if store != nil {
+			if closeErr := store.Close(); closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close failed storage: %w", closeErr))
+			}
+		}
+		return fmt.Errorf("open storage: %w", err)
+	}
+	if store == nil {
+		return ErrStorageRequired
+	}
+	b.application.store = store
+	b.application.own("storage", func(context.Context) error { return store.Close() })
+	return nil
+}
+
+func (b *runtimeBuilder) openConcepts() error {
+	catalogRuntime, err := b.factories.openCatalog(
+		context.Background(),
+		b.application.store,
+		b.config.Catalog.WorkspacePath,
+	)
+	if err != nil {
+		return fmt.Errorf("open catalog: %w", err)
+	}
+	if catalogRuntime == nil || catalogRuntime.ControlPlane() == nil {
+		return ErrCatalogRequired
+	}
+	b.application.catalogRuntime = catalogRuntime
+	b.application.catalog = catalogRuntime.ControlPlane()
+	if b.config.Catalog.RefreshOnStart {
+		if err := b.application.refreshCatalog(context.Background()); err != nil {
+			log.Warn().Err(err).Msg("startup Starmap catalog refresh failed; retaining current generation")
+		}
+	}
+
+	b.identities, err = identity.Open(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open identity repository: %w", err)
+	}
+	if err := ensureBootstrapIdentity(context.Background(), b.identities, b.config.Security.BootstrapAPIKey); err != nil {
+		return err
+	}
+	credentialRepository, err := credentials.Open(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open provider credential repository: %w", err)
+	}
+	b.rateLimits, err = ratelimit.Open(b.application.store, nil)
+	if err != nil {
+		return fmt.Errorf("open rate-limit repository: %w", err)
+	}
+	masterKey := []byte(b.config.Security.MasterKey)
+	if len(masterKey) < 32 {
+		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
+	}
+	b.providerKeys, err = byok.NewProviderKeys(credentialRepository, masterKey, b.application.adapters)
+	if err != nil {
+		return fmt.Errorf("open provider key service: %w", err)
+	}
+	return nil
+}
+
+func (b *runtimeBuilder) openRegistry() error {
+	registrations, err := buildRegistrations(
+		b.application.catalog,
+		b.application.adapters,
+		providerConfigurations(b.config.Providers),
+		b.factories.newConnector,
+	)
+	if err != nil {
+		return err
+	}
+	b.application.registry, err = registry.Open(b.application.catalog, registrations)
+	if err != nil {
+		return fmt.Errorf("open provider registry: %w", err)
+	}
+	b.application.own("registry", func(context.Context) error { return b.application.registry.Close() })
+	return nil
+}
+
+func (b *runtimeBuilder) openCache() error {
+	if b.config.Cache.Enabled {
+		cacheManager, err := b.factories.newCache(cache.ManagerConfig{}, b.application.store)
+		if err != nil {
+			if cacheManager != nil {
+				if closeErr := cacheManager.Close(); closeErr != nil {
+					err = errors.Join(err, fmt.Errorf("close failed cache manager: %w", closeErr))
+				}
+			}
+			return fmt.Errorf("open cache manager: %w", err)
+		}
+		if cacheManager == nil {
+			return errors.New("cache factory returned no cache manager")
+		}
+		b.application.cacheManager = cacheManager
+		b.application.own("cache", func(context.Context) error { return cacheManager.Close() })
+	}
+	return nil
+}
+
+func (b *runtimeBuilder) buildGateway() error {
+	registryAdapter := connectorRegistryAdapter{registry: b.application.registry}
+	modelRouter := router.New(registryAdapter, router.WithCatalog(b.application.catalog))
+	proxyOptions := make([]proxy.Option, 0, 1)
+	if b.application.cacheManager != nil {
+		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, &proxy.CacheConfig{
+			EnableChatCache: true, EnableEmbeddingCache: true,
+			EnableModelCache: true, EnableProviderCache: true,
+			CacheControlHeader: "X-Cache-Control",
+		}))
+	}
+	b.gateway = proxy.New(b.application.registry, modelRouter, proxyOptions...)
+	return nil
+}
+
+func (b *runtimeBuilder) openChatUI() error {
+	if b.config.ChatUI.Enabled {
+		var err error
+		b.chatUI, err = chatui.NewHandler(&log.Logger, chatui.Config{
+			Title: b.config.ChatUI.Title, Theme: b.config.ChatUI.Theme,
+			APIBaseURL: fmt.Sprintf("http://localhost:%d", b.config.Server.Port),
+		})
+		if err != nil {
+			return fmt.Errorf("open ChatUI: %w", err)
+		}
+	}
+	return nil
+}
+
+func (b *runtimeBuilder) openHotReload() error {
+	if b.config.RateLimiting.EnableHotReload {
+		var err error
+		b.application.hotReloader, err = b.factories.newHotReload(
+			b.config.RateLimiting.ConfigPath, b.config.RateLimiting.ReloadCheckInterval,
+		)
+		if err != nil {
+			return fmt.Errorf("open rate-limit hot reload: %w", err)
+		}
+		if b.application.hotReloader == nil {
+			return errors.New("hot-reload factory returned no runtime")
+		}
+		b.application.own("hot reload", func(context.Context) error {
+			b.application.hotReloader.Stop()
+			return nil
+		})
+	}
+	return nil
+}
+
+func (b *runtimeBuilder) openHTTPServer() error {
+	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
+		Service: b.gateway, Identities: b.identities, ProviderKeys: b.providerKeys,
+		RateLimits: b.rateLimits, ChatUI: b.chatUI,
+	})
+	if err != nil {
+		if httpServer != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), b.config.Server.ShutdownTimeout)
+			shutdownErr := httpServer.Shutdown(shutdownCtx)
+			cancel()
+			if shutdownErr != nil {
+				err = errors.Join(err, fmt.Errorf("close failed HTTP server: %w", shutdownErr))
+			}
+		}
+		return fmt.Errorf("open HTTP server: %w", err)
+	}
+	if httpServer == nil {
+		return errors.New("server factory returned no HTTP server")
+	}
+	b.application.httpServer = httpServer
+	b.application.own("HTTP server", httpServer.Shutdown)
+	return nil
+}
+
+func ensureBootstrapIdentity(ctx context.Context, identities identity.Repository, apiKey string) error {
+	if strings.TrimSpace(apiKey) == "" {
+		records, err := identities.List(ctx, 1)
+		if err != nil {
+			return fmt.Errorf("list bootstrap identities: %w", err)
+		}
+		if len(records) == 0 {
+			return ErrBootstrapRequired
+		}
+		return nil
+	}
+
+	hash := sha256.Sum256([]byte(apiKey))
+	hashValue := hex.EncodeToString(hash[:])
+	if _, err := identities.GetByHash(ctx, hashValue); err == nil {
+		return nil
+	} else if !errors.Is(err, identity.ErrNotFound) {
+		return fmt.Errorf("read bootstrap identity: %w", err)
+	}
+
+	_, err := identities.Create(ctx, identity.APIKey{
+		ID:        "bootstrap-" + hashValue[:16],
+		Name:      "bootstrap_admin",
+		Hash:      hashValue,
+		Scopes:    []string{"*"},
+		Active:    true,
+		CreatedAt: time.Now().UTC(),
+		Metadata:  map[string]any{"source": "bootstrap"},
+	})
+	if err != nil {
+		return fmt.Errorf("create bootstrap identity: %w", err)
+	}
+	return nil
+}
+
+// Run starts explicit runtime work and closes all dependencies on exit.
+func (a *App) Run(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("application run context is required")
+	}
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	if err := a.registry.Start(runCtx); err != nil {
+		return errors.Join(fmt.Errorf("start registry: %w", err), a.closeWithTimeout())
+	}
+	if a.hotReloader != nil {
+		if err := a.hotReloader.Start(runCtx); err != nil {
+			return errors.Join(fmt.Errorf("start hot reload: %w", err), a.closeWithTimeout())
+		}
+	}
+	if a.config.Catalog.RefreshInterval > 0 {
+		a.catalogRefreshWG.Add(1)
+		go func() {
+			defer a.catalogRefreshWG.Done()
+			a.refreshCatalogLoop(runCtx)
+		}()
+	}
+
+	serverResult := make(chan error, 1)
+	go func() { serverResult <- a.httpServer.Start() }()
+
+	var runErr error
+	select {
+	case <-runCtx.Done():
+	case err := <-serverResult:
+		if err == nil {
+			runErr = errors.New("HTTP server stopped before application cancellation")
+		} else {
+			runErr = fmt.Errorf("HTTP server: %w", err)
+		}
+	}
+	cancelRun()
+	a.catalogRefreshWG.Wait()
+	return errors.Join(runErr, a.closeWithTimeout())
+}
+
+// Close stops owned dependencies in reverse construction order.
+func (a *App) Close(ctx context.Context) error {
+	a.closeOnce.Do(func() { a.closeErr = a.closeLifecycle(ctx) })
+	return a.closeErr
+}
+
+func (a *App) own(name string, closeResource func(context.Context) error) {
+	a.lifecycle = append(a.lifecycle, lifecycleEntry{name: name, close: closeResource})
+}
+
+func (a *App) closeLifecycle(ctx context.Context) error {
+	var closeErrors []error
+	for index := len(a.lifecycle) - 1; index >= 0; index-- {
+		entry := a.lifecycle[index]
+		if err := entry.close(ctx); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("close %s: %w", entry.name, err))
+		}
+	}
+	a.lifecycle = nil
+	return errors.Join(closeErrors...)
+}
+
+func (a *App) closeWithTimeout() error {
+	timeout := a.config.Server.ShutdownTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return a.Close(ctx)
+}
+
+func defaultBootstrapFactories() bootstrapFactories {
+	return bootstrapFactories{
+		openStorage: openStorage,
+		openCatalog: func(
+			ctx context.Context,
+			store storage.KVStore,
+			workspacePath string,
+		) (catalogRuntime, error) {
+			runtime, err := runtimecatalog.OpenRuntime(ctx, store, workspacePath)
+			if err != nil {
+				return nil, err
+			}
+			return runtime, nil
+		},
+		newConnector: func(provider string, config connectors.ProviderConfig) (connectors.Connector, error) {
+			adapterRegistry, err := connectors.ProductionAdapterRegistry()
+			if err != nil {
+				return nil, err
+			}
+			return adapterRegistry.NewConnector(catalogs.ProviderID(provider), config)
+		},
+		newCache: cache.NewCacheManager,
+		newHotReload: func(path string, interval time.Duration) (hotReloadRuntime, error) {
+			reloader, err := config.NewHotReloader(path, interval)
+			if err != nil {
+				return nil, err
+			}
+			return reloader, nil
+		},
+		newServer: func(cfg *server.Config, dependencies server.Dependencies) (httpRuntime, error) {
+			httpServer, err := server.New(cfg, dependencies)
+			if err != nil {
+				return nil, err
+			}
+			return httpServer, nil
+		},
+	}
+}
+
+func (a *App) refreshCatalog(ctx context.Context) error {
+	if a == nil || a.catalogRuntime == nil {
+		return ErrCatalogRequired
+	}
+	timeout := a.config.Catalog.RefreshTimeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	refreshCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	_, err := a.catalogRuntime.Refresh(
+		refreshCtx,
+		pkgsync.WithSources(sources.ProvidersID, sources.LocalCatalogID),
+		pkgsync.WithTimeout(timeout),
+	)
+	return err
+}
+
+func (a *App) refreshCatalogLoop(ctx context.Context) {
+	ticker := time.NewTicker(a.config.Catalog.RefreshInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := a.refreshCatalog(ctx); err != nil {
+				log.Warn().Err(err).Msg("Starmap catalog refresh failed; retaining current generation")
+			}
+		}
+	}
+}
+
+func validateFactories(factories bootstrapFactories) error {
+	if factories.openStorage == nil || factories.openCatalog == nil || factories.newConnector == nil ||
+		factories.newCache == nil || factories.newHotReload == nil || factories.newServer == nil {
+		return errors.New("application bootstrap factories are incomplete")
+	}
+	return nil
+}
+
+func openStorage(cfg config.StorageConfig) (storage.KVStore, error) {
+	switch cfg.Mode {
+	case "badger":
+		store, err := storage.OpenBadger(storage.BadgerConfig{
+			Path: cfg.Badger.Path, SyncWrites: cfg.Badger.SyncWrites,
+			Compression: cfg.Badger.Compression != "none", NumVersions: 1,
+			NumLevelZero: 5, MemTableSize: 64 << 20,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return store, nil
+	case "valkey":
+		return storage.OpenValkey(storage.ValkeyConfig{
+			URL: cfg.Valkey.URL, Password: cfg.Valkey.Password,
+			MaxRetries: 3, MinIdleConns: cfg.Valkey.MinIdleConns,
+			ReadTimeout: cfg.Valkey.ReadTimeout, WriteTimeout: cfg.Valkey.WriteTimeout,
+			ClusterMode: cfg.Valkey.ClusterMode,
+		})
+	default:
+		return nil, fmt.Errorf("unknown storage mode %q", cfg.Mode)
+	}
+}
+
+func serverConfig(cfg *config.Config) *server.Config {
+	allowedOrigins := splitCommaSeparated(cfg.Security.AllowedOrigins)
+	if !cfg.Security.EnableCORS {
+		allowedOrigins = nil
+	}
+	allowCredentials := len(allowedOrigins) > 0 && !containsString(allowedOrigins, "*")
+	requestTimeout := cfg.Server.RequestTimeout
+	if requestTimeout == 0 {
+		requestTimeout = 60 * time.Second
+	}
+	maxRequestSize := cfg.Server.MaxRequestSize
+	if maxRequestSize == 0 {
+		maxRequestSize = 10 * 1024 * 1024
+	}
+	return &server.Config{
+		Port: cfg.Server.Port, Host: cfg.Server.Host,
+		ReadTimeout: cfg.Server.ReadTimeout, WriteTimeout: cfg.Server.WriteTimeout,
+		IdleTimeout: cfg.Server.IdleTimeout, RequestTimeout: requestTimeout,
+		ShutdownTimeout: cfg.Server.ShutdownTimeout, MaxRequestSize: maxRequestSize,
+		MaxHeaderBytes:             cfg.Server.MaxHeaderBytes,
+		EnableRateLimiting:         cfg.Security.EnableRateLimiting,
+		RateLimitRequestsPerWindow: int64(cfg.RateLimiting.DefaultRequestsPerMinute),
+		RateLimitWindow:            cfg.RateLimiting.WindowSize,
+		CORS: server.CORSConfig{
+			AllowedOrigins:   allowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
+			AllowCredentials: allowCredentials, MaxAge: 300,
+		},
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func splitCommaSeparated(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+type connectorRegistryAdapter struct{ registry *registry.Registry }
+
+func (a connectorRegistryAdapter) Get(provider string) connectors.Connector {
+	connector, _ := a.registry.Get(provider)
+	return connector
+}
+
+func (a connectorRegistryAdapter) List() []string { return a.registry.ListProviders() }

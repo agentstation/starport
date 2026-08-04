@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -20,13 +19,13 @@ func TestProviderPreferencesFiltering(t *testing.T) {
 	}{
 		{
 			name:     "no preferences",
-			models:   []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
+			models:   []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro"},
 			prefs:    nil,
-			expected: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
+			expected: []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro"},
 		},
 		{
 			name:   "only filter",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro"},
 			prefs: &ProviderPreferences{
 				Only: []string{"openai", "anthropic"},
 			},
@@ -34,15 +33,15 @@ func TestProviderPreferencesFiltering(t *testing.T) {
 		},
 		{
 			name:   "ignore filter",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro"},
 			prefs: &ProviderPreferences{
-				Ignore: []string{"google-aistudio"},
+				Ignore: []string{"google-ai-studio"},
 			},
 			expected: []string{"openai/gpt-4", "anthropic/claude-3"},
 		},
 		{
 			name:   "order without fallbacks",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro", "groq/llama3-70b"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro", "groq/llama3-70b"},
 			prefs: &ProviderPreferences{
 				Order:          []string{"anthropic", "openai"},
 				AllowFallbacks: false,
@@ -51,19 +50,19 @@ func TestProviderPreferencesFiltering(t *testing.T) {
 		},
 		{
 			name:   "order with fallbacks",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro", "groq/llama3-70b"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro", "groq/llama3-70b"},
 			prefs: &ProviderPreferences{
 				Order:          []string{"anthropic", "openai"},
 				AllowFallbacks: true,
 			},
-			expected: []string{"anthropic/claude-3", "openai/gpt-4", "google-aistudio/gemini-pro", "groq/llama3-70b"},
+			expected: []string{"anthropic/claude-3", "openai/gpt-4", "google-ai-studio/gemini-pro", "groq/llama3-70b"},
 		},
 		{
 			name:   "order with ignore",
-			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro", "groq/llama3-70b"},
+			models: []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro", "groq/llama3-70b"},
 			prefs: &ProviderPreferences{
-				Order:          []string{"google", "anthropic", "openai"},
-				Ignore:         []string{"google-aistudio"},
+				Order:          []string{"google-ai-studio", "anthropic", "openai"},
+				Ignore:         []string{"google-ai-studio"},
 				AllowFallbacks: true,
 			},
 			expected: []string{"anthropic/claude-3", "openai/gpt-4", "groq/llama3-70b"},
@@ -81,30 +80,6 @@ func TestProviderPreferencesFiltering(t *testing.T) {
 			assert.Equal(t, tt.expected, filtered)
 		})
 	}
-}
-
-func TestProviderHealthTracking(t *testing.T) {
-	registry := &mockRegistry{
-		connectors: make(map[string]connectors.Connector),
-	}
-	router := New(registry).(*modelRouter)
-
-	// Test initial state - provider should be healthy
-	assert.True(t, router.isProviderHealthy("openai"))
-
-	// Record failures
-	router.recordProviderFailure("openai", fmt.Errorf("connection error"))
-	assert.True(t, router.isProviderHealthy("openai")) // Still healthy after 1 failure
-
-	router.recordProviderFailure("openai", fmt.Errorf("connection error"))
-	assert.True(t, router.isProviderHealthy("openai")) // Still healthy after 2 failures
-
-	router.recordProviderFailure("openai", fmt.Errorf("connection error"))
-	assert.False(t, router.isProviderHealthy("openai")) // Circuit open after 3 failures
-
-	// Record success - should reset
-	router.recordProviderSuccess("openai")
-	assert.True(t, router.isProviderHealthy("openai"))
 }
 
 func TestLatencyTracking(t *testing.T) {
@@ -139,89 +114,6 @@ func TestLatencyTracking(t *testing.T) {
 	assert.Contains(t, allLatencies, "google")
 }
 
-func TestLatencyBasedSelection(t *testing.T) {
-	tracker := NewLatencyTracker(0.2, 1)
-	selector := NewLatencyBasedSelector(tracker, 2.0)
-
-	// No latency data - should return first provider
-	providers := []string{"openai", "anthropic", "google"}
-	selected := selector.SelectProvider(providers)
-	assert.Equal(t, "openai", selected)
-
-	// Add latency data
-	tracker.RecordLatency("openai", 200*time.Millisecond)
-	tracker.RecordLatency("anthropic", 100*time.Millisecond)
-	tracker.RecordLatency("google", 300*time.Millisecond)
-
-	// Should select provider with lowest latency
-	selected = selector.SelectProvider(providers)
-	assert.Equal(t, "anthropic", selected)
-
-	// Test filtering by latency threshold
-	filtered := selector.FilterByLatency(providers)
-	// All should be within 2x of minimum (100ms), so two should be included (anthropic=100ms, openai=200ms)
-	// google=300ms is > 2 * 100ms so it should be filtered out
-	assert.Len(t, filtered, 2)
-	assert.Contains(t, filtered, "anthropic")
-	assert.Contains(t, filtered, "openai")
-	assert.NotContains(t, filtered, "google")
-
-	// Add a very slow provider
-	tracker.RecordLatency("slow", 500*time.Millisecond)
-	providers = []string{"openai", "anthropic", "google", "slow"}
-	filtered = selector.FilterByLatency(providers)
-	// "slow" and "google" should be filtered out (both > 2 * 100ms)
-	assert.Len(t, filtered, 2)
-	assert.NotContains(t, filtered, "slow")
-	assert.NotContains(t, filtered, "google")
-}
-
-func TestCostCalculation(t *testing.T) {
-	calculator := NewCostCalculator()
-
-	// Test known model
-	pricing, exists := calculator.GetModelCost("openai/gpt-4")
-	assert.True(t, exists)
-	assert.Greater(t, pricing.PromptCostPer1M, 0.0)
-	assert.Greater(t, pricing.CompletionCostPer1M, 0.0)
-
-	// Test cost estimation
-	cost := calculator.EstimateCost("openai/gpt-3.5-turbo", 1000, 500)
-	// 1000 prompt tokens at $0.5/1M + 500 completion tokens at $1.5/1M
-	expectedCost := (1000.0/1_000_000)*0.5 + (500.0/1_000_000)*1.5
-	assert.InDelta(t, expectedCost, cost, 0.0001)
-
-	// Test cost comparison
-	ratio := calculator.CompareModelCosts("openai/gpt-4", "openai/gpt-3.5-turbo", 1000, 500)
-	assert.Greater(t, ratio, 1.0) // GPT-4 should be more expensive
-
-	// Test unknown model
-	_, exists = calculator.GetModelCost("unknown/model")
-	assert.False(t, exists)
-}
-
-func TestCostOptimizedSelection(t *testing.T) {
-	calculator := NewCostCalculator()
-	tracker := NewLatencyTracker(0.2, 1)
-	selector := NewCostOptimizedSelector(calculator, tracker, 2.0, 2.0)
-
-	// Add some latency data
-	tracker.RecordLatency("openai", 100*time.Millisecond)
-	tracker.RecordLatency("groq", 50*time.Millisecond)
-	tracker.RecordLatency("anthropic", 150*time.Millisecond)
-
-	models := []string{
-		"openai/gpt-4",                     // Expensive, medium latency
-		"openai/gpt-3.5-turbo",             // Cheap, medium latency
-		"groq/llama3-70b-8192",             // Very cheap, low latency
-		"anthropic/claude-3-opus-20240229", // Very expensive, high latency
-	}
-
-	// Should prefer groq/llama3 due to low cost and low latency
-	selected := selector.SelectModel(models, 1000, 500)
-	assert.Equal(t, "groq/llama3-70b-8192", selected)
-}
-
 func TestStickySession(t *testing.T) {
 	manager := NewStickyProviderSessionManager(1 * time.Second)
 
@@ -252,13 +144,28 @@ func TestStickySession(t *testing.T) {
 	assert.False(t, exists) // Should be expired
 }
 
+func TestStickySessionStorageIsBounded(t *testing.T) {
+	manager := NewStickyProviderSessionManager(time.Hour).(*memoryStickyProviderSessionManager)
+	manager.maximum = 2
+	manager.SetProvider("conv-1", "openai")
+	manager.SetProvider("conv-2", "anthropic")
+	manager.SetProvider("conv-3", "openai")
+
+	manager.mu.RLock()
+	require.Len(t, manager.sessions, 2)
+	manager.mu.RUnlock()
+	provider, exists := manager.GetProvider("conv-3")
+	require.True(t, exists)
+	require.Equal(t, "openai", provider)
+}
+
 func TestEnhancedAPIKeyRestrictions(t *testing.T) {
 	registry := &mockRegistry{
 		connectors: make(map[string]connectors.Connector),
 	}
 	router := New(registry).(*modelRouter)
 
-	models := []string{"openai/gpt-4", "anthropic/claude-3", "google-aistudio/gemini-pro"}
+	models := []string{"openai/gpt-4", "anthropic/claude-3", "google-ai-studio/gemini-pro"}
 	config := &APIKeyConfig{
 		AllowedProviders: []string{"openai", "anthropic"},
 		ModelOverrides: map[string]string{
@@ -270,7 +177,22 @@ func TestEnhancedAPIKeyRestrictions(t *testing.T) {
 	assert.Len(t, filtered, 2)
 	assert.Contains(t, filtered, "openai/gpt-3.5-turbo") // Override applied
 	assert.Contains(t, filtered, "anthropic/claude-3")
-	assert.NotContains(t, filtered, "google-aistudio/gemini-pro") // Not allowed
+	assert.NotContains(t, filtered, "google-ai-studio/gemini-pro") // Not allowed
+
+	modelConfig := &APIKeyConfig{
+		AllowedModels: []string{"openai/gpt-4", "claude-3"},
+	}
+
+	filtered = router.filterByAPIKeyRestrictions(models, modelConfig)
+	assert.ElementsMatch(t, []string{"openai/gpt-4", "anthropic/claude-3"}, filtered)
+
+	combinedConfig := &APIKeyConfig{
+		AllowedProviders: []string{"openai", "anthropic"},
+		AllowedModels:    []string{"openai/gpt-4", "google-ai-studio/gemini-pro"},
+	}
+
+	filtered = router.filterByAPIKeyRestrictions(models, combinedConfig)
+	assert.Equal(t, []string{"openai/gpt-4"}, filtered)
 }
 
 func TestRouterWithStickySessions(t *testing.T) {
@@ -337,9 +259,9 @@ func TestRouterCompleteFlow(t *testing.T) {
 
 	// Set up various connectors
 	rateLimitedConnector := &mockConnector{
-		name:        "openai",
-		shouldFail:  true,
-		failureType: FallbackRateLimit,
+		name:          "openai",
+		shouldFail:    true,
+		failureStatus: 429,
 	}
 
 	expensiveConnector := &mockConnector{
@@ -402,6 +324,6 @@ func TestRouterCompleteFlow(t *testing.T) {
 	// Check metadata
 	assert.Len(t, resp.Metadata.ModelsAttempted, 2)
 	assert.Equal(t, "failed", resp.Metadata.ModelsAttempted[0].Status)
-	assert.Contains(t, resp.Metadata.ModelsAttempted[0].Error, "Rate limit exceeded")
+	assert.Equal(t, "The provider rate limit was reached.", resp.Metadata.ModelsAttempted[0].Error)
 	assert.Equal(t, "success", resp.Metadata.ModelsAttempted[1].Status)
 }

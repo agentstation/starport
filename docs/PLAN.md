@@ -12,7 +12,7 @@ This document outlines the implementation plan for Starport, an open-source LLM 
 - ✅ All 6 LLM provider connectors with streaming
 - ✅ OpenAI and OpenRouter compatible APIs
 - ✅ Complete storage layer (Badger & Valkey)
-- ✅ Smart routing with circuit breakers
+- ✅ Smart routing with one attempt budget and offering-level availability
 - ✅ BYOK implementation with encryption
 
 **Critical Gaps**:

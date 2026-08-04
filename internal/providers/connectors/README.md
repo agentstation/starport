@@ -1,87 +1,22 @@
-# Connectors Package
+# Inference adapters
 
-This package contains the LLM provider connector interfaces and implementations for Starport.
+This package owns provider wire protocols and inference authentication. It does
+not own provider membership, model discovery, model IDs, service URLs, prices,
+capabilities, or reliability sources. Those facts come from one immutable
+Starmap catalog generation.
 
-## Structure
+The production adapter registry declares the inference operations, endpoint
+protocols, and credential contract that compiled Starport code can execute. A
+provider becomes active only when all three inputs exist:
 
-- `interface.go` - Core connector interface and factory function
-- `types.go` - Request/response types for LLM operations
-- `errors.go` - Error types and helpers
-- `mock.go` - Mock implementation for testing
-- Provider-specific implementations:
-  - `openai.go` - OpenAI connector
-  - `anthropic.go` - Anthropic/Claude connector
-  - `google_aistudio.go` - Google AI Studio (Gemini) connector
-  - `google_vertex.go` - Google Vertex AI connector
-  - `groq.go` - Groq connector
-  - `mistral.go` - Mistral AI connector
-  - `azure.go` - Azure OpenAI connector
-  - `ollama.go` - Ollama connector for local models
+1. A Starmap provider offering supports the operation.
+2. A compiled adapter supports the offering protocol.
+3. The operator supplied the required inference credential and runtime endpoint
+   bindings.
 
-## Usage
+Requests receive an exact provider model ID and a bound Starmap endpoint. An
+adapter must send both without model-family inference, endpoint fallback, model
+discovery, or hidden retries. The central executor owns retries and fallback.
 
-```go
-// Create a connector
-config := connectors.ProviderConfig{
-    BaseURL: "https://api.openai.com",
-    APIKey:  os.Getenv("OPENAI_API_KEY"),
-    Timeout: 30 * time.Second,
-}
-
-connector, err := connectors.NewConnector("openai", config)
-if err != nil {
-    log.Fatal(err)
-}
-defer connector.Close()
-
-// Use the connector
-req := &connectors.ChatRequest{
-    Model: "gpt-4",
-    Messages: []connectors.Message{
-        {Role: "user", Content: "Hello!"},
-    },
-}
-
-resp, err := connector.Chat(ctx, req)
-```
-
-### Ollama Example
-
-```go
-// Ollama connector (no API key needed)
-config := connectors.ProviderConfig{
-    BaseURL: "http://localhost:11434",
-    Timeout: 30 * time.Second,
-    Enabled: true, // Must be explicitly enabled
-}
-
-connector, err := connectors.NewConnector("ollama", config)
-if err != nil {
-    log.Fatal(err)
-}
-
-// List available models
-models, err := connector.Models(ctx)
-for _, model := range models.Data {
-    fmt.Printf("Available: %s\n", model.ID)
-}
-
-// Use a local model
-req := &connectors.ChatRequest{
-    Model: "ollama/llama3.2",
-    Messages: []connectors.Message{
-        {Role: "user", Content: "Hello!"},
-    },
-}
-
-resp, err := connector.Chat(ctx, req)
-```
-
-## Design Principles
-
-1. **Streaming First**: All connectors support streaming responses
-2. **Context Aware**: Proper context propagation for cancellation
-3. **Error Handling**: Consistent error types across providers
-4. **Health Checks**: Built-in health monitoring
-5. **OpenRouter Compatible**: Maintain compatibility with OpenRouter API
-6. **Idiomatic Go**: Simple interfaces, no unnecessary abstraction
+Starmap catalog-acquisition credentials are a separate credential plane. They
+must not enter an inference adapter.

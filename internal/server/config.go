@@ -27,6 +27,15 @@ type Config struct {
 	// Maximum request body size (default: 10MB)
 	MaxRequestSize int64 `env:"MAX_REQUEST_SIZE,default=10485760"`
 
+	// Maximum aggregate size of HTTP request headers.
+	MaxHeaderBytes int `env:"MAX_HEADER_BYTES,default=1048576"`
+
+	// Rate limiting configuration. Enforcement happens after API key
+	// authentication and uses the authenticated API key ID, not the raw secret.
+	EnableRateLimiting         bool          `env:"ENABLE_RATE_LIMITING,default=false"`
+	RateLimitRequestsPerWindow int64         `env:"RATE_LIMIT_REQUESTS_PER_WINDOW,default=0"`
+	RateLimitWindow            time.Duration `env:"RATE_LIMIT_WINDOW,default=1m"`
+
 	// CORS configuration
 	CORS CORSConfig
 }

@@ -10,36 +10,21 @@ import (
 )
 
 func TestNewConnector(t *testing.T) {
-	t.Run("Create mock connector", func(t *testing.T) {
-		config := connectors.ProviderConfig{
-			BaseURL: "http://mock.api",
-			APIKey:  "test-key",
-		}
-
-		connector, err := connectors.NewConnector("mock", config)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-
-		if connector.Name() != "mock" {
-			t.Errorf("expected name 'mock', got %s", connector.Name())
-		}
-	})
-
 	t.Run("Create with unknown provider", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			BaseURL: "http://unknown.api",
 		}
 
 		_, err := connectors.NewConnector("unknown", config)
-		if !errors.Is(err, connectors.ErrProviderNotSupported) {
-			t.Errorf("expected ErrProviderNotSupported, got %v", err)
+		if !errors.Is(err, connectors.ErrAdapterProviderUnsupported) {
+			t.Errorf("expected ErrAdapterProviderUnsupported, got %v", err)
 		}
 	})
 
 	t.Run("Create Google AI Studio connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			APIKey: "test-key",
+			BaseURL: "https://provider.test",
+			APIKey:  "test-key",
 		}
 
 		connector, err := connectors.NewConnector("google-ai-studio", config)
@@ -54,7 +39,8 @@ func TestNewConnector(t *testing.T) {
 
 	t.Run("Create Groq connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			APIKey: "test-key",
+			BaseURL: "https://provider.test",
+			APIKey:  "test-key",
 		}
 
 		connector, err := connectors.NewConnector("groq", config)
@@ -69,7 +55,8 @@ func TestNewConnector(t *testing.T) {
 
 	t.Run("Create Mistral connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			APIKey: "test-key",
+			BaseURL: "https://provider.test",
+			APIKey:  "test-key",
 		}
 
 		connector, err := connectors.NewConnector("mistral", config)
@@ -88,19 +75,20 @@ func TestNewConnector(t *testing.T) {
 			APIKey:  "test-key",
 		}
 
-		connector, err := connectors.NewConnector("azure", config)
+		connector, err := connectors.NewConnector("azure-openai", config)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if connector.Name() != "azure" {
+		if connector.Name() != "azure-openai" {
 			t.Errorf("expected name 'azure', got %s", connector.Name())
 		}
 	})
 
 	t.Run("Create OpenAI connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			APIKey: "test-key",
+			BaseURL: "https://provider.test",
+			APIKey:  "test-key",
 		}
 
 		connector, err := connectors.NewConnector("openai", config)
@@ -115,7 +103,8 @@ func TestNewConnector(t *testing.T) {
 
 	t.Run("Create Anthropic connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			APIKey: "test-key",
+			BaseURL: "https://provider.test",
+			APIKey:  "test-key",
 		}
 
 		connector, err := connectors.NewConnector("anthropic", config)
@@ -138,12 +127,9 @@ func TestProviderConfigValidation(t *testing.T) {
 		{
 			name: "valid config",
 			config: connectors.ProviderConfig{
-				BaseURL:           "https://api.example.com",
-				Timeout:           30 * time.Second,
-				MaxConnections:    100,
-				MaxRetries:        3,
-				RetryDelay:        1 * time.Second,
-				BackoffMultiplier: 2.0,
+				BaseURL:        "https://api.example.com",
+				Timeout:        30 * time.Second,
+				MaxConnections: 100,
 			},
 			wantErr: false,
 		},
@@ -178,37 +164,8 @@ func TestProviderConfigValidation(t *testing.T) {
 				if tt.config.MaxConnections <= 0 {
 					t.Error("expected positive max connections")
 				}
-				if tt.config.BackoffMultiplier <= 1 {
-					t.Error("expected backoff multiplier > 1")
-				}
 			}
 		})
-	}
-}
-
-func TestHealthStatus(t *testing.T) {
-	status := connectors.HealthStatus{
-		Healthy:   true,
-		Latency:   10 * time.Millisecond,
-		CheckedAt: time.Now(),
-	}
-
-	if !status.Healthy {
-		t.Error("expected healthy status")
-	}
-
-	errorStatus := connectors.HealthStatus{
-		Healthy:   false,
-		Latency:   5 * time.Second,
-		Error:     "connection timeout",
-		CheckedAt: time.Now(),
-	}
-
-	if errorStatus.Healthy {
-		t.Error("expected unhealthy status")
-	}
-	if errorStatus.Error == "" {
-		t.Error("expected error message")
 	}
 }
 
@@ -308,31 +265,6 @@ func TestConnectorInterface(t *testing.T) {
 		}
 		if len(resp.Data) != 1 {
 			t.Errorf("expected 1 embedding, got %d", len(resp.Data))
-		}
-	})
-
-	t.Run("Models", func(t *testing.T) {
-		resp, err := mock.Models(ctx)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-
-		if len(resp.Data) != 2 {
-			t.Errorf("expected 2 models, got %d", len(resp.Data))
-		}
-	})
-
-	t.Run("Health", func(t *testing.T) {
-		err := mock.Health(ctx)
-		if err != nil {
-			t.Errorf("expected healthy, got error: %v", err)
-		}
-
-		// Test with error
-		mock.SetHealthError(connectors.ErrHealthCheckFailed)
-		err = mock.Health(ctx)
-		if !errors.Is(err, connectors.ErrHealthCheckFailed) {
-			t.Errorf("expected ErrHealthCheckFailed, got %v", err)
 		}
 	})
 

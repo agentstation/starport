@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewGoogleAIStudioConnector(t *testing.T) {
@@ -18,13 +21,13 @@ func TestNewGoogleAIStudioConnector(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid config",
+			name: "missing catalog base URL",
 			config: ProviderConfig{
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "custom base URL",
@@ -39,7 +42,7 @@ func TestNewGoogleAIStudioConnector(t *testing.T) {
 		{
 			name: "invalid config - missing timeout",
 			config: ProviderConfig{
-				BaseURL:        "",
+				BaseURL:        "https://provider.test",
 				APIKey:         "test-key",
 				Timeout:        0,
 				MaxConnections: 100,
@@ -70,34 +73,30 @@ func TestNewVertexAIConnector(t *testing.T) {
 		{
 			name: "valid config",
 			config: ProviderConfig{
+				BaseURL:        "https://provider.test",
 				APIKey:         "test-token",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
-				Extra: map[string]any{
-					"project_id": "my-project",
-					"location":   "us-central1",
-				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "missing project_id",
+			name: "project identity is validated by adapter registry",
 			config: ProviderConfig{
+				BaseURL:        "https://provider.test",
 				APIKey:         "test-token",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "default location",
 			config: ProviderConfig{
+				BaseURL:        "https://provider.test",
 				APIKey:         "test-token",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
-				Extra: map[string]any{
-					"project_id": "my-project",
-				},
 			},
 			wantErr: false,
 		},
@@ -116,15 +115,18 @@ func TestNewVertexAIConnector(t *testing.T) {
 	}
 }
 
-func TestGoogleAIStudioConnector_Chat(t *testing.T) {
+func TestGoogleAPIKeyUsesInferenceHeader(t *testing.T) {
 	// Create a test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
 		if !strings.Contains(r.URL.Path, ":generateContent") {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("key") == "" {
-			t.Error("missing API key in query")
+		if r.Header.Get("x-goog-api-key") == "" {
+			t.Error("missing API key header")
+		}
+		if r.URL.Query().Get("key") != "" {
+			t.Error("API key entered the request URL")
 		}
 
 		// Send response
@@ -161,11 +163,15 @@ func TestGoogleAIStudioConnector_Chat(t *testing.T) {
 	}
 
 	resp, err := connector.Chat(context.Background(), &ChatRequest{
-		Model: "google-aistudio/gemini-1.5-flash",
+		Model: "google-ai-studio/gemini-1.5-flash",
+		Endpoint: InferenceEndpoint{
+			Type: catalogs.EndpointTypeGoogle,
+			URL:  server.URL + "/v1beta/models/gemini-1.5-flash:generateContent",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
-		MaxTokens: intPtr(100),
+		MaxTokens: IntPtr(100),
 	})
 
 	if err != nil {
@@ -222,21 +228,21 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 		BaseURL: server.URL,
 		APIKey:  "test-token",
 		Timeout: 10 * time.Second,
-		Extra: map[string]any{
-			"project_id": "test-project",
-			"location":   "us-central1",
-		},
 	})
 	if err != nil {
 		t.Fatalf("failed to create connector: %v", err)
 	}
 
 	resp, err := connector.Chat(context.Background(), &ChatRequest{
-		Model: "google-vertexai/gemini-1.5-flash",
+		Model: "google-vertex/gemini-1.5-flash",
+		Endpoint: InferenceEndpoint{
+			Type: catalogs.EndpointTypeGoogleCloud,
+			URL:  server.URL + "/v1/projects/test/locations/us/publishers/google/models/gemini:generateContent",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
-		MaxTokens: intPtr(100),
+		MaxTokens: IntPtr(100),
 	})
 
 	if err != nil {
@@ -251,95 +257,6 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 	}
 	if resp.Usage.TotalTokens != 30 {
 		t.Errorf("expected 30 total tokens, got %d", resp.Usage.TotalTokens)
-	}
-}
-
-func TestGoogleAIStudioConnector_Models(t *testing.T) {
-	connector, err := NewGoogleAIStudioConnector(ProviderConfig{
-		APIKey:  "test-key",
-		Timeout: 10 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("failed to create connector: %v", err)
-	}
-
-	// Clear cache to force static list
-	clearModelCache("google-aistudio")
-
-	models, err := connector.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models() failed: %v", err)
-	}
-
-	if len(models.Data) == 0 {
-		t.Error("expected models, got none")
-	}
-
-	// Check that all models have correct prefix
-	for _, model := range models.Data {
-		if !strings.HasPrefix(model.ID, "google-ai-studio/") {
-			t.Errorf("model ID missing prefix: %s", model.ID)
-		}
-	}
-}
-
-func TestVertexAIConnector_Models(t *testing.T) {
-	connector, err := NewVertexAIConnector(ProviderConfig{
-		APIKey:  "test-token",
-		Timeout: 10 * time.Second,
-		Extra: map[string]any{
-			"project_id": "test-project",
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to create connector: %v", err)
-	}
-
-	models, err := connector.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models() failed: %v", err)
-	}
-
-	if len(models.Data) == 0 {
-		t.Error("expected models, got none")
-	}
-
-	// Check that we have different types of models
-	foundGemini := false
-	foundClaude := false
-	foundPaLM := false
-	foundCodey := false
-
-	for _, model := range models.Data {
-		if !strings.HasPrefix(model.ID, "google-vertex/") {
-			t.Errorf("model ID missing prefix: %s", model.ID)
-		}
-
-		if strings.Contains(model.ID, "gemini") {
-			foundGemini = true
-		}
-		if strings.Contains(model.ID, "claude") {
-			foundClaude = true
-		}
-		if strings.Contains(model.ID, "bison") {
-			foundPaLM = true
-		}
-		if strings.Contains(model.ID, "code") {
-			foundCodey = true
-		}
-	}
-
-	if !foundGemini {
-		t.Error("expected Gemini models, found none")
-	}
-	if !foundClaude {
-		t.Error("expected Claude models via Vertex AI, found none")
-	}
-	if !foundPaLM {
-		t.Error("expected PaLM models, found none")
-	}
-	if !foundCodey {
-		t.Error("expected Codey models, found none")
 	}
 }
 
@@ -389,7 +306,11 @@ func TestGoogleAIStudioConnector_ChatStream(t *testing.T) {
 	}
 
 	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
-		Model: "google-aistudio/gemini-1.5-flash",
+		Model: "google-ai-studio/gemini-1.5-flash",
+		Endpoint: InferenceEndpoint{
+			Type: catalogs.EndpointTypeGoogle,
+			URL:  server.URL + "/v1beta/models/gemini-1.5-flash:streamGenerateContent",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -416,4 +337,32 @@ func TestGoogleAIStudioConnector_ChatStream(t *testing.T) {
 	if content.String() != "Hello from stream!" {
 		t.Errorf("expected 'Hello from stream!', got '%s'", content.String())
 	}
+}
+
+func TestGoogleAIStudioConnector_EmbeddingsUsesOfferingEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/selected/embed", r.URL.Path)
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"embedding": map[string]any{"values": []float32{0.1, 0.2}},
+		}))
+	}))
+	defer server.Close()
+
+	connector, err := NewGoogleAIStudioConnector(ProviderConfig{
+		BaseURL: server.URL,
+		APIKey:  "inference-key",
+	})
+	require.NoError(t, err)
+	defer connector.Close()
+	response, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
+		Model: "opaque/embedding@001",
+		Input: []string{"first", "second"},
+		Endpoint: InferenceEndpoint{
+			Type: catalogs.EndpointTypeGoogle,
+			URL:  server.URL + "/selected/embed",
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, response.Data, 2)
+	require.Equal(t, "opaque/embedding@001", response.Model)
 }

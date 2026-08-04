@@ -255,7 +255,7 @@ get_task_info() {
 - Implement dynamic Models() for Gemini (GET /v1beta/models)
 - Implement dynamic Models() for Groq (GET /openai/v1/models)
 - Split GeminiConnector into GoogleAIStudioConnector and VertexAIConnector
-- Update connector registry for google-aistudio and google-vertexai
+- Update the connector registry for google-ai-studio and google-vertex.
 - Add model response caching with TTL
 - Add Vertex AI models (PaLM, Codey, etc.)
 - Update all tests for new provider names"

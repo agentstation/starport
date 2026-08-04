@@ -198,29 +198,75 @@ func (v *ValkeyStore) Decrement(ctx context.Context, key string, delta int64) (i
 
 // CompareAndSwap atomically updates a value if it matches the old value
 func (v *ValkeyStore) CompareAndSwap(ctx context.Context, key string, old, newValue []byte) error {
-	// Use Lua script for atomic CAS operation
+	return v.CompareAndSwapBatch(ctx, []CompareAndSwapMutation{{
+		Key: key, ExpectedValue: old, NewValue: newValue,
+	}})
+}
+
+// CompareAndSwapBatch applies all conditional writes or none of them.
+func (v *ValkeyStore) CompareAndSwapBatch(ctx context.Context, mutations []CompareAndSwapMutation) error {
+	if err := validateCompareAndSwapMutations(mutations); err != nil {
+		return err
+	}
+	if len(mutations) == 0 {
+		return nil
+	}
 	script := `
-		if redis.call("get", KEYS[1]) == ARGV[1] then
-			return redis.call("set", KEYS[1], ARGV[2])
-		else
-			return nil
+		for index = 1, #KEYS do
+			local offset = (index - 1) * 5
+			local current = redis.call("get", KEYS[index])
+			if ARGV[offset + 1] == "0" then
+				if current ~= false then return 0 end
+			elseif current == false or current ~= ARGV[offset + 2] then
+				return 0
+			end
 		end
+		for index = 1, #KEYS do
+			local offset = (index - 1) * 5
+			if ARGV[offset + 3] == "0" then
+				redis.call("del", KEYS[index])
+			elseif tonumber(ARGV[offset + 5]) > 0 then
+				redis.call("set", KEYS[index], ARGV[offset + 4], "PX", ARGV[offset + 5])
+			else
+				redis.call("set", KEYS[index], ARGV[offset + 4], "KEEPTTL")
+			end
+		end
+		return 1
 	`
 
-	cmd := v.client.B().Eval().Script(script).Numkeys(1).Key(key).Arg(string(old), string(newValue)).Build()
+	keys := make([]string, 0, len(mutations))
+	args := make([]string, 0, len(mutations)*5)
+	for _, mutation := range mutations {
+		expectedExists := "1"
+		if mutation.ExpectedValue == nil {
+			expectedExists = "0"
+		}
+		newExists := "1"
+		if mutation.NewValue == nil {
+			newExists = "0"
+		}
+		ttlMilliseconds := mutation.TTL.Milliseconds()
+		if mutation.TTL > 0 && ttlMilliseconds == 0 {
+			ttlMilliseconds = 1
+		}
+		keys = append(keys, mutation.Key)
+		args = append(args, expectedExists, string(mutation.ExpectedValue), newExists, string(mutation.NewValue), fmt.Sprint(ttlMilliseconds))
+	}
+	cmd := v.client.B().Eval().Script(script).Numkeys(int64(len(keys))).Key(keys...).Arg(args...).Build()
 	resp := v.client.Do(ctx, cmd)
 
 	// Check for errors first
 	if err := resp.Error(); err != nil {
-		return fmt.Errorf("failed to compare and swap key %s: %w", key, err)
+		return fmt.Errorf("failed to compare and swap %d keys: %w", len(keys), err)
 	}
 
-	// Check if the script returned nil (mismatch) by trying to get the value
-	_, err := resp.ToString()
-	if err != nil && valkey.IsValkeyNil(err) {
+	updated, err := resp.AsInt64()
+	if err != nil {
+		return fmt.Errorf("decode compare-and-swap batch result: %w", err)
+	}
+	if updated != 1 {
 		return ErrConflict
 	}
-
 	return nil
 }
 
@@ -342,9 +388,13 @@ func (v *ValkeyStore) BeginTransaction(ctx context.Context) (Transaction, error)
 func (v *ValkeyStore) Scan(ctx context.Context, pattern string, limit int) ([]string, error) {
 	var keys []string
 	cursor := uint64(0)
+	count := int64(1000)
+	if limit > 0 && limit < int(count) {
+		count = int64(limit)
+	}
 
 	for {
-		cmd := v.client.B().Scan().Cursor(cursor).Match(pattern).Count(int64(limit)).Build()
+		cmd := v.client.B().Scan().Cursor(cursor).Match(pattern).Count(count).Build()
 		resp := v.client.Do(ctx, cmd)
 
 		// Parse scan result
@@ -356,18 +406,16 @@ func (v *ValkeyStore) Scan(ctx context.Context, pattern string, limit int) ([]st
 		keys = append(keys, scanResult.Elements...)
 
 		// Check if we've reached the limit or finished scanning
-		if scanResult.Cursor == 0 || len(keys) >= limit {
+		if scanResult.Cursor == 0 || (limit > 0 && len(keys) >= limit) {
 			break
 		}
 
 		cursor = scanResult.Cursor
 	}
 
-	// Trim to limit
-	if len(keys) > limit {
+	if limit > 0 && len(keys) > limit {
 		keys = keys[:limit]
 	}
-
 	return keys, nil
 }
 

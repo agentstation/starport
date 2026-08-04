@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,8 +14,8 @@ import (
 func TestListKeys(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Skip validation
@@ -65,8 +65,8 @@ func TestListKeys(t *testing.T) {
 func TestGlobalKeyOperations(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Skip validation
@@ -94,7 +94,7 @@ func TestGlobalKeyOperations(t *testing.T) {
 	// Test getting non-existent global key
 	_, err = manager.GetGlobalKey(ctx, "non-existent")
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrKeyNotFound)
 
 	// Test deleting non-existent global key
 	err = manager.DeleteGlobalKey(ctx, "non-existent")
@@ -102,12 +102,65 @@ func TestGlobalKeyOperations(t *testing.T) {
 	assert.Contains(t, err.Error(), "key not found")
 }
 
+func TestListGlobalKeysReadsCanonicalRecord(t *testing.T) {
+	ctx, _, manager := newProviderCredentialFixture(t)
+	addGlobalProviderCredential(t, ctx, manager)
+
+	keys, err := manager.ListGlobalKeys(ctx)
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	assert.Equal(t, "openai", keys[0].Provider)
+}
+
+func TestProviderCredentialRepositoryContract(t *testing.T) {
+	assert.Equal(t, 1, credentials.ProviderCredentialStorageSchemaVersion)
+	assert.Equal(t, "credentials:v1:scope:Kg:", credentials.ScopePrefix("*"))
+	assert.Equal(t, "credentials:v1:scope:Kg:provider:b3BlbmFp", credentials.StorageKey("*", "openai"))
+
+	ctx, store, manager := newProviderCredentialFixture(t)
+	addGlobalProviderCredential(t, ctx, manager)
+
+	storageKeys, err := store.ScanWithPrefix(ctx, credentials.ScopePrefix("*"), providerCredentialScanLimit)
+	require.NoError(t, err)
+	assert.Equal(t, []string{credentials.StorageKey("*", "openai")}, storageKeys)
+
+	providerKey, err := manager.GetGlobalKey(ctx, "openai")
+	require.NoError(t, err)
+	assert.Equal(t, "openai", providerKey.Provider)
+
+	updated, err := manager.UpdateGlobalKey(ctx, "openai", nil, map[string]any{"region": "test"}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"region": "test"}, updated.Config)
+
+	require.NoError(t, manager.DeleteGlobalKey(ctx, "openai"))
+	_, err = manager.GetGlobalKey(ctx, "openai")
+	assert.ErrorIs(t, err, ErrKeyNotFound)
+}
+
+func newProviderCredentialFixture(t *testing.T) (context.Context, *storage.MockStore, ProviderKeys) {
+	t.Helper()
+	ctx := context.WithValue(context.Background(), "skip_validation", true)
+	store := storage.NewMockStore()
+	masterKey, err := credentials.GenerateMasterKey()
+	require.NoError(t, err)
+
+	manager, err := newTestProviderKeys(store, masterKey)
+	require.NoError(t, err)
+	return ctx, store, manager
+}
+
+func addGlobalProviderCredential(t *testing.T, ctx context.Context, manager ProviderKeys) {
+	t.Helper()
+	_, err := manager.AddGlobalKey(ctx, "openai", map[string]string{"api_key": "sk-test"}, nil, nil)
+	require.NoError(t, err)
+}
+
 // TestRecordUsageErrors tests error cases in RecordUsage
 func TestRecordUsageErrors(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Try to record usage for non-existent key
@@ -119,15 +172,14 @@ func TestRecordUsageErrors(t *testing.T) {
 	}
 
 	err = manager.RecordUsage(ctx, "user:non-existent", "openai", usage)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get key")
+	assert.ErrorIs(t, err, ErrKeyNotFound)
 }
 
 // TestValidateKeyEdgeCases tests edge cases in validation
 func TestValidateKeyEdgeCases(t *testing.T) {
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	ctx := context.WithValue(context.Background(), "skip_validation", true)
@@ -153,51 +205,21 @@ func TestValidateKeyEdgeCases(t *testing.T) {
 		},
 		{
 			name:     "Empty Azure API key",
-			provider: "azure",
+			provider: "azure-openai",
 			key:      map[string]string{"api_key": ""},
 			wantErr:  true,
 		},
 		{
 			name:     "Empty Google AI Studio API key",
-			provider: "google-aistudio",
+			provider: "google-ai-studio",
 			key:      map[string]string{"api_key": ""},
 			wantErr:  true,
 		},
 		{
-			name:     "Empty Vertex AI service account",
-			provider: "google-vertexai",
-			key:      map[string]string{"service_account_json": ""},
+			name:     "Empty Vertex AI access token",
+			provider: "google-vertex",
+			key:      map[string]string{"access_token": ""},
 			wantErr:  true,
-		},
-		{
-			name:     "Empty AWS access key",
-			provider: "aws-bedrock",
-			key: map[string]string{
-				"access_key_id":     "",
-				"secret_access_key": "secret",
-				"region":            "us-east-1",
-			},
-			wantErr: true,
-		},
-		{
-			name:     "Empty AWS secret key",
-			provider: "aws-bedrock",
-			key: map[string]string{
-				"access_key_id":     "AKIATEST",
-				"secret_access_key": "",
-				"region":            "us-east-1",
-			},
-			wantErr: true,
-		},
-		{
-			name:     "Empty AWS region",
-			provider: "aws-bedrock",
-			key: map[string]string{
-				"access_key_id":     "AKIATEST",
-				"secret_access_key": "secret",
-				"region":            "",
-			},
-			wantErr: true,
 		},
 		{
 			name:     "Empty Groq API key",
@@ -229,8 +251,8 @@ func TestValidateKeyEdgeCases(t *testing.T) {
 func TestGetKeysWithErrors(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Test with empty scope
@@ -248,8 +270,8 @@ func TestGetKeysWithErrors(t *testing.T) {
 func TestUpdateKeyEdgeCases(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Skip validation
@@ -268,7 +290,7 @@ func TestUpdateKeyEdgeCases(t *testing.T) {
 	assert.Equal(t, newConfig, updatedKey.Config)
 
 	// Verify key data was not changed
-	encService, err := models.NewEncryptionService(masterKey)
+	encService, err := credentials.NewEncryptionService(masterKey)
 	require.NoError(t, err)
 	decrypted, err := encService.DecryptCredential(updatedKey.EncryptedCredential)
 	require.NoError(t, err)
@@ -283,57 +305,11 @@ func TestUpdateKeyEdgeCases(t *testing.T) {
 func TestRotateEncryptionKey(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	err = manager.RotateEncryptionKey(ctx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "key rotation not implemented")
-}
-
-// TestCostCalculationEdgeCases tests edge cases in cost calculation
-func TestCostCalculationEdgeCases(t *testing.T) {
-	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name  string
-		usage *Usage
-	}{
-		{
-			name: "Unknown provider",
-			usage: &Usage{
-				Provider:    "unknown",
-				Model:       "some-model",
-				TotalTokens: 1000,
-			},
-		},
-		{
-			name: "Zero tokens",
-			usage: &Usage{
-				Provider:         "openai",
-				Model:            "gpt-4",
-				PromptTokens:     0,
-				CompletionTokens: 0,
-			},
-		},
-		{
-			name: "Audio usage",
-			usage: &Usage{
-				Provider:     "openai",
-				Model:        "whisper",
-				AudioSeconds: 60.5,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cost := manager.CalculateProviderKeyCost(tt.usage)
-			assert.GreaterOrEqual(t, cost, 0.0, "Cost should never be negative")
-		})
-	}
 }

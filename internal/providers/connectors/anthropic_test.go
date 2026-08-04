@@ -27,14 +27,14 @@ func TestNewAnthropicConnector(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid config with default base URL",
+			name: "missing catalog base URL",
 			config: ProviderConfig{
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
-				BaseURL:        "", // Will use default
+				BaseURL:        "",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "invalid config - missing timeout",
@@ -206,8 +206,8 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 				APIKey:         "test-key",
 				Timeout:        5 * time.Second,
 				MaxConnections: 10,
-				MaxRetries:     0,
 			})
+			tt.request.Endpoint = InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"}
 
 			resp, err := connector.Chat(context.Background(), tt.request)
 			if (err != nil) != tt.wantErr {
@@ -268,7 +268,8 @@ func TestAnthropicConnector_ChatStream(t *testing.T) {
 	})
 
 	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
-		Model: "claude-3-haiku-20240307",
+		Model:    "claude-3-haiku-20240307",
+		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -315,6 +316,7 @@ func TestAnthropicConnector_ChatStream(t *testing.T) {
 
 func TestAnthropicConnector_Embeddings(t *testing.T) {
 	connector, _ := NewAnthropicConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
@@ -335,114 +337,6 @@ func TestAnthropicConnector_Embeddings(t *testing.T) {
 	}
 	if apiErr.StatusCode != http.StatusNotImplemented {
 		t.Errorf("Expected status 501, got %d", apiErr.StatusCode)
-	}
-}
-
-func TestAnthropicConnector_Models(t *testing.T) {
-	connector, _ := NewAnthropicConnector(ProviderConfig{
-		APIKey:         "test-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-	})
-
-	resp, err := connector.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models() error = %v", err)
-	}
-
-	if resp.Object != "list" {
-		t.Errorf("Expected object 'list', got '%s'", resp.Object)
-	}
-
-	// Check for expected models
-	modelMap := make(map[string]bool)
-	for _, model := range resp.Data {
-		modelMap[model.ID] = true
-	}
-
-	expectedModels := []string{
-		"anthropic/claude-3-opus",
-		"anthropic/claude-3-sonnet",
-		"anthropic/claude-3-haiku",
-		"anthropic/claude-3.5-sonnet",
-		"anthropic/claude-3.5-haiku",
-		"anthropic/claude-opus-4",
-		"anthropic/claude-sonnet-4",
-	}
-
-	for _, expected := range expectedModels {
-		if !modelMap[expected] {
-			t.Errorf("Expected model %s not found", expected)
-		}
-	}
-}
-
-func TestAnthropicConnector_Health(t *testing.T) {
-	tests := []struct {
-		name       string
-		mockStatus int
-		mockError  bool
-		wantErr    bool
-	}{
-		{
-			name:       "service healthy",
-			mockStatus: http.StatusOK,
-			mockError:  false,
-			wantErr:    false,
-		},
-		{
-			name:       "service up but unauthorized",
-			mockStatus: http.StatusUnauthorized,
-			mockError:  true,
-			wantErr:    false, // Auth error means service is up
-		},
-		{
-			name:       "service down",
-			mockStatus: http.StatusInternalServerError,
-			mockError:  true,
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tt.mockError {
-					w.WriteHeader(tt.mockStatus)
-					json.NewEncoder(w).Encode(map[string]any{
-						"error": map[string]any{
-							"type":    "error",
-							"message": "Test error",
-						},
-					})
-					return
-				}
-
-				w.WriteHeader(tt.mockStatus)
-				json.NewEncoder(w).Encode(anthropicResponse{
-					ID:   "msg_health",
-					Type: "message",
-					Role: "assistant",
-					Content: []anthropicContent{
-						{Type: "text", Text: "H"},
-					},
-				})
-			}))
-			defer server.Close()
-
-			connector, _ := NewAnthropicConnector(ProviderConfig{
-				BaseURL:        server.URL + "/v1",
-				APIKey:         "test-key",
-				Timeout:        5 * time.Second,
-				MaxConnections: 10,
-				MaxRetries:     0,
-			})
-
-			err := connector.Health(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Health() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
 	}
 }
 
@@ -485,14 +379,14 @@ func TestAnthropicConnector_ConvertMessageContent(t *testing.T) {
 	defer server.Close()
 
 	connector, _ := NewAnthropicConnector(ProviderConfig{
-		BaseURL:    server.URL + "/v1",
-		APIKey:     "test-key",
-		MaxRetries: 0,
+		BaseURL: server.URL + "/v1",
+		APIKey:  "test-key",
 	})
 
 	// Test multimodal content
 	_, err := connector.Chat(context.Background(), &ChatRequest{
-		Model: "claude-3-haiku-20240307",
+		Model:    "claude-3-haiku-20240307",
+		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
 		Messages: []Message{
 			{
 				Role: "user",
@@ -511,6 +405,7 @@ func TestAnthropicConnector_ConvertMessageContent(t *testing.T) {
 
 func TestAnthropicConnector_Name(t *testing.T) {
 	connector, err := NewAnthropicConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
@@ -526,6 +421,7 @@ func TestAnthropicConnector_Name(t *testing.T) {
 
 func TestAnthropicConnector_Close(t *testing.T) {
 	connector, err := NewAnthropicConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,

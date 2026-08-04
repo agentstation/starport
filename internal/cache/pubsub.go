@@ -101,19 +101,6 @@ func (m *MemoryPubSub) Close() error {
 	return nil
 }
 
-// Invalidation channel constants
-const (
-	// Channel prefixes for different data types
-	ChannelAPIKeyInvalidate = "cache:inv:apikey:" // #nosec G101 -- This is a channel name, not a credential
-	ChannelPresetInvalidate = "cache:inv:preset:"
-	ChannelModelInvalidate  = "cache:inv:model:"
-
-	// Broadcast channels for bulk invalidation
-	ChannelAPIKeyFlush = "cache:flush:apikey" // #nosec G101 -- This is a channel name, not a credential
-	ChannelPresetFlush = "cache:flush:preset"
-	ChannelModelFlush  = "cache:flush:model"
-)
-
 // matchesPattern checks if a channel matches a pattern with * wildcard
 func matchesPattern(pattern, channel string) bool {
 	// Exact match

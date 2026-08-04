@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/inference"
 	"github.com/rs/zerolog/log"
 )
 
@@ -53,8 +53,8 @@ func (s *loggingService) ProcessChatCompletion(ctx context.Context, req *ChatCom
 
 	log.Info().
 		Str("method", "ProcessChatCompletion").
-		Str("model", req.Model).
-		Int("messages", len(req.Messages)).
+		Str("model", req.Request.Model).
+		Int("messages", len(req.Request.Messages)).
 		Str("request_id", req.RequestID).
 		Msg("processing chat completion request")
 
@@ -70,8 +70,8 @@ func (s *loggingService) ProcessChatCompletion(ctx context.Context, req *ChatCom
 		logger.Err(err).Msg("chat completion failed")
 	} else {
 		logger.
-			Str("model_used", resp.ModelUsed).
-			Int("choices", len(resp.Choices)).
+			Str("model_used", resp.Response.ModelUsed).
+			Int("choices", len(resp.Response.Choices)).
 			Msg("chat completion succeeded")
 	}
 
@@ -84,8 +84,8 @@ func (s *loggingService) ProcessChatCompletionStream(ctx context.Context, req *C
 
 	log.Info().
 		Str("method", "ProcessChatCompletionStream").
-		Str("model", req.Model).
-		Int("messages", len(req.Messages)).
+		Str("model", req.Request.Model).
+		Int("messages", len(req.Request.Messages)).
 		Str("request_id", req.RequestID).
 		Msg("processing streaming chat completion request")
 
@@ -115,7 +115,7 @@ func (s *loggingService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsR
 
 	log.Info().
 		Str("method", "ProcessEmbeddings").
-		Str("model", req.Model).
+		Str("model", req.Request.Model).
 		Str("request_id", req.RequestID).
 		Msg("processing embeddings request")
 
@@ -131,7 +131,7 @@ func (s *loggingService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsR
 		logger.Err(err).Msg("embeddings generation failed")
 	} else {
 		logger.
-			Int("embeddings", len(resp.Data)).
+			Int("embeddings", len(resp.Response.Data)).
 			Msg("embeddings generation succeeded")
 	}
 
@@ -226,7 +226,7 @@ type loggingStream struct {
 }
 
 // Read passes through to the underlying stream.
-func (s *loggingStream) Read() (*connectors.ChatStreamChunk, error) {
+func (s *loggingStream) Read() (*inference.StreamEvent, error) {
 	return s.stream.Read()
 }
 

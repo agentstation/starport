@@ -18,7 +18,6 @@ type layeredCache struct {
 	config   Config
 	local    *ristretto.Cache[string, []byte]
 	kv       storage.KVStore
-	kg       *KeyGenerator
 	policies map[PolicyType]Policy
 	stats    cacheStats
 }
@@ -56,13 +55,7 @@ func New(config Config, kv storage.KVStore) (Cache, error) {
 		config:   config,
 		local:    localCache,
 		kv:       kv,
-		kg:       NewKeyGenerator("starport"),
 		policies: DefaultPolicies(),
-	}
-
-	// Start cleanup routine
-	if config.CleanupInterval > 0 {
-		go lc.cleanupRoutine()
 	}
 
 	// Warm up cache if configured
@@ -320,16 +313,4 @@ func (lc *layeredCache) Warm(ctx context.Context, keys []string) error {
 func (lc *layeredCache) Close() error {
 	lc.local.Close()
 	return nil
-}
-
-// cleanupRoutine periodically cleans up expired items
-func (lc *layeredCache) cleanupRoutine() {
-	ticker := time.NewTicker(lc.config.CleanupInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		// Ristretto handles TTL cleanup internally
-		// This is a placeholder for any additional cleanup logic
-		log.Debug().Msg("cache cleanup cycle completed")
-	}
 }

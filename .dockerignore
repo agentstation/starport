@@ -1,0 +1,10 @@
+.git
+.github
+.env
+local.env
+data
+tmp
+coverage.out
+coverage.html
+starport
+*.log

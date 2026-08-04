@@ -4,8 +4,10 @@ import "errors"
 
 // Validation errors
 var (
-	// ErrStoreRequired is returned when store is not provided
-	ErrStoreRequired = errors.New("store is required")
+	// ErrRepositoryRequired is returned when the credential repository is missing.
+	ErrRepositoryRequired = errors.New("credential repository is required")
+	// ErrAdapterRegistryRequired is returned when the compiled inference adapter registry is missing.
+	ErrAdapterRegistryRequired = errors.New("inference adapter registry is required")
 	// ErrScopeRequired is returned when scope is not provided
 	ErrScopeRequired = errors.New("scope is required")
 	// ErrProviderRequired is returned when provider is not provided
@@ -18,8 +20,6 @@ var (
 	ErrInvalidProvider = errors.New("invalid provider")
 	// ErrKeyNotFound is returned when a key is not found
 	ErrKeyNotFound = errors.New("key not found")
-	// ErrNotFound is an alias for ErrKeyNotFound for compatibility
-	ErrNotFound = ErrKeyNotFound
 	// ErrInvalidKeyFormat is returned when key format is invalid
 	ErrInvalidKeyFormat = errors.New("invalid key format")
 	// ErrEncryptionFailed is returned when encryption fails

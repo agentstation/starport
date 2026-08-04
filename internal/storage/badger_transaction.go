@@ -168,7 +168,9 @@ func (t *BadgerTransaction) CompareAndSwap(key string, old, newValue []byte) err
 	item, err := t.txn.Get([]byte(key))
 	if err != nil {
 		if errors.Is(err, badger.ErrKeyNotFound) && old == nil {
-			// Key doesn't exist and we expect nil, so set the new value
+			if newValue == nil {
+				return nil
+			}
 			return t.txn.Set([]byte(key), newValue)
 		}
 		if errors.Is(err, badger.ErrKeyNotFound) {
@@ -186,6 +188,9 @@ func (t *BadgerTransaction) CompareAndSwap(key string, old, newValue []byte) err
 	// Compare values
 	if !bytesEqual(currentValue, old) {
 		return ErrConflict
+	}
+	if newValue == nil {
+		return t.txn.Delete([]byte(key))
 	}
 
 	// Preserve TTL if set
@@ -214,6 +219,9 @@ func (t *BadgerTransaction) Commit(_ context.Context) error {
 
 	err := t.txn.Commit()
 	t.closed = true
+	if errors.Is(err, badger.ErrConflict) {
+		return ErrConflict
+	}
 	return err
 }
 

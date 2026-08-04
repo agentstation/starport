@@ -1,3 +1,4 @@
+// Package dto owns shared administrative HTTP response values.
 package dto
 
 import (

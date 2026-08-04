@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/agentstation/starport/pkg/catalog"
-	"github.com/agentstation/starport/pkg/httpclient"
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
+
+const anthropicTextType = "text"
 
 // AnthropicConnector implements the Connector interface for Anthropic
 type AnthropicConnector struct {
@@ -23,24 +23,18 @@ type AnthropicConnector struct {
 
 // NewAnthropicConnector creates a new Anthropic connector
 func NewAnthropicConnector(config ProviderConfig) (*AnthropicConnector, error) {
-	// Set default base URL if not provided
-	if config.BaseURL == "" {
-		config.BaseURL = "https://api.anthropic.com/v1"
-	}
-
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client using httpclient package
-	client, err := httpclient.New("anthropic", httpclient.DefaultProviderConfig("anthropic"))
+	httpClient, err := newProviderHTTPClient("anthropic", config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+		return nil, err
 	}
 
 	return &AnthropicConnector{
 		config:     config,
-		httpClient: client.GetHTTPClient(),
+		httpClient: httpClient,
 	}, nil
 }
 
@@ -51,7 +45,23 @@ func (c *AnthropicConnector) Name() string {
 
 // Chat performs a chat completion request
 func (c *AnthropicConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
-	anthropicReq := c.convertToAnthropicRequest(req)
+	endpoint, err := selectedEndpoint(req.Endpoint, catalogs.EndpointTypeAnthropic)
+	if err != nil {
+		return nil, err
+	}
+	return executeAnthropicChat(ctx, c.httpClient, endpoint, req, true, c.setHeaders, c.handleError)
+}
+
+func executeAnthropicChat(
+	ctx context.Context,
+	client *http.Client,
+	endpoint string,
+	req *ChatRequest,
+	includeModel bool,
+	setHeaders func(*http.Request),
+	handleError func(*http.Response) error,
+) (*ChatResponse, error) {
+	anthropicReq := convertToAnthropicRequest(req, includeModel)
 	anthropicReq["stream"] = false
 
 	body, err := json.Marshal(anthropicReq)
@@ -59,21 +69,21 @@ func (c *AnthropicConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatR
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.config.BaseURL+"/messages", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	c.setHeaders(httpReq)
+	setHeaders(httpReq)
 
-	resp, err := doRequestWithRetry(c.httpClient, httpReq, c.config)
+	resp, err := doRequest(client, httpReq)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, c.handleError(resp)
+		return nil, handleError(resp)
 	}
 
 	// Parse Anthropic response
@@ -83,12 +93,28 @@ func (c *AnthropicConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatR
 	}
 
 	// Convert to OpenAI format
-	return c.convertToOpenAIResponse(&anthropicResp, req.Model), nil
+	return convertAnthropicResponse(&anthropicResp, req.Model), nil
 }
 
 // ChatStream performs a streaming chat completion request
 func (c *AnthropicConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error) {
-	anthropicReq := c.convertToAnthropicRequest(req)
+	endpoint, err := selectedEndpoint(req.Endpoint, catalogs.EndpointTypeAnthropic)
+	if err != nil {
+		return nil, err
+	}
+	return executeAnthropicStream(ctx, c.httpClient, endpoint, req, true, c.setHeaders, c.handleError)
+}
+
+func executeAnthropicStream(
+	ctx context.Context,
+	client *http.Client,
+	endpoint string,
+	req *ChatRequest,
+	includeModel bool,
+	setHeaders func(*http.Request),
+	handleError func(*http.Response) error,
+) (ChatStream, error) {
+	anthropicReq := convertToAnthropicRequest(req, includeModel)
 	anthropicReq["stream"] = true
 
 	body, err := json.Marshal(anthropicReq)
@@ -96,22 +122,22 @@ func (c *AnthropicConnector) ChatStream(ctx context.Context, req *ChatRequest) (
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.config.BaseURL+"/messages", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	c.setHeaders(httpReq)
+	setHeaders(httpReq)
 	httpReq.Header.Set("Accept", "text/event-stream")
 
-	resp, err := doRequestWithRetry(c.httpClient, httpReq, c.config)
+	resp, err := doRequest(client, httpReq)
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		defer func() { _ = resp.Body.Close() }()
-		return nil, c.handleError(resp)
+		return nil, handleError(resp)
 	}
 
 	return newAnthropicStream(resp, req.Model), nil
@@ -127,107 +153,6 @@ func (c *AnthropicConnector) Embeddings(_ context.Context, _ *EmbeddingsRequest)
 	}
 }
 
-// Models lists available models from the provider
-func (c *AnthropicConnector) Models(ctx context.Context) (*ModelsResponse, error) {
-	return fetchModelsWithCache(ctx, "anthropic", func(ctx context.Context) (*ModelsResponse, error) {
-		// Try to fetch models dynamically from Anthropic API
-		req, err := http.NewRequestWithContext(ctx, "GET", c.config.BaseURL+"/models", nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		// Set headers
-		req.Header.Set("x-api-key", c.config.APIKey)
-		req.Header.Set("anthropic-version", "2023-06-01")
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			// Fall back to catalog models on error
-			return c.modelsFromCatalog(), nil
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		if resp.StatusCode != http.StatusOK {
-			// Fall back to catalog models on error
-			return c.modelsFromCatalog(), nil
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			// Fall back to catalog models on error
-			return c.modelsFromCatalog(), nil
-		}
-
-		// Parse the response
-		models, err := parseModelsResponse(body, "anthropic")
-		if err != nil {
-			// Fall back to catalog models on error
-			return c.modelsFromCatalog(), nil
-		}
-
-		return models, nil
-	})
-}
-
-// modelsFromCatalog returns models from the catalog as fallback
-func (c *AnthropicConnector) modelsFromCatalog() *ModelsResponse {
-	// Use the dynamic catalog helper that includes both static and dynamic models
-	models := catalog.GetModelsByProviderWithDynamic("anthropic")
-
-	// Convert catalog models to connector models
-	result := make([]Model, 0, len(models))
-	for _, m := range models {
-		result = append(result, Model{
-			ID:      m.ID,
-			Object:  "model",
-			Created: m.Created,
-			OwnedBy: "anthropic",
-		})
-	}
-
-	return &ModelsResponse{
-		Object: "list",
-		Data:   result,
-	}
-}
-
-// Health checks the health of the connector
-func (c *AnthropicConnector) Health(ctx context.Context) error {
-	// Simple health check - try to get response with minimal request
-	// Use a stable model that's likely to exist
-	req := &ChatRequest{
-		Model: "anthropic/claude-3-haiku-20240307",
-		Messages: []Message{
-			{Role: "user", Content: "Hi"},
-		},
-		MaxTokens: intPtr(1),
-	}
-
-	_, err := c.Chat(ctx, req)
-	if err != nil {
-		// Check if it's an auth error (which means the service is up)
-		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == http.StatusUnauthorized {
-			return nil // Service is up, just no valid key
-		}
-		// Check if it's a model not found error
-		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == http.StatusNotFound {
-			// Try with a basic claude-3 model
-			req.Model = "anthropic/claude-3-sonnet-20240229"
-			_, err2 := c.Chat(ctx, req)
-			if err2 != nil {
-				if apiErr2, ok := err2.(*APIError); ok && apiErr2.StatusCode == http.StatusUnauthorized {
-					return nil // Service is up, just no valid key
-				}
-				return err2
-			}
-			return nil
-		}
-		return err
-	}
-	return nil
-}
-
 // Close cleans up any resources
 func (c *AnthropicConnector) Close() error {
 	c.httpClient.CloseIdleConnections()
@@ -237,7 +162,7 @@ func (c *AnthropicConnector) Close() error {
 // setHeaders sets common headers for requests
 func (c *AnthropicConnector) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.config.APIKey)
+	applyRegisteredInferenceAuth(catalogs.ProviderIDAnthropic, req, c.config.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("User-Agent", "starport/1.0")
 }
@@ -268,23 +193,12 @@ func (c *AnthropicConnector) handleError(resp *http.Response) error {
 }
 
 // convertToAnthropicRequest converts OpenAI format to Anthropic format
-func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[string]any {
+func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]any {
 	anthropicReq := make(map[string]any)
 
-	// Model - resolve alias and strip provider prefix
-	modelID := req.Model
-	// Try to resolve alias from catalog
-	if cat, err := catalog.GetCatalog(); err == nil {
-		modelID = cat.ResolveModelAlias(modelID)
+	if includeModel {
+		anthropicReq["model"] = req.Model
 	}
-	// Strip provider prefix for Anthropic API
-	model := strings.TrimPrefix(modelID, "anthropic/")
-	// Anthropic API expects dots to be replaced with hyphens in model names
-	// specifically for Claude 3.5 models (e.g., "claude-3.5-sonnet" becomes "claude-3-5-sonnet")
-	if strings.Contains(model, "claude-3.5-") {
-		model = strings.ReplaceAll(model, ".", "-")
-	}
-	anthropicReq["model"] = model
 
 	// Convert messages
 	var messages []map[string]any
@@ -310,9 +224,9 @@ func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[str
 			// Handle multimodal content
 			var content []map[string]any
 			for _, part := range parts {
-				if part.Type == "text" {
+				if part.Type == anthropicTextType {
 					content = append(content, map[string]any{
-						"type": "text",
+						"type": anthropicTextType,
 						"text": part.Text,
 					})
 				} else if part.Type == "image_url" && part.ImageURL != nil {
@@ -355,15 +269,18 @@ func (c *AnthropicConnector) convertToAnthropicRequest(req *ChatRequest) map[str
 	if len(req.Stop) > 0 {
 		anthropicReq["stop_sequences"] = req.Stop
 	}
+	for field, value := range req.ProviderOptions {
+		anthropicReq[field] = value
+	}
 
 	return anthropicReq
 }
 
 // convertToOpenAIResponse converts Anthropic response to OpenAI format
-func (c *AnthropicConnector) convertToOpenAIResponse(resp *anthropicResponse, model string) *ChatResponse {
+func convertAnthropicResponse(resp *anthropicResponse, model string) *ChatResponse {
 	content := ""
 	for _, block := range resp.Content {
-		if block.Type == "text" {
+		if block.Type == anthropicTextType {
 			content += block.Text
 		}
 	}
@@ -536,9 +453,4 @@ type anthropicStreamEvent struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage,omitempty"`
-}
-
-// Helper function
-func intPtr(i int) *int {
-	return &i
 }
