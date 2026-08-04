@@ -2,21 +2,32 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starport/internal/cache"
 	"github.com/agentstation/starport/internal/chatui"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
-	"github.com/agentstation/starport/internal/registry"
-	"github.com/agentstation/starport/internal/router"
+	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/controllers"
-	"github.com/agentstation/starport/internal/server/dto"
-	"github.com/agentstation/starport/internal/storage"
+)
+
+var (
+	// ErrConfigRequired reports an absent HTTP server configuration.
+	ErrConfigRequired = errors.New("server config is required")
+	// ErrServiceRequired reports an absent gateway use-case service.
+	ErrServiceRequired = errors.New("gateway service is required")
+	// ErrIdentitiesRequired reports an absent identity repository.
+	ErrIdentitiesRequired = errors.New("identity repository is required")
+	// ErrProviderKeysRequired reports an absent provider-key service.
+	ErrProviderKeysRequired = errors.New("provider key service is required")
+	// ErrRateLimitsRequired reports an absent rate-limit repository.
+	ErrRateLimitsRequired = errors.New("rate-limit repository is required")
 )
 
 // Server represents the HTTP server with new handler organization
@@ -25,97 +36,64 @@ type Server struct {
 	cfg        *Config
 	httpServer *http.Server
 
-	// Core dependencies
-	registry     *registry.Registry
+	// Ready application dependencies
 	service      proxy.Proxy
-	store        storage.KVStore
+	identities   identity.Repository
 	providerKeys byok.ProviderKeys
+	rateLimits   ratelimit.Repository
 
 	// Handler collection
 	controllers *controllers.Controllers
 
 	// Middleware
 	auth *AuthMiddleware
-
-	// ChatUI configuration
-	chatUIConfig *chatui.Config
 }
 
-// Option configures server options
-type Option func(*Server)
+// Dependencies contains ready application ports for the HTTP adapter.
+type Dependencies struct {
+	Service      proxy.Proxy
+	Identities   identity.Repository
+	ProviderKeys byok.ProviderKeys
+	RateLimits   ratelimit.Repository
+	ChatUI       *chatui.Handler
+}
 
-// WithCache enables caching with the cache Manager
-func WithCache(cm *cache.Manager) Option {
-	return func(s *Server) {
-		// Create a new proxy service with caching enabled
-		cacheConfig := &proxy.CacheConfig{
-			EnableChatCache:      true,
-			EnableEmbeddingCache: true,
-			EnableModelCache:     true,
-			EnableProviderCache:  true,
-			CacheControlHeader:   "X-Cache-Control",
-		}
-
-		// Get registry and router from the server
-		reg := s.registry
-		router := router.New(newRegistryAdapter(reg))
-
-		// Create new proxy service with cache
-		s.service = proxy.New(reg, router, proxy.WithCache(cm, cacheConfig))
-		log.Info().Msg("cache manager option applied - proxy service created with caching enabled")
+// New creates an HTTP adapter from ready application dependencies.
+func New(config *Config, dependencies Dependencies) (*Server, error) {
+	if config == nil {
+		return nil, ErrConfigRequired
 	}
-}
-
-// WithChatUI enables the ChatUI with the given configuration
-func WithChatUI(config *chatui.Config) Option {
-	return func(s *Server) {
-		s.chatUIConfig = config
+	if dependencies.Service == nil {
+		return nil, ErrServiceRequired
 	}
-}
+	if dependencies.Identities == nil {
+		return nil, ErrIdentitiesRequired
+	}
+	if dependencies.ProviderKeys == nil {
+		return nil, ErrProviderKeysRequired
+	}
+	if dependencies.RateLimits == nil {
+		return nil, ErrRateLimitsRequired
+	}
 
-// New creates a new server instance with improved handler organization
-func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
-	// Create dependencies
-	store := storage.NewMockStore()                     // TODO: Get from config
-	providerKeys, _ := byok.NewProviderKeys(store, nil) // TODO: Get encryption service
-
-	// Create routing with adapter
-	router := router.New(newRegistryAdapter(reg))
-
-	// Create proxy service using the new constructor
-	service := proxy.New(reg, router)
-
-	// Create server instance
 	s := &Server{
 		router:       chi.NewRouter(),
 		cfg:          config,
-		registry:     reg,
-		service:      service,
-		store:        store,
-		providerKeys: providerKeys,
-		auth:         NewAuthMiddleware(store),
+		service:      dependencies.Service,
+		identities:   dependencies.Identities,
+		providerKeys: dependencies.ProviderKeys,
+		rateLimits:   dependencies.RateLimits,
 	}
+	s.auth = NewAuthMiddleware(s.identities)
 
-	// Apply options first to get ChatUI config
-	for _, opt := range opts {
-		opt(s)
-	}
-
-	// Create controller collection with ChatUI config
 	handlerConfig := controllers.Config{
-		Service:       s.service, // Use s.service which may be wrapped with cache
-		ProviderKeys:  providerKeys,
-		Store:         store,
-		ServiceName:   "starport",
-		Version:       "1.0.0",
-		ChatUIEnabled: s.chatUIConfig != nil,
-		Logger:        &log.Logger,
+		Service:      s.service,
+		ProviderKeys: s.providerKeys,
+		Identities:   s.identities,
+		ServiceName:  "starport",
+		Version:      "1.0.0",
+		ChatUI:       dependencies.ChatUI,
 	}
-
-	if s.chatUIConfig != nil {
-		handlerConfig.ChatUIConfig = *s.chatUIConfig
-	}
-
 	s.controllers = controllers.NewControllers(handlerConfig)
 
 	// Register routes
@@ -123,14 +101,15 @@ func New(config *Config, reg *registry.Registry, opts ...Option) *Server {
 
 	// Create HTTP server
 	s.httpServer = &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", config.Host, config.Port),
-		Handler:      s.router,
-		ReadTimeout:  config.ReadTimeout,
-		WriteTimeout: config.WriteTimeout,
-		IdleTimeout:  config.IdleTimeout,
+		Addr:           fmt.Sprintf("%s:%d", config.Host, config.Port),
+		Handler:        s.router,
+		ReadTimeout:    config.ReadTimeout,
+		WriteTimeout:   config.WriteTimeout,
+		IdleTimeout:    config.IdleTimeout,
+		MaxHeaderBytes: config.MaxHeaderBytes,
 	}
 
-	return s
+	return s, nil
 }
 
 // Middleware methods that routes.go expects
@@ -147,12 +126,16 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return s.auth.RequireAdmin(next)
 }
 
-func (s *Server) handleNotFound(w http.ResponseWriter, _ *http.Request) {
-	dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "The requested endpoint does not exist")
+func (s *Server) requireAnyScope(scopes ...string) func(http.Handler) http.Handler {
+	return s.auth.RequireAnyScope(scopes...)
 }
 
-func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
-	dto.WriteError(w, http.StatusMethodNotAllowed, dto.ErrorTypeInvalidRequest, "Method not allowed")
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	writeProtocolError(w, r, http.StatusNotFound, "not_found_error", "The requested endpoint does not exist")
+}
+
+func (s *Server) handleMethodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	writeProtocolError(w, r, http.StatusMethodNotAllowed, "invalid_request_error", "Method not allowed")
 }
 
 // Start starts the HTTP server
@@ -178,11 +161,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("failed to shutdown server: %w", err)
-	}
-
-	// Close registry and cleanup resources
-	if err := s.registry.Close(); err != nil {
-		log.Error().Err(err).Msg("failed to close registry")
 	}
 
 	return nil

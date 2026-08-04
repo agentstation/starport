@@ -12,12 +12,6 @@ import (
 	"time"
 )
 
-// Constants for Google operations
-const (
-	generateContentAction       = "generateContent"
-	streamGenerateContentAction = "streamGenerateContent"
-)
-
 // googleBaseConnector provides shared implementation for Google connectors
 type googleBaseConnector struct {
 	config     ProviderConfig
@@ -26,7 +20,7 @@ type googleBaseConnector struct {
 }
 
 // Chat performs a chat completion request
-func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEndpoint func(string, bool) string, setHeaders func(*http.Request)) (*ChatResponse, error) {
+func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEndpoint func(*ChatRequest, bool) (string, error), setHeaders func(*http.Request)) (*ChatResponse, error) {
 	geminiReq := c.convertToGeminiRequest(req)
 
 	body, err := json.Marshal(geminiReq)
@@ -34,7 +28,10 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	endpoint := getEndpoint(req.Model, false)
+	endpoint, err := getEndpoint(req, false)
+	if err != nil {
+		return nil, err
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -42,7 +39,7 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 
 	setHeaders(httpReq)
 
-	resp, err := doRequestWithRetry(c.httpClient, httpReq, c.config)
+	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +60,7 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 }
 
 // ChatStream performs a streaming chat completion request
-func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, getEndpoint func(string, bool) string, setHeaders func(*http.Request)) (ChatStream, error) {
+func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, getEndpoint func(*ChatRequest, bool) (string, error), setHeaders func(*http.Request)) (ChatStream, error) {
 	geminiReq := c.convertToGeminiRequest(req)
 
 	body, err := json.Marshal(geminiReq)
@@ -71,7 +68,10 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	endpoint := getEndpoint(req.Model, true)
+	endpoint, err := getEndpoint(req, true)
+	if err != nil {
+		return nil, err
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -80,7 +80,7 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 	setHeaders(httpReq)
 	httpReq.Header.Set("Accept", "text/event-stream")
 
-	resp, err := doRequestWithRetry(c.httpClient, httpReq, c.config)
+	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
 		return nil, err
 	}

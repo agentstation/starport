@@ -96,19 +96,6 @@ func TestHelpCommand(t *testing.T) {
 		expected []string
 	}{
 		{
-			name: "default help",
-			args: []string{"starport"},
-			expected: []string{
-				"NAME:",
-				"starport - High-performance LLM gateway",
-				"USAGE:",
-				"COMMANDS:",
-				"version",
-				"serve",
-				"help",
-			},
-		},
-		{
 			name: "help flag",
 			args: []string{"starport", "--help"},
 			expected: []string{
@@ -159,9 +146,19 @@ func TestHelpCommand(t *testing.T) {
 
 // TestServeCommand tests that serve command starts without crashing
 func TestServeCommand(t *testing.T) {
+	runServerCommandTest(t, []string{"starport", "serve"})
+}
+
+func TestDefaultCommandStartsServer(t *testing.T) {
+	runServerCommandTest(t, []string{"starport"})
+}
+
+func runServerCommandTest(t *testing.T, args []string) {
+	t.Helper()
+
 	// Skip this test if we're in a CI environment where network calls might hang
 	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping serve command test in CI environment")
+		t.Skip("Skipping server command test in CI environment")
 	}
 
 	// Find an available port to avoid conflicts
@@ -177,7 +174,15 @@ func TestServeCommand(t *testing.T) {
 
 	// Use the available port for testing
 	oldPort := os.Getenv("STARPORT_SERVER_PORT")
+	oldBadgerPath := os.Getenv("STARPORT_STORAGE_BADGER_PATH")
+	oldMasterKey := os.Getenv("STARPORT_SECURITY_MASTER_KEY")
+	oldBootstrapKey := os.Getenv("STARPORT_SECURITY_BOOTSTRAP_API_KEY")
+	oldProviderKey := os.Getenv("STARPORT_PROVIDERS_OPENAI_API_KEY")
 	os.Setenv("STARPORT_SERVER_PORT", fmt.Sprintf("%d", port))
+	os.Setenv("STARPORT_STORAGE_BADGER_PATH", t.TempDir())
+	os.Setenv("STARPORT_SECURITY_MASTER_KEY", strings.Repeat("k", 32))
+	os.Setenv("STARPORT_SECURITY_BOOTSTRAP_API_KEY", strings.Repeat("b", 32))
+	os.Setenv("STARPORT_PROVIDERS_OPENAI_API_KEY", "test-provider-key")
 	t.Logf("Using port %d for test (STARPORT_SERVER_PORT=%s)", port, os.Getenv("STARPORT_SERVER_PORT"))
 
 	// Also check if port 8080 is in use
@@ -193,6 +198,26 @@ func TestServeCommand(t *testing.T) {
 		} else {
 			os.Unsetenv("STARPORT_SERVER_PORT")
 		}
+		if oldBadgerPath != "" {
+			os.Setenv("STARPORT_STORAGE_BADGER_PATH", oldBadgerPath)
+		} else {
+			os.Unsetenv("STARPORT_STORAGE_BADGER_PATH")
+		}
+		if oldMasterKey != "" {
+			os.Setenv("STARPORT_SECURITY_MASTER_KEY", oldMasterKey)
+		} else {
+			os.Unsetenv("STARPORT_SECURITY_MASTER_KEY")
+		}
+		if oldBootstrapKey != "" {
+			os.Setenv("STARPORT_SECURITY_BOOTSTRAP_API_KEY", oldBootstrapKey)
+		} else {
+			os.Unsetenv("STARPORT_SECURITY_BOOTSTRAP_API_KEY")
+		}
+		if oldProviderKey != "" {
+			os.Setenv("STARPORT_PROVIDERS_OPENAI_API_KEY", oldProviderKey)
+		} else {
+			os.Unsetenv("STARPORT_PROVIDERS_OPENAI_API_KEY")
+		}
 	}()
 
 	// Create a context with timeout to prevent hanging
@@ -206,7 +231,7 @@ func TestServeCommand(t *testing.T) {
 	go func() {
 		// Notify that we've started
 		started <- true
-		runErr = runAppWithArgs(ctx, []string{"starport", "serve"})
+		runErr = runAppWithArgs(ctx, args)
 		done <- true
 	}()
 

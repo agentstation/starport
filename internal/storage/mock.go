@@ -227,7 +227,17 @@ func (m *MockStore) Decrement(ctx context.Context, key string, delta int64) (int
 
 // CompareAndSwap atomically updates a value if it matches the expected value
 func (m *MockStore) CompareAndSwap(ctx context.Context, key string, old, newValue []byte) error {
+	return m.CompareAndSwapBatch(ctx, []CompareAndSwapMutation{{
+		Key: key, ExpectedValue: old, NewValue: newValue,
+	}})
+}
+
+// CompareAndSwapBatch applies all conditional writes or none of them.
+func (m *MockStore) CompareAndSwapBatch(ctx context.Context, mutations []CompareAndSwapMutation) error {
 	if err := m.checkContext(ctx); err != nil {
+		return err
+	}
+	if err := validateCompareAndSwapMutations(mutations); err != nil {
 		return err
 	}
 
@@ -238,21 +248,28 @@ func (m *MockStore) CompareAndSwap(ctx context.Context, key string, old, newValu
 		return ErrStorageClosed
 	}
 
-	current, exists := m.data[key]
-	if !exists && old != nil {
-		return ErrConflict
-	}
-	if exists && !bytesEqual(current, old) {
-		return ErrConflict
+	for _, mutation := range mutations {
+		_ = m.checkExpired(mutation.Key)
+		current, exists := m.data[mutation.Key]
+		if !exists && mutation.ExpectedValue != nil {
+			return ErrConflict
+		}
+		if exists && !bytesEqual(current, mutation.ExpectedValue) {
+			return ErrConflict
+		}
 	}
 
-	if newValue == nil {
-		delete(m.data, key)
-		delete(m.ttl, key)
-	} else {
-		storedValue := make([]byte, len(newValue))
-		copy(storedValue, newValue)
-		m.data[key] = storedValue
+	for _, mutation := range mutations {
+		if mutation.NewValue == nil {
+			delete(m.data, mutation.Key)
+			delete(m.ttl, mutation.Key)
+			continue
+		}
+		storedValue := append([]byte(nil), mutation.NewValue...)
+		m.data[mutation.Key] = storedValue
+		if mutation.TTL > 0 {
+			m.ttl[mutation.Key] = time.Now().Add(mutation.TTL)
+		}
 	}
 	return nil
 }

@@ -191,13 +191,15 @@ func TestValkeyStoreWithMock(t *testing.T) {
 		// CAS success
 		client.EXPECT().Do(ctx, mock.MatchFn(func(cmd []string) bool {
 			return len(cmd) >= 2 && cmd[0] == "EVAL"
-		})).Return(mock.Result(mock.ValkeyString("OK")))
+		})).Return(mock.Result(mock.ValkeyInt64(1)))
 		err := store.CompareAndSwap(ctx, key, oldValue, newValue)
 		assert.NoError(t, err)
 
-		// For CAS failure test, we'll skip it as the mock behavior
-		// with ValkeyNil is complex to simulate correctly
-		// The integration tests cover this scenario
+		client.EXPECT().Do(ctx, mock.MatchFn(func(cmd []string) bool {
+			return len(cmd) >= 2 && cmd[0] == "EVAL"
+		})).Return(mock.Result(mock.ValkeyInt64(0)))
+		err = store.CompareAndSwap(ctx, key, oldValue, newValue)
+		assert.ErrorIs(t, err, ErrConflict)
 	})
 }
 

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 )
@@ -28,13 +27,13 @@ func TestNewOpenAIConnector(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid config with default base URL",
+			name: "missing catalog base URL",
 			config: ProviderConfig{
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "invalid config - missing timeout",
@@ -45,14 +44,14 @@ func TestNewOpenAIConnector(t *testing.T) {
 			wantErr: false, // Validate sets defaults
 		},
 		{
-			name: "empty base URL uses default",
+			name: "empty base URL fails closed",
 			config: ProviderConfig{
-				BaseURL:        "", // Should use default
+				BaseURL:        "",
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 	}
 
@@ -179,8 +178,11 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 				APIKey:         "test-key",
 				Timeout:        5 * time.Second,
 				MaxConnections: 10,
-				MaxRetries:     0,
 			})
+			tt.request.Endpoint = InferenceEndpoint{
+				Type: "openai",
+				URL:  server.URL + "/v1/chat/completions",
+			}
 
 			resp, err := connector.Chat(context.Background(), tt.request)
 			if (err != nil) != tt.wantErr {
@@ -237,6 +239,10 @@ func TestOpenAIConnector_ChatStream(t *testing.T) {
 
 	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
 		Model: "gpt-4",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -307,6 +313,10 @@ func TestOpenAIConnector_Embeddings(t *testing.T) {
 	resp, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
 		Model: "text-embedding-ada-002",
 		Input: "Hello world",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/v1/embeddings",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Embeddings() error = %v", err)
@@ -320,108 +330,9 @@ func TestOpenAIConnector_Embeddings(t *testing.T) {
 	}
 }
 
-func TestOpenAIConnector_Models(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := ModelsResponse{
-			Object: "list",
-			Data: []Model{
-				{
-					ID:      "gpt-4",
-					Object:  "model",
-					Created: time.Now().Unix(),
-					OwnedBy: "openai",
-				},
-				{
-					ID:      "gpt-3.5-turbo",
-					Object:  "model",
-					Created: time.Now().Unix(),
-					OwnedBy: "openai",
-				},
-			},
-		}
-
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	connector, _ := NewOpenAIConnector(ProviderConfig{
-		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-	})
-
-	resp, err := connector.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models() error = %v", err)
-	}
-
-	if len(resp.Data) != 2 {
-		t.Errorf("Expected 2 models, got %d", len(resp.Data))
-	}
-}
-
-func TestOpenAIConnector_Health(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/models") {
-			resp := ModelsResponse{
-				Object: "list",
-				Data:   []Model{},
-			}
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(resp)
-		}
-	}))
-	defer server.Close()
-
-	connector, _ := NewOpenAIConnector(ProviderConfig{
-		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-	})
-
-	err := connector.Health(context.Background())
-	if err != nil {
-		t.Errorf("Health() error = %v", err)
-	}
-}
-
-func TestOpenAIConnector_RetryLogic(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts < 3 {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(ModelsResponse{Object: "list", Data: []Model{}})
-	}))
-	defer server.Close()
-
-	connector, _ := NewOpenAIConnector(ProviderConfig{
-		BaseURL:           server.URL + "/v1",
-		APIKey:            "test-key",
-		Timeout:           5 * time.Second,
-		MaxConnections:    10,
-		MaxRetries:        3,
-		RetryDelay:        10 * time.Millisecond,
-		BackoffMultiplier: 2.0,
-	})
-
-	err := connector.Health(context.Background())
-	if err != nil {
-		t.Errorf("Health() with retry error = %v", err)
-	}
-	if attempts != 3 {
-		t.Errorf("Expected 3 attempts, got %d", attempts)
-	}
-}
-
 func TestOpenAIConnector_Name(t *testing.T) {
 	connector, err := NewOpenAIConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
@@ -437,6 +348,7 @@ func TestOpenAIConnector_Name(t *testing.T) {
 
 func TestOpenAIConnector_Close(t *testing.T) {
 	connector, err := NewOpenAIConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
@@ -492,11 +404,14 @@ func TestOpenAIConnector_ChatStreamErrors(t *testing.T) {
 				APIKey:         "test-key",
 				Timeout:        5 * time.Second,
 				MaxConnections: 10,
-				MaxRetries:     0,
 			})
 
 			_, err := connector.ChatStream(context.Background(), &ChatRequest{
 				Model: "gpt-3.5-turbo",
+				Endpoint: InferenceEndpoint{
+					Type: "openai",
+					URL:  server.URL + "/v1/chat/completions",
+				},
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
 				},
@@ -526,12 +441,15 @@ func TestOpenAIConnector_EmbeddingsError(t *testing.T) {
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		MaxRetries:     0,
 	})
 
 	_, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
 		Model: "invalid-model",
 		Input: "test",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/v1/embeddings",
+		},
 	})
 
 	if err == nil {
@@ -543,31 +461,5 @@ func TestOpenAIConnector_EmbeddingsError(t *testing.T) {
 		}
 	} else {
 		t.Errorf("Expected APIError, got %T", err)
-	}
-}
-
-func TestOpenAIConnector_ModelsError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]any{
-			"error": map[string]any{
-				"message": "Invalid API key",
-				"type":    "invalid_request_error",
-			},
-		})
-	}))
-	defer server.Close()
-
-	connector, _ := NewOpenAIConnector(ProviderConfig{
-		BaseURL:        server.URL + "/v1",
-		APIKey:         "invalid-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-		MaxRetries:     0,
-	})
-
-	_, err := connector.Models(context.Background())
-	if err == nil {
-		t.Error("Expected error for invalid API key")
 	}
 }

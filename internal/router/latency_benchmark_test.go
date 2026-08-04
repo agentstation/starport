@@ -30,11 +30,11 @@ func BenchmarkSelectModel(b *testing.B) {
 	// Create registry with multiple mock connectors
 	registry := &mockConnectorRegistry{
 		connectors: map[string]connectors.Connector{
-			"openai":          &mockConnector{name: "openai"},
-			"anthropic":       &mockConnector{name: "anthropic"},
-			"google-aistudio": &mockConnector{name: "google-aistudio"},
-			"groq":            &mockConnector{name: "groq"},
-			"mistral":         &mockConnector{name: "mistral"},
+			"openai":           &mockConnector{name: "openai"},
+			"anthropic":        &mockConnector{name: "anthropic"},
+			"google-ai-studio": &mockConnector{name: "google-ai-studio"},
+			"groq":             &mockConnector{name: "groq"},
+			"mistral":          &mockConnector{name: "mistral"},
 		},
 	}
 
@@ -163,44 +163,6 @@ func BenchmarkLatencyTracking(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_ = tracker.GetLatency("openai")
-		}
-		b.ReportAllocs()
-	})
-}
-
-// BenchmarkProviderHealth measures provider health tracking overhead
-func BenchmarkProviderHealth(b *testing.B) {
-	registry := &mockConnectorRegistry{
-		connectors: map[string]connectors.Connector{
-			"openai":    &mockConnector{name: "openai"},
-			"anthropic": &mockConnector{name: "anthropic"},
-			"groq":      &mockConnector{name: "groq"},
-		},
-	}
-
-	router := New(registry).(*modelRouter)
-
-	b.Run("RecordSuccess", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			router.recordProviderSuccess("openai")
-		}
-		b.ReportAllocs()
-	})
-
-	b.Run("RecordFailure", func(b *testing.B) {
-		err := &connectors.APIError{StatusCode: 500, Message: "Internal error"}
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			router.recordProviderFailure("openai", err)
-		}
-		b.ReportAllocs()
-	})
-
-	b.Run("IsProviderHealthy", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_ = router.isProviderHealthy("openai")
 		}
 		b.ReportAllocs()
 	})

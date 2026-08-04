@@ -266,6 +266,14 @@ func TestSecurityConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "bootstrap API key is too short",
+			config: SecurityConfig{
+				BootstrapAPIKey: "short",
+				AllowedOrigins:  "*",
+			},
+			wantErr: true,
+		},
+		{
 			name: "valid config with TLS",
 			config: SecurityConfig{
 				EnableTLS:      true,
@@ -435,30 +443,27 @@ func TestChatUIConfig_Validate(t *testing.T) {
 		{
 			name: "valid config",
 			config: ChatUIConfig{
-				Enabled:     true,
-				Title:       "Starport Chat",
-				Theme:       "light",
-				AllowKeyGen: true,
+				Enabled: true,
+				Title:   "Starport Chat",
+				Theme:   "light",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid dark theme",
 			config: ChatUIConfig{
-				Enabled:     true,
-				Title:       "Starport Chat",
-				Theme:       "dark",
-				AllowKeyGen: false,
+				Enabled: true,
+				Title:   "Starport Chat",
+				Theme:   "dark",
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid theme",
 			config: ChatUIConfig{
-				Enabled:     true,
-				Title:       "Starport Chat",
-				Theme:       "purple",
-				AllowKeyGen: true,
+				Enabled: true,
+				Title:   "Starport Chat",
+				Theme:   "purple",
 			},
 			wantErr: true,
 			errMsg:  "invalid theme: purple (must be 'light' or 'dark')",
@@ -466,10 +471,9 @@ func TestChatUIConfig_Validate(t *testing.T) {
 		{
 			name: "empty title",
 			config: ChatUIConfig{
-				Enabled:     true,
-				Title:       "",
-				Theme:       "light",
-				AllowKeyGen: true,
+				Enabled: true,
+				Title:   "",
+				Theme:   "light",
 			},
 			wantErr: true,
 			errMsg:  "ChatUI title cannot be empty",
@@ -477,10 +481,9 @@ func TestChatUIConfig_Validate(t *testing.T) {
 		{
 			name: "disabled config still validates",
 			config: ChatUIConfig{
-				Enabled:     false,
-				Title:       "Test",
-				Theme:       "light",
-				AllowKeyGen: false,
+				Enabled: false,
+				Title:   "Test",
+				Theme:   "light",
 			},
 			wantErr: false,
 		},

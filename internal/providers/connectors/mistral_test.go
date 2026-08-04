@@ -27,18 +27,19 @@ func TestNewMistralConnector(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid config with default base URL",
+			name: "missing catalog base URL",
 			config: ProviderConfig{
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "invalid config - missing timeout",
 			config: ProviderConfig{
-				APIKey: "test-key",
+				BaseURL: "https://provider.test",
+				APIKey:  "test-key",
 			},
 			wantErr: false, // Validate sets defaults
 		},
@@ -105,11 +106,14 @@ func TestMistralConnector_Chat(t *testing.T) {
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		MaxRetries:     0,
 	})
 
 	resp, err := connector.Chat(context.Background(), &ChatRequest{
 		Model: "mistral-tiny",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -160,6 +164,10 @@ func TestMistralConnector_ChatStream(t *testing.T) {
 
 	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
 		Model: "mistral-tiny",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -230,6 +238,10 @@ func TestMistralConnector_Embeddings(t *testing.T) {
 	resp, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
 		Model: "mistral-embed",
 		Input: "Hello world",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/v1/embeddings",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Embeddings() error = %v", err)
@@ -240,89 +252,6 @@ func TestMistralConnector_Embeddings(t *testing.T) {
 	}
 	if len(resp.Data[0].Embedding) != 4 {
 		t.Errorf("Expected 4 dimensions, got %d", len(resp.Data[0].Embedding))
-	}
-}
-
-func TestMistralConnector_Models(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := ModelsResponse{
-			Object: "list",
-			Data: []Model{
-				{
-					ID:      "mistral-tiny",
-					Object:  "model",
-					Created: time.Now().Unix(),
-					OwnedBy: "mistral",
-				},
-				{
-					ID:      "mistral-small",
-					Object:  "model",
-					Created: time.Now().Unix(),
-					OwnedBy: "mistral",
-				},
-				{
-					ID:      "mistral-medium",
-					Object:  "model",
-					Created: time.Now().Unix(),
-					OwnedBy: "mistral",
-				},
-			},
-		}
-
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	connector, _ := NewMistralConnector(ProviderConfig{
-		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-	})
-
-	resp, err := connector.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models() error = %v", err)
-	}
-
-	if len(resp.Data) != 3 {
-		t.Errorf("Expected 3 models, got %d", len(resp.Data))
-	}
-}
-
-func TestMistralConnector_Health(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/chat/completions" {
-			resp := ChatResponse{
-				ID:      "test-123",
-				Object:  "chat.completion",
-				Created: 1234567890,
-				Model:   "mistral/mistral-tiny",
-				Choices: []Choice{
-					{
-						Index:        0,
-						Message:      Message{Role: RoleAssistant, Content: "H"},
-						FinishReason: "stop",
-					},
-				},
-			}
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(resp)
-		}
-	}))
-	defer server.Close()
-
-	connector, _ := NewMistralConnector(ProviderConfig{
-		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-	})
-
-	err := connector.Health(context.Background())
-	if err != nil {
-		t.Errorf("Health() error = %v", err)
 	}
 }
 
@@ -342,11 +271,14 @@ func TestMistralConnector_ErrorHandling(t *testing.T) {
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		MaxRetries:     0,
 	})
 
 	_, err := connector.Chat(context.Background(), &ChatRequest{
 		Model: "mistral-tiny",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -372,6 +304,7 @@ func TestMistralConnector_ErrorHandling(t *testing.T) {
 
 func TestMistralConnector_Name(t *testing.T) {
 	connector, _ := NewMistralConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
@@ -384,6 +317,7 @@ func TestMistralConnector_Name(t *testing.T) {
 
 func TestMistralConnector_Close(t *testing.T) {
 	connector, _ := NewMistralConnector(ProviderConfig{
+		BaseURL:        "https://provider.test",
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,

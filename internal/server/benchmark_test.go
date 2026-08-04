@@ -2,13 +2,16 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
-	"github.com/agentstation/starport/internal/providers/connectors"
-	"github.com/agentstation/starport/internal/registry"
+	"github.com/agentstation/starport/internal/identity"
 )
 
 // BenchmarkProxyHandler measures the overhead of request handling
@@ -19,16 +22,15 @@ func BenchmarkProxyHandler(b *testing.B) {
 		MaxRequestSize: 10 * 1024 * 1024,
 	}
 
-	reg := registry.NewEmpty()
-
-	// Add mock connector
-	mockConfig := connectors.ProviderConfig{
-		BaseURL: "http://mock",
+	server := newTestServer(b, config)
+	const apiKey = "benchmark-gateway-key"
+	hash := sha256.Sum256([]byte(apiKey))
+	if _, err := server.identities.Create(context.Background(), identity.APIKey{
+		ID: "benchmark-key", Name: "benchmark_key", Hash: hex.EncodeToString(hash[:]),
+		Scopes: []string{"*"}, Active: true, CreatedAt: time.Now(),
+	}); err != nil {
+		b.Fatal(err)
 	}
-	mockConnector := connectors.NewMockConnector(mockConfig)
-	reg.Register("mock", mockConnector)
-
-	server := New(config, reg)
 
 	// Prepare test request
 	chatReq := map[string]any{
@@ -48,12 +50,12 @@ func BenchmarkProxyHandler(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			req := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer test-key")
+			req.Header.Set("Authorization", "Bearer "+apiKey)
 			w := httptest.NewRecorder()
 
 			server.router.ServeHTTP(w, req)
 
-			if w.Code != http.StatusOK && w.Code != http.StatusUnauthorized {
+			if w.Code != http.StatusOK {
 				b.Fatalf("unexpected status code: %d", w.Code)
 			}
 		}
@@ -66,10 +68,13 @@ func BenchmarkProxyHandler(b *testing.B) {
 			for pb.Next() {
 				req := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(body))
 				req.Header.Set("Content-Type", "application/json")
-				req.Header.Set("Authorization", "Bearer test-key")
+				req.Header.Set("Authorization", "Bearer "+apiKey)
 				w := httptest.NewRecorder()
 
 				server.router.ServeHTTP(w, req)
+				if w.Code != http.StatusOK {
+					b.Fatalf("unexpected status code: %d", w.Code)
+				}
 			}
 		})
 		b.ReportAllocs()
@@ -83,8 +88,7 @@ func BenchmarkMiddlewareChain(b *testing.B) {
 		MaxRequestSize: 10 * 1024 * 1024,
 	}
 
-	reg := registry.NewEmpty()
-	server := New(config, reg)
+	server := newTestServer(b, config)
 
 	b.Run("HealthEndpoint", func(b *testing.B) {
 		b.ResetTimer()

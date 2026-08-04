@@ -7,6 +7,54 @@ import (
 	"testing"
 )
 
+func TestLoaderUsesExactProviderEnvironmentNamespaces(t *testing.T) {
+	t.Run("exact names", func(t *testing.T) {
+		t.Setenv("STARPORT_PROVIDERS_GOOGLE_AI_STUDIO_API_KEY", "studio-key")
+		t.Setenv("STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY", "vertex-token")
+		t.Setenv("STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID", "vertex-project")
+		t.Setenv("STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY", "azure-key")
+
+		cfg, err := NewLoader().Load(context.Background())
+		if err != nil {
+			t.Fatalf("load exact provider namespaces: %v", err)
+		}
+		if cfg.Providers.GoogleAIStudio.APIKey != "studio-key" {
+			t.Fatalf("Google AI Studio API key = %q", cfg.Providers.GoogleAIStudio.APIKey)
+		}
+		if cfg.Providers.GoogleVertexAI.APIKey != "vertex-token" {
+			t.Fatalf("Google Vertex token = %q", cfg.Providers.GoogleVertexAI.APIKey)
+		}
+		if cfg.Providers.GoogleVertexAI.ProjectID != "vertex-project" {
+			t.Fatalf("Google Vertex project = %q", cfg.Providers.GoogleVertexAI.ProjectID)
+		}
+		if cfg.Providers.Azure.APIKey != "azure-key" {
+			t.Fatalf("Azure OpenAI API key = %q", cfg.Providers.Azure.APIKey)
+		}
+	})
+
+	t.Run("old names are ignored", func(t *testing.T) {
+		t.Setenv("GOOGLE_API_KEY", "")
+		t.Setenv("AZURE_OPENAI_API_KEY", "")
+		t.Setenv("STARPORT_PROVIDERS_GOOGLE_AISTUDIO_API_KEY", "old-studio-key")
+		t.Setenv("STARPORT_PROVIDERS_GOOGLE_VERTEXAI_API_KEY", "old-vertex-token")
+		t.Setenv("STARPORT_PROVIDERS_AZURE_API_KEY", "old-azure-key")
+
+		cfg, err := NewLoader().Load(context.Background())
+		if err != nil {
+			t.Fatalf("load old provider namespaces: %v", err)
+		}
+		if cfg.Providers.GoogleAIStudio.APIKey != "" {
+			t.Fatalf("old Google AI Studio namespace was accepted")
+		}
+		if cfg.Providers.GoogleVertexAI.APIKey != "" {
+			t.Fatalf("old Google Vertex namespace was accepted")
+		}
+		if cfg.Providers.Azure.APIKey != "" {
+			t.Fatalf("old Azure OpenAI namespace was accepted")
+		}
+	})
+}
+
 func TestLoader_Load(t *testing.T) {
 	// Save current environment
 	originalEnv := make(map[string]string)
@@ -189,24 +237,11 @@ func TestLoader_PostProcess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify default provider URLs are set
-	if cfg.Providers.OpenAI.BaseURL != "https://api.openai.com/v1" {
-		t.Errorf("expected OpenAI base URL to be set, got %s", cfg.Providers.OpenAI.BaseURL)
-	}
-	if cfg.Providers.Anthropic.BaseURL != "https://api.anthropic.com/v1" {
-		t.Errorf("expected Anthropic base URL to be set, got %s", cfg.Providers.Anthropic.BaseURL)
-	}
-	if cfg.Providers.Gemini.BaseURL != "https://us-central1-aiplatform.googleapis.com" {
-		t.Errorf("expected Gemini base URL to be set, got %s", cfg.Providers.Gemini.BaseURL)
-	}
-	if cfg.Providers.Groq.BaseURL != "https://api.groq.com/openai/v1" {
-		t.Errorf("expected Groq base URL to be set, got %s", cfg.Providers.Groq.BaseURL)
-	}
-	if cfg.Providers.Mistral.BaseURL != "https://api.mistral.ai/v1" {
-		t.Errorf("expected Mistral base URL to be set, got %s", cfg.Providers.Mistral.BaseURL)
-	}
-	if cfg.Providers.Azure.BaseURL != "https://YOUR-RESOURCE-NAME.openai.azure.com" {
-		t.Errorf("expected Azure base URL to be set, got %s", cfg.Providers.Azure.BaseURL)
+	// Provider service defaults come from Starmap during adapter activation.
+	for _, entry := range cfg.Providers.Entries() {
+		if entry.Config.BaseURL != "" {
+			t.Errorf("expected %s base URL to remain unset, got %s", entry.ProviderID, entry.Config.BaseURL)
+		}
 	}
 
 	// Verify path is made absolute

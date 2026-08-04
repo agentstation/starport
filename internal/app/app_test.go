@@ -2,265 +2,345 @@ package app
 
 import (
 	"context"
-	"fmt"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	pkgsync "github.com/agentstation/starmap/pkg/sync"
+	"github.com/stretchr/testify/require"
+
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/server"
-	"github.com/agentstation/starport/internal/testutil"
+	"github.com/agentstation/starport/internal/storage"
 )
 
-func TestNew(t *testing.T) {
-	// Test with default config
-	app, err := New()
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+func TestBootstrapIdentityContract(t *testing.T) {
+	identities, err := identity.Open(storage.NewMockStore())
+	require.NoError(t, err)
+	require.ErrorIs(t, ensureBootstrapIdentity(context.Background(), identities, ""), ErrBootstrapRequired)
 
-	if app == nil {
-		t.Fatal("expected app to be created")
-	}
+	apiKey := strings.Repeat("b", 32)
+	require.NoError(t, ensureBootstrapIdentity(context.Background(), identities, apiKey))
+	require.NoError(t, ensureBootstrapIdentity(context.Background(), identities, apiKey))
+	require.NoError(t, ensureBootstrapIdentity(context.Background(), identities, ""))
 
-	if app.config == nil {
-		t.Error("expected config to be initialized")
-	}
-
-	if app.httpServer == nil {
-		t.Error("expected HTTP server to be initialized")
-	}
-
-	// Verify defaults
-	if app.config.Server.Port != 8080 {
-		t.Errorf("expected default port 8080, got %d", app.config.Server.Port)
-	}
-	if app.config.StorageMode != "badger" {
-		t.Errorf("expected default storage mode 'badger', got %s", app.config.StorageMode)
-	}
-	if app.config.LogLevel != "info" {
-		t.Errorf("expected default log level 'info', got %s", app.config.LogLevel)
-	}
+	hash := sha256.Sum256([]byte(apiKey))
+	record, err := identities.GetByHash(context.Background(), hex.EncodeToString(hash[:]))
+	require.NoError(t, err)
+	require.True(t, record.APIKey.Active)
+	require.True(t, record.APIKey.HasScope("admin"))
+	require.Equal(t, "bootstrap", record.APIKey.Metadata["source"])
+	records, err := identities.List(context.Background(), 10)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
 }
 
-func TestDefaultConfig(t *testing.T) {
-	// Test that DefaultConfig has expected values
-	if DefaultConfig.Server.Port != 8080 {
-		t.Errorf("expected default port 8080, got %d", DefaultConfig.Server.Port)
-	}
-	if DefaultConfig.StorageMode != "badger" {
-		t.Errorf("expected default storage mode 'badger', got %s", DefaultConfig.StorageMode)
-	}
-	if DefaultConfig.LogLevel != "info" {
-		t.Errorf("expected default log level 'info', got %s", DefaultConfig.LogLevel)
-	}
-}
-
-func TestConfigApply(t *testing.T) {
-	// Test that Apply creates a new config without modifying the original
-	original := DefaultConfig
-	modified := original.Apply(
-		WithServerConfig(server.Config{Port: 9090}),
-		WithStorageMode("valkey"),
-		WithLogLevel("debug"),
-	)
-
-	// Original should be unchanged
-	if original.Server.Port != 8080 {
-		t.Errorf("original config modified: expected port 8080, got %d", original.Server.Port)
-	}
-
-	// Modified should have new values
-	if modified.Server.Port != 9090 {
-		t.Errorf("expected modified port 9090, got %d", modified.Server.Port)
-	}
-	if modified.StorageMode != "valkey" {
-		t.Errorf("expected modified storage mode 'valkey', got %s", modified.StorageMode)
-	}
-	if modified.LogLevel != "debug" {
-		t.Errorf("expected modified log level 'debug', got %s", modified.LogLevel)
-	}
-}
-
-func TestNewWithConfig(t *testing.T) {
-	// Test using individual options instead of WithConfig
-	app, err := New(
-		WithServerConfig(server.Config{
-			Port:            9090,
-			ReadTimeout:     5 * time.Second,
-			WriteTimeout:    5 * time.Second,
-			IdleTimeout:     60 * time.Second,
-			ShutdownTimeout: 15 * time.Second,
-		}),
-		WithStorageMode("badger"),
-		WithLogLevel("debug"),
-	)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if app.config.Server.Port != 9090 {
-		t.Errorf("expected port 9090, got %d", app.config.Server.Port)
-	}
-	if app.config.StorageMode != "badger" {
-		t.Errorf("expected storage mode 'badger', got %s", app.config.StorageMode)
-	}
-	if app.config.LogLevel != "debug" {
-		t.Errorf("expected log level 'debug', got %s", app.config.LogLevel)
-	}
-}
-
-func TestAppRun(t *testing.T) {
-	// Use a valid port for testing
-	config := &Config{
-		Server: server.Config{
-			Port:            18081,
-			ShutdownTimeout: 5 * time.Second,
-		},
-		StorageMode: "badger",
-		LogLevel:    "info",
-	}
-
-	app, err := New(WithConfig(config))
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	// Run app
-	err = app.Run(ctx)
-	if err != nil {
-		t.Errorf("expected no error on shutdown, got %v", err)
-	}
-}
-
-func TestAppRunWithCancel(t *testing.T) {
-	config := &Config{
-		Server: server.Config{
-			Port:            18080, // Use a specific port for testing
-			ShutdownTimeout: 5 * time.Second,
-		},
-		StorageMode: "badger",
-		LogLevel:    "info",
-	}
-
-	app, err := New(WithConfig(config))
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Run app in goroutine
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- app.Run(ctx)
-	}()
-
-	// Wait for server to be ready
-	testutil.WaitForServer(t, fmt.Sprintf("http://localhost:%d/health/live", config.Server.Port), 2*time.Second)
-
-	// Cancel context
-	cancel()
-
-	// Wait for shutdown
-	select {
-	case err := <-errChan:
-		if err != nil {
-			t.Errorf("expected no error on shutdown, got %v", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Error("timeout waiting for app to shutdown")
-	}
-}
-
-func TestApp_InitializeConnectors(t *testing.T) {
+func TestProductionCompositionFailsClosed(t *testing.T) {
+	baseConfig := validProductionConfig(t)
 	tests := []struct {
-		name            string
-		providersConfig *config.ProvidersConfig
-		expectMock      bool
-		expectProviders []string
+		name   string
+		mutate func(*config.Config, *bootstrapFactories)
+		cause  error
 	}{
 		{
-			name:            "no providers config uses mock",
-			providersConfig: nil,
-			expectMock:      true,
-			expectProviders: []string{},
+			name: "missing storage",
+			mutate: func(_ *config.Config, factories *bootstrapFactories) {
+				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) { return nil, nil }
+			},
+			cause: ErrStorageRequired,
 		},
 		{
-			name: "single provider configured",
-			providersConfig: &config.ProvidersConfig{
-				OpenAI: config.ProviderConfig{
-					BaseURL: "https://api.openai.com/v1",
-					Timeout: 30 * time.Second,
-				},
+			name: "missing catalog",
+			mutate: func(_ *config.Config, factories *bootstrapFactories) {
+				factories.openCatalog = func(
+					context.Context,
+					storage.KVStore,
+					string,
+				) (catalogRuntime, error) {
+					return nil, nil
+				}
 			},
-			expectMock:      false,
-			expectProviders: []string{"openai"},
+			cause: ErrCatalogRequired,
 		},
 		{
-			name: "multiple providers configured",
-			providersConfig: &config.ProvidersConfig{
-				OpenAI: config.ProviderConfig{
-					BaseURL: "https://api.openai.com/v1",
-					Timeout: 30 * time.Second,
-				},
-				Anthropic: config.ProviderConfig{
-					BaseURL: "https://api.anthropic.com/v1",
-					Timeout: 30 * time.Second,
-				},
-				Groq: config.ProviderConfig{
-					BaseURL: "https://api.groq.com/openai/v1",
-					Timeout: 30 * time.Second,
-				},
+			name: "missing credentials",
+			mutate: func(cfg *config.Config, _ *bootstrapFactories) {
+				cfg.Security.MasterKey = ""
 			},
-			expectMock:      false,
-			expectProviders: []string{"openai", "anthropic", "groq"},
+			cause: ErrCredentialsRequired,
 		},
 		{
-			name:            "no providers configured falls back to mock",
-			providersConfig: &config.ProvidersConfig{
-				// All providers have empty BaseURL
+			name: "missing bootstrap identity",
+			mutate: func(cfg *config.Config, _ *bootstrapFactories) {
+				cfg.Security.BootstrapAPIKey = ""
 			},
-			expectMock:      true,
-			expectProviders: []string{},
+			cause: ErrBootstrapRequired,
+		},
+		{
+			name: "missing providers",
+			mutate: func(cfg *config.Config, _ *bootstrapFactories) {
+				cfg.Providers = config.ProvidersConfig{}
+			},
+			cause: ErrProvidersRequired,
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			appConfig := &Config{
-				Server: server.Config{
-					Port: 8080,
-				},
-				StorageMode: "badger",
-				LogLevel:    "info",
-				Providers:   tt.providersConfig,
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := *baseConfig
+			factories := explicitTestFactories()
+			test.mutate(&cfg, &factories)
+			application, err := New(&cfg, withBootstrapFactories(factories))
+			if application != nil {
+				t.Cleanup(func() { _ = application.Close(context.Background()) })
 			}
-
-			app, err := New(WithConfig(appConfig))
-			if err != nil {
-				t.Fatalf("failed to create app: %v", err)
-			}
-
-			// Check mock connector
-			mockConnector, _ := app.registry.Get("mock")
-			if tt.expectMock && mockConnector == nil {
-				t.Error("expected mock connector to be registered")
-			}
-			if !tt.expectMock && mockConnector != nil {
-				t.Error("did not expect mock connector to be registered")
-			}
-
-			// Check expected providers
-			for _, provider := range tt.expectProviders {
-				connector, _ := app.registry.Get(provider)
-				if connector == nil {
-					t.Errorf("expected connector %s to be registered, but it was not found", provider)
-				}
-			}
+			require.ErrorIs(t, err, test.cause)
 		})
+	}
+}
+
+func TestStartupCatalogRefreshIsExplicitAndResilient(t *testing.T) {
+	refreshErr := errors.New("catalog source unavailable")
+	tests := []struct {
+		name           string
+		refreshOnStart bool
+		workspacePath  string
+		wantCalls      int
+	}{
+		{name: "workspace does not imply refresh", workspacePath: "configured-workspace"},
+		{name: "requested refresh retains current generation on failure", refreshOnStart: true, wantCalls: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := validProductionConfig(t)
+			cfg.Catalog.RefreshOnStart = test.refreshOnStart
+			cfg.Catalog.WorkspacePath = test.workspacePath
+			baseRuntime, err := runtimecatalog.OpenRuntime(context.Background(), storage.NewMockStore(), "")
+			require.NoError(t, err)
+			catalog := &failingCatalogRuntime{Runtime: baseRuntime, err: refreshErr}
+			factories := explicitTestFactories()
+			factories.openCatalog = func(context.Context, storage.KVStore, string) (catalogRuntime, error) {
+				return catalog, nil
+			}
+
+			application, err := New(cfg, withBootstrapFactories(factories))
+			require.NoError(t, err)
+			require.Equal(t, test.wantCalls, catalog.calls)
+			require.NoError(t, application.Close(context.Background()))
+		})
+	}
+}
+
+func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
+	factories := defaultBootstrapFactories()
+
+	httpServer, err := factories.newServer(nil, server.Dependencies{})
+	require.Error(t, err)
+	require.Nil(t, httpServer)
+
+	configPath := filepath.Join(t.TempDir(), "invalid.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("invalid: [yaml document"), 0o600))
+	reloader, err := factories.newHotReload(configPath, time.Second)
+	require.Error(t, err)
+	require.Nil(t, reloader)
+
+	storagePath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(storagePath, []byte("occupied"), 0o600))
+	store, err := openStorage(config.StorageConfig{
+		Mode: "badger", Badger: config.BadgerConfig{Path: storagePath, Compression: "snappy"},
+	})
+	require.Error(t, err)
+	require.Nil(t, store)
+}
+
+func TestServerConfigCredentialsFollowOriginScope(t *testing.T) {
+	cfg := validProductionConfig(t)
+	require.False(t, serverConfig(cfg).CORS.AllowCredentials)
+
+	cfg.Security.AllowedOrigins = "https://console.example.com"
+	require.True(t, serverConfig(cfg).CORS.AllowCredentials)
+
+	cfg.Security.EnableCORS = false
+	require.False(t, serverConfig(cfg).CORS.AllowCredentials)
+}
+
+func TestNewBuildsReadyProductionDependencies(t *testing.T) {
+	cfg := validProductionConfig(t)
+	application, err := New(cfg, withBootstrapFactories(explicitTestFactories()))
+	require.NoError(t, err)
+	require.NotNil(t, application.store)
+	require.NotNil(t, application.catalog)
+	require.NotNil(t, application.registry)
+	require.NotNil(t, application.httpServer)
+	require.Equal(t, []string{"openai"}, application.registry.ListProviders())
+	require.NoError(t, application.Close(context.Background()))
+}
+
+func TestNewMapsExternalServerConfigurationOnce(t *testing.T) {
+	cfg := validProductionConfig(t)
+	cfg.Server.RequestTimeout = 17 * time.Second
+	cfg.Server.MaxRequestSize = 23 << 20
+	cfg.Server.MaxHeaderBytes = 2 << 20
+	factories := explicitTestFactories()
+	var captured *server.Config
+	factories.newServer = func(value *server.Config, _ server.Dependencies) (httpRuntime, error) {
+		captured = value
+		return newBlockingHTTPRuntime(), nil
+	}
+
+	application, err := New(cfg, withBootstrapFactories(factories))
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	require.Equal(t, 17*time.Second, captured.RequestTimeout)
+	require.Equal(t, int64(23<<20), captured.MaxRequestSize)
+	require.Equal(t, 2<<20, captured.MaxHeaderBytes)
+	require.NoError(t, application.Close(context.Background()))
+}
+
+func TestLifecycleClosesInReverseOrderOnce(t *testing.T) {
+	var order []string
+	application := &App{}
+	for _, name := range []string{"storage", "registry", "cache", "server"} {
+		name := name
+		application.own(name, func(context.Context) error {
+			order = append(order, name)
+			return nil
+		})
+	}
+	require.NoError(t, application.Close(context.Background()))
+	require.NoError(t, application.Close(context.Background()))
+	require.Equal(t, []string{"server", "cache", "registry", "storage"}, order)
+}
+
+func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
+	cfg := validProductionConfig(t)
+	fakeHTTP := newBlockingHTTPRuntime()
+	factories := explicitTestFactories()
+	factories.newServer = func(*server.Config, server.Dependencies) (httpRuntime, error) {
+		return fakeHTTP, nil
+	}
+	application, err := New(cfg, withBootstrapFactories(factories))
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() { result <- application.Run(ctx) }()
+	select {
+	case <-fakeHTTP.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("HTTP runtime did not start")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("application did not stop after cancellation")
+	}
+	require.True(t, fakeHTTP.wasStopped())
+}
+
+func validProductionConfig(t *testing.T) *config.Config {
+	t.Helper()
+	return &config.Config{
+		Server: config.ServerConfig{
+			Port: 18080, Host: "127.0.0.1", ReadTimeout: time.Second,
+			WriteTimeout: time.Second, IdleTimeout: time.Second,
+			MaxHeaderBytes: 1 << 20, ShutdownTimeout: time.Second,
+		},
+		Storage: config.StorageConfig{
+			Mode: "badger",
+			Badger: config.BadgerConfig{
+				Path: t.TempDir(), Compression: "snappy", GCInterval: time.Minute,
+				GCDiscardRatio: 0.5,
+			},
+		},
+		Providers: config.ProvidersConfig{
+			OpenAI: config.ProviderConfig{
+				BaseURL: "https://api.openai.com/v1", APIKey: "test-key",
+				Timeout: time.Second, MaxConnections: 10,
+			},
+		},
+		RateLimiting: config.RateLimitingConfig{
+			GlobalRequestsPerSecond: 100, GlobalBurstMultiplier: 2,
+			DefaultRequestsPerMinute: 60, DefaultRequestsPerHour: 1000,
+			DefaultTokensPerMinute: 1000, DefaultTokensPerHour: 10000,
+			DefaultBurst: 10, WindowSize: time.Minute,
+			SyncInterval: time.Second, CleanupInterval: time.Minute,
+			EnableHotReload: false,
+		},
+		Security: config.SecurityConfig{
+			MasterKey: strings.Repeat("k", 32), BootstrapAPIKey: strings.Repeat("a", 32),
+			AllowedOrigins: "*", EnableCORS: true,
+		},
+		Logging: config.LoggingConfig{
+			Level: "info", Format: "json", Output: "stdout",
+			MaxSize: 100, MaxBackups: 3, MaxAge: 7,
+		},
+		Cache:  config.CacheConfig{Enabled: false},
+		ChatUI: config.ChatUIConfig{Title: "Starport", Theme: "light"},
+	}
+}
+
+func explicitTestFactories() bootstrapFactories {
+	factories := defaultBootstrapFactories()
+	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+		return storage.NewMockStore(), nil
+	}
+	factories.newConnector = func(_ string, providerConfig connectors.ProviderConfig) (connectors.Connector, error) {
+		return connectors.NewMockConnector(providerConfig), nil
+	}
+	return factories
+}
+
+type failingCatalogRuntime struct {
+	*runtimecatalog.Runtime
+	err   error
+	calls int
+}
+
+func (runtime *failingCatalogRuntime) Refresh(
+	context.Context,
+	...pkgsync.Option,
+) (*pkgsync.Result, error) {
+	runtime.calls++
+	return nil, runtime.err
+}
+
+type blockingHTTPRuntime struct {
+	started chan struct{}
+	stopped chan struct{}
+	once    sync.Once
+}
+
+func newBlockingHTTPRuntime() *blockingHTTPRuntime {
+	return &blockingHTTPRuntime{started: make(chan struct{}), stopped: make(chan struct{})}
+}
+
+func (runtime *blockingHTTPRuntime) Start() error {
+	close(runtime.started)
+	<-runtime.stopped
+	return nil
+}
+
+func (runtime *blockingHTTPRuntime) Shutdown(context.Context) error {
+	runtime.once.Do(func() { close(runtime.stopped) })
+	return nil
+}
+
+func (runtime *blockingHTTPRuntime) wasStopped() bool {
+	select {
+	case <-runtime.stopped:
+		return true
+	default:
+		return false
 	}
 }

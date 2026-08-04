@@ -8,68 +8,48 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/agentstation/starport/pkg/httpclient"
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
+
+const ollamaProviderName = "ollama"
 
 // OllamaConnector implements the Connector interface for Ollama
 type OllamaConnector struct {
 	config     ProviderConfig
 	httpClient *http.Client
-
-	// Cache for model list with TTL
-	modelListMu    sync.RWMutex
-	modelListCache *ModelsResponse
-	modelListTime  time.Time
-	modelListTTL   time.Duration
 }
 
 // NewOllamaConnector creates a new Ollama connector
 func NewOllamaConnector(config ProviderConfig) (*OllamaConnector, error) {
 	// Set default base URL if not provided
-	if config.BaseURL == "" {
-		config.BaseURL = "http://localhost:11434"
-	}
-
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client using httpclient package
-	// Ollama typically runs locally, so we can use more aggressive connection settings
-	ollamaConfig := httpclient.DefaultConfig()
-	ollamaConfig.MaxConnsPerHost = 50         // Lower for local service
-	ollamaConfig.MaxIdleConnsPerHost = 20     // Lower for local service
-	ollamaConfig.EnableCircuitBreaker = false // Disable for local service
-
-	client, err := httpclient.New("ollama", ollamaConfig)
+	httpClient, err := newProviderHTTPClient(ollamaProviderName, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+		return nil, err
 	}
 
 	return &OllamaConnector{
-		config:       config,
-		httpClient:   client.GetHTTPClient(),
-		modelListTTL: 5 * time.Minute, // Cache model list for 5 minutes
+		config:     config,
+		httpClient: httpClient,
 	}, nil
 }
 
 // Name returns the provider name
 func (c *OllamaConnector) Name() string {
-	return "ollama"
+	return ollamaProviderName
 }
 
 // Chat performs a chat completion request
 func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
-	// Strip provider prefix from model name if present
-	model := strings.TrimPrefix(req.Model, "ollama/")
-
 	// Convert to Ollama format
 	ollamaReq := map[string]any{
-		"model":    model,
+		"model":    req.Model,
 		"messages": req.Messages,
 		"stream":   false,
 		"options": map[string]any{
@@ -90,7 +70,11 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.config.BaseURL+"/api/chat", bytes.NewReader(body))
+	endpoint, err := selectedEndpoint(req.Endpoint, catalogs.EndpointTypeOllama)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -132,7 +116,7 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 		ID:      fmt.Sprintf("ollama-%d", time.Now().Unix()),
 		Object:  "chat.completion",
 		Created: time.Now().Unix(),
-		Model:   "ollama/" + ollamaResp.Model,
+		Model:   ollamaResp.Model,
 		Choices: []Choice{
 			{
 				Index: 0,
@@ -153,12 +137,9 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 
 // ChatStream performs a streaming chat completion request
 func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error) {
-	// Strip provider prefix from model name if present
-	model := strings.TrimPrefix(req.Model, "ollama/")
-
 	// Convert to Ollama format
 	ollamaReq := map[string]any{
-		"model":    model,
+		"model":    req.Model,
 		"messages": req.Messages,
 		"stream":   true,
 		"options": map[string]any{
@@ -179,7 +160,11 @@ func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.config.BaseURL+"/api/chat", bytes.NewReader(body))
+	endpoint, err := selectedEndpoint(req.Endpoint, catalogs.EndpointTypeOllama)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -199,17 +184,15 @@ func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 	return &ollamaStream{
 		resp:   resp,
 		reader: bufio.NewReader(resp.Body),
-		model:  model,
+		model:  req.Model,
 	}, nil
 }
 
 // Embeddings generates embeddings for the given input
 func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Ollama supports embeddings via /api/embeddings endpoint
-	model := strings.TrimPrefix(req.Model, "ollama/")
-
 	ollamaReq := map[string]any{
-		"model":  model,
+		"model":  req.Model,
 		"prompt": req.Input,
 	}
 
@@ -218,7 +201,11 @@ func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.config.BaseURL+"/api/embeddings", bytes.NewReader(body))
+	endpoint, err := selectedEndpoint(req.Endpoint, catalogs.EndpointTypeOllama)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -254,105 +241,12 @@ func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 				Index:     0,
 			},
 		},
-		Model: "ollama/" + model,
+		Model: req.Model,
 		Usage: Usage{
 			PromptTokens: 0, // Ollama doesn't report token usage for embeddings
 			TotalTokens:  0,
 		},
 	}, nil
-}
-
-// Models lists available models from the provider
-func (c *OllamaConnector) Models(ctx context.Context) (*ModelsResponse, error) {
-	// Check cache first
-	c.modelListMu.RLock()
-	if c.modelListCache != nil && time.Since(c.modelListTime) < c.modelListTTL {
-		defer c.modelListMu.RUnlock()
-		return c.modelListCache, nil
-	}
-	c.modelListMu.RUnlock()
-
-	// Fetch fresh model list
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", c.config.BaseURL+"/api/tags", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.handleError(resp)
-	}
-
-	// Parse Ollama response
-	var ollamaResp struct {
-		Models []struct {
-			Name       string    `json:"name"`
-			ModifiedAt time.Time `json:"modified_at"`
-			Size       int64     `json:"size"`
-			Digest     string    `json:"digest"`
-			Details    struct {
-				Format            string   `json:"format"`
-				Family            string   `json:"family"`
-				Families          []string `json:"families"`
-				ParameterSize     string   `json:"parameter_size"`
-				QuantizationLevel string   `json:"quantization_level"`
-			} `json:"details"`
-		} `json:"models"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// Convert to OpenAI format
-	models := make([]Model, len(ollamaResp.Models))
-	for i, m := range ollamaResp.Models {
-		models[i] = Model{
-			ID:      "ollama/" + m.Name,
-			Object:  "model",
-			Created: m.ModifiedAt.Unix(),
-			OwnedBy: "ollama",
-		}
-	}
-
-	response := &ModelsResponse{
-		Object: "list",
-		Data:   models,
-	}
-
-	// Update cache
-	c.modelListMu.Lock()
-	c.modelListCache = response
-	c.modelListTime = time.Now()
-	c.modelListMu.Unlock()
-
-	return response, nil
-}
-
-// Health checks the health of the connector
-func (c *OllamaConnector) Health(ctx context.Context) error {
-	// Use tags endpoint as health check
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", c.config.BaseURL+"/api/tags", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrHealthCheckFailed, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: status %d", ErrHealthCheckFailed, resp.StatusCode)
-	}
-
-	return nil
 }
 
 // Close closes the connector
@@ -372,7 +266,7 @@ func (c *OllamaConnector) handleError(resp *http.Response) error {
 		return &APIError{
 			StatusCode: resp.StatusCode,
 			Message:    errResp.Error,
-			Provider:   "ollama",
+			Provider:   ollamaProviderName,
 		}
 	}
 
@@ -380,7 +274,7 @@ func (c *OllamaConnector) handleError(resp *http.Response) error {
 	return &APIError{
 		StatusCode: resp.StatusCode,
 		Message:    string(body),
-		Provider:   "ollama",
+		Provider:   ollamaProviderName,
 	}
 }
 
@@ -447,7 +341,7 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 				ID:      fmt.Sprintf("ollama-%d", time.Now().UnixNano()),
 				Object:  "chat.completion.chunk",
 				Created: time.Now().Unix(),
-				Model:   "ollama/" + s.model,
+				Model:   s.model,
 				Choices: []StreamChoice{
 					{
 						Index:        0,
@@ -471,7 +365,7 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 		ID:      fmt.Sprintf("ollama-%d", time.Now().UnixNano()),
 		Object:  "chat.completion.chunk",
 		Created: time.Now().Unix(),
-		Model:   "ollama/" + s.model,
+		Model:   s.model,
 		Choices: []StreamChoice{
 			{
 				Index: 0,

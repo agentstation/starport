@@ -13,16 +13,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/storage"
 )
 
 func TestAdminHandler_CreateKey_UUIDKeyFormat(t *testing.T) {
 	store := storage.NewMockStore()
-	handler := NewAdminController(store)
+	identities, err := identity.Open(store)
+	require.NoError(t, err)
+	handler := NewAdminController(identities)
 	logger := zerolog.Nop()
 
 	reqBody := map[string]any{
-		"name":        "Test API Key",
+		"name":        "Test-API-Key",
 		"description": "Test key for uuidkey format verification",
 		"scopes":      []string{"chat:write", "models:read"},
 	}
@@ -92,13 +95,7 @@ func TestAdminHandler_CreateKey_UUIDKeyFormat(t *testing.T) {
 
 	// Verify hash was generated (we can't check the mapping without knowing the internal hash)
 	// But we can verify the key was stored
-	storedKey, err := store.Get(ctx, storage.APIKeyKey(keyID))
+	storedKey, err := identities.GetByID(ctx, keyID)
 	assert.NoError(t, err, "key should be stored")
-	assert.NotEmpty(t, storedKey, "stored key data should not be empty")
-}
-
-func TestChatUIHandler_GenerateKey_UUIDKeyFormat(t *testing.T) {
-	// This test would be similar but for the ChatUI handler
-	// The ChatUI package would need to export its handler for testing
-	// or we could add an integration test that tests the HTTP endpoint
+	assert.Equal(t, keyID, storedKey.APIKey.ID)
 }

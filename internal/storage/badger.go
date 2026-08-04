@@ -368,7 +368,14 @@ func (s *BadgerStore) Decrement(ctx context.Context, key string, delta int64) (i
 }
 
 // CompareAndSwap atomically updates a value if it matches the expected value
-func (s *BadgerStore) CompareAndSwap(_ context.Context, key string, old, newValue []byte) error {
+func (s *BadgerStore) CompareAndSwap(ctx context.Context, key string, old, newValue []byte) error {
+	return s.CompareAndSwapBatch(ctx, []CompareAndSwapMutation{{
+		Key: key, ExpectedValue: old, NewValue: newValue,
+	}})
+}
+
+// CompareAndSwapBatch applies all conditional writes or none of them.
+func (s *BadgerStore) CompareAndSwapBatch(_ context.Context, mutations []CompareAndSwapMutation) error {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -376,49 +383,71 @@ func (s *BadgerStore) CompareAndSwap(_ context.Context, key string, old, newValu
 	}
 	s.mu.RUnlock()
 
-	if key == "" {
-		return ErrInvalidKey
+	if err := validateCompareAndSwapMutations(mutations); err != nil {
+		return err
 	}
 
-	return s.db.Update(func(txn *badger.Txn) error {
-		// Get current value
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			if errors.Is(err, badger.ErrKeyNotFound) && old == nil {
-				// Key doesn't exist and we expect nil, so set the new value
-				return txn.Set([]byte(key), newValue)
+	err := s.db.Update(func(txn *badger.Txn) error {
+		for _, mutation := range mutations {
+			item, err := txn.Get([]byte(mutation.Key))
+			if err != nil {
+				if errors.Is(err, badger.ErrKeyNotFound) && mutation.ExpectedValue == nil {
+					if mutation.NewValue == nil {
+						continue
+					}
+					if mutation.TTL > 0 {
+						entry := badger.NewEntry([]byte(mutation.Key), mutation.NewValue).WithTTL(mutation.TTL)
+						if err := txn.SetEntry(entry); err != nil {
+							return err
+						}
+						continue
+					}
+					if err := txn.Set([]byte(mutation.Key), mutation.NewValue); err != nil {
+						return err
+					}
+					continue
+				}
+				if errors.Is(err, badger.ErrKeyNotFound) {
+					return ErrConflict
+				}
+				return err
 			}
-			if errors.Is(err, badger.ErrKeyNotFound) {
+
+			currentValue, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			if !bytesEqual(currentValue, mutation.ExpectedValue) {
 				return ErrConflict
 			}
-			return err
-		}
+			if mutation.NewValue == nil {
+				if err := txn.Delete([]byte(mutation.Key)); err != nil {
+					return err
+				}
+				continue
+			}
 
-		// Get current value
-		currentValue, err := item.ValueCopy(nil)
-		if err != nil {
-			return err
+			ttl := mutation.TTL
+			if ttl == 0 && item.ExpiresAt() > 0 {
+				ttl = time.Until(time.Unix(int64(item.ExpiresAt()), 0)) // #nosec G115
+			}
+			if ttl > 0 {
+				entry := badger.NewEntry([]byte(mutation.Key), mutation.NewValue).WithTTL(ttl)
+				if err := txn.SetEntry(entry); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := txn.Set([]byte(mutation.Key), mutation.NewValue); err != nil {
+				return err
+			}
 		}
-
-		// Compare values
-		if !bytesEqual(currentValue, old) {
-			return ErrConflict
-		}
-
-		// Preserve TTL if set
-		var ttl time.Duration
-		expiresAt := item.ExpiresAt()
-		if expiresAt > 0 {
-			ttl = time.Until(time.Unix(int64(expiresAt), 0)) // #nosec G115
-		}
-
-		// Set new value
-		if ttl > 0 {
-			e := badger.NewEntry([]byte(key), newValue).WithTTL(ttl)
-			return txn.SetEntry(e)
-		}
-		return txn.Set([]byte(key), newValue)
+		return nil
 	})
+	if errors.Is(err, badger.ErrConflict) {
+		return ErrConflict
+	}
+	return err
 }
 
 // Batch operations

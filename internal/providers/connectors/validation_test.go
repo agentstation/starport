@@ -13,23 +13,6 @@ func TestProviderConfig_ValidateEdgeCases(t *testing.T) {
 		check   func(t *testing.T, config *ProviderConfig)
 	}{
 		{
-			name: "retry delay of zero sets default",
-			config: ProviderConfig{
-				BaseURL:        "https://api.example.com",
-				APIKey:         "test-key",
-				Timeout:        30 * time.Second,
-				MaxConnections: 100,
-				MaxRetries:     3,
-				RetryDelay:     0, // Should be set to default
-			},
-			wantErr: false,
-			check: func(t *testing.T, config *ProviderConfig) {
-				if config.RetryDelay == 0 {
-					t.Error("Expected retry delay to be set to default")
-				}
-			},
-		},
-		{
 			name: "base URL with trailing slash",
 			config: ProviderConfig{
 				BaseURL:        "https://api.example.com/",
@@ -66,34 +49,6 @@ func TestProviderConfig_ValidateEdgeCases(t *testing.T) {
 			check: func(t *testing.T, config *ProviderConfig) {
 				if config.MaxConnections == 0 {
 					t.Error("Expected max connections to be set to default")
-				}
-			},
-		},
-		{
-			name: "zero max retries is valid",
-			config: ProviderConfig{
-				BaseURL:        "https://api.example.com",
-				APIKey:         "test-key",
-				Timeout:        30 * time.Second,
-				MaxConnections: 100,
-				MaxRetries:     0, // Valid - no retries
-			},
-			wantErr: false,
-		},
-		{
-			name: "backoff multiplier zero sets default",
-			config: ProviderConfig{
-				BaseURL:           "https://api.example.com",
-				APIKey:            "test-key",
-				Timeout:           30 * time.Second,
-				MaxConnections:    100,
-				MaxRetries:        3,
-				BackoffMultiplier: 0, // Should be set to default
-			},
-			wantErr: false,
-			check: func(t *testing.T, config *ProviderConfig) {
-				if config.BackoffMultiplier == 0 {
-					t.Error("Expected backoff multiplier to be set to default")
 				}
 			},
 		},

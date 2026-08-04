@@ -1,25 +1,52 @@
-// package controllers contains HTTP handlers for the Starport API
+// Package controllers contains HTTP handlers for the Starport API.
 package controllers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/httpapi/openai"
+	"github.com/agentstation/starport/internal/httpapi/openrouter"
 	"github.com/agentstation/starport/internal/proxy"
-	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/server/requestctx"
+)
+
+// Protocol identifies one external HTTP dialect.
+type Protocol string
+
+const (
+	// ProtocolOpenAI selects the OpenAI v1 contract.
+	ProtocolOpenAI Protocol = "openai"
+	// ProtocolOpenRouter selects the OpenRouter v1 contract.
+	ProtocolOpenRouter Protocol = "openrouter"
+
+	errorTypeInvalidRequest     = "invalid_request_error"
+	errorTypeServer             = "server_error"
+	errorTypeRateLimit          = "rate_limit_error"
+	errorTypePermission         = "permission_error"
+	errorTypeServiceUnavailable = "service_unavailable"
 )
 
 // BaseHandler provides common functionality for all handlers
 type BaseHandler struct {
-	service proxy.Proxy
+	service  proxy.Proxy
+	protocol Protocol
 }
 
 // NewBaseHandler creates a new base handler
 func NewBaseHandler(service proxy.Proxy) *BaseHandler {
+	return NewProtocolBaseHandler(service, ProtocolOpenAI)
+}
+
+// NewProtocolBaseHandler creates a handler for one explicit wire dialect.
+func NewProtocolBaseHandler(service proxy.Proxy, protocol Protocol) *BaseHandler {
 	return &BaseHandler{
-		service: service,
+		service:  service,
+		protocol: protocol,
 	}
 }
 
@@ -33,10 +60,42 @@ func (h *BaseHandler) getRequestID(ctx context.Context) string {
 
 // getAPIKey extracts the API key from the context
 func (h *BaseHandler) getAPIKey(ctx context.Context) string {
-	if apiKey, ok := ctx.Value("api_key").(string); ok {
+	if apiKey, ok := requestctx.GetAPIKey(ctx); ok {
 		return apiKey
 	}
 	return ""
+}
+
+// getTenantID extracts the authenticated tenant identity from the context.
+func (h *BaseHandler) getTenantID(ctx context.Context) string {
+	if tenantID, ok := requestctx.GetAPIKeyID(ctx); ok {
+		return tenantID
+	}
+	return ""
+}
+
+func (h *BaseHandler) writeInvalidRequest(w http.ResponseWriter, message string) {
+	if h.protocol == ProtocolOpenRouter {
+		openrouter.WriteError(w, http.StatusBadRequest, message, map[string]any{"error_type": errorTypeInvalidRequest})
+		return
+	}
+	openai.WriteError(w, http.StatusBadRequest, errorTypeInvalidRequest, message, nil)
+}
+
+// getAPIKeyRoutingConfig extracts routing restrictions from the authenticated API key.
+func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) *proxy.APIKeyRoutingConfig {
+	apiKey, ok := requestctx.GetAPIKeyModel(ctx)
+	if !ok || apiKey == nil {
+		return nil
+	}
+
+	if len(apiKey.AllowedModels) == 0 {
+		return nil
+	}
+
+	return &proxy.APIKeyRoutingConfig{
+		AllowedModels: append([]string(nil), apiKey.AllowedModels...),
+	}
 }
 
 // logError logs an error with context
@@ -49,53 +108,93 @@ func (h *BaseHandler) logError(ctx context.Context, err error, msg string) {
 
 // writeError writes an error response based on the error type
 func (h *BaseHandler) writeError(w http.ResponseWriter, err error) {
+	status, errorType, message, param := errorShape(err)
+	if h.protocol == ProtocolOpenRouter {
+		metadata := map[string]any{"error_type": errorType}
+		if param != nil {
+			metadata["param"] = *param
+		}
+		openrouter.WriteError(w, status, message, metadata)
+		return
+	}
+	openai.WriteError(w, status, errorType, message, param)
+}
+
+func errorShape(err error) (status int, errorType, message string, param *string) {
+	var normalized *failure.Failure
+	if errors.As(err, &normalized) {
+		status, errorType = normalizedFailureShape(normalized.Kind())
+		return status, errorType, normalized.SafeMessage(), nil
+	}
+
 	switch e := err.(type) {
 	case *proxy.ValidationError:
-		dto.WriteValidationError(w, e.Field, e.Message)
+		return http.StatusBadRequest, errorTypeInvalidRequest, e.Message, &e.Field
 
 	case *proxy.ProviderError:
 		// Map provider errors to appropriate HTTP status codes
 		status := http.StatusInternalServerError
-		errType := dto.ErrorTypeServerError
+		errType := errorTypeServer
 
 		switch e.Code {
 		case "rate_limit":
 			status = http.StatusTooManyRequests
-			errType = dto.ErrorTypeRateLimit
+			errType = errorTypeRateLimit
 		case "auth_error":
 			status = http.StatusUnauthorized
-			errType = dto.ErrorTypeAuthenticationError
-		case "permission_error":
+			errType = "authentication_error"
+		case errorTypePermission:
 			status = http.StatusForbidden
-			errType = dto.ErrorTypePermissionError
+			errType = errorTypePermission
 		case "not_found":
 			status = http.StatusNotFound
-			errType = dto.ErrorTypeNotFound
+			errType = "not_found_error"
 		}
-
-		dto.WriteError(w, status, errType, e.Message)
+		return status, errType, e.Message, nil
 
 	case *proxy.RoutingError:
-		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServiceUnavailable, e.Error())
+		return http.StatusServiceUnavailable, errorTypeServiceUnavailable, e.Error(), nil
 
 	default:
 		// Handle specific sentinel errors
 		switch err {
 		case proxy.ErrNoValidModel:
-			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "No valid model specified")
+			return http.StatusBadRequest, errorTypeInvalidRequest, "No valid model specified", nil
 		case proxy.ErrNoAvailableProvider:
-			dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServiceUnavailable, "No available provider for the requested model")
+			return http.StatusServiceUnavailable, errorTypeServiceUnavailable, "No available provider for the requested model", nil
 		case proxy.ErrRateLimitExceeded:
-			dto.WriteError(w, http.StatusTooManyRequests, dto.ErrorTypeRateLimit, "Rate limit exceeded")
+			return http.StatusTooManyRequests, errorTypeRateLimit, "Rate limit exceeded", nil
 		case proxy.ErrInsufficientQuota:
-			dto.WriteError(w, http.StatusPaymentRequired, dto.ErrorTypePermissionError, "Insufficient quota")
+			return http.StatusPaymentRequired, errorTypePermission, "Insufficient quota", nil
 		case proxy.ErrStreamingNotSupported:
-			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Streaming not supported for this request")
+			return http.StatusBadRequest, errorTypeInvalidRequest, "Streaming not supported for this request", nil
 		case proxy.ErrEmbeddingsNotSupported:
-			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Embeddings not supported by this provider")
+			return http.StatusBadRequest, errorTypeInvalidRequest, "Embeddings not supported by this provider", nil
 		default:
-			// Generic server error
-			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Internal server error")
+			return http.StatusInternalServerError, errorTypeServer, "Internal server error", nil
 		}
+	}
+}
+
+func normalizedFailureShape(kind failure.Kind) (int, string) {
+	switch kind {
+	case failure.Validation:
+		return http.StatusBadRequest, errorTypeInvalidRequest
+	case failure.Authentication:
+		return http.StatusUnauthorized, "authentication_error"
+	case failure.Permission:
+		return http.StatusForbidden, errorTypePermission
+	case failure.RateLimit:
+		return http.StatusTooManyRequests, errorTypeRateLimit
+	case failure.NotFound:
+		return http.StatusNotFound, "not_found_error"
+	case failure.Timeout:
+		return http.StatusGatewayTimeout, errorTypeServiceUnavailable
+	case failure.Canceled:
+		return http.StatusRequestTimeout, errorTypeInvalidRequest
+	case failure.ProviderUnavailable:
+		return http.StatusServiceUnavailable, errorTypeServiceUnavailable
+	default:
+		return http.StatusInternalServerError, errorTypeServer
 	}
 }

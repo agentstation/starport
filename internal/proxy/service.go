@@ -4,7 +4,7 @@ package proxy
 import (
 	"context"
 
-	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/inference"
 )
 
 // Proxy defines the core proxy interface for LLM request handling.
@@ -35,49 +35,22 @@ type Proxy interface {
 	GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error)
 }
 
-// ChatCompletionRequest represents a chat completion request
+// ChatCompletionRequest is a canonical chat request plus gateway policy and identity.
 type ChatCompletionRequest struct {
-	// OpenAI-compatible fields
-	Model            string                     `json:"model,omitempty"`
-	Messages         []connectors.Message       `json:"messages"`
-	Temperature      *float32                   `json:"temperature,omitempty"`
-	TopP             *float32                   `json:"top_p,omitempty"`
-	N                *int                       `json:"n,omitempty"`
-	Stream           bool                       `json:"stream,omitempty"`
-	Stop             []string                   `json:"stop,omitempty"`
-	MaxTokens        *int                       `json:"max_tokens,omitempty"`
-	PresencePenalty  *float32                   `json:"presence_penalty,omitempty"`
-	FrequencyPenalty *float32                   `json:"frequency_penalty,omitempty"`
-	LogitBias        map[string]float32         `json:"logit_bias,omitempty"`
-	User             string                     `json:"user,omitempty"`
-	Seed             *int                       `json:"seed,omitempty"`
-	Tools            []connectors.Tool          `json:"tools,omitempty"`
-	ToolChoice       any                        `json:"tool_choice,omitempty"`
-	ResponseFormat   *connectors.ResponseFormat `json:"response_format,omitempty"`
-
-	// OpenRouter-compatible fields
-	Models    []string             `json:"models,omitempty"`
-	Route     string               `json:"route,omitempty"`
-	Provider  *ProviderPreferences `json:"provider,omitempty"`
-	Reasoning *ReasoningConfig     `json:"reasoning,omitempty"`
+	Request  inference.ChatRequest
+	Route    string
+	Provider *ProviderPreferences
 
 	// Internal fields
-	APIKey    string `json:"-"`
-	RequestID string `json:"-"`
+	APIKey       string               `json:"-"`
+	TenantID     string               `json:"-"`
+	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
+	RequestID    string               `json:"-"`
 }
 
-// ChatCompletionResponse represents a chat completion response
+// ChatCompletionResponse is a canonical result plus gateway response metadata.
 type ChatCompletionResponse struct {
-	ID                string              `json:"id"`
-	Object            string              `json:"object"`
-	Created           int64               `json:"created"`
-	Model             string              `json:"model"`
-	Choices           []connectors.Choice `json:"choices"`
-	Usage             *connectors.Usage   `json:"usage,omitempty"`
-	SystemFingerprint string              `json:"system_fingerprint,omitempty"`
-
-	// OpenRouter-compatible fields
-	ModelUsed string `json:"model_used,omitempty"`
+	Response inference.ChatResponse
 
 	// Internal fields (not serialized)
 	CacheStatus string     `json:"-"`
@@ -88,32 +61,27 @@ type ChatCompletionResponse struct {
 
 // ChatCompletionStreamResponse represents a streaming response
 type ChatCompletionStreamResponse interface {
-	// Read returns the next chunk or io.EOF when done
-	Read() (*connectors.ChatStreamChunk, error)
+	// Read returns the next canonical event or io.EOF when done.
+	Read() (*inference.StreamEvent, error)
 
 	// Close releases any resources
 	Close() error
 }
 
-// EmbeddingsRequest represents an embeddings request
+// EmbeddingsRequest is a canonical embedding request plus gateway identity.
 type EmbeddingsRequest struct {
-	Model          string `json:"model"`
-	Input          any    `json:"input"`
-	EncodingFormat string `json:"encoding_format,omitempty"`
-	Dimensions     *int   `json:"dimensions,omitempty"`
-	User           string `json:"user,omitempty"`
+	Request inference.EmbeddingRequest
 
 	// Internal fields
-	APIKey    string `json:"-"`
-	RequestID string `json:"-"`
+	APIKey       string               `json:"-"`
+	TenantID     string               `json:"-"`
+	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
+	RequestID    string               `json:"-"`
 }
 
-// EmbeddingsResponse represents an embeddings response
+// EmbeddingsResponse is a canonical embedding result plus gateway metadata.
 type EmbeddingsResponse struct {
-	Object string                 `json:"object"`
-	Data   []connectors.Embedding `json:"data"`
-	Model  string                 `json:"model"`
-	Usage  *connectors.Usage      `json:"usage,omitempty"`
+	Response inference.EmbeddingResponse
 
 	// Internal fields (not serialized)
 	CacheStatus string     `json:"-"`
@@ -133,16 +101,21 @@ type ModelsResponse struct {
 
 // ModelInfo represents model information
 type ModelInfo struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
+	ID            string `json:"id"`
+	CanonicalSlug string `json:"canonical_slug,omitempty"`
+	Name          string `json:"name,omitempty"`
+	Object        string `json:"object"`
+	Created       int64  `json:"created"`
+	OwnedBy       string `json:"owned_by"`
 
 	// Extended metadata for OpenRouter compatibility
-	Pricing     *ModelPricing `json:"pricing,omitempty"`
-	Context     *int          `json:"context_length,omitempty"`
-	Type        string        `json:"type,omitempty"`
-	Description string        `json:"description,omitempty"`
+	Pricing             *ModelPricing      `json:"pricing,omitempty"`
+	Context             *int               `json:"context_length,omitempty"`
+	Type                string             `json:"type,omitempty"`
+	Description         string             `json:"description,omitempty"`
+	Architecture        *ModelArchitecture `json:"architecture,omitempty"`
+	TopProvider         *TopProviderInfo   `json:"top_provider,omitempty"`
+	SupportedParameters []string           `json:"supported_parameters,omitempty"`
 }
 
 // ModelPricing represents model pricing information
@@ -150,6 +123,20 @@ type ModelPricing struct {
 	Prompt     string `json:"prompt"`
 	Completion string `json:"completion"`
 	Currency   string `json:"currency"`
+}
+
+// ModelArchitecture describes protocol-facing model capabilities.
+type ModelArchitecture struct {
+	InputModalities  []string `json:"input_modalities"`
+	OutputModalities []string `json:"output_modalities"`
+	Tokenizer        string   `json:"tokenizer"`
+	InstructType     *string  `json:"instruct_type"`
+}
+
+// TopProviderInfo describes the selected representative offering limits.
+type TopProviderInfo struct {
+	ContextLength       int `json:"context_length"`
+	MaxCompletionTokens int `json:"max_completion_tokens"`
 }
 
 // ProvidersResponse represents provider information
@@ -196,11 +183,12 @@ type ProviderPreferences struct {
 	AllowFallback bool     `json:"allow_fallback,omitempty"`
 }
 
-// ReasoningConfig represents OpenRouter-style reasoning configuration
-type ReasoningConfig struct {
-	Effort    string `json:"effort,omitempty"`     // "high", "medium", "low"
-	MaxTokens *int   `json:"max_tokens,omitempty"` // Alternative to effort
-	Exclude   bool   `json:"exclude,omitempty"`    // Exclude reasoning from response
+// APIKeyRoutingConfig contains API-key scoped routing restrictions.
+type APIKeyRoutingConfig struct {
+	AllowedProviders []string
+	AllowedModels    []string
+	ModelOverrides   map[string]string
+	RateLimitTier    string
 }
 
 // CacheCost represents the cost of cache operations

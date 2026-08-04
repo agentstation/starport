@@ -1180,9 +1180,13 @@ func testBadgerPerformance(t *testing.T) {
 
 // TestBadgerStoreOpenError tests error handling in OpenBadger
 func TestBadgerStoreOpenError(t *testing.T) {
-	// Test with invalid path (read-only directory)
+	path := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(path, []byte("occupied"), 0o600); err != nil {
+		t.Fatalf("create file at Badger path: %v", err)
+	}
+
 	config := BadgerConfig{
-		Path:         "/invalid_readonly_path_that_should_not_exist",
+		Path:         path,
 		SyncWrites:   false,
 		Compression:  true,
 		NumVersions:  1,
@@ -1192,6 +1196,6 @@ func TestBadgerStoreOpenError(t *testing.T) {
 
 	_, err := OpenBadger(config)
 	if err == nil {
-		t.Errorf("Expected error when opening Badger with invalid path")
+		t.Error("expected error when opening Badger at a file path")
 	}
 }

@@ -25,12 +25,6 @@ type Options struct {
 
 	// EnableLogging enables request/response logging
 	EnableLogging bool
-
-	// MaxRetries is the maximum number of retry attempts
-	MaxRetries int
-
-	// RetryDelay is the delay between retry attempts
-	RetryDelay time.Duration
 }
 
 // DefaultOptions returns default proxy options.
@@ -39,8 +33,6 @@ func DefaultOptions() *Options {
 		RequestTimeout: 30 * time.Second,
 		EnableMetrics:  true,
 		EnableLogging:  true,
-		MaxRetries:     3,
-		RetryDelay:     100 * time.Millisecond,
 	}
 }
 

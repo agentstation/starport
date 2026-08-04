@@ -161,11 +161,7 @@
                                     <p>To get started:</p>
                                     <ol>
                                         <li>Click the settings icon (⚙️) in the header</li>
-                                        {{if .AllowKeyGen}}
-                                        <li>Click "Generate" to create a new API key, or enter an existing one</li>
-                                        {{else}}
                                         <li>Enter your API key</li>
-                                        {{end}}
                                         <li>Select a model from the dropdown</li>
                                         <li>Start chatting!</li>
                                     </ol>
@@ -227,9 +223,6 @@
                             <label for="api-key">API Key</label>
                             <div class="input-group">
                                 <input type="password" id="api-key" class="form-input" placeholder="sk-..." autocomplete="off">
-                                {{if .AllowKeyGen}}
-                                <button type="button" id="generate-key" class="btn btn-secondary">Generate</button>
-                                {{end}}
                             </div>
                         </div>
                         <div class="form-group">
@@ -326,8 +319,7 @@
     <script>
         // Pass configuration to JavaScript
         window.STARPORT_CONFIG = {
-            apiBaseURL: "{{.APIBaseURL}}",
-            allowKeyGen: {{.AllowKeyGen}}
+            apiBaseURL: "{{.APIBaseURL}}"
         };
     </script>
     <!-- Markdown parsing and XSS protection libraries -->

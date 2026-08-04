@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/agentstation/starport/internal/httpapi/openai"
+	"github.com/agentstation/starport/internal/httpapi/openrouter"
+	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
-	"github.com/agentstation/starport/internal/server/dto"
 )
 
 // EmbeddingsController handles embeddings endpoints
@@ -15,19 +17,28 @@ type EmbeddingsController struct {
 
 // NewEmbeddingsController creates a new embeddings controller
 func NewEmbeddingsController(service proxy.Proxy) *EmbeddingsController {
+	return newEmbeddingsController(service, ProtocolOpenAI)
+}
+
+// NewOpenRouterEmbeddingsController creates an OpenRouter embeddings controller.
+func NewOpenRouterEmbeddingsController(service proxy.Proxy) *EmbeddingsController {
+	return newEmbeddingsController(service, ProtocolOpenRouter)
+}
+
+func newEmbeddingsController(service proxy.Proxy, protocol Protocol) *EmbeddingsController {
 	return &EmbeddingsController{
-		BaseHandler: NewBaseHandler(service),
+		BaseHandler: NewProtocolBaseHandler(service, protocol),
 	}
 }
 
 // Create handles POST /v1/embeddings and /api/v1/embeddings
 func (h *EmbeddingsController) Create(w http.ResponseWriter, r *http.Request) {
-	// Parse request
-	req, err := dto.ParseEmbeddingsRequest(r)
+	request, err := h.decodeEmbedding(r)
 	if err != nil {
-		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
+		h.writeInvalidRequest(w, "Invalid request body: "+err.Error())
 		return
 	}
+	req := &proxy.EmbeddingsRequest{Request: request}
 
 	// Check If-None-Match header for conditional request
 	ifNoneMatch := r.Header.Get("If-None-Match")
@@ -35,6 +46,8 @@ func (h *EmbeddingsController) Create(w http.ResponseWriter, r *http.Request) {
 	// Add context from HTTP request
 	ctx := r.Context()
 	req.APIKey = h.getAPIKey(ctx)
+	req.TenantID = h.getTenantID(ctx)
+	req.APIKeyConfig = h.getAPIKeyRoutingConfig(ctx)
 	req.RequestID = h.getRequestID(ctx)
 
 	// Process the request
@@ -64,8 +77,21 @@ func (h *EmbeddingsController) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Write response
-	if err := dto.WriteJSON(w, http.StatusOK, resp); err != nil {
+	if err := h.writeEmbeddingResponse(w, resp.Response); err != nil {
 		h.logError(ctx, err, "failed to write response")
 	}
+}
+
+func (h *EmbeddingsController) decodeEmbedding(r *http.Request) (inference.EmbeddingRequest, error) {
+	if h.protocol == ProtocolOpenRouter {
+		return openrouter.DecodeEmbedding(r.Body)
+	}
+	return openai.DecodeEmbedding(r.Body)
+}
+
+func (h *EmbeddingsController) writeEmbeddingResponse(w http.ResponseWriter, response inference.EmbeddingResponse) error {
+	if h.protocol == ProtocolOpenRouter {
+		return openrouter.WriteJSON(w, http.StatusOK, openrouter.EncodeEmbedding(response))
+	}
+	return openai.WriteJSON(w, http.StatusOK, openai.EncodeEmbedding(response))
 }

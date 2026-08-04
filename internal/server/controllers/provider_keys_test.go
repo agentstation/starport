@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -18,22 +18,22 @@ import (
 // mockKeyManager implements keys.KeyManager for testing
 type mockKeyManager struct{}
 
-func (m *mockKeyManager) AddKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback bool, priority int) (*models.ProviderKey, error) {
-	return &models.ProviderKey{
+func (m *mockKeyManager) AddKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback bool, priority int) (*credentials.ProviderKey, error) {
+	return &credentials.ProviderKey{
 		Scope:    scope,
 		Provider: provider,
 	}, nil
 }
 
-func (m *mockKeyManager) GetKey(ctx context.Context, scope, provider string) (*models.ProviderKey, error) {
-	return &models.ProviderKey{
+func (m *mockKeyManager) GetKey(ctx context.Context, scope, provider string) (*credentials.ProviderKey, error) {
+	return &credentials.ProviderKey{
 		Scope:    scope,
 		Provider: provider,
 	}, nil
 }
 
-func (m *mockKeyManager) GetKeys(ctx context.Context, scope, provider string) ([]*models.ProviderKey, error) {
-	return []*models.ProviderKey{
+func (m *mockKeyManager) GetKeys(ctx context.Context, scope, provider string) ([]*credentials.ProviderKey, error) {
+	return []*credentials.ProviderKey{
 		{
 			Scope:    scope,
 			Provider: provider,
@@ -41,8 +41,8 @@ func (m *mockKeyManager) GetKeys(ctx context.Context, scope, provider string) ([
 	}, nil
 }
 
-func (m *mockKeyManager) ListKeys(ctx context.Context, scope string) ([]*models.ProviderKey, error) {
-	return []*models.ProviderKey{
+func (m *mockKeyManager) ListKeys(ctx context.Context, scope string) ([]*credentials.ProviderKey, error) {
+	return []*credentials.ProviderKey{
 		{
 			Scope:    scope,
 			Provider: "openai",
@@ -50,8 +50,8 @@ func (m *mockKeyManager) ListKeys(ctx context.Context, scope string) ([]*models.
 	}, nil
 }
 
-func (m *mockKeyManager) UpdateKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback *bool, priority *int) (*models.ProviderKey, error) {
-	return &models.ProviderKey{
+func (m *mockKeyManager) UpdateKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback *bool, priority *int) (*credentials.ProviderKey, error) {
+	return &credentials.ProviderKey{
 		Scope:    scope,
 		Provider: provider,
 	}, nil
@@ -65,22 +65,22 @@ func (m *mockKeyManager) ValidateKey(ctx context.Context, provider string, key m
 	return nil
 }
 
-func (m *mockKeyManager) AddGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *models.RateLimitConfig) (*models.ProviderKey, error) {
-	return &models.ProviderKey{
+func (m *mockKeyManager) AddGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+	return &credentials.ProviderKey{
 		Scope:    "*",
 		Provider: provider,
 	}, nil
 }
 
-func (m *mockKeyManager) GetGlobalKey(ctx context.Context, provider string) (*models.ProviderKey, error) {
-	return &models.ProviderKey{
+func (m *mockKeyManager) GetGlobalKey(ctx context.Context, provider string) (*credentials.ProviderKey, error) {
+	return &credentials.ProviderKey{
 		Scope:    "*",
 		Provider: provider,
 	}, nil
 }
 
-func (m *mockKeyManager) UpdateGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *models.RateLimitConfig) (*models.ProviderKey, error) {
-	return &models.ProviderKey{
+func (m *mockKeyManager) UpdateGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+	return &credentials.ProviderKey{
 		Scope:    "*",
 		Provider: provider,
 	}, nil
@@ -90,8 +90,8 @@ func (m *mockKeyManager) DeleteGlobalKey(ctx context.Context, provider string) e
 	return nil
 }
 
-func (m *mockKeyManager) ListGlobalKeys(ctx context.Context) ([]*models.ProviderKey, error) {
-	return []*models.ProviderKey{
+func (m *mockKeyManager) ListGlobalKeys(ctx context.Context) ([]*credentials.ProviderKey, error) {
+	return []*credentials.ProviderKey{
 		{
 			Scope:    "*",
 			Provider: "openai",
@@ -101,10 +101,6 @@ func (m *mockKeyManager) ListGlobalKeys(ctx context.Context) ([]*models.Provider
 
 func (m *mockKeyManager) DetermineKeyStrategy(ctx context.Context, scope string, provider string) byok.FallbackStrategy {
 	return byok.GatewayFirst
-}
-
-func (m *mockKeyManager) CalculateProviderKeyCost(usage *byok.Usage) float64 {
-	return 0.0
 }
 
 func (m *mockKeyManager) RecordUsage(ctx context.Context, scope string, provider string, usage *byok.Usage) error {
@@ -135,6 +131,20 @@ func TestProviderKeysHandler_List(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Contains(t, resp, "provider_keys")
+}
+
+func TestProviderKeysHandler_Disabled(t *testing.T) {
+	handler := NewProviderKeysController(nil)
+
+	r := chi.NewRouter()
+	r.Get("/api/v1/keys/{key_id}/provider-keys", handler.List)
+
+	req := httptest.NewRequest("GET", "/api/v1/keys/test-key/provider-keys", nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
 
 func TestProviderKeysHandler_Create(t *testing.T) {

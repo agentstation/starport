@@ -27,15 +27,12 @@ func TestNewAzureOpenAIConnector(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid config with custom API version",
+			name: "valid config",
 			config: ProviderConfig{
 				BaseURL:        "https://myresource.openai.azure.com",
 				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
-				Extra: map[string]any{
-					"api_version": "2024-03-01-preview",
-				},
 			},
 			wantErr: false,
 		},
@@ -61,47 +58,11 @@ func TestNewAzureOpenAIConnector(t *testing.T) {
 				if connector == nil {
 					t.Error("NewAzureOpenAIConnector() returned nil connector")
 				}
-				if connector.Name() != "azure" {
+				if connector.Name() != "azure-openai" {
 					t.Errorf("Expected name 'azure', got '%s'", connector.Name())
 				}
 			}
 		})
-	}
-}
-
-func TestAzureOpenAIConnector_Models(t *testing.T) {
-	connector, err := NewAzureOpenAIConnector(ProviderConfig{
-		BaseURL:        "https://myresource.openai.azure.com",
-		APIKey:         "test-key",
-		Timeout:        5 * time.Second,
-		MaxConnections: 10,
-	})
-	if err != nil {
-		t.Fatalf("NewAzureOpenAIConnector() error = %v", err)
-	}
-
-	resp, err := connector.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models() error = %v", err)
-	}
-
-	// Azure returns example deployments
-	if resp.Object != "list" {
-		t.Errorf("Expected object 'list', got '%s'", resp.Object)
-	}
-	if len(resp.Data) != 4 {
-		t.Errorf("Expected 4 example models, got %d", len(resp.Data))
-	}
-	// Check for the placeholder
-	hasPlaceholder := false
-	for _, model := range resp.Data {
-		if model.ID == "azure/YOUR-DEPLOYMENT-NAME" {
-			hasPlaceholder = true
-			break
-		}
-	}
-	if !hasPlaceholder {
-		t.Error("Expected placeholder model 'azure/YOUR-DEPLOYMENT-NAME' not found")
 	}
 }
 
@@ -113,12 +74,6 @@ func TestAzureOpenAIConnector_Chat(t *testing.T) {
 		}
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("Expected Content-Type header, got %s", r.Header.Get("Content-Type"))
-		}
-
-		// Verify API version in query
-		apiVersion := r.URL.Query().Get("api-version")
-		if apiVersion == "" {
-			t.Error("Expected api-version query parameter")
 		}
 
 		var reqBody ChatRequest
@@ -153,11 +108,14 @@ func TestAzureOpenAIConnector_Chat(t *testing.T) {
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		MaxRetries:     0,
 	})
 
 	resp, err := connector.Chat(context.Background(), &ChatRequest{
-		Model: "azure/gpt-35-turbo-deployment", // Using provider/model format
+		Model: "azure-openai/gpt-35-turbo-deployment", // Using provider/model format
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/openai/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -172,7 +130,7 @@ func TestAzureOpenAIConnector_Chat(t *testing.T) {
 	}
 }
 
-func TestAzureOpenAIConnector_APIVersion(t *testing.T) {
+func TestAzureOpenAIConnector_PreservesCatalogEndpointQuery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check custom API version
 		apiVersion := r.URL.Query().Get("api-version")
@@ -198,13 +156,14 @@ func TestAzureOpenAIConnector_APIVersion(t *testing.T) {
 		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		Extra: map[string]any{
-			"api_version": "2024-03-01-preview",
-		},
 	})
 
 	_, err := connector.Chat(context.Background(), &ChatRequest{
 		Model: "gpt-4-deployment",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/openai/v1/chat/completions?api-version=2024-03-01-preview",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Test"},
 		},
@@ -234,11 +193,14 @@ func TestAzureOpenAIConnector_ErrorHandling(t *testing.T) {
 		APIKey:         "invalid-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
-		MaxRetries:     0,
 	})
 
 	_, err := connector.Chat(context.Background(), &ChatRequest{
 		Model: "gpt-35-turbo",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/openai/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -294,6 +256,10 @@ func TestAzureOpenAIConnector_ChatStream(t *testing.T) {
 
 	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
 		Model: "gpt-4-deployment",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/openai/v1/chat/completions",
+		},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
@@ -362,6 +328,10 @@ func TestAzureOpenAIConnector_Embeddings(t *testing.T) {
 	resp, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
 		Model: "text-embedding-ada-002-deployment",
 		Input: "Hello world",
+		Endpoint: InferenceEndpoint{
+			Type: "openai",
+			URL:  server.URL + "/openai/v1/embeddings",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Embeddings() error = %v", err)

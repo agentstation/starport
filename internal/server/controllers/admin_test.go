@@ -7,135 +7,36 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/agentstation/starport/internal/apikeys"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// mockStore implements storage.KVStore for testing
-type mockStore struct {
-	data map[string][]byte
+func newAdminTestController(t *testing.T) (*AdminController, identity.Repository) {
+	t.Helper()
+	repository, err := identity.Open(storage.NewMockStore())
+	require.NoError(t, err)
+	return NewAdminController(repository), repository
 }
 
-func newMockStore() *mockStore {
-	return &mockStore{
-		data: make(map[string][]byte),
+func createAdminTestIdentity(t *testing.T, repository identity.Repository, apiKey identity.APIKey) {
+	t.Helper()
+	if len(apiKey.Scopes) == 0 {
+		apiKey.Scopes = []string{"test"}
 	}
-}
-
-func (m *mockStore) Get(ctx context.Context, key string) ([]byte, error) {
-	if val, ok := m.data[key]; ok {
-		return val, nil
+	if apiKey.Hash == "" {
+		apiKey.Hash = "hash-" + apiKey.ID
 	}
-	return nil, storage.ErrNotFound
-}
-
-func (m *mockStore) Set(ctx context.Context, key string, value []byte) error {
-	m.data[key] = value
-	return nil
-}
-
-func (m *mockStore) SetWithTTL(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	m.data[key] = value
-	return nil
-}
-
-func (m *mockStore) Delete(ctx context.Context, key string) error {
-	delete(m.data, key)
-	return nil
-}
-
-func (m *mockStore) Exists(ctx context.Context, key string) (bool, error) {
-	_, ok := m.data[key]
-	return ok, nil
-}
-
-func (m *mockStore) Increment(ctx context.Context, key string, delta int64) (int64, error) {
-	return 0, nil
-}
-
-func (m *mockStore) ScanWithPrefix(ctx context.Context, prefix string, limit int) ([]string, error) {
-	var keys []string
-	for k := range m.data {
-		if len(keys) >= limit {
-			break
-		}
-		keys = append(keys, k)
-	}
-	return keys, nil
-}
-
-func (m *mockStore) Close() error {
-	return nil
-}
-
-func (m *mockStore) BeginTransaction(ctx context.Context) (storage.Transaction, error) {
-	return nil, nil
-}
-
-func (m *mockStore) GetTTL(ctx context.Context, key string) (time.Duration, error) {
-	return 0, nil
-}
-
-func (m *mockStore) ExpireAt(ctx context.Context, key string, expireAt time.Time) error {
-	return nil
-}
-
-func (m *mockStore) Decrement(ctx context.Context, key string, delta int64) (int64, error) {
-	return 0, nil
-}
-
-func (m *mockStore) CompareAndSwap(ctx context.Context, key string, old, newValue []byte) error {
-	return nil
-}
-
-func (m *mockStore) BatchGet(ctx context.Context, keys []string) (map[string][]byte, error) {
-	result := make(map[string][]byte)
-	for _, key := range keys {
-		if val, ok := m.data[key]; ok {
-			result[key] = val
-		}
-	}
-	return result, nil
-}
-
-func (m *mockStore) BatchSet(ctx context.Context, items map[string][]byte) error {
-	for k, v := range items {
-		m.data[k] = v
-	}
-	return nil
-}
-
-func (m *mockStore) BatchDelete(ctx context.Context, keys []string) error {
-	for _, key := range keys {
-		delete(m.data, key)
-	}
-	return nil
-}
-
-func (m *mockStore) BatchSetWithTTL(ctx context.Context, items map[string][]byte, ttl time.Duration) error {
-	for k, v := range items {
-		m.data[k] = v
-	}
-	return nil
-}
-
-func (m *mockStore) Scan(ctx context.Context, pattern string, limit int) ([]string, error) {
-	return m.ScanWithPrefix(ctx, "", limit)
-}
-
-func (m *mockStore) Ping(ctx context.Context) error {
-	return nil
+	_, err := repository.Create(context.Background(), apiKey)
+	require.NoError(t, err)
 }
 
 func TestAdminHandler_SystemInfo(t *testing.T) {
 	// Create handler
-	store := newMockStore()
-	handler := NewAdminController(store)
+	handler, _ := newAdminTestController(t)
 
 	// Create request
 	req := httptest.NewRequest("GET", "/api/v1/admin/info", nil)
@@ -157,8 +58,7 @@ func TestAdminHandler_SystemInfo(t *testing.T) {
 
 func TestAdminHandler_Metrics(t *testing.T) {
 	// Create handler
-	store := newMockStore()
-	handler := NewAdminController(store)
+	handler, _ := newAdminTestController(t)
 
 	// Create request
 	req := httptest.NewRequest("GET", "/api/v1/admin/metrics", nil)
@@ -180,17 +80,15 @@ func TestAdminHandler_Metrics(t *testing.T) {
 
 func TestAdminHandler_ListKeys(t *testing.T) {
 	// Create handler
-	store := newMockStore()
-	handler := NewAdminController(store)
+	handler, identities := newAdminTestController(t)
 
 	// Add some test keys
-	apiKey := &apikeys.APIKey{
+	apiKey := &identity.APIKey{
 		ID:     "test-key-1",
-		Name:   "Test Key 1",
+		Name:   "Test-Key-1",
 		Active: true,
 	}
-	keyData, _ := storage.Serialize(apiKey)
-	_ = store.Set(context.Background(), storage.APIKeyKey(apiKey.ID), keyData)
+	createAdminTestIdentity(t, identities, *apiKey)
 
 	// Create request
 	req := httptest.NewRequest("GET", "/api/v1/admin/keys", nil)
@@ -212,12 +110,11 @@ func TestAdminHandler_ListKeys(t *testing.T) {
 
 func TestAdminHandler_CreateKey(t *testing.T) {
 	// Create handler
-	store := newMockStore()
-	handler := NewAdminController(store)
+	handler, _ := newAdminTestController(t)
 
 	// Create request body
 	reqBody := map[string]any{
-		"name":        "Test API Key",
+		"name":        "Test-API-Key",
 		"description": "Test key for unit tests",
 		"scopes":      []string{"read", "write"},
 	}
@@ -243,23 +140,21 @@ func TestAdminHandler_CreateKey(t *testing.T) {
 
 	keyInfo := resp["key"].(map[string]any)
 	assert.Contains(t, keyInfo, "key") // The actual key value
-	assert.Equal(t, "Test API Key", keyInfo["name"])
+	assert.Equal(t, "Test-API-Key", keyInfo["name"])
 }
 
 func TestAdminHandler_GetKey(t *testing.T) {
 	// Create handler
-	store := newMockStore()
-	handler := NewAdminController(store)
+	handler, identities := newAdminTestController(t)
 
 	// Add a test key
-	apiKey := &apikeys.APIKey{
+	apiKey := &identity.APIKey{
 		ID:     "test-key-1",
-		Name:   "Test Key 1",
+		Name:   "Test-Key-1",
 		Active: true,
 		Hash:   "secret-hash",
 	}
-	keyData, _ := storage.Serialize(apiKey)
-	_ = store.Set(context.Background(), storage.APIKeyKey(apiKey.ID), keyData)
+	createAdminTestIdentity(t, identities, *apiKey)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -276,27 +171,25 @@ func TestAdminHandler_GetKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Check response
-	var resp apikeys.APIKey
+	var resp identity.APIKey
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, "test-key-1", resp.ID)
-	assert.Equal(t, "Test Key 1", resp.Name)
+	assert.Equal(t, "Test-Key-1", resp.Name)
 	assert.Empty(t, resp.Hash) // Hash should not be exposed
 }
 
 func TestAdminHandler_DeleteKey(t *testing.T) {
 	// Create handler
-	store := newMockStore()
-	handler := NewAdminController(store)
+	handler, identities := newAdminTestController(t)
 
 	// Add a test key
-	apiKey := &apikeys.APIKey{
+	apiKey := &identity.APIKey{
 		ID:     "test-key-1",
-		Name:   "Test Key 1",
+		Name:   "Test-Key-1",
 		Active: true,
 	}
-	keyData, _ := storage.Serialize(apiKey)
-	_ = store.Set(context.Background(), storage.APIKeyKey(apiKey.ID), keyData)
+	createAdminTestIdentity(t, identities, *apiKey)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -320,6 +213,6 @@ func TestAdminHandler_DeleteKey(t *testing.T) {
 	assert.Equal(t, "test-key-1", resp["key_id"])
 
 	// Verify key was deleted
-	_, err = store.Get(context.Background(), storage.APIKeyKey(apiKey.ID))
-	assert.Equal(t, storage.ErrNotFound, err)
+	_, err = identities.GetByID(context.Background(), apiKey.ID)
+	assert.ErrorIs(t, err, identity.ErrNotFound)
 }

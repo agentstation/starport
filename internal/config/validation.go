@@ -49,6 +49,12 @@ func (c *ServerConfig) Validate() error {
 	if c.IdleTimeout <= 0 {
 		return fmt.Errorf("idle timeout must be positive")
 	}
+	if c.RequestTimeout < 0 {
+		return fmt.Errorf("request timeout cannot be negative")
+	}
+	if c.MaxRequestSize < 0 {
+		return fmt.Errorf("max request size cannot be negative")
+	}
 
 	if c.MaxHeaderBytes <= 0 {
 		return fmt.Errorf("max header bytes must be positive")
@@ -67,6 +73,17 @@ func (c *StorageConfig) Validate() error {
 	default:
 		return fmt.Errorf("unsupported storage mode: %s", c.Mode)
 	}
+}
+
+// Validate validates Starmap catalog acquisition settings.
+func (c *CatalogConfig) Validate() error {
+	if c.RefreshInterval < 0 {
+		return fmt.Errorf("catalog refresh interval cannot be negative")
+	}
+	if c.RefreshTimeout < 0 {
+		return fmt.Errorf("catalog refresh timeout cannot be negative")
+	}
+	return nil
 }
 
 // Validate validates BadgerConfig
@@ -136,18 +153,22 @@ func (c *ProviderConfig) Validate() error {
 		return fmt.Errorf("max connections must be positive")
 	}
 
-	if c.MaxRetries < 0 {
-		return fmt.Errorf("max retries cannot be negative")
-	}
+	return nil
+}
 
-	if c.RetryDelay <= 0 {
-		return fmt.Errorf("retry delay must be positive")
+// Validate validates each active provider configuration.
+func (c *ProvidersConfig) Validate() error {
+	for _, entry := range c.Entries() {
+		provider := entry.Config
+		active := provider.APIKey != "" || provider.BaseURL != "" ||
+			provider.ProjectID != "" || provider.Location != "" || provider.Enabled
+		if !active {
+			continue
+		}
+		if err := provider.Validate(); err != nil {
+			return fmt.Errorf("invalid %s provider config: %w", entry.ProviderID, err)
+		}
 	}
-
-	if c.BackoffMultiplier <= 1 {
-		return fmt.Errorf("backoff multiplier must be greater than 1")
-	}
-
 	return nil
 }
 
@@ -196,6 +217,9 @@ func (c *RateLimitingConfig) Validate() error {
 
 // Validate validates SecurityConfig
 func (c *SecurityConfig) Validate() error {
+	if c.BootstrapAPIKey != "" && len(c.BootstrapAPIKey) < 32 {
+		return fmt.Errorf("bootstrap API key must be at least 32 characters")
+	}
 	if c.EnableTLS {
 		if c.TLSCertPath == "" {
 			return fmt.Errorf("TLS cert path required when TLS is enabled")

@@ -14,13 +14,10 @@ func IntPtr(i int) *int             { return &i }
 // BenchmarkConnectorOperations benchmarks various connector operations
 func BenchmarkConnectorOperations(b *testing.B) {
 	config := ProviderConfig{
-		BaseURL:           "http://mock",
-		APIKey:            "test-key",
-		MaxRetries:        3,
-		RetryDelay:        100 * time.Millisecond,
-		BackoffMultiplier: 2.0,
-		Timeout:           30 * time.Second,
-		MaxConnections:    100,
+		BaseURL:        "http://mock",
+		APIKey:         "test-key",
+		Timeout:        30 * time.Second,
+		MaxConnections: 100,
 	}
 
 	connector := NewMockConnector(config)
@@ -92,27 +89,6 @@ func BenchmarkConnectorOperations(b *testing.B) {
 		}
 	})
 
-	b.Run("Models", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			resp, err := connector.Models(ctx)
-			if err != nil {
-				b.Fatal(err)
-			}
-			if resp == nil || len(resp.Data) == 0 {
-				b.Fatal("expected models")
-			}
-		}
-	})
-
-	b.Run("Health", func(b *testing.B) {
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			if err := connector.Health(ctx); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
 }
 
 // BenchmarkModelParsing benchmarks model ID parsing
@@ -120,7 +96,7 @@ func BenchmarkModelParsing(b *testing.B) {
 	modelIDs := []string{
 		"openai/gpt-4",
 		"anthropic/claude-3-opus",
-		"google-aistudio/gemini-pro",
+		"google-ai-studio/gemini-pro",
 		"groq/mixtral-8x7b",
 		"mistral/mistral-large",
 		"simple-model",

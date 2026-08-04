@@ -5,18 +5,17 @@ Documentation for the Starport open source LLM gateway.
 ## Core Documentation
 
 - **[Architecture](ARCHITECTURE.md)** - Technical design and system architecture
+- **[Architecture Control Plane](ARCHITECTURE_CONTROL_PLANE.md)** - Historical architecture-hardening ledger
+- **[Starport v1 Architecture Plan](STARPORT_V1_ARCHITECTURE_PLAN.md)** - Active concept-seam migration and verification ledger
 - **[Development Plan](PLAN.md)** - Implementation phases and roadmap
 - **[Task Status](TASKS.md)** - Current development status and task tracking
-- **[Operator Guide](OPERATOR-GUIDE.md)** - Development workflow and guidelines
+- **[Operator Guide](OPERATOR-GUIDE.md)** - Deployment, bootstrap, operation, and release checks
 
 ## Architecture Decision Records
 
-- [API Key Architecture](API-KEY-DECISION.md) - Design decisions for API key system
-- [Credential Architecture](CREDENTIAL-ARCHITECTURE-CLARIFICATION.md) - BYOK credential design
-- [Credential Unification](CREDENTIAL-UNIFICATION-SUMMARY.md) - Unified credential model
-- [Key Architecture Summary](KEY-ARCHITECTURE-SUMMARY.md) - Summary of key management
-- [Simplified Credential Architecture](SIMPLIFIED-CREDENTIAL-ARCHITECTURE.md) - Simplified approach
-- [Unified Key Architecture](UNIFIED-KEY-ARCHITECTURE.md) - Final unified design
+- [Architecture](ARCHITECTURE.md) is the canonical v1 design.
+- The active plan records accepted architectural decisions and their proof.
+- Starport has no pre-v1 compatibility or data-migration contract.
 
 ## User Guides (Coming Soon)
 
@@ -30,5 +29,5 @@ Documentation for the Starport open source LLM gateway.
 ## Developer Resources
 
 - [Contributing Guidelines](CONTRIBUTING.md) - How to contribute
-- [Code of Conduct](CODE_OF_CONDUCT.md) - Community standards
+- [Community rules](CODE_OF_CONDUCT.md)
 - [Claude Instructions](../CLAUDE.md) - For AI assistants

@@ -1,11 +1,13 @@
-// package router provides model routing and fallback capabilities for the Starport gateway
+// Package router provides model routing and fallback capabilities for the Starport gateway.
 package router
 
 import (
 	"context"
 	"time"
 
+	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/routing"
 )
 
 // ModelRouter handles model selection, fallback logic, and provider routing
@@ -17,6 +19,9 @@ type ModelRouter interface {
 	// RouteWithFallback attempts to route a request through multiple models with fallback logic
 	// Returns the response and which model was actually used
 	RouteWithFallback(ctx context.Context, req *Request) (*Response, error)
+
+	// RouteStream executes the same immutable route plan and budget for streaming.
+	RouteStream(ctx context.Context, req *Request) (execution.ManagedStream, error)
 }
 
 // Request contains the original request plus routing preferences
@@ -35,6 +40,10 @@ type Request struct {
 
 	// Request metadata for routing decisions
 	Metadata *RequestMetadata
+
+	// PrepareAttempt optionally adjusts the provider request for the selected
+	// model immediately before invoking the connector.
+	PrepareAttempt func(route routing.Route, req *connectors.ChatRequest) *connectors.ChatRequest
 }
 
 // ProviderPreferences controls which providers can be used
@@ -56,6 +65,9 @@ type ProviderPreferences struct {
 type APIKeyConfig struct {
 	// Allowed providers for this API key
 	AllowedProviders []string
+
+	// Allowed models for this API key
+	AllowedModels []string
 
 	// Model-specific overrides
 	ModelOverrides map[string]string
@@ -116,134 +128,4 @@ type ModelAttempt struct {
 	Error    string        `json:"error,omitempty"`
 	Duration time.Duration `json:"duration_ms"`
 	Status   string        `json:"status"` // "success", "failed", "skipped"
-}
-
-// FallbackTrigger represents reasons to trigger fallback
-type FallbackTrigger int
-
-const (
-	// FallbackNone indicates no fallback needed
-	FallbackNone FallbackTrigger = iota
-	// FallbackRateLimit triggered by 429 error
-	FallbackRateLimit
-	// FallbackModelUnavailable triggered by 404 or model not found
-	FallbackModelUnavailable
-	// FallbackContextExceeded triggered when context length is exceeded
-	FallbackContextExceeded
-	// FallbackProviderError triggered by 5xx errors
-	FallbackProviderError
-	// FallbackContentModeration triggered by content policy violations
-	FallbackContentModeration
-	// FallbackTimeout triggered by request timeout
-	FallbackTimeout
-)
-
-// IsFallbackError determines if an error should trigger fallback
-func IsFallbackError(err error) (FallbackTrigger, bool) {
-	if err == nil {
-		return FallbackNone, false
-	}
-
-	// Check if it's an API error
-	if apiErr, ok := err.(*connectors.APIError); ok {
-		switch apiErr.StatusCode {
-		case 429:
-			return FallbackRateLimit, true
-		case 404:
-			return FallbackModelUnavailable, true
-		case 400:
-			// Check for context length errors
-			if containsContextError(apiErr.Message) {
-				return FallbackContextExceeded, true
-			}
-			// Check for content moderation
-			if containsContentError(apiErr.Message) {
-				return FallbackContentModeration, true
-			}
-		case 500, 502, 503, 504:
-			return FallbackProviderError, true
-		}
-	}
-
-	// Check for timeout
-	if isTimeoutError(err) {
-		return FallbackTimeout, true
-	}
-
-	return FallbackNone, false
-}
-
-func containsContextError(msg string) bool {
-	// Common context length error patterns
-	contextErrors := []string{
-		"context length",
-		"context_length_exceeded",
-		"max_tokens",
-		"token limit",
-		"maximum context",
-	}
-	for _, pattern := range contextErrors {
-		if contains(msg, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
-func containsContentError(msg string) bool {
-	// Common content moderation error patterns
-	contentErrors := []string{
-		"content_policy",
-		"content moderation",
-		"safety",
-		"harmful",
-		"inappropriate",
-	}
-	for _, pattern := range contentErrors {
-		if contains(msg, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
-func isTimeoutError(err error) bool {
-	// Check for context deadline exceeded or timeout errors
-	errStr := err.Error()
-	return contains(errStr, "timeout") || contains(errStr, "deadline exceeded")
-}
-
-// Simple case-insensitive contains check
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && containsIgnoreCase(s, substr)
-}
-
-func containsIgnoreCase(s, substr string) bool {
-	if len(substr) == 0 {
-		return true
-	}
-	if len(s) < len(substr) {
-		return false
-	}
-	// Simple implementation - in production would use strings.Contains with lowercasing
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-		for j := 0; j < len(substr); j++ {
-			if toLower(s[i+j]) != toLower(substr[j]) {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
-}
-
-func toLower(b byte) byte {
-	if b >= 'A' && b <= 'Z' {
-		return b + 32
-	}
-	return b
 }

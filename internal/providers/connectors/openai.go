@@ -6,37 +6,33 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/agentstation/starport/pkg/httpclient"
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
 // OpenAIConnector implements the Connector interface for OpenAI
 type OpenAIConnector struct {
 	OpenAICompatibleConnector
+	providerID catalogs.ProviderID
 }
 
 // NewOpenAIConnector creates a new OpenAI connector
 func NewOpenAIConnector(config ProviderConfig) (*OpenAIConnector, error) {
-	// Set default base URL if not provided
-	if config.BaseURL == "" {
-		config.BaseURL = "https://api.openai.com/v1"
-	}
-
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Create HTTP client using httpclient package
-	client, err := httpclient.New("openai", httpclient.DefaultProviderConfig("openai"))
+	httpClient, err := newProviderHTTPClient("openai", config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+		return nil, err
 	}
 
 	return &OpenAIConnector{
 		OpenAICompatibleConnector: OpenAICompatibleConnector{
 			config:     config,
 			provider:   "openai",
-			httpClient: client.GetHTTPClient(),
+			httpClient: httpClient,
 		},
+		providerID: catalogs.ProviderIDOpenAI,
 	}, nil
 }
 
@@ -60,25 +56,6 @@ func (c *OpenAIConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 	return c.OpenAICompatibleConnector.Embeddings(ctx, req, c.setHeaders, c.handleError)
 }
 
-// Models lists available models from the provider
-func (c *OpenAIConnector) Models(ctx context.Context) (*ModelsResponse, error) {
-	return c.OpenAICompatibleConnector.Models(ctx, c.setHeaders, c.handleError)
-}
-
-// Health checks the health of the connector
-func (c *OpenAIConnector) Health(ctx context.Context) error {
-	// Use models endpoint as health check
-	_, err := c.Models(ctx)
-	if err != nil {
-		// If it's an auth error, the service is up
-		if apiErr, ok := err.(*APIError); ok && apiErr.StatusCode == http.StatusUnauthorized {
-			return nil
-		}
-		return fmt.Errorf("%w: %v", ErrHealthCheckFailed, err)
-	}
-	return nil
-}
-
 // Close closes the connector
 func (c *OpenAIConnector) Close() error {
 	c.httpClient.CloseIdleConnections()
@@ -87,7 +64,7 @@ func (c *OpenAIConnector) Close() error {
 
 // setHeaders sets OpenAI-specific headers
 func (c *OpenAIConnector) setHeaders(req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
+	applyRegisteredInferenceAuth(c.providerID, req, c.config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 }
 
@@ -105,7 +82,7 @@ func (c *OpenAIConnector) handleError(resp *http.Response) error {
 		return &APIError{
 			StatusCode: resp.StatusCode,
 			Message:    "failed to decode error response",
-			Provider:   "openai",
+			Provider:   string(c.providerID),
 		}
 	}
 
@@ -114,6 +91,6 @@ func (c *OpenAIConnector) handleError(resp *http.Response) error {
 		Message:    errResp.Error.Message,
 		Type:       errResp.Error.Type,
 		Code:       errResp.Error.Code,
-		Provider:   "openai",
+		Provider:   string(c.providerID),
 	}
 }

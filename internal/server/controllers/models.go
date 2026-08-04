@@ -3,10 +3,11 @@ package controllers
 import (
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/agentstation/starport/internal/httpapi/openai"
+	"github.com/agentstation/starport/internal/httpapi/openrouter"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/dto"
 )
@@ -18,8 +19,17 @@ type ModelsController struct {
 
 // NewModelsController creates a new models controller
 func NewModelsController(service proxy.Proxy) *ModelsController {
+	return newModelsController(service, ProtocolOpenAI)
+}
+
+// NewOpenRouterModelsController creates an OpenRouter models controller.
+func NewOpenRouterModelsController(service proxy.Proxy) *ModelsController {
+	return newModelsController(service, ProtocolOpenRouter)
+}
+
+func newModelsController(service proxy.Proxy, protocol Protocol) *ModelsController {
 	return &ModelsController{
-		BaseHandler: NewBaseHandler(service),
+		BaseHandler: NewProtocolBaseHandler(service, protocol),
 	}
 }
 
@@ -40,19 +50,8 @@ func (h *ModelsController) List(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Cache", resp.CacheStatus)
 	}
 
-	// For /v1/models, return basic OpenAI format
-	// For /api/v1/models, return enhanced metadata (already included in response)
-	if strings.HasPrefix(r.URL.Path, "/v1/") {
-		// Transform to basic OpenAI format by removing extra fields
-		basicResp := transformToBasicModels(resp)
-		if err := dto.WriteJSON(w, http.StatusOK, basicResp); err != nil {
-			h.logError(ctx, err, "failed to write response")
-		}
-	} else {
-		// Return full response with metadata
-		if err := dto.WriteJSON(w, http.StatusOK, resp); err != nil {
-			h.logError(ctx, err, "failed to write response")
-		}
+	if err := h.writeModels(w, resp.Data); err != nil {
+		h.logError(ctx, err, "failed to write response")
 	}
 }
 
@@ -63,14 +62,14 @@ func (h *ModelsController) Get(w http.ResponseWriter, r *http.Request) {
 	// Get model ID from path
 	modelID := chi.URLParam(r, "model")
 	if modelID == "" {
-		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Model ID is required")
+		h.writeInvalidRequest(w, "Model ID is required")
 		return
 	}
 
-	// URL decode the model ID (handles cases like "anthropic%2Fclaude-3-opus")
+	// URL decode provider-scoped model IDs that contain an escaped slash.
 	modelID, err := url.QueryUnescape(modelID)
 	if err != nil {
-		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid model ID")
+		h.writeInvalidRequest(w, "Invalid model ID")
 		return
 	}
 
@@ -85,24 +84,15 @@ func (h *ModelsController) Get(w http.ResponseWriter, r *http.Request) {
 	// Find the requested model
 	for _, model := range resp.Data {
 		if model.ID == modelID {
-			// For /v1/models/{model}, return basic format
-			// For /api/v1/models/{model}, return enhanced format
-			if strings.HasPrefix(r.URL.Path, "/v1/") {
-				basicModel := transformToBasicModel(&model)
-				if err := dto.WriteJSON(w, http.StatusOK, basicModel); err != nil {
-					h.logError(ctx, err, "failed to write response")
-				}
-			} else {
-				if err := dto.WriteJSON(w, http.StatusOK, model); err != nil {
-					h.logError(ctx, err, "failed to write response")
-				}
+			if err := h.writeModel(w, model); err != nil {
+				h.logError(ctx, err, "failed to write response")
 			}
 			return
 		}
 	}
 
 	// Model not found
-	dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Model not found")
+	h.writeError(w, &proxy.ProviderError{Code: "not_found", Message: "Model not found"})
 }
 
 // GetEndpoints handles GET /api/v1/models/{model}/endpoints
@@ -112,14 +102,14 @@ func (h *ModelsController) GetEndpoints(w http.ResponseWriter, r *http.Request) 
 	// Get model ID from path
 	modelID := chi.URLParam(r, "model")
 	if modelID == "" {
-		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Model ID is required")
+		h.writeInvalidRequest(w, "Model ID is required")
 		return
 	}
 
 	// URL decode the model ID
 	modelID, err := url.QueryUnescape(modelID)
 	if err != nil {
-		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid model ID")
+		h.writeInvalidRequest(w, "Invalid model ID")
 		return
 	}
 
@@ -137,50 +127,66 @@ func (h *ModelsController) GetEndpoints(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// transformToBasicModels removes enhanced metadata for OpenAI compatibility
-func transformToBasicModels(resp *proxy.ModelsResponse) any {
-	type basicModel struct {
-		ID      string `json:"id"`
-		Object  string `json:"object"`
-		Created int64  `json:"created"`
-		OwnedBy string `json:"owned_by"`
-	}
-
-	type basicResponse struct {
-		Object string       `json:"object"`
-		Data   []basicModel `json:"data"`
-	}
-
-	basic := basicResponse{
-		Object: resp.Object,
-		Data:   make([]basicModel, len(resp.Data)),
-	}
-
-	for i, model := range resp.Data {
-		basic.Data[i] = basicModel{
-			ID:      model.ID,
-			Object:  model.Object,
-			Created: model.Created,
-			OwnedBy: model.OwnedBy,
+func (h *ModelsController) writeModels(w http.ResponseWriter, models []proxy.ModelInfo) error {
+	if h.protocol == ProtocolOpenRouter {
+		converted := make([]openrouter.Model, len(models))
+		for index := range models {
+			converted[index] = openRouterModel(models[index])
 		}
+		return openrouter.WriteJSON(w, http.StatusOK, openrouter.ModelList{
+			Data: converted, TotalCount: len(converted), Links: openrouter.ModelLinks{Next: nil},
+		})
 	}
-
-	return basic
+	converted := make([]openai.Model, len(models))
+	for index, model := range models {
+		converted[index] = openAIModel(model)
+	}
+	return openai.WriteJSON(w, http.StatusOK, openai.ModelList{Object: "list", Data: converted})
 }
 
-// transformToBasicModel removes enhanced metadata for OpenAI compatibility
-func transformToBasicModel(model *proxy.ModelInfo) any {
-	type basicModel struct {
-		ID      string `json:"id"`
-		Object  string `json:"object"`
-		Created int64  `json:"created"`
-		OwnedBy string `json:"owned_by"`
+func (h *ModelsController) writeModel(w http.ResponseWriter, model proxy.ModelInfo) error {
+	if h.protocol == ProtocolOpenRouter {
+		return openrouter.WriteJSON(w, http.StatusOK, openRouterModel(model))
 	}
+	return openai.WriteJSON(w, http.StatusOK, openAIModel(model))
+}
 
-	return basicModel{
+func openAIModel(model proxy.ModelInfo) openai.Model {
+	return openai.Model{
 		ID:      model.ID,
 		Object:  model.Object,
 		Created: model.Created,
 		OwnedBy: model.OwnedBy,
 	}
+}
+
+func openRouterModel(model proxy.ModelInfo) openrouter.Model {
+	converted := openrouter.Model{
+		ID: model.ID, CanonicalSlug: model.CanonicalSlug, Name: model.Name,
+		Created: model.Created, Description: model.Description,
+		SupportedParameters: append([]string(nil), model.SupportedParameters...),
+	}
+	if converted.Name == "" {
+		converted.Name = model.ID
+	}
+	if model.Context != nil {
+		converted.ContextLength = *model.Context
+	}
+	if model.Pricing != nil {
+		converted.Pricing = &openrouter.Pricing{Prompt: model.Pricing.Prompt, Completion: model.Pricing.Completion}
+	}
+	if model.Architecture != nil {
+		converted.Architecture = &openrouter.Architecture{
+			InputModalities:  append([]string(nil), model.Architecture.InputModalities...),
+			OutputModalities: append([]string(nil), model.Architecture.OutputModalities...),
+			Tokenizer:        model.Architecture.Tokenizer, InstructType: model.Architecture.InstructType,
+		}
+	}
+	if model.TopProvider != nil {
+		converted.TopProvider = &openrouter.TopProvider{
+			ContextLength:       model.TopProvider.ContextLength,
+			MaxCompletionTokens: model.TopProvider.MaxCompletionTokens,
+		}
+	}
+	return converted
 }

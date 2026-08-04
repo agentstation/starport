@@ -1,329 +1,225 @@
-# Operator Execution Guide
+# Starport v1 Operator Guide
 
-**Quick Start**: Run `./spawn-agent.sh P1-S1-1.2` to start the next available task.
+Last updated: 2026-08-03
 
-## How It Works
+This guide covers a single Starport process and a Valkey-backed multi-node
+deployment. Starport starts only when storage, Starmap, provider credentials,
+and the initial gateway identity are usable.
 
-1. **Check TASKS.md** to see which tasks are ready (see Phase 1 Progress section)
-2. **Run spawn-agent.sh** with the task ID
-3. **Script handles everything**: workspace setup, context generation, prerequisite checking
-4. **Agents update TASKS.md** automatically
+## Requirements
 
-## Phase 1: Foundation Setup
+- Go 1.26.5 for a source build.
+- One configured inference provider.
+- A provider-credential master key with at least 32 random characters.
+- A different bootstrap API key with at least 32 random characters for empty
+  identity storage.
+- A writable Badger path, or a reachable Valkey service.
 
-### Day 1 Morning: Start Here
+Do not reuse the provider master key as a gateway API key. Starport stores the
+gateway key as a SHA-256 hash. It uses the master key to encrypt provider
+credentials.
 
-#### Step 1: Initialize Repository
-```bash
-# From your main starport directory
-./spawn-agent.sh P1-S1-1.1
-# Script will create: ~/starport-development/starport-init/
-```
-**Creates**: go.mod, LICENSE, updates README  
-**Time**: ~2 hours  
-**Wait for**: PR to be merged before proceeding  
+## First Start
 
-#### Step 2: Project Structure (after Step 1 PR merged)
+Copy the example configuration and set the required secrets:
 
 ```bash
-./spawn-agent.sh P1-S1-1.2
-# Auto-creates: ~/starport-development/starport-structure/
-# Creates: Directory structure, cmd/starport/main.go, Makefile
-# Time: ~4 hours
+cp .env.example .env
 ```
 
-### Day 1 Afternoon: Development Environment
+At minimum, set these values in the environment or `.env`:
 
-#### Step 3: Development Environment (after P1-S1-1.2 is merged)
+```text
+STARPORT_SECURITY_MASTER_KEY=<random secret with at least 32 characters>
+STARPORT_SECURITY_BOOTSTRAP_API_KEY=<different random key with at least 32 characters>
+STARPORT_PROVIDERS_OPENAI_API_KEY=<provider inference key>
+```
+
+Any supported provider can replace OpenAI. Starport reads `local.env` before
+`.env`. Existing process environment values have the highest priority.
+
+Build and start the gateway:
 
 ```bash
-./spawn-agent.sh P1-S1-1.3
-# Auto-creates: ~/starport-development/starport-devops/
-# Creates: docker-compose.yml, GitHub Actions, pre-commit hooks
-# Time: ~6 hours
+make build
+./starport serve
 ```
 
-#### Step 4: HTTP Server Foundation (after P1-S1-1.2 is merged)
+The default listener is `http://0.0.0.0:8080`. The default Badger data path is
+`./data/starport`.
+
+Check process health:
 
 ```bash
-./spawn-agent.sh P1-S1-1.4
-# Auto-creates: ~/starport-development/starport-http/
-# Creates: HTTP server with chi router, health checks
-# Time: ~8 hours
+curl --fail http://localhost:8080/health/live
+curl --fail http://localhost:8080/health/ready
 ```
 
-#### Step 5: Configuration System (after P1-S1-1.4 is merged)
+## Bootstrap and Rotate the Admin Key
+
+The bootstrap key has wildcard scope. Use it only to create the first named
+administrator key:
 
 ```bash
-./spawn-agent.sh P1-S1-1.5
-# Auto-creates: ~/starport-development/starport-config/
-# Creates: Configuration system with viper
-# Time: ~6 hours
+curl --fail-with-body \
+  -H "Authorization: Bearer $STARPORT_SECURITY_BOOTSTRAP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"primary_admin","scopes":["*"]}' \
+  http://localhost:8080/api/v1/admin/keys/
 ```
 
-### Day 2: Storage Layer
+The response shows the new key once. Save it in a secret manager. Stop the
+process, remove `STARPORT_SECURITY_BOOTSTRAP_API_KEY`, and start Starport
+again. Startup succeeds because identity storage is no longer empty.
 
-#### Step 6: Storage Interface (after P1-S1-1.5 is merged)
+If storage is empty and the bootstrap value is absent, startup fails. If the
+same bootstrap value remains configured, startup is idempotent and does not
+create duplicate identities.
+
+## Client Base URLs
+
+Use these substitutions in existing clients:
+
+| Client contract | Base URL | API key |
+| --- | --- | --- |
+| OpenAI | `http://localhost:8080/v1` | A Starport gateway key |
+| OpenRouter | `http://localhost:8080/api/v1` | A Starport gateway key |
+
+Example OpenRouter-style request:
 
 ```bash
-./spawn-agent.sh P1-S2-2.1
-# Auto-creates: ~/starport-development/starport-storage-interface/
-# Creates: Storage interface definitions
-# Time: ~4 hours
+curl --fail-with-body \
+  -H "Authorization: Bearer $STARPORT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openrouter/auto","messages":[{"role":"user","content":"Hello"}]}' \
+  http://localhost:8080/api/v1/chat/completions
 ```
 
-#### Step 7: Storage Implementations (after P1-S2-2.1 is merged)
+The key needs `chat:write` or wildcard scope. Model discovery needs
+`models:read`. Embeddings need `embeddings:write`, `chat:write`, or wildcard
+scope.
 
-**Can run in parallel:**
-```bash
-# Terminal 1
-./spawn-agent.sh P1-S2-2.2
-# Auto-creates: ~/starport-development/starport-badger/
-# Creates: Badger DB implementation
-# Time: ~6 hours
+## Provider Configuration
 
-# Terminal 2
-./spawn-agent.sh P1-S2-2.3
-# Auto-creates: ~/starport-development/starport-models/
-# Creates: Core storage models
-# Time: ~4 hours
+Starport uses exact adapter IDs. Current IDs are:
+
+- `openai`
+- `anthropic`
+- `google-ai-studio`
+- `google-vertex`
+- `groq`
+- `mistral`
+- `azure-openai`
+- `ollama`
+
+Inference secrets use only `STARPORT_PROVIDERS_*_API_KEY` variables. Starmap
+catalog acquisition uses the provider variables in its catalog, such as
+`OPENAI_API_KEY`, or its configured cloud credential chain. Starport never
+copies an acquisition credential into an inference adapter.
+
+Vertex AI needs `STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY`, a project ID, and a location.
+The API-key value is an OAuth access token. Set the project with
+`STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID` and the location with
+`STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION`. Ollama needs
+`STARPORT_PROVIDERS_OLLAMA_ENABLED=true` or the `--enable-ollama` flag.
+
+Starmap owns the model catalog. Only offerings from the active Starmap
+generation and configured adapters are routable. A Starmap acquisition failure
+does not add a static model list.
+
+Set `STARPORT_CATALOG_REFRESH_ON_START=true` to run Starmap acquisition before
+adapter activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later refreshes.
+Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed tenant facts, including
+Azure deployment names and local Ollama model mappings. Those facts enter a
+durable Starmap generation before Starport makes the adapter routable.
+
+## Storage Modes
+
+Badger is the default for one process:
+
+```text
+STARPORT_STORAGE_MODE=badger
+STARPORT_STORAGE_BADGER_PATH=./data/starport
 ```
 
-### Day 3: LLM Proxy Core
+Stop Starport before copying a Badger directory for backup or restore. Keep
+the directory on persistent storage.
 
-#### Step 8: Connector Interface (after P1-S1-1.4 is merged)
+Use Valkey for shared state across nodes:
 
-```bash
-./spawn-agent.sh P1-S3-3.1
-# Auto-creates: ~/starport-development/starport-connector-interface/
-# Creates: Model connector interface
-# Time: ~4 hours
+```text
+STARPORT_STORAGE_MODE=valkey
+STARPORT_STORAGE_VALKEY_URL=valkey://valkey.example:6379
 ```
 
-#### Step 9: Provider Integration (after P1-S3-3.1 is merged)
+Use `rediss://` for a TLS Valkey endpoint. Apply the Valkey service's normal
+backup, access-control, and failover procedures.
 
-**Can run in parallel:**
-```bash
-# Terminal 1
-./spawn-agent.sh P1-S3-3.2
-# Auto-creates: ~/starport-development/starport-connectors/
-# Creates: OpenAI & Anthropic connectors
-# Time: ~8 hours
+## Container Start
 
-# Terminal 2
-./spawn-agent.sh P1-S3-3.3
-# Auto-creates: ~/starport-development/starport-proxy/
-# Creates: Proxy endpoints
-# Time: ~10 hours
-```
-
-#### Step 10: Routing System (after P1-S3-3.2 is merged)
-
-```bash
-./spawn-agent.sh P1-S3-3.4
-# Auto-creates: ~/starport-development/starport-routing/
-# Creates: Advanced routing system
-# Time: ~8 hours
-```
-
-### Day 4: Advanced Features
-
-#### Step 11: Security & Storage Features (after dependencies met)
-
-**Can run in parallel after P1-S2-2.3:**
-```bash
-# Terminal 1
-./spawn-agent.sh P1-S4-4.1
-# Auto-creates: ~/starport-development/starport-provider-keys/
-# Creates: Provider key implementation (includes BYOK)
-# Time: ~6 hours
-
-# Terminal 2
-./spawn-agent.sh P1-S4-4.4
-# Auto-creates: ~/starport-development/starport-presets/
-# Creates: Preset management
-# Time: ~4 hours
-```
-
-#### Step 12: Proxy Features (after P1-S3-3.3 is merged)
-
-**Can run in parallel:**
-```bash
-# Terminal 1
-./spawn-agent.sh P1-S4-4.2
-# Auto-creates: ~/starport-development/starport-cache/
-# Creates: Caching system
-# Time: ~6 hours
-
-# Terminal 2
-./spawn-agent.sh P1-S4-4.3
-# Auto-creates: ~/starport-development/starport-filters/
-# Creates: Content filtering
-# Time: ~6 hours
-```
-
-## Quick Reference Card
-
-### Can Run Immediately
-- `P1-S1-1.1` - First task, no dependencies
-
-### Foundation Dependencies
-- `P1-S1-1.2` - After 1.1
-- `P1-S1-1.3` - After 1.2
-- `P1-S1-1.4` - After 1.2
-- `P1-S1-1.5` - After 1.4
-
-### Storage Dependencies
-- `P1-S2-2.1` - After 1.5
-- `P1-S2-2.2` - After 2.1 (parallel with 2.3)
-- `P1-S2-2.3` - After 2.1 (parallel with 2.2)
-
-### LLM Proxy Dependencies
-- `P1-S3-3.1` - After 1.4
-- `P1-S3-3.2` - After 3.1 (parallel with 3.3)
-- `P1-S3-3.3` - After 3.1 (parallel with 3.2)
-- `P1-S3-3.4` - After 3.2
-
-### Feature Dependencies
-- `P1-S4-4.1` - After 2.3 (parallel with 4.4)
-- `P1-S4-4.2` - After 3.3 (parallel with 4.3)
-- `P1-S4-4.3` - After 3.3 (parallel with 4.2)
-- `P1-S4-4.4` - After 2.3 (parallel with 4.1)
-
-## Status Tracking
-
-### How to Check Progress
-```bash
-# Pull latest changes
-git pull origin main
-
-# Check what's been completed
-ls -la cmd/starport/main.go  # If exists, P1-S1-1.2 is done
-ls -la go.mod                 # If exists, P1-S1-1.1 is done
-```
-
-### Common Issues
-
-**"Unknown task ID"**
-- Check you typed the task ID correctly (e.g., P1-S1-1.1)
-
-**"Prerequisite not met"**
-- The required previous task hasn't been merged yet
-- Check GitHub PRs or pull latest main
-
-**Context too long to paste**
-- Use the file option: `./spawn-agent.sh P1-S1-1.1 > context-P1-S1-1.1.txt`
-- Then tell Claude: "Read context-P1-S1-1.1.txt"
-
-## Parallel Execution Map
-
-```
-START
-  |
-  v
-P1-S1-1.1 (Repository Init)
-  |
-  v
-P1-S1-1.2 (Project Structure)
-  |
-  +---> P1-S1-1.3 (Dev Environment)
-  |
-  +---> P1-S1-1.4 (HTTP Server) -----> P1-S3-3.1 (Connector Interface)
-            |                                    |
-            v                                    +---> P1-S3-3.2 (Providers)
-          P1-S1-1.5 (Configuration)              |           |
-            |                                    |           v
-            v                                    |     P1-S3-3.4 (Routing)
-          P1-S2-2.1 (Storage Interface)          |
-            |                                    +---> P1-S3-3.3 (Proxy)
-            +---> P1-S2-2.2 (Badger)                        |
-            |                                               +---> P1-S4-4.2 (Cache)
-            +---> P1-S2-2.3 (Models)                        |
-                    |                                       +---> P1-S4-4.3 (Filters)
-                    +---> P1-S4-4.1 (BYOK)
-                    |
-                    +---> P1-S4-4.4 (Presets)
-```
-
-## Automatic Workspace Management
-
-The `spawn-agent.sh` script handles all workspace management for you:
-
-### What it Does
-1. **Creates `~/starport-development/`** as the workspace root
-2. **Clones separate directories** for each task automatically
-3. **Names workspaces clearly**: `starport-init`, `starport-structure`, etc.
-4. **Handles existing workspaces**: Options to reuse or recreate
-5. **Pulls latest changes** when reusing workspaces
-
-### Workspace Locations
-All agent workspaces are created under `~/starport-development/`:
-
-**Foundation:**
-- `P1-S1-1.1` → `~/starport-development/starport-init/`
-- `P1-S1-1.2` → `~/starport-development/starport-structure/`
-- `P1-S1-1.3` → `~/starport-development/starport-devops/`
-- `P1-S1-1.4` → `~/starport-development/starport-http/`
-- `P1-S1-1.5` → `~/starport-development/starport-config/`
-
-**Storage:**
-- `P1-S2-2.1` → `~/starport-development/starport-storage-interface/`
-- `P1-S2-2.2` → `~/starport-development/starport-badger/`
-- `P1-S2-2.3` → `~/starport-development/starport-models/`
-
-**LLM Proxy:**
-- `P1-S3-3.1` → `~/starport-development/starport-connector-interface/`
-- `P1-S3-3.2` → `~/starport-development/starport-connectors/`
-- `P1-S3-3.3` → `~/starport-development/starport-proxy/`
-- `P1-S3-3.4` → `~/starport-development/starport-routing/`
-
-**Features:**
-- `P1-S4-4.1` → `~/starport-development/starport-provider-keys/`
-- `P1-S4-4.2` → `~/starport-development/starport-cache/`
-- `P1-S4-4.3` → `~/starport-development/starport-filters/`
-- `P1-S4-4.4` → `~/starport-development/starport-presets/`
-
-### Clean Up After Merge
-Once a PR is merged, you can remove the workspace:
-```bash
-rm -rf ~/starport-development/starport-init/
-```
-
-## Parallel Execution Tips
-
-### Running Multiple Agents
-The spawn-agent.sh script creates separate workspaces automatically, so you can run multiple agents in parallel:
+The Compose file starts Starport with Valkey and requires three environment
+values:
 
 ```bash
-# Terminal 1 - Storage team
-./spawn-agent.sh P1-S2-2.2
-
-# Terminal 2 - API team  
-./spawn-agent.sh P1-S3-3.2
-
-# Terminal 3 - Features team
-./spawn-agent.sh P1-S4-4.1
+export STARPORT_SECURITY_MASTER_KEY=<master-secret>
+export STARPORT_SECURITY_BOOTSTRAP_API_KEY=<bootstrap-key>
+export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
+docker compose up --build
 ```
 
-Each agent gets its own Git clone to avoid conflicts. The script handles all workspace management.
+For an existing identity store, remove the bootstrap requirement from your
+deployment manifest after the first administrator key is safe.
 
-### Avoiding Conflicts
-- Each task modifies different packages/files
-- Agents update TASKS.md to coordinate
-- Use PR comments for cross-team communication
+## Limits and Shutdown
 
-## Summary
+The main HTTP controls are:
 
-1. **Run `./spawn-agent.sh`** - it handles workspace setup automatically
-2. Always start with `P1-S1-1.1`
-3. Check dependencies before spawning agents
-4. Use multiple terminals for parallel tasks
-5. Wait for PRs to merge before dependent tasks
-6. Each spawn command gives complete context - just copy and paste
+- `STARPORT_SERVER_REQUEST_TIMEOUT`
+- `STARPORT_SERVER_MAX_REQUEST_SIZE`
+- `STARPORT_SERVER_MAX_HEADER_BYTES`
+- `STARPORT_SERVER_SHUTDOWN_TIMEOUT`
 
-No need to:
-- Manually clone repositories
-- Manage workspace directories
-- Read TASKS.md in detail
+`SIGINT` and `SIGTERM` start graceful shutdown. Starport drains HTTP first.
+It then closes background work, cache, providers, and storage in reverse
+construction order.
 
-Everything you need is automated!
+## Failure Diagnosis
+
+- `provider credential master key is required`: set
+  `STARPORT_SECURITY_MASTER_KEY`.
+- `bootstrap API key is required when identity storage is empty`: set the
+  bootstrap key for the first start.
+- `at least one production provider is required`: configure one provider or
+  enable Ollama.
+- HTTP 401: the bearer value does not match an active stored identity.
+- HTTP 403: the identity lacks the required scope or owns a different key.
+- No route candidate: the model, provider policy, tenant policy, capability,
+  context limit, or current offering availability rejected every route.
+- SDK check is `UNVERIFIED`: install the named optional official SDK before
+  treating that client as tested.
+
+Starport emits structured JSON logs by default. Each request includes a
+request ID. Do not log raw gateway keys, provider keys, or bootstrap values.
+
+Starport trusts only the direct TCP peer for client-IP logs. It ignores
+`X-Forwarded-For` and `X-Real-IP`. A future trusted-proxy configuration must
+name the proxy header and trust boundary explicitly.
+
+## Release Gate
+
+Run these checks before you promote a production image:
+
+```bash
+bash scripts/verify-v1-architecture.sh
+go test ./...
+go test -race ./internal/inference ./internal/catalog ./internal/routing ./internal/execution ./internal/availability ./internal/responsecache ./internal/app ./internal/server
+go vet ./...
+make lint
+make build
+docker build .
+bash scripts/smoke-openrouter-sdks.sh
+```
+
+The verifier must report `Summary: 12 passed, 0 failed`. Required raw HTTP
+smoke checks must pass. Optional SDK checks can be green or `UNVERIFIED`. Do
+not report an unverified SDK as compatible.

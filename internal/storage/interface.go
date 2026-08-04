@@ -24,6 +24,8 @@ var (
 	ErrConflict = errors.New("write conflict")
 	// ErrInvalidKey is returned when an invalid key is provided
 	ErrInvalidKey = errors.New("invalid key")
+	// ErrInvalidMutation is returned when an atomic mutation set is malformed.
+	ErrInvalidMutation = errors.New("invalid compare-and-swap mutation")
 	// ErrStorageClosed is returned when operations are attempted on a closed store
 	ErrStorageClosed = errors.New("storage closed")
 	// ErrTimeout is returned when an operation times out
@@ -48,6 +50,7 @@ type KVStore interface {
 	Increment(ctx context.Context, key string, delta int64) (int64, error)
 	Decrement(ctx context.Context, key string, delta int64) (int64, error)
 	CompareAndSwap(ctx context.Context, key string, old, newValue []byte) error
+	CompareAndSwapBatch(ctx context.Context, mutations []CompareAndSwapMutation) error
 
 	// Batch operations
 	BatchGet(ctx context.Context, keys []string) (map[string][]byte, error)
@@ -65,6 +68,16 @@ type KVStore interface {
 	// Health check and lifecycle
 	Ping(ctx context.Context) error
 	Close() error
+}
+
+// CompareAndSwapMutation is one conditional write in an atomic mutation set.
+// A nil ExpectedValue requires absence. A nil NewValue deletes the key. A
+// positive TTL replaces the key expiration; zero preserves an existing TTL.
+type CompareAndSwapMutation struct {
+	Key           string
+	ExpectedValue []byte
+	NewValue      []byte
+	TTL           time.Duration
 }
 
 // Transaction represents an atomic set of operations

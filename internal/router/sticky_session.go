@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const defaultMaximumStickySessions = 100_000
+
 // StickyProviderSessionManager manages conversation-to-provider mappings
 type StickyProviderSessionManager interface {
 	// GetProvider returns the provider for a conversation, if any
@@ -22,9 +24,11 @@ type StickyProviderSessionManager interface {
 
 // memoryStickyProviderSessionManager implements in-memory sticky sessions
 type memoryStickyProviderSessionManager struct {
-	mu       sync.RWMutex
-	sessions map[string]*stickyProviderSession
-	ttl      time.Duration
+	mu        sync.RWMutex
+	sessions  map[string]*stickyProviderSession
+	ttl       time.Duration
+	maximum   int
+	lastSweep time.Time
 }
 
 type stickyProviderSession struct {
@@ -41,10 +45,8 @@ func NewStickyProviderSessionManager(ttl time.Duration) StickyProviderSessionMan
 	manager := &memoryStickyProviderSessionManager{
 		sessions: make(map[string]*stickyProviderSession),
 		ttl:      ttl,
+		maximum:  defaultMaximumStickySessions,
 	}
-
-	// Start cleanup goroutine
-	go manager.cleanupLoop()
 
 	return manager
 }
@@ -55,9 +57,8 @@ func (m *memoryStickyProviderSessionManager) GetProvider(conversationID string) 
 		return "", false
 	}
 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	session, exists := m.sessions[conversationID]
 	if !exists {
 		return "", false
@@ -65,9 +66,9 @@ func (m *memoryStickyProviderSessionManager) GetProvider(conversationID string) 
 
 	// Check if expired
 	if time.Now().After(session.expiresAt) {
+		delete(m.sessions, conversationID)
 		return "", false
 	}
-
 	return session.provider, true
 }
 
@@ -80,9 +81,24 @@ func (m *memoryStickyProviderSessionManager) SetProvider(conversationID string, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	now := time.Now()
+	sweepInterval := m.ttl / 2
+	if sweepInterval > 5*time.Second {
+		sweepInterval = 5 * time.Second
+	}
+	if m.lastSweep.IsZero() || now.Sub(m.lastSweep) >= sweepInterval {
+		m.cleanupExpiredLocked(now)
+		m.lastSweep = now
+	}
+	if _, exists := m.sessions[conversationID]; !exists && len(m.sessions) >= m.maximum {
+		for id := range m.sessions {
+			delete(m.sessions, id)
+			break
+		}
+	}
 	m.sessions[conversationID] = &stickyProviderSession{
 		provider:  provider,
-		expiresAt: time.Now().Add(m.ttl),
+		expiresAt: now.Add(m.ttl),
 	}
 }
 
@@ -103,20 +119,13 @@ func (m *memoryStickyProviderSessionManager) CleanupExpired() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	now := time.Now()
+	m.cleanupExpiredLocked(time.Now())
+}
+
+func (m *memoryStickyProviderSessionManager) cleanupExpiredLocked(now time.Time) {
 	for id, session := range m.sessions {
 		if now.After(session.expiresAt) {
 			delete(m.sessions, id)
 		}
-	}
-}
-
-// cleanupLoop runs periodic cleanup
-func (m *memoryStickyProviderSessionManager) cleanupLoop() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		m.CleanupExpired()
 	}
 }

@@ -1,0 +1,138 @@
+package catalog
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	stderrors "errors"
+	"fmt"
+
+	"github.com/agentstation/starmap/pkg/catalogstore"
+	starmaperrors "github.com/agentstation/starmap/pkg/errors"
+
+	"github.com/agentstation/starport/internal/storage"
+)
+
+const (
+	catalogCurrentGenerationKey = "catalog_generation:v1:current"
+	catalogGenerationKeyPrefix  = "catalog_generation:v1:generation:"
+)
+
+// GenerationStore adapts Starport's configured KV store to Starmap's durable
+// immutable-generation contract.
+type GenerationStore struct {
+	store storage.KVStore
+}
+
+// NewGenerationStore creates a durable Starmap generation store.
+func NewGenerationStore(store storage.KVStore) (*GenerationStore, error) {
+	if store == nil {
+		return nil, stderrors.New("catalog generation KV store is required")
+	}
+	return &GenerationStore{store: store}, nil
+}
+
+// Current returns the atomically selected generation.
+func (s *GenerationStore) Current(ctx context.Context) (catalogstore.Generation, error) {
+	currentID, err := s.store.Get(ctx, catalogCurrentGenerationKey)
+	if err != nil {
+		if stderrors.Is(err, storage.ErrNotFound) {
+			return catalogstore.Generation{}, &starmaperrors.NotFoundError{
+				Resource: "catalog generation", ID: "current",
+			}
+		}
+		return catalogstore.Generation{}, fmt.Errorf("read current catalog generation: %w", err)
+	}
+	return s.Get(ctx, string(currentID))
+}
+
+// Get returns one immutable generation by ID.
+func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalogstore.Generation, error) {
+	encoded, err := s.store.Get(ctx, catalogGenerationKey(generationID))
+	if err != nil {
+		if stderrors.Is(err, storage.ErrNotFound) {
+			return catalogstore.Generation{}, &starmaperrors.NotFoundError{
+				Resource: "catalog generation", ID: generationID,
+			}
+		}
+		return catalogstore.Generation{}, fmt.Errorf("read catalog generation %q: %w", generationID, err)
+	}
+	var generation catalogstore.Generation
+	if err := json.Unmarshal(encoded, &generation); err != nil {
+		return catalogstore.Generation{}, fmt.Errorf("decode catalog generation %q: %w", generationID, err)
+	}
+	if err := generation.Validate(); err != nil {
+		return catalogstore.Generation{}, fmt.Errorf("validate catalog generation %q: %w", generationID, err)
+	}
+	if generation.Manifest.GenerationID != generationID {
+		return catalogstore.Generation{}, fmt.Errorf(
+			"catalog generation key %q contains generation %q",
+			generationID,
+			generation.Manifest.GenerationID,
+		)
+	}
+	return generation, nil
+}
+
+// Commit stores one immutable generation, then selects it with compare-and-swap.
+func (s *GenerationStore) Commit(
+	ctx context.Context,
+	generation catalogstore.Generation,
+	expectedGenerationID string,
+) error {
+	if err := generation.Validate(); err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(generation)
+	if err != nil {
+		return fmt.Errorf("encode catalog generation %q: %w", generation.Manifest.GenerationID, err)
+	}
+	generationKey := catalogGenerationKey(generation.Manifest.GenerationID)
+	if err := s.store.CompareAndSwap(ctx, generationKey, nil, encoded); err != nil {
+		if !stderrors.Is(err, storage.ErrConflict) {
+			return fmt.Errorf("store catalog generation %q: %w", generation.Manifest.GenerationID, err)
+		}
+		existing, readErr := s.store.Get(ctx, generationKey)
+		if readErr != nil {
+			return fmt.Errorf("read existing catalog generation %q: %w", generation.Manifest.GenerationID, readErr)
+		}
+		if !bytes.Equal(existing, encoded) {
+			return &starmaperrors.ConflictError{
+				Resource: "catalog generation",
+				Expected: generation.Manifest.GenerationID,
+				Actual:   generation.Manifest.GenerationID,
+				Message:  "generation ID is already bound to different content",
+			}
+		}
+	}
+
+	var expected []byte
+	if expectedGenerationID != "" {
+		expected = []byte(expectedGenerationID)
+	}
+	actual := []byte(generation.Manifest.GenerationID)
+	if err := s.store.CompareAndSwap(ctx, catalogCurrentGenerationKey, expected, actual); err != nil {
+		if !stderrors.Is(err, storage.ErrConflict) {
+			return fmt.Errorf("select catalog generation %q: %w", generation.Manifest.GenerationID, err)
+		}
+		current, readErr := s.store.Get(ctx, catalogCurrentGenerationKey)
+		if readErr == nil && bytes.Equal(current, actual) {
+			return nil
+		}
+		if readErr != nil && !stderrors.Is(readErr, storage.ErrNotFound) {
+			return fmt.Errorf("read current catalog generation after conflict: %w", readErr)
+		}
+		return &starmaperrors.ConflictError{
+			Resource: "catalog current generation",
+			Expected: expectedGenerationID,
+			Actual:   string(current),
+		}
+	}
+	return nil
+}
+
+func catalogGenerationKey(generationID string) string {
+	return catalogGenerationKeyPrefix + generationID
+}
+
+var _ catalogstore.Store = (*GenerationStore)(nil)

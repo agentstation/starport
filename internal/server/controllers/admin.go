@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,21 +14,19 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starport/internal/apikeys"
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/dto"
-	"github.com/agentstation/starport/internal/storage"
 )
 
 // AdminController handles administrative endpoints
 type AdminController struct {
-	store storage.KVStore
+	identities identity.Repository
 }
 
 // NewAdminController creates a new admin controller
-func NewAdminController(store storage.KVStore) *AdminController {
+func NewAdminController(identities identity.Repository) *AdminController {
 	return &AdminController{
-		store: store,
+		identities: identities,
 	}
 }
 
@@ -40,28 +39,17 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 	offset := 0
 	// TODO: Parse from query params
 
-	// List API keys from storage
-	prefix := "apikey:"
-	keyNames, err := h.store.ScanWithPrefix(ctx, prefix, limit)
+	records, err := h.identities.List(ctx, limit)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list API keys")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to list API keys")
 		return
 	}
 
-	// Get and deserialize keys
-	apiKeys := make([]apikeys.APIKey, 0, len(keyNames))
-	for _, keyName := range keyNames {
-		data, err := h.store.Get(ctx, keyName)
-		if err != nil {
-			continue // Skip on error
-		}
-
-		var apiKey apikeys.APIKey
-		if err := storage.Deserialize(data, &apiKey); err != nil {
-			log.Error().Err(err).Msg("Failed to deserialize API key")
-			continue
-		}
+	apiKeys := make([]identity.APIKey, 0, len(records))
+	for _, record := range records {
+		apiKey := record.APIKey
+		apiKey.Hash = ""
 		apiKeys = append(apiKeys, apiKey)
 	}
 
@@ -84,11 +72,10 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req struct {
-		Name        string                  `json:"name"`
-		Description string                  `json:"description,omitempty"`
-		Scopes      []string                `json:"scopes,omitempty"`
-		RateLimit   *models.RateLimitConfig `json:"rate_limit,omitempty"`
-		Metadata    map[string]string       `json:"metadata,omitempty"`
+		Name        string            `json:"name"`
+		Description string            `json:"description,omitempty"`
+		Scopes      []string          `json:"scopes,omitempty"`
+		Metadata    map[string]string `json:"metadata,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -97,7 +84,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create API key
-	apiKey := &apikeys.APIKey{
+	apiKey := &identity.APIKey{
 		Name:      req.Name,
 		Scopes:    req.Scopes,
 		Metadata:  convertStringMapToInterface(req.Metadata),
@@ -126,31 +113,13 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 	hash := sha256.Sum256([]byte(keyValue))
 	apiKey.Hash = hex.EncodeToString(hash[:])
 
-	// Basic validation
-	if apiKey.Name == "" {
-		dto.WriteValidationError(w, "name", "Name is required")
+	if err := apiKey.Validate(); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 		return
 	}
 
-	// Store
-	keyData, err := storage.Serialize(apiKey)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to serialize API key")
-		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create API key")
-		return
-	}
-
-	if err := h.store.Set(ctx, storage.APIKeyKey(apiKey.ID), keyData); err != nil {
-		log.Error().Err(err).Msg("Failed to store API key")
-		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create API key")
-		return
-	}
-
-	// Also store hash -> ID mapping for quick lookups during authentication
-	if err := h.store.Set(ctx, storage.APIKeyHashKey(apiKey.Hash), []byte(apiKey.ID)); err != nil {
-		log.Error().Err(err).Msg("Failed to store API key hash mapping")
-		// Try to clean up the key we just stored
-		_ = h.store.Delete(ctx, storage.APIKeyKey(apiKey.ID))
+	if _, err := h.identities.Create(ctx, *apiKey); err != nil {
+		log.Error().Err(err).Msg("Failed to create API key identity")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create API key")
 		return
 	}
@@ -178,10 +147,9 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	keyID := chi.URLParam(r, "key_id")
 
-	// Get key from storage
-	keyData, err := h.store.Get(ctx, storage.APIKeyKey(keyID))
+	record, err := h.identities.GetByID(ctx, keyID)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, identity.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return
 		}
@@ -190,15 +158,7 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Deserialize
-	var apiKey apikeys.APIKey
-	if err := storage.Deserialize(keyData, &apiKey); err != nil {
-		log.Error().Err(err).Msg("Failed to deserialize API key")
-		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to get API key")
-		return
-	}
-
-	// Don't expose the hash
+	apiKey := record.APIKey
 	apiKey.Hash = ""
 
 	if err := dto.WriteJSON(w, http.StatusOK, apiKey); err != nil {
@@ -211,10 +171,9 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	keyID := chi.URLParam(r, "key_id")
 
-	// Get existing key
-	keyData, err := h.store.Get(ctx, storage.APIKeyKey(keyID))
+	record, err := h.identities.GetByID(ctx, keyID)
 	if err != nil {
-		if err == storage.ErrNotFound {
+		if errors.Is(err, identity.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return
 		}
@@ -223,12 +182,7 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var apiKey apikeys.APIKey
-	if err := storage.Deserialize(keyData, &apiKey); err != nil {
-		log.Error().Err(err).Msg("Failed to deserialize API key")
-		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to get API key")
-		return
-	}
+	apiKey := record.APIKey
 
 	// Parse update request
 	var req struct {
@@ -257,27 +211,23 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		apiKey.Active = *req.Active
 	}
 
-	// Basic validation
-	if apiKey.Name == "" {
-		dto.WriteValidationError(w, "name", "Name cannot be empty")
+	if err := apiKey.Validate(); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 		return
 	}
 
-	// Store updated key
-	updatedData, err := storage.Serialize(&apiKey)
+	updated, err := h.identities.Update(ctx, apiKey, record.Revision)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to serialize API key")
+		if errors.Is(err, identity.ErrConflict) {
+			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "API key changed during update")
+			return
+		}
+		log.Error().Err(err).Msg("Failed to update API key identity")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to update API key")
 		return
 	}
 
-	if err := h.store.Set(ctx, storage.APIKeyKey(keyID), updatedData); err != nil {
-		log.Error().Err(err).Msg("Failed to store API key")
-		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to update API key")
-		return
-	}
-
-	// Don't expose the hash
+	apiKey = updated.APIKey
 	apiKey.Hash = ""
 
 	if err := dto.WriteJSON(w, http.StatusOK, apiKey); err != nil {
@@ -290,8 +240,8 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	keyID := chi.URLParam(r, "key_id")
 
-	if err := h.store.Delete(ctx, storage.APIKeyKey(keyID)); err != nil {
-		if err == storage.ErrNotFound {
+	if err := h.identities.Delete(ctx, keyID, 0); err != nil {
+		if errors.Is(err, identity.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return
 		}

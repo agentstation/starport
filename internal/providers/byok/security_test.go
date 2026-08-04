@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,8 +17,8 @@ import (
 func TestEncryptionIsolation(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Skip validation
@@ -39,8 +39,8 @@ func TestEncryptionIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get raw encrypted data from store
-	key1 := models.ProviderKeyStorageKey(scope1, provider)
-	key2 := models.ProviderKeyStorageKey(scope2, provider)
+	key1 := credentials.StorageKey(scope1, provider)
+	key2 := credentials.StorageKey(scope2, provider)
 
 	data1, err := store.Get(ctx, key1)
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ func TestEncryptionIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decrypt the credential to verify
-	encService, err := models.NewEncryptionService(masterKey)
+	encService, err := credentials.NewEncryptionService(masterKey)
 	require.NoError(t, err)
 
 	decrypted1, err := encService.DecryptCredential(key1Data.EncryptedCredential)
@@ -78,8 +78,8 @@ func TestEncryptionIsolation(t *testing.T) {
 // TestEncryptionRandomness verifies that encryption uses proper randomness
 func TestEncryptionRandomness(t *testing.T) {
 	// Create encryption service
-	masterKey, _ := models.GenerateMasterKey()
-	encService, err := models.NewEncryptionService(masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	encService, err := credentials.NewEncryptionService(masterKey)
 	require.NoError(t, err)
 
 	// Encrypt the same plaintext multiple times
@@ -114,8 +114,8 @@ func TestEncryptionRandomness(t *testing.T) {
 
 // TestEncryptionTampering verifies that tampered data cannot be decrypted
 func TestEncryptionTampering(t *testing.T) {
-	masterKey, _ := models.GenerateMasterKey()
-	encService, err := models.NewEncryptionService(masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	encService, err := credentials.NewEncryptionService(masterKey)
 	require.NoError(t, err)
 
 	plaintext := "sk-test-secret-key-123456789"
@@ -182,8 +182,8 @@ func TestEncryptionTampering(t *testing.T) {
 func TestKeyLeakage(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	secretKey := "sk-super-secret-key-123456789"
@@ -208,7 +208,7 @@ func TestKeyLeakage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify stored data doesn't contain plaintext
-	key := models.ProviderKeyStorageKey("user:test-key", "openai")
+	key := credentials.StorageKey("user:test-key", "openai")
 	rawData, err := store.Get(ctx, key)
 	require.NoError(t, err)
 
@@ -223,7 +223,7 @@ func TestMasterKeyStrength(t *testing.T) {
 	// Generate multiple master keys
 	keys := make([][]byte, 10)
 	for i := range keys {
-		key, err := models.GenerateMasterKey()
+		key, err := credentials.GenerateMasterKey()
 		require.NoError(t, err)
 		keys[i] = key
 
@@ -256,22 +256,22 @@ func TestPasswordDerivedKey(t *testing.T) {
 	password := "my-secure-password-123"
 
 	// Derive key multiple times from same password
-	key1 := models.DeriveKeyFromPassword(password)
-	key2 := models.DeriveKeyFromPassword(password)
+	key1 := credentials.DeriveKeyFromPassword(password)
+	key2 := credentials.DeriveKeyFromPassword(password)
 
 	// Should produce the same key (deterministic)
 	assert.Equal(t, key1, key2, "Same password should produce same key")
 	assert.Equal(t, 32, len(key1), "Derived key should be 32 bytes")
 
 	// Different password should produce different key
-	key3 := models.DeriveKeyFromPassword("different-password")
+	key3 := credentials.DeriveKeyFromPassword("different-password")
 	assert.NotEqual(t, key1, key3, "Different passwords should produce different keys")
 }
 
 // TestLargeKeyEncryption tests encryption of large keys
 func TestLargeKeyEncryption(t *testing.T) {
-	masterKey, _ := models.GenerateMasterKey()
-	encService, err := models.NewEncryptionService(masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	encService, err := credentials.NewEncryptionService(masterKey)
 	require.NoError(t, err)
 
 	// Create a large service account JSON (typical for GCP)
@@ -302,8 +302,8 @@ func TestLargeKeyEncryption(t *testing.T) {
 func TestConcurrentAccess(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Skip validation
@@ -371,7 +371,7 @@ func TestZeroizationOnError(t *testing.T) {
 
 	// Create an encryption service with invalid master key
 	shortKey := make([]byte, 16) // Too short
-	_, err := models.NewEncryptionService(shortKey)
+	_, err := credentials.NewEncryptionService(shortKey)
 	assert.Error(t, err)
 
 	// The shortKey slice should still exist but we've demonstrated
@@ -380,8 +380,8 @@ func TestZeroizationOnError(t *testing.T) {
 
 // BenchmarkEncryption measures encryption performance
 func BenchmarkEncryption(b *testing.B) {
-	masterKey, _ := models.GenerateMasterKey()
-	encService, _ := models.NewEncryptionService(masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	encService, _ := credentials.NewEncryptionService(masterKey)
 	key := "sk-test-api-key-123456789"
 
 	b.ResetTimer()
@@ -403,6 +403,6 @@ func BenchmarkKeyDerivation(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = models.DeriveKeyFromPassword(password)
+		_ = credentials.DeriveKeyFromPassword(password)
 	}
 }

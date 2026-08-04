@@ -2,10 +2,13 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/agentstation/starport/internal/storage"
 )
 
 func TestNew(t *testing.T) {
@@ -25,7 +28,7 @@ func TestNew(t *testing.T) {
 		},
 	}
 
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 	if server == nil {
 		t.Fatal("expected server to be created")
 	}
@@ -43,6 +46,35 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestNewRequiresReadyDependencies(t *testing.T) {
+	config := &Config{Port: 8080}
+	ready := newTestServer(t, config)
+	base := Dependencies{
+		Service: ready.service, Identities: ready.identities,
+		ProviderKeys: ready.providerKeys, RateLimits: ready.rateLimits,
+	}
+	tests := []struct {
+		name   string
+		mutate func(*Dependencies)
+		cause  error
+	}{
+		{"service", func(value *Dependencies) { value.Service = nil }, ErrServiceRequired},
+		{"identities", func(value *Dependencies) { value.Identities = nil }, ErrIdentitiesRequired},
+		{"provider keys", func(value *Dependencies) { value.ProviderKeys = nil }, ErrProviderKeysRequired},
+		{"rate limits", func(value *Dependencies) { value.RateLimits = nil }, ErrRateLimitsRequired},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dependencies := base
+			test.mutate(&dependencies)
+			_, err := New(config, dependencies)
+			if !errors.Is(err, test.cause) {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
 func TestMiddleware(t *testing.T) {
 	config := &Config{
 		Port: 8080,
@@ -52,7 +84,7 @@ func TestMiddleware(t *testing.T) {
 		},
 	}
 
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 
 	// Test that middleware is properly configured
 	// Use /health/live which doesn't require authentication
@@ -84,7 +116,7 @@ func TestShutdown(t *testing.T) {
 		ShutdownTimeout: 5 * time.Second,
 	}
 
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 
 	// Start server in background
 	go func() {
@@ -104,6 +136,27 @@ func TestShutdown(t *testing.T) {
 	}
 }
 
+func TestShutdownDoesNotCloseApplicationStorage(t *testing.T) {
+	config := &Config{
+		Port:            0,
+		ShutdownTimeout: 5 * time.Second,
+	}
+
+	store := storage.NewMockStore()
+	server := newTestServer(t, config, withTestStore(store))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		t.Fatalf("expected successful shutdown, got error: %v", err)
+	}
+
+	if err := store.Set(context.Background(), "still-open", []byte("value")); err != nil {
+		t.Fatalf("expected server shutdown to leave storage ownership with app: %v", err)
+	}
+}
+
 func TestCORSHeaders(t *testing.T) {
 	config := &Config{
 		Port: 8080,
@@ -116,7 +169,7 @@ func TestCORSHeaders(t *testing.T) {
 		},
 	}
 
-	server := newTestServer(config)
+	server := newTestServer(t, config)
 
 	// Test preflight request
 	req := httptest.NewRequest("OPTIONS", "/api/v1/", nil)

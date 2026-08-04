@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -71,6 +72,10 @@ func TestOllamaConnector_Chat(t *testing.T) {
 	ctx := context.Background()
 	req := &ChatRequest{
 		Model: "ollama/llama2",
+		Endpoint: InferenceEndpoint{
+			Type: "ollama",
+			URL:  server.URL + "/api/chat",
+		},
 		Messages: []Message{
 			{
 				Role:    "user",
@@ -198,6 +203,10 @@ func TestOllamaConnector_ChatStream(t *testing.T) {
 	ctx := context.Background()
 	req := &ChatRequest{
 		Model: "ollama/llama2",
+		Endpoint: InferenceEndpoint{
+			Type: "ollama",
+			URL:  server.URL + "/api/chat",
+		},
 		Messages: []Message{
 			{
 				Role:    "user",
@@ -233,141 +242,6 @@ func TestOllamaConnector_ChatStream(t *testing.T) {
 	fullContent := strings.Join(contents, "")
 	if fullContent != "Hello! How can I help?" {
 		t.Errorf("expected 'Hello! How can I help?', got '%s'", fullContent)
-	}
-}
-
-func TestOllamaConnector_Models(t *testing.T) {
-	// Create test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/tags":
-			// Send model list
-			resp := map[string]any{
-				"models": []map[string]any{
-					{
-						"name":        "llama2",
-						"modified_at": time.Now().Format(time.RFC3339),
-						"size":        4000000000,
-						"digest":      "abc123",
-						"details": map[string]any{
-							"format":             "gguf",
-							"family":             "llama",
-							"families":           []string{"llama"},
-							"parameter_size":     "7B",
-							"quantization_level": "Q4_0",
-						},
-					},
-					{
-						"name":        "mistral",
-						"modified_at": time.Now().Add(-time.Hour).Format(time.RFC3339),
-						"size":        7000000000,
-						"digest":      "def456",
-						"details": map[string]any{
-							"format":             "gguf",
-							"family":             "mistral",
-							"families":           []string{"mistral"},
-							"parameter_size":     "7B",
-							"quantization_level": "Q4_0",
-						},
-					},
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(resp)
-
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
-	// Create connector
-	config := ProviderConfig{
-		BaseURL:        server.URL,
-		Timeout:        10 * time.Second,
-		MaxConnections: 10,
-		Enabled:        true,
-	}
-	connector, err := NewOllamaConnector(config)
-	if err != nil {
-		t.Fatalf("failed to create connector: %v", err)
-	}
-	defer connector.Close()
-
-	// Test models
-	ctx := context.Background()
-	resp, err := connector.Models(ctx)
-	if err != nil {
-		t.Fatalf("models failed: %v", err)
-	}
-
-	// Verify response
-	if resp.Object != "list" {
-		t.Errorf("expected object='list', got %s", resp.Object)
-	}
-	if len(resp.Data) != 2 {
-		t.Fatalf("expected 2 models, got %d", len(resp.Data))
-	}
-
-	// Check first model
-	if resp.Data[0].ID != "ollama/llama2" {
-		t.Errorf("expected ID='ollama/llama2', got %s", resp.Data[0].ID)
-	}
-	if resp.Data[0].OwnedBy != "ollama" {
-		t.Errorf("expected OwnedBy='ollama', got %s", resp.Data[0].OwnedBy)
-	}
-
-	// Check second model
-	if resp.Data[1].ID != "ollama/mistral" {
-		t.Errorf("expected ID='ollama/mistral', got %s", resp.Data[1].ID)
-	}
-
-	// Test caching - second call should be cached
-	resp2, err := connector.Models(ctx)
-	if err != nil {
-		t.Fatalf("models (cached) failed: %v", err)
-	}
-	if len(resp2.Data) != 2 {
-		t.Errorf("expected cached response to have 2 models")
-	}
-}
-
-func TestOllamaConnector_Health(t *testing.T) {
-	// Create test server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/tags":
-			// Return empty model list for health check
-			resp := map[string]any{
-				"models": []any{},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(resp)
-
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
-	// Create connector
-	config := ProviderConfig{
-		BaseURL:        server.URL,
-		Timeout:        10 * time.Second,
-		MaxConnections: 10,
-		Enabled:        true,
-	}
-	connector, err := NewOllamaConnector(config)
-	if err != nil {
-		t.Fatalf("failed to create connector: %v", err)
-	}
-	defer connector.Close()
-
-	// Test health
-	ctx := context.Background()
-	err = connector.Health(ctx)
-	if err != nil {
-		t.Errorf("health check failed: %v", err)
 	}
 }
 
@@ -407,6 +281,10 @@ func TestOllamaConnector_ErrorHandling(t *testing.T) {
 	ctx := context.Background()
 	req := &ChatRequest{
 		Model: "ollama/unknown-model",
+		Endpoint: InferenceEndpoint{
+			Type: "ollama",
+			URL:  server.URL + "/api/chat",
+		},
 		Messages: []Message{
 			{
 				Role:    "user",
@@ -447,7 +325,7 @@ func TestOllamaConnector_DisabledError(t *testing.T) {
 		t.Fatal("expected error when ollama not enabled")
 	}
 
-	if !strings.Contains(err.Error(), "ollama support is not enabled") {
-		t.Errorf("expected 'ollama support is not enabled' error, got: %v", err)
+	if !errors.Is(err, ErrAdapterConfigurationInvalid) {
+		t.Errorf("expected adapter configuration error, got: %v", err)
 	}
 }

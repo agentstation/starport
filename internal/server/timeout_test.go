@@ -11,8 +11,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/agentstation/starport/internal/registry"
 )
 
 func TestRequestTimeout(t *testing.T) {
@@ -97,8 +95,7 @@ func TestShutdownTimeout(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewEmpty()
-	server := New(config, reg)
+	server := newTestServer(t, config)
 
 	// Start server
 	go func() {
@@ -134,8 +131,7 @@ func TestContextPropagation(t *testing.T) {
 		},
 	}
 
-	reg := registry.NewEmpty()
-	server := New(config, reg)
+	server := newTestServer(t, config)
 
 	// Track if context was cancelled using a channel
 	contextCancelled := make(chan bool, 1)

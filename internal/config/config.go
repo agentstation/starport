@@ -5,18 +5,30 @@ package config
 
 import (
 	"time"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
 // Config represents the complete application configuration
 type Config struct {
 	Server       ServerConfig       `env:",prefix=SERVER_"`
 	Storage      StorageConfig      `env:",prefix=STORAGE_"`
+	Catalog      CatalogConfig      `env:",prefix=CATALOG_"`
 	Providers    ProvidersConfig    `env:",prefix=PROVIDERS_"`
 	RateLimiting RateLimitingConfig `env:",prefix=RATE_LIMITING_"`
 	Security     SecurityConfig     `env:",prefix=SECURITY_"`
 	Logging      LoggingConfig      `env:",prefix=LOGGING_"`
 	Cache        CacheConfig        `env:",prefix=CACHE_"`
 	ChatUI       ChatUIConfig       `env:",prefix=CHATUI_"`
+}
+
+// CatalogConfig defines Starmap acquisition and tenant workspace settings.
+// Acquisition credentials remain in Starmap's provider environment contract.
+type CatalogConfig struct {
+	WorkspacePath   string        `env:"WORKSPACE_PATH"`
+	RefreshOnStart  bool          `env:"REFRESH_ON_START,default=false"`
+	RefreshInterval time.Duration `env:"REFRESH_INTERVAL,default=0s"`
+	RefreshTimeout  time.Duration `env:"REFRESH_TIMEOUT,default=2m"`
 }
 
 // ServerConfig defines HTTP server settings
@@ -26,6 +38,8 @@ type ServerConfig struct {
 	ReadTimeout       time.Duration `env:"READ_TIMEOUT,default=30s"`
 	WriteTimeout      time.Duration `env:"WRITE_TIMEOUT,default=30s"`
 	IdleTimeout       time.Duration `env:"IDLE_TIMEOUT,default=120s"`
+	RequestTimeout    time.Duration `env:"REQUEST_TIMEOUT,default=60s"`
+	MaxRequestSize    int64         `env:"MAX_REQUEST_SIZE,default=10485760"`
 	MaxHeaderBytes    int           `env:"MAX_HEADER_BYTES,default=1048576"`
 	ShutdownTimeout   time.Duration `env:"SHUTDOWN_TIMEOUT,default=30s"`
 	EnableProfiling   bool          `env:"ENABLE_PROFILING,default=false"`
@@ -65,24 +79,44 @@ type ValkeyConfig struct {
 type ProvidersConfig struct {
 	OpenAI         ProviderConfig `env:",prefix=OPENAI_"`
 	Anthropic      ProviderConfig `env:",prefix=ANTHROPIC_"`
-	Gemini         ProviderConfig `env:",prefix=GEMINI_"` // Deprecated, use GoogleAIStudio
-	GoogleAIStudio ProviderConfig `env:",prefix=GOOGLE_AISTUDIO_"`
-	GoogleVertexAI ProviderConfig `env:",prefix=GOOGLE_VERTEXAI_"`
+	GoogleAIStudio ProviderConfig `env:",prefix=GOOGLE_AI_STUDIO_"`
+	GoogleVertexAI ProviderConfig `env:",prefix=GOOGLE_VERTEX_"`
 	Groq           ProviderConfig `env:",prefix=GROQ_"`
 	Mistral        ProviderConfig `env:",prefix=MISTRAL_"`
-	Azure          ProviderConfig `env:",prefix=AZURE_"`
+	Azure          ProviderConfig `env:",prefix=AZURE_OPENAI_"`
 	Ollama         ProviderConfig `env:",prefix=OLLAMA_"`
 }
 
 // ProviderConfig defines settings for a single LLM provider
 type ProviderConfig struct {
-	BaseURL           string        `env:"BASE_URL"`
-	Timeout           time.Duration `env:"TIMEOUT,default=30s"`
-	MaxConnections    int           `env:"MAX_CONNECTIONS,default=100"`
-	MaxRetries        int           `env:"MAX_RETRIES,default=3"`
-	RetryDelay        time.Duration `env:"RETRY_DELAY,default=1s"`
-	BackoffMultiplier float64       `env:"BACKOFF_MULTIPLIER,default=2.0"`
-	Enabled           bool          `env:"ENABLED"` // Used for optional providers like Ollama
+	BaseURL        string        `env:"BASE_URL"`
+	APIKey         string        `env:"API_KEY"`
+	Timeout        time.Duration `env:"TIMEOUT,default=30s"`
+	MaxConnections int           `env:"MAX_CONNECTIONS,default=100"`
+	Enabled        bool          `env:"ENABLED"` // Used for optional providers like Ollama
+	ProjectID      string        `env:"PROJECT_ID"`
+	Location       string        `env:"LOCATION"`
+}
+
+// ProviderEntry binds external operator configuration to one exact Starmap provider ID.
+type ProviderEntry struct {
+	ProviderID catalogs.ProviderID
+	Config     ProviderConfig
+}
+
+// Entries returns all supported external configuration slots. Adapter
+// semantics and provider membership remain outside the configuration package.
+func (c ProvidersConfig) Entries() []ProviderEntry {
+	return []ProviderEntry{
+		{ProviderID: catalogs.ProviderIDOpenAI, Config: c.OpenAI},
+		{ProviderID: catalogs.ProviderIDAnthropic, Config: c.Anthropic},
+		{ProviderID: catalogs.ProviderIDGoogleAIStudio, Config: c.GoogleAIStudio},
+		{ProviderID: catalogs.ProviderIDGoogleVertex, Config: c.GoogleVertexAI},
+		{ProviderID: catalogs.ProviderIDGroq, Config: c.Groq},
+		{ProviderID: catalogs.ProviderIDMistralAI, Config: c.Mistral},
+		{ProviderID: catalogs.ProviderIDAzureOpenAI, Config: c.Azure},
+		{ProviderID: catalogs.ProviderIDOllama, Config: c.Ollama},
+	}
 }
 
 // RateLimitingConfig defines rate limiting settings
@@ -111,7 +145,8 @@ type RateLimitingConfig struct {
 
 // SecurityConfig defines security settings
 type SecurityConfig struct {
-	MasterKeyEnv       string `env:"MASTER_KEY_ENV,default=STARPORT_MASTER_KEY"`
+	MasterKey          string `env:"MASTER_KEY"`
+	BootstrapAPIKey    string `env:"BOOTSTRAP_API_KEY"`
 	TLSCertPath        string `env:"TLS_CERT_PATH"`
 	TLSKeyPath         string `env:"TLS_KEY_PATH"`
 	EnableTLS          bool   `env:"ENABLE_TLS,default=false"`
@@ -141,10 +176,9 @@ type CacheConfig struct {
 
 // ChatUIConfig defines settings for the embedded chat UI
 type ChatUIConfig struct {
-	Enabled     bool   `env:"ENABLED,default=false"`
-	Title       string `env:"TITLE,default=Starport Chat"`
-	Theme       string `env:"THEME,default=light"`
-	AllowKeyGen bool   `env:"ALLOW_KEY_GEN,default=false"`
+	Enabled bool   `env:"ENABLED,default=false"`
+	Title   string `env:"TITLE,default=Starport Chat"`
+	Theme   string `env:"THEME,default=light"`
 }
 
 // Validate performs validation on the configuration
@@ -156,6 +190,12 @@ func (c *Config) Validate() error {
 
 	// Validate storage config
 	if err := c.Storage.Validate(); err != nil {
+		return err
+	}
+	if err := c.Catalog.Validate(); err != nil {
+		return err
+	}
+	if err := c.Providers.Validate(); err != nil {
 		return err
 	}
 

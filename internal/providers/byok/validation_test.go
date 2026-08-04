@@ -2,11 +2,11 @@ package byok
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 
-	"github.com/agentstation/starport/internal/models"
+	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,8 +14,8 @@ import (
 
 func TestValidateKey(t *testing.T) {
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	// Skip actual API calls
@@ -74,57 +74,29 @@ func TestValidateKey(t *testing.T) {
 
 		// Azure OpenAI tests
 		{
-			name:     "Valid Azure config",
-			provider: "azure",
+			name:     "Valid Azure API key",
+			provider: "azure-openai",
 			key:      map[string]string{"api_key": "test-azure-key"},
-			config: map[string]any{
-				"endpoint":      "https://test.openai.azure.com",
-				"deployment_id": "gpt-4",
-			},
-			wantErr: false,
+			wantErr:  false,
 		},
 		{
-			name:     "Azure missing endpoint",
-			provider: "azure",
-			key:      map[string]string{"api_key": "test-azure-key"},
-			config: map[string]any{
-				"deployment_id": "gpt-4",
-			},
+			name:     "Azure missing API key",
+			provider: "azure-openai",
+			key:      map[string]string{},
 			wantErr:  true,
-			errField: "endpoint",
-		},
-		{
-			name:     "Azure missing deployment",
-			provider: "azure",
-			key:      map[string]string{"api_key": "test-azure-key"},
-			config: map[string]any{
-				"endpoint": "https://test.openai.azure.com",
-			},
-			wantErr:  true,
-			errField: "deployment_id",
-		},
-		{
-			name:     "Azure invalid endpoint URL",
-			provider: "azure",
-			key:      map[string]string{"api_key": "test-azure-key"},
-			config: map[string]any{
-				"endpoint":      "not-a-url",
-				"deployment_id": "gpt-4",
-			},
-			wantErr:  true,
-			errField: "endpoint",
+			errField: "api_key",
 		},
 
 		// Google AI Studio tests
 		{
 			name:     "Valid Google AI Studio key",
-			provider: "google-aistudio",
+			provider: "google-ai-studio",
 			key:      map[string]string{"api_key": "AIzaSyD" + strings.Repeat("x", 32)}, // 39 chars
 			wantErr:  false,
 		},
 		{
 			name:     "Invalid Google AI Studio key length",
-			provider: "google-aistudio",
+			provider: "google-ai-studio",
 			key:      map[string]string{"api_key": "AIzaSyD-short"},
 			wantErr:  true,
 			errField: "api_key",
@@ -132,91 +104,17 @@ func TestValidateKey(t *testing.T) {
 
 		// Google Vertex AI tests
 		{
-			name:     "Valid Vertex AI service account",
-			provider: "google-vertexai",
-			key: map[string]string{
-				"service_account_json": `{
-					"type": "service_account",
-					"project_id": "test-project",
-					"private_key_id": "key123",
-					"private_key": "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
-					"client_email": "test@test.iam.gserviceaccount.com",
-					"client_id": "123456789",
-					"auth_uri": "https://accounts.google.com/o/oauth2/auth",
-					"token_uri": "https://oauth2.googleapis.com/token"
-				}`,
-			},
-			wantErr: false,
+			name:     "Valid Vertex AI access token",
+			provider: "google-vertex",
+			key:      map[string]string{"access_token": "vertex-access-token"},
+			wantErr:  false,
 		},
 		{
-			name:     "Invalid Vertex AI JSON",
-			provider: "google-vertexai",
-			key: map[string]string{
-				"service_account_json": "not-json",
-			},
+			name:     "Empty Vertex AI access token",
+			provider: "google-vertex",
+			key:      map[string]string{"access_token": ""},
 			wantErr:  true,
-			errField: "service_account_json",
-		},
-		{
-			name:     "Vertex AI missing required field",
-			provider: "google-vertexai",
-			key: map[string]string{
-				"service_account_json": `{
-					"type": "service_account",
-					"project_id": "test-project"
-				}`,
-			},
-			wantErr:  true,
-			errField: "service_account_json",
-		},
-		{
-			name:     "Vertex AI wrong type",
-			provider: "google-vertexai",
-			key: map[string]string{
-				"service_account_json": `{
-					"type": "user",
-					"project_id": "test-project",
-					"private_key_id": "key123",
-					"private_key": "test",
-					"client_email": "test@test.iam.gserviceaccount.com"
-				}`,
-			},
-			wantErr:  true,
-			errField: "service_account_json",
-		},
-
-		// AWS Bedrock tests
-		{
-			name:     "Valid AWS Bedrock credentials",
-			provider: "aws-bedrock",
-			key: map[string]string{
-				"access_key_id":     "AKIAIOSFODNN7EXAMPLE",
-				"secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-				"region":            "us-east-1",
-			},
-			wantErr: false,
-		},
-		{
-			name:     "AWS Bedrock with session token",
-			provider: "aws-bedrock",
-			key: map[string]string{
-				"access_key_id":     "ASIAIOSFODNN7EXAMPLE",
-				"secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-				"session_token":     "AQoDYXdzEJr...",
-				"region":            "us-west-2",
-			},
-			wantErr: false,
-		},
-		{
-			name:     "AWS Bedrock invalid access key format",
-			provider: "aws-bedrock",
-			key: map[string]string{
-				"access_key_id":     "invalid-key",
-				"secret_access_key": "secret",
-				"region":            "us-east-1",
-			},
-			wantErr:  true,
-			errField: "access_key_id",
+			errField: "access_token",
 		},
 
 		// Groq tests
@@ -273,37 +171,24 @@ func TestValidateKey(t *testing.T) {
 	}
 }
 
-// TestValidateKeyWithAPIValidation tests actual API validation when enabled
-func TestValidateKeyWithAPIValidation(t *testing.T) {
-	// Skip if no real API keys are available
-	if os.Getenv("TEST_OPENAI_API_KEY") == "" {
-		t.Skip("Skipping API validation test - no test API key provided")
-	}
-
+func TestValidateKeyDoesNotPerformImplicitNetworkProbe(t *testing.T) {
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
-	// Test with actual API validation (no skip_validation)
-	ctx := context.Background()
-
-	// Test with valid OpenAI key from environment
-	validKey := os.Getenv("TEST_OPENAI_API_KEY")
-	err = manager.ValidateKey(ctx, "openai", map[string]string{"api_key": validKey}, nil)
+	err = manager.ValidateKey(context.Background(), "openai", map[string]string{"api_key": "sk-local-shape"}, nil)
 	assert.NoError(t, err)
-
-	// Test with invalid OpenAI key
-	err = manager.ValidateKey(ctx, "openai", map[string]string{"api_key": "sk-invalid-key-12345"}, nil)
+	err = manager.ValidateKey(context.Background(), "openai", map[string]string{"api_key": "invalid-key"}, nil)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid API key")
+	assert.Contains(t, err.Error(), "must start")
 }
 
 // TestValidateKeyNilConfig tests validation with nil config
 func TestValidateKeyNilConfig(t *testing.T) {
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	ctx := context.WithValue(context.Background(), "skip_validation", true)
@@ -312,22 +197,21 @@ func TestValidateKeyNilConfig(t *testing.T) {
 	err = manager.ValidateKey(ctx, "openai", map[string]string{"api_key": "sk-test123"}, nil)
 	assert.NoError(t, err)
 
-	// Azure should fail with nil config
-	err = manager.ValidateKey(ctx, "azure", map[string]string{"api_key": "test-key"}, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "config is required")
+	// Azure deployments and endpoints are catalog facts, not credential fields.
+	err = manager.ValidateKey(ctx, "azure-openai", map[string]string{"api_key": "test-key"}, nil)
+	assert.NoError(t, err)
 }
 
 // TestValidateKeyEmptyCredentials tests validation with empty key map
 func TestValidateKeyEmptyCredentials(t *testing.T) {
 	store := storage.NewMockStore()
-	masterKey, _ := models.GenerateMasterKey()
-	manager, err := NewProviderKeys(store, masterKey)
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
 	require.NoError(t, err)
 
 	ctx := context.WithValue(context.Background(), "skip_validation", true)
 
-	providers := []string{"openai", "anthropic", "groq", "mistral", "google-aistudio", "google-vertexai", "aws-bedrock"}
+	providers := []string{"openai", "anthropic", "groq", "mistral", "google-ai-studio", "google-vertex"}
 	for _, provider := range providers {
 		t.Run(provider, func(t *testing.T) {
 			err := manager.ValidateKey(ctx, provider, map[string]string{}, nil)
@@ -336,25 +220,34 @@ func TestValidateKeyEmptyCredentials(t *testing.T) {
 	}
 }
 
-// TestIsAlphanumeric tests the helper function
-func TestIsAlphanumeric(t *testing.T) {
-	tests := []struct {
-		input string
-		want  bool
-	}{
-		{"AKIAIOSFODNN7EXAMPLE", true},
-		{"abc123XYZ", true},
-		{"", true}, // empty string is considered alphanumeric
-		{"has-dash", false},
-		{"has_underscore", false},
-		{"has space", false},
-		{"has@symbol", false},
-	}
+func TestUnsupportedInferenceProviderFailsClosed(t *testing.T) {
+	store := storage.NewMockStore()
+	masterKey, err := credentials.GenerateMasterKey()
+	require.NoError(t, err)
+	manager, err := newTestProviderKeys(store, masterKey)
+	require.NoError(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got := isAlphanumeric(tt.input)
-			assert.Equal(t, tt.want, got)
-		})
-	}
+	err = manager.ValidateKey(context.Background(), "aws-bedrock", map[string]string{
+		"access_key_id": "must-not-be-accepted",
+	}, nil)
+	require.ErrorIs(t, err, connectors.ErrAdapterProviderUnsupported)
+}
+
+func TestValidateKeyCanonicalGoogleProviderNames(t *testing.T) {
+	store := storage.NewMockStore()
+	masterKey, _ := credentials.GenerateMasterKey()
+	manager, err := newTestProviderKeys(store, masterKey)
+	require.NoError(t, err)
+
+	ctx := context.WithValue(context.Background(), "skip_validation", true)
+
+	err = manager.ValidateKey(ctx, "google-ai-studio", map[string]string{
+		"api_key": "AIzaSyD" + strings.Repeat("x", 32),
+	}, nil)
+	require.NoError(t, err)
+
+	err = manager.ValidateKey(ctx, "google-vertex", map[string]string{
+		"access_token": "vertex-access-token",
+	}, nil)
+	require.NoError(t, err)
 }
