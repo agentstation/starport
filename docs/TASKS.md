@@ -16,6 +16,7 @@ No work is active.
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| CI-001 | DevOps | #71 | 2026-08-04 | Restored default-branch SARIF uploads by granting Actions metadata read access and updating the CodeQL SARIF action to v4 |
 | SVA16 | Architecture | #69 | 2026-08-04 | Established the Starport v1 concept seams, made Starmap v0.3.0 the provider and model fact owner, separated catalog-acquisition auth from inference auth, added OpenAI and OpenRouter protocol contracts, and passed the cross-platform CI, security, race, fuzz, and architecture gates |
 | P1-S4-4.2b | Backend | #30 | 2025-01-10 | Valkey storage implementation with full KVStore interface, pub/sub support for cache invalidation, transaction support with MULTI/EXEC, atomic operations with Lua scripts, batch operations with auto-pipelining, integration tests, valkey-go client integration |
 | P1-S4-4.2a | Backend | #29 | 2025-01-09 | Cache architecture refactoring with data-type-specific strategies, pub/sub invalidation for multi-node deployments, hybrid caching (local + distributed), automatic deployment mode detection, proper cache coherence for security-critical data (API keys, presets), distributed-only for rate limits, 75%+ test coverage |
