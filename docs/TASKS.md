@@ -9,12 +9,14 @@ Last Updated: 2026-08-04
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-| DevOps | CI-002 Publish security artifacts on all runs | codex/ci-security-artifact | 🟢 In Progress | 2026-08-04 | - |
+
+No work is active.
 
 ### Recently Completed
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| CI-002 | DevOps | #72 | 2026-08-04 | Made Gosec SARIF artifacts available on pull-request and default-branch runs without paid Code Security, and removed unused elevated workflow permissions |
 | CI-001 | DevOps | #71 | 2026-08-04 | Confirmed that default-branch CodeQL SARIF upload is unavailable because Code Security is disabled for the private repository |
 | SVA16 | Architecture | #69 | 2026-08-04 | Established the Starport v1 concept seams, made Starmap v0.3.0 the provider and model fact owner, separated catalog-acquisition auth from inference auth, added OpenAI and OpenRouter protocol contracts, and passed the cross-platform CI, security, race, fuzz, and architecture gates |
 | P1-S4-4.2b | Backend | #30 | 2025-01-10 | Valkey storage implementation with full KVStore interface, pub/sub support for cache invalidation, transaction support with MULTI/EXEC, atomic operations with Lua scripts, batch operations with auto-pipelining, integration tests, valkey-go client integration |
