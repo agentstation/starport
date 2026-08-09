@@ -3,7 +3,7 @@
 Status: `active` | Owner: this plan | Created: 2026-08-09
 Baseline: master @ ff293dd50189df2f9937b19e80f29be359639995
 Proof root: `docs/proof/starport-v1-release/`
-Next action: close the stale bot PRs and audit current dependencies for SPR1
+Next action: merge SPR1 proof and tag protected master v1.0.0
 
 ## Outcome
 
@@ -87,8 +87,8 @@ Promote this plan to `active` only when every item holds:
 | ID | Task | Status | Evidence |
 | --- | --- | --- | --- |
 | SPR0 | Pin the baseline, create the red release verifier and proof root, review this plan, and activate the goal. | `done` | Baseline `ff293dd`; verifier: 2 passed and 11 failed; promotion review passed; `docs/proof/starport-v1-release/spr0.md`. |
-| SPR1 | Build and merge one complete v1 release candidate: clean the stale PR queue, refresh dependencies and action pins, prove all official OpenRouter SDKs, add fail-closed distribution, and repair release documentation. | `in_progress` | |
-| SPR2 | Tag protected `master` as `v1.0.0`, publish the verified immutable release and container, and read back every public identity and artifact. | `todo` | |
+| SPR1 | Build and merge one complete v1 release candidate: clean the stale PR queue, refresh dependencies and action pins, prove all official OpenRouter SDKs, add fail-closed distribution, and repair release documentation. | `done` | PR #73; protected `master` at `ee8c34e`; CI run 31329415791 passed 10 of 10 jobs; `docs/proof/starport-v1-release/spr1.md`. |
+| SPR2 | Tag protected `master` as `v1.0.0`, publish the verified immutable release and container, and read back every public identity and artifact. | `in_progress` | |
 | SPR3 | Store compact closeout proof, make the task ledger terminal, remove this active plan, merge the closeout PR, and verify protected `master`. | `todo` | |
 
 ## Test matrix
@@ -277,6 +277,11 @@ ledger. Remove this active plan. Verify the final protected master state.
 ```
 
 ## Execution log
+
+| Date | Item | Action | Evidence |
+| --- | --- | --- | --- |
+| 2026-08-09 | SPR0 | Established the baseline, red verifier, proof root, active plan, and goal. | Baseline `ff293dd`; release verifier reported 2 passed and 11 failed; `docs/proof/starport-v1-release/spr0.md`. |
+| 2026-08-09 | SPR1 | Built, reviewed, and merged the protected v1 release candidate; advanced publication to SPR2. | PR #73; commits `2a66b22` through `ee8c34e`; CI run 31329415791 passed 10 of 10 jobs; pre-PR Sol autoreview was clean; `docs/proof/starport-v1-release/spr1.md`. |
 
 | Date | Item | Action | Evidence |
 | --- | --- | --- | --- |
