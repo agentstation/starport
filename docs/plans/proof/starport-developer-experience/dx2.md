@@ -96,3 +96,28 @@ certificate. It produced no finding.
 The isolated `sol` profile then used `gpt-5.6-sol` at high reasoning. TruffleHog
 reported a clean bundle. The reviewer reported no actionable finding and rated
 the patch correct at 0.91. It supplied no finding to accept or reject.
+
+The final branch-bundle review also used the isolated `sol` profile. It rated
+the patch correct at 0.97 and reported no accepted finding. It noted that the
+new sources and paths do not support an in-place upgrade from the old defaults.
+The owner requires direct pre-launch changes and forbids legacy compatibility,
+so the task rejects that concern by design.
+
+## Pull request gate
+
+- Pull request: `https://github.com/agentstation/starport/pull/78`
+- Merge commit: `be127cef32e4c69a474bea2289900d3d2009abda`
+- Merge time: 2026-08-09 at 21:18:57 UTC
+
+All 10 CI checks passed before merge:
+
+- Action Pin Provenance
+- Build
+- Lint
+- OpenRouter SDK Compatibility
+- Release Contract
+- Release Snapshot
+- Security Scan
+- Test on macOS
+- Test on Ubuntu
+- Test on Windows

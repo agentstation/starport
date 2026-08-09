@@ -1,10 +1,8 @@
-// Package main is the entry point for the Starport application.
+// Package main is the Starport process boundary.
 package main
 
-import "log"
+import "os"
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatalf("Fatal error: %v", err)
-	}
+	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
 }
