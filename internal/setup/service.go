@@ -305,7 +305,7 @@ func InitializeIdentity(
 		if errors.Is(err, identity.ErrConflict) {
 			return identity.IssueResult{}, fmt.Errorf("%w: initial identity was already claimed", ErrAlreadyInitialized)
 		}
-		return identity.IssueResult{}, fmt.Errorf("create named identity: %w", err)
+		return issued, fmt.Errorf("create named identity: %w", err)
 	}
 	return issued, nil
 }

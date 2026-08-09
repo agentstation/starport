@@ -84,6 +84,10 @@ a secret manager before you start the gateway.
 If credential output fails, the command atomically releases the initial
 identity and its setup claim. You can then run the command again.
 
+Always check the command exit status. If a remote write has an uncertain
+result, the command prints the candidate key before it reports the storage
+error. Keep that key while you inspect the repository state.
+
 ## Client Base URLs
 
 Use these substitutions in existing clients:

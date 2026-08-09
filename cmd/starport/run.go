@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/app"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -96,20 +97,31 @@ func initializeConfiguredStorage(
 	}
 	issued, issueErr := setup.InitializeIdentity(ctx, store, options.IdentityName)
 	closeErr := store.Close()
+	result := configuredInitResult(storageConfig, options.IdentityName, issued)
 	if issueErr != nil {
-		return starportcli.InitResult{}, errors.Join(issueErr, closeErr)
-	}
-	result := starportcli.InitResult{
-		IdentityName: options.IdentityName,
-		APIKey:       issued.Secret,
-		Rollback: func(rollbackCtx context.Context) error {
-			return rollbackConfiguredIdentity(rollbackCtx, storageConfig, issued.APIKey.ID)
-		},
+		return result, errors.Join(issueErr, closeErr)
 	}
 	if closeErr != nil {
 		return result, fmt.Errorf("close configured storage: %w", closeErr)
 	}
 	return result, nil
+}
+
+func configuredInitResult(
+	storageConfig storage.Config,
+	identityName string,
+	issued identity.IssueResult,
+) starportcli.InitResult {
+	if issued.Secret == "" {
+		return starportcli.InitResult{}
+	}
+	return starportcli.InitResult{
+		IdentityName: identityName,
+		APIKey:       issued.Secret,
+		Rollback: func(rollbackCtx context.Context) error {
+			return rollbackConfiguredIdentity(rollbackCtx, storageConfig, issued.APIKey.ID)
+		},
+	}
 }
 
 func rollbackConfiguredIdentity(

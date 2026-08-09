@@ -96,6 +96,33 @@ func TestIssuerRejectsInvalidIdentityBeforeStorage(t *testing.T) {
 	}
 }
 
+func TestIssuerReturnsCredentialOnAmbiguousStorageFailure(t *testing.T) {
+	store := storage.NewMockStore()
+	repository, err := Open(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := NewIssuer(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := issuer.IssueInitial(context.Background(), IssueRequest{
+		Name: "local-admin", Scopes: []string{"*"},
+	})
+	if err == nil {
+		t.Fatal("IssueInitial() returned no storage error")
+	}
+	if result.Secret == "" || result.APIKey.ID == "" {
+		t.Fatalf("ambiguous failure result = %#v", result)
+	}
+	if _, parseErr := uuidkey.ParseAPIKey(result.Secret); parseErr != nil {
+		t.Fatalf("parse returned credential: %v", parseErr)
+	}
+}
+
 func TestNewIssuerRequiresRepository(t *testing.T) {
 	_, err := NewIssuer(nil)
 	if !errors.Is(err, ErrIssuerRequired) {

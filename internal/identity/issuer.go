@@ -111,7 +111,7 @@ func (i *Issuer) issue(
 	}
 	record, err := create(ctx, apiKey)
 	if err != nil {
-		return IssueResult{}, fmt.Errorf("create identity: %w", err)
+		return IssueResult{APIKey: apiKey, Secret: credential.secret}, fmt.Errorf("create identity: %w", err)
 	}
 	return IssueResult{APIKey: record.APIKey, Secret: credential.secret}, nil
 }
