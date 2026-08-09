@@ -9,8 +9,10 @@ Last Updated: 2026-08-04
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
+| Release | SPR1: protected v1 release candidate | `codex/starport-v1-release` | In progress | Evidence driven | Pending |
 
-No work is active.
+The active control plane is
+[`STARPORT_V1_RELEASE_CONTROL_PLANE.md`](STARPORT_V1_RELEASE_CONTROL_PLANE.md).
 
 ### Recently Completed
 
