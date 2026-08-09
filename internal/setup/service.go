@@ -216,6 +216,9 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 	if state != StateReady {
 		return fmt.Errorf("%w: isolated setup state is %s", ErrRollbackRefused, state)
 	}
+	if err := validateRollbackLayout(paths); err != nil {
+		return err
+	}
 	store, err := s.openStore(paths.BadgerDir)
 	if err != nil {
 		return fmt.Errorf("open isolated identity store for rollback: %w", err)
@@ -225,8 +228,12 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 		_ = store.Close()
 		return fmt.Errorf("open initialized identity repository for rollback: %w", err)
 	}
+	keys, scanErr := store.ScanWithPrefix(ctx, "", 0)
 	records, listErr := repository.List(ctx, 2)
 	closeErr := store.Close()
+	if scanErr != nil {
+		return errors.Join(fmt.Errorf("inspect isolated storage keys for rollback: %w", scanErr), closeErr)
+	}
 	if listErr != nil {
 		return errors.Join(fmt.Errorf("inspect initialized identity for rollback: %w", listErr), closeErr)
 	}
@@ -236,7 +243,43 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 	if len(records) != 1 || records[0].APIKey.ID != result.identityID {
 		return fmt.Errorf("%w: identity storage changed after initialization", ErrRollbackRefused)
 	}
+	if len(keys) != 3 {
+		return fmt.Errorf("%w: storage contains %d records, want 3", ErrRollbackRefused, len(keys))
+	}
+	for _, key := range keys {
+		if !strings.HasPrefix(key, identity.StoragePrefix) {
+			return fmt.Errorf("%w: storage contains application state", ErrRollbackRefused)
+		}
+	}
 	return nil
+}
+
+func validateRollbackLayout(paths config.Paths) error {
+	entries, err := os.ReadDir(paths.ConfigDir)
+	if err != nil {
+		return fmt.Errorf("inspect isolated configuration directory for rollback: %w", err)
+	}
+	if len(entries) != 2 || !hasDirectoryEntry(entries, filepath.Base(paths.ConfigFile), false) ||
+		!hasDirectoryEntry(entries, filepath.Base(paths.DataDir), true) {
+		return fmt.Errorf("%w: configuration directory contains application state", ErrRollbackRefused)
+	}
+	dataEntries, err := os.ReadDir(paths.DataDir)
+	if err != nil {
+		return fmt.Errorf("inspect isolated data directory for rollback: %w", err)
+	}
+	if len(dataEntries) != 1 || !hasDirectoryEntry(dataEntries, filepath.Base(paths.BadgerDir), true) {
+		return fmt.Errorf("%w: data directory contains application state", ErrRollbackRefused)
+	}
+	return nil
+}
+
+func hasDirectoryEntry(entries []fs.DirEntry, name string, directory bool) bool {
+	for _, entry := range entries {
+		if entry.Name() == name && entry.IsDir() == directory {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) restoreRollback(rollbackDir string, cause error) error {

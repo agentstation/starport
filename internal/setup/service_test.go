@@ -258,6 +258,55 @@ func TestRollbackRefusesChangedIdentityStorage(t *testing.T) {
 	}
 }
 
+func TestRollbackRefusesOtherApplicationRecords(t *testing.T) {
+	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
+	service := New(paths)
+	result, err := service.Initialize(context.Background(), Request{
+		Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := openLocalStore(paths.BadgerDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(context.Background(), "catalog:v1:current", []byte("state")); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.Rollback(context.Background(), result); !errors.Is(err, ErrRollbackRefused) {
+		t.Fatalf("rollback error = %v, want %v", err, ErrRollbackRefused)
+	}
+	if _, err := os.Stat(paths.ConfigDir); err != nil {
+		t.Fatalf("configuration directory after refused rollback: %v", err)
+	}
+}
+
+func TestRollbackRefusesOtherManagedFiles(t *testing.T) {
+	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
+	service := New(paths)
+	result, err := service.Initialize(context.Background(), Request{
+		Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.DataDir, "application-state"), []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.Rollback(context.Background(), result); !errors.Is(err, ErrRollbackRefused) {
+		t.Fatalf("rollback error = %v, want %v", err, ErrRollbackRefused)
+	}
+	if got := string(mustReadFile(t, filepath.Join(paths.DataDir, "application-state"))); got != "keep" {
+		t.Fatalf("application state = %q, want keep", got)
+	}
+}
+
 func TestInitializeConcurrentSingleWinner(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	request := Request{Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin"}

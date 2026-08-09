@@ -253,7 +253,8 @@ Implemented:
 - Local initialization writes an owner-only configuration file and creates one named wildcard identity directly.
 - Platform-native no-replace rename operations install local state without replacing an existing directory.
 - Configured-storage initialization creates the first named identity without a temporary startup credential.
-- Failed credential output isolates and verifies local state before deletion. Configured storage atomically releases the identity claim.
+- Failed credential output isolates local state before deletion. Rollback requires the original layout and only the initial identity records.
+- Configured storage atomically releases the identity claim after an output failure.
 - An initial claim names its identity. Setup can reclaim the claim only when the repository is empty and that identity is absent.
 - Startup rejects empty identity storage and does not create an identity.
 - Starport accepts API keys from `Authorization` and `X-API-Key` headers only.
