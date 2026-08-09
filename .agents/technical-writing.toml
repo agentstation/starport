@@ -1,0 +1,74 @@
+version = 1
+mode = "strict"
+
+[limits]
+instruction_words = 20
+descriptive_words = 25
+paragraph_sentences = 6
+max_warnings_per_100_words = 0
+
+[rules]
+long_sentence = "error"
+semicolon = "error"
+contraction = "error"
+passive_voice = "warning"
+complex_verb = "warning"
+ing_main_verb = "warning"
+nominalization = "warning"
+phrasal_verb = "warning"
+banned_word = "error"
+marketing_adjective = "error"
+modal_hedge = "error"
+formulaic_phrase = "warning"
+negative_parallelism = "warning"
+assistant_scaffold = "warning"
+restricted_vocabulary = "warning"
+long_paragraph = "error"
+em_dash = "error"
+glossary_term = "error"
+
+[terms]
+additional_banned = []
+allowed = []
+
+[restricted_vocabulary]
+additional = []
+exceptions = []
+
+[files]
+exclude = [
+  "docs/proof/**",
+  "docs/plans/proof/**",
+]
+
+[glossary]
+path = "GLOSSARY.md"
+required = true
+require_approved_definitions = true
+candidate_min_occurrences = 2
+ignored_candidates = [
+  "AGENTS",
+  "API",
+  "CLI",
+  "GitHub",
+  "HTML",
+  "HTTP",
+  "JSON",
+  "P0",
+  "PR",
+  "SDK",
+  "TOML",
+  "URL",
+  "YAML",
+]
+scan = [
+  "README.md",
+  "GLOSSARY.md",
+  "docs/**/*.md",
+  "docs/plans/**/*.html",
+]
+exclude = [
+  ".git/**",
+  "docs/proof/**",
+  "docs/plans/proof/**",
+]
