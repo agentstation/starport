@@ -7,6 +7,11 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
+const (
+	authorizationHeader = "Authorization"
+	bearerScheme        = "Bearer"
+)
+
 func productionAdapterDescriptors() []AdapterDescriptor {
 	chat := catalogs.ProviderOperationChatCompletions
 	embeddings := catalogs.ProviderOperationEmbeddings
@@ -19,7 +24,7 @@ func productionAdapterDescriptors() []AdapterDescriptor {
 			ValidateConfig: requiredAPIKeyConfig, ResolveBaseURL: resolveProviderBase,
 			Credential: InferenceCredentialDescriptor{
 				Fields: append(apiKeyField, InferenceCredentialField{Name: "organization"}),
-				Header: "Authorization", Scheme: "Bearer", Validate: validateOpenAICredential,
+				Header: authorizationHeader, Scheme: bearerScheme, Validate: validateOpenAICredential,
 			},
 		},
 		{
@@ -47,7 +52,7 @@ func productionAdapterDescriptors() []AdapterDescriptor {
 			ValidateConfig: requiredAPIKeyConfig, ResolveBaseURL: resolveProviderBase,
 			Credential: InferenceCredentialDescriptor{
 				Fields: []InferenceCredentialField{{Name: "access_token", Required: true, Sensitive: true}},
-				Header: "Authorization", Scheme: "Bearer", Validate: validateGoogleVertexCredential,
+				Header: authorizationHeader, Scheme: bearerScheme, Validate: validateGoogleVertexCredential,
 			},
 		},
 		{
@@ -56,7 +61,7 @@ func productionAdapterDescriptors() []AdapterDescriptor {
 			Factory:       connectorFactory(NewGroqConnector), Configured: inferenceConfigurationPresent,
 			ValidateConfig: requiredAPIKeyConfig, ResolveBaseURL: resolveProviderBase,
 			Credential: InferenceCredentialDescriptor{
-				Fields: apiKeyField, Header: "Authorization", Scheme: "Bearer", Validate: validateGroqCredential,
+				Fields: apiKeyField, Header: authorizationHeader, Scheme: bearerScheme, Validate: validateGroqCredential,
 			},
 		},
 		{
@@ -65,7 +70,7 @@ func productionAdapterDescriptors() []AdapterDescriptor {
 			Factory:       connectorFactory(NewMistralConnector), Configured: inferenceConfigurationPresent,
 			ValidateConfig: requiredAPIKeyConfig, ResolveBaseURL: resolveProviderBase,
 			Credential: InferenceCredentialDescriptor{
-				Fields: apiKeyField, Header: "Authorization", Scheme: "Bearer", Validate: validateMistralCredential,
+				Fields: apiKeyField, Header: authorizationHeader, Scheme: bearerScheme, Validate: validateMistralCredential,
 			},
 		},
 		{

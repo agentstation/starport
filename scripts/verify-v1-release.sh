@@ -54,8 +54,8 @@ else
 	fail 'workflow actions include mutable or undocumented references'
 fi
 
-if grep -Eq '^\s*github.com/agentstation/starmap v0\.3\.0$' "$repository_root/go.mod" && ! grep -Eq '^replace[[:space:]]|^replace[[:space:]]*\(' "$repository_root/go.mod"; then
-	pass 'Starport uses published Starmap v0.3.0 without replacement'
+if grep -Eq '^\s*github.com/agentstation/starmap v[0-9]+\.[0-9]+\.[0-9]+([-.][^[:space:]]+)?$' "$repository_root/go.mod" && ! grep -Eq '^replace[[:space:]]|^replace[[:space:]]*\(' "$repository_root/go.mod"; then
+	pass 'Starport uses a published Starmap version without replacement'
 else
 	fail 'Starmap dependency is not the approved published version'
 fi

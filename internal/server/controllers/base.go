@@ -29,6 +29,11 @@ const (
 	errorTypeRateLimit          = "rate_limit_error"
 	errorTypePermission         = "permission_error"
 	errorTypeServiceUnavailable = "service_unavailable"
+	errorTypeProvider           = "provider_error"
+	openRouterErrorTypeField    = "error_type"
+	providerField               = "provider"
+	responseCountField          = "count"
+	responseMessageField        = "message"
 )
 
 // BaseHandler provides common functionality for all handlers
@@ -76,7 +81,7 @@ func (h *BaseHandler) getTenantID(ctx context.Context) string {
 
 func (h *BaseHandler) writeInvalidRequest(w http.ResponseWriter, message string) {
 	if h.protocol == ProtocolOpenRouter {
-		openrouter.WriteError(w, http.StatusBadRequest, message, map[string]any{"error_type": errorTypeInvalidRequest})
+		openrouter.WriteError(w, http.StatusBadRequest, message, map[string]any{openRouterErrorTypeField: errorTypeInvalidRequest})
 		return
 	}
 	openai.WriteError(w, http.StatusBadRequest, errorTypeInvalidRequest, message, nil)
@@ -110,7 +115,7 @@ func (h *BaseHandler) logError(ctx context.Context, err error, msg string) {
 func (h *BaseHandler) writeError(w http.ResponseWriter, err error) {
 	status, errorType, message, param := errorShape(err)
 	if h.protocol == ProtocolOpenRouter {
-		metadata := map[string]any{"error_type": errorType}
+		metadata := map[string]any{openRouterErrorTypeField: errorType}
 		if param != nil {
 			metadata["param"] = *param
 		}

@@ -14,6 +14,24 @@ const (
 	RoleAssistant = "assistant"
 )
 
+// Provider wire constants keep shared OpenAI-compatible tokens consistent
+// across connector implementations.
+const (
+	contentTypeText           = "text"
+	finishReasonStop          = "stop"
+	objectChatCompletion      = "chat.completion"
+	objectChatCompletionChunk = "chat.completion.chunk"
+	objectEmbedding           = "embedding"
+	objectList                = "list"
+	streamReadFailureReason   = "failed to read stream"
+	toolTypeFunction          = "function"
+	wireFieldMessages         = "messages"
+	wireFieldStream           = "stream"
+	wireFieldTemperature      = "temperature"
+	wireModelToken            = "model"
+	wireTypeToken             = "type"
+)
+
 // SSE stream constants
 const (
 	SSEDone = "[DONE]"
@@ -302,7 +320,7 @@ func ParseMessageContent(content MessageContent) ([]ContentPart, error) {
 
 	// Handle string content
 	if str, ok := content.(string); ok {
-		return []ContentPart{{Type: "text", Text: str}}, nil
+		return []ContentPart{{Type: contentTypeText, Text: str}}, nil
 	}
 
 	// Handle already parsed content parts

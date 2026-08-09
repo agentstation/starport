@@ -9,6 +9,8 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
+const mistralProviderName = string(catalogs.ProviderIDMistralAI)
+
 // MistralConnector implements the Connector interface for Mistral
 type MistralConnector struct {
 	OpenAICompatibleConnector
@@ -20,7 +22,7 @@ func NewMistralConnector(config ProviderConfig) (*MistralConnector, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient("mistral", config)
+	httpClient, err := newProviderHTTPClient(mistralProviderName, config)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +30,7 @@ func NewMistralConnector(config ProviderConfig) (*MistralConnector, error) {
 	return &MistralConnector{
 		OpenAICompatibleConnector: OpenAICompatibleConnector{
 			config:     config,
-			provider:   "mistral",
+			provider:   mistralProviderName,
 			httpClient: httpClient,
 		},
 	}, nil
@@ -36,7 +38,7 @@ func NewMistralConnector(config ProviderConfig) (*MistralConnector, error) {
 
 // Name returns the provider name
 func (c *MistralConnector) Name() string {
-	return "mistral"
+	return mistralProviderName
 }
 
 // Chat performs a chat completion request
@@ -79,7 +81,7 @@ func (c *MistralConnector) handleError(resp *http.Response) error {
 		return &APIError{
 			StatusCode: resp.StatusCode,
 			Message:    "failed to decode error response",
-			Provider:   "mistral",
+			Provider:   mistralProviderName,
 		}
 	}
 
@@ -88,6 +90,6 @@ func (c *MistralConnector) handleError(resp *http.Response) error {
 		Message:    errResp.Message,
 		Type:       errResp.Type,
 		Code:       errResp.Code,
-		Provider:   "mistral",
+		Provider:   mistralProviderName,
 	}
 }

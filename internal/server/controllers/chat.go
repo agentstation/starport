@@ -230,7 +230,7 @@ func (h *ChatController) encodeStreamEvent(event inference.StreamEvent) ([]byte,
 
 func (h *ChatController) writeOpenRouterStreamError(w http.ResponseWriter, event inference.StreamEvent) {
 	chunk := openrouter.EncodeStreamError(event, http.StatusBadGateway, "Provider stream failed", map[string]any{
-		"error_type": "provider_error",
+		openRouterErrorTypeField: errorTypeProvider,
 	})
 	data, err := json.Marshal(chunk)
 	if err != nil {

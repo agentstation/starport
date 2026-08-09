@@ -79,8 +79,8 @@ func (h *ProviderKeysController) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]any{
-		"provider_keys": summaries,
-		"count":         len(summaries),
+		"provider_keys":    summaries,
+		responseCountField: len(summaries),
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
@@ -112,7 +112,7 @@ func (h *ProviderKeysController) Create(w http.ResponseWriter, r *http.Request) 
 
 	// Validate provider
 	if req.Provider == "" {
-		dto.WriteValidationError(w, "provider", "Provider is required")
+		dto.WriteValidationError(w, providerField, "Provider is required")
 		return
 	}
 
@@ -136,7 +136,7 @@ func (h *ProviderKeysController) Create(w http.ResponseWriter, r *http.Request) 
 	// Validate the credentials with the provider if requested
 	if validateParam := r.URL.Query().Get("validate"); validateParam == "true" {
 		if err := h.providerKeys.ValidateKey(ctx, req.Provider, credMap, req.Config); err != nil {
-			log.Warn().Err(err).Str("provider", req.Provider).Msg("Provider key validation failed")
+			log.Warn().Err(err).Str(providerField, req.Provider).Msg("Provider key validation failed")
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid credentials for provider")
 			return
 		}
@@ -149,14 +149,14 @@ func (h *ProviderKeysController) Create(w http.ResponseWriter, r *http.Request) 
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "Provider key already exists")
 			return
 		}
-		log.Error().Err(err).Str("api_key_id", apiKeyID).Str("provider", req.Provider).Msg("Failed to store provider key")
+		log.Error().Err(err).Str("api_key_id", apiKeyID).Str(providerField, req.Provider).Msg("Failed to store provider key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to store provider key")
 		return
 	}
 
 	response := map[string]any{
-		"message":  "Provider key added successfully",
-		"provider": req.Provider,
+		responseMessageField: "Provider key added successfully",
+		providerField:        req.Provider,
 	}
 
 	if err := dto.WriteJSON(w, http.StatusCreated, response); err != nil {
@@ -172,7 +172,7 @@ func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
-	provider := chi.URLParam(r, "provider")
+	provider := chi.URLParam(r, providerField)
 
 	key, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
 	if err != nil {
@@ -180,14 +180,14 @@ func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
-		log.Error().Err(err).Str("api_key_id", apiKeyID).Str("provider", provider).Msg("Failed to get provider key")
+		log.Error().Err(err).Str("api_key_id", apiKeyID).Str(providerField, provider).Msg("Failed to get provider key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to get provider key")
 		return
 	}
 
 	// Don't expose actual credentials in response
 	response := map[string]any{
-		"provider":    key.Provider,
+		providerField: key.Provider,
 		"config":      key.Config,
 		"is_fallback": key.IsFallback,
 		"priority":    key.Priority,
@@ -215,7 +215,7 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
-	provider := chi.URLParam(r, "provider")
+	provider := chi.URLParam(r, providerField)
 
 	var req struct {
 		Credentials map[string]any `json:"credentials,omitempty"`
@@ -236,7 +236,7 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
-		log.Error().Err(err).Str("api_key_id", apiKeyID).Str("provider", provider).Msg("Failed to get provider key")
+		log.Error().Err(err).Str("api_key_id", apiKeyID).Str(providerField, provider).Msg("Failed to get provider key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to get provider key")
 		return
 	}
@@ -258,7 +258,7 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 	// Validate if credentials were updated and validation requested
 	if credMap != nil && r.URL.Query().Get("validate") == "true" {
 		if err := h.providerKeys.ValidateKey(ctx, provider, credMap, req.Config); err != nil {
-			log.Warn().Err(err).Str("provider", provider).Msg("Provider key validation failed")
+			log.Warn().Err(err).Str(providerField, provider).Msg("Provider key validation failed")
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid credentials for provider")
 			return
 		}
@@ -267,14 +267,14 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 	// Update the key
 	_, err = h.providerKeys.UpdateKey(ctx, "user:"+apiKeyID, provider, credMap, req.Config, req.IsFallback, req.Priority)
 	if err != nil {
-		log.Error().Err(err).Str("api_key_id", apiKeyID).Str("provider", provider).Msg("Failed to update provider key")
+		log.Error().Err(err).Str("api_key_id", apiKeyID).Str(providerField, provider).Msg("Failed to update provider key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to update provider key")
 		return
 	}
 
 	response := map[string]any{
-		"message":  "Provider key updated successfully",
-		"provider": provider,
+		responseMessageField: "Provider key updated successfully",
+		providerField:        provider,
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
@@ -290,21 +290,21 @@ func (h *ProviderKeysController) Delete(w http.ResponseWriter, r *http.Request) 
 
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
-	provider := chi.URLParam(r, "provider")
+	provider := chi.URLParam(r, providerField)
 
 	if err := h.providerKeys.DeleteKey(ctx, "user:"+apiKeyID, provider); err != nil {
 		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
-		log.Error().Err(err).Str("api_key_id", apiKeyID).Str("provider", provider).Msg("Failed to delete provider key")
+		log.Error().Err(err).Str("api_key_id", apiKeyID).Str(providerField, provider).Msg("Failed to delete provider key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to delete provider key")
 		return
 	}
 
 	response := map[string]any{
-		"message":  "Provider key deleted successfully",
-		"provider": provider,
+		responseMessageField: "Provider key deleted successfully",
+		providerField:        provider,
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
@@ -320,7 +320,7 @@ func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request
 
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
-	provider := chi.URLParam(r, "provider")
+	provider := chi.URLParam(r, providerField)
 
 	_, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
 	if err != nil {
@@ -328,7 +328,7 @@ func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
-		log.Error().Err(err).Str("api_key_id", apiKeyID).Str("provider", provider).Msg("Failed to get provider key")
+		log.Error().Err(err).Str("api_key_id", apiKeyID).Str(providerField, provider).Msg("Failed to get provider key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to get provider key")
 		return
 	}
@@ -336,9 +336,9 @@ func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request
 	// We can't validate the key without decrypting credentials
 	// For now, just return that the key exists
 	response := map[string]any{
-		"valid":   true,
-		"message": "Provider key exists",
-		"note":    "Validation requires decrypted credentials",
+		"valid":              true,
+		responseMessageField: "Provider key exists",
+		"note":               "Validation requires decrypted credentials",
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
@@ -350,7 +350,7 @@ func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request
 func (h *ProviderKeysController) GetUsage(w http.ResponseWriter, _ *http.Request) {
 	// Placeholder implementation
 	response := map[string]any{
-		"message": "Provider key usage analytics not yet implemented",
+		responseMessageField: "Provider key usage analytics not yet implemented",
 	}
 
 	if err := dto.WriteJSON(w, http.StatusNotImplemented, response); err != nil {
@@ -362,7 +362,7 @@ func (h *ProviderKeysController) GetUsage(w http.ResponseWriter, _ *http.Request
 func (h *ProviderKeysController) GetUsageComparison(w http.ResponseWriter, _ *http.Request) {
 	// Placeholder implementation
 	response := map[string]any{
-		"message": "Usage comparison not yet implemented",
+		responseMessageField: "Usage comparison not yet implemented",
 	}
 
 	if err := dto.WriteJSON(w, http.StatusNotImplemented, response); err != nil {

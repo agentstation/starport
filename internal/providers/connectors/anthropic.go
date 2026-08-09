@@ -13,7 +13,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
-const anthropicTextType = "text"
+const anthropicProviderName = string(catalogs.ProviderIDAnthropic)
 
 // AnthropicConnector implements the Connector interface for Anthropic
 type AnthropicConnector struct {
@@ -27,7 +27,7 @@ func NewAnthropicConnector(config ProviderConfig) (*AnthropicConnector, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient("anthropic", config)
+	httpClient, err := newProviderHTTPClient(anthropicProviderName, config)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func NewAnthropicConnector(config ProviderConfig) (*AnthropicConnector, error) {
 
 // Name returns the provider name
 func (c *AnthropicConnector) Name() string {
-	return "anthropic"
+	return anthropicProviderName
 }
 
 // Chat performs a chat completion request
@@ -62,7 +62,7 @@ func executeAnthropicChat(
 	handleError func(*http.Response) error,
 ) (*ChatResponse, error) {
 	anthropicReq := convertToAnthropicRequest(req, includeModel)
-	anthropicReq["stream"] = false
+	anthropicReq[wireFieldStream] = false
 
 	body, err := json.Marshal(anthropicReq)
 	if err != nil {
@@ -115,7 +115,7 @@ func executeAnthropicStream(
 	handleError func(*http.Response) error,
 ) (ChatStream, error) {
 	anthropicReq := convertToAnthropicRequest(req, includeModel)
-	anthropicReq["stream"] = true
+	anthropicReq[wireFieldStream] = true
 
 	body, err := json.Marshal(anthropicReq)
 	if err != nil {
@@ -147,7 +147,7 @@ func executeAnthropicStream(
 func (c *AnthropicConnector) Embeddings(_ context.Context, _ *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Anthropic doesn't support embeddings directly
 	return nil, &APIError{
-		Provider:   "anthropic",
+		Provider:   anthropicProviderName,
 		StatusCode: http.StatusNotImplemented,
 		Message:    "Anthropic does not support embeddings endpoint",
 	}
@@ -178,14 +178,14 @@ func (c *AnthropicConnector) handleError(resp *http.Response) error {
 
 	if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
 		return &APIError{
-			Provider:   "anthropic",
+			Provider:   anthropicProviderName,
 			StatusCode: resp.StatusCode,
 			Message:    fmt.Sprintf("HTTP %d", resp.StatusCode),
 		}
 	}
 
 	return &APIError{
-		Provider:   "anthropic",
+		Provider:   anthropicProviderName,
 		StatusCode: resp.StatusCode,
 		Type:       errResp.Error.Type,
 		Message:    errResp.Error.Message,
@@ -197,7 +197,7 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 	anthropicReq := make(map[string]any)
 
 	if includeModel {
-		anthropicReq["model"] = req.Model
+		anthropicReq[wireModelToken] = req.Model
 	}
 
 	// Convert messages
@@ -224,18 +224,18 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 			// Handle multimodal content
 			var content []map[string]any
 			for _, part := range parts {
-				if part.Type == anthropicTextType {
+				if part.Type == contentTypeText {
 					content = append(content, map[string]any{
-						"type": anthropicTextType,
-						"text": part.Text,
+						wireTypeToken:   contentTypeText,
+						contentTypeText: part.Text,
 					})
 				} else if part.Type == "image_url" && part.ImageURL != nil {
 					content = append(content, map[string]any{
-						"type": "image",
+						wireTypeToken: "image",
 						"source": map[string]any{
-							"type":       "base64",
-							"media_type": "image/jpeg",      // TODO: detect from URL
-							"data":       part.ImageURL.URL, // Assuming base64 data
+							wireTypeToken: "base64",
+							"media_type":  "image/jpeg",      // TODO: detect from URL
+							"data":        part.ImageURL.URL, // Assuming base64 data
 						},
 					})
 				}
@@ -246,7 +246,7 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 		messages = append(messages, anthropicMsg)
 	}
 
-	anthropicReq["messages"] = messages
+	anthropicReq[wireFieldMessages] = messages
 	if system != "" {
 		anthropicReq["system"] = system
 	}
@@ -259,7 +259,7 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 	}
 
 	if req.Temperature != nil {
-		anthropicReq["temperature"] = *req.Temperature
+		anthropicReq[wireFieldTemperature] = *req.Temperature
 	}
 
 	if req.TopP != nil {
@@ -280,21 +280,21 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 func convertAnthropicResponse(resp *anthropicResponse, model string) *ChatResponse {
 	content := ""
 	for _, block := range resp.Content {
-		if block.Type == anthropicTextType {
+		if block.Type == contentTypeText {
 			content += block.Text
 		}
 	}
 
 	return &ChatResponse{
 		ID:      resp.ID,
-		Object:  "chat.completion",
+		Object:  objectChatCompletion,
 		Created: time.Now().Unix(),
 		Model:   model,
 		Choices: []Choice{
 			{
 				Index: 0,
 				Message: Message{
-					Role:    "assistant",
+					Role:    RoleAssistant,
 					Content: content,
 				},
 				FinishReason: resp.StopReason,
@@ -359,7 +359,7 @@ func (s *anthropicStream) Recv() (*ChatStreamChunk, error) {
 			}
 			return nil, &StreamError{
 				Err:    err,
-				Reason: "failed to read stream",
+				Reason: streamReadFailureReason,
 			}
 		}
 
@@ -396,7 +396,7 @@ func (s *anthropicStream) Close() error {
 func (s *anthropicStream) convertToOpenAIChunk(event *anthropicStreamEvent) *ChatStreamChunk {
 	chunk := &ChatStreamChunk{
 		ID:      s.messageID,
-		Object:  "chat.completion.chunk",
+		Object:  objectChatCompletionChunk,
 		Created: time.Now().Unix(),
 		Model:   s.model,
 		Choices: []StreamChoice{
@@ -411,7 +411,7 @@ func (s *anthropicStream) convertToOpenAIChunk(event *anthropicStreamEvent) *Cha
 	case "message_start":
 		s.messageID = event.Message.ID
 		chunk.ID = s.messageID
-		chunk.Choices[0].Delta.Role = "assistant"
+		chunk.Choices[0].Delta.Role = RoleAssistant
 
 	case "content_block_delta":
 		if event.Delta.Type == "text_delta" {

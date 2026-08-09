@@ -22,7 +22,7 @@ func ChatRequestFromInference(request inference.ChatRequest) (*ChatRequest, erro
 				return nil, fmt.Errorf("decode tool %q parameters: %w", tool.Name, err)
 			}
 		}
-		tools[i] = Tool{Type: "function", Function: Function{Name: tool.Name, Description: tool.Description, Parameters: parameters}}
+		tools[i] = Tool{Type: toolTypeFunction, Function: Function{Name: tool.Name, Description: tool.Description, Parameters: parameters}}
 	}
 
 	providerOptions := make(map[string]any, len(request.Extensions))
@@ -169,7 +169,7 @@ func ChatResponseFromInference(response inference.ChatResponse) (*ChatResponse, 
 		}
 	}
 	return &ChatResponse{
-		ID: response.ID, Object: "chat.completion", Created: response.CreatedUnix,
+		ID: response.ID, Object: objectChatCompletion, Created: response.CreatedUnix,
 		Model: response.Model, Choices: choices, Usage: usageFromInference(response.Usage),
 		SystemFingerprint: response.SystemFingerprint,
 	}, nil
@@ -241,7 +241,7 @@ func streamEventKind(deltas []inference.ChoiceDelta) inference.StreamEventKind {
 // StreamChunkFromInference converts one canonical event to a wire chunk.
 func StreamChunkFromInference(event inference.StreamEvent) *ChatStreamChunk {
 	chunk := &ChatStreamChunk{
-		ID: event.ID, Object: "chat.completion.chunk", Created: event.CreatedUnix,
+		ID: event.ID, Object: objectChatCompletionChunk, Created: event.CreatedUnix,
 		Model: event.Model, SystemFingerprint: event.SystemFingerprint,
 	}
 	if chunk.Model == "" {
@@ -304,9 +304,9 @@ func EmbeddingResponseToInference(response *EmbeddingsResponse) (inference.Embed
 func EmbeddingResponseFromInference(response inference.EmbeddingResponse) *EmbeddingsResponse {
 	data := make([]Embedding, len(response.Data))
 	for i, embedding := range response.Data {
-		data[i] = Embedding{Object: "embedding", Index: embedding.Index, Embedding: append([]float32(nil), embedding.Vector...)}
+		data[i] = Embedding{Object: objectEmbedding, Index: embedding.Index, Embedding: append([]float32(nil), embedding.Vector...)}
 	}
-	return &EmbeddingsResponse{Object: "list", Data: data, Model: response.Model, Usage: usageFromInference(response.Usage)}
+	return &EmbeddingsResponse{Object: objectList, Data: data, Model: response.Model, Usage: usageFromInference(response.Usage)}
 }
 
 func messagesFromInference(messages []inference.Message) ([]Message, error) {
@@ -325,7 +325,7 @@ func messagesFromInference(messages []inference.Message) ([]Message, error) {
 			}
 		}
 		var wireContent MessageContent = content
-		if len(content) == 1 && content[0].Type == "text" && content[0].CacheControl == nil {
+		if len(content) == 1 && content[0].Type == contentTypeText && content[0].CacheControl == nil {
 			wireContent = content[0].Text
 		}
 		converted[i] = Message{
@@ -369,7 +369,7 @@ func messageToInference(message Message) (inference.Message, error) {
 func toolCallsFromInference(calls []inference.ToolCall) []ToolCall {
 	converted := make([]ToolCall, len(calls))
 	for i, call := range calls {
-		converted[i] = ToolCall{ID: call.ID, Type: "function", Function: FunctionCall{Name: call.Name, Arguments: call.Arguments}}
+		converted[i] = ToolCall{ID: call.ID, Type: toolTypeFunction, Function: FunctionCall{Name: call.Name, Arguments: call.Arguments}}
 	}
 	return converted
 }
@@ -389,7 +389,7 @@ func toolChoiceFromInference(choice inference.ToolChoice) any {
 	if choice.Mode != inference.ToolChoiceNamed {
 		return string(choice.Mode)
 	}
-	return map[string]any{"type": "function", "function": map[string]string{"name": choice.Name}}
+	return map[string]any{wireTypeToken: toolTypeFunction, toolTypeFunction: map[string]string{"name": choice.Name}}
 }
 
 func toolChoiceToInference(value any) inference.ToolChoice {

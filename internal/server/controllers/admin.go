@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/agentstation/uuidkey"
@@ -17,6 +18,8 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/dto"
 )
+
+const systemInfoUnavailable = "unavailable"
 
 // AdminController handles administrative endpoints
 type AdminController struct {
@@ -54,8 +57,8 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]any{
-		"keys":  apiKeys,
-		"count": len(apiKeys),
+		"keys":             apiKeys,
+		responseCountField: len(apiKeys),
 		"pagination": map[string]any{
 			"limit":  limit,
 			"offset": offset,
@@ -134,7 +137,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 			"active":     apiKey.Active,
 			"created_at": apiKey.CreatedAt,
 		},
-		"message": "API key created successfully. Save the key value as it won't be shown again.",
+		responseMessageField: "API key created successfully. Save the key value as it won't be shown again.",
 	}
 
 	if err := dto.WriteJSON(w, http.StatusCreated, response); err != nil {
@@ -251,8 +254,8 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]any{
-		"message": "API key deleted successfully",
-		"key_id":  keyID,
+		responseMessageField: "API key deleted successfully",
+		"key_id":             keyID,
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
@@ -266,17 +269,17 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 	info := map[string]any{
 		"service":    "starport",
 		"version":    "1.0.0",
-		"uptime":     "TODO",
-		"go_version": "TODO",
-		"os":         "TODO",
-		"arch":       "TODO",
+		"uptime":     systemInfoUnavailable,
+		"go_version": runtime.Version(),
+		"os":         runtime.GOOS,
+		"arch":       runtime.GOARCH,
 		"storage": map[string]any{
 			"type":   "badger",
 			"status": "healthy",
 		},
 		"providers": map[string]any{
-			"count":  "TODO",
-			"status": "TODO",
+			responseCountField: systemInfoUnavailable,
+			"status":           systemInfoUnavailable,
 		},
 	}
 

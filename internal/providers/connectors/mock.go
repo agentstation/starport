@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+const (
+	mockCompletionID = "chatcmpl-mock"
+	mockModel        = "mock-model"
+)
+
 // MockConnector implements a mock LLM connector for testing
 type MockConnector struct {
 	name           string
@@ -27,18 +32,18 @@ func NewMockConnector(config ProviderConfig) *MockConnector {
 		name:   "mock",
 		config: config,
 		chatResponse: &ChatResponse{
-			ID:      "chatcmpl-mock",
-			Object:  "chat.completion",
+			ID:      mockCompletionID,
+			Object:  objectChatCompletion,
 			Created: time.Now().Unix(),
-			Model:   "mock-model",
+			Model:   mockModel,
 			Choices: []Choice{
 				{
 					Index: 0,
 					Message: Message{
-						Role:    "assistant",
+						Role:    RoleAssistant,
 						Content: "This is a mock response",
 					},
-					FinishReason: "stop",
+					FinishReason: finishReasonStop,
 				},
 			},
 			Usage: Usage{
@@ -49,24 +54,24 @@ func NewMockConnector(config ProviderConfig) *MockConnector {
 		},
 		streamChunks: []ChatStreamChunk{
 			{
-				ID:      "chatcmpl-mock",
-				Object:  "chat.completion.chunk",
+				ID:      mockCompletionID,
+				Object:  objectChatCompletionChunk,
 				Created: time.Now().Unix(),
-				Model:   "mock-model",
+				Model:   mockModel,
 				Choices: []StreamChoice{
 					{
 						Index: 0,
 						Delta: MessageDelta{
-							Role: "assistant",
+							Role: RoleAssistant,
 						},
 					},
 				},
 			},
 			{
-				ID:      "chatcmpl-mock",
-				Object:  "chat.completion.chunk",
+				ID:      mockCompletionID,
+				Object:  objectChatCompletionChunk,
 				Created: time.Now().Unix(),
-				Model:   "mock-model",
+				Model:   mockModel,
 				Choices: []StreamChoice{
 					{
 						Index: 0,
@@ -77,26 +82,26 @@ func NewMockConnector(config ProviderConfig) *MockConnector {
 				},
 			},
 			{
-				ID:      "chatcmpl-mock",
-				Object:  "chat.completion.chunk",
+				ID:      mockCompletionID,
+				Object:  objectChatCompletionChunk,
 				Created: time.Now().Unix(),
-				Model:   "mock-model",
+				Model:   mockModel,
 				Choices: []StreamChoice{
 					{
 						Index: 0,
 						Delta: MessageDelta{
 							Content: "mock streaming response",
 						},
-						FinishReason: "stop",
+						FinishReason: finishReasonStop,
 					},
 				},
 			},
 		},
 		embeddingResp: &EmbeddingsResponse{
-			Object: "list",
+			Object: objectList,
 			Data: []Embedding{
 				{
-					Object:    "embedding",
+					Object:    objectEmbedding,
 					Index:     0,
 					Embedding: []float32{0.1, 0.2, 0.3},
 				},
