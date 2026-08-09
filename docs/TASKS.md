@@ -7,17 +7,14 @@ Last Updated: 2026-08-09
 
 ### Active Work
 
-| Team | Current Task | Branch | Status | ETA | PR |
-|------|--------------|--------|--------|-----|-----|
-| Release | SPR2: publish and verify v1.0.0 | protected `master` | In progress | Evidence driven | #73 merged |
-
-The active control plane is
-[`STARPORT_V1_RELEASE_CONTROL_PLANE.md`](STARPORT_V1_RELEASE_CONTROL_PLANE.md).
+None.
 
 ### Recently Completed
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| SPR3 | Release | Pending closeout PR | 2026-08-09 | Stored compact terminal proof and removed the completed release control plane |
+| SPR2 | Release | Release workflow | 2026-08-09 | Published immutable `v1.0.0` with 13 verified assets and a public, attested, two-platform GHCR image at `sha256:f4230687fdf664022e4be80031c4145ff2eb795ff200489216ea76ba4b64bc24` |
 | SPR1 | Release | #73 | 2026-08-09 | Merged the complete v1 release candidate after all 10 CI jobs passed, including cross-platform race tests, official OpenRouter SDK compatibility, release contracts, security, and reproducible release snapshots |
 | CI-002 | DevOps | #72 | 2026-08-04 | Made Gosec SARIF artifacts available on pull-request and default-branch runs without paid Code Security, and removed unused elevated workflow permissions |
 | CI-001 | DevOps | #71 | 2026-08-04 | Confirmed that default-branch CodeQL SARIF upload is unavailable because Code Security is disabled for the private repository |
@@ -59,6 +56,8 @@ The active control plane is
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
 - Release archives, SBOMs, checksums, attestations, and GHCR publication are
   fail-closed release requirements.
+- Independent checks verify public immutable release `v1.0.0` and its public
+  GHCR image.
 
 This file keeps task status and the Phase 1 completion history. The canonical
 v1 design is in `docs/ARCHITECTURE.md`.
