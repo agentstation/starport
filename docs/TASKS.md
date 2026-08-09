@@ -55,7 +55,9 @@ The active control plane is
 - Starmap v0.3.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
 - Starport owns inference credentials, request policy, route planning, execution, and protocol adaptation.
 - OpenAI and OpenRouter raw protocol smoke tests pass.
-- Optional Python, TypeScript, and Go SDK smoke tests remain unverified when their packages are absent.
+- The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
+- Release archives, SBOMs, checksums, attestations, and GHCR publication are
+  fail-closed release requirements.
 
 This file keeps task status and the Phase 1 completion history. The canonical
 v1 design is in `docs/ARCHITECTURE.md`.

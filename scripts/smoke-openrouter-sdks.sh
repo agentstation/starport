@@ -2,7 +2,11 @@
 
 set -eu
 
-repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+# Never let a caller-wide Node.js TLS override weaken package installation or
+# SDK requests. The local smoke server itself uses plain loopback HTTP.
+unset NODE_TLS_REJECT_UNAUTHORIZED
+
+repository_root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 temporary_directory=$(mktemp -d)
 output_file="$temporary_directory/server.out"
 error_file="$temporary_directory/server.err"
@@ -17,6 +21,13 @@ cleanup() {
 	rm -rf "$temporary_directory"
 }
 trap cleanup EXIT INT TERM
+
+for required_tool in curl go node npm python3; do
+	if ! command -v "$required_tool" >/dev/null 2>&1; then
+		printf 'FAIL required SDK smoke tool is missing: %s\n' "$required_tool" >&2
+		exit 1
+	fi
+done
 
 (cd "$repository_root" && go build -o "$server_binary" ./scripts/sdk-smoke-server)
 "$server_binary" >"$output_file" 2>"$error_file" &
@@ -78,27 +89,28 @@ embeddings_response=$(curl --fail --silent --show-error \
 printf '%s' "$embeddings_response" | grep -q '"embedding":\[0.1,0.2,0.3\]'
 printf '%s\n' 'PASS raw HTTP embeddings'
 
-export STARPORT_SMOKE_BASE_URL="$base_url"
+export STARPORT_SMOKE_BASE_URL="$api_base"
 export STARPORT_SMOKE_API_KEY="$api_key"
 
-python_status=0
-if command -v python3 >/dev/null 2>&1; then
-	python3 "$repository_root/scripts/smoke_openrouter_python.py" || python_status=$?
-	if [ "$python_status" -ne 0 ] && [ "$python_status" -ne 3 ]; then
-		exit "$python_status"
-	fi
-else
-	printf '%s\n' 'UNVERIFIED Python OpenRouter SDK: python3 is not installed'
-fi
+python_environment="$temporary_directory/python"
+python3 -m venv "$python_environment"
+"$python_environment/bin/python" -m pip install \
+	--disable-pip-version-check \
+	--quiet \
+	'openrouter==1.1.38'
+"$python_environment/bin/python" "$repository_root/scripts/smoke_openrouter_python.py"
 
-typescript_status=0
-if command -v node >/dev/null 2>&1; then
-	node "$repository_root/scripts/smoke_openrouter_typescript.mjs" || typescript_status=$?
-	if [ "$typescript_status" -ne 0 ] && [ "$typescript_status" -ne 3 ]; then
-		exit "$typescript_status"
-	fi
-else
-	printf '%s\n' 'UNVERIFIED TypeScript OpenRouter SDK: node is not installed'
-fi
+typescript_environment="$temporary_directory/typescript"
+mkdir -p "$typescript_environment"
+npm install \
+	--prefix "$typescript_environment" \
+	--ignore-scripts \
+	--no-audit \
+	--no-fund \
+	--silent \
+	'@openrouter/sdk@1.2.18'
+cp "$repository_root/scripts/smoke_openrouter_typescript.mjs" \
+	"$typescript_environment/smoke_openrouter_typescript.mjs"
+node "$typescript_environment/smoke_openrouter_typescript.mjs"
 
-printf '%s\n' 'UNVERIFIED Go OpenRouter SDK: package is not part of this module'
+(cd "$repository_root/scripts/smoke_openrouter_go" && GOWORK=off go run .)

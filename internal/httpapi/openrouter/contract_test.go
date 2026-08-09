@@ -54,7 +54,7 @@ func TestOpenRouterProtocolContract(t *testing.T) {
 		require.JSONEq(t, `{
 			"id":"chatcmpl-test","object":"chat.completion","created":1744329600,"model":"openai/gpt-4.1","provider":"openai",
 			"choices":[{"index":0,"message":{"role":"assistant","content":"done","reasoning":"checked"},"finish_reason":"stop"}],
-			"usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}
+			"usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6},"system_fingerprint":null
 		}`, string(encoded))
 
 		usage := inference.Usage{InputTokens: 4, OutputTokens: 2, TotalTokens: 6}
@@ -63,6 +63,7 @@ func TestOpenRouterProtocolContract(t *testing.T) {
 		}))
 		require.NoError(t, err)
 		require.Contains(t, string(usageOnly), `"choices":[]`)
+		require.Contains(t, string(usageOnly), `"system_fingerprint":null`)
 
 		errorChunk, err := json.Marshal(EncodeStreamError(inference.StreamEvent{ID: "chatcmpl-test", Model: "openai/gpt-4.1"}, 502, "Provider stream failed", map[string]any{"error_type": "provider_error"}))
 		require.NoError(t, err)

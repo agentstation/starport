@@ -86,6 +86,13 @@ else
 	fail 'release configuration does not cover the v1 platform matrix'
 fi
 
+if grep -Eq 'main\.buildTime=\{\{[[:space:]]*\.CommitDate[[:space:]]*\}\}' \
+	"$repository_root/.goreleaser.yaml"; then
+	pass 'release binaries use reproducible commit-time metadata'
+else
+	fail 'release binaries use per-run or missing build-time metadata'
+fi
+
 if [ -f "$repository_root/.github/workflows/release.yaml" ] &&
 	grep -q 'Verify draft release assets before publication' "$repository_root/.github/workflows/release.yaml" &&
 	grep -q 'attest-build-provenance' "$repository_root/.github/workflows/release.yaml" &&

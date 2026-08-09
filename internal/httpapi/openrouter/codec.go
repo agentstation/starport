@@ -260,7 +260,7 @@ type ChatResponse struct {
 	Provider          string   `json:"provider,omitempty"`
 	Choices           []Choice `json:"choices"`
 	Usage             Usage    `json:"usage"`
-	SystemFingerprint string   `json:"system_fingerprint,omitempty"`
+	SystemFingerprint *string  `json:"system_fingerprint"`
 }
 
 // Choice is one OpenRouter chat-completions result.
@@ -330,7 +330,7 @@ func EncodeChat(response inference.ChatResponse) ChatResponse {
 	return ChatResponse{
 		ID: response.ID, Object: "chat.completion", Created: response.CreatedUnix,
 		Model: model, Provider: providerFromModel(response.ModelUsed), Choices: choices,
-		Usage: encodeUsage(response.Usage), SystemFingerprint: response.SystemFingerprint,
+		Usage: encodeUsage(response.Usage), SystemFingerprint: nullableString(response.SystemFingerprint),
 	}
 }
 
@@ -371,7 +371,7 @@ type StreamChunk struct {
 	Provider          string         `json:"provider,omitempty"`
 	Choices           []StreamChoice `json:"choices"`
 	Usage             *Usage         `json:"usage,omitempty"`
-	SystemFingerprint string         `json:"system_fingerprint,omitempty"`
+	SystemFingerprint *string        `json:"system_fingerprint"`
 }
 
 // StreamChoice is one streamed OpenRouter choice.
@@ -396,7 +396,7 @@ func EncodeStream(event inference.StreamEvent) StreamChunk {
 	chunk := StreamChunk{
 		ID: event.ID, Object: "chat.completion.chunk", Created: event.CreatedUnix,
 		Model: model, Provider: providerFromModel(event.ModelUsed), Choices: make([]StreamChoice, 0, len(event.Deltas)),
-		SystemFingerprint: event.SystemFingerprint,
+		SystemFingerprint: nullableString(event.SystemFingerprint),
 	}
 	if event.Usage != nil {
 		usage := encodeUsage(*event.Usage)
@@ -725,6 +725,13 @@ func messageText(message inference.Message) string {
 		}
 	}
 	return builder.String()
+}
+
+func nullableString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func responseModel(model, modelUsed string) string {

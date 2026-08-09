@@ -1,0 +1,561 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to recover"
+        required: true
+        type: string
+      source_run_id:
+        description: "Failed Release run that owns the exact distribution"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CONTAINER_IMAGE: ghcr.io/agentstation/starport
+  GORELEASER_VERSION: v2.17.1
+  SYFT_VERSION: v1.50.0
+
+jobs:
+  test:
+    name: Release Gate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Require an application tag at the exact master head
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "release tag is not an application semantic version" >&2
+            exit 1
+          fi
+          git fetch origin master
+          TAG_SHA=$(git rev-list -n 1 "$GITHUB_REF_NAME")
+          test "$TAG_SHA" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$TAG_SHA" origin/master
+          test "$TAG_SHA" = "$(git rev-parse origin/master)"
+          test -z "$(git status --short)"
+
+      - name: Run Go lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          args: --timeout=5m
+
+      - name: Run repository release gates
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash scripts/verify-starmap-ownership.sh
+          bash scripts/verify-v1-architecture.sh
+          bash scripts/verify-v1-release.sh
+          bash scripts/verify-action-pins.sh
+          bash scripts/verify-release-workflow.sh
+          go test ./...
+          go vet ./...
+          make build
+          bash scripts/smoke-openrouter-sdks.sh
+
+      - name: Check GoReleaser configuration
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: ${{ env.GORELEASER_VERSION }}
+          args: check
+
+  release:
+    name: Assemble, Verify, and Publish
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
+
+      - name: Resolve immutable release metadata
+        id: metadata
+        shell: bash
+        run: |
+          RELEASE_VERSION=${GITHUB_REF_NAME#v}
+          test "$RELEASE_VERSION" = "$(git describe --tags --exact-match --match 'v*' | sed 's/^v//')"
+          BUILD_TIME=$(git show -s --format=%cI "$GITHUB_SHA")
+          {
+            echo "version=$RELEASE_VERSION"
+            echo "build-time=$BUILD_TIME"
+            echo "build-tag=$CONTAINER_IMAGE:sha-$GITHUB_SHA-run-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            echo "release-tags<<EOF"
+            echo "$CONTAINER_IMAGE:$RELEASE_VERSION"
+            echo "$CONTAINER_IMAGE:$GITHUB_REF_NAME"
+            if [[ "$RELEASE_VERSION" != *-* ]]; then
+              echo "$CONTAINER_IMAGE:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Assemble draft release archives
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: ${{ env.GORELEASER_VERSION }}
+          args: release --clean --parallelism 2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify portable archives before image publication
+        run: |
+          scripts/verify-release-binaries.sh dist "${{ steps.metadata.outputs.version }}"
+          scripts/verify-release-archives.sh dist "${{ steps.metadata.outputs.version }}"
+
+      - name: Build and push the release container
+        id: container
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.build-tag }}
+          build-args: |
+            VERSION=${{ steps.metadata.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.metadata.outputs.build-time }}
+          provenance: false
+          sbom: true
+
+      - name: Store container recovery identity
+        shell: bash
+        run: |
+          test "${{ steps.container.outputs.digest }}" != ""
+          printf '%s\n' "${{ steps.container.outputs.digest }}" > dist/container-digest.txt
+
+      - name: Attest released archives and SBOMs
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+
+      - name: Attest the checksum manifest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/checksums.txt
+
+      - name: Attest the release container
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.CONTAINER_IMAGE }}
+          subject-digest: ${{ steps.container.outputs.digest }}
+          push-to-registry: true
+
+      - name: Verify draft release assets before publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+          CONTAINER_DIGEST: ${{ steps.container.outputs.digest }}
+        shell: bash
+        run: |
+          RELEASE_JSON=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME")
+          test "$(jq -r .draft <<<"$RELEASE_JSON")" = true
+          test "$(jq -r .immutable <<<"$RELEASE_JSON")" = false
+          test "$(jq -r .tag_name <<<"$RELEASE_JSON")" = "$GITHUB_REF_NAME"
+          EXPECTED_ASSETS=${RUNNER_TEMP}/expected-assets.txt
+          ACTUAL_ASSETS=${RUNNER_TEMP}/actual-assets.txt
+          {
+            awk '{print $2}' dist/checksums.txt
+            printf '%s\n' checksums.txt
+          } | LC_ALL=C sort > "$EXPECTED_ASSETS"
+          jq -r '.assets[].name' <<<"$RELEASE_JSON" | LC_ALL=C sort > "$ACTUAL_ASSETS"
+          diff -u "$EXPECTED_ASSETS" "$ACTUAL_ASSETS"
+
+          DOWNLOAD_DIRECTORY=$(mktemp -d "${RUNNER_TEMP}/starport-draft.XXXXXX")
+          gh release download "$GITHUB_REF_NAME" --dir "$DOWNLOAD_DIRECTORY"
+          cmp dist/checksums.txt "$DOWNLOAD_DIRECTORY/checksums.txt"
+          (
+            cd "$DOWNLOAD_DIRECTORY"
+            sha256sum --check checksums.txt
+          )
+          while read -r _ asset; do
+            gh attestation verify \
+              "$DOWNLOAD_DIRECTORY/$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+              --source-digest "$GITHUB_SHA" \
+              --deny-self-hosted-runners
+          done < "$DOWNLOAD_DIRECTORY/checksums.txt"
+          gh attestation verify \
+            "$DOWNLOAD_DIRECTORY/checksums.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+          scripts/verify-release-container.sh \
+            "$CONTAINER_IMAGE" "$RELEASE_VERSION" "$CONTAINER_DIGEST" digest-only
+          gh attestation verify \
+            "oci://$CONTAINER_IMAGE@$CONTAINER_DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+
+      - name: Publish verified immutable release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            gh release edit "$GITHUB_REF_NAME" --draft=false --latest=false
+          else
+            gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          fi
+          for _ in {1..15}; do
+            if [[ "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .immutable)" == true ]]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "release did not become immutable after publication" >&2
+          exit 1
+
+      - name: Promote verified container tags
+        env:
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+          CONTAINER_DIGEST: ${{ steps.container.outputs.digest }}
+          RELEASE_TAGS: ${{ steps.metadata.outputs.release-tags }}
+        shell: bash
+        run: |
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              docker buildx imagetools create \
+                --tag "$tag" "$CONTAINER_IMAGE@$CONTAINER_DIGEST"
+            fi
+          done <<< "$RELEASE_TAGS"
+          scripts/verify-release-container.sh \
+            "$CONTAINER_IMAGE" "$RELEASE_VERSION" "$CONTAINER_DIGEST"
+
+      - name: Verify published release and publisher identity
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+          CONTAINER_DIGEST: ${{ steps.container.outputs.digest }}
+        shell: bash
+        run: |
+          DOWNLOAD_DIRECTORY=$(mktemp -d "${RUNNER_TEMP}/starport-published.XXXXXX")
+          gh release download "$GITHUB_REF_NAME" --dir "$DOWNLOAD_DIRECTORY"
+          cmp dist/checksums.txt "$DOWNLOAD_DIRECTORY/checksums.txt"
+          (
+            cd "$DOWNLOAD_DIRECTORY"
+            sha256sum --check checksums.txt
+          )
+          while read -r _ asset; do
+            gh attestation verify \
+              "$DOWNLOAD_DIRECTORY/$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+              --source-digest "$GITHUB_SHA" \
+              --deny-self-hosted-runners
+          done < "$DOWNLOAD_DIRECTORY/checksums.txt"
+          gh attestation verify \
+            "$DOWNLOAD_DIRECTORY/checksums.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+          scripts/verify-release-container.sh \
+            "$CONTAINER_IMAGE" "$RELEASE_VERSION" "$CONTAINER_DIGEST"
+          gh attestation verify \
+            "oci://$CONTAINER_IMAGE@$CONTAINER_DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+            --source-digest "$GITHUB_SHA" \
+            --deny-self-hosted-runners
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .immutable)" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .draft)" = false
+
+      - name: Upload recovery distribution on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-dist
+          path: dist/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  recover:
+    name: Recover Verified Draft
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+    steps:
+      - name: Checkout immutable release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate recovery source and release identity
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "release tag is not an application semantic version" >&2
+            exit 1
+          fi
+          if [[ ! "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "source run ID is not numeric" >&2
+            exit 1
+          fi
+          TAG_SHA=$(git rev-list -n 1 "$RELEASE_TAG")
+          git fetch origin master
+          git merge-base --is-ancestor "$TAG_SHA" origin/master
+          test "$TAG_SHA" = "$(git rev-parse origin/master)"
+          SOURCE_RUN=$(gh run view "$SOURCE_RUN_ID" --json conclusion,event,headSha,workflowName)
+          test "$(jq -r .workflowName <<<"$SOURCE_RUN")" = Release
+          test "$(jq -r .event <<<"$SOURCE_RUN")" = push
+          test "$(jq -r .conclusion <<<"$SOURCE_RUN")" = failure
+          test "$(jq -r .headSha <<<"$SOURCE_RUN")" = "$TAG_SHA"
+
+          RELEASES=$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+              jq -s --arg tag "$RELEASE_TAG" '[.[][] | select(.tag_name == $tag)]'
+          )
+          test "$(jq length <<<"$RELEASES")" = 1
+          RELEASE_DRAFT=$(jq -r '.[0].draft' <<<"$RELEASES")
+          RELEASE_IMMUTABLE=$(jq -r '.[0].immutable' <<<"$RELEASES")
+          if [[ "$RELEASE_DRAFT" == true ]]; then
+            test "$RELEASE_IMMUTABLE" = false
+            PUBLISH_RELEASE=true
+          else
+            test "$RELEASE_DRAFT" = false
+            test "$RELEASE_IMMUTABLE" = true
+            PUBLISH_RELEASE=false
+          fi
+          {
+            echo "RELEASE_ID=$(jq -r '.[0].id' <<<"$RELEASES")"
+            echo "PUBLISH_RELEASE=$PUBLISH_RELEASE"
+            echo "RELEASE_VERSION=${RELEASE_TAG#v}"
+            echo "TAG_SHA=$TAG_SHA"
+          } >> "$GITHUB_ENV"
+
+      - name: Download exact failed-run distribution
+        run: |
+          mkdir dist
+          gh run download "$SOURCE_RUN_ID" --name release-dist --dir dist
+          find dist -type f -name starport -exec chmod u+x {} +
+          test "$(jq -r .tag dist/metadata.json)" = "$RELEASE_TAG"
+          test "$(jq -r .version dist/metadata.json)" = "$RELEASE_VERSION"
+          test "$(jq -r .commit dist/metadata.json)" = "$TAG_SHA"
+          CONTAINER_DIGEST=$(tr -d '[:space:]' < dist/container-digest.txt)
+          if [[ ! "$CONTAINER_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "recovered container digest is invalid" >&2
+            exit 1
+          fi
+          echo "CONTAINER_DIGEST=$CONTAINER_DIGEST" >> "$GITHUB_ENV"
+
+      - name: Verify recovered distribution and container
+        run: |
+          scripts/verify-release-binaries.sh dist "$RELEASE_VERSION"
+          scripts/verify-release-archives.sh dist "$RELEASE_VERSION"
+          scripts/verify-release-container.sh \
+            "$CONTAINER_IMAGE" "$RELEASE_VERSION" "$CONTAINER_DIGEST" digest-only
+
+      - name: Restore exact draft assets
+        if: env.PUBLISH_RELEASE == 'true'
+        shell: bash
+        run: |
+          mapfile -t ASSETS < <(awk '{print "dist/" $2}' dist/checksums.txt)
+          ASSETS+=(dist/checksums.txt)
+          gh release upload "$RELEASE_TAG" "${ASSETS[@]}" --clobber
+
+      - name: Attest recovered archives and SBOMs
+        if: env.PUBLISH_RELEASE == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+
+      - name: Attest recovered checksum manifest
+        if: env.PUBLISH_RELEASE == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/checksums.txt
+
+      - name: Attest recovered container
+        if: env.PUBLISH_RELEASE == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.CONTAINER_IMAGE }}
+          subject-digest: ${{ env.CONTAINER_DIGEST }}
+          push-to-registry: true
+
+      - name: Verify exact recovered assets and provenance
+        shell: bash
+        run: |
+          EXPECTED_ASSETS=${RUNNER_TEMP}/expected-assets.txt
+          ACTUAL_ASSETS=${RUNNER_TEMP}/actual-assets.txt
+          {
+            awk '{print $2}' dist/checksums.txt
+            printf '%s\n' checksums.txt
+          } | LC_ALL=C sort > "$EXPECTED_ASSETS"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            --jq '.assets[].name' | LC_ALL=C sort > "$ACTUAL_ASSETS"
+          diff -u "$EXPECTED_ASSETS" "$ACTUAL_ASSETS"
+
+          DOWNLOAD_DIRECTORY=$(mktemp -d "${RUNNER_TEMP}/starport-recovery.XXXXXX")
+          gh release download "$RELEASE_TAG" --dir "$DOWNLOAD_DIRECTORY"
+          cmp dist/checksums.txt "$DOWNLOAD_DIRECTORY/checksums.txt"
+          (
+            cd "$DOWNLOAD_DIRECTORY"
+            sha256sum --check checksums.txt
+          )
+          while read -r _ asset; do
+            gh attestation verify \
+              "$DOWNLOAD_DIRECTORY/$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+              --source-digest "$TAG_SHA" \
+              --deny-self-hosted-runners
+          done < "$DOWNLOAD_DIRECTORY/checksums.txt"
+          gh attestation verify \
+            "$DOWNLOAD_DIRECTORY/checksums.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+            --source-digest "$TAG_SHA" \
+            --deny-self-hosted-runners
+          gh attestation verify \
+            "oci://$CONTAINER_IMAGE@$CONTAINER_DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yaml" \
+            --source-digest "$TAG_SHA" \
+            --deny-self-hosted-runners
+
+      - name: Publish verified immutable release
+        if: env.PUBLISH_RELEASE == 'true'
+        shell: bash
+        run: |
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --latest=false
+          else
+            gh release edit "$RELEASE_TAG" --draft=false --latest
+          fi
+          for _ in {1..15}; do
+            if [[ "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .immutable)" == true ]]; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "release did not become immutable after recovery" >&2
+          exit 1
+
+      - name: Promote verified recovered container tags
+        shell: bash
+        run: |
+          TAGS=("$RELEASE_VERSION" "$RELEASE_TAG")
+          if [[ "$RELEASE_VERSION" != *-* ]]; then
+            TAGS+=(latest)
+          fi
+          for tag in "${TAGS[@]}"; do
+            docker buildx imagetools create \
+              --tag "$CONTAINER_IMAGE:$tag" "$CONTAINER_IMAGE@$CONTAINER_DIGEST"
+          done
+          scripts/verify-release-container.sh \
+            "$CONTAINER_IMAGE" "$RELEASE_VERSION" "$CONTAINER_DIGEST"
+
+      - name: Verify recovered immutable release
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .draft)" = false
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .immutable)" = true
+          scripts/verify-release-container.sh \
+            "$CONTAINER_IMAGE" "$RELEASE_VERSION" "$CONTAINER_DIGEST"
+
+      - name: Upload recovery diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-recovery-dist
+          path: dist/
+          if-no-files-found: ignore
+          retention-days: 7
