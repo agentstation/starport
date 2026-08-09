@@ -1,5 +1,5 @@
 package app
 
-func withBootstrapFactories(factories bootstrapFactories) Option {
+func withRuntimeFactories(factories runtimeFactories) Option {
 	return func(options *buildOptions) { options.factories = factories }
 }

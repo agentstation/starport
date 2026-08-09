@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,9 @@ import (
 	"github.com/agentstation/starport/internal/app"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/setup"
+	"github.com/agentstation/starport/internal/storage"
 )
 
 // Build-time variables injected through linker flags.
@@ -26,7 +30,7 @@ var (
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runContext(ctx, args, stdin, stdout, stderr, runServer)
+	return runContext(ctx, args, stdin, stdout, stderr, runServer, runInitializer)
 }
 
 func runContext(
@@ -36,16 +40,109 @@ func runContext(
 	stdout io.Writer,
 	stderr io.Writer,
 	server starportcli.ServerRunner,
+	initializer starportcli.Initializer,
 ) int {
 	err := starportcli.Run(ctx, args, starportcli.Dependencies{
 		Stdin: stdin, Stdout: stdout, Stderr: stderr,
-		Build: buildInformation(), RunServer: server,
+		Build: buildInformation(), RunServer: server, Initialize: initializer,
 	})
 	if err == nil {
 		return 0
 	}
 	_, _ = fmt.Fprintln(stderr, err)
 	return starportcli.ExitCode(err)
+}
+
+func runInitializer(ctx context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {
+	if options.ConfiguredStorage {
+		return initializeConfiguredStorage(ctx, options)
+	}
+	paths, err := config.PlatformPaths()
+	if err != nil {
+		return starportcli.InitResult{}, fmt.Errorf("resolve setup paths: %w", err)
+	}
+	service := setup.New(paths)
+	result, err := service.Initialize(ctx, setup.Request{
+		Provider:           options.Provider,
+		ProviderCredential: os.Getenv(setup.OpenAIProviderCredentialEnvironment),
+		IdentityName:       options.IdentityName,
+	})
+	initialized := starportcli.InitResult{
+		Provider: result.Provider, IdentityName: result.IdentityName,
+		ConfigFile: result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
+		Rollback: func(rollbackCtx context.Context) error {
+			return service.Rollback(rollbackCtx, result)
+		},
+	}
+	if result.APIKey == "" {
+		initialized = starportcli.InitResult{}
+	}
+	return initialized, err
+}
+
+func initializeConfiguredStorage(
+	ctx context.Context,
+	options starportcli.InitOptions,
+) (starportcli.InitResult, error) {
+	cfg, err := config.LoadWithDefaults(ctx)
+	if err != nil {
+		return starportcli.InitResult{}, fmt.Errorf("load configured storage: %w", err)
+	}
+	storageConfig := cfg.Storage.RuntimeStorage()
+	if storageConfig.Type == storage.StorageTypeBadger {
+		storageConfig.Badger.SyncWrites = true
+	}
+	store, err := storage.Open(storageConfig)
+	if err != nil {
+		return starportcli.InitResult{}, fmt.Errorf("open configured storage: %w", err)
+	}
+	issued, issueErr := setup.InitializeIdentity(ctx, store, options.IdentityName)
+	closeErr := store.Close()
+	result := configuredInitResult(storageConfig, options.IdentityName, issued)
+	if issueErr != nil {
+		return result, errors.Join(issueErr, closeErr)
+	}
+	if closeErr != nil {
+		return result, fmt.Errorf("close configured storage: %w", closeErr)
+	}
+	return result, nil
+}
+
+func configuredInitResult(
+	storageConfig storage.Config,
+	identityName string,
+	issued identity.IssueResult,
+) starportcli.InitResult {
+	if issued.Secret == "" {
+		return starportcli.InitResult{}
+	}
+	return starportcli.InitResult{
+		IdentityName: identityName,
+		APIKey:       issued.Secret,
+		Rollback: func(rollbackCtx context.Context) error {
+			return rollbackConfiguredIdentity(rollbackCtx, storageConfig, issued.APIKey.ID)
+		},
+	}
+}
+
+func rollbackConfiguredIdentity(
+	ctx context.Context,
+	storageConfig storage.Config,
+	identityID string,
+) error {
+	store, err := storage.Open(storageConfig)
+	if err != nil {
+		return fmt.Errorf("open configured storage for rollback: %w", err)
+	}
+	releaseErr := setup.ReleaseIdentity(ctx, store, identityID)
+	closeErr := store.Close()
+	if releaseErr != nil {
+		return errors.Join(releaseErr, closeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close configured storage after rollback: %w", closeErr)
+	}
+	return nil
 }
 
 func runServer(ctx context.Context, options starportcli.ServeOptions) error {

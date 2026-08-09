@@ -220,9 +220,6 @@ func (c *SecurityConfig) Validate() error {
 	if c.MasterKey != "" && len(c.MasterKey) < 32 {
 		return fmt.Errorf("master key must be at least 32 bytes")
 	}
-	if c.BootstrapAPIKey != "" && len(c.BootstrapAPIKey) < 32 {
-		return fmt.Errorf("bootstrap API key must be at least 32 characters")
-	}
 	if c.EnableTLS {
 		if c.TLSCertPath == "" {
 			return fmt.Errorf("TLS cert path required when TLS is enabled")

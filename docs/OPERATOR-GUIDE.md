@@ -1,6 +1,6 @@
 # Starport v1 Operator Guide
 
-Last updated: 2026-08-03
+Last updated: 2026-08-09
 
 This guide covers a single Starport process and a Valkey-backed multi-node
 deployment. Starport starts only when storage, Starmap, provider credentials,
@@ -10,43 +10,54 @@ and the initial gateway identity are usable.
 
 - Go 1.26.5 for a source build.
 - One configured inference provider.
-- A provider-credential master key with at least 32 random characters.
-- A different bootstrap API key with at least 32 random characters for empty
-  identity storage.
 - A writable Badger path, or a reachable Valkey service.
 
-Do not reuse the provider master key as a gateway API key. Starport stores the
-gateway key as a SHA-256 hash. It uses the master key to encrypt provider
-credentials.
+Local initialization generates the provider-credential master key. A
+production deployment must supply a master key with at least 32 bytes through
+its environment or secret manager. Do not reuse that value as a gateway API
+key. Starport stores only the SHA-256 hash of each gateway key.
 
 ## First Start
 
-Copy the example configuration and set the required secrets:
-
-```bash
-cp .env.example .env
-```
-
-At minimum, set these values in the environment or `.env`:
-
-```text
-STARPORT_SECURITY_MASTER_KEY=<random secret with at least 32 characters>
-STARPORT_SECURITY_BOOTSTRAP_API_KEY=<different random key with at least 32 characters>
-STARPORT_PROVIDERS_OPENAI_API_KEY=<provider inference key>
-```
-
-Any supported provider can replace OpenAI. Starport reads `local.env` before
-`.env`. Existing process environment values have the highest priority.
-
-Build and start the gateway:
+Build Starport:
 
 ```bash
 make build
+```
+
+For OpenAI, supply the provider inference key and run local initialization:
+
+```bash
+export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
+./starport init --provider openai
+```
+
+For Ollama, use this command instead:
+
+```bash
+./starport init --provider ollama
+```
+
+This command creates Starport state but does not invent catalog facts. Add
+each installed Ollama model to a reviewed Starmap workspace. Then set
+`STARPORT_CATALOG_WORKSPACE_PATH` before you start Starport.
+
+Initialization writes the platform `config.env` file with mode `0600`. It
+also creates one named identity in the platform Badger directory. The command
+prints the new gateway API key once. Save it in a password manager or secret
+manager. The command refuses to replace existing configuration or identity
+storage. If it cannot write the gateway key, it removes the new state so that
+you can retry.
+
+Start the gateway:
+
+```bash
 ./starport serve
 ```
 
-The default listener is `http://0.0.0.0:8080`. The default Badger data path is
-`./data/starport`.
+The default listener is `http://127.0.0.1:8080`. The configuration package
+selects the platform configuration directory. The Badger path is
+`data/badger` under that directory.
 
 Check process health:
 
@@ -55,26 +66,27 @@ curl --fail http://localhost:8080/health/live
 curl --fail http://localhost:8080/health/ready
 ```
 
-## Bootstrap and Rotate the Admin Key
+## Initialize Configured Storage
 
-The bootstrap key has wildcard scope. Use it only to create the first named
-administrator key:
+Production keeps configuration in environment variables or a secret manager.
+Set the storage, master-key, and provider values before the first start. Then
+create the first named identity directly:
 
 ```bash
-curl --fail-with-body \
-  -H "Authorization: Bearer $STARPORT_SECURITY_BOOTSTRAP_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"primary_admin","scopes":["*"]}' \
-  http://localhost:8080/api/v1/admin/keys/
+starport init --configured-storage --name primary-admin
 ```
 
-The response shows the new key once. Save it in a secret manager. Stop the
-process, remove `STARPORT_SECURITY_BOOTSTRAP_API_KEY`, and start Starport
-again. Startup succeeds because identity storage is no longer empty.
+This form does not write a local configuration file. It opens the configured
+Badger or Valkey service and refuses any identity repository that already
+contains an identity. It prints the new gateway API key once. Save the key in
+a secret manager before you start the gateway.
 
-If storage is empty and the bootstrap value is absent, startup fails. If the
-same bootstrap value remains configured, startup is idempotent and does not
-create duplicate identities.
+If credential output fails, the command atomically releases the initial
+identity and its setup claim. You can then run the command again.
+
+Always check the command exit status. If a remote write has an uncertain
+result, the command prints the candidate key before it reports the storage
+error. Keep that key while you inspect the repository state.
 
 ## Client Base URLs
 
@@ -139,7 +151,7 @@ Badger is the default for one process:
 
 ```text
 STARPORT_STORAGE_MODE=badger
-STARPORT_STORAGE_BADGER_PATH=./data/starport
+STARPORT_STORAGE_BADGER_PATH=/absolute/path/to/starport/data/badger
 ```
 
 Stop Starport before copying a Badger directory for backup or restore. Keep
@@ -157,18 +169,19 @@ backup, access-control, and failover procedures.
 
 ## Container Start
 
-The Compose file starts Starport with Valkey and requires three environment
-values:
+The Compose file starts Starport with Valkey and requires two environment
+values. Initialize the shared identity repository before you start Starport:
 
 ```bash
 export STARPORT_SECURITY_MASTER_KEY=<master-secret>
-export STARPORT_SECURITY_BOOTSTRAP_API_KEY=<bootstrap-key>
 export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
-docker compose up --build
+docker compose up --build -d valkey
+docker compose run --rm starport init --configured-storage --name primary-admin
+docker compose up -d starport
 ```
 
-For an existing identity store, remove the bootstrap requirement from your
-deployment manifest after the first administrator key is safe.
+Save the gateway key from the initialization output. Do not run the
+initialization command again for the same Valkey data set.
 
 ## Limits and Shutdown
 
@@ -187,8 +200,8 @@ construction order.
 
 - `provider credential master key is required`: set
   `STARPORT_SECURITY_MASTER_KEY`.
-- `bootstrap API key is required when identity storage is empty`: set the
-  bootstrap key for the first start.
+- `gateway identity is required; run "starport init"`: create the first named
+  identity in local or configured storage.
 - `at least one production provider is required`: configure one provider or
   enable Ollama.
 - HTTP 401: the bearer value does not match an active stored identity.
@@ -199,7 +212,7 @@ construction order.
   treating that client as tested.
 
 Starport emits structured JSON logs by default. Each request includes a
-request ID. Do not log raw gateway keys, provider keys, or bootstrap values.
+request ID. Do not log raw gateway keys, provider keys, or master keys.
 
 Starport trusts only the direct TCP peer for client-IP logs. It ignores
 `X-Forwarded-For` and `X-Real-IP`. A future trusted-proxy configuration must

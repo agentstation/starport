@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestIdentityRepositoryContract(t *testing.T) {
 
 		keys, err := store.ScanWithPrefix(ctx, StoragePrefix, 0)
 		require.NoError(t, err)
-		require.Len(t, keys, 2)
+		require.Len(t, keys, 3)
 		primaryData, err := store.Get(ctx, identityStorageKey(apiKey.ID))
 		require.NoError(t, err)
 		var schema map[string]any
@@ -80,6 +81,17 @@ func TestIdentityRepositoryContract(t *testing.T) {
 		require.ErrorIs(t, err, ErrNotFound)
 		_, err = repository.GetByHash(ctx, apiKey.Hash)
 		require.ErrorIs(t, err, ErrNotFound)
+
+		initial := apiKey
+		initial.ID = "initial-" + suffix
+		initial.Name = "initial-key"
+		initial.Hash = "initial-hash-" + suffix
+		initial.Active = true
+		_, err = repository.CreateInitial(ctx, initial)
+		require.NoError(t, err)
+		require.NoError(t, repository.ReleaseInitial(ctx, initial.ID))
+		_, err = repository.CreateInitial(ctx, initial)
+		require.NoError(t, err)
 
 		corruptID := "corrupt-" + suffix
 		require.NoError(t, store.Set(ctx, identityStorageKey(corruptID), []byte(`{"schema_version":2}`)))
@@ -125,4 +137,150 @@ func TestIdentityDeleteToleratesMissingHashIndex(t *testing.T) {
 	require.NoError(t, repository.Delete(ctx, apiKey.ID, created.Revision))
 	_, err = repository.GetByID(ctx, apiKey.ID)
 	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.ErrorIs(t, err, ErrConflict)
+	records, err := repository.List(context.Background(), 10)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, first.ID, records[0].APIKey.ID)
+}
+
+func TestConcurrentCreatesRetryCollectionContention(t *testing.T) {
+	store := &collectionReadBarrierStore{
+		KVStore: storage.NewMockStore(),
+		ready:   make(chan struct{}, 2),
+		release: make(chan struct{}),
+	}
+	repository, err := Open(store)
+	require.NoError(t, err)
+	results := make(chan error, 2)
+	for index := range 2 {
+		index := index
+		go func() {
+			apiKey := APIKey{
+				ID:     "identity-" + string(rune('A'+index)),
+				Name:   "identity-" + string(rune('A'+index)),
+				Hash:   "hash-" + string(rune('A'+index)),
+				Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
+			}
+			_, createErr := repository.Create(context.Background(), apiKey)
+			results <- createErr
+		}()
+	}
+	<-store.ready
+	<-store.ready
+	close(store.release)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("concurrent create error = %v", err)
+		}
+	}
+	records, err := repository.List(context.Background(), 2)
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+}
+
+func TestCreateInitialRefusesNonemptyCollection(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.Create(context.Background(), first)
+	require.NoError(t, err)
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.ErrorIs(t, err, ErrConflict)
+}
+
+func TestCreateInitialReclaimsMissingInitialIdentity(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	created, err := repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+	require.NoError(t, repository.Delete(context.Background(), first.ID, created.Revision))
+
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.NoError(t, err)
+}
+
+func TestReleaseInitialAllowsSafeRetry(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+	require.NoError(t, repository.ReleaseInitial(context.Background(), first.ID))
+	_, err = repository.GetByID(context.Background(), first.ID)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = repository.GetByHash(context.Background(), first.Hash)
+	require.ErrorIs(t, err, ErrNotFound)
+
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.NoError(t, err)
+}
+
+func TestReleaseInitialRefusesAnotherIdentity(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+	require.ErrorIs(t, repository.ReleaseInitial(context.Background(), "other"), ErrConflict)
+	_, err = repository.GetByID(context.Background(), first.ID)
+	require.NoError(t, err)
+}
+
+type collectionReadBarrierStore struct {
+	storage.KVStore
+	ready   chan struct{}
+	release chan struct{}
+	reads   atomic.Int32
+}
+
+func (store *collectionReadBarrierStore) Get(ctx context.Context, key string) ([]byte, error) {
+	value, err := store.KVStore.Get(ctx, key)
+	if key == collectionKey && store.reads.Add(1) <= 2 {
+		store.ready <- struct{}{}
+		<-store.release
+	}
+	return value, err
 }

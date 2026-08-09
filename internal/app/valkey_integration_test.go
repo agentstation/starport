@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/identity"
 )
 
 func TestAppWithValkey(t *testing.T) {
@@ -23,10 +26,20 @@ func TestAppWithValkey(t *testing.T) {
 	cfg.Storage.Valkey.ReadTimeout = time.Second
 	cfg.Storage.Valkey.WriteTimeout = time.Second
 	cfg.Cache.Enabled = true
+	store, err := openStorage(cfg.Storage)
+	require.NoError(t, err)
+	identities, err := identity.Open(store)
+	require.NoError(t, err)
+	_, err = identities.Create(context.Background(), testIdentity())
+	if err != nil && !errors.Is(err, identity.ErrConflict) {
+		t.Fatalf("seed Valkey identity: %v", err)
+	}
+	require.NoError(t, store.Close())
+
 	factories := explicitTestFactories()
 	factories.openStorage = openStorage
 
-	application, err := New(cfg, withBootstrapFactories(factories))
+	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
 	require.NotNil(t, application.cacheManager)
 	require.NoError(t, application.store.Set(context.Background(), "app:test", []byte("value")))
@@ -39,7 +52,7 @@ func TestAppWithValkey(t *testing.T) {
 func TestStorageModeValidation(t *testing.T) {
 	cfg := validProductionConfig(t)
 	cfg.Storage.Mode = "invalid"
-	application, err := New(cfg, withBootstrapFactories(explicitTestFactories()))
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
 	require.Error(t, err)
 	require.Nil(t, application)
 }

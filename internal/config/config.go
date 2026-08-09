@@ -146,7 +146,6 @@ type RateLimitingConfig struct {
 // SecurityConfig defines security settings
 type SecurityConfig struct {
 	MasterKey          string `env:"MASTER_KEY"`
-	BootstrapAPIKey    string `env:"BOOTSTRAP_API_KEY"`
 	TLSCertPath        string `env:"TLS_CERT_PATH"`
 	TLSKeyPath         string `env:"TLS_KEY_PATH"`
 	EnableTLS          bool   `env:"ENABLE_TLS,default=false"`
