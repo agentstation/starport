@@ -55,18 +55,18 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Require an application tag at the exact master head
+      - name: Require an application tag at the exact main head
         shell: bash
         run: |
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
             echo "release tag is not an application semantic version" >&2
             exit 1
           fi
-          git fetch origin master
+          git fetch origin main
           TAG_SHA=$(git rev-list -n 1 "$GITHUB_REF_NAME")
           test "$TAG_SHA" = "$GITHUB_SHA"
-          git merge-base --is-ancestor "$TAG_SHA" origin/master
-          test "$TAG_SHA" = "$(git rev-parse origin/master)"
+          git merge-base --is-ancestor "$TAG_SHA" origin/main
+          test "$TAG_SHA" = "$(git rev-parse origin/main)"
           test -z "$(git status --short)"
 
       - name: Resolve verified published Starmap source
@@ -402,9 +402,9 @@ jobs:
             exit 1
           fi
           TAG_SHA=$(git rev-list -n 1 "$RELEASE_TAG")
-          git fetch origin master
-          git merge-base --is-ancestor "$TAG_SHA" origin/master
-          test "$TAG_SHA" = "$(git rev-parse origin/master)"
+          git fetch origin main
+          git merge-base --is-ancestor "$TAG_SHA" origin/main
+          test "$TAG_SHA" = "$(git rev-parse origin/main)"
           SOURCE_RUN=$(gh run view "$SOURCE_RUN_ID" --json conclusion,event,headSha,workflowName)
           test "$(jq -r .workflowName <<<"$SOURCE_RUN")" = Release
           test "$(jq -r .event <<<"$SOURCE_RUN")" = push

@@ -129,9 +129,9 @@ make test-integration
 ### 1. Create a Feature Branch
 
 ```bash
-# Update your local master
-git checkout master
-git pull upstream master
+# Update your local main branch
+git checkout main
+git pull upstream main
 
 # Create a feature branch
 git checkout -b feature/your-feature-name
@@ -335,7 +335,7 @@ Closes #123"
 1. **Update from upstream**:
    ```bash
    git fetch upstream
-   git rebase upstream/master
+   git rebase upstream/main
    ```
 
 2. **Run all tests and linters**:
