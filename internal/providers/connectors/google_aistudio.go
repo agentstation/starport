@@ -64,10 +64,10 @@ func (c *GoogleAIStudioConnector) Embeddings(ctx context.Context, req *Embedding
 		return nil, err
 	}
 
-	result := &EmbeddingsResponse{Object: "list", Model: req.Model}
+	result := &EmbeddingsResponse{Object: objectList, Model: req.Model}
 	for index, input := range inputs {
 		payload := map[string]any{
-			"content": map[string]any{"parts": []map[string]string{{"text": input}}},
+			"content": map[string]any{"parts": []map[string]string{{contentTypeText: input}}},
 		}
 		if req.Dimensions != nil {
 			payload["outputDimensionality"] = *req.Dimensions
@@ -101,7 +101,7 @@ func (c *GoogleAIStudioConnector) Embeddings(ctx context.Context, req *Embedding
 			return nil, fmt.Errorf("decode Google embedding response: %w", decodeErr)
 		}
 		result.Data = append(result.Data, Embedding{
-			Object: "embedding", Index: index, Embedding: providerResponse.Embedding.Values,
+			Object: objectEmbedding, Index: index, Embedding: providerResponse.Embedding.Values,
 		})
 	}
 	return result, nil

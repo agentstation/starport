@@ -16,6 +16,7 @@ import (
 const (
 	catalogCurrentGenerationKey = "catalog_generation:v1:current"
 	catalogGenerationKeyPrefix  = "catalog_generation:v1:generation:"
+	catalogGenerationResource   = "catalog generation"
 )
 
 // GenerationStore adapts Starport's configured KV store to Starmap's durable
@@ -38,7 +39,7 @@ func (s *GenerationStore) Current(ctx context.Context) (catalogstore.Generation,
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
 			return catalogstore.Generation{}, &starmaperrors.NotFoundError{
-				Resource: "catalog generation", ID: "current",
+				Resource: catalogGenerationResource, ID: "current",
 			}
 		}
 		return catalogstore.Generation{}, fmt.Errorf("read current catalog generation: %w", err)
@@ -52,7 +53,7 @@ func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalog
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
 			return catalogstore.Generation{}, &starmaperrors.NotFoundError{
-				Resource: "catalog generation", ID: generationID,
+				Resource: catalogGenerationResource, ID: generationID,
 			}
 		}
 		return catalogstore.Generation{}, fmt.Errorf("read catalog generation %q: %w", generationID, err)
@@ -98,7 +99,7 @@ func (s *GenerationStore) Commit(
 		}
 		if !bytes.Equal(existing, encoded) {
 			return &starmaperrors.ConflictError{
-				Resource: "catalog generation",
+				Resource: catalogGenerationResource,
 				Expected: generation.Manifest.GenerationID,
 				Actual:   generation.Manifest.GenerationID,
 				Message:  "generation ID is already bound to different content",

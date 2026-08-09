@@ -130,7 +130,7 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 		case RoleUser:
 			role = RoleUser
 		case RoleAssistant:
-			role = "model"
+			role = wireModelToken
 		case RoleSystem:
 			// Gemini doesn't have system role, prepend to first user message
 			continue
@@ -141,7 +141,7 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 		content := map[string]any{
 			"role": role,
 			"parts": []map[string]any{
-				{"text": msg.Content.(string)},
+				{contentTypeText: msg.Content.(string)},
 			},
 		}
 		contents = append(contents, content)
@@ -149,11 +149,11 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 
 	// Handle system message by prepending to first user message
 	for i, msg := range req.Messages {
-		if msg.Role == "system" && i+1 < len(req.Messages) {
+		if msg.Role == RoleSystem && i+1 < len(req.Messages) {
 			systemText := msg.Content.(string)
-			if len(contents) > 0 && contents[0]["role"] == "user" {
+			if len(contents) > 0 && contents[0]["role"] == RoleUser {
 				parts := contents[0]["parts"].([]map[string]any)
-				parts[0]["text"] = systemText + "\n\n" + parts[0]["text"].(string)
+				parts[0][contentTypeText] = systemText + "\n\n" + parts[0][contentTypeText].(string)
 			}
 			break
 		}
@@ -166,7 +166,7 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 	// Generation config
 	genConfig := make(map[string]any)
 	if req.Temperature != nil {
-		genConfig["temperature"] = *req.Temperature
+		genConfig[wireFieldTemperature] = *req.Temperature
 	}
 	if req.TopP != nil {
 		genConfig["topP"] = *req.TopP
@@ -222,7 +222,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 	if len(resp.Candidates) == 0 {
 		return &ChatResponse{
 			ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
-			Object:  "chat.completion",
+			Object:  objectChatCompletion,
 			Created: time.Now().Unix(),
 			Model:   req.Model,
 			Choices: []Choice{},
@@ -257,7 +257,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 	}
 
 	message := Message{
-		Role:    "assistant",
+		Role:    RoleAssistant,
 		Content: content,
 	}
 
@@ -268,7 +268,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 
 	return &ChatResponse{
 		ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
-		Object:  "chat.completion",
+		Object:  objectChatCompletion,
 		Created: time.Now().Unix(),
 		Model:   req.Model,
 		Choices: []Choice{
@@ -342,7 +342,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 		if err != nil && err != io.EOF {
 			return nil, &StreamError{
 				Err:    err,
-				Reason: "failed to read stream",
+				Reason: streamReadFailureReason,
 			}
 		}
 
@@ -409,7 +409,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 
 			chunk := &ChatStreamChunk{
 				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
-				Object:  "chat.completion.chunk",
+				Object:  objectChatCompletionChunk,
 				Created: time.Now().Unix(),
 				Model:   s.model,
 				Choices: []StreamChoice{
@@ -511,7 +511,7 @@ func (s *googleStream) Close() error {
 func mapFinishReason(reason string) string {
 	switch reason {
 	case "STOP":
-		return "stop"
+		return finishReasonStop
 	case "MAX_TOKENS":
 		return "length"
 	case "SAFETY":
@@ -524,7 +524,7 @@ func mapFinishReason(reason string) string {
 func mapVertexFinishReason(reason string) string {
 	switch reason {
 	case "STOP":
-		return "stop"
+		return finishReasonStop
 	case "MAX_TOKENS":
 		return "length"
 	case "SAFETY":

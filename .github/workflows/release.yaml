@@ -69,6 +69,18 @@ jobs:
           test "$TAG_SHA" = "$(git rev-parse origin/master)"
           test -z "$(git status --short)"
 
+      - name: Resolve published Starmap version
+        id: starmap
+        run: echo "version=$(go list -m -f '{{.Version}}' github.com/agentstation/starmap)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout published Starmap ownership source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: agentstation/starmap
+          ref: ${{ steps.starmap.outputs.version }}
+          path: starmap
+          persist-credentials: false
+
       - name: Run Go lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
@@ -78,6 +90,7 @@ jobs:
       - name: Run repository release gates
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STARMAP_OWNERSHIP_STARMAP_ROOT: ${{ github.workspace }}/starmap
         run: |
           bash scripts/verify-starmap-ownership.sh
           bash scripts/verify-v1-architecture.sh

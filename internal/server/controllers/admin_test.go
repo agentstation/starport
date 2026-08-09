@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 
 	"github.com/agentstation/starport/internal/identity"
@@ -54,6 +55,10 @@ func TestAdminHandler_SystemInfo(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "starport", resp["service"])
 	assert.Contains(t, resp, "version")
+	assert.Equal(t, runtime.Version(), resp["go_version"])
+	assert.Equal(t, runtime.GOOS, resp["os"])
+	assert.Equal(t, runtime.GOARCH, resp["arch"])
+	assert.NotContains(t, w.Body.String(), "TODO")
 }
 
 func TestAdminHandler_Metrics(t *testing.T) {

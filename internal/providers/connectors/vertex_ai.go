@@ -121,10 +121,10 @@ func (c *VertexAIConnector) Embeddings(ctx context.Context, req *EmbeddingsReque
 	}
 
 	return &EmbeddingsResponse{
-		Object: "list",
+		Object: objectList,
 		Data: []Embedding{
 			{
-				Object:    "embedding",
+				Object:    objectEmbedding,
 				Index:     0,
 				Embedding: vertexResp.Predictions[0].Embeddings.Values,
 			},

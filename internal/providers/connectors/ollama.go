@@ -14,7 +14,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
-const ollamaProviderName = "ollama"
+const ollamaProviderName = string(catalogs.ProviderIDOllama)
 
 // OllamaConnector implements the Connector interface for Ollama
 type OllamaConnector struct {
@@ -49,11 +49,11 @@ func (c *OllamaConnector) Name() string {
 func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	// Convert to Ollama format
 	ollamaReq := map[string]any{
-		"model":    req.Model,
-		"messages": req.Messages,
-		"stream":   false,
+		wireModelToken:    req.Model,
+		wireFieldMessages: req.Messages,
+		wireFieldStream:   false,
 		"options": map[string]any{
-			"temperature": req.Temperature,
+			wireFieldTemperature: req.Temperature,
 		},
 	}
 
@@ -114,7 +114,7 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 	// Convert to OpenAI format
 	return &ChatResponse{
 		ID:      fmt.Sprintf("ollama-%d", time.Now().Unix()),
-		Object:  "chat.completion",
+		Object:  objectChatCompletion,
 		Created: time.Now().Unix(),
 		Model:   ollamaResp.Model,
 		Choices: []Choice{
@@ -124,7 +124,7 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 					Role:    ollamaResp.Message.Role,
 					Content: ollamaResp.Message.Content,
 				},
-				FinishReason: "stop",
+				FinishReason: finishReasonStop,
 			},
 		},
 		Usage: Usage{
@@ -139,11 +139,11 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatStream, error) {
 	// Convert to Ollama format
 	ollamaReq := map[string]any{
-		"model":    req.Model,
-		"messages": req.Messages,
-		"stream":   true,
+		wireModelToken:    req.Model,
+		wireFieldMessages: req.Messages,
+		wireFieldStream:   true,
 		"options": map[string]any{
-			"temperature": req.Temperature,
+			wireFieldTemperature: req.Temperature,
 		},
 	}
 
@@ -192,8 +192,8 @@ func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Ollama supports embeddings via /api/embeddings endpoint
 	ollamaReq := map[string]any{
-		"model":  req.Model,
-		"prompt": req.Input,
+		wireModelToken: req.Model,
+		"prompt":       req.Input,
 	}
 
 	body, err := json.Marshal(ollamaReq)
@@ -233,10 +233,10 @@ func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 
 	// Convert to OpenAI format
 	return &EmbeddingsResponse{
-		Object: "list",
+		Object: objectList,
 		Data: []Embedding{
 			{
-				Object:    "embedding",
+				Object:    objectEmbedding,
 				Embedding: ollamaResp.Embedding,
 				Index:     0,
 			},
@@ -339,14 +339,14 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 		if s.promptTokens > 0 || s.completionTokens > 0 {
 			return &ChatStreamChunk{
 				ID:      fmt.Sprintf("ollama-%d", time.Now().UnixNano()),
-				Object:  "chat.completion.chunk",
+				Object:  objectChatCompletionChunk,
 				Created: time.Now().Unix(),
 				Model:   s.model,
 				Choices: []StreamChoice{
 					{
 						Index:        0,
 						Delta:        MessageDelta{},
-						FinishReason: "stop",
+						FinishReason: finishReasonStop,
 					},
 				},
 				Usage: &Usage{
@@ -363,7 +363,7 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 	// Convert to OpenAI format
 	return &ChatStreamChunk{
 		ID:      fmt.Sprintf("ollama-%d", time.Now().UnixNano()),
-		Object:  "chat.completion.chunk",
+		Object:  objectChatCompletionChunk,
 		Created: time.Now().Unix(),
 		Model:   s.model,
 		Choices: []StreamChoice{

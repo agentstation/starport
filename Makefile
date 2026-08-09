@@ -18,6 +18,7 @@ GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GO_VERSION = $(shell go version | awk '{print $$3}')
 GORELEASER_VERSION=2.17.1
+GOLANGCI_LINT_VERSION=v2.12.2
 
 # Build flags
 LDFLAGS = -ldflags "\
@@ -168,12 +169,7 @@ fmt: format ## Alias for format
 .PHONY: lint
 lint: ## Lint code
 	@echo "Linting code..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run; \
-	else \
-		echo "golangci-lint not installed, running basic go vet..."; \
-		$(GO) vet ./...; \
-	fi
+	@$(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run
 	@echo "Lint complete"
 
 ##@ Tools
@@ -196,7 +192,7 @@ install-air: ## Install Air for hot-reloading
 .PHONY: tools
 tools: install-air ## Install all development tools
 	@echo "Installing development tools..."
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@go install golang.org/x/tools/cmd/goimports@latest
 	@echo "Optional: Install gofumpt for stricter formatting:"
 	@echo "  go install mvdan.cc/gofumpt@latest"

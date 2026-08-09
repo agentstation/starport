@@ -20,8 +20,8 @@ type OpenAICompatibleConnector struct {
 }
 
 var openAIChatFields = map[string]struct{}{
-	"model": {}, "messages": {}, "temperature": {}, "top_p": {}, "n": {},
-	"max_tokens": {}, "stream": {}, "stop": {}, "presence_penalty": {},
+	wireModelToken: {}, wireFieldMessages: {}, wireFieldTemperature: {}, "top_p": {}, "n": {},
+	"max_tokens": {}, wireFieldStream: {}, finishReasonStop: {}, "presence_penalty": {},
 	"frequency_penalty": {}, "logit_bias": {}, "user": {}, "seed": {},
 	"tools": {}, "tool_choice": {}, "response_format": {}, "models": {},
 	"stream_options": {}, "reasoning": {}, "provider_options": {},
@@ -196,7 +196,7 @@ func (s *openAICompatibleStream) Recv() (*ChatStreamChunk, error) {
 			}
 			return nil, &StreamError{
 				Err:    err,
-				Reason: "failed to read stream",
+				Reason: streamReadFailureReason,
 			}
 		}
 
