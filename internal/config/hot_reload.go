@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,13 +35,15 @@ type RateLimitRules struct {
 // HotReloader manages hot-reloading of configuration files
 type HotReloader struct {
 	mu              sync.RWMutex
+	reloadMu        sync.Mutex
 	configPath      string
 	checkInterval   time.Duration
 	rateLimitRules  *RateLimitRules
 	watcher         *fsnotify.Watcher
 	updateCallbacks []func(*RateLimitRules)
 	stopCh          chan struct{}
-	lastModTime     time.Time
+	lastDigest      [sha256.Size]byte
+	hasDigest       bool
 }
 
 // NewHotReloader creates a new hot reloader
@@ -64,20 +67,13 @@ func NewHotReloader(configPath string, checkInterval time.Duration) (*HotReloade
 	}
 	h.watcher = watcher
 
-	// Watch the config file if it exists
-	if _, err := os.Stat(configPath); err == nil {
-		if err := watcher.Add(configPath); err != nil {
-			_ = watcher.Close()
-			return nil, fmt.Errorf("failed to watch config file: %w", err)
-		}
-	} else {
-		// Watch the directory instead
-		dir := filepath.Dir(configPath)
-		if err := watcher.Add(dir); err != nil {
-			_ = watcher.Close()
-			// If we can't watch, just continue without file watching
-			h.watcher = nil
-		}
+	// Watch the directory because atomic config updates replace the file inode.
+	if err := watcher.Add(filepath.Dir(configPath)); err != nil {
+		_ = watcher.Close()
+		h.watcher = nil
+		log.Warn().Err(err).
+			Str("config_path", configPath).
+			Msg("Config file watching unavailable; using periodic checks")
 	}
 
 	return h, nil
@@ -153,8 +149,11 @@ func (h *HotReloader) GetRuleForModel(model string) (*RateLimitRule, bool) {
 
 // loadConfig loads the configuration from disk
 func (h *HotReloader) loadConfig() error {
+	h.reloadMu.Lock()
+	defer h.reloadMu.Unlock()
+
 	// Check if file exists
-	info, err := os.Stat(h.configPath)
+	_, err := os.Stat(h.configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, use empty rules
@@ -164,20 +163,12 @@ func (h *HotReloader) loadConfig() error {
 				Rules:   make(map[string]RateLimitRule),
 				Models:  make(map[string]RateLimitRule),
 			}
+			h.lastDigest = [sha256.Size]byte{}
+			h.hasDigest = false
 			h.mu.Unlock()
 			return nil
 		}
 		return fmt.Errorf("failed to stat config file: %w", err)
-	}
-
-	// Check if file was modified
-	h.mu.Lock()
-	lastMod := h.lastModTime
-	h.mu.Unlock()
-
-	if !lastMod.IsZero() && info.ModTime().Equal(lastMod) {
-		// File hasn't changed
-		return nil
 	}
 
 	// Read the file
@@ -189,6 +180,16 @@ func (h *HotReloader) loadConfig() error {
 	// Check for empty file
 	if len(data) == 0 {
 		return fmt.Errorf("config file is empty")
+	}
+
+	// Compare content rather than timestamps. Atomic replacements can preserve
+	// modification times, and some filesystems have coarse timestamp precision.
+	digest := sha256.Sum256(data)
+	h.mu.RLock()
+	unchanged := h.hasDigest && digest == h.lastDigest
+	h.mu.RUnlock()
+	if unchanged {
+		return nil
 	}
 
 	// Parse YAML
@@ -217,7 +218,8 @@ func (h *HotReloader) loadConfig() error {
 	// Update configuration
 	h.mu.Lock()
 	h.rateLimitRules = &rules
-	h.lastModTime = info.ModTime()
+	h.lastDigest = digest
+	h.hasDigest = true
 	h.mu.Unlock()
 
 	// Notify callbacks
@@ -293,9 +295,9 @@ func (h *HotReloader) watchLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
+			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) != 0 {
 				// Check if it's our config file
-				if event.Name == h.configPath || filepath.Base(event.Name) == filepath.Base(h.configPath) {
+				if filepath.Clean(event.Name) == filepath.Clean(h.configPath) {
 					log.Info().
 						Str("file", event.Name).
 						Str("op", event.Op.String()).

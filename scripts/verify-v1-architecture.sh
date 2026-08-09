@@ -10,15 +10,20 @@ check() {
     name="$2"
     shift 2
 
-    if "$@" >/dev/null 2>&1; then
+    if output=$("$@" 2>&1); then
         passed=$((passed + 1))
         printf 'PASS %s %s\n' "$id" "$name"
     else
         failed=$((failed + 1))
         printf 'FAIL %s %s\n' "$id" "$name"
+        if [ -n "$output" ]; then
+            printf '%s\n' "$output" >&2
+        fi
     fi
 }
 
+# Go templates and awk programs must remain literal inside the nested shell.
+# shellcheck disable=SC2016
 check V01 'Starmap module and Go floor' sh -c '
     awk '\''$1 == "go" { split($2, version, "."); exit !(version[1] > 1 || version[2] >= 25) }'\'' go.mod &&
 	module_version=$(go list -m -f '\''{{if .Replace}}replace{{else}}{{.Version}}{{end}}'\'' github.com/agentstation/starmap) &&
