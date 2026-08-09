@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -203,6 +202,10 @@ func TestHotReloader_HotReload(t *testing.T) {
 	if err := os.Rename(tempPath, configPath); err != nil {
 		t.Fatal(err)
 	}
+	initialInfo, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	reloader, err := NewHotReloader(configPath, 100*time.Millisecond)
 	if err != nil {
@@ -219,14 +222,12 @@ func TestHotReloader_HotReload(t *testing.T) {
 	}
 
 	// Set up callback to track updates
-	var mu sync.Mutex
-	updateCount := 0
-	var lastUpdate *RateLimitRules
+	updates := make(chan *RateLimitRules, 1)
 	reloader.OnUpdate(func(rules *RateLimitRules) {
-		mu.Lock()
-		defer mu.Unlock()
-		updateCount++
-		lastUpdate = rules
+		select {
+		case updates <- rules:
+		default:
+		}
 	})
 
 	// Verify initial state
@@ -260,12 +261,27 @@ func TestHotReloader_HotReload(t *testing.T) {
 	if err := os.WriteFile(tempPath, data, 0644); err != nil {
 		t.Fatal(err)
 	}
+	// Preserve the original timestamp to prove content-based detection.
+	if err := os.Chtimes(tempPath, initialInfo.ModTime(), initialInfo.ModTime()); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Rename(tempPath, configPath); err != nil {
 		t.Fatal(err)
 	}
+	replacementInfo, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !replacementInfo.ModTime().Equal(initialInfo.ModTime()) {
+		t.Fatalf("replacement modification time changed: got %v, want %v", replacementInfo.ModTime(), initialInfo.ModTime())
+	}
 
-	// Wait for reload - give extra time for file watcher
-	time.Sleep(800 * time.Millisecond)
+	var lastUpdate *RateLimitRules
+	select {
+	case lastUpdate = <-updates:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for atomic config replacement to reload")
+	}
 
 	// Verify update
 	rule, ok = reloader.GetRuleForKey("test-key")
@@ -276,16 +292,7 @@ func TestHotReloader_HotReload(t *testing.T) {
 		t.Errorf("expected updated requests per minute 200, got %d", rule.RequestsPerMinute)
 	}
 
-	// Verify callback was called
-	mu.Lock()
-	finalUpdateCount := updateCount
-	finalLastUpdate := lastUpdate
-	mu.Unlock()
-
-	if finalUpdateCount == 0 {
-		t.Error("expected update callback to be called")
-	}
-	if finalLastUpdate == nil || len(finalLastUpdate.Rules) != 1 {
+	if lastUpdate == nil || len(lastUpdate.Rules) != 1 {
 		t.Error("callback received incorrect data")
 	}
 }
@@ -382,5 +389,54 @@ func TestHotReloader_NonExistentFile(t *testing.T) {
 	}
 	if len(rules.Rules) != 0 || len(rules.Models) != 0 {
 		t.Error("expected empty rules")
+	}
+}
+
+func TestHotReloader_ReloadsRestoredUnchangedFile(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "rate_limits.yaml")
+	rules := RateLimitRules{
+		Version: "1.0",
+		Rules: map[string]RateLimitRule{
+			"test-key": {
+				Name:              "Test Rule",
+				RequestsPerMinute: 100,
+			},
+		},
+	}
+
+	data, err := yaml.Marshal(&rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	reloader, err := NewHotReloader(configPath, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reloader.Stop()
+
+	if err := os.Remove(configPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := reloader.loadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := reloader.GetRuleForKey("test-key"); ok {
+		t.Fatal("expected rules to clear after config removal")
+	}
+
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := reloader.loadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	rule, ok := reloader.GetRuleForKey("test-key")
+	if !ok || rule.RequestsPerMinute != 100 {
+		t.Fatal("expected unchanged restored config to reload")
 	}
 }
