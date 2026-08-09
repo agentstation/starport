@@ -33,57 +33,44 @@ webhooks, and enterprise SSO/RBAC are outside the current v1 scope.
 
 Requirements:
 
-- A Starport v1 binary, container image, or Go 1.26.5 source toolchain.
-- One configured inference provider.
-- Two different secrets with at least 32 characters each.
+- Go 1.26.5 for a source build.
+- An OpenAI inference key or a running Ollama service.
 
-Install a verified archive from the GitHub release:
-
-```bash
-gh release download v1.0.0 \
-  --repo agentstation/starport \
-  --pattern 'starport_1.0.0_linux_x86_64.tar.gz' \
-  --pattern 'checksums.txt'
-sha256sum --check --ignore-missing checksums.txt
-gh attestation verify starport_1.0.0_linux_x86_64.tar.gz \
-  --repo agentstation/starport \
-  --signer-workflow agentstation/starport/.github/workflows/release.yaml
-tar -xzf starport_1.0.0_linux_x86_64.tar.gz
-./starport --version
-```
-
-The release also contains Linux and macOS archives and Windows zip files for
-amd64 and arm64. You can build the exact tag from source:
-
-```bash
-go install github.com/agentstation/starport/cmd/starport@v1.0.0
-```
-
-Copy the example configuration:
-
-```bash
-cp .env.example .env
-```
-
-Set the provider-credential master key, the first gateway key, and one
-provider key:
-
-```text
-STARPORT_SECURITY_MASTER_KEY=<random master secret>
-STARPORT_SECURITY_BOOTSTRAP_API_KEY=<different random gateway key>
-STARPORT_PROVIDERS_OPENAI_API_KEY=<provider inference key>
-```
-
-Build and start Starport:
+Build Starport:
 
 ```bash
 make build
-./starport serve
+./starport version
 ```
 
-If identity storage is empty, Starport requires a bootstrap key. See the
-[operator guide](docs/OPERATOR-GUIDE.md) for the first administrator-key
-rotation procedure.
+Initialize an OpenAI-backed local instance. The command reads the provider
+credential from the named environment variable. It generates the credential
+master key and one named gateway identity.
+
+```bash
+export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
+./starport init --provider openai
+```
+
+For Ollama, use this command instead:
+
+```bash
+./starport init --provider ollama
+```
+
+The Ollama profile creates local Starport state. Before you start Starport,
+add each installed Ollama model to a reviewed Starmap workspace and set
+`STARPORT_CATALOG_WORKSPACE_PATH`. Starmap owns the model identity,
+capabilities, and Ollama offering facts.
+
+The command writes `config.env` and the Badger identity store under the user
+configuration directory. It refuses existing configuration or identity
+storage. It prints the new gateway API key once. Save that key. For the OpenAI
+profile, start Starport:
+
+```bash
+./starport serve
+```
 
 Check health:
 
@@ -150,13 +137,18 @@ The Compose file builds Starport locally and starts it with Valkey:
 
 ```bash
 export STARPORT_SECURITY_MASTER_KEY=<master-secret>
-export STARPORT_SECURITY_BOOTSTRAP_API_KEY=<bootstrap-key>
 export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
-docker compose up --build
+docker compose up --build -d valkey
+docker compose run --rm starport init --configured-storage
+docker compose up -d starport
 ```
 
-For a single-node container, mount `/var/lib/starport/data` and pass the
-required secrets through an environment file or secret manager.
+The initialization command prints the gateway API key once. It refuses a
+Valkey identity repository that already contains an identity.
+
+For a single-node container, mount `/var/lib/starport/data`. Run
+`starport init --configured-storage` with that mount and the required
+environment values before the first `starport serve` command.
 
 ## Development and Verification
 

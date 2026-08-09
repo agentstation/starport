@@ -1,18 +1,12 @@
 package controllers
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"runtime"
-	"time"
 
-	"github.com/agentstation/uuidkey"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/identity"
@@ -24,12 +18,15 @@ const systemInfoUnavailable = "unavailable"
 // AdminController handles administrative endpoints
 type AdminController struct {
 	identities identity.Repository
+	issuer     *identity.Issuer
 }
 
 // NewAdminController creates a new admin controller
 func NewAdminController(identities identity.Repository) *AdminController {
+	issuer, _ := identity.NewIssuer(identities)
 	return &AdminController{
 		identities: identities,
+		issuer:     issuer,
 	}
 }
 
@@ -86,52 +83,28 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create API key
-	apiKey := &identity.APIKey{
-		Name:      req.Name,
-		Scopes:    req.Scopes,
-		Metadata:  convertStringMapToInterface(req.Metadata),
-		Active:    true,
-		CreatedAt: time.Now(),
-	}
-
-	// Generate UUID for the key
-	keyUUID := uuid.New().String()
-
-	// Create API key using uuidkey with STARPORT prefix
-	apiKeyObj, err := uuidkey.NewAPIKey("STARPORT", keyUUID)
+	issued, err := h.issuer.Issue(ctx, identity.IssueRequest{
+		Name:     req.Name,
+		Scopes:   req.Scopes,
+		Metadata: convertStringMapToInterface(req.Metadata),
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create API key with uuidkey")
-		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to generate API key")
-		return
-	}
-
-	// The actual key value (only shown once)
-	keyValue := apiKeyObj.String()
-
-	// Use the prefix_key format as the ID (without entropy for storage key)
-	apiKey.ID = fmt.Sprintf("%s_%s", apiKeyObj.Prefix, apiKeyObj.Key)
-
-	// Hash the full key value for storage
-	hash := sha256.Sum256([]byte(keyValue))
-	apiKey.Hash = hex.EncodeToString(hash[:])
-
-	if err := apiKey.Validate(); err != nil {
-		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
-		return
-	}
-
-	if _, err := h.identities.Create(ctx, *apiKey); err != nil {
+		if errors.Is(err, identity.ErrInvalidName) || errors.Is(err, identity.ErrMissingScopes) ||
+			errors.Is(err, identity.ErrInvalidScope) {
+			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
+			return
+		}
 		log.Error().Err(err).Msg("Failed to create API key identity")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create API key")
 		return
 	}
+	apiKey := issued.APIKey
 
 	// Return created key (with the actual key value visible once)
 	response := map[string]any{
 		"key": map[string]any{
 			"id":         apiKey.ID,
-			"key":        keyValue, // Only shown on creation - the full uuidkey format
+			"key":        issued.Secret,
 			"name":       apiKey.Name,
 			"scopes":     apiKey.Scopes,
 			"active":     apiKey.Active,

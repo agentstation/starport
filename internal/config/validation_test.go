@@ -266,14 +266,6 @@ func TestSecurityConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "bootstrap API key is too short",
-			config: SecurityConfig{
-				BootstrapAPIKey: "short",
-				AllowedOrigins:  "*",
-			},
-			wantErr: true,
-		},
-		{
 			name: "master key is too short",
 			config: SecurityConfig{
 				MasterKey:      "short",

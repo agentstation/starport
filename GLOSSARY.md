@@ -5,7 +5,6 @@
 | Starport | The LLM inference gateway in this repository. | | approved | `README.md` |
 | Starmap | The catalog system that owns provider and model facts for Starport. | | approved | `docs/ARCHITECTURE.md` |
 | gateway API key | A Starport credential that authenticates one client identity. | | approved | `internal/identity/model.go` |
-| bootstrap API key | A temporary gateway API key for an empty identity store. | | approved | `internal/app/app.go` |
 | provider inference credential | A secret that Starport uses for an inference request to one provider. | | approved | `internal/providers/connectors/README.md` |
 | catalog generation | One immutable Starmap catalog version that binds provider and model facts. | | approved | `internal/catalog/control_plane.go` |
 | adapter registry | The Starport registry that owns compiled provider adapter behavior. | | approved | `internal/providers/connectors/adapter_registry.go` |

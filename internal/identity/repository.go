@@ -20,7 +20,9 @@ const (
 
 	identityKeyPrefix = StoragePrefix + "key:"
 	hashKeyPrefix     = StoragePrefix + "hash:"
+	initialKey        = StoragePrefix + "initial"
 	defaultListLimit  = 1000
+	initialRecord     = `{"schema_version":1}`
 )
 
 var (
@@ -45,6 +47,7 @@ type Record struct {
 // Repository is the durable identity contract.
 type Repository interface {
 	Create(context.Context, APIKey) (Record, error)
+	CreateInitial(context.Context, APIKey) (Record, error)
 	GetByID(context.Context, string) (Record, error)
 	GetByHash(context.Context, string) (Record, error)
 	List(context.Context, int) ([]Record, error)
@@ -76,6 +79,15 @@ func Open(store storage.KVStore) (Repository, error) {
 }
 
 func (r *repository) Create(ctx context.Context, apiKey APIKey) (Record, error) {
+	return r.create(ctx, apiKey, false)
+}
+
+// CreateInitial atomically claims initialization and creates the first identity.
+func (r *repository) CreateInitial(ctx context.Context, apiKey APIKey) (Record, error) {
+	return r.create(ctx, apiKey, true)
+}
+
+func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (Record, error) {
 	if err := apiKey.Validate(); err != nil {
 		return Record{}, err
 	}
@@ -89,10 +101,16 @@ func (r *repository) Create(ctx context.Context, apiKey APIKey) (Record, error) 
 		return Record{}, fmt.Errorf("encode identity hash record: %w", err)
 	}
 
-	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
+	mutations := []storage.CompareAndSwapMutation{
 		{Key: identityStorageKey(apiKey.ID), NewValue: data},
 		{Key: hashStorageKey(apiKey.Hash), NewValue: indexData},
-	}); err != nil {
+	}
+	if initial {
+		mutations = append([]storage.CompareAndSwapMutation{{
+			Key: initialKey, NewValue: []byte(initialRecord),
+		}}, mutations...)
+	}
+	if err := r.store.CompareAndSwapBatch(ctx, mutations); err != nil {
 		return Record{}, mapConflict("create identity and hash index", err)
 	}
 	return recordFromIdentity(stored), nil

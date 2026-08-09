@@ -18,7 +18,7 @@ import (
 )
 
 func TestActiveProviderIntersection(t *testing.T) {
-	application, err := New(validProductionConfig(t), withBootstrapFactories(explicitTestFactories()))
+	application, err := New(validProductionConfig(t), withRuntimeFactories(explicitTestFactories()))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
 	require.Equal(t, []string{"openai"}, application.registry.ListProviders())

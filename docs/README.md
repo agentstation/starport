@@ -7,7 +7,7 @@ Documentation for the Starport open source LLM gateway.
 - **[Architecture](ARCHITECTURE.md)** - Technical design and system architecture
 - **[Architecture Control Plane](ARCHITECTURE_CONTROL_PLANE.md)** - Historical architecture-hardening ledger
 - **[Task Status](TASKS.md)** - Current development status and task tracking
-- **[Operator Guide](OPERATOR-GUIDE.md)** - Deployment, bootstrap, operation, and release checks
+- **[Operator Guide](OPERATOR-GUIDE.md)** - Setup, deployment, operation, and release checks
 
 ## Architecture Decision Records
 

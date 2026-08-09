@@ -26,6 +26,7 @@ func TestRunContextNoArgumentsShowsHelp(t *testing.T) {
 			calls++
 			return nil
 		},
+		noopInitializer,
 	)
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0; stderr = %s", code, stderr.String())
@@ -50,6 +51,7 @@ func TestRunContextServeDelegatesToRunner(t *testing.T) {
 			got = options
 			return nil
 		},
+		noopInitializer,
 	)
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
@@ -69,6 +71,7 @@ func TestRunContextMapsRuntimeError(t *testing.T) {
 		&bytes.Buffer{},
 		stderr,
 		func(context.Context, starportcli.ServeOptions) error { return serverErr },
+		noopInitializer,
 	)
 	if code != starportcli.ExitCodeRuntime {
 		t.Errorf("exit code = %d, want %d", code, starportcli.ExitCodeRuntime)
@@ -87,6 +90,7 @@ func TestRunContextWritesUsageErrorOnce(t *testing.T) {
 		&bytes.Buffer{},
 		stderr,
 		func(context.Context, starportcli.ServeOptions) error { return nil },
+		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
 		t.Errorf("exit code = %d, want %d", code, starportcli.ExitCodeUsage)
@@ -104,6 +108,7 @@ func TestRunContextNormalizesMissingHelpTopic(t *testing.T) {
 		&bytes.Buffer{},
 		&bytes.Buffer{},
 		func(context.Context, starportcli.ServeOptions) error { return nil },
+		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
 		t.Errorf("exit code = %d, want %d", code, starportcli.ExitCodeUsage)
@@ -119,6 +124,7 @@ func TestRunContextWritesInvalidHelpErrorOnce(t *testing.T) {
 		&bytes.Buffer{},
 		stderr,
 		func(context.Context, starportcli.ServeOptions) error { return nil },
+		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
 		t.Errorf("exit code = %d, want %d", code, starportcli.ExitCodeUsage)
@@ -138,6 +144,7 @@ func TestRunContextVersionJSON(t *testing.T) {
 		stdout,
 		stderr,
 		func(context.Context, starportcli.ServeOptions) error { return nil },
+		noopInitializer,
 	)
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", code, stderr.String())
@@ -151,9 +158,46 @@ func TestRunContextVersionJSON(t *testing.T) {
 	}
 }
 
+func TestRunContextInitDelegatesToInitializer(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	var got starportcli.InitOptions
+	code := runContext(
+		context.Background(),
+		[]string{"starport", "init", "--provider", "ollama", "--json"},
+		bytes.NewReader(nil),
+		stdout,
+		&bytes.Buffer{},
+		func(context.Context, starportcli.ServeOptions) error { return nil },
+		func(_ context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {
+			got = options
+			return starportcli.InitResult{
+				Provider: options.Provider, IdentityName: options.IdentityName,
+				ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			}, nil
+		},
+	)
+	if code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if got.IdentityName != "local-admin" {
+		t.Errorf("identity name = %q, want local-admin", got.IdentityName)
+	}
+	var result starportcli.InitResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode init JSON: %v", err)
+	}
+	if result.APIKey != "gateway-key" {
+		t.Errorf("API key = %q", result.APIKey)
+	}
+}
+
 func TestBuildInformationUsesRuntimeGoVersionFallback(t *testing.T) {
 	info := buildInformation()
 	if goVersion == "unknown" && info.GoVersion != runtime.Version() {
 		t.Errorf("Go version = %q, want %q", info.GoVersion, runtime.Version())
 	}
+}
+
+func noopInitializer(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {
+	return starportcli.InitResult{}, nil
 }

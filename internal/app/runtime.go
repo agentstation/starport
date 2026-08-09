@@ -29,7 +29,7 @@ type catalogRuntime interface {
 	Refresh(context.Context, ...pkgsync.Option) (*pkgsync.Result, error)
 }
 
-type bootstrapFactories struct {
+type runtimeFactories struct {
 	openStorage  func(config.StorageConfig) (storage.KVStore, error)
 	openCatalog  func(context.Context, storage.KVStore, string) (catalogRuntime, error)
 	newConnector func(string, connectors.ProviderConfig) (connectors.Connector, error)
@@ -38,7 +38,7 @@ type bootstrapFactories struct {
 	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)
 }
 
-type buildOptions struct{ factories bootstrapFactories }
+type buildOptions struct{ factories runtimeFactories }
 
-// Option changes bootstrap factories for explicit test composition.
+// Option changes runtime factories for explicit test composition.
 type Option func(*buildOptions)

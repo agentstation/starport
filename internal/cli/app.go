@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
 	urfavecli "github.com/urfave/cli/v3"
 )
 
@@ -26,6 +27,8 @@ var (
 	ErrStderrRequired = errors.New("command error output is required")
 	// ErrServerRunnerRequired reports a missing server runtime boundary.
 	ErrServerRunnerRequired = errors.New("server runner is required")
+	// ErrInitializerRequired reports a missing setup runtime boundary.
+	ErrInitializerRequired = errors.New("initializer is required")
 )
 
 // ServeOptions contains explicit server command options.
@@ -36,13 +39,17 @@ type ServeOptions struct {
 // ServerRunner starts the gateway and blocks until it stops.
 type ServerRunner func(context.Context, ServeOptions) error
 
+// Initializer creates local state and returns the new gateway credential once.
+type Initializer func(context.Context, InitOptions) (InitResult, error)
+
 // Dependencies contains all runtime boundaries used by commands.
 type Dependencies struct {
-	Stdin     io.Reader
-	Stdout    io.Writer
-	Stderr    io.Writer
-	Build     BuildInfo
-	RunServer ServerRunner
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+	Build      BuildInfo
+	RunServer  ServerRunner
+	Initialize Initializer
 }
 
 // New creates the Starport root command.
@@ -58,6 +65,9 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	}
 	if deps.RunServer == nil {
 		return nil, ErrServerRunnerRequired
+	}
+	if deps.Initialize == nil {
+		return nil, ErrInitializerRequired
 	}
 
 	usageError := func(
@@ -93,6 +103,57 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 				return runtimeFailure{cause: err}
 			}
 			return nil
+		},
+	}
+
+	initialize := &urfavecli.Command{
+		Name:         "init",
+		Usage:        "Initialize secure local configuration and identity storage",
+		OnUsageError: usageError,
+		Flags: []urfavecli.Flag{
+			&urfavecli.StringFlag{
+				Name:  "provider",
+				Usage: "Local provider profile: openai or ollama",
+			},
+			&urfavecli.StringFlag{
+				Name:  "name",
+				Usage: "Name for the first gateway identity",
+				Value: "local-admin",
+			},
+			&urfavecli.BoolFlag{
+				Name:  initFormatJSON,
+				Usage: "Write initialization results as JSON",
+			},
+			&urfavecli.BoolFlag{
+				Name:  "configured-storage",
+				Usage: "Create only the first identity in configured storage",
+			},
+		},
+		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
+			if err := rejectArguments(cmd); err != nil {
+				return err
+			}
+			provider := catalogs.ProviderID(cmd.String("provider"))
+			configuredStorage := cmd.Bool("configured-storage")
+			if configuredStorage && provider != "" {
+				return urfavecli.Exit(
+					"--provider and --configured-storage cannot be used together",
+					ExitCodeUsage,
+				)
+			}
+			if !configuredStorage && provider != catalogs.ProviderIDOpenAI && provider != catalogs.ProviderIDOllama {
+				return urfavecli.Exit(
+					fmt.Sprintf("unsupported local provider profile %q; use --provider openai or --provider ollama", provider),
+					ExitCodeUsage,
+				)
+			}
+			result, err := deps.Initialize(ctx, InitOptions{
+				Provider: provider, IdentityName: cmd.String("name"), ConfiguredStorage: configuredStorage,
+			})
+			if err != nil {
+				return runtimeFailure{cause: err}
+			}
+			return writeInitResult(cmd.Writer, result, cmd.Bool(initFormatJSON))
 		},
 	}
 
@@ -144,7 +205,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Writer:          deps.Stdout,
 		ErrWriter:       deps.Stderr,
 		OnUsageError:    usageError,
-		Commands:        []*urfavecli.Command{serve, version, help},
+		Commands:        []*urfavecli.Command{initialize, serve, version, help},
 		HideHelpCommand: true,
 		Suggest:         true,
 		ExitErrHandler: func(context.Context, *urfavecli.Command, error) {

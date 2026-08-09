@@ -101,6 +101,7 @@ starport/
 ├── internal/presets/          # preset model and versioned repository
 ├── internal/storage/          # KVStore adapter interface and implementations
 ├── internal/config/           # environment/.env config loading and validation
+├── internal/setup/            # safe first-run configuration and identity creation
 └── internal/architecture/     # executable import and package-boundary rules
 ```
 
@@ -115,9 +116,10 @@ value to adapter configuration. It then constructs storage, the Starmap
 control plane, repositories, providers, cache, routing, and HTTP.
 
 Production needs storage, a catalog, a credential master key, and one explicit
-provider. Empty identity storage also needs a bootstrap API key. Production
-composition never selects mock dependencies. Tests can replace factories
-through an explicit test-only builder.
+provider. It also needs one named identity in storage. The
+`starport init --configured-storage` command creates that identity before the
+first process starts. Production composition never selects mock dependencies.
+Tests can replace factories through an explicit test-only builder.
 
 `internal/app.App` owns shared dependency lifecycle:
 
@@ -247,8 +249,10 @@ must represent location failover.
 Implemented:
 
 - The identity repository owns the SHA-256 hash index and atomic identity changes.
-- Startup requires a bootstrap key for empty identity storage. It stores only the SHA-256 hash and creates one wildcard identity.
-- Operators use the bootstrap identity to create the first named administrator key. They can then remove the bootstrap value from configuration.
+- The identity issuer owns gateway-key generation, hashing, and one-time secret return.
+- Local initialization writes an owner-only configuration file and creates one named wildcard identity directly.
+- Configured-storage initialization creates the first named identity without a temporary startup credential.
+- Startup rejects empty identity storage and does not create an identity.
 - Starport accepts API keys from `Authorization` and `X-API-Key` headers only.
 - The HTTP edge derives client IP from the direct TCP peer. It ignores untrusted forwarding headers.
 - Authentication stores the API key model in request context for ownership and routing checks.

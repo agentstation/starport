@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -23,44 +21,33 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-func TestBootstrapIdentityContract(t *testing.T) {
+func TestRuntimeRequiresNamedIdentity(t *testing.T) {
 	identities, err := identity.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	require.ErrorIs(t, ensureBootstrapIdentity(context.Background(), identities, ""), ErrBootstrapRequired)
+	require.ErrorIs(t, requireIdentity(context.Background(), identities), ErrIdentityRequired)
 
-	apiKey := strings.Repeat("b", 32)
-	require.NoError(t, ensureBootstrapIdentity(context.Background(), identities, apiKey))
-	require.NoError(t, ensureBootstrapIdentity(context.Background(), identities, apiKey))
-	require.NoError(t, ensureBootstrapIdentity(context.Background(), identities, ""))
-
-	hash := sha256.Sum256([]byte(apiKey))
-	record, err := identities.GetByHash(context.Background(), hex.EncodeToString(hash[:]))
+	_, err = identities.Create(context.Background(), testIdentity())
 	require.NoError(t, err)
-	require.True(t, record.APIKey.Active)
-	require.True(t, record.APIKey.HasScope("admin"))
-	require.Equal(t, "bootstrap", record.APIKey.Metadata["source"])
-	records, err := identities.List(context.Background(), 10)
-	require.NoError(t, err)
-	require.Len(t, records, 1)
+	require.NoError(t, requireIdentity(context.Background(), identities))
 }
 
 func TestProductionCompositionFailsClosed(t *testing.T) {
 	baseConfig := validProductionConfig(t)
 	tests := []struct {
 		name   string
-		mutate func(*config.Config, *bootstrapFactories)
+		mutate func(*config.Config, *runtimeFactories)
 		cause  error
 	}{
 		{
 			name: "missing storage",
-			mutate: func(_ *config.Config, factories *bootstrapFactories) {
+			mutate: func(_ *config.Config, factories *runtimeFactories) {
 				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) { return nil, nil }
 			},
 			cause: ErrStorageRequired,
 		},
 		{
 			name: "missing catalog",
-			mutate: func(_ *config.Config, factories *bootstrapFactories) {
+			mutate: func(_ *config.Config, factories *runtimeFactories) {
 				factories.openCatalog = func(
 					context.Context,
 					storage.KVStore,
@@ -73,21 +60,23 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 		},
 		{
 			name: "missing credentials",
-			mutate: func(cfg *config.Config, _ *bootstrapFactories) {
+			mutate: func(cfg *config.Config, _ *runtimeFactories) {
 				cfg.Security.MasterKey = ""
 			},
 			cause: ErrCredentialsRequired,
 		},
 		{
-			name: "missing bootstrap identity",
-			mutate: func(cfg *config.Config, _ *bootstrapFactories) {
-				cfg.Security.BootstrapAPIKey = ""
+			name: "missing identity",
+			mutate: func(_ *config.Config, factories *runtimeFactories) {
+				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
+					return storage.NewMockStore(), nil
+				}
 			},
-			cause: ErrBootstrapRequired,
+			cause: ErrIdentityRequired,
 		},
 		{
 			name: "missing providers",
-			mutate: func(cfg *config.Config, _ *bootstrapFactories) {
+			mutate: func(cfg *config.Config, _ *runtimeFactories) {
 				cfg.Providers = config.ProvidersConfig{}
 			},
 			cause: ErrProvidersRequired,
@@ -98,7 +87,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 			cfg := *baseConfig
 			factories := explicitTestFactories()
 			test.mutate(&cfg, &factories)
-			application, err := New(&cfg, withBootstrapFactories(factories))
+			application, err := New(&cfg, withRuntimeFactories(factories))
 			if application != nil {
 				t.Cleanup(func() { _ = application.Close(context.Background()) })
 			}
@@ -131,7 +120,7 @@ func TestStartupCatalogRefreshIsExplicitAndResilient(t *testing.T) {
 				return catalog, nil
 			}
 
-			application, err := New(cfg, withBootstrapFactories(factories))
+			application, err := New(cfg, withRuntimeFactories(factories))
 			require.NoError(t, err)
 			require.Equal(t, test.wantCalls, catalog.calls)
 			require.NoError(t, application.Close(context.Background()))
@@ -140,7 +129,7 @@ func TestStartupCatalogRefreshIsExplicitAndResilient(t *testing.T) {
 }
 
 func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
-	factories := defaultBootstrapFactories()
+	factories := defaultRuntimeFactories()
 
 	httpServer, err := factories.newServer(nil, server.Dependencies{})
 	require.Error(t, err)
@@ -174,7 +163,7 @@ func TestServerConfigCredentialsFollowOriginScope(t *testing.T) {
 
 func TestNewBuildsReadyProductionDependencies(t *testing.T) {
 	cfg := validProductionConfig(t)
-	application, err := New(cfg, withBootstrapFactories(explicitTestFactories()))
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
 	require.NoError(t, err)
 	require.NotNil(t, application.store)
 	require.NotNil(t, application.catalog)
@@ -196,7 +185,7 @@ func TestNewMapsExternalServerConfigurationOnce(t *testing.T) {
 		return newBlockingHTTPRuntime(), nil
 	}
 
-	application, err := New(cfg, withBootstrapFactories(factories))
+	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
 	require.NotNil(t, captured)
 	require.Equal(t, 17*time.Second, captured.RequestTimeout)
@@ -227,7 +216,7 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 	factories.newServer = func(*server.Config, server.Dependencies) (httpRuntime, error) {
 		return fakeHTTP, nil
 	}
-	application, err := New(cfg, withBootstrapFactories(factories))
+	application, err := New(cfg, withRuntimeFactories(factories))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -278,7 +267,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 			EnableHotReload: false,
 		},
 		Security: config.SecurityConfig{
-			MasterKey: strings.Repeat("k", 32), BootstrapAPIKey: strings.Repeat("a", 32),
+			MasterKey:      strings.Repeat("k", 32),
 			AllowedOrigins: "*", EnableCORS: true,
 		},
 		Logging: config.LoggingConfig{
@@ -290,15 +279,26 @@ func validProductionConfig(t *testing.T) *config.Config {
 	}
 }
 
-func explicitTestFactories() bootstrapFactories {
-	factories := defaultBootstrapFactories()
+func explicitTestFactories() runtimeFactories {
+	factories := defaultRuntimeFactories()
+	store := storage.NewMockStore()
+	identities, _ := identity.Open(store)
+	_, _ = identities.Create(context.Background(), testIdentity())
 	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
-		return storage.NewMockStore(), nil
+		return store, nil
 	}
 	factories.newConnector = func(_ string, providerConfig connectors.ProviderConfig) (connectors.Connector, error) {
 		return connectors.NewMockConnector(providerConfig), nil
 	}
 	return factories
+}
+
+func testIdentity() identity.APIKey {
+	return identity.APIKey{
+		ID: "STARPORT_TEST", Name: "test-admin", Hash: "test-hash",
+		Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
+		Metadata: map[string]any{"source": "test"},
+	}
 }
 
 type failingCatalogRuntime struct {

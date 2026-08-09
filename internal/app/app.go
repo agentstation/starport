@@ -3,8 +3,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -41,8 +39,8 @@ var (
 	ErrCatalogRequired = errors.New("catalog factory returned no catalog")
 	// ErrCredentialsRequired reports an absent provider-credential master key.
 	ErrCredentialsRequired = errors.New("provider credential master key is required")
-	// ErrBootstrapRequired reports empty identity storage without a bootstrap key.
-	ErrBootstrapRequired = errors.New("bootstrap API key is required when identity storage is empty")
+	// ErrIdentityRequired reports empty gateway identity storage.
+	ErrIdentityRequired = errors.New("gateway identity is required; run \"starport init\"")
 )
 
 type lifecycleEntry struct {
@@ -91,23 +89,23 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 	return application, nil
 }
 
-func prepareComposition(cfg *config.Config, options []Option) (bootstrapFactories, error) {
+func prepareComposition(cfg *config.Config, options []Option) (runtimeFactories, error) {
 	if cfg == nil {
-		return bootstrapFactories{}, ErrConfigRequired
+		return runtimeFactories{}, ErrConfigRequired
 	}
 	if err := cfg.Validate(); err != nil {
-		return bootstrapFactories{}, fmt.Errorf("validate application config: %w", err)
+		return runtimeFactories{}, fmt.Errorf("validate application config: %w", err)
 	}
 	if strings.TrimSpace(cfg.Security.MasterKey) == "" {
-		return bootstrapFactories{}, ErrCredentialsRequired
+		return runtimeFactories{}, ErrCredentialsRequired
 	}
 
-	build := buildOptions{factories: defaultBootstrapFactories()}
+	build := buildOptions{factories: defaultRuntimeFactories()}
 	for _, option := range options {
 		option(&build)
 	}
 	if err := validateFactories(build.factories); err != nil {
-		return bootstrapFactories{}, err
+		return runtimeFactories{}, err
 	}
 	return build.factories, nil
 }
@@ -115,7 +113,7 @@ func prepareComposition(cfg *config.Config, options []Option) (bootstrapFactorie
 type runtimeBuilder struct {
 	application  *App
 	config       *config.Config
-	factories    bootstrapFactories
+	factories    runtimeFactories
 	identities   identity.Repository
 	providerKeys byok.ProviderKeys
 	rateLimits   ratelimit.Repository
@@ -184,7 +182,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open identity repository: %w", err)
 	}
-	if err := ensureBootstrapIdentity(context.Background(), b.identities, b.config.Security.BootstrapAPIKey); err != nil {
+	if err := requireIdentity(context.Background(), b.identities); err != nil {
 		return err
 	}
 	credentialRepository, err := credentials.Open(b.application.store)
@@ -317,37 +315,13 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	return nil
 }
 
-func ensureBootstrapIdentity(ctx context.Context, identities identity.Repository, apiKey string) error {
-	if strings.TrimSpace(apiKey) == "" {
-		records, err := identities.List(ctx, 1)
-		if err != nil {
-			return fmt.Errorf("list bootstrap identities: %w", err)
-		}
-		if len(records) == 0 {
-			return ErrBootstrapRequired
-		}
-		return nil
-	}
-
-	hash := sha256.Sum256([]byte(apiKey))
-	hashValue := hex.EncodeToString(hash[:])
-	if _, err := identities.GetByHash(ctx, hashValue); err == nil {
-		return nil
-	} else if !errors.Is(err, identity.ErrNotFound) {
-		return fmt.Errorf("read bootstrap identity: %w", err)
-	}
-
-	_, err := identities.Create(ctx, identity.APIKey{
-		ID:        "bootstrap-" + hashValue[:16],
-		Name:      "bootstrap_admin",
-		Hash:      hashValue,
-		Scopes:    []string{"*"},
-		Active:    true,
-		CreatedAt: time.Now().UTC(),
-		Metadata:  map[string]any{"source": "bootstrap"},
-	})
+func requireIdentity(ctx context.Context, identities identity.Repository) error {
+	records, err := identities.List(ctx, 1)
 	if err != nil {
-		return fmt.Errorf("create bootstrap identity: %w", err)
+		return fmt.Errorf("list gateway identities: %w", err)
+	}
+	if len(records) == 0 {
+		return ErrIdentityRequired
 	}
 	return nil
 }
@@ -425,8 +399,8 @@ func (a *App) closeWithTimeout() error {
 	return a.Close(ctx)
 }
 
-func defaultBootstrapFactories() bootstrapFactories {
-	return bootstrapFactories{
+func defaultRuntimeFactories() runtimeFactories {
+	return runtimeFactories{
 		openStorage: openStorage,
 		openCatalog: func(
 			ctx context.Context,
@@ -497,36 +471,16 @@ func (a *App) refreshCatalogLoop(ctx context.Context) {
 	}
 }
 
-func validateFactories(factories bootstrapFactories) error {
+func validateFactories(factories runtimeFactories) error {
 	if factories.openStorage == nil || factories.openCatalog == nil || factories.newConnector == nil ||
 		factories.newCache == nil || factories.newHotReload == nil || factories.newServer == nil {
-		return errors.New("application bootstrap factories are incomplete")
+		return errors.New("application runtime factories are incomplete")
 	}
 	return nil
 }
 
 func openStorage(cfg config.StorageConfig) (storage.KVStore, error) {
-	switch cfg.Mode {
-	case "badger":
-		store, err := storage.OpenBadger(storage.BadgerConfig{
-			Path: cfg.Badger.Path, SyncWrites: cfg.Badger.SyncWrites,
-			Compression: cfg.Badger.Compression != "none", NumVersions: 1,
-			NumLevelZero: 5, MemTableSize: 64 << 20,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return store, nil
-	case "valkey":
-		return storage.OpenValkey(storage.ValkeyConfig{
-			URL: cfg.Valkey.URL, Password: cfg.Valkey.Password,
-			MaxRetries: 3, MinIdleConns: cfg.Valkey.MinIdleConns,
-			ReadTimeout: cfg.Valkey.ReadTimeout, WriteTimeout: cfg.Valkey.WriteTimeout,
-			ClusterMode: cfg.Valkey.ClusterMode,
-		})
-	default:
-		return nil, fmt.Errorf("unknown storage mode %q", cfg.Mode)
-	}
+	return storage.Open(cfg.RuntimeStorage())
 }
 
 func serverConfig(cfg *config.Config) *server.Config {

@@ -126,3 +126,25 @@ func TestIdentityDeleteToleratesMissingHashIndex(t *testing.T) {
 	_, err = repository.GetByID(ctx, apiKey.ID)
 	require.ErrorIs(t, err, ErrNotFound)
 }
+
+func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.ErrorIs(t, err, ErrConflict)
+	records, err := repository.List(context.Background(), 10)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.Equal(t, first.ID, records[0].APIKey.ID)
+}

@@ -162,7 +162,6 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 		"STARPORT_LOGGING_OUTPUT":                  "file",
 		"STARPORT_LOGGING_FILE_PATH":               "logs/starport.log",
 		"STARPORT_SECURITY_MASTER_KEY":             strings.Repeat("m", 32),
-		"STARPORT_SECURITY_BOOTSTRAP_API_KEY":      strings.Repeat("b", 32),
 		"STARPORT_PROVIDERS_OPENAI_API_KEY":        "provider-key",
 		"STARPORT_RATE_LIMITING_ENABLE_HOT_RELOAD": "false",
 	}
