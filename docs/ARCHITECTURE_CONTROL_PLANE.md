@@ -29,7 +29,7 @@ Use this exact goal when resuming the work:
 
 ## Current Work Snapshot
 
-- Current branch: `master`
+- Branch recorded by this historical plan: `master`
 - Active work: architecture hardening after a full architecture review.
 - Current verification: final `go test ./...` and selected race suite pass after P7 documentation closeout.
 - Original baseline failure is preserved in P0-E3 for historical context.

@@ -9,6 +9,8 @@ Date: 2026-08-09
 - Baseline commit: `a62fc289ed59c058013ee0ff5a411dd083e8454c`
 - Plan branch: `codex/starport-developer-experience`
 - Plan work commit: `fb5a821c87e0a7f3ccd72268e403526e6a959bc4`
+- Pull request: `https://github.com/agentstation/starport/pull/76`
+- Merge commit: `7be7b08f54e816782b2098eab5a7f90dbc1d352d`
 - Runtime behavior changes: none
 
 ## Fail-before verifier
@@ -69,3 +71,20 @@ git diff --check
 ```
 
 Both commands exited with status 0 before the work commit.
+
+## Pull request gate
+
+All 10 CI checks passed before merge:
+
+- Action Pin Provenance
+- Build
+- Lint
+- OpenRouter SDK Compatibility
+- Release Contract
+- Release Snapshot
+- Security Scan
+- Test on macOS
+- Test on Ubuntu
+- Test on Windows
+
+Pull request #76 merged on 2026-08-09 at 20:40:46 UTC.

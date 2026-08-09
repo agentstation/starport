@@ -7,7 +7,9 @@ Last Updated: 2026-08-09
 
 ### Active Work
 
-None.
+| Task | Owner | Status | Plan |
+|---|---|---|---|
+| Starport developer experience | DX1 | Active | [Developer experience plan](plans/starport-developer-experience-plan.html) |
 
 ### Recently Completed
 

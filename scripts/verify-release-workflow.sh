@@ -21,8 +21,8 @@ fi
 
 require_text '^permissions:$' 'a default permission boundary'
 require_text '^[[:space:]]+contents: read$' 'read-only default contents permission'
-require_text 'git merge-base --is-ancestor .* origin/master' 'a master ancestry check'
-require_text 'test .*origin/master' 'an exact master-head check'
+require_text 'git merge-base --is-ancestor .* origin/main' 'a main ancestry check'
+require_text 'test .*origin/main' 'an exact main-head check'
 require_text 'smoke-openrouter-sdks\.sh' 'the required official SDK gate'
 require_text 'verify-release-binaries\.sh' 'the portable binary gate'
 require_text 'verify-release-archives\.sh' 'the archive and SBOM gate'
