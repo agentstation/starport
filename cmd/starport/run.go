@@ -67,16 +67,17 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 		ProviderCredential: os.Getenv(setup.OpenAIProviderCredentialEnvironment),
 		IdentityName:       options.IdentityName,
 	})
-	if err != nil {
-		return starportcli.InitResult{}, err
-	}
-	return starportcli.InitResult{
+	initialized := starportcli.InitResult{
 		Provider: result.Provider, IdentityName: result.IdentityName,
 		ConfigFile: result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
 		Rollback: func(rollbackCtx context.Context) error {
 			return service.Rollback(rollbackCtx, result)
 		},
-	}, nil
+	}
+	if result.APIKey == "" {
+		initialized = starportcli.InitResult{}
+	}
+	return initialized, err
 }
 
 func initializeConfiguredStorage(

@@ -13,5 +13,5 @@ func renameNoReplace(source, destination string) error {
 	if err != nil {
 		return err
 	}
-	return windows.MoveFileEx(sourcePointer, destinationPointer, 0)
+	return windows.MoveFileEx(sourcePointer, destinationPointer, windows.MOVEFILE_WRITE_THROUGH)
 }

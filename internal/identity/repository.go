@@ -23,6 +23,7 @@ const (
 	initialKey        = StoragePrefix + "initial"
 	collectionKey     = StoragePrefix + "collection"
 	defaultListLimit  = 1000
+	collectionRetries = 32
 )
 
 var (
@@ -91,7 +92,20 @@ func Open(store storage.KVStore) (Repository, error) {
 }
 
 func (r *repository) Create(ctx context.Context, apiKey APIKey) (Record, error) {
-	return r.create(ctx, apiKey, false)
+	for range collectionRetries {
+		record, err := r.create(ctx, apiKey, false)
+		if !errors.Is(err, ErrConflict) {
+			return record, err
+		}
+		collision, checkErr := r.identityOrHashExists(ctx, apiKey)
+		if checkErr != nil {
+			return Record{}, checkErr
+		}
+		if collision {
+			return Record{}, ErrConflict
+		}
+	}
+	return Record{}, ErrConflict
 }
 
 // CreateInitial atomically claims initialization and creates the first identity.
@@ -154,6 +168,20 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 		return Record{}, mapConflict("create identity, hash index, and collection record", err)
 	}
 	return recordFromIdentity(stored), nil
+}
+
+func (r *repository) identityOrHashExists(ctx context.Context, apiKey APIKey) (bool, error) {
+	if _, err := r.GetByID(ctx, apiKey.ID); err == nil {
+		return true, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return false, err
+	}
+	if _, err := r.GetByHash(ctx, apiKey.Hash); err == nil {
+		return true, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return false, err
+	}
+	return false, nil
 }
 
 func (r *repository) replaceMissingInitial(

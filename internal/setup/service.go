@@ -146,6 +146,11 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 	if err := writeExclusive(stagedPaths.ConfigFile, contents); err != nil {
 		return Result{}, fmt.Errorf("write staged configuration file: %w", err)
 	}
+	for _, directory := range []string{stagedPaths.BadgerDir, stagedPaths.DataDir, stagedPaths.ConfigDir} {
+		if err := syncDirectory(directory); err != nil {
+			return Result{}, fmt.Errorf("sync staged setup directory %q: %w", directory, err)
+		}
+	}
 	if err := renameNoReplace(stagingDir, s.paths.ConfigDir); err != nil {
 		current, inspectErr := Inspect(s.paths)
 		if inspectErr == nil && current == StateReady {
@@ -157,11 +162,15 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 		return Result{}, fmt.Errorf("install initialized state: %w", err)
 	}
 
-	return Result{
+	result := Result{
 		Provider: request.Provider, IdentityName: request.IdentityName,
 		ConfigFile: s.paths.ConfigFile, DataDir: s.paths.DataDir, APIKey: issued.Secret,
 		identityID: issued.APIKey.ID, configDigest: sha256.Sum256(contents),
-	}, nil
+	}
+	if err := syncDirectory(parentDir); err != nil {
+		return result, fmt.Errorf("sync installed setup directory: %w", err)
+	}
+	return result, nil
 }
 
 // Rollback removes local state when the initialization result could not be returned.
@@ -197,6 +206,9 @@ func (s *Service) Rollback(ctx context.Context, result Result) error {
 	}
 	if err := os.RemoveAll(rollbackDir); err != nil {
 		return fmt.Errorf("remove rolled-back setup state: %w", err)
+	}
+	if err := syncDirectory(parentDir); err != nil {
+		return fmt.Errorf("sync rolled-back setup directory: %w", err)
 	}
 	return nil
 }
@@ -288,6 +300,9 @@ func (s *Service) restoreRollback(rollbackDir string, cause error) error {
 			cause,
 			fmt.Errorf("restore refused setup state from %q: %w", rollbackDir, err),
 		)
+	}
+	if err := syncDirectory(filepath.Dir(s.paths.ConfigDir)); err != nil {
+		return errors.Join(cause, fmt.Errorf("sync restored setup state: %w", err))
 	}
 	return cause
 }

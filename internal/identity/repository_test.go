@@ -161,7 +161,7 @@ func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
 	require.Equal(t, first.ID, records[0].APIKey.ID)
 }
 
-func TestCreateInitialRacesNormalCreateOnRepositoryEmptiness(t *testing.T) {
+func TestConcurrentCreatesRetryCollectionContention(t *testing.T) {
 	store := &collectionReadBarrierStore{
 		KVStore: storage.NewMockStore(),
 		ready:   make(chan struct{}, 2),
@@ -179,36 +179,38 @@ func TestCreateInitialRacesNormalCreateOnRepositoryEmptiness(t *testing.T) {
 				Hash:   "hash-" + string(rune('A'+index)),
 				Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
 			}
-			var createErr error
-			if index == 0 {
-				_, createErr = repository.CreateInitial(context.Background(), apiKey)
-			} else {
-				_, createErr = repository.Create(context.Background(), apiKey)
-			}
+			_, createErr := repository.Create(context.Background(), apiKey)
 			results <- createErr
 		}()
 	}
 	<-store.ready
 	<-store.ready
 	close(store.release)
-	successes := 0
-	conflicts := 0
 	for range 2 {
-		switch err := <-results; {
-		case err == nil:
-			successes++
-		case errors.Is(err, ErrConflict):
-			conflicts++
-		default:
+		if err := <-results; err != nil {
 			t.Fatalf("concurrent create error = %v", err)
 		}
 	}
-	if successes != 1 || conflicts != 1 {
-		t.Fatalf("successes = %d, conflicts = %d", successes, conflicts)
-	}
 	records, err := repository.List(context.Background(), 2)
 	require.NoError(t, err)
-	require.Len(t, records, 1)
+	require.Len(t, records, 2)
+}
+
+func TestCreateInitialRefusesNonemptyCollection(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.Create(context.Background(), first)
+	require.NoError(t, err)
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.ErrorIs(t, err, ErrConflict)
 }
 
 func TestCreateInitialReclaimsMissingInitialIdentity(t *testing.T) {

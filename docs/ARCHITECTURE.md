@@ -250,9 +250,11 @@ Implemented:
 
 - The identity repository owns the SHA-256 hash index and atomic identity changes.
 - A versioned collection record joins every identity create and delete transaction. Initial setup uses it to prove repository emptiness atomically.
+- Independent identity creation retries collection-record contention without weakening duplicate-key conflicts.
 - The identity issuer owns gateway-key generation, hashing, and one-time secret return.
 - Local initialization writes an owner-only configuration file and creates one named wildcard identity directly.
 - Platform-native no-replace rename operations install local state without replacing an existing directory.
+- Directory synchronization makes staged contents and the installed rename durable before the command reports success.
 - Configured-storage initialization creates the first named identity without a temporary startup credential.
 - Failed credential output isolates local state before deletion. Rollback requires the original layout and only the initial identity records.
 - Configured storage atomically releases the identity claim after an output failure.
