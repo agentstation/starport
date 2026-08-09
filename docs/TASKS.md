@@ -9,7 +9,7 @@ Last Updated: 2026-08-09
 
 | Task | Owner | Status | Plan |
 |---|---|---|---|
-| Starport developer experience | DX2 | Active | [Developer experience plan](plans/starport-developer-experience-plan.html) |
+| Starport developer experience | DX3 | Active | [Developer experience plan](plans/starport-developer-experience-plan.html) |
 
 ### Recently Completed
 

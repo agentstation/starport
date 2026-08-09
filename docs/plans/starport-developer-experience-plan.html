@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <body>
 <header id="overview">
   <h1>Starport developer experience plan</h1>
-  <p id="status-line">Status: <code data-plan-status="active">active</code> · Owner: this plan · Created: 2026-08-09 · Baseline: master @ a62fc289ed59c058013ee0ff5a411dd083e8454c · Proof root: <code>docs/plans/proof/starport-developer-experience/</code>. Next action: make configuration loading pure and add secure platform defaults.</p>
+  <p id="status-line">Status: <code data-plan-status="active">active</code> · Owner: this plan · Created: 2026-08-09 · Baseline: master @ a62fc289ed59c058013ee0ff5a411dd083e8454c · Proof root: <code>docs/plans/proof/starport-developer-experience/</code>. Next action: create the CLI seam and stable command contracts.</p>
   <section id="outcome">
     <h2>Outcome</h2>
     <blockquote>Starport gives a developer one tested install, setup, diagnosis, and first-request path. The same release keeps explicit production configuration, renewable cloud credentials, and verified distribution artifacts.</blockquote>
@@ -122,8 +122,8 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
     <table><thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
       <tr id="DX0" data-status="done"><td>DX0</td><td>Pin the baseline, add the red verifier, add the glossary, and capture fail-before evidence.</td><td><code>done</code></td><td>PR <a href="https://github.com/agentstation/starport/pull/76">#76</a>, merge <code>7be7b08</code>, 10 CI checks, and <a href="proof/starport-developer-experience/dx0.md">DX0 proof</a>.</td></tr>
       <tr id="DX1" data-status="done"><td>DX1</td><td>Rename the protected default branch to <code>main</code> and update active branch contracts.</td><td><code>done</code></td><td>PR <a href="https://github.com/agentstation/starport/pull/77">#77</a>; merge <code>05f4a79</code>; 10 CI checks passed.</td></tr>
-      <tr id="DX2" data-status="in_progress"><td>DX2</td><td>Make configuration pure, deterministic, secure by default, and independent of the launch directory.</td><td><code>in_progress</code></td><td></td></tr>
-      <tr id="DX3" data-status="todo"><td>DX3</td><td>Create the CLI seam and stable command, output, error, and exit contracts.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DX2" data-status="done"><td>DX2</td><td>Make configuration pure, deterministic, secure by default, and independent of the launch directory.</td><td><code>done</code></td><td>PR <a href="https://github.com/agentstation/starport/pull/78">#78</a>; merge <code>be127ce</code>; 10 CI checks passed.</td></tr>
+      <tr id="DX3" data-status="in_progress"><td>DX3</td><td>Create the CLI seam and stable command, output, error, and exit contracts.</td><td><code>in_progress</code></td><td></td></tr>
       <tr id="DX4" data-status="todo"><td>DX4</td><td>Add safe local setup and direct named identity creation.</td><td><code>todo</code></td><td></td></tr>
       <tr id="DX5" data-status="todo"><td>DX5</td><td>Add configuration inspection and read-only diagnosis.</td><td><code>todo</code></td><td></td></tr>
       <tr id="DX6" data-status="todo"><td>DX6</td><td>Add renewable Google Cloud and Azure inference credentials.</td><td><code>todo</code></td><td></td></tr>
@@ -242,7 +242,7 @@ This is a whole-plan goal, not a single-task goal. Read the plan fully,
 then read AGENTS.md, docs/TASKS.md, docs/ARCHITECTURE.md, GLOSSARY.md,
 and the plans and technical-writing skills. Work in
 /Users/jack/src/github.com/agentstation/starport on branch
-codex/starport-dx2-config for DX2. Update this branch value at
+codex/starport-dx3-cli for DX3. Update this branch value at
 each task transition. Chat history is not progress state. Resume from the
 status ledger, the execution log, and git state. If compaction happens,
 continue from the plan and git state rather than restarting. Loop: keep
@@ -275,6 +275,7 @@ plan artifacts.</code></pre>
       <tr><td>2026-08-09</td><td>DX1</td><td>renamed and verified</td><td>Work commit <code>d63c268</code>. GitHub reports protected <code>main</code> as the default branch with all four required checks. The three DX1 verifier conditions pass.</td></tr>
       <tr><td>2026-08-09</td><td>DX1</td><td>merged and advanced</td><td>PR <a href="https://github.com/agentstation/starport/pull/77">#77</a> merged as <code>05f4a79</code> after 10 CI checks passed. The remote and local <code>master</code> branches were removed. DX2 became active.</td></tr>
       <tr><td>2026-08-09</td><td>DX2</td><td>implemented and verified</td><td>Work commit <code>0fd5265</code>. All seven DX2 verifier conditions, repository gates, container verification, strict prose checks, and autoreview passed.</td></tr>
+      <tr><td>2026-08-09</td><td>DX2</td><td>merged and advanced</td><td>PR <a href="https://github.com/agentstation/starport/pull/78">#78</a> merged as <code>be127ce</code> after 10 CI checks passed. DX3 became active.</td></tr>
     </tbody></table>
   </section>
 </main>
