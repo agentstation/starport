@@ -146,7 +146,7 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 	if err := writeExclusive(stagedPaths.ConfigFile, contents); err != nil {
 		return Result{}, fmt.Errorf("write staged configuration file: %w", err)
 	}
-	if err := os.Rename(stagingDir, s.paths.ConfigDir); err != nil {
+	if err := renameNoReplace(stagingDir, s.paths.ConfigDir); err != nil {
 		current, inspectErr := Inspect(s.paths)
 		if inspectErr == nil && current == StateReady {
 			return Result{}, fmt.Errorf("%w: %q", ErrAlreadyInitialized, s.paths.ConfigDir)
@@ -173,13 +173,6 @@ func (s *Service) Rollback(ctx context.Context, result Result) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	contents, err := os.ReadFile(s.paths.ConfigFile)
-	if err != nil {
-		return fmt.Errorf("read initialized configuration for rollback: %w", err)
-	}
-	if sha256.Sum256(contents) != result.configDigest {
-		return fmt.Errorf("%w: configuration changed after initialization", ErrRollbackRefused)
-	}
 	state, err := Inspect(s.paths)
 	if err != nil {
 		return err
@@ -187,10 +180,6 @@ func (s *Service) Rollback(ctx context.Context, result Result) error {
 	if state != StateReady {
 		return fmt.Errorf("%w: setup state is %s", ErrRollbackRefused, state)
 	}
-	if err := s.validateRollbackIdentity(ctx, result.identityID); err != nil {
-		return err
-	}
-
 	parentDir := filepath.Dir(s.paths.ConfigDir)
 	rollbackDir, err := os.MkdirTemp(parentDir, "."+filepath.Base(s.paths.ConfigDir)+"-rollback-")
 	if err != nil {
@@ -199,8 +188,12 @@ func (s *Service) Rollback(ctx context.Context, result Result) error {
 	if err := os.Remove(rollbackDir); err != nil {
 		return fmt.Errorf("prepare setup rollback path: %w", err)
 	}
-	if err := os.Rename(s.paths.ConfigDir, rollbackDir); err != nil {
+	if err := renameNoReplace(s.paths.ConfigDir, rollbackDir); err != nil {
 		return fmt.Errorf("isolate initialized state for rollback: %w", err)
+	}
+	rollbackPaths := config.PathsForConfigDir(rollbackDir)
+	if err := s.validateRollbackState(ctx, rollbackPaths, result); err != nil {
+		return s.restoreRollback(rollbackDir, err)
 	}
 	if err := os.RemoveAll(rollbackDir); err != nil {
 		return fmt.Errorf("remove rolled-back setup state: %w", err)
@@ -208,10 +201,24 @@ func (s *Service) Rollback(ctx context.Context, result Result) error {
 	return nil
 }
 
-func (s *Service) validateRollbackIdentity(ctx context.Context, identityID string) error {
-	store, err := s.openStore(s.paths.BadgerDir)
+func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths, result Result) error {
+	contents, err := os.ReadFile(paths.ConfigFile)
 	if err != nil {
-		return fmt.Errorf("open initialized identity store for rollback: %w", err)
+		return fmt.Errorf("read isolated configuration for rollback: %w", err)
+	}
+	if sha256.Sum256(contents) != result.configDigest {
+		return fmt.Errorf("%w: configuration changed after initialization", ErrRollbackRefused)
+	}
+	state, err := Inspect(paths)
+	if err != nil {
+		return err
+	}
+	if state != StateReady {
+		return fmt.Errorf("%w: isolated setup state is %s", ErrRollbackRefused, state)
+	}
+	store, err := s.openStore(paths.BadgerDir)
+	if err != nil {
+		return fmt.Errorf("open isolated identity store for rollback: %w", err)
 	}
 	repository, err := identity.Open(store)
 	if err != nil {
@@ -226,10 +233,20 @@ func (s *Service) validateRollbackIdentity(ctx context.Context, identityID strin
 	if closeErr != nil {
 		return fmt.Errorf("close initialized identity store for rollback: %w", closeErr)
 	}
-	if len(records) != 1 || records[0].APIKey.ID != identityID {
+	if len(records) != 1 || records[0].APIKey.ID != result.identityID {
 		return fmt.Errorf("%w: identity storage changed after initialization", ErrRollbackRefused)
 	}
 	return nil
+}
+
+func (s *Service) restoreRollback(rollbackDir string, cause error) error {
+	if err := renameNoReplace(rollbackDir, s.paths.ConfigDir); err != nil {
+		return errors.Join(
+			cause,
+			fmt.Errorf("restore refused setup state from %q: %w", rollbackDir, err),
+		)
+	}
+	return cause
 }
 
 func (s *Service) validate(request Request) error {
