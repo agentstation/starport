@@ -1,35 +1,56 @@
-# Configuration Package
+# Configuration package
 
-This package provides a comprehensive configuration system for Starport with support for:
+The configuration package owns source precedence, platform paths, decoding,
+and validation. Loading reads process state but does not change it.
 
-- Environment variables
-- `.env` files (with `local.env` taking precedence)
-- Type-safe configuration with validation
-- Hot reload for rate limit rules
+## Source precedence
 
-## Configuration Loading
+Starport resolves each value in this order:
 
-The configuration is loaded in the following order of precedence:
+1. A `STARPORT_` process environment variable.
+2. The first environment file that defines the value.
+3. A built-in default.
 
-1. Environment variables
-2. `local.env` file (if exists)
-3. `.env` file (if exists)
-4. Default values
+The standard loader reads one platform file named `config.env`. It uses these
+locations:
 
-## Configuration Structure
+| Platform | File |
+|---|---|
+| Linux and other Unix systems | `$XDG_CONFIG_HOME/starport/config.env`, or `$HOME/.config/starport/config.env` when `XDG_CONFIG_HOME` is empty |
+| macOS | `$HOME/Library/Application Support/starport/config.env` |
+| Windows | `%AppData%\starport\config.env` |
 
-The main configuration struct includes:
+`os.UserConfigDir` supplies the platform root. Tests can inject a different
+root and environment map without changing global process state.
 
-- **Server**: HTTP server settings (port, timeouts, etc.)
-- **Storage**: Storage backend configuration (Badger or Valkey)
-- **Providers**: LLM provider settings (OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure, Ollama)
-- **RateLimiting**: Rate limiting configuration with hot reload support
-- **Security**: Security settings (TLS, CORS, JWT)
-- **Logging**: Logging configuration
+## Managed paths
 
-## Environment Variables
+The platform configuration directory owns these defaults:
 
-All configuration can be set via environment variables with the `STARPORT_` prefix:
+| Concept | Relative path |
+|---|---|
+| Environment file | `config.env` |
+| Badger data | `data/badger` |
+| Rate-limit rules | `rate_limits.yaml` |
+
+Starport resolves a configured relative path from the platform configuration
+directory. An absolute path remains unchanged. This rule makes file behavior
+independent of the directory that starts the process.
+
+## Secure local defaults
+
+The HTTP server listens on `127.0.0.1:8080`. CORS and rate-limit hot reload are
+off until an operator enables them. A supplied credential master key must
+contain at least 32 bytes.
+
+The container image explicitly listens on `0.0.0.0` because publishing a
+container port is an operator action. It also stores Badger data under
+`/var/lib/starport/data/badger`. Its writable configuration root is
+`/var/lib/starport/config`.
+
+## Environment variables
+
+All external fields use the `STARPORT_` prefix. For example:
 
 ```bash
 STARPORT_SERVER_PORT=8080
@@ -37,60 +58,19 @@ STARPORT_STORAGE_MODE=badger
 STARPORT_LOGGING_LEVEL=info
 ```
 
-See `.env.example` for a complete list of available variables.
+Use [the configuration reference](../../.env.example) for the complete field
+list. Starmap acquisition credentials stay separate from Starport inference
+credentials.
 
-## Hot Reload
+## Rate-limit reload
 
-Rate limit rules can be hot-reloaded from a YAML file without restarting the server:
+To enable rule reload, set both values:
 
-```yaml
-# config/rate_limits.yaml
-version: "1.0"
-rules:
-  "sk-premium-key":
-    requests_per_minute: 600
-    tokens_per_minute: 1000000
-models:
-  "gpt-4":
-    requests_per_minute: 20
-    tokens_per_minute: 40000
-```
-
-Enable hot reload by setting:
 ```bash
 STARPORT_RATE_LIMITING_ENABLE_HOT_RELOAD=true
-STARPORT_RATE_LIMITING_CONFIG_PATH=./config/rate_limits.yaml
+STARPORT_RATE_LIMITING_CONFIG_PATH=/absolute/path/to/rate_limits.yaml
 ```
 
-## Usage
-
-```go
-// Load configuration
-cfg, err := config.LoadWithDefaults(ctx)
-if err != nil {
-    log.Fatal(err)
-}
-
-// Initialize hot reloader if enabled
-if cfg.RateLimiting.EnableHotReload {
-    hotReloader, err := config.NewHotReloader(
-        cfg.RateLimiting.ConfigPath,
-        cfg.RateLimiting.ReloadCheckInterval,
-    )
-    if err == nil {
-        hotReloader.Start(ctx)
-        defer hotReloader.Stop()
-    }
-}
-```
-
-## Validation
-
-All configuration is validated on load. The validation includes:
-
-- Port numbers must be between 1-65535
-- Timeouts must be positive
-- Storage modes must be "badger" or "valkey"
-- Log levels must be valid (trace, debug, info, warn, error, fatal, panic)
-- TLS certificate paths must exist if TLS is enabled
-- Rate limit values must be non-negative
+Starport requires the rules file after an operator enables reload. The hot
+reloader watches its directory and also checks the file at the configured
+interval.

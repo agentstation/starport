@@ -34,7 +34,7 @@ type CatalogConfig struct {
 // ServerConfig defines HTTP server settings
 type ServerConfig struct {
 	Port              int           `env:"PORT,default=8080"`
-	Host              string        `env:"HOST,default=0.0.0.0"`
+	Host              string        `env:"HOST,default=127.0.0.1"`
 	ReadTimeout       time.Duration `env:"READ_TIMEOUT,default=30s"`
 	WriteTimeout      time.Duration `env:"WRITE_TIMEOUT,default=30s"`
 	IdleTimeout       time.Duration `env:"IDLE_TIMEOUT,default=120s"`
@@ -55,7 +55,7 @@ type StorageConfig struct {
 
 // BadgerConfig defines Badger DB settings
 type BadgerConfig struct {
-	Path           string        `env:"PATH,default=./data/starport"`
+	Path           string        `env:"PATH,overwrite"`
 	SyncWrites     bool          `env:"SYNC_WRITES,default=false"`
 	Compression    string        `env:"COMPRESSION,default=snappy"`
 	GCInterval     time.Duration `env:"GC_INTERVAL,default=5m"`
@@ -138,8 +138,8 @@ type RateLimitingConfig struct {
 	CleanupInterval time.Duration `env:"CLEANUP_INTERVAL,default=10m"`
 
 	// Hot reload settings
-	EnableHotReload     bool          `env:"ENABLE_HOT_RELOAD,default=true"`
-	ConfigPath          string        `env:"CONFIG_PATH,default=./config/rate_limits.yaml"`
+	EnableHotReload     bool          `env:"ENABLE_HOT_RELOAD,default=false"`
+	ConfigPath          string        `env:"CONFIG_PATH,overwrite"`
 	ReloadCheckInterval time.Duration `env:"RELOAD_CHECK_INTERVAL,default=10s"`
 }
 
@@ -150,8 +150,8 @@ type SecurityConfig struct {
 	TLSCertPath        string `env:"TLS_CERT_PATH"`
 	TLSKeyPath         string `env:"TLS_KEY_PATH"`
 	EnableTLS          bool   `env:"ENABLE_TLS,default=false"`
-	AllowedOrigins     string `env:"ALLOWED_ORIGINS,default=*"`
-	EnableCORS         bool   `env:"ENABLE_CORS,default=true"`
+	AllowedOrigins     string `env:"ALLOWED_ORIGINS"`
+	EnableCORS         bool   `env:"ENABLE_CORS,default=false"`
 	JWTSecret          string `env:"JWT_SECRET"`
 	APIKeyHeader       string `env:"API_KEY_HEADER,default=Authorization"`
 	EnableRateLimiting bool   `env:"ENABLE_RATE_LIMITING,default=true"`

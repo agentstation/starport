@@ -53,3 +53,25 @@ Summary: 4 passed, 35 failed
 
 The developer-experience verifier must fail until later plan tasks implement
 the other 35 conditions. The three DX1 branch conditions pass.
+
+## Pull request gate
+
+- Pull request: `https://github.com/agentstation/starport/pull/77`
+- Merge commit: `05f4a791470a60d858b0620b2d3804bb1d02203e`
+- Merge time: 2026-08-09 at 20:52:19 UTC
+
+All 10 CI checks passed before merge:
+
+- Action Pin Provenance
+- Build
+- Lint
+- OpenRouter SDK Compatibility
+- Release Contract
+- Release Snapshot
+- Security Scan
+- Test on macOS
+- Test on Ubuntu
+- Test on Windows
+
+The merge cleanup removed the remote and local `master` branches. Git history
+can recover the local branch for an audit.

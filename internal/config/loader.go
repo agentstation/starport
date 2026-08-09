@@ -2,152 +2,172 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
-	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/sethvargo/go-envconfig"
 )
 
-// Loader handles configuration loading from multiple sources
+// Loader reads configuration without changing process state.
 type Loader struct {
-	envFiles []string
-	prefix   string
+	envFiles     []string
+	prefix       string
+	environment  envconfig.Lookuper
+	resolvePaths func() (Paths, error)
 }
 
-// NewLoader creates a new configuration loader
+// NewLoader creates a loader for the process environment and platform paths.
 func NewLoader() *Loader {
 	return &Loader{
-		envFiles: []string{"local.env", ".env"},
-		prefix:   "STARPORT_",
+		prefix:       "STARPORT_",
+		environment:  envconfig.OsLookuper(),
+		resolvePaths: PlatformPaths,
 	}
 }
 
-// WithEnvFiles sets custom env files to load (in order of precedence)
+// WithEnvFiles sets environment files in descending precedence order.
+// An empty list disables file loading.
 func (l *Loader) WithEnvFiles(files ...string) *Loader {
-	l.envFiles = files
+	l.envFiles = make([]string, len(files))
+	copy(l.envFiles, files)
 	return l
 }
 
-// WithPrefix sets a custom environment variable prefix
+// WithPrefix sets the environment variable prefix.
 func (l *Loader) WithPrefix(prefix string) *Loader {
 	l.prefix = prefix
 	return l
 }
 
-// Load loads configuration from environment variables and .env files
+// WithEnvironment replaces the process environment source.
+func (l *Loader) WithEnvironment(values map[string]string) *Loader {
+	copyValues := make(map[string]string, len(values))
+	for key, value := range values {
+		copyValues[key] = value
+	}
+	l.environment = envconfig.MapLookuper(copyValues)
+	return l
+}
+
+// WithPaths replaces platform path resolution.
+func (l *Loader) WithPaths(paths Paths) *Loader {
+	l.resolvePaths = func() (Paths, error) { return paths, nil }
+	return l
+}
+
+// Load resolves configuration sources, applies defaults, and validates the result.
 func (l *Loader) Load(ctx context.Context) (*Config, error) {
-	// Load .env files in order (first file takes precedence)
-	if err := l.loadEnvFiles(); err != nil {
-		return nil, fmt.Errorf("failed to load env files: %w", err)
+	paths, err := l.resolvePaths()
+	if err != nil {
+		return nil, fmt.Errorf("resolve configuration paths: %w", err)
 	}
 
-	// Create config with defaults
-	cfg := &Config{}
+	lookuper, err := l.sourceLookuper(paths)
+	if err != nil {
+		return nil, err
+	}
 
-	// Create a custom lookuper that adds our prefix
-	lookuper := envconfig.PrefixLookuper(l.prefix, envconfig.OsLookuper())
-
-	// Process environment variables using go-envconfig
+	cfg := defaultConfig(paths)
 	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
 		Target:   cfg,
-		Lookuper: lookuper,
+		Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper),
 	}); err != nil {
-		return nil, fmt.Errorf("failed to process env config: %w", err)
+		return nil, fmt.Errorf("process environment configuration: %w", err)
 	}
 
-	// Apply any post-processing
-	if err := l.postProcess(cfg); err != nil {
-		return nil, fmt.Errorf("failed to post-process config: %w", err)
+	if err := resolveConfiguredPaths(cfg, paths); err != nil {
+		return nil, fmt.Errorf("resolve configured paths: %w", err)
 	}
-
-	// Validate the configuration
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("configuration validation failed: %w", err)
+		return nil, fmt.Errorf("validate configuration: %w", err)
 	}
 
 	return cfg, nil
 }
 
-// loadEnvFiles loads environment files in order of precedence
-func (l *Loader) loadEnvFiles() error {
-	// Track which env vars were already set
-	existingEnv := make(map[string]bool)
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
-		if len(parts) > 0 {
-			existingEnv[parts[0]] = true
-		}
+func defaultConfig(paths Paths) *Config {
+	return &Config{
+		Storage: StorageConfig{
+			Badger: BadgerConfig{Path: paths.BadgerDir},
+		},
+		RateLimiting: RateLimitingConfig{ConfigPath: paths.RateLimitsFile},
+	}
+}
+
+func (l *Loader) sourceLookuper(paths Paths) (envconfig.Lookuper, error) {
+	files := l.envFiles
+	if files == nil {
+		files = []string{paths.ConfigFile}
 	}
 
-	// Load env files in order (first file has precedence)
-	for _, file := range l.envFiles {
-		// Check if file exists
-		if _, err := os.Stat(file); os.IsNotExist(err) {
-			// Skip non-existent files
-			continue
-		}
-
-		// Read the env file
-		envMap, err := godotenv.Read(file)
+	lookupers := []envconfig.Lookuper{l.environment}
+	for _, file := range files {
+		values, err := godotenv.Read(file)
 		if err != nil {
-			return fmt.Errorf("failed to read %s: %w", file, err)
-		}
-
-		// Set env vars only if not already set
-		for key, value := range envMap {
-			if !existingEnv[key] {
-				if err := os.Setenv(key, value); err != nil {
-					return fmt.Errorf("failed to set env var %s: %w", key, err)
-				}
-				existingEnv[key] = true
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
 			}
+			return nil, fmt.Errorf("read environment file %q: %w", file, err)
+		}
+		lookupers = append(lookupers, envconfig.MapLookuper(values))
+	}
+	return envconfig.MultiLookuper(lookupers...), nil
+}
+
+func resolveConfiguredPaths(cfg *Config, paths Paths) error {
+	var err error
+	if cfg.Storage.Mode == "badger" {
+		cfg.Storage.Badger.Path, err = resolvePath(paths.ConfigDir, cfg.Storage.Badger.Path)
+		if err != nil {
+			return fmt.Errorf("badger path: %w", err)
 		}
 	}
-
+	cfg.Catalog.WorkspacePath, err = resolvePath(paths.ConfigDir, cfg.Catalog.WorkspacePath)
+	if err != nil {
+		return fmt.Errorf("catalog workspace path: %w", err)
+	}
+	cfg.RateLimiting.ConfigPath, err = resolvePath(paths.ConfigDir, cfg.RateLimiting.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("rate-limit configuration path: %w", err)
+	}
+	cfg.Security.TLSCertPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSCertPath)
+	if err != nil {
+		return fmt.Errorf("TLS certificate path: %w", err)
+	}
+	cfg.Security.TLSKeyPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSKeyPath)
+	if err != nil {
+		return fmt.Errorf("TLS key path: %w", err)
+	}
+	cfg.Logging.FilePath, err = resolvePath(paths.ConfigDir, cfg.Logging.FilePath)
+	if err != nil {
+		return fmt.Errorf("log file path: %w", err)
+	}
 	return nil
 }
 
-// postProcess applies any post-processing to the configuration
-func (l *Loader) postProcess(cfg *Config) error {
-	// Ensure storage path is absolute
-	if cfg.Storage.Mode == "badger" && cfg.Storage.Badger.Path != "" {
-		if !filepath.IsAbs(cfg.Storage.Badger.Path) {
-			absPath, err := filepath.Abs(cfg.Storage.Badger.Path)
-			if err != nil {
-				return fmt.Errorf("failed to resolve badger path: %w", err)
-			}
-			cfg.Storage.Badger.Path = absPath
-		}
+func resolvePath(base, value string) (string, error) {
+	if value == "" || filepath.IsAbs(value) {
+		return value, nil
 	}
-	if cfg.Catalog.WorkspacePath != "" && !filepath.IsAbs(cfg.Catalog.WorkspacePath) {
-		absPath, err := filepath.Abs(cfg.Catalog.WorkspacePath)
-		if err != nil {
-			return fmt.Errorf("failed to resolve catalog workspace path: %w", err)
-		}
-		cfg.Catalog.WorkspacePath = absPath
+	if base == "" {
+		return "", fmt.Errorf("base directory is empty")
 	}
-
-	// Parse allowed origins
-	if cfg.Security.AllowedOrigins == "" {
-		cfg.Security.AllowedOrigins = "*"
-	}
-
-	return nil
+	return filepath.Join(base, value), nil
 }
 
-// LoadWithDefaults loads configuration with default settings
+// LoadWithDefaults loads configuration from the standard sources.
 func LoadWithDefaults(ctx context.Context) (*Config, error) {
 	return NewLoader().Load(ctx)
 }
 
-// MustLoad loads configuration and panics on error
+// MustLoad loads configuration and panics if loading fails.
 func MustLoad(ctx context.Context) *Config {
 	cfg, err := LoadWithDefaults(ctx)
 	if err != nil {
-		panic(fmt.Sprintf("failed to load configuration: %v", err))
+		panic(fmt.Sprintf("load configuration: %v", err))
 	}
 	return cfg
 }
