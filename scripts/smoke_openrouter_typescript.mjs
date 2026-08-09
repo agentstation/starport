@@ -14,9 +14,11 @@ const client = new OpenRouter({
   serverURL: process.env.STARPORT_SMOKE_BASE_URL,
 });
 const response = await client.chat.send({
-  model: "openai/gpt-4.1",
-  messages: [{ role: "user", content: "smoke" }],
-  stream: false,
+  chatRequest: {
+    model: "openai/gpt-4.1",
+    messages: [{ role: "user", content: "smoke" }],
+    stream: false,
+  },
 });
 if (response.choices[0].message.content !== "starport smoke ok") {
   throw new Error("unexpected OpenRouter TypeScript SDK response");

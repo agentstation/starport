@@ -5,8 +5,9 @@ OpenRouter HTTP contracts over one provider-neutral inference core. It uses
 Starmap as the only source of model, provider, capability, context, and price
 facts.
 
-Status: pre-release. Starport has no legacy API, provider-ID, or durable-data
-compatibility contract.
+Status: v1. Starport uses direct breaking changes. Starport does not yet
+publish a compatibility policy. It has no legacy provider aliases, storage
+prefixes, or schema readers.
 
 ## Version 1 Scope
 
@@ -32,9 +33,31 @@ webhooks, and enterprise SSO/RBAC are outside the current v1 scope.
 
 Requirements:
 
-- Go 1.26.5 for a source build.
+- A Starport v1 binary, container image, or Go 1.26.5 source toolchain.
 - One configured inference provider.
-- two different secrets with at least 32 characters each.
+- Two different secrets with at least 32 characters each.
+
+Install a verified archive from the GitHub release:
+
+```bash
+gh release download v1.0.0 \
+  --repo agentstation/starport \
+  --pattern 'starport_1.0.0_linux_x86_64.tar.gz' \
+  --pattern 'checksums.txt'
+sha256sum --check --ignore-missing checksums.txt
+gh attestation verify starport_1.0.0_linux_x86_64.tar.gz \
+  --repo agentstation/starport \
+  --signer-workflow agentstation/starport/.github/workflows/release.yaml
+tar -xzf starport_1.0.0_linux_x86_64.tar.gz
+./starport --version
+```
+
+The release also contains Linux and macOS archives and Windows zip files for
+amd64 and arm64. You can build the exact tag from source:
+
+```bash
+go install github.com/agentstation/starport/cmd/starport@v1.0.0
+```
 
 Copy the example configuration:
 
@@ -104,25 +127,26 @@ curl --fail-with-body \
   http://localhost:8080/api/v1/chat/completions
 ```
 
-## Exact Provider IDs
+## Catalog Identities
 
-Routing and BYOK APIs accept these adapter IDs:
-
-- `openai`
-- `anthropic`
-- `google-ai-studio`
-- `google-vertex`
-- `groq`
-- `mistral`
-- `azure-openai`
-- `ollama`
-
-Starport does not normalize old or alternate provider names. Model IDs use
-the exact `provider/model` form present in the active Starmap generation.
+Starmap is the source of provider IDs, model IDs, offerings, capabilities,
+prices, and provider service metadata. Read the active values from
+`GET /api/v1/providers` and `GET /api/v1/models`. Starport keeps each ID exact
+and opaque. It does not normalize old or alternate names.
 
 ## Containers
 
-The Compose file starts Starport with Valkey:
+Pull the signed-release identity by version, not by an unverified digest:
+
+```bash
+docker pull ghcr.io/agentstation/starport:1.0.0
+gh attestation verify oci://ghcr.io/agentstation/starport:1.0.0 \
+  --repo agentstation/starport \
+  --signer-workflow agentstation/starport/.github/workflows/release.yaml
+docker run --rm ghcr.io/agentstation/starport:1.0.0 --version
+```
+
+The Compose file builds Starport locally and starts it with Valkey:
 
 ```bash
 export STARPORT_SECURITY_MASTER_KEY=<master-secret>
@@ -131,20 +155,23 @@ export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
 docker compose up --build
 ```
 
-The repository does not claim a published image before the first release.
+For a single-node container, mount `/var/lib/starport/data` and pass the
+required secrets through an environment file or secret manager.
 
 ## Development and Verification
 
 ```bash
 go test ./...
+bash scripts/verify-starmap-ownership.sh
 bash scripts/verify-v1-architecture.sh
+bash scripts/verify-v1-release.sh
 make lint
 make build
 bash scripts/smoke-openrouter-sdks.sh
 ```
 
-The smoke runner always tests the raw HTTP contract. It reports optional
-official SDK checks as `UNVERIFIED` when the SDK is not installed.
+The smoke runner tests raw HTTP plus the pinned official OpenRouter Python,
+TypeScript, and Go SDKs. A missing or incompatible SDK is a failed gate.
 
 ## Documentation
 

@@ -1,0 +1,106 @@
+version: 2
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: starport
+    binary: starport
+    main: ./cmd/starport
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.buildTime={{ .CommitDate }}
+      - -X main.gitCommit={{ .ShortCommit }}
+      - -X main.gitBranch=release
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: starport
+    ids:
+      - starport
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - .env.example
+      - LICENSE
+      - README.md
+      - SECURITY.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^style:'
+      - '^refactor:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Build and CI
+      regexp: '^.*?(build|ci)(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: Other changes
+      order: 999
+
+release:
+  github:
+    owner: agentstation
+    name: starport
+  name_template: "Starport v{{ .Version }}"
+  header: |
+    Starport v{{ .Version }} is an OpenAI- and OpenRouter-compatible LLM
+    inference gateway backed by the Starmap provider and model catalog.
+
+    See the README and operator guide before deployment. Verify downloaded
+    archives with `checksums.txt` and GitHub artifact attestations.
+  footer: |
+    **Full changelog:** https://github.com/agentstation/starport/compare/{{ .PreviousTag }}...{{ .Tag }}
+  draft: true
+  prerelease: auto
+  make_latest: '{{ if .Prerelease }}false{{ else }}true{{ end }}'
+  mode: keep-existing

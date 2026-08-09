@@ -17,6 +17,7 @@ BUILD_TIME = $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GO_VERSION = $(shell go version | awk '{print $$3}')
+GORELEASER_VERSION=2.17.1
 
 # Build flags
 LDFLAGS = -ldflags "\
@@ -127,6 +128,28 @@ check: format lint test ## Run all checks (format, lint, test)
 .PHONY: check-race
 check-race: format lint test-race ## Run all checks with race detection
 
+.PHONY: verify
+verify: ## Run deterministic architecture and release contract checks
+	bash scripts/verify-starmap-ownership.sh
+	bash scripts/verify-v1-architecture.sh
+	bash scripts/verify-v1-release.sh
+	bash scripts/verify-release-workflow.sh
+
+.PHONY: release-check
+release-check: verify ## Check the release configuration and online action provenance
+	@command -v goreleaser >/dev/null 2>&1 || (echo "goreleaser $(GORELEASER_VERSION) is required"; exit 1)
+	@test "$$(goreleaser --version | awk '/GitVersion:/ {sub(/^v/, "", $$2); print $$2}')" = "$(GORELEASER_VERSION)" || \
+		(echo "goreleaser $(GORELEASER_VERSION) is required"; exit 1)
+	goreleaser check
+	bash scripts/verify-action-pins.sh
+
+.PHONY: release-snapshot
+release-snapshot: release-check ## Build and verify the complete local release snapshot
+	@command -v syft >/dev/null 2>&1 || (echo "syft is required"; exit 1)
+	goreleaser release --snapshot --clean
+	scripts/verify-release-binaries.sh dist
+	scripts/verify-release-archives.sh dist
+
 .PHONY: format
 format: ## Format code using goimports (or go fmt)
 	@echo "Formatting code..."
@@ -231,4 +254,3 @@ clean: ## Clean build artifacts
 .PHONY: version
 version: build ## Show version information
 	./$(BINARY_NAME) version
-

@@ -16,7 +16,7 @@ This guide covers everything you need to know to develop on Starport.
 
 ## Prerequisites
 
-- **Go 1.22+** - [Install Go](https://golang.org/dl/)
+- **Go 1.26.5** - [Install Go](https://go.dev/dl/)
 - **Git** - For version control
 - **Make** - For running build commands
 - **Docker** (optional) - For integration testing with Valkey
@@ -46,7 +46,7 @@ This guide covers everything you need to know to develop on Starport.
 
 ### Hot Reload Development (Recommended)
 
-The fastest way to develop is using Air for automatic rebuilds:
+Use Air to rebuild automatically:
 
 ```bash
 make dev   # Starts server with hot reload on file changes
@@ -95,6 +95,9 @@ Run `make help` to see all available commands with descriptions.
 | `make test-integration` | Run integration tests (requires Docker) |
 | `make check` | Run format, lint, and tests |
 | `make check-race` | Run all checks with race detection |
+| `make verify` | Run architecture and release contract checks |
+| `make release-check` | Check GoReleaser and online action provenance |
+| `make release-snapshot` | Build and verify all release archives locally |
 
 ### 🎨 Code Formatting
 
@@ -293,7 +296,7 @@ make deps   # Run go mod tidy
    export STARPORT_LOG_LEVEL=debug
    ```
 
-2. **Use delve debugger**:
+2. **Start a debugger**:
    ```bash
    dlv debug ./cmd/starport -- serve
    ```
@@ -337,7 +340,7 @@ kill -9 <PID>
 
 ### Build errors
 
-1. Ensure Go version is 1.22+:
+1. Check the Go version (requires 1.26.5):
    ```bash
    go version
    ```

@@ -3,8 +3,10 @@
 .env
 local.env
 data
+dist
 tmp
 coverage.out
 coverage.html
 starport
+starport.exe
 *.log

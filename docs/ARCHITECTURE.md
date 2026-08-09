@@ -317,7 +317,8 @@ GET /chat/*   # when ChatUI is enabled
 
 ## Release Verification
 
-The active v1 plan and its proof files record exact results. The final local gate is:
+The repository owns deterministic architecture, protocol, and distribution
+checks. Run the complete local release gate from a clean tag worktree:
 
 ```bash
 cd /path/to/starmap
@@ -326,6 +327,7 @@ make verify
 cd /path/to/starport
 bash scripts/verify-starmap-ownership.sh
 bash scripts/verify-v1-architecture.sh
+bash scripts/verify-v1-release.sh
 go test ./...
 go test -race ./internal/catalog ./internal/proxy ./internal/routing \
   ./internal/providers/connectors ./internal/app ./internal/server
@@ -333,11 +335,14 @@ go vet ./...
 make lint
 make build
 bash scripts/smoke-openrouter-sdks.sh
+make release-check
+make release-snapshot
 ```
 
-The release gate requires the raw HTTP smoke checks. Official SDK checks
-report `UNVERIFIED` when their packages are not installed. An absent optional
-dependency is never a green result.
+The release gate requires raw HTTP and the official OpenRouter Python,
+TypeScript, and Go SDKs. It also verifies six static binaries, six archives,
+six SBOMs, action provenance, checksums, build provenance, the non-root
+multi-platform container, and immutable release readback.
 
-The final Starport module must use a published Starmap version. A local module
-replacement is valid only for the cross-repository development worktree.
+Starport releases must use a published Starmap version with no local module
+replacement.
