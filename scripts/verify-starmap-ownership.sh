@@ -63,15 +63,19 @@ starmap_tests() {
 }
 
 no_match() {
+  local pattern=$1
+  shift
   local status=0
-  rg -n "$@" || status=$?
+  grep -R -n -E -- "$pattern" "$@" || status=$?
   [[ $status -eq 1 ]]
 }
 
 no_starport_match() {
   local pattern=$1
   shift
-  no_match --glob '*.go' --glob '!**/*_test.go' "$pattern" "$@"
+  local status=0
+  grep -R -n -E --include='*.go' --exclude='*_test.go' -- "$pattern" "$@" || status=$?
+  [[ $status -eq 1 ]]
 }
 
 connector_facts_are_catalog_derived() {
