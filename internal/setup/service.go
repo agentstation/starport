@@ -243,8 +243,8 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 	if len(records) != 1 || records[0].APIKey.ID != result.identityID {
 		return fmt.Errorf("%w: identity storage changed after initialization", ErrRollbackRefused)
 	}
-	if len(keys) != 3 {
-		return fmt.Errorf("%w: storage contains %d records, want 3", ErrRollbackRefused, len(keys))
+	if len(keys) != 4 {
+		return fmt.Errorf("%w: storage contains %d records, want 4", ErrRollbackRefused, len(keys))
 	}
 	for _, key := range keys {
 		if !strings.HasPrefix(key, identity.StoragePrefix) {

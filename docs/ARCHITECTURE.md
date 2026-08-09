@@ -249,6 +249,7 @@ must represent location failover.
 Implemented:
 
 - The identity repository owns the SHA-256 hash index and atomic identity changes.
+- A versioned collection record joins every identity create and delete transaction. Initial setup uses it to prove repository emptiness atomically.
 - The identity issuer owns gateway-key generation, hashing, and one-time secret return.
 - Local initialization writes an owner-only configuration file and creates one named wildcard identity directly.
 - Platform-native no-replace rename operations install local state without replacing an existing directory.

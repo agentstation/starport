@@ -3,15 +3,11 @@
 package setup
 
 import (
-	"io/fs"
-	"os"
+	"errors"
 )
 
+var errExclusiveRenameUnsupported = errors.New("exclusive directory rename is unsupported on this platform")
+
 func renameNoReplace(source, destination string) error {
-	if _, err := os.Lstat(destination); err == nil {
-		return fs.ErrExist
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	return os.Rename(source, destination)
+	return errExclusiveRenameUnsupported
 }

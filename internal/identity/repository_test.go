@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestIdentityRepositoryContract(t *testing.T) {
 
 		keys, err := store.ScanWithPrefix(ctx, StoragePrefix, 0)
 		require.NoError(t, err)
-		require.Len(t, keys, 2)
+		require.Len(t, keys, 3)
 		primaryData, err := store.Get(ctx, identityStorageKey(apiKey.ID))
 		require.NoError(t, err)
 		var schema map[string]any
@@ -160,6 +161,56 @@ func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
 	require.Equal(t, first.ID, records[0].APIKey.ID)
 }
 
+func TestCreateInitialRacesNormalCreateOnRepositoryEmptiness(t *testing.T) {
+	store := &collectionReadBarrierStore{
+		KVStore: storage.NewMockStore(),
+		ready:   make(chan struct{}, 2),
+		release: make(chan struct{}),
+	}
+	repository, err := Open(store)
+	require.NoError(t, err)
+	results := make(chan error, 2)
+	for index := range 2 {
+		index := index
+		go func() {
+			apiKey := APIKey{
+				ID:     "identity-" + string(rune('A'+index)),
+				Name:   "identity-" + string(rune('A'+index)),
+				Hash:   "hash-" + string(rune('A'+index)),
+				Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
+			}
+			var createErr error
+			if index == 0 {
+				_, createErr = repository.CreateInitial(context.Background(), apiKey)
+			} else {
+				_, createErr = repository.Create(context.Background(), apiKey)
+			}
+			results <- createErr
+		}()
+	}
+	<-store.ready
+	<-store.ready
+	close(store.release)
+	successes := 0
+	conflicts := 0
+	for range 2 {
+		switch err := <-results; {
+		case err == nil:
+			successes++
+		case errors.Is(err, ErrConflict):
+			conflicts++
+		default:
+			t.Fatalf("concurrent create error = %v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("successes = %d, conflicts = %d", successes, conflicts)
+	}
+	records, err := repository.List(context.Background(), 2)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+}
+
 func TestCreateInitialReclaimsMissingInitialIdentity(t *testing.T) {
 	repository, err := Open(storage.NewMockStore())
 	require.NoError(t, err)
@@ -214,4 +265,20 @@ func TestReleaseInitialRefusesAnotherIdentity(t *testing.T) {
 	require.ErrorIs(t, repository.ReleaseInitial(context.Background(), "other"), ErrConflict)
 	_, err = repository.GetByID(context.Background(), first.ID)
 	require.NoError(t, err)
+}
+
+type collectionReadBarrierStore struct {
+	storage.KVStore
+	ready   chan struct{}
+	release chan struct{}
+	reads   atomic.Int32
+}
+
+func (store *collectionReadBarrierStore) Get(ctx context.Context, key string) ([]byte, error) {
+	value, err := store.KVStore.Get(ctx, key)
+	if key == collectionKey && store.reads.Add(1) <= 2 {
+		store.ready <- struct{}{}
+		<-store.release
+	}
+	return value, err
 }
