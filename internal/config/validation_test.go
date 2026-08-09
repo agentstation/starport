@@ -274,6 +274,14 @@ func TestSecurityConfig_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "master key is too short",
+			config: SecurityConfig{
+				MasterKey:      "short",
+				AllowedOrigins: "*",
+			},
+			wantErr: true,
+		},
+		{
 			name: "valid config with TLS",
 			config: SecurityConfig{
 				EnableTLS:      true,
