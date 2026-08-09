@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-04
+Last Updated: 2026-08-09
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -9,7 +9,7 @@ Last Updated: 2026-08-04
 
 | Team | Current Task | Branch | Status | ETA | PR |
 |------|--------------|--------|--------|-----|-----|
-| Release | SPR1: protected v1 release candidate | `codex/starport-v1-release` | In progress | Evidence driven | Pending |
+| Release | SPR2: publish and verify v1.0.0 | protected `master` | In progress | Evidence driven | #73 merged |
 
 The active control plane is
 [`STARPORT_V1_RELEASE_CONTROL_PLANE.md`](STARPORT_V1_RELEASE_CONTROL_PLANE.md).
@@ -18,6 +18,7 @@ The active control plane is
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| SPR1 | Release | #73 | 2026-08-09 | Merged the complete v1 release candidate after all 10 CI jobs passed, including cross-platform race tests, official OpenRouter SDK compatibility, release contracts, security, and reproducible release snapshots |
 | CI-002 | DevOps | #72 | 2026-08-04 | Made Gosec SARIF artifacts available on pull-request and default-branch runs without paid Code Security, and removed unused elevated workflow permissions |
 | CI-001 | DevOps | #71 | 2026-08-04 | Confirmed that default-branch CodeQL SARIF upload is unavailable because Code Security is disabled for the private repository |
 | SVA16 | Architecture | #69 | 2026-08-04 | Established the Starport v1 concept seams, made Starmap v0.3.0 the provider and model fact owner, separated catalog-acquisition auth from inference auth, added OpenAI and OpenRouter protocol contracts, and passed the cross-platform CI, security, race, fuzz, and architecture gates |
