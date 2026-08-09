@@ -81,6 +81,17 @@ func TestIdentityRepositoryContract(t *testing.T) {
 		_, err = repository.GetByHash(ctx, apiKey.Hash)
 		require.ErrorIs(t, err, ErrNotFound)
 
+		initial := apiKey
+		initial.ID = "initial-" + suffix
+		initial.Name = "initial-key"
+		initial.Hash = "initial-hash-" + suffix
+		initial.Active = true
+		_, err = repository.CreateInitial(ctx, initial)
+		require.NoError(t, err)
+		require.NoError(t, repository.ReleaseInitial(ctx, initial.ID))
+		_, err = repository.CreateInitial(ctx, initial)
+		require.NoError(t, err)
+
 		corruptID := "corrupt-" + suffix
 		require.NoError(t, store.Set(ctx, identityStorageKey(corruptID), []byte(`{"schema_version":2}`)))
 		_, err = repository.GetByID(ctx, corruptID)
@@ -147,4 +158,41 @@ func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, records, 1)
 	require.Equal(t, first.ID, records[0].APIKey.ID)
+}
+
+func TestReleaseInitialAllowsSafeRetry(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+	require.NoError(t, repository.ReleaseInitial(context.Background(), first.ID))
+	_, err = repository.GetByID(context.Background(), first.ID)
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = repository.GetByHash(context.Background(), first.Hash)
+	require.ErrorIs(t, err, ErrNotFound)
+
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.NoError(t, err)
+}
+
+func TestReleaseInitialRefusesAnotherIdentity(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	_, err = repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+	require.ErrorIs(t, repository.ReleaseInitial(context.Background(), "other"), ErrNotFound)
+	_, err = repository.GetByID(context.Background(), first.ID)
+	require.NoError(t, err)
 }

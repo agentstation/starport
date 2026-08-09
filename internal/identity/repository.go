@@ -48,6 +48,7 @@ type Record struct {
 type Repository interface {
 	Create(context.Context, APIKey) (Record, error)
 	CreateInitial(context.Context, APIKey) (Record, error)
+	ReleaseInitial(context.Context, string) error
 	GetByID(context.Context, string) (Record, error)
 	GetByHash(context.Context, string) (Record, error)
 	List(context.Context, int) ([]Record, error)
@@ -114,6 +115,53 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 		return Record{}, mapConflict("create identity and hash index", err)
 	}
 	return recordFromIdentity(stored), nil
+}
+
+// ReleaseInitial atomically deletes the initial identity and its setup claim.
+// Call it only when the one-time credential could not be returned.
+func (r *repository) ReleaseInitial(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return ErrMissingID
+	}
+	markerData, err := r.store.Get(ctx, initialKey)
+	if err != nil {
+		return mapReadError("get initial identity claim", err)
+	}
+	if string(markerData) != initialRecord {
+		return fmt.Errorf("%w: initial identity claim has an unsupported schema", ErrCorruptRecord)
+	}
+	identityKey := identityStorageKey(id)
+	identityData, err := r.store.Get(ctx, identityKey)
+	if err != nil {
+		return mapReadError("get initial identity", err)
+	}
+	stored, err := decodeIdentity(identityData)
+	if err != nil {
+		return err
+	}
+	if stored.APIKey.ID != id {
+		return fmt.Errorf("%w: initial identity ID does not match its key", ErrCorruptRecord)
+	}
+	hashKey := hashStorageKey(stored.APIKey.Hash)
+	hashData, err := r.store.Get(ctx, hashKey)
+	if err != nil {
+		return mapReadError("get initial identity hash", err)
+	}
+	index, err := decodeHashRecord(hashData)
+	if err != nil {
+		return err
+	}
+	if index.IdentityID != id {
+		return fmt.Errorf("%w: initial identity hash target does not match", ErrCorruptRecord)
+	}
+	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
+		{Key: initialKey, ExpectedValue: markerData},
+		{Key: identityKey, ExpectedValue: identityData},
+		{Key: hashKey, ExpectedValue: hashData},
+	}); err != nil {
+		return mapConflict("release initial identity and setup claim", err)
+	}
+	return nil
 }
 
 func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {

@@ -41,16 +41,24 @@ var (
 
 var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+// ValidateName checks the public identity-name contract.
+func ValidateName(name string) error {
+	if name == "" || len(name) > 255 {
+		return ErrInvalidName
+	}
+	if !validNameRegex.MatchString(name) {
+		return fmt.Errorf("%w: must contain only alphanumeric characters, hyphens, and underscores", ErrInvalidName)
+	}
+	return nil
+}
+
 // Validate checks the API-key invariants.
 func (k APIKey) Validate() error {
 	if k.ID == "" {
 		return ErrMissingID
 	}
-	if k.Name == "" || len(k.Name) > 255 {
-		return ErrInvalidName
-	}
-	if !validNameRegex.MatchString(k.Name) {
-		return fmt.Errorf("%w: must contain only alphanumeric characters, hyphens, and underscores", ErrInvalidName)
+	if err := ValidateName(k.Name); err != nil {
+		return err
 	}
 	if k.Hash == "" {
 		return ErrMissingHash

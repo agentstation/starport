@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,11 +20,12 @@ type InitOptions struct {
 
 // InitResult contains initialized paths and the one-time gateway credential.
 type InitResult struct {
-	Provider     catalogs.ProviderID `json:"provider,omitempty"`
-	IdentityName string              `json:"identity_name"`
-	ConfigFile   string              `json:"config_file,omitempty"`
-	DataDir      string              `json:"data_dir,omitempty"`
-	APIKey       string              `json:"api_key"`
+	Provider     catalogs.ProviderID         `json:"provider,omitempty"`
+	IdentityName string                      `json:"identity_name"`
+	ConfigFile   string                      `json:"config_file,omitempty"`
+	DataDir      string                      `json:"data_dir,omitempty"`
+	APIKey       string                      `json:"api_key"`
+	Rollback     func(context.Context) error `json:"-"`
 }
 
 func writeInitResult(writer io.Writer, result InitResult, asJSON bool) error {

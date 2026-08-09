@@ -6,16 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	urfavecli "github.com/urfave/cli/v3"
+
+	"github.com/agentstation/starport/internal/identity"
 )
 
 const (
 	// ExitCodeRuntime reports an application or dependency failure.
 	ExitCodeRuntime = 1
 	// ExitCodeUsage reports invalid command syntax or arguments.
-	ExitCodeUsage = 2
+	ExitCodeUsage                 = 2
+	initializationRollbackTimeout = 5 * time.Second
 )
 
 var (
@@ -147,13 +151,22 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 					ExitCodeUsage,
 				)
 			}
-			result, err := deps.Initialize(ctx, InitOptions{
-				Provider: provider, IdentityName: cmd.String("name"), ConfiguredStorage: configuredStorage,
-			})
-			if err != nil {
-				return runtimeFailure{cause: err}
+			identityName := cmd.String("name")
+			if err := identity.ValidateName(identityName); err != nil {
+				return urfavecli.Exit(err.Error(), ExitCodeUsage)
 			}
-			return writeInitResult(cmd.Writer, result, cmd.Bool(initFormatJSON))
+			result, initializeErr := deps.Initialize(ctx, InitOptions{
+				Provider: provider, IdentityName: identityName, ConfiguredStorage: configuredStorage,
+			})
+			if result.APIKey != "" {
+				if err := writeInitResult(cmd.Writer, result, cmd.Bool(initFormatJSON)); err != nil {
+					return runtimeFailure{cause: rollbackInitialization(ctx, result, err)}
+				}
+			}
+			if initializeErr != nil {
+				return runtimeFailure{cause: initializeErr}
+			}
+			return nil
 		},
 	}
 
@@ -273,4 +286,17 @@ func rejectArguments(cmd *urfavecli.Command) error {
 		fmt.Sprintf("%s does not accept arguments", cmd.FullName()),
 		ExitCodeUsage,
 	)
+}
+
+func rollbackInitialization(ctx context.Context, result InitResult, outputErr error) error {
+	resultErr := fmt.Errorf("write initialization result: %w", outputErr)
+	if result.Rollback == nil {
+		return resultErr
+	}
+	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), initializationRollbackTimeout)
+	defer cancel()
+	if err := result.Rollback(rollbackCtx); err != nil {
+		return errors.Join(resultErr, fmt.Errorf("rollback initialization: %w", err))
+	}
+	return resultErr
 }

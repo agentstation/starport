@@ -66,7 +66,8 @@ capabilities, and Ollama offering facts.
 The command writes `config.env` and the Badger identity store under the user
 configuration directory. It refuses existing configuration or identity
 storage. It prints the new gateway API key once. Save that key. For the OpenAI
-profile, start Starport:
+profile, start Starport. If output fails, the command removes the initial state
+so that you can retry.
 
 ```bash
 ./starport serve
@@ -144,7 +145,8 @@ docker compose up -d starport
 ```
 
 The initialization command prints the gateway API key once. It refuses a
-Valkey identity repository that already contains an identity.
+Valkey identity repository that already contains an identity. It releases the
+initial identity if it cannot write the credential output.
 
 For a single-node container, mount `/var/lib/starport/data`. Run
 `starport init --configured-storage` with that mount and the required

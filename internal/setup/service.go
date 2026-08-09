@@ -3,6 +3,7 @@ package setup
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -41,6 +42,8 @@ var (
 	ErrUnsupportedProvider = errors.New("setup supports only OpenAI or Ollama")
 	// ErrProviderCredentialRequired reports an absent OpenAI inference credential.
 	ErrProviderCredentialRequired = errors.New("OpenAI provider credential is required")
+	// ErrRollbackRefused reports state that does not match an initialization result.
+	ErrRollbackRefused = errors.New("setup rollback refused")
 )
 
 // State describes the durable local setup state.
@@ -69,6 +72,8 @@ type Result struct {
 	ConfigFile   string
 	DataDir      string
 	APIKey       string
+	identityID   string
+	configDigest [sha256.Size]byte
 }
 
 // Service initializes one local configuration and identity store.
@@ -155,7 +160,49 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 	return Result{
 		Provider: request.Provider, IdentityName: request.IdentityName,
 		ConfigFile: s.paths.ConfigFile, DataDir: s.paths.DataDir, APIKey: issued.Secret,
+		identityID: issued.APIKey.ID, configDigest: sha256.Sum256(contents),
 	}, nil
+}
+
+// Rollback removes local state when the initialization result could not be returned.
+func (s *Service) Rollback(ctx context.Context, result Result) error {
+	if s == nil || result.ConfigFile != s.paths.ConfigFile || result.DataDir != s.paths.DataDir ||
+		result.identityID == "" {
+		return ErrRollbackRefused
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	contents, err := os.ReadFile(s.paths.ConfigFile)
+	if err != nil {
+		return fmt.Errorf("read initialized configuration for rollback: %w", err)
+	}
+	if sha256.Sum256(contents) != result.configDigest {
+		return fmt.Errorf("%w: configuration changed after initialization", ErrRollbackRefused)
+	}
+	state, err := Inspect(s.paths)
+	if err != nil {
+		return err
+	}
+	if state != StateReady {
+		return fmt.Errorf("%w: setup state is %s", ErrRollbackRefused, state)
+	}
+
+	parentDir := filepath.Dir(s.paths.ConfigDir)
+	rollbackDir, err := os.MkdirTemp(parentDir, "."+filepath.Base(s.paths.ConfigDir)+"-rollback-")
+	if err != nil {
+		return fmt.Errorf("reserve setup rollback path: %w", err)
+	}
+	if err := os.Remove(rollbackDir); err != nil {
+		return fmt.Errorf("prepare setup rollback path: %w", err)
+	}
+	if err := os.Rename(s.paths.ConfigDir, rollbackDir); err != nil {
+		return fmt.Errorf("isolate initialized state for rollback: %w", err)
+	}
+	if err := os.RemoveAll(rollbackDir); err != nil {
+		return fmt.Errorf("remove rolled-back setup state: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) validate(request Request) error {
@@ -261,6 +308,18 @@ func InitializeIdentity(
 		return identity.IssueResult{}, fmt.Errorf("create named identity: %w", err)
 	}
 	return issued, nil
+}
+
+// ReleaseIdentity removes an unpublished initial identity and its setup claim.
+func ReleaseIdentity(ctx context.Context, store storage.KVStore, id string) error {
+	repository, err := identity.Open(store)
+	if err != nil {
+		return fmt.Errorf("open identity repository: %w", err)
+	}
+	if err := repository.ReleaseInitial(ctx, id); err != nil {
+		return fmt.Errorf("release initial identity: %w", err)
+	}
+	return nil
 }
 
 func localConfig(request Request, masterKey string) ([]byte, error) {

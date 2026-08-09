@@ -60,7 +60,8 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 	if err != nil {
 		return starportcli.InitResult{}, fmt.Errorf("resolve setup paths: %w", err)
 	}
-	result, err := setup.New(paths).Initialize(ctx, setup.Request{
+	service := setup.New(paths)
+	result, err := service.Initialize(ctx, setup.Request{
 		Provider:           options.Provider,
 		ProviderCredential: os.Getenv(setup.OpenAIProviderCredentialEnvironment),
 		IdentityName:       options.IdentityName,
@@ -71,6 +72,9 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 	return starportcli.InitResult{
 		Provider: result.Provider, IdentityName: result.IdentityName,
 		ConfigFile: result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
+		Rollback: func(rollbackCtx context.Context) error {
+			return service.Rollback(rollbackCtx, result)
+		},
 	}, nil
 }
 
@@ -82,7 +86,11 @@ func initializeConfiguredStorage(
 	if err != nil {
 		return starportcli.InitResult{}, fmt.Errorf("load configured storage: %w", err)
 	}
-	store, err := storage.Open(cfg.Storage.RuntimeStorage())
+	storageConfig := cfg.Storage.RuntimeStorage()
+	if storageConfig.Type == storage.StorageTypeBadger {
+		storageConfig.Badger.SyncWrites = true
+	}
+	store, err := storage.Open(storageConfig)
 	if err != nil {
 		return starportcli.InitResult{}, fmt.Errorf("open configured storage: %w", err)
 	}
@@ -91,13 +99,37 @@ func initializeConfiguredStorage(
 	if issueErr != nil {
 		return starportcli.InitResult{}, errors.Join(issueErr, closeErr)
 	}
-	if closeErr != nil {
-		return starportcli.InitResult{}, fmt.Errorf("close configured storage: %w", closeErr)
-	}
-	return starportcli.InitResult{
+	result := starportcli.InitResult{
 		IdentityName: options.IdentityName,
 		APIKey:       issued.Secret,
-	}, nil
+		Rollback: func(rollbackCtx context.Context) error {
+			return rollbackConfiguredIdentity(rollbackCtx, storageConfig, issued.APIKey.ID)
+		},
+	}
+	if closeErr != nil {
+		return result, fmt.Errorf("close configured storage: %w", closeErr)
+	}
+	return result, nil
+}
+
+func rollbackConfiguredIdentity(
+	ctx context.Context,
+	storageConfig storage.Config,
+	identityID string,
+) error {
+	store, err := storage.Open(storageConfig)
+	if err != nil {
+		return fmt.Errorf("open configured storage for rollback: %w", err)
+	}
+	releaseErr := setup.ReleaseIdentity(ctx, store, identityID)
+	closeErr := store.Close()
+	if releaseErr != nil {
+		return errors.Join(releaseErr, closeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close configured storage after rollback: %w", closeErr)
+	}
+	return nil
 }
 
 func runServer(ctx context.Context, options starportcli.ServeOptions) error {

@@ -46,7 +46,8 @@ Initialization writes the platform `config.env` file with mode `0600`. It
 also creates one named identity in the platform Badger directory. The command
 prints the new gateway API key once. Save it in a password manager or secret
 manager. The command refuses to replace existing configuration or identity
-storage.
+storage. If it cannot write the gateway key, it removes the new state so that
+you can retry.
 
 Start the gateway:
 
@@ -79,6 +80,9 @@ This form does not write a local configuration file. It opens the configured
 Badger or Valkey service and refuses any identity repository that already
 contains an identity. It prints the new gateway API key once. Save the key in
 a secret manager before you start the gateway.
+
+If credential output fails, the command atomically releases the initial
+identity and its setup claim. You can then run the command again.
 
 ## Client Base URLs
 

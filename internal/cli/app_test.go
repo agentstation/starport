@@ -94,6 +94,65 @@ func TestInitRejectsUnsupportedProviderAsUsageError(t *testing.T) {
 	}
 }
 
+func TestInitRejectsInvalidIdentityNameAsUsageError(t *testing.T) {
+	deps, _, _ := testDependencies()
+	called := false
+	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
+		called = true
+		return InitResult{}, nil
+	}
+	err := Run(context.Background(), []string{
+		"starport", "init", "--provider", "ollama", "--name", "invalid name",
+	}, deps)
+	if err == nil || ExitCode(err) != ExitCodeUsage {
+		t.Fatalf("invalid name error = %v, exit code = %d", err, ExitCode(err))
+	}
+	if called {
+		t.Fatal("initializer ran for an invalid identity name")
+	}
+}
+
+func TestInitRollsBackWhenCredentialOutputFails(t *testing.T) {
+	deps, _, _ := testDependencies()
+	outputErr := errors.New("output unavailable")
+	deps.Stdout = failingWriter{err: outputErr}
+	rollbackCalls := 0
+	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
+		return InitResult{
+			Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin",
+			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			Rollback: func(context.Context) error {
+				rollbackCalls++
+				return nil
+			},
+		}, nil
+	}
+	err := Run(context.Background(), []string{"starport", "init", "--provider", "ollama"}, deps)
+	if !errors.Is(err, outputErr) || ExitCode(err) != ExitCodeRuntime {
+		t.Fatalf("output error = %v, exit code = %d", err, ExitCode(err))
+	}
+	if rollbackCalls != 1 {
+		t.Fatalf("rollback calls = %d, want 1", rollbackCalls)
+	}
+}
+
+func TestInitReturnsCredentialBeforePostCommitFailure(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	closeErr := errors.New("storage close failed")
+	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
+		return InitResult{
+			IdentityName: "local-admin", APIKey: "gateway-key",
+		}, closeErr
+	}
+	err := Run(context.Background(), []string{"starport", "init", "--configured-storage"}, deps)
+	if !errors.Is(err, closeErr) || ExitCode(err) != ExitCodeRuntime {
+		t.Fatalf("initialization error = %v, exit code = %d", err, ExitCode(err))
+	}
+	if !strings.Contains(stdout.String(), "gateway-key") {
+		t.Errorf("initialization output = %q", stdout.String())
+	}
+}
+
 func TestInitConfiguredStorageNeedsNoProvider(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	var got InitOptions
@@ -263,3 +322,7 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 		Initialize: func(context.Context, InitOptions) (InitResult, error) { return InitResult{}, nil },
 	}, stdout, stderr
 }
+
+type failingWriter struct{ err error }
+
+func (writer failingWriter) Write([]byte) (int, error) { return 0, writer.err }

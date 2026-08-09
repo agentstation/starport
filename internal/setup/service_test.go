@@ -179,6 +179,46 @@ func TestInitializeRefusesReadyState(t *testing.T) {
 	}
 }
 
+func TestRollbackRemovesUnpublishedLocalState(t *testing.T) {
+	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
+	service := New(paths)
+	request := Request{Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin"}
+	result, err := service.Initialize(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Rollback(context.Background(), result); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+	state, err := Inspect(paths)
+	if err != nil || state != StateAbsent {
+		t.Fatalf("state after rollback = %q, error = %v", state, err)
+	}
+	if _, err := service.Initialize(context.Background(), request); err != nil {
+		t.Fatalf("retry after rollback: %v", err)
+	}
+}
+
+func TestRollbackRefusesChangedConfiguration(t *testing.T) {
+	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
+	service := New(paths)
+	result, err := service.Initialize(context.Background(), Request{
+		Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ConfigFile, []byte("changed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Rollback(context.Background(), result); !errors.Is(err, ErrRollbackRefused) {
+		t.Fatalf("rollback error = %v, want %v", err, ErrRollbackRefused)
+	}
+	if _, err := os.Stat(paths.ConfigDir); err != nil {
+		t.Fatalf("configuration directory after refused rollback: %v", err)
+	}
+}
+
 func TestInitializeConcurrentSingleWinner(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	request := Request{Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin"}
@@ -259,6 +299,20 @@ func TestInitializeIdentityRefusesExistingIdentity(t *testing.T) {
 	_, err = InitializeIdentity(context.Background(), store, "replacement-admin")
 	if !errors.Is(err, ErrAlreadyInitialized) {
 		t.Fatalf("second initialization error = %v, want %v", err, ErrAlreadyInitialized)
+	}
+}
+
+func TestReleaseIdentityAllowsConfiguredStorageRetry(t *testing.T) {
+	store := storage.NewMockStore()
+	first, err := InitializeIdentity(context.Background(), store, "primary-admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ReleaseIdentity(context.Background(), store, first.APIKey.ID); err != nil {
+		t.Fatalf("release identity: %v", err)
+	}
+	if _, err := InitializeIdentity(context.Background(), store, "retry-admin"); err != nil {
+		t.Fatalf("retry configured initialization: %v", err)
 	}
 }
 
