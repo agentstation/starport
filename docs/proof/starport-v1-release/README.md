@@ -12,7 +12,7 @@ is at <https://github.com/agentstation/starport/releases/tag/v1.0.0>.
 | SPR0 | `done` | Baseline `ff293dd`; 10 stale Dependabot pull requests; release verifier reported 2 passed and 11 failed; [SPR0 evidence](spr0.md). |
 | SPR1 | `done` | PR #73; protected candidate `ee8c34e`; CI run 31329415791 passed all 10 jobs; [SPR1 evidence](spr1.md). |
 | SPR2 | `done` | Tag commit `fca912f`; release run 31331662248; immutable release `RE_kwDOPH3H-c4V6I7F`; [SPR2 evidence](spr2.md). |
-| SPR3 | `done` | Closeout PR pending; this proof survives active-plan removal. |
+| SPR3 | `done` | Closeout PR #75; this proof survives active-plan removal. |
 
 ## Verified release
 
