@@ -147,21 +147,20 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Resolve published Starmap version
+      - name: Resolve verified published Starmap source
         id: starmap
-        run: echo "version=$(go list -m -f '{{.Version}}' github.com/agentstation/starmap)" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout published Starmap ownership source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: agentstation/starmap
-          ref: ${{ steps.starmap.outputs.version }}
-          path: starmap
-          persist-credentials: false
+        shell: bash
+        run: |
+          VERSION=$(go list -m -f '{{.Version}}' github.com/agentstation/starmap)
+          MODULE=$(go mod download -json "github.com/agentstation/starmap@$VERSION")
+          test "$(jq -r .Version <<<"$MODULE")" = "$VERSION"
+          ROOT=$(jq -r .Dir <<<"$MODULE")
+          test -d "$ROOT/pkg/catalogs"
+          printf 'root=%s\n' "$ROOT" >> "$GITHUB_OUTPUT"
 
       - name: Verify release contracts
         env:
-          STARMAP_OWNERSHIP_STARMAP_ROOT: ${{ github.workspace }}/starmap
+          STARMAP_OWNERSHIP_STARMAP_ROOT: ${{ steps.starmap.outputs.root }}
         run: |
           bash scripts/verify-starmap-ownership.sh
           bash scripts/verify-v1-architecture.sh

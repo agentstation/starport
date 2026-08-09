@@ -27,85 +27,85 @@ check V01 'Starmap module and Go floor' sh -c '
 '
 
 check V02 'canonical inference contract' sh -c '
-    rg -q "^func TestCanonicalInferenceContract" internal/inference --glob "*_test.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestCanonicalInferenceContract" internal/inference &&
     go test ./internal/inference -run "^TestCanonicalInferenceContract$"
 '
 
 check V03 'routable snapshot generation contract' sh -c '
-    rg -q "^func TestRoutableSnapshotGenerationConsistency" internal/catalog --glob "*_test.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestRoutableSnapshotGenerationConsistency" internal/catalog &&
     go test ./internal/catalog -run "^TestRoutableSnapshotGenerationConsistency$"
 '
 
 check V04 'deterministic route planner contract' sh -c '
-    rg -q "^func TestRoutePlannerContract" internal/routing --glob "*_test.go" &&
-    rg -q "^func TestRoutePlannerDeterministic" internal/routing --glob "*_test.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestRoutePlannerContract" internal/routing &&
+    grep -R -q -E --include="*_test.go" "^func TestRoutePlannerDeterministic" internal/routing &&
     go test ./internal/routing -run "^TestRoutePlanner(Contract|Deterministic)$"
 '
 
 check V05 'attempt state and retry budget contract' sh -c '
-    rg -q "^func TestAttemptStateAndRetryBudgetContract" internal/execution --glob "*_test.go" &&
-    rg -q "^func TestProviderHTTPRequestIsOneLogicalAttempt" internal/providers/connectors --glob "*_test.go" &&
-    scripts/require-no-match.sh rg -q "doRequestWithRetry|WithRetry|CircuitBreaker|fallbackLocations|fallback_locations" internal/providers/connectors internal/router internal/httpclient --glob "*.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestAttemptStateAndRetryBudgetContract" internal/execution &&
+    grep -R -q -E --include="*_test.go" "^func TestProviderHTTPRequestIsOneLogicalAttempt" internal/providers/connectors &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" "doRequestWithRetry|WithRetry|CircuitBreaker|fallbackLocations|fallback_locations" internal/providers/connectors internal/router internal/httpclient &&
     go test ./internal/execution ./internal/availability -run "^(TestAttemptStateAndRetryBudgetContract|TestOfferingAvailabilityStateMachine)$"
 '
 
 check V06 'versioned concept repository contracts' sh -c '
-	scripts/require-no-match.sh rg -q '\''"(apikey:|apikey:hash:|ratelimit:|preset:|providerkey:|provider_key:)"'\'' internal --glob "*.go" &&
-	rg -q "StorageSchemaVersion = 1" internal/identity/repository.go &&
-	rg -q "ProviderCredentialStorageSchemaVersion = 1" internal/credentials/repository.go &&
-	rg -q "StorageSchemaVersion = 1" internal/ratelimit/repository.go &&
-	rg -q "StorageSchemaVersion = 1" internal/presets/repository.go &&
-	rg -q "^func TestIdentityRepositoryContract" internal/identity --glob "*_test.go" &&
-	rg -q "^func TestProviderCredentialRepositoryContract" internal/credentials --glob "*_test.go" &&
-	rg -q "^func TestRateLimitRepositoryContract" internal/ratelimit --glob "*_test.go" &&
-	rg -q "^func TestPresetRepositoryContract" internal/presets --glob "*_test.go" &&
-	scripts/require-no-match.sh rg -q "internal/storage" internal/server/controllers internal/server/middleware.go internal/chatui internal/providers/byok --glob "*.go" --glob "!*_test.go" &&
+	scripts/require-no-match.sh grep -R -q -E --include="*.go" '\''"(apikey:|apikey:hash:|ratelimit:|preset:|providerkey:|provider_key:)"'\'' internal &&
+	grep -q -E "StorageSchemaVersion = 1" internal/identity/repository.go &&
+	grep -q -E "ProviderCredentialStorageSchemaVersion = 1" internal/credentials/repository.go &&
+	grep -q -E "StorageSchemaVersion = 1" internal/ratelimit/repository.go &&
+	grep -q -E "StorageSchemaVersion = 1" internal/presets/repository.go &&
+	grep -R -q -E --include="*_test.go" "^func TestIdentityRepositoryContract" internal/identity &&
+	grep -R -q -E --include="*_test.go" "^func TestProviderCredentialRepositoryContract" internal/credentials &&
+	grep -R -q -E --include="*_test.go" "^func TestRateLimitRepositoryContract" internal/ratelimit &&
+	grep -R -q -E --include="*_test.go" "^func TestPresetRepositoryContract" internal/presets &&
+	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "internal/storage" internal/server/controllers internal/server/middleware.go internal/chatui internal/providers/byok &&
 	go test ./internal/identity ./internal/credentials ./internal/ratelimit ./internal/presets -run "^Test(Identity|ProviderCredential|RateLimit|Preset)RepositoryContract$"
 '
 
 check V07 'response cache semantic identity contract' sh -c '
-    rg -q "^func TestSemanticKeyAndTenantIsolationContract" internal/responsecache --glob "*_test.go" &&
-    rg -q "^func TestCachedService_TenantAndGenerationIsolation" internal/proxy --glob "*_test.go" &&
-    rg -q "RecordSchemaVersion = 1" internal/responsecache/repository.go &&
+    grep -R -q -E --include="*_test.go" "^func TestSemanticKeyAndTenantIsolationContract" internal/responsecache &&
+    grep -R -q -E --include="*_test.go" "^func TestCachedService_TenantAndGenerationIsolation" internal/proxy &&
+    grep -q -E "RecordSchemaVersion = 1" internal/responsecache/repository.go &&
     test ! -e internal/cache/keys.go &&
-    scripts/require-no-match.sh rg -q "KeyGenerator|ChatCompletionKey|GetChatCompletion|SetChatCompletion|GetEmbedding|SetEmbedding" internal/cache --glob "*.go" &&
-    scripts/require-no-match.sh rg -q "internal/(cache|providers|proxy|server)" internal/responsecache --glob "*.go" &&
-    scripts/require-no-match.sh rg -q "sha256|sha\.Sum|hex\.Encode" internal/proxy/cache.go &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" "KeyGenerator|ChatCompletionKey|GetChatCompletion|SetChatCompletion|GetEmbedding|SetEmbedding" internal/cache &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" "internal/(cache|providers|proxy|server)" internal/responsecache &&
+    scripts/require-no-match.sh grep -q -E "sha256|sha\.Sum|hex\.Encode" internal/proxy/cache.go &&
     go test ./internal/responsecache -run "^(TestSemanticKeyAndTenantIsolationContract|TestCanonicalRecordAndStreamReconstruction|TestRepositoryRejectsInvalidRecords)$" &&
     go test ./internal/proxy -run "^(TestCachedService_TenantAndGenerationIsolation|TestCachingStreamWrapper_DoesNotCachePartialStream)$"
 '
 
 check V08 'production composition fail-closed contract' sh -c '
-    rg -q "^func TestProductionCompositionFailsClosed" internal/app --glob "*_test.go" &&
-	rg -q "^func TestBootstrapIdentityContract" internal/app --glob "*_test.go" &&
-	rg -q "^type Dependencies struct" internal/server/server.go &&
-	rg -q "^func Open" internal/registry/registry.go &&
-	rg -q "^func .*Registry.* Start" internal/registry/registry.go &&
-    scripts/require-no-match.sh rg -q "router\\.New|proxy\\.New|byok\\.NewProviderKeys|storage\\.NewMockStore" internal/server --glob "*.go" --glob "!*_test.go" &&
-	scripts/require-no-match.sh rg -q "internal/(storage|registry|cache|router)" internal/server --glob "*.go" --glob "!*_test.go" &&
-	scripts/require-no-match.sh rg -q "NewMockConnector|NewMockStore" internal/app internal/registry internal/server --glob "*.go" --glob "!*_test.go" &&
-    scripts/require-no-match.sh rg -q "os\\.Getenv|initializeMockProvider" internal/registry --glob "*.go" --glob "!*_test.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestProductionCompositionFailsClosed" internal/app &&
+	grep -R -q -E --include="*_test.go" "^func TestBootstrapIdentityContract" internal/app &&
+	grep -q -E "^type Dependencies struct" internal/server/server.go &&
+	grep -q -E "^func Open" internal/registry/registry.go &&
+	grep -q -E "^func .*Registry.* Start" internal/registry/registry.go &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "router\\.New|proxy\\.New|byok\\.NewProviderKeys|storage\\.NewMockStore" internal/server &&
+	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "internal/(storage|registry|cache|router)" internal/server &&
+	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "NewMockConnector|NewMockStore" internal/app internal/registry internal/server &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "os\\.Getenv|initializeMockProvider" internal/registry &&
     go test ./internal/app -run "^Test(ProductionCompositionFailsClosed|BootstrapIdentityContract)$"
 '
 
 check V09 'public package boundary contract' sh -c '
-    rg -q "^func TestPublicPackageBoundary" internal/architecture --glob "*_test.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestPublicPackageBoundary" internal/architecture &&
     go test ./internal/architecture -run "^TestPublicPackageBoundary$"
 '
 
 check V10 'OpenAI and OpenRouter protocol contracts' sh -c '
-    rg -q "^func TestOpenAIProtocolContract" internal/httpapi/openai --glob "*_test.go" &&
-    rg -q "^func TestOpenRouterProtocolContract" internal/httpapi/openrouter --glob "*_test.go" &&
-    rg -q "^func TestProtocolRoutesUseSelectedCodec" internal/server --glob "*_test.go" &&
-	rg -q "^func TestClientIPIgnoresUntrustedForwardingHeaders" internal/server --glob "*_test.go" &&
-	scripts/require-no-match.sh rg -q "middleware\.RealIP" internal/server --glob "*.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestOpenAIProtocolContract" internal/httpapi/openai &&
+    grep -R -q -E --include="*_test.go" "^func TestOpenRouterProtocolContract" internal/httpapi/openrouter &&
+    grep -R -q -E --include="*_test.go" "^func TestProtocolRoutesUseSelectedCodec" internal/server &&
+	grep -R -q -E --include="*_test.go" "^func TestClientIPIgnoresUntrustedForwardingHeaders" internal/server &&
+	scripts/require-no-match.sh grep -R -q -E --include="*.go" "middleware\.RealIP" internal/server &&
     go test ./internal/httpapi/openai -run "^TestOpenAIProtocolContract$" &&
     go test ./internal/httpapi/openrouter -run "^TestOpenRouterProtocolContract$" &&
     go test ./internal/server -run "^Test(ProtocolRoutesUseSelectedCodec|ClientIPIgnoresUntrustedForwardingHeaders)$"
 '
 
 check V11 'import graph architecture fitness' sh -c '
-    rg -q "^func TestImportGraphArchitecture" internal/architecture --glob "*_test.go" &&
+    grep -R -q -E --include="*_test.go" "^func TestImportGraphArchitecture" internal/architecture &&
     go test ./internal/architecture -run "^TestImportGraphArchitecture$"
 '
 
