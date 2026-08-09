@@ -104,3 +104,10 @@ correct at 0.94. It noted that no-argument direct binary invocation no longer
 starts the gateway. Decision D4 requires help for this case. The container
 passes `serve`, and the owner prefers direct pre-launch changes. Therefore, the
 task rejects this last concern by design.
+
+## Pull request gate
+
+PR [#79](https://github.com/agentstation/starport/pull/79) merged as
+`9ccf2a4da89f9952ae715e3fcf1f9bb3bf21b990` after all 10 CI checks passed.
+The gate included Linux, macOS, and Windows tests, lint, security, the
+OpenRouter SDK suite, the release contract, and the release snapshot.
