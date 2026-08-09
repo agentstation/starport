@@ -253,6 +253,7 @@ Implemented:
 - Local initialization writes an owner-only configuration file and creates one named wildcard identity directly.
 - Configured-storage initialization creates the first named identity without a temporary startup credential.
 - Failed credential output removes local state or atomically releases the configured-storage identity claim.
+- An initial claim names its identity. Setup can reclaim the claim only when the repository is empty and that identity is absent.
 - Startup rejects empty identity storage and does not create an identity.
 - Starport accepts API keys from `Authorization` and `X-API-Key` headers only.
 - The HTTP edge derives client IP from the direct TCP peer. It ignores untrusted forwarding headers.

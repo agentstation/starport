@@ -187,6 +187,9 @@ func (s *Service) Rollback(ctx context.Context, result Result) error {
 	if state != StateReady {
 		return fmt.Errorf("%w: setup state is %s", ErrRollbackRefused, state)
 	}
+	if err := s.validateRollbackIdentity(ctx, result.identityID); err != nil {
+		return err
+	}
 
 	parentDir := filepath.Dir(s.paths.ConfigDir)
 	rollbackDir, err := os.MkdirTemp(parentDir, "."+filepath.Base(s.paths.ConfigDir)+"-rollback-")
@@ -201,6 +204,30 @@ func (s *Service) Rollback(ctx context.Context, result Result) error {
 	}
 	if err := os.RemoveAll(rollbackDir); err != nil {
 		return fmt.Errorf("remove rolled-back setup state: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) validateRollbackIdentity(ctx context.Context, identityID string) error {
+	store, err := s.openStore(s.paths.BadgerDir)
+	if err != nil {
+		return fmt.Errorf("open initialized identity store for rollback: %w", err)
+	}
+	repository, err := identity.Open(store)
+	if err != nil {
+		_ = store.Close()
+		return fmt.Errorf("open initialized identity repository for rollback: %w", err)
+	}
+	records, listErr := repository.List(ctx, 2)
+	closeErr := store.Close()
+	if listErr != nil {
+		return errors.Join(fmt.Errorf("inspect initialized identity for rollback: %w", listErr), closeErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close initialized identity store for rollback: %w", closeErr)
+	}
+	if len(records) != 1 || records[0].APIKey.ID != identityID {
+		return fmt.Errorf("%w: identity storage changed after initialization", ErrRollbackRefused)
 	}
 	return nil
 }

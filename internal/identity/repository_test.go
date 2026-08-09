@@ -160,6 +160,25 @@ func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
 	require.Equal(t, first.ID, records[0].APIKey.ID)
 }
 
+func TestCreateInitialReclaimsMissingInitialIdentity(t *testing.T) {
+	repository, err := Open(storage.NewMockStore())
+	require.NoError(t, err)
+	first := APIKey{
+		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
+		Active: true, CreatedAt: time.Now().UTC(),
+	}
+	created, err := repository.CreateInitial(context.Background(), first)
+	require.NoError(t, err)
+	require.NoError(t, repository.Delete(context.Background(), first.ID, created.Revision))
+
+	second := first
+	second.ID = "second"
+	second.Name = "second"
+	second.Hash = "second-hash"
+	_, err = repository.CreateInitial(context.Background(), second)
+	require.NoError(t, err)
+}
+
 func TestReleaseInitialAllowsSafeRetry(t *testing.T) {
 	repository, err := Open(storage.NewMockStore())
 	require.NoError(t, err)
@@ -192,7 +211,7 @@ func TestReleaseInitialRefusesAnotherIdentity(t *testing.T) {
 	}
 	_, err = repository.CreateInitial(context.Background(), first)
 	require.NoError(t, err)
-	require.ErrorIs(t, repository.ReleaseInitial(context.Background(), "other"), ErrNotFound)
+	require.ErrorIs(t, repository.ReleaseInitial(context.Background(), "other"), ErrConflict)
 	_, err = repository.GetByID(context.Background(), first.ID)
 	require.NoError(t, err)
 }

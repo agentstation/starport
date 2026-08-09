@@ -22,7 +22,6 @@ const (
 	hashKeyPrefix     = StoragePrefix + "hash:"
 	initialKey        = StoragePrefix + "initial"
 	defaultListLimit  = 1000
-	initialRecord     = `{"schema_version":1}`
 )
 
 var (
@@ -71,6 +70,11 @@ type hashRecord struct {
 	IdentityID    string `json:"identity_id"`
 }
 
+type initialIdentityRecord struct {
+	SchemaVersion int    `json:"schema_version"`
+	IdentityID    string `json:"identity_id"`
+}
+
 // Open returns a storage-backed identity repository.
 func Open(store storage.KVStore) (Repository, error) {
 	if store == nil {
@@ -107,12 +111,62 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 		{Key: hashStorageKey(apiKey.Hash), NewValue: indexData},
 	}
 	if initial {
+		markerData, encodeErr := json.Marshal(initialIdentityRecord{
+			SchemaVersion: StorageSchemaVersion,
+			IdentityID:    apiKey.ID,
+		})
+		if encodeErr != nil {
+			return Record{}, fmt.Errorf("encode initial identity claim: %w", encodeErr)
+		}
 		mutations = append([]storage.CompareAndSwapMutation{{
-			Key: initialKey, NewValue: []byte(initialRecord),
+			Key: initialKey, NewValue: markerData,
 		}}, mutations...)
 	}
 	if err := r.store.CompareAndSwapBatch(ctx, mutations); err != nil {
+		if initial && errors.Is(err, storage.ErrConflict) {
+			return r.replaceMissingInitial(ctx, stored, data, indexData, mutations[0].NewValue)
+		}
 		return Record{}, mapConflict("create identity and hash index", err)
+	}
+	return recordFromIdentity(stored), nil
+}
+
+func (r *repository) replaceMissingInitial(
+	ctx context.Context,
+	stored identityRecord,
+	identityData []byte,
+	hashData []byte,
+	markerData []byte,
+) (Record, error) {
+	currentMarkerData, err := r.store.Get(ctx, initialKey)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return Record{}, ErrConflict
+		}
+		return Record{}, mapConflict("create identity and hash index", err)
+	}
+	currentMarker, err := decodeInitialIdentityRecord(currentMarkerData)
+	if err != nil {
+		return Record{}, err
+	}
+	if _, err := r.store.Get(ctx, identityStorageKey(currentMarker.IdentityID)); err == nil {
+		return Record{}, ErrConflict
+	} else if !errors.Is(err, storage.ErrNotFound) {
+		return Record{}, mapReadError("get claimed initial identity", err)
+	}
+	records, err := r.List(ctx, 1)
+	if err != nil {
+		return Record{}, err
+	}
+	if len(records) != 0 {
+		return Record{}, ErrConflict
+	}
+	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
+		{Key: initialKey, ExpectedValue: currentMarkerData, NewValue: markerData},
+		{Key: identityStorageKey(stored.APIKey.ID), NewValue: identityData},
+		{Key: hashStorageKey(stored.APIKey.Hash), NewValue: hashData},
+	}); err != nil {
+		return Record{}, mapConflict("replace missing initial identity", err)
 	}
 	return recordFromIdentity(stored), nil
 }
@@ -127,8 +181,12 @@ func (r *repository) ReleaseInitial(ctx context.Context, id string) error {
 	if err != nil {
 		return mapReadError("get initial identity claim", err)
 	}
-	if string(markerData) != initialRecord {
-		return fmt.Errorf("%w: initial identity claim has an unsupported schema", ErrCorruptRecord)
+	marker, err := decodeInitialIdentityRecord(markerData)
+	if err != nil {
+		return err
+	}
+	if marker.IdentityID != id {
+		return ErrConflict
 	}
 	identityKey := identityStorageKey(id)
 	identityData, err := r.store.Get(ctx, identityKey)
@@ -311,6 +369,15 @@ func decodeHashRecord(data []byte) (hashRecord, error) {
 		return hashRecord{}, fmt.Errorf("%w: hash index", ErrCorruptRecord)
 	}
 	return index, nil
+}
+
+func decodeInitialIdentityRecord(data []byte) (initialIdentityRecord, error) {
+	var record initialIdentityRecord
+	if err := json.Unmarshal(data, &record); err != nil ||
+		record.SchemaVersion != StorageSchemaVersion || record.IdentityID == "" {
+		return initialIdentityRecord{}, fmt.Errorf("%w: initial identity claim", ErrCorruptRecord)
+	}
+	return record, nil
 }
 
 func decodeIdentity(data []byte) (identityRecord, error) {
