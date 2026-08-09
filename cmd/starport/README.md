@@ -1,9 +1,8 @@
-# starport
+# Starport process boundary
 
-Single binary that provides both server and CLI functionality.
+This package owns signals, process streams, exit codes, and application
+composition. The command tree and its tests live in `internal/cli`.
 
-## Files
-
-- `main.go` - Minimal entry point
-- `start.go` - Signal handling and lifecycle management
-- `run.go` - Application setup and CLI framework integration
+`main.go` passes process resources to `run.go`. The latter builds injected CLI
+dependencies and maps returned errors to one process exit code. It does not own
+command behavior.

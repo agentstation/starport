@@ -3,19 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"runtime"
-	"runtime/debug"
 	"syscall"
 
-	"github.com/urfave/cli/v2"
-
 	"github.com/agentstation/starport/internal/app"
+	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
 )
 
-// Build-time variables injected via ldflags
+// Build-time variables injected through linker flags.
 var (
 	version   = "dev"
 	buildTime = "unknown"
@@ -24,109 +23,55 @@ var (
 	goVersion = "unknown"
 )
 
-// run is the entry point for the application. It sets up the context and signal handling.
-func run() error {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	return runApp(ctx)
+	return runContext(ctx, args, stdin, stdout, stderr, runServer)
 }
 
-// runApp is the main function for the application. It sets up the CLI app and it's commands
-// including version, serve, and parse.
-func runApp(ctx context.Context) error {
-	cliApp := &cli.App{
-		Name:    "starport",
-		Usage:   "High-performance LLM gateway",
-		Version: version,
-		Commands: []*cli.Command{
-			{
-				Name:  "version",
-				Usage: "Show detailed version information",
-				Action: func(_ *cli.Context) error {
-					fmt.Printf("Starport %s\n", version)
-					fmt.Printf("Build Time:  %s\n", buildTime)
-					fmt.Printf("Git Commit:  %s\n", gitCommit)
-					fmt.Printf("Git Branch:  %s\n", gitBranch)
-					fmt.Printf("Go Version:  %s\n", getBuildGoVersion())
-					fmt.Printf("OS/Arch:     %s/%s\n", runtime.GOOS, runtime.GOARCH)
-
-					if info, ok := debug.ReadBuildInfo(); ok {
-						fmt.Printf("\nBuild Info:\n")
-						fmt.Printf("  Main Module: %s\n", info.Main.Path)
-						if info.Main.Sum != "" {
-							fmt.Printf("  Module Sum:  %s\n", info.Main.Sum)
-						}
-						fmt.Printf("  Go Version:  %s\n", info.GoVersion)
-
-						if len(info.Settings) > 0 {
-							fmt.Printf("\nBuild Settings:\n")
-							for _, setting := range info.Settings {
-								if setting.Key == "vcs.revision" || setting.Key == "vcs.time" || setting.Key == "vcs.modified" {
-									fmt.Printf("  %s: %s\n", setting.Key, setting.Value)
-								}
-							}
-						}
-					}
-					return nil
-				},
-			},
-			{
-				Name:    "serve",
-				Aliases: []string{"server"},
-				Usage:   "Run the llm gateway server",
-				Flags: []cli.Flag{
-					&cli.BoolFlag{
-						Name:  "enable-ollama",
-						Usage: "Enable Ollama support for local models",
-					},
-				},
-				Action: func(c *cli.Context) error {
-					return runServer(ctx, c.Bool("enable-ollama"))
-				},
-			},
-		},
-		Action: func(c *cli.Context) error {
-			if c.NArg() > 0 {
-				if err := cli.ShowAppHelp(c); err != nil {
-					return err
-				}
-				return fmt.Errorf("unknown command: %s", c.Args().First())
-			}
-			return runServer(ctx, false)
-		},
+func runContext(
+	ctx context.Context,
+	args []string,
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+	server starportcli.ServerRunner,
+) int {
+	err := starportcli.Run(ctx, args, starportcli.Dependencies{
+		Stdin: stdin, Stdout: stdout, Stderr: stderr,
+		Build: buildInformation(), RunServer: server,
+	})
+	if err == nil {
+		return 0
 	}
-
-	return cliApp.RunContext(ctx, os.Args)
+	_, _ = fmt.Fprintln(stderr, err)
+	return starportcli.ExitCode(err)
 }
 
-// runServer is the main function for the application. It sets up the server and it's configuration.
-func runServer(ctx context.Context, enableOllama bool) error {
-	// Load configuration
+func runServer(ctx context.Context, options starportcli.ServeOptions) error {
 	cfg, err := config.LoadWithDefaults(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return fmt.Errorf("load configuration: %w", err)
 	}
-
-	// Override Ollama setting from command line flag
-	if enableOllama {
+	if options.EnableOllama {
 		cfg.Providers.Ollama.Enabled = true
 	}
 
 	application, err := app.New(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to create app: %w", err)
+		return fmt.Errorf("create application: %w", err)
 	}
-
 	return application.Run(ctx)
 }
 
-// getBuildGoVersion is a helper function to get the build-time Go version.
-func getBuildGoVersion() string {
-	// Use the build-time injected version if available
-	if goVersion != "unknown" {
-		return goVersion
+func buildInformation() starportcli.BuildInfo {
+	builtWith := goVersion
+	if builtWith == "unknown" {
+		builtWith = runtime.Version()
 	}
-	// Fall back to runtime version
-	return runtime.Version()
+	return starportcli.BuildInfo{
+		Version: version, BuildTime: buildTime,
+		GitCommit: gitCommit, GitBranch: gitBranch,
+		GoVersion: builtWith, OS: runtime.GOOS, Arch: runtime.GOARCH,
+	}
 }
