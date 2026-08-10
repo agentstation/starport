@@ -88,6 +88,51 @@ Always check the command exit status. If a remote write has an uncertain
 result, the command prints the candidate key before it reports the storage
 error. Keep that key while you inspect the repository state.
 
+## Inspect Configuration and Startup State
+
+Show each managed path:
+
+```bash
+starport config paths
+```
+
+Show the effective configuration without secret values:
+
+```bash
+starport config show
+```
+
+Validate the same effective configuration that `starport serve` loads:
+
+```bash
+starport config validate
+```
+
+Run passive startup checks:
+
+```bash
+starport doctor
+```
+
+Passive checks load configuration and Starmap facts. They also compile the
+configured adapter and catalog intersection. They do not open configured
+storage or use a network connection.
+
+Add `--probe` to open Badger or Valkey in read-only mode. This probe verifies
+the current catalog generation and gateway identity state. Diagnosis never
+writes storage and never returns a configured secret.
+
+After an unclean Badger shutdown, the probe can require writable recovery. It
+marks the storage and identity checks as skipped. Start and stop
+`starport serve` cleanly, and then rerun the probe.
+
+Badger does not support read-only mode on Windows. On Windows, the probe marks
+the storage and identity checks as skipped. Use `starport serve` to verify the
+normal writable startup.
+
+Each command accepts `--json` for stable machine-readable output. A failed
+validation or diagnostic check returns a nonzero exit status.
+
 ## Client Base URLs
 
 Use these substitutions in existing clients:
@@ -197,6 +242,9 @@ It then closes background work, cache, providers, and storage in reverse
 construction order.
 
 ## Failure Diagnosis
+
+Run `starport doctor --probe` before you start the server. The output names
+each failed check and keeps all secret values redacted.
 
 - `provider credential master key is required`: set
   `STARPORT_SECURITY_MASTER_KEY`.

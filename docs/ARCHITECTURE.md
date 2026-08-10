@@ -102,6 +102,7 @@ starport/
 ├── internal/storage/          # KVStore adapter interface and implementations
 ├── internal/config/           # environment/.env config loading and validation
 ├── internal/setup/            # safe first-run configuration and identity creation
+├── internal/diagnosis/        # read-only startup checks and exact check results
 └── internal/architecture/     # executable import and package-boundary rules
 ```
 
@@ -114,6 +115,12 @@ The protocol packages can repeat wire fields. Each package converts once through
 `internal/app.New` receives one validated configuration value. It maps that
 value to adapter configuration. It then constructs storage, the Starmap
 control plane, repositories, providers, cache, routing, and HTTP.
+
+`internal/diagnosis` checks the same configuration, Starmap catalog, adapter
+registry, storage, and identity contracts without server construction. Its
+default checks are passive. An explicit probe opens storage through a
+write-blocking adapter. The diagnostic report uses stable check IDs and never
+contains a configured secret.
 
 Production needs storage, a catalog, a credential master key, and one explicit
 provider. It also needs one named identity in storage. The

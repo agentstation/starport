@@ -19,6 +19,32 @@ type Loader struct {
 	resolvePaths func() (Paths, error)
 }
 
+type loadFailure struct {
+	message string
+	cause   error
+}
+
+func (e *loadFailure) Error() string { return e.message }
+
+func (e *loadFailure) Unwrap() error { return e.cause }
+
+// OperatorError returns an error that is safe to show without configured
+// values. It preserves the original error for programmatic inspection.
+func OperatorError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var failure *loadFailure
+	if errors.As(err, &failure) {
+		return &loadFailure{message: failure.message, cause: err}
+	}
+	return &loadFailure{message: "configuration could not be loaded", cause: err}
+}
+
+func newLoadFailure(message string, cause error) error {
+	return &loadFailure{message: message, cause: cause}
+}
+
 // NewLoader creates a loader for the process environment and platform paths.
 func NewLoader() *Loader {
 	return &Loader{
@@ -62,12 +88,12 @@ func (l *Loader) WithPaths(paths Paths) *Loader {
 func (l *Loader) Load(ctx context.Context) (*Config, error) {
 	paths, err := l.resolvePaths()
 	if err != nil {
-		return nil, fmt.Errorf("resolve configuration paths: %w", err)
+		return nil, newLoadFailure("configuration paths could not be resolved", err)
 	}
 
 	lookuper, err := l.sourceLookuper(paths)
 	if err != nil {
-		return nil, err
+		return nil, newLoadFailure("configuration sources could not be read", err)
 	}
 
 	cfg := defaultConfig(paths)
@@ -75,14 +101,14 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 		Target:   cfg,
 		Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper),
 	}); err != nil {
-		return nil, fmt.Errorf("process environment configuration: %w", err)
+		return nil, newLoadFailure("configuration values could not be decoded", err)
 	}
 
 	if err := resolveConfiguredPaths(cfg, paths); err != nil {
-		return nil, fmt.Errorf("resolve configured paths: %w", err)
+		return nil, newLoadFailure("configured paths could not be resolved", err)
 	}
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("validate configuration: %w", err)
+		return nil, newLoadFailure("configuration values are invalid", err)
 	}
 
 	return cfg, nil

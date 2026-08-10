@@ -20,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/proxy"
@@ -208,7 +209,7 @@ func (b *runtimeBuilder) openRegistry() error {
 	registrations, err := buildRegistrations(
 		b.application.catalog,
 		b.application.adapters,
-		providerConfigurations(b.config.Providers),
+		providers.Configurations(b.config.Providers),
 		b.factories.newConnector,
 	)
 	if err != nil {

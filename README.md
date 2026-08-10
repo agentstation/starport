@@ -69,6 +69,22 @@ storage. It prints the new gateway API key once. Save that key. For the OpenAI
 profile, start Starport. If output fails, the command removes the initial state
 so that you can retry.
 
+Inspect the effective configuration and verify startup requirements:
+
+```bash
+./starport config paths
+./starport config show
+./starport config validate
+./starport doctor --probe
+```
+
+`config show` hides every secret value. `doctor` runs passive
+checks by default. The `--probe` option opens configured storage in read-only
+mode and verifies that an identity exists. Neither form changes stored state.
+If Badger needs writable recovery after an unclean shutdown, the probe skips
+storage inspection and gives recovery instructions. It also skips this
+inspection on platforms where Badger does not support read-only mode.
+
 ```bash
 ./starport serve
 ```

@@ -54,7 +54,6 @@ func OpenValkey(config ValkeyConfig) (KVStore, error) {
 	store.pubsub = NewValkeyPubSub(client)
 
 	log.Info().
-		Str("url", config.URL).
 		Int("db", config.DB).
 		Bool("cluster", config.ClusterMode).
 		Msg("connected to valkey")

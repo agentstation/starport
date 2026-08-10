@@ -33,8 +33,26 @@ type BadgerStore struct {
 
 // OpenBadger creates a new BadgerStore instance with the given configuration
 func OpenBadger(config BadgerConfig) (*BadgerStore, error) {
+	return openBadger(config, false)
+}
+
+// OpenBadgerReadOnly opens an existing Badger database without background
+// maintenance or filesystem creation.
+func OpenBadgerReadOnly(config BadgerConfig) (*BadgerStore, error) {
+	return openBadger(config, true)
+}
+
+func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 	// Ensure the directory exists
-	if err := os.MkdirAll(config.Path, 0750); err != nil {
+	if readOnly {
+		info, err := os.Stat(config.Path)
+		if err != nil {
+			return nil, fmt.Errorf("read badger directory: %w", err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("badger path is not a directory")
+		}
+	} else if err := os.MkdirAll(config.Path, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create badger directory: %w", err)
 	}
 
@@ -50,11 +68,12 @@ func OpenBadger(config BadgerConfig) (*BadgerStore, error) {
 	opts.NumLevelZeroTablesStall = 10
 	opts.NumCompactors = 4
 	opts.BlockCacheSize = 256 << 20 // 256 MB
+	opts.ReadOnly = readOnly
 
 	// Open the database
 	db, err := badger.Open(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open badger: %w", err)
+		return nil, badgerOpenError(readOnly, err)
 	}
 
 	store := &BadgerStore{
@@ -64,13 +83,25 @@ func OpenBadger(config BadgerConfig) (*BadgerStore, error) {
 		compactStop: make(chan struct{}),
 	}
 
-	// Start garbage collection for expired keys
-	store.startGarbageCollection()
+	if !readOnly {
+		// Start garbage collection for expired keys.
+		store.startGarbageCollection()
 
-	// Start periodic compaction
-	store.startCompaction()
+		// Start periodic compaction.
+		store.startCompaction()
+	}
 
 	return store, nil
+}
+
+func badgerOpenError(readOnly bool, err error) error {
+	if readOnly && errors.Is(err, badger.ErrTruncateNeeded) {
+		return fmt.Errorf("%w: %w", ErrReadOnlyRecoveryRequired, err)
+	}
+	if readOnly && (errors.Is(err, badger.ErrWindowsNotSupported) || errors.Is(err, badger.ErrPlan9NotSupported)) {
+		return fmt.Errorf("%w: %w", ErrReadOnlyUnsupported, err)
+	}
+	return fmt.Errorf("failed to open badger: %w", err)
 }
 
 // Basic operations

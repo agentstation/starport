@@ -7,7 +7,6 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
 )
@@ -16,28 +15,6 @@ var (
 	// ErrProvidersRequired reports an empty production provider set.
 	ErrProvidersRequired = errors.New("at least one production provider is required")
 )
-
-func providerConfigurations(configs config.ProvidersConfig) map[catalogs.ProviderID]connectors.ProviderConfig {
-	result := make(map[catalogs.ProviderID]connectors.ProviderConfig)
-	for _, entry := range configs.Entries() {
-		providerConfig := connectors.ProviderConfig{
-			BaseURL: entry.Config.BaseURL, APIKey: entry.Config.APIKey,
-			Timeout: entry.Config.Timeout, MaxConnections: entry.Config.MaxConnections,
-			Enabled: entry.Config.Enabled,
-		}
-		if entry.Config.ProjectID != "" || entry.Config.Location != "" {
-			providerConfig.EndpointBindings = make(map[string]string, 2)
-			if entry.Config.ProjectID != "" {
-				providerConfig.EndpointBindings["project"] = entry.Config.ProjectID
-			}
-			if entry.Config.Location != "" {
-				providerConfig.EndpointBindings["location"] = entry.Config.Location
-			}
-		}
-		result[entry.ProviderID] = providerConfig
-	}
-	return result
-}
 
 func buildRegistrations(
 	catalogPlane *runtimecatalog.ControlPlane,

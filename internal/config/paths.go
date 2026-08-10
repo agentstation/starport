@@ -10,11 +10,11 @@ const applicationDirectory = "starport"
 
 // Paths contains the platform-owned files and directories that Starport uses.
 type Paths struct {
-	ConfigDir      string
-	ConfigFile     string
-	DataDir        string
-	BadgerDir      string
-	RateLimitsFile string
+	ConfigDir      string `json:"config_dir"`
+	ConfigFile     string `json:"config_file"`
+	DataDir        string `json:"data_dir"`
+	BadgerDir      string `json:"badger_dir"`
+	RateLimitsFile string `json:"rate_limits_file"`
 }
 
 // PlatformPaths resolves the current user's Starport paths.
