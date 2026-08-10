@@ -174,3 +174,6 @@ The final review also separated source-path semantics from containment. Local
 destinations resolve from the requested document path, while canonical paths
 enforce the repository boundary. A symlink test covers false-pass and
 false-fail cases.
+
+The final independent P3 review reported no accepted or actionable findings.
+Its overall verdict marked the patch correct.
