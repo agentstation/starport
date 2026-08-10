@@ -66,19 +66,20 @@ func CheckFiles(root string, files []string) ([]BrokenLink, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve documentation root: %w", err)
 	}
-	rootPath, err = filepath.EvalSymlinks(rootPath)
+	rootPath = filepath.Clean(rootPath)
+	canonicalRoot, err := filepath.EvalSymlinks(rootPath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve documentation root symlinks: %w", err)
 	}
 
 	broken := make([]BrokenLink, 0)
 	for _, file := range files {
-		sourcePath, err := resolveSource(rootPath, file)
+		sourcePath, canonicalSource, err := resolveSource(rootPath, canonicalRoot, file)
 		if err != nil {
 			return nil, err
 		}
-		// #nosec G304 -- resolveSource confines the canonical path below rootPath.
-		source, err := os.ReadFile(sourcePath)
+		// #nosec G304 -- resolveSource confines the canonical path below canonicalRoot.
+		source, err := os.ReadFile(canonicalSource)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", file, err)
 		}
@@ -103,7 +104,7 @@ func CheckFiles(root string, files []string) ([]BrokenLink, error) {
 				if err != nil {
 					return nil, fmt.Errorf("resolve link target %s: %w", candidate, err)
 				}
-				if !within(rootPath, resolved) {
+				if !within(canonicalRoot, resolved) {
 					return nil, fmt.Errorf("link target escapes documentation root in %s:%d: %s", file, link.Line, target)
 				}
 				continue
@@ -120,20 +121,23 @@ func CheckFiles(root string, files []string) ([]BrokenLink, error) {
 	return broken, nil
 }
 
-func resolveSource(root, file string) (string, error) {
+func resolveSource(root, canonicalRoot, file string) (string, string, error) {
 	path := file
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(root, path)
 	}
 	path = filepath.Clean(path)
+	if !within(root, path) {
+		return "", "", fmt.Errorf("documentation file escapes root: %s", file)
+	}
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return "", fmt.Errorf("resolve documentation file %s: %w", file, err)
+		return "", "", fmt.Errorf("resolve documentation file %s: %w", file, err)
 	}
-	if !within(root, resolved) {
-		return "", fmt.Errorf("documentation file escapes root: %s", file)
+	if !within(canonicalRoot, resolved) {
+		return "", "", fmt.Errorf("documentation file escapes root: %s", file)
 	}
-	return resolved, nil
+	return path, resolved, nil
 }
 
 func within(root, path string) bool {

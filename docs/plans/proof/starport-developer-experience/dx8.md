@@ -169,3 +169,8 @@ The last P3 review found three syntax-tree edge cases. The parser now visits
 images nested inside links, uses Goldmark node positions for empty labels, and
 uses each URL path without a second decode. Regression tests cover all three
 cases.
+
+The final review also separated source-path semantics from containment. Local
+destinations resolve from the requested document path, while canonical paths
+enforce the repository boundary. A symlink test covers false-pass and
+false-fail cases.

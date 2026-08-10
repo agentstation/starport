@@ -85,3 +85,51 @@ func TestCheckFilesRejectsPathsOutsideRoot(t *testing.T) {
 		t.Fatal("CheckFiles() accepted a source outside its root")
 	}
 }
+
+func TestCheckFilesResolvesTargetsFromSourceSymlink(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	docs := filepath.Join(root, "docs")
+	shared := filepath.Join(root, "shared")
+	for _, directory := range []string{docs, shared} {
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sharedGuide := filepath.Join(shared, "guide.md")
+	if err := os.WriteFile(sharedGuide, []byte("[target](target.md)\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	linkedGuide := filepath.Join(docs, "guide.md")
+	if err := os.Symlink(filepath.Join("..", "shared", "guide.md"), linkedGuide); err != nil {
+		t.Skipf("create source symlink: %v", err)
+	}
+	docsTarget := filepath.Join(docs, "target.md")
+	if err := os.WriteFile(docsTarget, []byte("docs target\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	broken, err := CheckFiles(root, []string{linkedGuide})
+	if err != nil {
+		t.Fatalf("CheckFiles() error = %v", err)
+	}
+	if len(broken) != 0 {
+		t.Fatalf("CheckFiles() = %#v, want no broken links", broken)
+	}
+
+	if err := os.Remove(docsTarget); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(shared, "target.md"), []byte("shared target\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	broken, err = CheckFiles(root, []string{linkedGuide})
+	if err != nil {
+		t.Fatalf("CheckFiles() error = %v", err)
+	}
+	want := []BrokenLink{{Source: linkedGuide, Line: 1, Target: "target.md"}}
+	if !reflect.DeepEqual(broken, want) {
+		t.Fatalf("CheckFiles() = %#v, want %#v", broken, want)
+	}
+}
