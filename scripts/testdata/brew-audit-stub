@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+case "${1:-}" in
+	tap)
+		exit 0
+		;;
+	tap-new)
+		test "$GIT_AUTHOR_NAME" = starport-audit
+		test "$GIT_AUTHOR_EMAIL" = starport-audit@example.invalid
+		test "$GIT_COMMITTER_NAME" = starport-audit
+		test "$GIT_COMMITTER_EMAIL" = starport-audit@example.invalid
+		exit 0
+		;;
+	--repository)
+		printf '%s\n' "$STARPORT_AUDIT_TEST_ROOT/tap"
+		;;
+	audit)
+		test -f "$STARPORT_AUDIT_TEST_ROOT/tap/Casks/starport.rb"
+		;;
+	untap)
+		exit 0
+		;;
+	*)
+		printf 'unexpected brew command: %s\n' "$*" >&2
+		exit 1
+		;;
+esac

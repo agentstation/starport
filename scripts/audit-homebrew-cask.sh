@@ -19,7 +19,11 @@ if brew tap | grep -Fxq "$tap"; then
 fi
 
 cask="$(cd "$(dirname "$cask")" && pwd)/$(basename "$cask")"
-brew tap-new "$tap" >/dev/null
+GIT_AUTHOR_NAME=starport-audit \
+	GIT_AUTHOR_EMAIL=starport-audit@example.invalid \
+	GIT_COMMITTER_NAME=starport-audit \
+	GIT_COMMITTER_EMAIL=starport-audit@example.invalid \
+	brew tap-new "$tap" >/dev/null
 trap 'brew untap "$tap" >/dev/null' EXIT
 
 tap_root="$(brew --repository "$tap")"
