@@ -27,16 +27,24 @@ To build from source, install the Go version from `go.mod`, then run:
 git clone https://github.com/agentstation/starport.git
 cd starport
 make build
-./starport --version
+export STARPORT_BIN="$PWD/starport"
+"$STARPORT_BIN" --version
 ```
 
 ## Quick start
+
+Set the executable once. The default uses a release installation from
+`PATH`. Source builders keep the value from the preceding build commands.
+
+```bash
+export STARPORT_BIN="${STARPORT_BIN:-starport}"
+```
 
 You need an OpenAI inference key. Initialize one local Starport instance:
 
 ```bash
 export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
-starport init --provider openai
+"$STARPORT_BIN" init --provider openai
 ```
 
 Initialization creates a provider-credential master key and one gateway
@@ -51,15 +59,15 @@ export STARPORT_API_KEY="replace-with-gateway-api-key-from-init"
 Inspect the effective paths and startup state:
 
 ```bash
-starport config paths
-starport config validate
-starport doctor --probe
+"$STARPORT_BIN" config paths
+"$STARPORT_BIN" config validate
+"$STARPORT_BIN" doctor --probe
 ```
 
-Start the gateway in another terminal:
+Start the gateway in this terminal. Use another terminal for the requests:
 
 ```bash
-starport serve
+"$STARPORT_BIN" serve
 ```
 
 Check readiness and the authenticated model catalog:

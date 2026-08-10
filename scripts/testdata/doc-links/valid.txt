@@ -3,3 +3,5 @@
 [Angle destination](<target with space.md> "Local title")
 
 [Balanced destination](target(with-parentheses).md)
+
+[Trailing parenthesis](target(v2))

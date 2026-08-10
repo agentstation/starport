@@ -153,3 +153,8 @@ The same review exposed two lower-priority boundary defects. Temporary cleanup
 now uses the exact directory from `mktemp`. The link verifier now recognizes
 angle-bracket destinations, titles, spaces, and balanced parentheses. Its
 fixture test proves both valid and missing destinations.
+
+The final P3 review found two more defects. The quick start now carries the
+exact built executable through `STARPORT_BIN`. The link verifier preserves a
+destination that ends in a balanced parenthesis, and its fixture covers that
+case.

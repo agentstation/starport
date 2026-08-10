@@ -53,7 +53,6 @@ while IFS= read -r record; do
   line=${remainder%%:*}
   link=${remainder#*:}
   target=${link#*](}
-  target=${target%)}
   target=${target#<}
   target=${target%>}
 
