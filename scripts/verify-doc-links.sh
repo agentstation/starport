@@ -32,7 +32,7 @@ done
 
 records=$(mktemp "${TMPDIR:-/tmp}/starport-doc-links.XXXXXX")
 trap 'rm -f "$records"' EXIT INT TERM
-link_pattern='\[[^]]+\]\([^ )]+\)'
+link_pattern='\[[^]]+\]\((<[^>]+>|([^[:space:]()\\]|\\.|\([^[:space:]()]*\))+)'
 : >"$records"
 for file in "${files[@]}"; do
   line_number=0

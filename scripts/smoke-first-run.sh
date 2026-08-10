@@ -14,9 +14,9 @@ cleanup() {
 		kill -INT "$server_pid"
 		wait "$server_pid" || true
 	fi
-	case "$smoke_root" in
-		"$temporary_root"/starport-first-run.*) rm -rf "$smoke_root" ;;
-	esac
+	if [[ -n "$smoke_root" && ${smoke_root##*/} == starport-first-run.* ]]; then
+		rm -rf -- "$smoke_root"
+	fi
 }
 trap cleanup EXIT INT TERM
 
@@ -33,14 +33,23 @@ server_log="$smoke_root/server.log"
 setup_log="$smoke_root/setup.log"
 server_port="${STARPORT_SMOKE_PORT:-18080}"
 
+if [[ ! $server_port =~ ^[0-9]+$ ]] || ((server_port < 1 || server_port > 65535)); then
+	printf 'STARPORT_SMOKE_PORT must be an integer from 1 through 65535\n' >&2
+	exit 1
+fi
+
 cd "$repository_root"
 go build -trimpath -o "$binary" ./cmd/starport
 
-export STARPORT_CONFIG_DIR="$config_directory"
-export STARPORT_PROVIDERS_OPENAI_API_KEY="first-run-provider-key"
-export STARPORT_SERVER_PORT="$server_port"
+starport_environment=(
+	env -i
+	"PATH=${PATH:-/usr/bin:/bin}"
+	"STARPORT_CONFIG_DIR=$config_directory"
+	"STARPORT_PROVIDERS_OPENAI_API_KEY=first-run-provider-key"
+	"STARPORT_SERVER_PORT=$server_port"
+)
 
-if ! initialization="$("$binary" init --provider openai --name smoke-admin --json 2>"$setup_log")"; then
+if ! initialization="$("${starport_environment[@]}" "$binary" init --provider openai --name smoke-admin --json 2>"$setup_log")"; then
 	printf 'first-run initialization failed\n' >&2
 	sed -n '1,120p' "$setup_log" >&2
 	exit 1
@@ -49,18 +58,18 @@ gateway_key="$(jq -er '.api_key | select(length > 0)' <<<"$initialization")"
 test "$(jq -r .identity_name <<<"$initialization")" = smoke-admin
 test "$(jq -r .config_file <<<"$initialization")" = "$config_directory/config.env"
 
-if ! "$binary" config validate >>"$setup_log" 2>&1; then
+if ! "${starport_environment[@]}" "$binary" config validate >>"$setup_log" 2>&1; then
 	printf 'first-run configuration validation failed\n' >&2
 	sed -n '1,120p' "$setup_log" >&2
 	exit 1
 fi
-if ! "$binary" doctor --probe >>"$setup_log" 2>&1; then
+if ! "${starport_environment[@]}" "$binary" doctor --probe >>"$setup_log" 2>&1; then
 	printf 'first-run diagnosis failed\n' >&2
 	sed -n '1,120p' "$setup_log" >&2
 	exit 1
 fi
 
-"$binary" serve >"$server_log" 2>&1 &
+"${starport_environment[@]}" "$binary" serve >"$server_log" 2>&1 &
 server_pid=$!
 
 ready=false

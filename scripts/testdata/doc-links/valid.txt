@@ -1,0 +1,5 @@
+# Valid link destinations
+
+[Angle destination](<target with space.md> "Local title")
+
+[Balanced destination](target(with-parentheses).md)

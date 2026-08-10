@@ -140,6 +140,7 @@ verify: ## Run deterministic architecture and release contract checks
 	bash scripts/verify-release-workflow.sh
 	bash scripts/verify-developer-experience.sh
 	bash scripts/verify-doc-links.sh
+	bash scripts/test-doc-link-verifier.sh
 
 .PHONY: release-check
 release-check: verify ## Check the release configuration and online action provenance
@@ -160,13 +161,19 @@ release-snapshot: release-check ## Build and verify the complete local release s
 
 .PHONY: format-check
 format-check: ## Check Go formatting without changing files
-	@unformatted="$$(gofmt -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './tmp/*'))"; \
+	@if ! unformatted="$$(gofmt -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './tmp/*'))"; then \
+		echo "gofmt failed"; \
+		exit 1; \
+	fi; \
 		if [ -n "$$unformatted" ]; then \
 			echo "gofmt is required for:"; \
 			echo "$$unformatted"; \
 			exit 1; \
 		fi
-	@unformatted="$$(go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './tmp/*'))"; \
+	@if ! unformatted="$$(go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './tmp/*'))"; then \
+		echo "goimports failed"; \
+		exit 1; \
+	fi; \
 		if [ -n "$$unformatted" ]; then \
 			echo "goimports is required for:"; \
 			echo "$$unformatted"; \

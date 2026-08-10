@@ -141,3 +141,15 @@ The isolated P2 review found six defects. DX8 fixed all six:
 - Each Valkey test command uses `-count=1`.
 - Each integration run uses its shell process ID in the Compose project name.
 - Each smoke-test HTTP request has bounded connection and total times.
+
+A second P2 review found two defects in the repaired gates. DX8 also fixed
+both defects:
+
+- `format-check` now fails when `gofmt` or `goimports` fails.
+- The first-run scene uses an allowlisted environment for each Starport
+  process.
+
+The same review exposed two lower-priority boundary defects. Temporary cleanup
+now uses the exact directory from `mktemp`. The link verifier now recognizes
+angle-bracket destinations, titles, spaces, and balanced parentheses. Its
+fixture test proves both valid and missing destinations.
