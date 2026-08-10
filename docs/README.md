@@ -1,32 +1,39 @@
-# Starport Documentation
+# Starport documentation
 
-Documentation for the Starport open source LLM gateway.
+Use this index to find current product, operator, and developer information.
 
-## Core Documentation
+## Start and operate Starport
 
-- **[Architecture](ARCHITECTURE.md)** - Technical design and system architecture
-- **[Architecture Control Plane](ARCHITECTURE_CONTROL_PLANE.md)** - Historical architecture-hardening ledger
-- **[Task Status](TASKS.md)** - Current development status and task tracking
-- **[Operator Guide](OPERATOR-GUIDE.md)** - Setup, deployment, operation, and release checks
-- **[Vertex AI Configuration](VERTEX_AI_CONFIG.md)** - Static and renewable inference authentication
+- [README](../README.md): install, initialize, and send a first request.
+- [Operator guide](OPERATOR-GUIDE.md): configure storage, providers, clients,
+  containers, diagnosis, and shutdown.
+- [Configuration reference](../.env.example): list all supported environment
+  fields and secure defaults.
+- [Vertex AI configuration](VERTEX_AI_CONFIG.md): configure static or renewable
+  Vertex AI inference authentication.
+- [Model catalog contract](../MODELS.md): understand Starmap ownership and model
+  identity rules.
+- [Prompt cache control](CACHE_CONTROL.md): send route-aware prompt-cache
+  controls.
+- [Security policy](../SECURITY.md): report a vulnerability.
 
-## Architecture Decision Records
+## Understand the system
 
-- [Architecture](ARCHITECTURE.md) is the canonical v1 design.
-- [Architecture Control Plane](ARCHITECTURE_CONTROL_PLANE.md) records the architecture-hardening history.
-- Starport has no pre-v1 compatibility or data-migration contract.
+- [Architecture](ARCHITECTURE.md): read the canonical version 1 design and
+  concept boundaries.
+- [Architecture control-plane history](ARCHITECTURE_CONTROL_PLANE.md): inspect
+  the completed architecture-hardening record.
+- [Task status](TASKS.md): inspect current repository work.
 
-## User Guides (Coming Soon)
+Starport has no legacy provider aliases or storage compatibility readers.
+Starmap owns provider and model facts. Starport owns inference and gateway
+runtime behavior.
 
-- API Reference - Complete API documentation
-- Configuration Guide - All configuration options
-- Deployment Guide - Production deployment instructions
-- Provider Setup - Configuring LLM providers
-- Performance Tuning - Optimization guide
-- [Model Catalog](../MODELS.md) - Complete list of supported models
+## Develop and contribute
 
-## Developer Resources
-
-- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute
-- [Community rules](CODE_OF_CONDUCT.md)
-- [Claude Instructions](../CLAUDE.md) - For AI assistants
+- [Development guide](../DEVELOPMENT.md): set up tools, run tests, and check a
+  release snapshot.
+- [Contribution guide](CONTRIBUTING.md): prepare a focused pull request.
+- [Community rules](CODE_OF_CONDUCT.md): follow the rules for project work.
+- [Active plans](plans/README.md): inspect durable implementation control
+  planes.

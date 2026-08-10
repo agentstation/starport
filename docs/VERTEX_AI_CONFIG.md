@@ -33,7 +33,7 @@ Use a static OAuth access token only when token renewal is external:
 
 ```bash
 export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=static
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY=<OAuth-access-token>
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY="replace-with-oauth-access-token"
 ```
 
 Do not set the API-key variable with default mode. Starport rejects this

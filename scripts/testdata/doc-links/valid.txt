@@ -1,0 +1,13 @@
+# Valid link destinations
+
+[Angle destination](<target with space.md> "Local title")
+
+[Balanced destination](target(with-parentheses).md)
+
+[Trailing parenthesis](target(v2))
+
+`[Ignored code span](missing-code-span.md)`
+
+```text
+[Ignored fenced code](missing-fenced-code.md)
+```

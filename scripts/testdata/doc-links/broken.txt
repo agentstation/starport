@@ -1,0 +1,5 @@
+# Broken reference destination
+
+[Missing destination][missing]
+
+[missing]: <missing target.md> "Local title"

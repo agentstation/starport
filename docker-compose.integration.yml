@@ -1,0 +1,4 @@
+services:
+  valkey:
+    ports:
+      - "127.0.0.1:${STARPORT_VALKEY_PORT:-6379}:6379"

@@ -8,6 +8,8 @@ import (
 
 const applicationDirectory = "starport"
 
+const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
+
 // Paths contains the platform-owned files and directories that Starport uses.
 type Paths struct {
 	ConfigDir      string `json:"config_dir"`
@@ -19,6 +21,12 @@ type Paths struct {
 
 // PlatformPaths resolves the current user's Starport paths.
 func PlatformPaths() (Paths, error) {
+	if configured := os.Getenv(configDirectoryEnvironment); configured != "" {
+		if !filepath.IsAbs(configured) {
+			return Paths{}, fmt.Errorf("%s must be an absolute path", configDirectoryEnvironment)
+		}
+		return PathsForConfigDir(configured), nil
+	}
 	root, err := os.UserConfigDir()
 	if err != nil {
 		return Paths{}, fmt.Errorf("resolve user configuration directory: %w", err)
