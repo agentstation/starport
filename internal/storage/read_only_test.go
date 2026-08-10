@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -108,5 +110,18 @@ func TestBadgerUnsupportedReadOnlyErrorIsClassified(t *testing.T) {
 		if !errors.Is(err, cause) {
 			t.Errorf("error = %v, want cause %v", err, cause)
 		}
+	}
+}
+
+func TestBadgerUnsupportedPlatformPrecedesFilesystemCheck(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	for _, goos := range []string{"windows", "plan9"} {
+		err := badgerReadOnlyPreflight(missing, goos)
+		if !errors.Is(err, ErrReadOnlyUnsupported) {
+			t.Errorf("%s error = %v, want %v", goos, err, ErrReadOnlyUnsupported)
+		}
+	}
+	if err := badgerReadOnlyPreflight(missing, "linux"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("supported-platform error = %v, want %v", err, os.ErrNotExist)
 	}
 }

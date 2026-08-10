@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -45,12 +46,8 @@ func OpenBadgerReadOnly(config BadgerConfig) (*BadgerStore, error) {
 func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 	// Ensure the directory exists
 	if readOnly {
-		info, err := os.Stat(config.Path)
-		if err != nil {
-			return nil, fmt.Errorf("read badger directory: %w", err)
-		}
-		if !info.IsDir() {
-			return nil, fmt.Errorf("badger path is not a directory")
+		if err := badgerReadOnlyPreflight(config.Path, runtime.GOOS); err != nil {
+			return nil, err
 		}
 	} else if err := os.MkdirAll(config.Path, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create badger directory: %w", err)
@@ -92,6 +89,23 @@ func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 	}
 
 	return store, nil
+}
+
+func badgerReadOnlyPreflight(path, goos string) error {
+	switch goos {
+	case "windows":
+		return fmt.Errorf("%w: %w", ErrReadOnlyUnsupported, badger.ErrWindowsNotSupported)
+	case "plan9":
+		return fmt.Errorf("%w: %w", ErrReadOnlyUnsupported, badger.ErrPlan9NotSupported)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("read badger directory: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("badger path is not a directory")
+	}
+	return nil
 }
 
 func badgerOpenError(readOnly bool, err error) error {
