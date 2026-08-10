@@ -9,7 +9,7 @@ Last Updated: 2026-08-09
 
 | Task | Owner | Status | Plan |
 |---|---|---|---|
-| Starport developer experience | DX7 | Active | [Developer experience plan](plans/starport-developer-experience-plan.html) |
+| Starport developer experience | DX8 | Active; DX7 waits for Apple notarization input | [Developer experience plan](plans/starport-developer-experience-plan.html) |
 
 ### Recently Completed
 
