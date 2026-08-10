@@ -9,7 +9,7 @@ Last Updated: 2026-08-10
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP2 migrates provider YAML and removes provider facts from Starmap acquisition code. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP2.1 moves inferred model facts to authored data or verified observations and creates durable review candidates. |
 
 ### Proposed Work
 
