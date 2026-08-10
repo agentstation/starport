@@ -120,3 +120,25 @@ verifier must inspect a platform child instead of the OCI index.
 
 Optional Developer ID signing and notarization remain `UNVERIFIED` until all
 five Apple credentials exist. Their absence does not block CLI publication.
+
+## Readback hardening
+
+Hardening commit `a8ca07d` fixes both defects from the source release run.
+
+- The primary workflow reads the paginated release list. It requires exactly
+  one item that matches both the release tag and draft state.
+- The container verifier resolves the Linux AMD64 child digest from the OCI
+  index. It reads the runtime user from that child image config.
+- A deterministic fake-registry scene verifies the platform-child lookup. It
+  rejects OCI index image config use.
+- The workflow verifier rejects the failed draft-tag lookup and requires the
+  draft-only list predicate.
+- The updated verifier passed against the public 1.0.1 container from macOS.
+
+The clean `v1.0.2-next` snapshot passed with GoReleaser 2.17.1 and Syft
+1.50.0. The ownership, architecture, Go, and release checks passed. The SDK,
+first-run, Homebrew audit, documentation, and strict prose checks also passed.
+
+The first P0 through P3 hardening review found one P2 item. The workflow then
+restricted uniqueness to draft releases. The final review reported no
+actionable findings and rated the patch correct with 0.97 confidence.
