@@ -9,7 +9,7 @@ Last Updated: 2026-08-10
 
 | Task | Owner | Status | Plan |
 |---|---|---|---|
-| Starport developer experience | DX9 | Active; DX7 waits for Apple notarization input | [Developer experience plan](plans/starport-developer-experience-plan.html) |
+| Starport developer experience | DX7 | Blocked on Apple release credentials | [Developer experience plan](plans/starport-developer-experience-plan.html) |
 
 ### Recently Completed
 
