@@ -1,0 +1,26 @@
+cask "starport" do
+  version "@VERSION@"
+
+  on_arm do
+    on_macos do
+      sha256 "@CHECKSUM@"
+    end
+    on_linux do
+      sha256 "@CHECKSUM@"
+    end
+  end
+  on_intel do
+    on_macos do
+      sha256 "@CHECKSUM@"
+    end
+    on_linux do
+      sha256 "@CHECKSUM@"
+    end
+  end
+
+  binary "starport"
+  manpage "manpages/starport.1"
+  bash_completion "completions/starport.bash"
+  zsh_completion "completions/starport.zsh"
+  fish_completion "completions/starport.fish"
+end
