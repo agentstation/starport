@@ -99,9 +99,15 @@ type refreshingSource struct {
 	refreshBefore time.Duration
 	now           func() time.Time
 
-	mu          sync.Mutex
-	token       Token
-	refreshDone chan struct{}
+	mu      sync.Mutex
+	token   Token
+	refresh *refreshAttempt
+}
+
+type refreshAttempt struct {
+	done            chan struct{}
+	err             error
+	retryForWaiters bool
 }
 
 func (s *refreshingSource) Token(ctx context.Context) (Token, error) {
@@ -115,36 +121,52 @@ func (s *refreshingSource) Token(ctx context.Context) (Token, error) {
 			s.mu.Unlock()
 			return token, nil
 		}
-		if s.refreshDone != nil {
-			done := s.refreshDone
+		if s.refresh != nil {
+			attempt := s.refresh
 			s.mu.Unlock()
 			select {
 			case <-ctx.Done():
 				return Token{}, ctx.Err()
-			case <-done:
-				continue
+			case <-attempt.done:
+				if err := ctx.Err(); err != nil {
+					return Token{}, err
+				}
+				if attempt.err == nil {
+					continue
+				}
+				if attempt.retryForWaiters {
+					continue
+				}
+				return Token{}, attempt.err
 			}
 		}
 
-		done := make(chan struct{})
-		s.refreshDone = done
+		attempt := &refreshAttempt{done: make(chan struct{})}
+		s.refresh = attempt
 		s.mu.Unlock()
 
 		token, err := s.upstream.Token(ctx)
+		retryForWaiters := err != nil && ctx.Err() != nil && errors.Is(err, ctx.Err())
 		if err == nil {
 			err = validateToken(token, s.now(), s.refreshBefore)
+		}
+
+		if err != nil {
+			err = fmt.Errorf("refresh provider credential: %w", err)
 		}
 
 		s.mu.Lock()
 		if err == nil {
 			s.token = token
 		}
-		s.refreshDone = nil
-		close(done)
+		attempt.err = err
+		attempt.retryForWaiters = retryForWaiters
+		s.refresh = nil
+		close(attempt.done)
 		s.mu.Unlock()
 
 		if err != nil {
-			return Token{}, fmt.Errorf("refresh provider credential: %w", err)
+			return Token{}, err
 		}
 		return token, nil
 	}

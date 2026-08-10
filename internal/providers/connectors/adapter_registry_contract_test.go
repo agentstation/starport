@@ -69,14 +69,16 @@ func TestCatalogEndpointBindingsFailClosed(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = adapters.Activate(client.Catalog(), map[catalogs.ProviderID]ProviderConfig{
-		catalogs.ProviderIDGoogleVertex: {APIKey: "inference-token"},
+		catalogs.ProviderIDGoogleVertex: {
+			APIKey: "inference-token", AuthMode: providerauth.ModeStatic,
+		},
 	})
 	require.ErrorIs(t, err, ErrAdapterConfigurationInvalid)
 	require.ErrorContains(t, err, "endpoint binding")
 
 	active, err := adapters.Activate(client.Catalog(), map[catalogs.ProviderID]ProviderConfig{
 		catalogs.ProviderIDGoogleVertex: {
-			APIKey: "inference-token",
+			APIKey: "inference-token", AuthMode: providerauth.ModeStatic,
 			EndpointBindings: map[string]string{
 				"project":  "tenant-project",
 				"location": "us-test1",

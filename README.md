@@ -142,8 +142,8 @@ and opaque. It does not normalize old or alternate names.
 ## Cloud Provider Credentials
 
 Vertex AI and Azure OpenAI accept static inference credentials or a default
-cloud credential chain. Select the chain with the provider `AUTH_MODE`
-variable. Starport does not select it when the variable is empty.
+cloud credential chain. Both adapters require the provider `AUTH_MODE`
+variable.
 
 ```bash
 export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
@@ -157,7 +157,7 @@ export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL=https://<resource>.openai.azure.
 Default mode uses Google Application Default Credentials or Azure
 `DefaultAzureCredential`. Starport renews each bearer token before expiry.
 Static mode uses the Starport provider `API_KEY` variable. Do not set an API
-key with default mode.
+key with default mode. Starport rejects an empty cloud auth mode.
 
 ## Containers
 

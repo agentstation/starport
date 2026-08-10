@@ -178,10 +178,13 @@ func (c *ProvidersConfig) Validate() error {
 		if !active {
 			continue
 		}
-		if provider.AuthMode == providerauth.ModeDefault &&
-			entry.ProviderID != catalogs.ProviderIDGoogleVertex &&
-			entry.ProviderID != catalogs.ProviderIDAzureOpenAI {
-			return fmt.Errorf("invalid %s provider config: default credentials are not supported", entry.ProviderID)
+		cloudAdapter := entry.ProviderID == catalogs.ProviderIDGoogleVertex ||
+			entry.ProviderID == catalogs.ProviderIDAzureOpenAI
+		if provider.AuthMode != "" && !cloudAdapter {
+			return fmt.Errorf("invalid %s provider config: auth mode is not supported", entry.ProviderID)
+		}
+		if cloudAdapter && provider.AuthMode == "" {
+			return fmt.Errorf("invalid %s provider config: auth mode is required", entry.ProviderID)
 		}
 		if err := provider.Validate(); err != nil {
 			return fmt.Errorf("invalid %s provider config: %w", entry.ProviderID, err)

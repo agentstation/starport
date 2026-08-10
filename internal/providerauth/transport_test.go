@@ -20,6 +20,19 @@ type closeTrackingTransport struct {
 	closed bool
 }
 
+type closeTrackingBody struct {
+	closed bool
+}
+
+func (*closeTrackingBody) Read([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (b *closeTrackingBody) Close() error {
+	b.closed = true
+	return nil
+}
+
 func (t *closeTrackingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, errors.New("unexpected request")
 }
@@ -70,7 +83,8 @@ func TestBearerTransportForwardsRequestCancellation(t *testing.T) {
 	}), source)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://provider.test/inference", nil)
+	body := &closeTrackingBody{}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://provider.test/inference", body)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -78,6 +92,25 @@ func TestBearerTransportForwardsRequestCancellation(t *testing.T) {
 	_, err = transport.RoundTrip(request)
 	if !called || !errors.Is(err, context.Canceled) {
 		t.Fatalf("round trip error = %v; source called = %t", err, called)
+	}
+	if !body.closed {
+		t.Fatal("request body remained open after credential failure")
+	}
+}
+
+func TestBearerTransportClosesBodyWhenSourceIsMissing(t *testing.T) {
+	body := &closeTrackingBody{}
+	request, err := http.NewRequest(http.MethodPost, "https://provider.test/inference", body)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	transport := NewBearerTransport(nil, nil)
+	_, err = transport.RoundTrip(request)
+	if !errors.Is(err, ErrSourceRequired) {
+		t.Fatalf("round trip error = %v, want missing source", err)
+	}
+	if !body.closed {
+		t.Fatal("request body remained open without a credential source")
 	}
 }
 

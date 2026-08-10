@@ -14,8 +14,10 @@ func TestLoaderUsesExactProviderEnvironmentNamespaces(t *testing.T) {
 	environment := map[string]string{
 		"STARPORT_PROVIDERS_GOOGLE_AI_STUDIO_API_KEY": "studio-key",
 		"STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY":    "vertex-token",
+		"STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE":  "static",
 		"STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID": "vertex-project",
 		"STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY":     "azure-key",
+		"STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE":   "static",
 	}
 	cfg := loadTestConfig(t, environment)
 

@@ -195,8 +195,9 @@ export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL=https://<resource>.openai.azure.
 
 For a static Azure API key, set `AUTH_MODE=static` and set
 `STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY`. Do not combine an API key with
-default mode. Starport refreshes default bearer tokens before expiry. Request
-cancellation also cancels credential acquisition.
+default mode. Both cloud adapters require `AUTH_MODE`. Starport refreshes
+default bearer tokens before expiry. Request cancellation also cancels
+credential acquisition.
 
 Ollama needs `STARPORT_PROVIDERS_OLLAMA_ENABLED=true` or the
 `--enable-ollama` flag.

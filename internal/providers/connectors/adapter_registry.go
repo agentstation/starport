@@ -441,8 +441,10 @@ func requiredCloudCredentialConfig(config ProviderConfig) error {
 			return errors.New("inference API key cannot be combined with default credentials")
 		}
 		return nil
-	case "", providerauth.ModeStatic:
+	case providerauth.ModeStatic:
 		return requiredAPIKeyConfig(config)
+	case "":
+		return errors.New("provider auth mode is required")
 	default:
 		return errors.New("unsupported provider auth mode")
 	}

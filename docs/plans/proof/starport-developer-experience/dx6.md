@@ -37,10 +37,10 @@ Implementation branch: `codex/starport-dx6-cloud-auth`.
   Cloud platform scope.
 - Azure default mode uses `DefaultAzureCredential` with the Azure Cognitive
   Services scope.
-- `AUTH_MODE=default` is an explicit opt-in. Ambient cloud credentials do not
-  activate either inference adapter.
-- Static mode keeps the existing Starport provider secret path. Starport
-  rejects default mode combined with an API key.
+- Each cloud adapter requires an explicit `AUTH_MODE`. Ambient cloud
+  credentials do not activate either inference adapter.
+- Static mode keeps the Starport provider secret path. Starport rejects an
+  empty mode or default mode combined with an API key.
 - Starmap catalog-acquisition credentials do not enter the new source or
   connector paths.
 
@@ -106,4 +106,15 @@ The glossary check reported 15 terms and zero errors.
 
 ## Review and pull request gate
 
-The pre-PR autoreview and pull request gate are pending.
+The `sol` profile used `gpt-5.6-sol` at high reasoning. TruffleHog reported a
+clean bundle. The wider review found two failure-path defects:
+
+- Concurrent waiters retried one failed credential refresh in sequence.
+- A credential failure did not close the outbound request body.
+
+Starport now shares a failed refresh with its waiting cohort. A later request
+can retry. A waiter also retries when the refresh leader cancels its own
+context. The bearer transport closes the request body before it returns an
+authentication error.
+
+The convergence review and pull request gate are pending.

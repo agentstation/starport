@@ -9,6 +9,8 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 func TestExactProviderModelIDIsOpaque(t *testing.T) {
@@ -56,8 +58,9 @@ func TestOfferingEndpointSelectsProtocol(t *testing.T) {
 	defer server.Close()
 
 	connector, err := NewVertexAIConnector(ProviderConfig{
-		BaseURL: server.URL,
-		APIKey:  "inference-token",
+		BaseURL:  server.URL,
+		APIKey:   "inference-token",
+		AuthMode: providerauth.ModeStatic,
 	})
 	require.NoError(t, err)
 	defer connector.Close()

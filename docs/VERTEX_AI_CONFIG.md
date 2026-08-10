@@ -35,8 +35,8 @@ export STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY=<OAuth-access-token>
 ```
 
 Do not set the API-key variable with default mode. Starport rejects this
-ambiguous configuration. Default mode is opt-in. Ambient Google credentials do
-not activate the inference adapter when `AUTH_MODE` is empty.
+ambiguous configuration. The adapter requires `AUTH_MODE`. Ambient Google
+credentials do not activate Vertex AI when this value is empty.
 
 Starmap resolves its catalog-acquisition credentials independently. Starport
 does not copy a Starmap credential into an inference request.

@@ -21,10 +21,12 @@ type bearerTransport struct {
 
 func (t *bearerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if t.source == nil {
+		closeRequestBody(request)
 		return nil, ErrSourceRequired
 	}
 	token, err := t.source.Token(request.Context())
 	if err != nil {
+		closeRequestBody(request)
 		return nil, fmt.Errorf("authorize provider inference request: %w", err)
 	}
 
@@ -32,6 +34,12 @@ func (t *bearerTransport) RoundTrip(request *http.Request) (*http.Response, erro
 	authorized.Header = request.Header.Clone()
 	authorized.Header.Set("Authorization", "Bearer "+token.Value)
 	return t.base.RoundTrip(authorized)
+}
+
+func closeRequestBody(request *http.Request) {
+	if request != nil && request.Body != nil {
+		_ = request.Body.Close()
+	}
 }
 
 // CloseIdleConnections closes idle connections in the wrapped transport when

@@ -69,3 +69,12 @@ func TestProvidersConfigLimitsDefaultCredentialsToCloudAdapters(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+func TestProvidersConfigRequiresExplicitCloudAuthMode(t *testing.T) {
+	providers := ProvidersConfig{GoogleVertexAI: ProviderConfig{
+		APIKey: "token", Timeout: time.Second, MaxConnections: 1,
+	}}
+	if err := providers.Validate(); err == nil || !strings.Contains(err.Error(), "auth mode is required") {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}

@@ -230,9 +230,10 @@ scope. A synchronized source caches each token and refreshes it two minutes
 before expiry. Waiting requests can stop through their own contexts. The HTTP
 transport gets credentials with the inference request context.
 
-The operator must select default mode. Ambient cloud credentials do not
+The operator must select a cloud auth mode. Ambient cloud credentials do not
 activate an adapter. Static credentials remain in Starport provider
-configuration. Starport rejects a static secret combined with default mode.
+configuration. Starport rejects an empty mode or a static secret combined with
+default mode.
 
 ## Routing
 

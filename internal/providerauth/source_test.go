@@ -97,6 +97,104 @@ func TestRefreshingSourceCoalescesConcurrentRefresh(t *testing.T) {
 	}
 }
 
+func TestRefreshingSourceSharesFailedRefreshWithWaiters(t *testing.T) {
+	injected := errors.New("credential service unavailable")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	upstream := SourceFunc(func(context.Context) (Token, error) {
+		call := calls.Add(1)
+		if call == 1 {
+			close(started)
+			<-release
+			return Token{}, injected
+		}
+		return Token{Value: "recovered", ExpiresAt: time.Now().Add(time.Hour)}, nil
+	})
+	source, err := NewRefreshingSource(upstream, RefreshOptions{})
+	if err != nil {
+		t.Fatalf("new source: %v", err)
+	}
+
+	const callers = 24
+	results := make(chan error, callers)
+	begin := make(chan struct{})
+	for range callers {
+		go func() {
+			<-begin
+			_, tokenErr := source.Token(context.Background())
+			results <- tokenErr
+		}()
+	}
+	close(begin)
+	<-started
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	for range callers {
+		if result := <-results; !errors.Is(result, injected) {
+			t.Errorf("token result = %v, want shared failure", result)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("upstream calls = %d, want 1 for failed cohort", got)
+	}
+
+	token, err := source.Token(context.Background())
+	if err != nil {
+		t.Fatalf("later retry: %v", err)
+	}
+	if token.Value != "recovered" || calls.Load() != 2 {
+		t.Fatalf("later token = %q after %d calls", token.Value, calls.Load())
+	}
+}
+
+func TestRefreshingSourceRetriesAfterLeaderCancellation(t *testing.T) {
+	started := make(chan struct{})
+	var calls atomic.Int32
+	upstream := SourceFunc(func(ctx context.Context) (Token, error) {
+		if calls.Add(1) == 1 {
+			close(started)
+			<-ctx.Done()
+			return Token{}, ctx.Err()
+		}
+		return Token{Value: "waiter-token", ExpiresAt: time.Now().Add(time.Hour)}, nil
+	})
+	source, err := NewRefreshingSource(upstream, RefreshOptions{})
+	if err != nil {
+		t.Fatalf("new source: %v", err)
+	}
+
+	leaderContext, cancelLeader := context.WithCancel(context.Background())
+	leader := make(chan error, 1)
+	go func() {
+		_, tokenErr := source.Token(leaderContext)
+		leader <- tokenErr
+	}()
+	<-started
+	waiter := make(chan struct {
+		token Token
+		err   error
+	}, 1)
+	go func() {
+		token, tokenErr := source.Token(context.Background())
+		waiter <- struct {
+			token Token
+			err   error
+		}{token: token, err: tokenErr}
+	}()
+	cancelLeader()
+	if err := <-leader; !errors.Is(err, context.Canceled) {
+		t.Fatalf("leader error = %v, want context cancellation", err)
+	}
+	result := <-waiter
+	if result.err != nil || result.token.Value != "waiter-token" {
+		t.Fatalf("waiter result = %#v", result)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Errorf("upstream calls = %d, want 2", got)
+	}
+}
+
 func TestRefreshingSourceWaiterRespectsCancellation(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
