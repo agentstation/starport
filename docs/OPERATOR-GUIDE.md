@@ -28,7 +28,7 @@ make build
 For OpenAI, supply the provider inference key and run local initialization:
 
 ```bash
-export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
+export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
 ./starport init --provider openai
 ```
 
@@ -190,7 +190,7 @@ Azure OpenAI needs a resource base URL. Select Azure
 
 ```bash
 export STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE=default
-export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL=https://<resource>.openai.azure.com
+export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL="https://replace-with-resource.openai.azure.com"
 ```
 
 For a static Azure API key, set `AUTH_MODE=static` and set
@@ -240,8 +240,8 @@ The Compose file starts Starport with Valkey and requires two environment
 values. Initialize the shared identity repository before you start Starport:
 
 ```bash
-export STARPORT_SECURITY_MASTER_KEY=<master-secret>
-export STARPORT_PROVIDERS_OPENAI_API_KEY=<provider-inference-key>
+export STARPORT_SECURITY_MASTER_KEY="replace-with-random-secret-at-least-32-bytes"
+export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose up -d starport

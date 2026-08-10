@@ -1,370 +1,252 @@
-# Development Guide
+# Develop Starport
 
-This guide covers everything you need to know to develop on Starport.
+This guide describes the local build, test, and release-check workflow.
 
-## Table of Contents
+## Requirements
 
-- [Prerequisites](#prerequisites)
-- [Initial Setup](#initial-setup)
-- [Development Workflow](#development-workflow)
-- [Make Commands Reference](#make-commands-reference)
-- [Testing](#testing)
-- [Code Style](#code-style)
-- [Building & Releasing](#building--releasing)
-- [Common Tasks](#common-tasks)
-- [Troubleshooting](#troubleshooting)
+Install these tools:
 
-## Prerequisites
+- The Go version required by `go.mod`.
+- Git.
+- Make.
+- Docker with the Compose plugin for Valkey integration tests.
+- `curl`, `jq`, Node.js, npm, and Python for the SDK smoke suite.
 
-- **Go 1.26.5** - [Install Go](https://go.dev/dl/)
-- **Git** - For version control
-- **Make** - For running build commands
-- **Docker** (optional) - For integration testing with Valkey
-- **Air** (optional) - For hot reload development
+Install GoReleaser and Syft only when you create a local release snapshot.
 
-## Initial Setup
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/agentstation/starport.git
-   cd starport
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   make deps          # Download Go modules
-   make tools         # Install development tools (Air, goimports, golangci-lint)
-   ```
-
-3. **Set up your environment** (optional):
-   ```bash
-   cp .env.example .env
-   # Edit .env with your provider API keys
-   ```
-
-## Development Workflow
-
-### Hot Reload Development (Recommended)
-
-Use Air to rebuild automatically:
+## Set up the repository
 
 ```bash
-make dev   # Starts server with hot reload on file changes
+git clone https://github.com/agentstation/starport.git
+cd starport
+make deps
+make tools
+make check
 ```
 
-This watches all Go, HTML, CSS, JS, YAML, and JSON files. Any change triggers an automatic rebuild and restart.
+`make deps` downloads modules without changing `go.mod` or `go.sum`.
+`make tools` installs pinned versions of Air, goimports, and golangci-lint.
 
-### Manual Development
+## Run a local gateway
 
-If you prefer manual control:
+Use an isolated configuration directory during development:
 
 ```bash
-make build         # Build the binary
-make run           # Build and run
-./starport serve   # Run existing binary
+export STARPORT_CONFIG_DIR="$PWD/tmp/config"
+export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
+go run ./cmd/starport init --provider openai
+go run ./cmd/starport doctor --probe
+go run ./cmd/starport serve
 ```
 
-## Make Commands Reference
+`STARPORT_CONFIG_DIR` must be an absolute path. It changes all managed local
+paths together.
 
-Run `make help` to see all available commands with descriptions.
-
-### 🚀 Development Commands
-
-| Command | Description |
-|---------|-------------|
-| `make dev` | Start development server with hot-reloading (recommended) |
-| `make run` | Build and run the server (no hot reload) |
-| `make build-run` | Build and run in one command |
-
-### 🔨 Build Commands
-
-| Command | Description |
-|---------|-------------|
-| `make build` | Build the standard binary |
-| `make build-race` | Build with race detector enabled |
-| `make release` | Build optimized production binary |
-
-### 🧪 Testing & Quality
-
-| Command | Description |
-|---------|-------------|
-| `make test` | Run all tests |
-| `make tests` | Alias for test |
-| `make test-race` | Run tests with race detector |
-| `make test-coverage` | Generate coverage report (coverage.html) |
-| `make test-integration` | Run integration tests (requires Docker) |
-| `make check` | Run format, lint, and tests |
-| `make check-race` | Run all checks with race detection |
-| `make verify` | Run architecture and release contract checks |
-| `make release-check` | Check GoReleaser and online action provenance |
-| `make release-snapshot` | Build and verify all release archives locally |
-
-### 🎨 Code Formatting
-
-| Command | Description |
-|---------|-------------|
-| `make format` | Format code using goimports |
-| `make fmt` | Alias for format |
-| `make lint` | Run golangci-lint |
-
-### 🛠️ Tools
-
-| Command | Description |
-|---------|-------------|
-| `make tools` | Install all development tools |
-| `make install-air` | Install Air for hot-reloading |
-
-### 🐳 Docker
-
-| Command | Description |
-|---------|-------------|
-| `make dev-docker` | Start development environment |
-| `make dev-docker-logs` | View docker-compose logs |
-| `make dev-docker-stop` | Stop docker environment |
-| `make dev-docker-clean` | Clean docker volumes |
-
-### 🧹 Utilities
-
-| Command | Description |
-|---------|-------------|
-| `make clean` | Clean build artifacts |
-| `make deps` | Install/update dependencies |
-| `make version` | Show version information |
-| `make ford` | Generate catalog.json |
-
-## Testing
-
-### Running Tests
+For automatic rebuilds, install the pinned tools and run:
 
 ```bash
-# Run all tests
-make test
+make tools
+make dev
+```
 
-# Run with race detector
-make test-race
+Air builds into `tmp/` and sends an interrupt before restart. The normal CLI
+still requires the explicit `serve` command.
 
-# Generate coverage report
-make test-coverage
-# Open coverage.html in your browser
+## Make targets
 
-# Run specific package tests
-go test -v ./internal/server/...
+Run `make help` for the current list.
 
-# Run integration tests (requires Docker)
+| Target | Result | Changes tracked files |
+| --- | --- | --- |
+| `make build` | Builds `./starport` | No |
+| `make run` | Builds and starts `starport serve` | No |
+| `make test` | Runs all Go tests | No |
+| `make test-race` | Runs all Go tests with race detection | No |
+| `make test-integration` | Runs Valkey integration tests | No |
+| `make format-check` | Checks gofmt and goimports output | No |
+| `make lint` | Runs the pinned golangci-lint version | No |
+| `make verify` | Runs architecture and release contracts | No |
+| `make check` | Runs formatting, lint, test, and verifier gates | No |
+| `make format` | Applies the pinned goimports version | Yes |
+| `make tidy` | Updates Go module metadata | Yes |
+| `make release-snapshot` | Builds and checks release artifacts | No |
+
+`make check` does not format code or tidy modules. This property keeps local
+and CI checks deterministic.
+
+## Test behavior
+
+Run one package:
+
+```bash
+go test -race ./internal/routing -count=1
+```
+
+Run one test:
+
+```bash
+go test ./internal/server -run TestName -count=1
+```
+
+Run the isolated first-start scene:
+
+```bash
+bash scripts/smoke-first-run.sh
+```
+
+The scene creates a temporary configuration root. It initializes a gateway
+identity, validates configuration, probes storage, starts the server, and
+reads the authenticated model catalog.
+
+Run the OpenRouter compatibility scene:
+
+```bash
+bash scripts/smoke-openrouter-sdks.sh
+```
+
+This scene tests raw HTTP plus the pinned official Python, TypeScript, and Go
+OpenRouter clients.
+
+## Run Valkey integration tests
+
+```bash
 make test-integration
 ```
 
-### Writing Tests
-
-- Place test files next to the code they test (`foo_test.go` next to `foo.go`)
-- Use table-driven tests for multiple cases
-- Aim for 90% coverage on new code
-- Mock external dependencies
-- Use the `testutil` package for common test helpers
-
-Example test structure:
-```go
-func TestFeature(t *testing.T) {
-    tests := []struct {
-        name    string
-        input   string
-        want    string
-        wantErr bool
-    }{
-        {"valid input", "test", "TEST", false},
-        {"empty input", "", "", true},
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got, err := Feature(tt.input)
-            if (err != nil) != tt.wantErr {
-                t.Errorf("Feature() error = %v, wantErr %v", err, tt.wantErr)
-                return
-            }
-            if got != tt.want {
-                t.Errorf("Feature() = %v, want %v", got, tt.want)
-            }
-        })
-    }
-}
-```
-
-## Code Style
-
-### Formatting
-
-Code is automatically formatted using `goimports` (or `go fmt` as fallback):
+The target uses an isolated Compose project and host port `16379`. A shell trap
+removes its container, network, and volume on success, test failure, or
+interruption. Set `VALKEY_INTEGRATION_PORT` to use another host port:
 
 ```bash
-make format   # Format all Go code
+make test-integration VALKEY_INTEGRATION_PORT=26379
 ```
 
-### Linting
-
-We use `golangci-lint` for code quality:
+For the complete local Compose environment, use:
 
 ```bash
-make lint     # Run all linters
+make dev-docker
+make dev-docker-logs
+make dev-docker-stop
 ```
 
-### Conventions
+`make dev-docker-clean` also removes the Compose volumes. Use that target only
+when you intend to remove local Valkey data.
 
-- Follow [Effective Go](https://golang.org/doc/effective_go)
-- Use meaningful variable names
-- Add comments for exported functions
-- Keep functions small and focused
-- Handle errors explicitly
-- Use structured logging with zerolog
+## Format and lint
 
-### Error Handling
-
-```go
-// Wrap errors with context
-if err != nil {
-    return fmt.Errorf("component: action failed: %w", err)
-}
-
-// Define package-level sentinel errors
-var ErrNotFound = errors.New("key not found")
-```
-
-### Logging
-
-```go
-log.Info().
-    Str("component", "storage").
-    Str("action", "initialize").
-    Msg("initializing storage backend")
-```
-
-## Building & Releasing
-
-### Local Build
+Check formatting without changes:
 
 ```bash
-# Development build
+make format-check
+```
+
+Apply formatting:
+
+```bash
+make format
+```
+
+Run the repository lint configuration:
+
+```bash
+make lint
+```
+
+Do not lower a lint rule or test assertion to hide a defect.
+
+## Respect concept ownership
+
+Starport uses concept-owned seams:
+
+- `internal/inference` owns canonical inference types.
+- `internal/catalog` projects one immutable Starmap generation.
+- `internal/routing` owns deterministic route planning.
+- `internal/execution` owns attempts and retry budgets.
+- `internal/failure` normalizes provider failures.
+- `internal/providerauth` owns renewable inference credentials.
+- `internal/httpapi/openai` owns OpenAI protocol codecs.
+- `internal/httpapi/openrouter` owns OpenRouter protocol codecs.
+- `internal/app` composes the concepts.
+- `internal/server` wires HTTP routes.
+
+Starmap owns provider IDs, model IDs, services, offerings, capabilities,
+prices, catalog credentials, and status sources. Do not add a provider switch,
+model list, endpoint table, or price default to Starport.
+
+Starport owns inference credentials, tenant identity, routing policy,
+availability, execution, caching, rate limits, and HTTP protocols.
+
+## Add provider inference support
+
+First add or update the provider facts in Starmap. Publish a Starmap release,
+then update the Starport module version.
+
+In Starport:
+
+1. Add the transport adapter under `internal/providers`.
+2. Project required configuration from the Starmap adapter descriptor.
+3. Put renewable authentication in `internal/providerauth` when needed.
+4. Add contract tests for requests, responses, streaming, and failures.
+5. Prove that the Starmap ownership verifier still passes.
+
+Keep provider model IDs exact and opaque.
+
+## Change dependencies
+
+Add or update one dependency explicitly:
+
+```bash
+go get example.com/module@v1.2.3
+make tidy
+make check
+```
+
+Review both module files. Do not use an unpinned tool version in the Makefile
+or a workflow.
+
+## Build a release snapshot
+
+Install the exact GoReleaser and Syft versions from the workflow, then run:
+
+```bash
+make release-check
+make release-snapshot
+```
+
+The snapshot checks six target binaries, six archives, six SBOMs, shell
+completions, the manual page, and the generated Homebrew cask. Snapshot mode
+skips Apple notarization. A stable release cannot skip it.
+
+## Required pull-request gates
+
+Run these commands before a pull request:
+
+```bash
+bash scripts/verify-starmap-ownership.sh
+bash scripts/verify-v1-architecture.sh
+go test ./...
+go vet ./...
+make lint
 make build
-
-# Production build (optimized, stripped)
-make release
-
-# Build with race detector
-make build-race
+bash scripts/smoke-openrouter-sdks.sh
 ```
 
-### Cross-Platform Build
+Also run tests for each changed concept. Report every skipped external check
+as `UNVERIFIED`.
+
+## Troubleshoot startup
+
+Inspect managed paths and safe effective values:
 
 ```bash
-# macOS
-GOOS=darwin GOARCH=amd64 make build
-
-# Linux
-GOOS=linux GOARCH=amd64 make build
-
-# Windows
-GOOS=windows GOARCH=amd64 make build
+starport config paths
+starport config show
+starport config validate
+starport doctor --probe
 ```
 
-### Docker Build
+`config show` hides secret and URL values. `doctor` does not write storage.
 
-```bash
-docker build -t starport:latest .
-```
-
-## Common Tasks
-
-### Adding a New Provider
-
-1. Create connector in `internal/providers/connectors/`
-2. Implement the `Connector` interface
-3. Add to registry in `internal/registry/`
-4. Add configuration in `internal/config/`
-5. Update documentation
-
-### Updating Dependencies
-
-```bash
-go get -u github.com/some/package
-make deps   # Run go mod tidy
-```
-
-### Debugging
-
-1. **Enable debug logging**:
-   ```bash
-   export STARPORT_LOG_LEVEL=debug
-   ```
-
-2. **Start a debugger**:
-   ```bash
-   dlv debug ./cmd/starport -- serve
-   ```
-
-3. **Profile performance**:
-   ```bash
-   go test -bench=. -cpuprofile=cpu.prof
-   go tool pprof cpu.prof
-   ```
-
-## Troubleshooting
-
-### Air not found
-
-```bash
-make install-air
-# Or manually:
-go install github.com/cosmtrek/air@latest
-```
-
-### Port already in use
-
-```bash
-# Find process using port 8080
-lsof -i :8080
-# Kill it
-kill -9 <PID>
-```
-
-### Test failures
-
-1. Check if integration tests need Docker:
-   ```bash
-   docker-compose up -d valkey
-   ```
-
-2. Clear test cache:
-   ```bash
-   go clean -testcache
-   ```
-
-### Build errors
-
-1. Check the Go version (requires 1.26.5):
-   ```bash
-   go version
-   ```
-
-2. Clean and rebuild:
-   ```bash
-   make clean
-   make deps
-   make build
-   ```
-
-## Additional Resources
-
-- [Architecture Documentation](docs/ARCHITECTURE.md) - System design
-- [Contributing Guidelines](docs/CONTRIBUTING.md) - Contribution process
-- [API Documentation](docs/api.md) - API reference
-- [Task Tracking](docs/TASKS.md) - Current development status
-
-## Getting Help
-
-- Check existing [GitHub Issues](https://github.com/agentstation/starport/issues)
-- Join our [Discord](https://discord.gg/starport) (coming soon)
-- Review the [documentation](docs/)
-
----
-
-Happy coding! 🚀
+If a test leaves a local server or Compose service, stop that process before
+you run the scene again. Do not remove a configuration directory until you
+confirm its exact path with `starport config paths`.

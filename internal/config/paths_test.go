@@ -7,6 +7,7 @@ import (
 )
 
 func TestPlatformPathsUseUserConfigDirectory(t *testing.T) {
+	t.Setenv(configDirectoryEnvironment, "")
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
 		t.Fatalf("resolve user config directory: %v", err)
@@ -18,6 +19,26 @@ func TestPlatformPathsUseUserConfigDirectory(t *testing.T) {
 	want := filepath.Join(userConfigDir, applicationDirectory)
 	if paths.ConfigDir != want {
 		t.Errorf("config directory = %q, want %q", paths.ConfigDir, want)
+	}
+}
+
+func TestPlatformPathsUseExplicitDirectory(t *testing.T) {
+	configured := t.TempDir()
+	t.Setenv(configDirectoryEnvironment, configured)
+
+	paths, err := PlatformPaths()
+	if err != nil {
+		t.Fatalf("resolve explicit config directory: %v", err)
+	}
+	if paths != PathsForConfigDir(configured) {
+		t.Errorf("paths = %#v, want %#v", paths, PathsForConfigDir(configured))
+	}
+}
+
+func TestPlatformPathsRejectRelativeExplicitDirectory(t *testing.T) {
+	t.Setenv(configDirectoryEnvironment, "relative/config")
+	if _, err := PlatformPaths(); err == nil {
+		t.Fatal("relative config directory did not fail")
 	}
 }
 

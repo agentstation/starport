@@ -19,6 +19,9 @@ GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknow
 GO_VERSION = $(shell go version | awk '{print $$3}')
 GORELEASER_VERSION=2.17.1
 GOLANGCI_LINT_VERSION=v2.12.2
+AIR_VERSION=v1.67.4
+GOIMPORTS_VERSION=v0.48.0
+VALKEY_INTEGRATION_PORT ?= 16379
 
 # Build flags
 LDFLAGS = -ldflags "\
@@ -54,9 +57,7 @@ run: build ## Build and run the server (no hot reload)
 	./$(BINARY_NAME) serve
 
 .PHONY: build-run
-build-run: ## Build and run in one command
-	@$(MAKE) build
-	@$(MAKE) run
+build-run: run ## Alias for build and run
 
 ##@ Build
 
@@ -110,24 +111,26 @@ test-coverage: ## Run tests with coverage report
 	@$(GO) tool cover -func=coverage.out | grep total | awk '{print "Total coverage: " $$3}'
 
 .PHONY: test-integration
-test-integration: ## Run integration tests with docker-compose
-	@echo "Starting Valkey for integration tests..."
-	docker-compose up -d valkey
-	@echo "Waiting for Valkey to be ready..."
-	@sleep 3
-	@echo "Running integration tests..."
-	TEST_VALKEY_URL=valkey://localhost:6379 $(GO) test -v ./internal/storage -run TestValkey
-	TEST_VALKEY_URL=valkey://localhost:6379 $(GO) test -v ./internal/cache -run TestValkeyIntegration
-	TEST_VALKEY_URL=valkey://localhost:6379 $(GO) test -v ./internal/app -run TestAppWithValkey
-	@echo "Stopping Valkey..."
-	docker-compose stop valkey
-	@echo "Integration tests complete"
+test-integration: ## Run Valkey integration tests with Docker Compose
+	@set -eu; \
+		export COMPOSE_PROJECT_NAME=starport-integration-test; \
+		export STARPORT_SECURITY_MASTER_KEY=integration-test-master-key-0001; \
+		export STARPORT_PROVIDERS_OPENAI_API_KEY=integration-test-provider-key; \
+		export STARPORT_VALKEY_PORT=$(VALKEY_INTEGRATION_PORT); \
+		trap 'docker compose down --volumes --remove-orphans' EXIT INT TERM; \
+		docker compose up -d --wait valkey; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v ./internal/storage -run 'Test(Valkey|KVStoreContract)'; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v ./internal/cache -run TestValkey; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v ./internal/app -run TestAppWithValkey; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v \
+			./internal/credentials ./internal/identity ./internal/presets ./internal/ratelimit \
+			-run RepositoryContract
 
 .PHONY: check
-check: format lint test ## Run all checks (format, lint, test)
+check: format-check lint test verify ## Run all read-only checks
 
 .PHONY: check-race
-check-race: format lint test-race ## Run all checks with race detection
+check-race: format-check lint test-race verify ## Run all read-only checks with race detection
 
 .PHONY: verify
 verify: ## Run deterministic architecture and release contract checks
@@ -135,6 +138,8 @@ verify: ## Run deterministic architecture and release contract checks
 	bash scripts/verify-v1-architecture.sh
 	bash scripts/verify-v1-release.sh
 	bash scripts/verify-release-workflow.sh
+	bash scripts/verify-developer-experience.sh
+	bash scripts/verify-doc-links.sh
 
 .PHONY: release-check
 release-check: verify ## Check the release configuration and online action provenance
@@ -147,20 +152,32 @@ release-check: verify ## Check the release configuration and online action prove
 .PHONY: release-snapshot
 release-snapshot: release-check ## Build and verify the complete local release snapshot
 	@command -v syft >/dev/null 2>&1 || (echo "syft is required"; exit 1)
-	goreleaser release --snapshot --clean
+	goreleaser release --snapshot --clean --skip=notarize
 	scripts/verify-release-binaries.sh dist
 	scripts/verify-release-archives.sh dist
+	scripts/verify-homebrew-cask.sh dist/homebrew/Casks/starport.rb
+	scripts/audit-homebrew-cask.sh dist/homebrew/Casks/starport.rb
+
+.PHONY: format-check
+format-check: ## Check Go formatting without changing files
+	@unformatted="$$(gofmt -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './tmp/*'))"; \
+		if [ -n "$$unformatted" ]; then \
+			echo "gofmt is required for:"; \
+			echo "$$unformatted"; \
+			exit 1; \
+		fi
+	@unformatted="$$(go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -l $$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './tmp/*'))"; \
+		if [ -n "$$unformatted" ]; then \
+			echo "goimports is required for:"; \
+			echo "$$unformatted"; \
+			exit 1; \
+		fi
 
 .PHONY: format
-format: ## Format code using goimports (or go fmt)
+format: ## Format Go code with the pinned goimports version
 	@echo "Formatting code..."
-	@if command -v goimports >/dev/null 2>&1; then \
-		echo "Using goimports..."; \
-		goimports -w $$(find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./tmp/*"); \
-	else \
-		echo "Using go fmt..."; \
-		$(GO) fmt ./...; \
-	fi
+	@go run golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION) -w \
+		$$(find . -type f -name '*.go' -not -path './vendor/*' -not -path './tmp/*')
 	@echo "Format complete"
 
 .PHONY: fmt
@@ -186,53 +203,54 @@ check-air:
 .PHONY: install-air
 install-air: ## Install Air for hot-reloading
 	@echo "Installing Air..."
-	@go install github.com/cosmtrek/air@latest
+	@go install github.com/air-verse/air@$(AIR_VERSION)
 	@echo "Air installed successfully!"
 
 .PHONY: tools
 tools: install-air ## Install all development tools
 	@echo "Installing development tools..."
 	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	@go install golang.org/x/tools/cmd/goimports@latest
-	@echo "Optional: Install gofumpt for stricter formatting:"
-	@echo "  go install mvdan.cc/gofumpt@latest"
+	@go install golang.org/x/tools/cmd/goimports@$(GOIMPORTS_VERSION)
 	@echo "All tools installed!"
 
 ##@ Dependencies
 
 .PHONY: deps
 deps: ## Install dependencies
-	@echo "Installing dependencies..."
+	@echo "Downloading dependencies..."
 	$(GO) mod download
+	@echo "Dependencies downloaded"
+
+.PHONY: tidy
+tidy: ## Update Go module metadata
 	$(GO) mod tidy
-	@echo "Dependencies installed"
 
 ##@ Docker
-### Requires: Docker and docker-compose installed
+### Requires Docker with the Compose plugin
 
 .PHONY: dev-docker
-dev-docker: ## Start development environment with docker-compose
-	@echo "Starting development environment with docker-compose..."
-	docker-compose up -d
+dev-docker: ## Start the Compose development environment
+	@echo "Starting development environment with Docker Compose..."
+	docker compose up -d
 	@echo "Development environment started:"
 	@echo "  - Starport: http://localhost:8080"
 	@echo "  - Valkey: localhost:6379"
 	@echo "Use 'make dev-docker-logs' to view logs"
 
 .PHONY: dev-docker-logs
-dev-docker-logs: ## View docker-compose logs
-	docker-compose logs -f
+dev-docker-logs: ## View Compose logs
+	docker compose logs -f
 
 .PHONY: dev-docker-stop
-dev-docker-stop: ## Stop docker-compose environment
+dev-docker-stop: ## Stop the Compose environment
 	@echo "Stopping development environment..."
-	docker-compose down
+	docker compose down
 	@echo "Development environment stopped"
 
 .PHONY: dev-docker-clean
-dev-docker-clean: ## Clean docker-compose volumes
+dev-docker-clean: ## Remove the Compose environment and its volumes
 	@echo "Cleaning development environment..."
-	docker-compose down -v
+	docker compose down -v
 	@echo "Development environment cleaned"
 
 ##@ Utilities

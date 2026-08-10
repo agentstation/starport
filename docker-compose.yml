@@ -2,6 +2,8 @@ services:
   valkey:
     image: valkey/valkey:7-alpine
     command: valkey-server --appendonly yes
+    ports:
+      - "${STARPORT_VALKEY_PORT:-6379}:6379"
     volumes:
       - valkey-data:/data
     healthcheck:

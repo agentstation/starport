@@ -1,28 +1,29 @@
-# Cache Control Implementation
+# Prompt Cache Control
 
-Starport now supports OpenRouter-compatible cache control for prompt caching, allowing you to reduce costs and improve performance for requests with repeated context.
+Starport accepts OpenRouter-compatible prompt cache controls on chat message
+content. A cache control marks a point where a provider can reuse prompt
+content in a later request.
 
-## Overview
+## Capability Source
 
-Cache control allows you to mark specific content parts in your messages as cacheable. When providers support this feature, they will cache the marked content and reuse it in subsequent requests, significantly reducing token costs.
+Starmap owns the prompt-cache capability for each provider offering. Starport
+reads that capability from its immutable Starmap catalog snapshot. Starport
+does not keep a separate provider or model support list.
 
-## Supported Providers
+The selected route determines request behavior:
 
-The following providers support cache control:
-- OpenAI (gpt-4o, gpt-4o-mini)
-- Anthropic (claude-3-5-sonnet, claude-3-haiku)
-- Groq
-- DeepSeek
-- Azure OpenAI
+- If Starmap marks the offering as prompt-cache capable, Starport sends the
+  cache control to the provider.
+- If support is false or unknown, Starport removes the cache control from that
+  provider attempt. The rest of the request stays unchanged.
 
-Providers that use implicit caching (not cache_control):
-- Google AI Studio
-- Google Vertex AI
-- Mistral
+Use the model catalog to select a current offering. Provider capabilities can
+change between catalog generations.
 
-## Usage
+## Request Format
 
-To use cache control, add a `cache_control` field to content parts in your messages:
+Add `cache_control` to a text content part. Starport supports the `ephemeral`
+type:
 
 ```json
 {
@@ -40,49 +41,42 @@ To use cache control, add a `cache_control` field to content parts in your messa
         }
       ]
     },
-    {
-      "role": "user",
-      "content": "What is the capital of France?"
-    }
+    {"role": "user", "content": "Summarize the reference material."}
   ]
 }
 ```
 
-## Provider-Specific Limits
+Starport returns a validation error for any other cache control type.
 
-### Anthropic
-- Maximum of 4 cache control breakpoints per request
-- Cache write cost: 1.25x prompt cost
-- Cache read cost: 0.1x prompt cost
+## Routing and Fallback
 
-### OpenAI
-- No specific limit on breakpoints
-- Cache write cost: 2.5x prompt cost  
-- Cache read cost: 0.5x prompt cost
+Starport evaluates prompt-cache support for every provider attempt. A fallback
+route can therefore receive a different request form from the first route. The
+gateway keeps the cache control only for routes that declare support in the
+same Starmap catalog generation used for routing.
 
-### DeepSeek
-- Free caching (same as prompt cost)
-- Cache read cost: 0.1x prompt cost
+This behavior lets one request use fallback without sending unsupported
+provider fields.
 
 ## Response Headers
 
-When cache control is used, Starport adds the following headers to responses:
+For a non-streaming prompt-cache request, Starport can return these cost
+headers when Starmap supplies cache token prices for the selected offering:
 
-- `X-Cache`: Cache status (HIT/MISS)
-- `X-Cache-Age`: Age of cached content in seconds
-- `X-Cache-Write-Cost`: Cost of writing to cache
-- `X-Cache-Read-Cost`: Cost of reading from cache
-- `X-Cache-Total-Cost`: Total cache operation cost
+- `X-Cache-Write-Cost`
+- `X-Cache-Read-Cost`
+- `X-Cache-Total-Cost`
 
-## Automatic Provider Handling
+These values use the price data from the same Starmap offering. A missing
+header means that Starport could not calculate that value from the selected
+offering and response.
 
-If you send a request with cache control to a provider that doesn't support it (like Google providers), Starport will automatically:
-1. Strip the cache_control fields from the request
-2. Forward the cleaned request to the provider
-3. Return the response normally (without cache headers)
+`X-Cache` and `X-Cache-Age` describe Starport response-cache state. They do not
+describe provider prompt-cache state.
 
-This ensures compatibility across all providers while allowing you to use cache control where supported.
+## Related Contracts
 
-## Example Code
-
-See `examples/cache_control_demo.go` for a complete example of using cache control with Starport.
+The OpenRouter protocol contract is in
+[`internal/httpapi/openrouter/contract_test.go`](../internal/httpapi/openrouter/contract_test.go).
+The route-specific behavior is in
+[`internal/proxy/proxy_routing_test.go`](../internal/proxy/proxy_routing_test.go).

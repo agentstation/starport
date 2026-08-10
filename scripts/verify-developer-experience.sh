@@ -79,7 +79,7 @@ require_text DX-BREW-5 '^  verify-homebrew:' .github/workflows/release.yaml
 
 forbid_text DX-DEV-1 'docker-compose' "$root/Makefile" "$root/DEVELOPMENT.md"
 forbid_text DX-DEV-2 '@latest' "$root/Makefile"
-forbid_text DX-DEV-3 '^check:.*format' "$root/Makefile"
+forbid_text DX-DEV-3 '^check:.*[[:space:]](format|fmt)([[:space:]]|$)' "$root/Makefile"
 if awk '
   /^deps:/ { in_deps=1; next }
   in_deps && /^[^[:space:]#].*:/ { exit found ? 0 : 1 }
