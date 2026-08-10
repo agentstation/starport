@@ -44,8 +44,8 @@ Implementation branch: `codex/starport-dx8-dev-docs`.
 - `make test-integration` uses an isolated Compose project and waits for
   Valkey health. It supplies test-only configuration. A shell trap removes
   its container, network, and volume.
-- The Compose file publishes a configurable Valkey host port.
-- The Compose file binds the Valkey host port to loopback.
+- The base Compose file keeps Valkey inside the Compose network.
+- The integration override publishes one configurable loopback port.
 - Each integration run uses a unique Compose project and uncached Go tests.
 - `STARPORT_CONFIG_DIR` gives first-run tests an explicit and isolated
   configuration root. The resolver rejects relative paths.
@@ -57,7 +57,7 @@ Implementation branch: `codex/starport-dx8-dev-docs`.
 - The prompt-cache guide derives capability and price facts from Starmap. It
   does not list hard-coded provider support.
 - The document-link verifier checks every current guide from one canonical
-  list. Its Bash scanner has no ripgrep dependency and supports one-file runs.
+  list. Its Goldmark syntax parser supports one-file runs without ripgrep.
 - The first-run HTTP requests have connection and total time limits.
 - The README lists public release archives first. It marks the signed
   Homebrew cask as blocked until Apple release credentials are available.
@@ -78,12 +78,10 @@ bash scripts/verify-doc-links.sh README.md
 ```
 
 `make deps` left `go.mod` and `go.sum` unchanged. `make check` reported zero
-lint issues and passed 34 Go packages. The JSON test report counted 1,075
-passed tests and nine skipped Valkey tests in the standard suite. The
-dedicated integration target then ran the Valkey storage, cache, application,
-and repository contracts against a healthy container. One placeholder
-reconnection test remains `UNVERIFIED` because its body requires a manual
-Valkey restart.
+lint issues and passed the full Go suite. The dedicated integration target
+then ran the Valkey storage, cache, application, and repository contracts
+against a healthy container. One placeholder reconnection test remains
+`UNVERIFIED` because its body requires a manual Valkey restart.
 
 The integration target removed its isolated container, network, and volume
 after the tests. Compose configuration also passed with explicit placeholder
@@ -99,7 +97,7 @@ The first-run scene reported:
 PASS isolated init, validation, diagnosis, readiness, and authenticated model discovery
 ```
 
-The developer-experience verifier passed all 39 conditions. The ownership
+The developer-experience verifier passed all 41 conditions. The ownership
 verifier passed 12 checks, and the architecture verifier passed 12 checks.
 The release verifier passed 14 checks. The release workflow and documentation
 link contracts also passed.
@@ -124,8 +122,8 @@ docs/VERTEX_AI_CONFIG.md
 internal/config/README.md
 ```
 
-The glossary check passed 15 terms with zero errors. Shellcheck passed both
-new shell scripts. The local link verifier found no broken links in the
+The glossary check passed 15 terms with zero errors. Shellcheck passed the
+developer shell scripts. The local link verifier found no broken links in the
 current guide set.
 
 Historical architecture records and the standard community rules remain
@@ -135,7 +133,7 @@ outside the current-guide lint set. DX8 did not rewrite those records.
 
 The isolated P2 review found six defects. DX8 fixed all six:
 
-- Valkey now binds only to `127.0.0.1` on the host.
+- The integration Valkey port now binds only to `127.0.0.1` on the host.
 - Link verification no longer requires an undeclared `rg` command.
 - The README does not claim that the blocked Homebrew cask is available.
 - Each Valkey test command uses `-count=1`.
@@ -158,3 +156,9 @@ The final P3 review found two more defects. The quick start now carries the
 exact built executable through `STARPORT_BIN`. The link verifier preserves a
 destination that ends in a balanced parenthesis, and its fixture covers that
 case.
+
+A further P3 review found two remaining boundary defects. The base Compose
+file no longer exposes the unauthenticated Valkey service. An integration-only
+override owns the loopback port. The link verifier now uses a Goldmark syntax
+tree instead of regular expressions. Tests cover reference links, inline code,
+fenced code, angle destinations, titles, spaces, and balanced parentheses.

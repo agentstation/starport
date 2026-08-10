@@ -22,6 +22,7 @@ GOLANGCI_LINT_VERSION=v2.12.2
 AIR_VERSION=v1.67.4
 GOIMPORTS_VERSION=v0.48.0
 VALKEY_INTEGRATION_PORT ?= 16379
+INTEGRATION_COMPOSE=docker compose -f docker-compose.yml -f docker-compose.integration.yml
 
 # Build flags
 LDFLAGS = -ldflags "\
@@ -117,8 +118,8 @@ test-integration: ## Run Valkey integration tests with Docker Compose
 		export STARPORT_SECURITY_MASTER_KEY=integration-test-master-key-0001; \
 		export STARPORT_PROVIDERS_OPENAI_API_KEY=integration-test-provider-key; \
 		export STARPORT_VALKEY_PORT=$(VALKEY_INTEGRATION_PORT); \
-		trap 'docker compose down --volumes --remove-orphans' EXIT INT TERM; \
-		docker compose up -d --wait valkey; \
+		trap '$(INTEGRATION_COMPOSE) down --volumes --remove-orphans' EXIT INT TERM; \
+		$(INTEGRATION_COMPOSE) up -d --wait valkey; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/storage -run 'Test(Valkey|KVStoreContract)'; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/cache -run TestValkey; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/app -run TestAppWithValkey; \

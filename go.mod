@@ -24,6 +24,7 @@ require (
 	github.com/urfave/cli/v3 v3.10.1
 	github.com/valkey-io/valkey-go v1.0.76
 	github.com/valkey-io/valkey-go/mock v1.0.76
+	github.com/yuin/goldmark v1.8.5
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.54.0
 	golang.org/x/sys v0.47.0

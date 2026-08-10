@@ -115,7 +115,12 @@ make test-integration
 
 The target uses an isolated Compose project and host port `16379`. A shell trap
 removes its container, network, and volume on success, test failure, or
-interruption. Set `VALKEY_INTEGRATION_PORT` to use another host port:
+interruption.
+
+The base Compose file does not publish Valkey to the host. The integration
+target adds a loopback-only port override.
+
+Set `VALKEY_INTEGRATION_PORT` to use another host port:
 
 ```bash
 make test-integration VALKEY_INTEGRATION_PORT=26379

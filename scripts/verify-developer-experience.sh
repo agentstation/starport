@@ -77,7 +77,7 @@ require_text DX-BREW-3 'manpages/\*' .goreleaser.yaml
 require_text DX-BREW-4 'Publish the generated Homebrew cask' .github/workflows/release.yaml
 require_text DX-BREW-5 '^  verify-homebrew:' .github/workflows/release.yaml
 
-forbid_text DX-DEV-1 'docker-compose' "$root/Makefile" "$root/DEVELOPMENT.md"
+forbid_text DX-DEV-1 '(^|[[:space:]])docker-compose[[:space:]]' "$root/Makefile" "$root/DEVELOPMENT.md"
 forbid_text DX-DEV-2 '@latest' "$root/Makefile"
 forbid_text DX-DEV-3 '^check:.*[[:space:]](format|fmt)([[:space:]]|$)' "$root/Makefile"
 if awk '
@@ -90,6 +90,17 @@ if awk '
 else
   pass DX-DEV-4
 fi
+if awk '
+  /^  valkey:/ { in_valkey=1; next }
+  in_valkey && /^  [^[:space:]]/ { in_valkey=0 }
+  in_valkey && /^    ports:/ { found=1 }
+  END { exit found ? 0 : 1 }
+' "$root/docker-compose.yml"; then
+  fail DX-DEV-5
+else
+  pass DX-DEV-5
+fi
+require_text DX-DEV-6 '127\.0\.0\.1:\$\{STARPORT_VALKEY_PORT:-6379\}:6379' docker-compose.integration.yml
 require_text DX-DOC-1 'brew install agentstation/tap/starport' README.md
 forbid_text DX-DOC-2 'Coming Soon' "$root/docs/README.md"
 require_file DX-DOC-3 scripts/smoke-first-run.sh
