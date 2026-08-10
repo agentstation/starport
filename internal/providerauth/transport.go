@@ -22,6 +22,10 @@ type bearerTransport struct {
 }
 
 func (t *bearerTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if request.Response != nil {
+		closeRequestBody(request)
+		return nil, ErrCredentialRedirect
+	}
 	if t.source == nil {
 		closeRequestBody(request)
 		return nil, ErrSourceRequired

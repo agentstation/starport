@@ -23,6 +23,9 @@ var (
 	// ErrTokenStale reports a credential source that returned a token too close
 	// to expiry for a new inference request.
 	ErrTokenStale = errors.New("provider credential token is stale")
+	// ErrCredentialRedirect reports an attempt to reuse renewable provider
+	// credentials on an HTTP redirect.
+	ErrCredentialRedirect = errors.New("provider credential redirect is not allowed")
 )
 
 // Mode selects the operator-owned inference credential source.

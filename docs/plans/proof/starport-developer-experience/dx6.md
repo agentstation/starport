@@ -128,4 +128,9 @@ project from Application Default Credentials. The source now preserves that
 value, and the bearer transport sends it as `X-Goog-User-Project`. This change
 supports local credentials that charge requests to an explicit quota project.
 
+The pre-pull-request review found that a general HTTP client could run the
+credential transport again after a cross-origin redirect. This behavior could
+send a renewable credential to the redirect target. The transport now rejects
+all redirect requests before it reads or sends a credential.
+
 The next step runs the convergence review and pull request gate.
