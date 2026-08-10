@@ -9,7 +9,7 @@ Last Updated: 2026-08-10
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP2.1 moves inferred model facts to authored data or verified observations and creates durable review candidates. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP3 adds Starmap credential-source lifecycles and catalog-driven operator surfaces. |
 
 ### Proposed Work
 
