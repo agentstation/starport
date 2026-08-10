@@ -7,7 +7,13 @@ Last Updated: 2026-08-10
 
 ### Active Work
 
-No durable plan is active.
+| Task | Plan | Status | Next action |
+|------|------|--------|-------------|
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP0 authors the 19-condition red verifier and captures fail-before evidence. |
+
+### Proposed Work
+
+No proposed durable plan exists.
 
 ### Recently Completed
 

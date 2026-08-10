@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalog-driven provider runtime plan</title>
+<style>
+:root{--ink:#1a1e24;--muted:#5c6570;--line:#d8dde3;--soft:#f4f6f8;--page:#fff;--accent:#2563eb;--done:#16a34a}
+@media(prefers-color-scheme:dark){:root{--ink:#e5e9ee;--muted:#9aa4af;--line:#333a43;--soft:#1b2027;--page:#11151a;--accent:#60a5fa;--done:#4ade80}}
+*{box-sizing:border-box}body{margin:0 auto;padding:2rem 1.25rem 4rem;max-width:1080px;background:var(--page);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+h1{font-size:1.6rem;margin:0 0 .25rem}h2{font-size:1.15rem;margin:2rem 0 .5rem;border-bottom:1px solid var(--line);padding-bottom:.25rem}h3{font-size:1rem;margin:1.25rem 0 .4rem}code{background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:.05rem .35rem;font-size:.85em}pre{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:.9rem 1rem;overflow:auto;line-height:1.45}pre code{background:none;border:0;padding:0}blockquote{margin:.75rem 0;padding:.6rem 1rem;border-left:3px solid var(--accent);background:var(--soft)}table{border-collapse:collapse;width:100%;margin:.75rem 0;font-size:.92rem}th,td{border:1px solid var(--line);padding:.35rem .55rem;text-align:left;vertical-align:top}th{background:var(--soft)}#status-line{color:var(--muted);font-size:.92rem;margin:0 0 1rem}.bar{height:.75rem;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--soft)}.fill{height:100%;width:0;background:var(--done)}.counts{color:var(--muted);font-size:.92rem}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}figure{margin:0;border:1px solid var(--line);border-radius:8px;padding:.75rem;background:var(--soft)}figcaption{font-weight:600;margin-bottom:.5rem}figure svg{max-width:100%;height:auto}@page{margin:.7in .6in;size:letter}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded",function(){var rows=document.querySelectorAll("#ledger tbody tr"),terminal={"done":1,"no-action":1,"rejected":1},closed=0,current="";rows.forEach(function(row){var status=(row.getAttribute("data-status")||"").split("(")[0].trim();if(terminal[status]){closed++}if(status==="in_progress"&&!current){current=row.id+" "+row.cells[1].textContent.trim()}});var total=rows.length,pct=total?Math.round(closed/total*100):0;document.querySelector("#progress .fill").style.width=pct+"%";document.querySelector("#progress .counts").textContent=closed+" of "+total+" tasks terminal ("+pct+"%)."+(current?" In progress: "+current:"")});
+</script>
+</head>
+<body>
+<header id="overview">
+<h1>Catalog-driven provider runtime plan</h1>
+
+<p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-10.<br>
+Baseline: Starport main @ <code>101c32d</code>. Starmap main @ <code>7f53767</code>.<br>
+Proof root: <code>docs/plans/proof/catalog-driven-provider-runtime/</code>.<br>
+Next action: CDP0 authors the 19-condition red verifier and captures fail-before evidence.</p>
+
+<section id="outcome">
+<h2>Outcome</h2>
+
+<blockquote>Provider YAML and verified evidence define provider, model, and credential metadata in one Starmap catalog generation. Starport builds a complete runtime generation from that catalog, compiled transport and authentication primitives, operator configuration, and credential sources. Each request selects tenant or operator credential material without storing a secret in a connector.</blockquote>
+
+</section>
+
+<section id="progress"><h2>Progress</h2><div class="bar"><div class="fill"></div></div><p class="counts">The status ledger is the progress source.</p></section>
+
+<section id="architecture">
+<h2>Architecture</h2>
+
+<div class="pair">
+<figure><figcaption>Before</figcaption><svg viewBox="0 0 420 210" role="img" aria-label="Provider facts exist in YAML and Go before this plan"><rect x="10" y="15" width="120" height="55" rx="7" fill="none" stroke="currentColor"/><text x="70" y="38" text-anchor="middle" fill="currentColor">Starmap YAML</text><text x="70" y="57" text-anchor="middle" fill="currentColor">provider facts</text><rect x="10" y="105" width="120" height="70" rx="7" fill="none" stroke="currentColor"/><text x="70" y="132" text-anchor="middle" fill="currentColor">Starmap Go</text><text x="70" y="151" text-anchor="middle" fill="currentColor">model facts</text><rect x="160" y="60" width="100" height="65" rx="7" fill="none" stroke="currentColor"/><text x="210" y="87" text-anchor="middle" fill="currentColor">catalog</text><text x="210" y="106" text-anchor="middle" fill="currentColor">generation</text><rect x="290" y="15" width="120" height="65" rx="7" fill="none" stroke="currentColor"/><text x="350" y="42" text-anchor="middle" fill="currentColor">fixed provider</text><text x="350" y="61" text-anchor="middle" fill="currentColor">configuration</text><rect x="290" y="115" width="120" height="65" rx="7" fill="none" stroke="currentColor"/><text x="350" y="142" text-anchor="middle" fill="currentColor">provider adapter</text><text x="350" y="161" text-anchor="middle" fill="currentColor">roster</text><path d="M130 43 L160 78 M130 140 L160 108 M260 92 L290 55 M260 100 L290 145" fill="none" stroke="currentColor"/></svg></figure>
+
+<figure><figcaption>After</figcaption><svg viewBox="0 0 470 260" role="img" aria-label="Provider YAML and request policy drive the Starport runtime"><defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8z" fill="currentColor"/></marker></defs><rect x="10" y="20" width="105" height="65" rx="7" fill="none" stroke="currentColor"/><text x="62" y="47" text-anchor="middle" fill="currentColor">provider YAML</text><text x="62" y="66" text-anchor="middle" fill="currentColor">and evidence</text><rect x="145" y="20" width="120" height="65" rx="7" fill="none" stroke="currentColor"/><text x="205" y="47" text-anchor="middle" fill="currentColor">Starmap catalog</text><text x="205" y="66" text-anchor="middle" fill="currentColor">generation</text><rect x="300" y="20" width="155" height="65" rx="7" fill="none" stroke="currentColor"/><text x="377" y="47" text-anchor="middle" fill="currentColor">Starport runtime</text><text x="377" y="66" text-anchor="middle" fill="currentColor">generation</text><rect x="10" y="125" width="120" height="60" rx="7" fill="none" stroke="currentColor"/><text x="70" y="150" text-anchor="middle" fill="currentColor">operator credential</text><text x="70" y="169" text-anchor="middle" fill="currentColor">sources</text><rect x="165" y="125" width="120" height="60" rx="7" fill="none" stroke="currentColor"/><text x="225" y="150" text-anchor="middle" fill="currentColor">tenant BYOK</text><text x="225" y="169" text-anchor="middle" fill="currentColor">policy</text><rect x="320" y="120" width="135" height="70" rx="7" fill="none" stroke="currentColor"/><text x="387" y="145" text-anchor="middle" fill="currentColor">request credential</text><text x="387" y="164" text-anchor="middle" fill="currentColor">selection and</text><text x="387" y="183" text-anchor="middle" fill="currentColor">auth placement</text><rect x="300" y="220" width="155" height="30" rx="7" fill="none" stroke="currentColor"/><text x="377" y="240" text-anchor="middle" fill="currentColor">credential-free connector</text><path d="M115 52 L141 52 M265 52 L296 52 M377 85 L387 116 M130 155 L316 155 M285 155 L316 155 M387 190 L377 216" fill="none" stroke="currentColor" marker-end="url(#arrow)"/></svg></figure>
+
+</div>
+</section>
+
+</header>
+
+<main>
+<section id="scope">
+<h2>Scope</h2>
+
+<p><strong>Owns:</strong> Starmap credential metadata, provider YAML migration, and provider and model fact migration. It also owns Starport dynamic provider activation, request credential selection, and runtime replacement.</p>
+
+<p>The plan includes ambient, <code>env:</code>, <code>file:</code>, and cloud default credential sources. It also includes remote catalog consumption, setup, diagnosis, BYOK, tests, documentation, and releases.</p>
+
+<p><strong>Does not own:</strong> a new inference protocol. A later protocol plan owns each provider that needs a new wire codec. A later direct-secret-source plan owns adapters that fail this plan's dependency budgets.</p>
+
+<p><strong>Non-goals:</strong> secret writes, provider-side rotation, generic configuration templates, automatic model approval, compatibility aliases, build-tag release variants, and a shared runtime secret package.</p>
+
+</section>
+
+<section id="ledger">
+<h2>Status ledger</h2>
+
+<table><thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
+<tr id="CDP0" data-status="in_progress"><td>CDP0</td><td>Review disposition and red cross-repository verifier.</td><td><code>in_progress</code></td><td>The owner approved activation after independent and Claude review. The red verifier is pending.</td></tr>
+<tr id="CDP1" data-status="todo"><td>CDP1</td><td>Starmap credential profiles and authentication alternatives.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP2" data-status="todo"><td>CDP2</td><td>Starmap provider YAML and acquisition-fact migration.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP2.1" data-status="todo"><td>CDP2.1</td><td>Starmap model-fact migration and review candidates.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP3" data-status="todo"><td>CDP3</td><td>Starmap credential sources and operator surfaces.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP3.1" data-status="todo"><td>CDP3.1</td><td>Starmap direct secret-source measurements and accepted adapters.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP4" data-status="todo"><td>CDP4</td><td>Starmap atomic and durable remote subscriber.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP4.1" data-status="todo"><td>CDP4.1</td><td>Starmap compatibility release and catalog publication.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP5" data-status="todo"><td>CDP5</td><td>Starport dynamic configuration and environment resolution.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP5.1" data-status="todo"><td>CDP5.1</td><td>Starport credential material and core sources.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP6" data-status="todo"><td>CDP6</td><td>Credential-free connectors and primitive registries.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP6.1" data-status="todo"><td>CDP6.1</td><td>Atomic Starport runtime generation and connector draining.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP7" data-status="todo"><td>CDP7</td><td>Request credential policy, BYOK, setup, and diagnosis.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP7.1" data-status="todo"><td>CDP7.1</td><td>Starport direct secret-source measurements and accepted adapters.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP8" data-status="todo"><td>CDP8</td><td>Verified remote catalog activation and recovery.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP9" data-status="todo"><td>CDP9</td><td>Cross-repository conformance, documentation, and review.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP9.1" data-status="todo"><td>CDP9.1</td><td>Merge, release, installation, and public readback.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP10" data-status="todo"><td>CDP10</td><td>Cleanup after the final pull request merges.</td><td><code>todo</code></td><td></td></tr>
+</tbody></table>
+
+</section>
+
+<section id="promotion-gate">
+<h2>Promotion gate</h2>
+
+<p>Promote this plan to <code>active</code> only when all conditions hold:</p>
+
+<ul><li>An independent GPT-5.6-sol xhigh review used the model-neutral review prompt and covered both pinned repositories and the recorded plan baseline.</li>
+
+<li>Claude's activation review covers the revised plan and disposition.</li>
+
+<li>The disposition maps every independent and Claude finding to a task, rejection, or follow-up owner.</li>
+
+<li>CDP0 names the terminal verifier checks and expected count.</li>
+
+<li>Both worktrees are clean or every existing change has an owner.</li>
+
+<li>The owner approves activation and the whole-plan goal starts.</li></ul>
+
+</section>
+
+<section id="invariants">
+<h2>Invariants</h2>
+
+<ol>
+<li>Starmap owns provider IDs, model IDs, offerings, prices, limits, capabilities, service endpoints, status facts, and credential metadata.</li>
+
+<li>Starport owns provider inference credential values, tenant selection, runtime policy, request execution, and provider availability.</li>
+
+<li>Catalog-acquisition values never cross into the inference credential plane.</li>
+
+<li>A catalog generation never contains a secret value or secret-store authentication value.</li>
+
+<li>Compiled registries contain transport and authentication primitives, not provider rosters.</li>
+
+<li>Connectors contain transport state and endpoint bindings. They never contain tenant or operator credential material.</li>
+
+<li>Each request carries an explicit credential selection result into authentication placement.</li>
+
+<li>Credential fallback uses the same attempt budget as route fallback. It cannot create a hidden provider attempt.</li>
+
+<li>Provider model IDs remain exact and opaque from catalog input to the outbound request.</li>
+
+<li>Conventional provider environment names precede derived product aliases during ambient discovery.</li>
+
+<li>The first non-empty ambient value wins. Invalid selected values fail without a lower-priority fallback.</li>
+
+<li>Credential resolution preserves secret bytes. It does not trim, normalize, log, or serialize them.</li>
+
+<li>An explicit secret reference fails closed unless the operator configures a fallback.</li>
+
+<li>The credential layer owns source caching, single-flight resolution, versions, expiry, and lease renewal.</li>
+
+<li>A credential value rotation does not replace a runtime generation.</li>
+
+<li>Query placement requires verified provider evidence. Diagnostics never expose a credential-bearing URL or full query string.</li>
+
+<li>Verified refresh retains the complete last-known-good runtime after any catalog, configuration, source, or connector failure.</li>
+
+<li>Direct breaking changes remove old environment names and provider configuration structures.</li>
+</ol>
+
+</section>
+
+<section id="decisions">
+<h2>Decisions</h2>
+
+<table><thead><tr><th>ID</th><th>Decision</th><th>Consequence</th><th>Reopen condition</th></tr></thead><tbody>
+<tr><td>D1</td><td>Starmap publishes named, secret-free credential profiles and ordered authentication alternatives. Each plane selects one alternative and resolves its own values.</td><td>One profile defines fields, placement, scopes, endpoint bindings, and typed protocol options. A selected alternative cannot fall through automatically.</td><td>Verified provider behavior cannot fit the typed profile or alternative vocabulary.</td></tr>
+<tr><td>D2</td><td>Credential metadata owns conventional environment names. Each product derives <code>&lt;PRODUCT&gt;_&lt;PROVIDER_ID&gt;_&lt;FIELD_ID&gt;</code> after strict ID validation.</td><td>Starmap validates every derived name across providers, profiles, and fields. Any collision rejects the catalog before an environment read.</td><td>A provider needs an intentional shared credential group that the schema cannot express.</td></tr>
+<tr><td>D3</td><td>Starport removes <code>STARPORT_PROVIDERS_OPENAI_API_KEY</code> and equivalent fixed-roster names.</td><td>No <code>PROVIDER</code> segment or compatibility path remains.</td><td>Do not reopen before the first released configuration contract.</td></tr>
+<tr><td>D4</td><td>Request policy selects tenant or operator material. Operator resolution uses an explicit reference before ambient discovery.</td><td><code>user_only</code> never falls back. Other strategies permit only declared not-configured, authentication, or rate-limit fallback. Access, invalid, timeout, cancellation, and internal errors stay terminal.</td><td>A named policy needs a different tested order without silent operator billing.</td></tr>
+<tr><td>D5</td><td>An operator secret reference contains a backend, resource, optional field, and optional version. It contains no credentials or backend authentication values.</td><td>Each deployment owns references. Typed errors control explicit fallback. An opaque cache identity binds every reference component without exposing a sensitive path.</td><td>A backend cannot map to this grammar without embedding authentication data.</td></tr>
+<tr><td>D6</td><td>Core V1 supports ambient, <code>env:</code>, <code>file:</code>, and default cloud chains. Direct adapters use official clients only when they pass fixed budgets. <code>vals</code> is rejected.</td><td>Starport and Starmap each ship one release binary without build tags. Each adapter can finish <code>rejected(budget)</code> without blocking core V1.</td><td>A measured adapter cannot fit one binary, or an official client cannot meet the source contract.</td></tr>
+<tr><td>D7</td><td>Starport consumes one atomic state from the Starmap remote subscriber and retains an offline pinned artifact.</td><td>The subscriber owns verified fetch semantics and a caller-supplied store. Starport does not reconstruct catalog identity from separate reads.</td><td>The remote protocol cannot expose one consistent catalog and generation identity.</td></tr>
+<tr><td>D8</td><td>The credential layer returns named material with an opaque version and optional expiry or lease metadata. It owns caching and single-flight work.</td><td><code>providerauth.Source</code> becomes a thin bearer-token projection. Static material does not require a fabricated expiry.</td><td>One source needs a lifecycle that cannot share the same cache and refresh contract.</td></tr>
+<tr><td>D9</td><td>Connectors are credential-free. An explicit invocation value carries selected material to catalog-declared authentication placement for each attempt.</td><td>Concurrent tenants can share transports without sharing credentials. Credential rotation does not rebuild connectors.</td><td>A transport proves that request-bound authentication cannot be applied safely.</td></tr>
+<tr><td>D10</td><td>One immutable runtime generation contains catalog state, validated operator configuration, source handles, credential-free connectors, operation support, and availability.</td><td>Starport builds and validates a candidate before one atomic swap. Old connectors close after their in-flight requests finish.</td><td>Measured request draining needs a smaller equivalent ownership boundary.</td></tr>
+</tbody></table>
+
+</section>
+
+<section id="dependency-budgets">
+<h2>Dependency budgets</h2>
+
+<p>The baseline uses Go 1.26.5 with <code>CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w'</code>. Starport is 49,791,138 bytes with 157 modules and 609 compiled packages. Starmap is 36,769,954 bytes with 126 modules and 570 compiled packages.</p>
+
+<table><thead><tr><th>Dimension</th><th>Admission limit</th></tr></thead><tbody>
+<tr><td>Go version</td><td>No adapter raises either repository's Go 1.25 language floor.</td></tr>
+<tr><td>Dependency evidence</td><td>Record the complete module and compiled-package graphs before and after each adapter. Counts are review evidence, not admission limits.</td></tr>
+<tr><td>Source ownership</td><td>One adapter adds modules from at most five new source repository owners. Normalize GitHub and GitLab modules to <code>host/owner</code>. Map each vanity import to its source repository owner.</td></tr>
+<tr><td>Runtime closure</td><td>Admit only the official client and its required runtime dependencies. Reject new Kubernetes, SOPS, CLI, template, and unrelated secret-backend dependency families. A Starmap read-only consumer cannot compile adapter packages or embed adapter modules in its binary.</td></tr>
+<tr><td>Binary size</td><td>One adapter adds at most 8 percent. All accepted adapters add at most 15 percent in one release binary.</td></tr>
+<tr><td>Lifecycle</td><td>An unused or closed adapter retains no goroutine. Cancellation of a blocked fake returns within 250 milliseconds.</td></tr>
+<tr><td>Local latency</td><td>A deterministic local fake records at most 1 millisecond p95 resolver overhead across 10,000 cold calls.</td></tr>
+<tr><td>License</td><td>Each new dependency uses Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT, or MPL-2.0.</td></tr>
+<tr><td>Vulnerability</td><td><code>govulncheck ./...</code> reports no reachable vulnerability from an accepted adapter.</td></tr>
+</tbody></table>
+
+<p>CDP3.1 and CDP7.1 measure each adapter separately with the same toolchain and flags. They repeat the aggregate build after each accepted adapter. OpenBao is not preapproved. An adapter that exceeds one limit finishes as <code>rejected(budget)</code>. Its proof names the follow-up direct-secret-source plan as owner.</p>
+
+</section>
+
+<section id="test-matrix">
+<h2>Test matrix</h2>
+
+<table><thead><tr><th>Dimension</th><th>Required cases</th></tr></thead><tbody>
+<tr><td>Provider identity</td><td>Unknown OpenAI-compatible provider, exact opaque model ID, alias collision, missing reviewed model link.</td></tr>
+<tr><td>Transport</td><td>Supported primitive, unsupported primitive, provider protocol override, missing endpoint binding.</td></tr>
+<tr><td>Authentication</td><td>API key, no auth, Google default, Azure default, AWS default, unsupported method.</td></tr>
+<tr><td>Environment</td><td>Conventional only, product alias only, both present, invalid selected value, empty candidates, and whole-catalog collision.</td></tr>
+<tr><td>Credential source</td><td>Ambient, <code>env:</code>, <code>file:</code>, cloud default, version, expiry, lease, cancellation, denial, redaction, concurrent refresh, in-place file rewrite, atomic file replacement, symlink target swap, mounted-content replacement, and agent file rerender.</td></tr>
+<tr><td>Request authentication</td><td>Operator material, tenant material, each BYOK strategy, concurrent tenants, query redaction, static or renewable material, and <code>user_only</code> noninterference.</td></tr>
+<tr><td>Runtime replacement</td><td>Valid update, failed candidate, concurrent reads, old request drain, credential rotation, endpoint change, and last-known-good retention.</td></tr>
+<tr><td>Catalog refresh</td><td>Bad checksum, incompatible schema, rollback, duplicate generation, digest-equal identity, durable restart, and remote catch-up.</td></tr>
+<tr><td>Consumer surfaces</td><td>Startup, setup, diagnosis, BYOK, model list, provider list, chat, embeddings, and streaming.</td></tr>
+</tbody></table>
+
+</section>
+
+<section id="coordination">
+<h2>Coordination</h2>
+
+<p>This file owns the outcome across both repositories. Completed Starmap control planes supply evidence but do not own new work.</p>
+
+<p>Starmap schema and release tasks precede Starport consumption tasks. Each repository uses a <code>codex/catalog-driven-provider-runtime</code> branch from its pinned <code>main</code> baseline.</p>
+
+<p>The companion review prompt is <code>docs/reviews/CATALOG_DRIVEN_PROVIDER_REVIEW_PROMPT.md</code>. The accepted disposition is <code>docs/plans/proof/catalog-driven-provider-runtime/review-disposition.md</code>.</p>
+
+</section>
+
+<section id="verifier-contract">
+<h2>Verifier contract</h2>
+
+<p><code>scripts/verify-catalog-driven-providers.sh</code> reports these 19 fixed conditions and the summary <code>Summary: N passed, M failed</code>.</p>
+
+<table><thead><tr><th>ID</th><th>Terminal condition</th></tr></thead><tbody>
+<tr><td>CDP-V01</td><td>Credential profiles, alternatives, JSON, YAML, copies, and strict validation preserve one contract.</td></tr>
+<tr><td>CDP-V02</td><td>Catalog-acquisition and inference values remain isolated and absent from every catalog byte.</td></tr>
+<tr><td>CDP-V03</td><td>Every provider YAML record uses the new credential schema.</td></tr>
+<tr><td>CDP-V04</td><td>Both products pass conventional, product alias, <code>env:</code>, and <code>file:</code> precedence.</td></tr>
+<tr><td>CDP-V05</td><td>Alias collisions and invalid selected ambient values fail before any fallback or connector construction.</td></tr>
+<tr><td>CDP-V06</td><td>Explicit references precede ambient sources and permit only typed, configured fallback.</td></tr>
+<tr><td>CDP-V07</td><td>Both products run the same named source-conformance vectors. Every accepted source passes version, expiry, cancellation, concurrency, rotation, and redaction tests.</td></tr>
+<tr><td>CDP-V08</td><td>Production configuration contains no <code>STARPORT_PROVIDERS_*</code> name or compatibility path.</td></tr>
+<tr><td>CDP-V09</td><td>Starport production selection contains no provider roster.</td></tr>
+<tr><td>CDP-V10</td><td>Starmap acquisition and CLI selection contain no provider roster.</td></tr>
+<tr><td>CDP-V11</td><td>Prohibited production zones contain no provider or model facts.</td></tr>
+<tr><td>CDP-V12</td><td>Transport and authentication registries use only primitives, operations, and typed protocol options.</td></tr>
+<tr><td>CDP-V13</td><td>Connectors hold no credential values. Concurrent tenant and operator requests use only their selected material.</td></tr>
+<tr><td>CDP-V14</td><td>Synthetic <code>acme</code> chat, embeddings, streaming, model discovery, and provider discovery pass.</td></tr>
+<tr><td>CDP-V15</td><td>Synthetic <code>acme</code> setup, diagnosis, and BYOK pass without source changes.</td></tr>
+<tr><td>CDP-V16</td><td>Unsupported primitives, bindings, operations, and credentials return typed, secret-free errors.</td></tr>
+<tr><td>CDP-V17</td><td>A verified remote <code>acme</code> generation atomically activates without a Starport rebuild.</td></tr>
+<tr><td>CDP-V18</td><td>Every invalid remote candidate retains the complete runtime and cache identity. Old requests drain before connector close.</td></tr>
+<tr><td>CDP-V19</td><td>Each BYOK strategy uses its declared order. <code>user_only</code> never uses operator material. Its external error is identical whether operator material exists.</td></tr>
+</tbody></table>
+
+<p>The scan prohibits provider and model facts in production selection, configuration, setup, diagnosis, and shared acquisition code. It permits wire tokens in concept-owned codecs and exact examples in tests, fixtures, and documentation. Each source exception names its primitive and reason.</p>
+
+</section>
+
+<section id="tasks">
+<h2>Tasks</h2>
+
+<h3>Phase 0: evidence and executable contract</h3>
+
+<h3 id="task-CDP0">CDP0 Baseline, review, and verifier</h3>
+
+<ul><li><strong>Problem:</strong> Existing checks pass without proving YAML-only provider activation.</li>
+
+<li><strong>Owning seam and paths:</strong> This plan, its proof root, review prompt and disposition, and <code>scripts/verify-catalog-driven-providers.sh</code>.</li>
+
+<li><strong>Steps:</strong> Freeze the 19 condition IDs and allowed scan zones. Author the verifier without production changes. Capture the red summary.</li>
+
+<li><strong>Acceptance:</strong> The disposition covers every finding. The verifier reports 19 named conditions and at least one failure.</li>
+
+<li><strong>Fail-before:</strong> A synthetic <code>acme</code> OpenAI provider cannot activate in Starport without a compiled provider descriptor.</li>
+
+<li><strong>Verification:</strong> Run <code>bash scripts/verify-catalog-driven-providers.sh</code> and store its output in <code>docs/plans/proof/catalog-driven-provider-runtime/cdp0.md</code>.</li></ul>
+
+<h3>Phase 1: Starmap facts and publication</h3>
+
+<h3 id="task-CDP1">CDP1 Credential profiles and authentication alternatives</h3>
+
+<ul><li><strong>Problem:</strong> Starmap cannot describe multi-field credentials, plane references, or ordered authentication alternatives.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>pkg/catalogs</code>, embedded provider schema, copy, validation, JSON, YAML, and generation compatibility.</li>
+
+<li><strong>Steps:</strong> Add named profiles and plane references. Add typed authentication alternatives, fields, placement, scopes, endpoint bindings, and protocol options. Add ID and alias validation.</li>
+
+<li><strong>Acceptance:</strong> Strict round-trip and copy tests preserve every field. Validation rejects collisions, ambiguous bindings, unrestricted headers, and invalid alternatives before environment access.</li>
+
+<li><strong>Fail-before:</strong> No catalog type can express OpenAI organization placement or terminal Azure authentication selection.</li>
+
+<li><strong>Verification:</strong> Run <code>go test ./pkg/catalogs ./internal/embedded</code>, <code>make docs-check</code>, and <code>make verify</code> in Starmap.</li></ul>
+
+<h3 id="task-CDP2">CDP2 Provider YAML and acquisition-fact migration</h3>
+
+<ul><li><strong>Problem:</strong> Provider facts still exist in acquisition code, request construction, and fixed CLI lists.</li>
+
+<li><strong>Owning seam and paths:</strong> Starmap provider YAML, acquisition clients, transport request options, CLI composition, and catalog validation.</li>
+
+<li><strong>Steps:</strong> Migrate every provider to CDP1. Remove obsolete credential fields, provider maps, endpoint defaults, request versions, scopes, and price units from shared code.</li>
+
+<li><strong>Acceptance:</strong> Acquisition uses endpoint type, authentication primitive, and typed protocol options only. Public provider constants do not select production behavior.</li>
+
+<li><strong>Fail-before:</strong> Production maps and provider switches still select credentials, request versions, and price units.</li>
+
+<li><strong>Verification:</strong> Run acquisition, auth, transport, CLI, embedded, and catalog tests. Then run <code>make verify</code> in Starmap.</li></ul>
+
+<h3 id="task-CDP2.1">CDP2.1 Model-fact migration and review candidates</h3>
+
+<ul><li><strong>Problem:</strong> Google, Anthropic, and OpenAI acquisition code infers model identity, authors, limits, capabilities, and price units.</li>
+
+<li><strong>Owning seam and paths:</strong> Authored model YAML, provider offering YAML, acquisition normalization, reconciliation issues, and catalog publication.</li>
+
+<li><strong>Steps:</strong> Move model facts to authored data or verified observations. Preserve exact provider model IDs. Make reconciliation issues the durable review-candidate artifact.</li>
+
+<li><strong>Acceptance:</strong> Unknown identities stay unpublished. Each candidate records provider ID, model ID, source revision, evidence checksum, reason, and prior reviewed link.</li>
+
+<li><strong>Fail-before:</strong> Compiled family rules and fallback authors can change published model facts.</li>
+
+<li><strong>Verification:</strong> Run provider, reconciliation, quarantine, exact-ID, generation, and embedded-catalog tests. Then run <code>make verify</code>.</li></ul>
+
+<h3 id="task-CDP3">CDP3 Starmap credential sources and operator surfaces</h3>
+
+<ul><li><strong>Problem:</strong> Starmap credential checks use fixed environment lists and lack one source lifecycle.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>internal/auth</code>, acquisition composition, CLI auth, operator configuration, file access, and redaction.</li>
+
+<li><strong>Steps:</strong> Add named material with an opaque version and optional expiry or lease. Add ambient, <code>env:</code>, <code>file:</code>, and existing cloud default sources. Put caching and single-flight work in this layer. Test in-place rewrite, atomic replacement, symlink target swap, mounted-content replacement, and agent file rerender.</li>
+
+<li><strong>Acceptance:</strong> Every provider uses catalog metadata. Static and renewable material share one lifecycle. File rotation supports each named replacement pattern and does not depend on modification time alone.</li>
+
+<li><strong>Fail-before:</strong> <code>STARMAP_OPENAI_API_KEY</code> cannot satisfy acquisition and CLI hints omit YAML-only providers.</li>
+
+<li><strong>Verification:</strong> Run auth, environment, file, renewal, cancellation, concurrency, CLI, and redaction tests. Then run <code>make verify</code>.</li></ul>
+
+<h3 id="task-CDP3.1">CDP3.1 Starmap direct secret-source adapters</h3>
+
+<ul><li><strong>Problem:</strong> Direct secret-store client costs lack binary, dependency, lifecycle, license, and security evidence.</li>
+
+<li><strong>Owning seam and paths:</strong> Starmap source adapters, dependency proof, release build, and source conformance tests.</li>
+
+<li><strong>Steps:</strong> Measure official AWS, Google Cloud, Azure, Vault, and OpenBao clients separately. Implement only adapters that pass every fixed budget.</li>
+
+<li><strong>Acceptance:</strong> Each candidate has raw before-and-after proof. Each accepted adapter passes one conformance suite. Each rejected adapter names its follow-up owner.</li>
+
+<li><strong>Fail-before:</strong> No direct adapter has reproducible dependency or binary evidence.</li>
+
+<li><strong>Verification:</strong> Repeat the dependency budget build. Run source conformance, race, cancellation, license, and <code>govulncheck</code> checks.</li></ul>
+
+<h3 id="task-CDP4">CDP4 Atomic and durable remote subscriber</h3>
+
+<ul><li><strong>Problem:</strong> The remote subscriber exposes catalog and generation identity through separate state. It also fixes storage to memory.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>remote.Subscriber</code>, <code>catalogstore.Store</code>, bootstrap configuration, health, and remote protocol tests.</li>
+
+<li><strong>Steps:</strong> Expose one atomic state. Accept a caller-owned store and pinned bootstrap. Define digest-equal identity, degraded startup, retry, and durable recovery.</li>
+
+<li><strong>Acceptance:</strong> The returned generation ID always matches subscriber identity. Restart uses a verified durable generation when the remote source is unavailable.</li>
+
+<li><strong>Fail-before:</strong> <code>remote.New</code> constructs a memory store. A digest-equal identity advance does not update the client state.</li>
+
+<li><strong>Verification:</strong> Run remote, store, bootstrap, race, failure, retry, and restart tests. Then run Starmap consumer dependency checks.</li></ul>
+
+<h3 id="task-CDP4.1">CDP4.1 Starmap release and catalog publication</h3>
+
+<ul><li><strong>Problem:</strong> Starport needs one released schema and remote contract before consumption.</li>
+
+<li><strong>Owning seam and paths:</strong> Starmap dependencies, version policy, release workflow, catalog artifact, changelog, and migration guide.</li>
+
+<li><strong>Steps:</strong> Test Starmap with Starport-selected dependency versions. Align minimum versions unless lower-version evidence is intentional. Review, merge, publish, and verify the release.</li>
+
+<li><strong>Acceptance:</strong> A clean Starport consumer resolves the exact release and expected module graph. The catalog generation passes artifact and remote verification.</li>
+
+<li><strong>Fail-before:</strong> Starport selects newer Google auth, gRPC, and Google API modules than Starmap tests directly.</li>
+
+<li><strong>Verification:</strong> Run <code>make verify</code>, <code>make release-check</code>, the Starport consumer build, release readback, and hosted Starmap checks.</li></ul>
+
+<h3>Phase 2: Starport dynamic runtime</h3>
+
+<h3 id="task-CDP5">CDP5 Dynamic provider configuration</h3>
+
+<ul><li><strong>Problem:</strong> A fixed Go struct defines the Starport provider roster and old environment names.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>internal/config</code>, catalog projection, application composition, and configuration inspection.</li>
+
+<li><strong>Steps:</strong> Replace fixed provider fields with exact catalog-keyed entries. Apply the CDP1 alias algorithm. Remove every <code>STARPORT_PROVIDERS_*</code> path without compatibility code.</li>
+
+<li><strong>Acceptance:</strong> <code>OPENAI_API_KEY</code> precedes <code>STARPORT_OPENAI_API_KEY</code>. <code>FIREWORKS_API_KEY</code> resolves Fireworks configuration without a source edit. Collisions fail before reads.</li>
+
+<li><strong>Fail-before:</strong> Fireworks has no Starport configuration slot. The loader requires <code>STARPORT_PROVIDERS_OPENAI_API_KEY</code>.</li>
+
+<li><strong>Verification:</strong> Run <code>go test ./internal/config ./internal/app ./internal/catalog</code> and the red campaign verifier.</li></ul>
+
+<h3 id="task-CDP5.1">CDP5.1 Starport credential material and core sources</h3>
+
+<ul><li><strong>Problem:</strong> Starport cannot represent static multi-field material and renewable tokens through one lifecycle.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>internal/credentials</code>, <code>internal/providerauth</code>, operator secret references, environment access, file access, and redaction.</li>
+
+<li><strong>Steps:</strong> Add named material and lifecycle metadata. Add the tagged secret reference and typed errors. Add core sources. Make bearer auth a thin projection. Test in-place rewrite, atomic replacement, symlink target swap, mounted-content replacement, and agent file rerender.</li>
+
+<li><strong>Acceptance:</strong> One cache owns resolution and renewal. Static material needs no expiry. File reads enforce path and size policy. File rotation supports each named replacement pattern without modification-time-only detection. Vendor fields stay primitive-owned.</li>
+
+<li><strong>Fail-before:</strong> <code>providerauth.Token</code> stores one value, requires expiry for refresh, and exposes a Google quota field.</li>
+
+<li><strong>Verification:</strong> Run credential, auth, file rotation, reference grammar, cancellation, concurrency, race, and redaction tests.</li></ul>
+
+<h3 id="task-CDP6">CDP6 Credential-free connectors and primitive registries</h3>
+
+<ul><li><strong>Problem:</strong> Adapter descriptors combine provider membership, transport, authentication, and credentials. Connectors store one operator key for every request.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>internal/providers/connectors</code>, <code>internal/providerauth</code>, <code>internal/registry</code>, routing, and execution.</li>
+
+<li><strong>Steps:</strong> Key factories by primitive and operation. Build connectors from catalog facts. Pass request credential material explicitly. Apply typed placement after policy selection. Delete provider roster switches.</li>
+
+<li><strong>Acceptance:</strong> Connectors store no credential value or source. Synthetic <code>acme</code> chat, embeddings, and streaming pass. Unsupported primitives fail with typed errors.</li>
+
+<li><strong>Fail-before:</strong> The registry rejects <code>acme</code>. OpenAI applies <code>c.config.APIKey</code> to every outbound request.</li>
+
+<li><strong>Verification:</strong> Run connector, auth, registry, routing, execution, app, and catalog tests. Run both Starport architecture verifiers.</li></ul>
+
+<h3 id="task-CDP6.1">CDP6.1 Atomic runtime generation and connector draining</h3>
+
+<ul><li><strong>Problem:</strong> Catalog refresh cannot replace the configured connector set as one transaction.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>internal/catalog</code>, <code>internal/registry</code>, <code>internal/app</code>, request leases, connector close, and availability.</li>
+
+<li><strong>Steps:</strong> Build a complete candidate from catalog state, operator configuration, source handles, connectors, operations, and availability. Publish it once. Drain the prior generation.</li>
+
+<li><strong>Acceptance:</strong> Requests observe one complete generation. Failed candidates keep the prior generation. Credential value rotation causes no generation swap.</li>
+
+<li><strong>Fail-before:</strong> <code>Registry.Start</code> seals registrations. Catalog refresh changes only the routable snapshot.</li>
+
+<li><strong>Verification:</strong> Run atomic swap, failed candidate, race, request lease, connector drain, close, and credential rotation tests.</li></ul>
+
+<h3 id="task-CDP7">CDP7 Request credential policy and operator surfaces</h3>
+
+<ul><li><strong>Problem:</strong> BYOK strategies do not reach inference execution. Setup and diagnosis use compiled provider descriptors.</li>
+
+<li><strong>Owning seam and paths:</strong> Request policy, <code>internal/providers/byok</code>, execution, setup, diagnosis, CLI, and credential validation.</li>
+
+<li><strong>Steps:</strong> Implement all three BYOK strategies for each attempt. Define eligible fallback errors. Drive BYOK, setup, diagnosis, and redaction from the catalog contract.</li>
+
+<li><strong>Acceptance:</strong> Concurrent tenants never share material. <code>user_only</code> hides operator availability. Terminal errors never fall through. Credential fallback consumes the existing attempt budget.</li>
+
+<li><strong>Fail-before:</strong> BYOK strategy constants are absent from inference routing. Setup accepts only OpenAI and Ollama.</li>
+
+<li><strong>Verification:</strong> Run policy, execution, BYOK, setup, diagnosis, CLI, concurrent tenant, typed error, redaction, and race tests.</li></ul>
+
+<h3 id="task-CDP7.1">CDP7.1 Starport direct secret-source adapters</h3>
+
+<ul><li><strong>Problem:</strong> Direct secret-store client costs lack Starport build and lifecycle evidence.</li>
+
+<li><strong>Owning seam and paths:</strong> Starport source adapters, operator configuration, dependency proof, release build, and source conformance tests.</li>
+
+<li><strong>Steps:</strong> Measure official AWS, Google Cloud, Azure, Vault, and OpenBao clients separately. Implement only adapters that pass every fixed budget.</li>
+
+<li><strong>Acceptance:</strong> Each candidate has raw proof. Each accepted adapter uses the CDP5.1 lifecycle. Each rejected adapter names its follow-up owner.</li>
+
+<li><strong>Fail-before:</strong> No direct Starport adapter has reproducible dependency or binary evidence.</li>
+
+<li><strong>Verification:</strong> Repeat the dependency budget build. Run source conformance, race, cancellation, license, and <code>govulncheck</code> checks.</li></ul>
+
+<h3 id="task-CDP8">CDP8 Verified remote catalog activation</h3>
+
+<ul><li><strong>Problem:</strong> A released Starport binary cannot receive catalog-only provider changes from the verified Starmap publication path.</li>
+
+<li><strong>Owning seam and paths:</strong> <code>internal/catalog</code>, application lifecycle, configuration, diagnosis, cache generation identity, and Starmap remote consumer.</li>
+
+<li><strong>Steps:</strong> Consume the CDP4 atomic source and durable store. Feed each compatible state into the CDP6.1 transaction. Keep verified pinned fallback and bounded retry.</li>
+
+<li><strong>Acceptance:</strong> Remote <code>acme</code> becomes routable without a rebuild. Invalid, stale, duplicate, incompatible, and malformed states retain the complete runtime and cache identity.</li>
+
+<li><strong>Fail-before:</strong> Starport only reads its compiled Starmap version or a local workspace.</li>
+
+<li><strong>Verification:</strong> Run catalog, lifecycle, cache, digest-equal, remote failure, restart, catch-up, race, and recovery tests. Run both architecture verifiers.</li></ul>
+
+<h3>Phase 3: conformance and closeout</h3>
+
+<h3 id="task-CDP9">CDP9 Conformance, documentation, and review</h3>
+
+<ul><li><strong>Problem:</strong> The complete cross-repository outcome needs executable proof and public operator documentation.</li>
+
+<li><strong>Owning seam and paths:</strong> Both verifier suites, README files, architecture documents, setup guides, accepted source guides, SDK smoke tests, and pull requests.</li>
+
+<li><strong>Steps:</strong> Make all 19 checks green. Scan prohibited zones. Run the same named source-conformance vectors in both products. Run repository checks and pre-PR autoreview. Publish both ready pull requests.</li>
+
+<li><strong>Documentation:</strong> Document strict ambient precedence, explicit <code>env:</code> override, and projected or mounted file rotation. Add verified <code>doppler run --</code>, <code>op run --</code>, and <code>infisical run --</code> quickstarts.</li>
+
+<li><strong>Acceptance:</strong> The campaign verifier reports <code>Summary: 19 passed, 0 failed</code>. Both product-owned implementations run the same canonical source-conformance vector IDs. The documentation explains how an explicit <code>env:</code> reference overrides conventional ambient discovery and contains a verified quickstart for each named wrapper. Both pull requests have green local gates and no unresolved review finding.</li>
+
+<li><strong>Fail-before:</strong> The CDP0 verifier output records at least one failed condition.</li>
+
+<li><strong>Verification:</strong> Run <code>make verify</code> in Starmap. Run every required Starport ownership, architecture, Go, SDK, documentation, and autoreview check.</li></ul>
+
+<h3 id="task-CDP9.1">CDP9.1 Merge, release, and public readback</h3>
+
+<ul><li><strong>Problem:</strong> Green source pull requests do not prove released consumer compatibility or public installation.</li>
+
+<li><strong>Owning seam and paths:</strong> Both protected branches, release workflows, immutable assets, Homebrew casks, attestations, and public readback scripts.</li>
+
+<li><strong>Steps:</strong> Merge the exact green heads. Publish Starmap before Starport. Verify assets, checksums, attestations, catalog generation, casks, images, and rollback.</li>
+
+<li><strong>Acceptance:</strong> Exact-version installs pass on macOS and Linux. OpenRouter SDK smoke checks pass. Public release readback passes for both products.</li>
+
+<li><strong>Fail-before:</strong> The revised public releases do not exist.</li>
+
+<li><strong>Verification:</strong> Run both release checks, public readback, exact-version install tests, Homebrew audits, SDK smoke tests, and hosted required checks.</li></ul>
+
+<h3 id="task-CDP10">CDP10 Cleanup</h3>
+
+<ul><li><strong>Problem:</strong> A merged campaign plan must not remain an active control plane.</li>
+
+<li><strong>Owning seam and paths:</strong> This plan, its proof root, the plan index, and <code>docs/TASKS.md</code>.</li>
+
+<li><strong>Steps:</strong> Confirm every final pull request and release. Record the closeout. Delete this plan, proof root, prompt, and index entries after the final merge.</li>
+
+<li><strong>Acceptance:</strong> Both <code>main</code> branches contain the outcome. No active or proposed entry references this plan.</li>
+
+<li><strong>Fail-before:</strong> Not applicable because the merge triggers cleanup.</li>
+
+<li><strong>Verification:</strong> Search both repositories for the plan slug. Confirm clean primary worktrees and protected <code>main</code> branches.</li></ul>
+
+</section>
+
+<section id="goal">
+<h2>Goal</h2>
+
+<pre><code>Execute /Users/jack/src/github.com/agentstation/starport/docs/plans/catalog-driven-provider-runtime-plan.html to completion. This is a whole-plan goal, not a single-task goal. Read the plan fully. Then read both AGENTS.md files, both architecture documents, Starport docs/TASKS.md, Starmap docs/TESTING.md, Starmap docs/REMOTE_CATALOG_PROTOCOL.md, the independent review prompt, and the review disposition. Work in /Users/jack/src/github.com/agentstation/starmap and /Users/jack/src/github.com/agentstation/starport on branch codex/catalog-driven-provider-runtime in each repository. Start each branch from the pinned main baseline after you confirm the tree. Chat history is not progress state. Resume from the status ledger, execution log, proof files, and git state. If compaction happens, continue from those sources. Keep one task in_progress. Follow ledger order unless evidence proves a task independent. Implement at the owning seam. Capture fail-before evidence. Run each task verification. Commit the work per repository. Write the proof file. Append the execution log. Mark the task terminal with evidence. Commit the plan transition. Then advance to the next eligible task. Decide from evidence. Mark a wrong or satisfied task no-action with one reason. Mark a direct adapter rejected(budget) when any fixed admission limit fails, name its follow-up owner, and continue. Record a blocker and continue with the next eligible task. Preserve every invariant and non-goal. Use direct breaking changes. Add no provider or environment compatibility path. Keep acquisition and inference secret values isolated. Keep credential material out of connectors and runtime generations. Ship one release binary per platform without build-tag source variants. Commit policy: use one intentional work commit per coherent repository change and one following plan transition commit. Use pull requests for both repositories. Run autoreview with --gate pre-pr --mode auto after final checks and commits for every substantive pull request. Stop only at a valid stop state from the plans skill. Before you stop, update the ledger, log, and next action. The goal is met when both main branches contain the catalog-driven runtime, Starmap has a verified public release and catalog generation, Starport consumes that release, CDP-V01 through CDP-V19 pass, every required repository and hosted gate passes, both release readbacks pass, and CDP10 can run after the final merge.</code></pre>
+</section>
+
+<section id="execution-log">
+<h2>Execution log</h2>
+
+<table><thead><tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>2026-08-10</td><td>meta</td><td>authored</td><td>Created the proposed cross-repository plan, baseline proof, and independent review prompt. No implementation started.</td></tr>
+<tr><td>2026-08-10</td><td>meta</td><td>revised</td><td>Accepted the independent and Claude findings. Added credential-free connectors, request-bound authentication, core source lifecycles, fixed budgets, atomic runtime replacement, and split tasks. The plan remains proposed.</td></tr>
+<tr><td>2026-08-10</td><td>meta</td><td>activation review</td><td>Accepted the dependency-budget, BYOK noninterference, documentation, file-rotation, and shared-vector findings. Reported adapter measurements remain unverified until CDP3.1 and CDP7.1 reproduce them. The plan remains proposed.</td></tr>
+<tr><td>2026-08-10</td><td>CDP0</td><td>activated</td><td>The owner supplied Claude's approve-activation verdict. Renamed the review prompt, activated the plan, and started CDP0.</td></tr>
+</tbody></table>
+
+</section>
+
+</main>
+
+</body>
+</html>
