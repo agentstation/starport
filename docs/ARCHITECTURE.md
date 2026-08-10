@@ -225,6 +225,10 @@ reuses secret values from the other plane.
 
 `internal/providerauth` owns renewable inference bearer tokens. Vertex AI uses
 Google Application Default Credentials with the Google Cloud platform scope.
+The Google source preserves the Application Default Credentials quota project.
+The bearer transport sends it as `X-Goog-User-Project` without replacing an
+explicit request header.
+
 Azure OpenAI uses `DefaultAzureCredential` with the Azure Cognitive Services
 scope. A synchronized source caches each token and refreshes it two minutes
 before expiry. Waiting requests can stop through their own contexts. The HTTP

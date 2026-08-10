@@ -48,8 +48,9 @@ func (m Mode) Validate() error {
 
 // Token is one provider inference bearer token.
 type Token struct {
-	Value     string
-	ExpiresAt time.Time
+	Value          string
+	ExpiresAt      time.Time
+	QuotaProjectID string
 }
 
 // Source supplies provider inference bearer tokens.

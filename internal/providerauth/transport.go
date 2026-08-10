@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+const googleQuotaProjectHeader = "X-Goog-User-Project"
+
 // NewBearerTransport returns a transport that obtains a bearer token for each
 // request. The source can cache a fresh token between requests.
 func NewBearerTransport(base http.RoundTripper, source Source) http.RoundTripper {
@@ -33,6 +35,9 @@ func (t *bearerTransport) RoundTrip(request *http.Request) (*http.Response, erro
 	authorized := request.Clone(request.Context())
 	authorized.Header = request.Header.Clone()
 	authorized.Header.Set("Authorization", "Bearer "+token.Value)
+	if token.QuotaProjectID != "" && authorized.Header.Get(googleQuotaProjectHeader) == "" {
+		authorized.Header.Set(googleQuotaProjectHeader, token.QuotaProjectID)
+	}
 	return t.base.RoundTrip(authorized)
 }
 

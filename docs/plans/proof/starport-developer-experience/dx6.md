@@ -6,7 +6,7 @@ Date: 2026-08-09
 
 The Vertex AI connector used one configured value as an access token for every
 request. The Azure OpenAI connector used one configured API key for every
-request. Neither connector could obtain or refresh a cloud credential.
+request. Neither connector could get or refresh a cloud credential.
 
 This command captured the static contracts before implementation:
 
@@ -28,13 +28,14 @@ Implementation branch: `codex/starport-dx6-cloud-auth`.
   adapters.
 - A refreshable source caches a token and replaces it two minutes before
   expiry.
-- One request performs each refresh. Other requests can stop waiting through
+- One request refreshes the credential. Other requests can stop through
   their own contexts.
 - A token without a value, expiry, or sufficient remaining life fails closed.
 - The bearer transport uses the inference request context. It changes a
   request copy and forwards idle-connection closure.
 - Google default mode uses Application Default Credentials with the Google
-  Cloud platform scope.
+  Cloud platform scope. It preserves the detected quota project for provider
+  requests.
 - Azure default mode uses `DefaultAzureCredential` with the Azure Cognitive
   Services scope.
 - Each cloud adapter requires an explicit `AUTH_MODE`. Ambient cloud
@@ -76,6 +77,7 @@ The tests cover these contracts:
 - Empty, missing-expiry, and stale token rejection.
 - Request-copy authorization and idle-connection closure.
 - Google and Azure SDK token adaptation.
+- Google quota-project propagation without explicit-header replacement.
 - The Azure Cognitive Services scope.
 - Static and default mode validation.
 - Explicit cloud inference opt-in.
@@ -101,7 +103,7 @@ checks. Lint reported zero issues. The SDK smoke suite passed raw chat,
 streaming, model, and embedding requests. It also passed the Python,
 TypeScript, and Go OpenRouter clients.
 
-Strict technical-writing lint passed six changed guides with zero diagnostics.
+Strict technical-writing lint passed seven changed guides with zero diagnostics.
 The glossary check reported 15 terms and zero errors.
 
 ## Review and pull request gate
@@ -121,4 +123,9 @@ The first convergence review found a timing assumption in the new failed
 cohort test. The test now verifies the cohort wait contract directly and tests
 a later retry separately. Fifty repeated race runs passed.
 
-The convergence review and pull request gate are pending.
+The next convergence review found that the Google source discarded the quota
+project from Application Default Credentials. The source now preserves that
+value, and the bearer transport sends it as `X-Goog-User-Project`. This change
+supports local credentials that charge requests to an explicit quota project.
+
+The next step runs the convergence review and pull request gate.

@@ -18,13 +18,15 @@ import (
 
 func TestVertexAIConnectorRefreshesDefaultCredential(t *testing.T) {
 	now := time.Unix(1_000, 0)
-	source, err := newTestRefreshingSource(&now)
+	source, err := newTestRefreshingSource(&now, "quota-project")
 	if err != nil {
 		t.Fatalf("new credential source: %v", err)
 	}
 	var authorizations []string
+	var quotaProjects []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		authorizations = append(authorizations, request.Header.Get("Authorization"))
+		quotaProjects = append(quotaProjects, request.Header.Get("X-Goog-User-Project"))
 		_ = json.NewEncoder(w).Encode(geminiResponse{
 			Candidates: []geminiCandidate{{
 				Content:      geminiContent{Parts: []geminiPart{{Text: "ok"}}, Role: "model"},
@@ -58,11 +60,14 @@ func TestVertexAIConnectorRefreshesDefaultCredential(t *testing.T) {
 	if want := []string{"Bearer token-1", "Bearer token-2"}; !slices.Equal(authorizations, want) {
 		t.Errorf("Authorization values = %v, want %v", authorizations, want)
 	}
+	if want := []string{"quota-project", "quota-project"}; !slices.Equal(quotaProjects, want) {
+		t.Errorf("quota project values = %v, want %v", quotaProjects, want)
+	}
 }
 
 func TestAzureOpenAIConnectorRefreshesDefaultCredential(t *testing.T) {
 	now := time.Unix(1_000, 0)
-	source, err := newTestRefreshingSource(&now)
+	source, err := newTestRefreshingSource(&now, "")
 	if err != nil {
 		t.Fatalf("new credential source: %v", err)
 	}
@@ -71,6 +76,9 @@ func TestAzureOpenAIConnectorRefreshesDefaultCredential(t *testing.T) {
 		authorizations = append(authorizations, request.Header.Get("Authorization"))
 		if apiKey := request.Header.Get("api-key"); apiKey != "" {
 			t.Errorf("api-key = %q with default credentials", apiKey)
+		}
+		if quotaProject := request.Header.Get("X-Goog-User-Project"); quotaProject != "" {
+			t.Errorf("X-Goog-User-Project = %q for Azure OpenAI", quotaProject)
 		}
 		_ = json.NewEncoder(w).Encode(ChatResponse{
 			ID: "response", Object: objectChatCompletion, Model: "deployment",
@@ -159,14 +167,15 @@ func TestCloudConnectorsForwardCredentialCancellation(t *testing.T) {
 	}
 }
 
-func newTestRefreshingSource(now *time.Time) (providerauth.Source, error) {
+func newTestRefreshingSource(now *time.Time, quotaProjectID string) (providerauth.Source, error) {
 	call := 0
 	return providerauth.NewRefreshingSource(
 		providerauth.SourceFunc(func(context.Context) (providerauth.Token, error) {
 			call++
 			return providerauth.Token{
-				Value:     fmt.Sprintf("token-%d", call),
-				ExpiresAt: now.Add(10 * time.Minute),
+				Value:          fmt.Sprintf("token-%d", call),
+				ExpiresAt:      now.Add(10 * time.Minute),
+				QuotaProjectID: quotaProjectID,
 			}, nil
 		}),
 		providerauth.RefreshOptions{

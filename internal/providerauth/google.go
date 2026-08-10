@@ -22,10 +22,21 @@ func NewGoogleDefaultSource() (Source, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detect Google default credentials: %w", err)
 	}
-	return newGoogleSource(credential.TokenProvider)
+	return newGoogleCredentialSource(credential)
 }
 
-func newGoogleSource(provider auth.TokenProvider) (Source, error) {
+func newGoogleCredentialSource(credential *auth.Credentials) (Source, error) {
+	if credential == nil {
+		return nil, errors.New("google credentials are required")
+	}
+	quotaProjectID, err := credential.QuotaProjectID(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("resolve Google quota project: %w", err)
+	}
+	return newGoogleSource(credential.TokenProvider, quotaProjectID)
+}
+
+func newGoogleSource(provider auth.TokenProvider, quotaProjectID string) (Source, error) {
 	if provider == nil {
 		return nil, errors.New("google token provider is required")
 	}
@@ -34,6 +45,10 @@ func newGoogleSource(provider auth.TokenProvider) (Source, error) {
 		if err != nil {
 			return Token{}, fmt.Errorf("get Google access token: %w", err)
 		}
-		return Token{Value: token.Value, ExpiresAt: token.Expiry}, nil
+		return Token{
+			Value:          token.Value,
+			ExpiresAt:      token.Expiry,
+			QuotaProjectID: quotaProjectID,
+		}, nil
 	}), RefreshOptions{})
 }

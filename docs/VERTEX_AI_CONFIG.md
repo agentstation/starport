@@ -25,7 +25,9 @@ export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
 
 Default mode supports local Application Default Credentials, Google managed
 identity, and workload identity federation. Starport requests the Google Cloud
-platform scope. It refreshes the bearer token two minutes before expiry.
+platform scope. It preserves the quota project from the detected credentials
+and sends it with each request. It refreshes the bearer token two minutes
+before expiry.
 
 Use a static OAuth access token only when token renewal is external:
 
