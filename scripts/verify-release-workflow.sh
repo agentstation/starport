@@ -92,4 +92,6 @@ if "$repository_root/scripts/generate-release-artifacts.sh" \
 	exit 1
 fi
 
+"$repository_root/scripts/test-homebrew-publisher.sh" >/dev/null
+
 printf 'PASS release workflow contract\n'

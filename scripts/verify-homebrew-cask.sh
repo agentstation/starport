@@ -11,6 +11,12 @@ if [[ ! -f "$cask" ]]; then
 fi
 
 ruby -c "$cask" >/dev/null
+actual_version="$(ruby -e '
+  text = File.read(ARGV.fetch(0))
+  version = text[/^\s*version\s+"([^"]+)"/, 1]
+  abort "cask version is missing" unless version
+  print version
+' "$cask")"
 
 require_text() {
 	local pattern="$1"
@@ -33,7 +39,10 @@ require_text '^[[:space:]]*on_macos do$' 'macOS archives'
 require_text '^[[:space:]]*on_linux do$' 'Linux archives'
 
 if [[ -n "$expected_version" ]]; then
-	require_text "^[[:space:]]*version \"${expected_version//./\\.}\"$" "version $expected_version"
+	if [[ "$actual_version" != "$expected_version" ]]; then
+		printf 'Homebrew cask version is %s, want %s\n' "$actual_version" "$expected_version" >&2
+		exit 1
+	fi
 fi
 
 if grep -Eq 'sha256 "(no_check|[0]+)"' "$cask"; then

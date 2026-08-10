@@ -403,10 +403,20 @@ jobs:
 
   verify-homebrew:
     name: Verify Homebrew (${{ matrix.os }})
-    if: ${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
-    needs: release
+    if: >-
+      ${{
+        always() &&
+        !contains(github.event_name == 'push' && github.ref_name || inputs.tag, '-') &&
+        (
+          (github.event_name == 'push' && needs.release.result == 'success') ||
+          (github.event_name == 'workflow_dispatch' && needs.recover.result == 'success')
+        )
+      }}
+    needs: [release, recover]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
     strategy:
       fail-fast: false
       matrix:
@@ -431,7 +441,7 @@ jobs:
       - name: Verify the installed release and developer artifacts
         shell: bash
         run: |
-          test "$(starport --version)" = "starport version ${GITHUB_REF_NAME#v}"
+          test "$(starport --version)" = "starport version ${RELEASE_TAG#v}"
           test -x "$(command -v starport)"
           test -f "$(brew --prefix)/etc/bash_completion.d/starport"
           test -f "$(brew --prefix)/share/zsh/site-functions/_starport"
