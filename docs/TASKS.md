@@ -57,8 +57,9 @@ No durable plan is active.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
 - Release archives, SBOMs, checksums, attestations, and GHCR publication are
   fail-closed release requirements.
-- Independent checks verify public immutable release `v1.0.0` and its public
-  GHCR image.
+- Independent checks verify public immutable release `v1.0.1` and its public,
+  attested GHCR image at
+  `sha256:9dd90f8eb4d7918548075c7043eb93a8801efa0fd0fa5465a21f4e08b039f92f`.
 
 This file keeps task status and the Phase 1 completion history. The canonical
 v1 design is in `docs/ARCHITECTURE.md`.
