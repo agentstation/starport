@@ -42,7 +42,10 @@ git -C "$seed" push --quiet --set-upstream origin main
 
 write_cask "$candidate" 1.9.0 \
 	bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-"$repository_root/scripts/publish-homebrew-cask.sh" "$candidate" "file://$remote" >/dev/null
+effective_version="$(
+	"$repository_root/scripts/publish-homebrew-cask.sh" "$candidate" "file://$remote" 2>/dev/null
+)"
+test "$effective_version" = 2.0.0
 test "$(git --git-dir="$remote" show main:Casks/starport.rb | sed -n 's/^[[:space:]]*version "\([^"]*\)"/\1/p')" = 2.0.0
 
 write_cask "$candidate" 2.0.0 \
@@ -55,8 +58,14 @@ fi
 write_cask "$candidate" 2.1.0+build.1 \
 	dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
 "$repository_root/scripts/verify-homebrew-cask.sh" "$candidate" 2.1.0+build.1 >/dev/null
-"$repository_root/scripts/publish-homebrew-cask.sh" "$candidate" "file://$remote" >/dev/null
-"$repository_root/scripts/publish-homebrew-cask.sh" "$candidate" "file://$remote" >/dev/null
+effective_version="$(
+	"$repository_root/scripts/publish-homebrew-cask.sh" "$candidate" "file://$remote" 2>/dev/null
+)"
+test "$effective_version" = 2.1.0+build.1
+effective_version="$(
+	"$repository_root/scripts/publish-homebrew-cask.sh" "$candidate" "file://$remote" 2>/dev/null
+)"
+test "$effective_version" = 2.1.0+build.1
 test "$(git --git-dir="$remote" show main:Casks/starport.rb | sed -n 's/^[[:space:]]*version "\([^"]*\)"/\1/p')" = 2.1.0+build.1
 
 printf 'PASS monotonic and idempotent Homebrew publication\n'

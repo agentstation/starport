@@ -50,13 +50,15 @@ for attempt in 1 2 3; do
 		comparison="$(compare_versions "$current_version" "$version")"
 		if ((comparison > 0)) || { ((comparison == 0)) && [[ "$current_version" != "$version" ]]; }; then
 			printf 'Homebrew tap already contains newer Starport %s; keeping it instead of %s\n' \
-				"$current_version" "$version"
+				"$current_version" "$version" >&2
+			printf '%s\n' "$current_version"
 			rm -rf "$checkout"
 			exit 0
 		fi
 		if [[ "$current_version" == "$version" ]]; then
 			if cmp -s "$cask" "$current_cask"; then
-				printf 'Homebrew tap already contains Starport %s\n' "$version"
+				printf 'Homebrew tap already contains Starport %s\n' "$version" >&2
+				printf '%s\n' "$version"
 				rm -rf "$checkout"
 				exit 0
 			fi
@@ -68,7 +70,8 @@ for attempt in 1 2 3; do
 
 	install -m 0644 "$cask" "$current_cask"
 	if [[ -z "$(git -C "$checkout" status --short -- Casks/starport.rb)" ]]; then
-		printf 'Homebrew tap already contains Starport %s\n' "$version"
+		printf 'Homebrew tap already contains Starport %s\n' "$version" >&2
+		printf '%s\n' "$version"
 		rm -rf "$checkout"
 		exit 0
 	fi
@@ -76,9 +79,10 @@ for attempt in 1 2 3; do
 	git -C "$checkout" config user.name agentstation-release
 	git -C "$checkout" config user.email releases@agentstation.ai
 	git -C "$checkout" add Casks/starport.rb
-	git -C "$checkout" commit -m "Update starport to v$version"
+	git -C "$checkout" commit --quiet -m "Update starport to v$version"
 	if git -C "$checkout" push --quiet origin "HEAD:$branch"; then
-		printf 'published Starport %s to the Homebrew tap\n' "$version"
+		printf 'published Starport %s to the Homebrew tap\n' "$version" >&2
+		printf '%s\n' "$version"
 		rm -rf "$checkout"
 		exit 0
 	fi
