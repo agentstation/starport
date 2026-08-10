@@ -9,7 +9,7 @@ Last Updated: 2026-08-10
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP1 defines credential profiles and authentication alternatives in Starmap. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP2 migrates provider YAML and removes provider facts from Starmap acquisition code. |
 
 ### Proposed Work
 

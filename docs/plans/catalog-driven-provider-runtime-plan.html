@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-10.<br>
 Baseline: Starport main @ <code>101c32d</code>. Starmap main @ <code>7f53767</code>.<br>
 Proof root: <code>docs/plans/proof/catalog-driven-provider-runtime/</code>.<br>
-Next action: CDP1 defines credential profiles and authentication alternatives in Starmap.</p>
+Next action: CDP2 migrates every Starmap provider to the credential schema and removes provider facts from acquisition code.</p>
 
 <section id="outcome">
 <h2>Outcome</h2>
@@ -64,8 +64,8 @@ Next action: CDP1 defines credential profiles and authentication alternatives in
 
 <table><thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
 <tr id="CDP0" data-status="done"><td>CDP0</td><td>Review disposition and red cross-repository verifier.</td><td><code>done</code></td><td>Work commit <code>1fea084</code>. The proof records <code>Summary: 0 passed, 19 failed</code> in <code>docs/plans/proof/catalog-driven-provider-runtime/cdp0.md</code>.</td></tr>
-<tr id="CDP1" data-status="in_progress"><td>CDP1</td><td>Starmap credential profiles and authentication alternatives.</td><td><code>in_progress</code></td><td>CDP0 froze the schema and verifier obligations.</td></tr>
-<tr id="CDP2" data-status="todo"><td>CDP2</td><td>Starmap provider YAML and acquisition-fact migration.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP1" data-status="done"><td>CDP1</td><td>Starmap credential profiles and authentication alternatives.</td><td><code>done</code></td><td>Starmap commits <code>3d3428f9</code> and <code>2f858ac4</code>. Ordinary <code>make verify</code> passed, and the verifier reached <code>1 passed, 18 failed</code>. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp1.md</code>.</td></tr>
+<tr id="CDP2" data-status="in_progress"><td>CDP2</td><td>Starmap provider YAML and acquisition-fact migration.</td><td><code>in_progress</code></td><td>CDP1 supplies the strict credential schema and primitive vocabulary.</td></tr>
 <tr id="CDP2.1" data-status="todo"><td>CDP2.1</td><td>Starmap model-fact migration and review candidates.</td><td><code>todo</code></td><td></td></tr>
 <tr id="CDP3" data-status="todo"><td>CDP3</td><td>Starmap credential sources and operator surfaces.</td><td><code>todo</code></td><td></td></tr>
 <tr id="CDP3.1" data-status="todo"><td>CDP3.1</td><td>Starmap direct secret-source measurements and accepted adapters.</td><td><code>todo</code></td><td></td></tr>
@@ -527,6 +527,7 @@ Next action: CDP1 defines credential profiles and authentication alternatives in
 <tr><td>2026-08-10</td><td>meta</td><td>activation review</td><td>Accepted the dependency-budget, BYOK noninterference, documentation, file-rotation, and shared-vector findings. Reported adapter measurements remain unverified until CDP3.1 and CDP7.1 reproduce them. The plan remains proposed.</td></tr>
 <tr><td>2026-08-10</td><td>CDP0</td><td>activated</td><td>The owner supplied Claude's approve-activation verdict. Renamed the review prompt, activated the plan, and started CDP0.</td></tr>
 <tr><td>2026-08-10</td><td>CDP0</td><td>done; CDP1 started</td><td>Work commit <code>1fea084</code>. The red verifier reported <code>0 passed, 19 failed</code>. Shell syntax, shellcheck, eight strict writing checks, plan structure, and whitespace checks passed.</td></tr>
+<tr><td>2026-08-10</td><td>CDP1</td><td>done; CDP2 started</td><td>Starmap commits <code>3d3428f9</code> and <code>2f858ac4</code>. Credential contract, strict round trips, copies, collision validation, and normal-scheduling repository verification passed. The cross-repository verifier reported <code>1 passed, 18 failed</code>.</td></tr>
 </tbody></table>
 
 </section>
