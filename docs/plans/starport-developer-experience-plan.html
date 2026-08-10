@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <body>
 <header id="overview">
   <h1>Starport developer experience plan</h1>
-  <p id="status-line">Status: <code data-plan-status="active">active</code> · Owner: this plan · Created: 2026-08-09 · Baseline: repository @ a62fc289ed59c058013ee0ff5a411dd083e8454c · Proof root: <code>docs/plans/proof/starport-developer-experience/</code>. Next action: publish the reviewed DX7 pull request, wait for all checks, merge it, and publish the next stable release.</p>
+  <p id="status-line">Status: <code data-plan-status="active">active</code> · Owner: this plan · Created: 2026-08-09 · Baseline: repository @ a62fc289ed59c058013ee0ff5a411dd083e8454c · Proof root: <code>docs/plans/proof/starport-developer-experience/</code>. Next action: publish the reviewed release-readback pull request, wait for all checks, and merge it.</p>
   <section id="outcome">
     <h2>Outcome</h2>
     <blockquote>Starport gives a developer one tested install, setup, diagnosis, and first-request path. The same release keeps explicit production configuration, renewable cloud credentials, and verified distribution artifacts.</blockquote>
@@ -129,7 +129,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
       <tr id="DX4" data-status="done"><td>DX4</td><td>Add safe local setup and direct named identity creation.</td><td><code>done</code></td><td>PR <a href="https://github.com/agentstation/starport/pull/80">#80</a>; merge <code>7561450</code>; 10 CI checks passed; <a href="proof/starport-developer-experience/dx4.md">DX4 proof</a>.</td></tr>
       <tr id="DX5" data-status="done"><td>DX5</td><td>Add configuration inspection and read-only diagnosis.</td><td><code>done</code></td><td>PR <a href="https://github.com/agentstation/starport/pull/81">#81</a>; merge <code>a6687f1</code>; 10 CI checks passed; <a href="proof/starport-developer-experience/dx5.md">DX5 proof</a>.</td></tr>
       <tr id="DX6" data-status="done"><td>DX6</td><td>Add renewable Google Cloud and Azure inference credentials.</td><td><code>done</code></td><td><a href="https://github.com/agentstation/starport/pull/82">PR #82</a> merged as <code>d269c24</code>. See <a href="proof/starport-developer-experience/dx6.md">proof</a>.</td></tr>
-      <tr id="DX7" data-status="in_progress"><td>DX7</td><td>Add completions, a man page, a Homebrew cask, and install verification.</td><td><code>in_progress</code></td><td><a href="https://github.com/agentstation/starport/pull/83">PR #83</a> merged as <code>57608e7</code>. Work commit <code>b4ff9b4</code> passed the complete local release gate and independent review. See the <a href="proof/starport-developer-experience/dx7.md">DX7 proof</a>. Stable publication remains.</td></tr>
+      <tr id="DX7" data-status="in_progress"><td>DX7</td><td>Add completions, a man page, a Homebrew cask, and install verification.</td><td><code>in_progress</code></td><td><a href="https://github.com/agentstation/starport/pull/87">PR #87</a> merged as <code>bd81f0f</code>. Release and recovery runs published immutable <code>v1.0.1</code> and passed macOS and Linux cask installation. Hardening commit <code>a8ca07d</code> passed all local gates and independent review. See the <a href="proof/starport-developer-experience/dx7.md">DX7 proof</a>.</td></tr>
       <tr id="DX8" data-status="done"><td>DX8</td><td>Repair developer commands and rewrite current user documentation in strict mode.</td><td><code>done</code></td><td><a href="https://github.com/agentstation/starport/pull/84">PR #84</a> merged as <code>d7bfae4</code> after all 10 CI jobs passed. See the <a href="proof/starport-developer-experience/dx8.md">DX8 proof</a>.</td></tr>
       <tr id="DX9" data-status="done"><td>DX9</td><td>Run first-install scenes, repository gates, strict prose review, and the pre-PR review.</td><td><code>done</code></td><td><a href="https://github.com/agentstation/starport/pull/85">PR #85</a> merged as <code>74e78de</code> after all 10 CI jobs passed. See the <a href="proof/starport-developer-experience/dx9.md">DX9 proof</a>.</td></tr>
       <tr id="DX10" data-status="todo"><td>DX10</td><td>Delete the plan, proof root, and index entry after the final pull request merges.</td><td><code>todo</code></td><td></td></tr>
@@ -244,7 +244,7 @@ This is a whole-plan goal, not a single-task goal. Read the plan fully,
 then read AGENTS.md, docs/TASKS.md, docs/ARCHITECTURE.md, GLOSSARY.md,
 and the plans and technical-writing skills. Work in
 /Users/jack/src/github.com/agentstation/starport on branch
-codex/starport-dx7-homebrew-cli for DX7. Update this branch value at
+codex/starport-release-readback for DX7. Update this branch value at
 each task transition. Chat history is not progress state. Resume from the
 status ledger, the execution log, and git state. If compaction happens,
 continue from the plan and git state rather than restarting. Loop: keep
@@ -294,6 +294,9 @@ plan artifacts.</code></pre>
       <tr><td>2026-08-10</td><td>DX9</td><td>merged</td><td><a href="https://github.com/agentstation/starport/pull/85">PR #85</a> merged as <code>74e78de</code> after all 10 CI jobs passed. DX7 remains blocked on the Apple release credentials.</td></tr>
       <tr><td>2026-08-10</td><td>DX7</td><td>resumed with a replacement release decision</td><td>The owner superseded D6. D7 makes Apple signing and notarization conditional, permits the established staged-payload quarantine hook, and keeps the cask release controls required by PR #83. DX7 is active without an external credential blocker.</td></tr>
       <tr><td>2026-08-10</td><td>DX7</td><td>implemented, verified, and reviewed</td><td>Work commit <code>b4ff9b4</code> passed the exact GoReleaser 2.17.1 and Syft 1.50.0 snapshot, strict Homebrew audit, all repository gates, the OpenRouter SDK scenes, and strict prose checks. The final P0 through P3 pre-pull-request review reported no actionable findings. <a href="proof/starport-developer-experience/dx7.md">Proof</a>.</td></tr>
+      <tr><td>2026-08-10</td><td>DX7</td><td>merged and published</td><td><a href="https://github.com/agentstation/starport/pull/87">PR #87</a> merged as <code>bd81f0f</code> after all 10 CI jobs passed. Source run <code>31399898752</code> preserved the verified distribution after draft tag readback returned 404. Recovery run <code>31400964409</code> published immutable <code>v1.0.1</code>, updated the tap, and passed exact-version cask installation on macOS and Linux.</td></tr>
+      <tr><td>2026-08-10</td><td>DX7</td><td>hardening started</td><td>Independent public readback verified the release, attestation, cask, container child, and runtime user. It also showed that the primary workflow must query the draft release list and that local container verification must inspect a platform child rather than the OCI index.</td></tr>
+      <tr><td>2026-08-10</td><td>DX7</td><td>hardening verified and reviewed</td><td>Work commit <code>a8ca07d</code> adds draft-only list readback and platform-child container inspection. The exact snapshot, live public-container check, all repository gates, strict prose checks, and final P0 through P3 review passed.</td></tr>
     </tbody></table>
   </section>
 </main>

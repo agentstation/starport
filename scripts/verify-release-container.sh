@@ -49,6 +49,16 @@ if [ "$platforms" != $'linux/amd64\nlinux/arm64' ]; then
 	exit 1
 fi
 
+amd64_digest="$(
+	jq -r \
+		'.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest' \
+		<<<"$manifest"
+)"
+if [[ ! "$amd64_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+	printf 'container AMD64 child digest is invalid: %s\n' "$amd64_digest" >&2
+	exit 1
+fi
+
 sbom_manifests="$(
 	jq '[.manifests[] | select(.platform.os == "unknown")] | length' <<<"$manifest"
 )"
@@ -65,7 +75,10 @@ if [ "$version_output" != "starport version $version" ]; then
 	exit 1
 fi
 
-runtime_user="$(docker image inspect "$image@$expected_digest" --format '{{.Config.User}}')"
+runtime_user="$(
+	docker buildx imagetools inspect "$image@$amd64_digest" \
+		--format '{{json .Image}}' | jq -r '.config.User'
+)"
 if [ "$runtime_user" != '65532:65532' ]; then
 	printf 'container runtime user is %q, want 65532:65532\n' "$runtime_user" >&2
 	exit 1

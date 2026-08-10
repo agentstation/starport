@@ -236,7 +236,13 @@ jobs:
           CONTAINER_DIGEST: ${{ steps.container.outputs.digest }}
         shell: bash
         run: |
-          RELEASE_JSON=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME")
+          DRAFT_RELEASES=$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+              jq -s --arg tag "$GITHUB_REF_NAME" \
+                '[.[][] | select(.tag_name == $tag and .draft == true)]'
+          )
+          test "$(jq length <<<"$DRAFT_RELEASES")" = 1
+          RELEASE_JSON=$(jq '.[0]' <<<"$DRAFT_RELEASES")
           test "$(jq -r .draft <<<"$RELEASE_JSON")" = true
           test "$(jq -r .immutable <<<"$RELEASE_JSON")" = false
           test "$(jq -r .tag_name <<<"$RELEASE_JSON")" = "$GITHUB_REF_NAME"

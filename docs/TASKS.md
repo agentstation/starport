@@ -9,7 +9,7 @@ Last Updated: 2026-08-10
 
 | Task | Owner | Status | Plan |
 |---|---|---|---|
-| Starport developer experience | DX7 | In progress: conditional CLI cask release | [Developer experience plan](plans/starport-developer-experience-plan.html) |
+| Starport developer experience | DX7 | In progress: release readback hardening | [Developer experience plan](plans/starport-developer-experience-plan.html) |
 
 ### Recently Completed
 
