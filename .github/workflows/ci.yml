@@ -221,17 +221,22 @@ jobs:
         with:
           syft-version: v1.50.0
 
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
+
       - name: Build release snapshot
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
           version: v2.17.1
-          args: release --snapshot --clean
+          args: release --snapshot --clean --skip=notarize
 
       - name: Verify release snapshot
         run: |
           scripts/verify-release-binaries.sh dist
           scripts/verify-release-archives.sh dist
+          scripts/verify-homebrew-cask.sh dist/homebrew/Casks/starport.rb
+          scripts/audit-homebrew-cask.sh dist/homebrew/Casks/starport.rb
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -241,6 +246,7 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/checksums.txt
+            dist/homebrew/Casks/starport.rb
           retention-days: 7
 
   action-pins:

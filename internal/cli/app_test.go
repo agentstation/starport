@@ -20,10 +20,68 @@ func TestNoArgumentsShowHelp(t *testing.T) {
 	if err := Run(context.Background(), []string{"starport"}, deps); err != nil {
 		t.Fatalf("run without arguments: %v", err)
 	}
-	for _, want := range []string{"NAME:", "starport", "COMMANDS:", "serve", "doctor", "config", "version"} {
+	for _, want := range []string{
+		"NAME:", "starport", "COMMANDS:", "serve", "doctor", "config", "version", "completion", "man",
+	} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("help output does not contain %q:\n%s", want, stdout.String())
 		}
+	}
+}
+
+func TestCompletionGeneratesSupportedShellScripts(t *testing.T) {
+	tests := []struct {
+		shell string
+		want  string
+	}{
+		{shell: "bash", want: "complete"},
+		{shell: "zsh", want: "compdef"},
+		{shell: "fish", want: "complete -c starport"},
+		{shell: "pwsh", want: "Register-ArgumentCompleter"},
+	}
+	for _, test := range tests {
+		t.Run(test.shell, func(t *testing.T) {
+			deps, stdout, _ := testDependencies()
+			if err := Run(context.Background(), []string{
+				"starport", "completion", test.shell,
+			}, deps); err != nil {
+				t.Fatalf("generate %s completion: %v", test.shell, err)
+			}
+			if !strings.Contains(stdout.String(), test.want) {
+				t.Errorf("%s completion does not contain %q", test.shell, test.want)
+			}
+		})
+	}
+}
+
+func TestCompletionOutputFailureIsRuntimeError(t *testing.T) {
+	deps, _, _ := testDependencies()
+	injected := errors.New("completion output unavailable")
+	deps.Stdout = failingWriter{err: injected}
+	err := Run(context.Background(), []string{"starport", "completion", "bash"}, deps)
+	if err == nil || ExitCode(err) != ExitCodeRuntime || !strings.Contains(err.Error(), injected.Error()) {
+		t.Fatalf("completion error = %v, exit code = %d", err, ExitCode(err))
+	}
+}
+
+func TestManGeneratesSectionOneManual(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	if err := Run(context.Background(), []string{"starport", "man"}, deps); err != nil {
+		t.Fatalf("generate manual: %v", err)
+	}
+	manual := stdout.String()
+	for _, want := range []string{".TH starport 1", ".SH NAME", ".SH COMMANDS", ".SH serve, server"} {
+		if !strings.Contains(manual, want) {
+			t.Errorf("manual does not contain %q", want)
+		}
+	}
+}
+
+func TestManRejectsArguments(t *testing.T) {
+	deps, _, _ := testDependencies()
+	err := Run(context.Background(), []string{"starport", "man", "extra"}, deps)
+	if err == nil || ExitCode(err) != ExitCodeUsage {
+		t.Fatalf("manual argument error = %v, exit code = %d", err, ExitCode(err))
 	}
 }
 

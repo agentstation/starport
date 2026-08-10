@@ -240,6 +240,24 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			}
 		},
 	}
+	completion := &urfavecli.Command{
+		Name:  "completion",
+		Usage: "Generate a shell completion script",
+	}
+	man := &urfavecli.Command{
+		Name:         "man",
+		Usage:        "Generate the starport(1) manual page",
+		OnUsageError: usageError,
+		Action: func(_ context.Context, cmd *urfavecli.Command) error {
+			if err := rejectArguments(cmd); err != nil {
+				return err
+			}
+			if err := writeManPage(cmd.Root(), cmd.Writer); err != nil {
+				return runtimeFailure{cause: err}
+			}
+			return nil
+		},
+	}
 	configCommand := newConfigCommand(deps, usageError)
 	doctor := newDoctorCommand(deps, usageError)
 
@@ -251,9 +269,13 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Writer:          deps.Stdout,
 		ErrWriter:       deps.Stderr,
 		OnUsageError:    usageError,
-		Commands:        []*urfavecli.Command{initialize, serve, doctor, configCommand, version, help},
+		Commands:        []*urfavecli.Command{initialize, serve, doctor, configCommand, version, man, help},
 		HideHelpCommand: true,
-		Suggest:         true,
+		ConfigureShellCompletionCommand: configureCompletionCommand(
+			completion,
+			usageError,
+		),
+		Suggest: true,
 		ExitErrHandler: func(context.Context, *urfavecli.Command, error) {
 			// The process boundary owns error output and exit behavior.
 		},

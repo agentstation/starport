@@ -3,6 +3,7 @@ version: 2
 before:
   hooks:
     - go mod verify
+    - bash scripts/generate-release-artifacts.sh build/release-artifacts
 
 builds:
   - id: starport
@@ -46,6 +47,52 @@ archives:
       - LICENSE
       - README.md
       - SECURITY.md
+      - src: build/release-artifacts/completions/*
+        dst: completions
+        strip_parent: true
+      - src: build/release-artifacts/manpages/*
+        dst: manpages
+        strip_parent: true
+
+homebrew_casks:
+  - name: starport
+    ids:
+      - starport
+    repository:
+      owner: agentstation
+      name: homebrew-tap
+      branch: master
+    directory: Casks
+    commit_author:
+      name: agentstation-release
+      email: releases@agentstation.ai
+    commit_msg_template: "Update starport to v{{ .Version }}"
+    homepage: https://github.com/agentstation/starport
+    description: OpenAI- and OpenRouter-compatible LLM inference gateway
+    skip_upload: true
+    binaries:
+      - starport
+    manpages:
+      - manpages/starport.1
+    completions:
+      bash: completions/starport.bash
+      zsh: completions/starport.zsh
+      fish: completions/starport.fish
+
+notarize:
+  macos:
+    - enabled: true
+      ids:
+        - starport
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
 
 checksum:
   name_template: checksums.txt

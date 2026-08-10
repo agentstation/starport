@@ -38,6 +38,13 @@ require_text 'container-digest\.txt' 'container digest recovery evidence'
 require_text 'find dist .*chmod u\+x' 'recovered executable permission restoration'
 require_text 'build-tag=.*sha-.*GITHUB_SHA.*GITHUB_RUN_ID.*GITHUB_RUN_ATTEMPT' 'a unique staging image tag'
 require_text 'Promote verified container tags' 'verified canonical image promotion'
+require_text 'Publish the generated Homebrew cask' 'post-verification Homebrew publication'
+require_text '^  verify-homebrew:' 'macOS and Linux Homebrew installation verification'
+require_text 'brew install agentstation/tap/starport' 'the documented Homebrew install command'
+require_text 'MACOS_SIGN_P12' 'the Developer ID signing credential'
+require_text 'MACOS_NOTARY_ISSUER_ID' 'the Apple notarization credential'
+require_text 'spctl --assess' 'the installed Gatekeeper assessment'
+require_text 'Require Apple signing and notarization credentials' 'a hard signing credential gate'
 
 verification_line="$(grep -n -m1 'Verify draft release assets before publication' "$workflow" | cut -d: -f1)"
 publication_line="$(grep -n -m1 'Publish verified immutable release' "$workflow" | cut -d: -f1)"
@@ -47,12 +54,28 @@ if [ "$verification_line" -ge "$publication_line" ] || [ "$publication_line" -ge
 	exit 1
 fi
 
+published_verification_line="$(grep -n -m1 'Verify published release and publisher identity' "$workflow" | cut -d: -f1)"
+homebrew_publication_line="$(grep -n -m1 'Publish the generated Homebrew cask' "$workflow" | cut -d: -f1)"
+if [ "$promotion_line" -ge "$published_verification_line" ] ||
+	[ "$published_verification_line" -ge "$homebrew_publication_line" ]; then
+	printf 'container promotion, published-release verification, and Homebrew publication are out of order\n' >&2
+	exit 1
+fi
+
 recovery_verification_line="$(grep -n -m1 'Verify exact recovered assets and provenance' "$workflow" | cut -d: -f1)"
 recovery_publication_line="$(grep -n 'Publish verified immutable release' "$workflow" | sed -n '2p' | cut -d: -f1)"
 recovery_promotion_line="$(grep -n -m1 'Promote verified recovered container tags' "$workflow" | cut -d: -f1)"
 if [ "$recovery_verification_line" -ge "$recovery_publication_line" ] ||
 	[ "$recovery_publication_line" -ge "$recovery_promotion_line" ]; then
 	printf 'recovery verification, release publication, and container tag promotion are out of order\n' >&2
+	exit 1
+fi
+
+recovery_immutable_line="$(grep -n -m1 'Verify recovered immutable release' "$workflow" | cut -d: -f1)"
+recovery_homebrew_line="$(grep -n 'Publish the generated Homebrew cask' "$workflow" | sed -n '2p' | cut -d: -f1)"
+if [ "$recovery_promotion_line" -ge "$recovery_immutable_line" ] ||
+	[ "$recovery_immutable_line" -ge "$recovery_homebrew_line" ]; then
+	printf 'recovered container promotion, immutable verification, and Homebrew publication are out of order\n' >&2
 	exit 1
 fi
 

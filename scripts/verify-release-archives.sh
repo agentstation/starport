@@ -62,7 +62,17 @@ while IFS= read -r archive; do
 		executable=starport
 	fi
 	if ! diff -u <(
-		printf '%s\n' .env.example LICENSE README.md SECURITY.md "$executable" |
+		printf '%s\n' \
+			.env.example \
+			LICENSE \
+			README.md \
+			SECURITY.md \
+			completions/starport.bash \
+			completions/starport.fish \
+			completions/starport.ps1 \
+			completions/starport.zsh \
+			manpages/starport.1 \
+			"$executable" |
 			LC_ALL=C sort
 	) "$contents"; then
 		printf 'release archive has unexpected contents: %s\n' "$archive" >&2
