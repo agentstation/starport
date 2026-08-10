@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 // AzureOpenAIConnector implements the Connector interface for Azure OpenAI
@@ -18,14 +20,25 @@ func NewAzureOpenAIConnector(config ProviderConfig) (*AzureOpenAIConnector, erro
 	if config.BaseURL == "" {
 		return nil, fmt.Errorf("azure openai requires a catalog-derived or operator-supplied base URL")
 	}
-
-	// Create an OpenAI connector with Azure's base URL
-	openAIConnector, err := NewOpenAIConnector(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create azure openai connector: %w", err)
+	if err := requiredCloudCredentialConfig(config); err != nil {
+		return nil, fmt.Errorf("invalid Azure OpenAI inference credentials: %w", err)
 	}
-	openAIConnector.providerID = catalogs.ProviderIDAzureOpenAI
-	openAIConnector.provider = AzureOpenAIProvider
+
+	credentialSource, err := azureCredentialSource(config)
+	if err != nil {
+		return nil, err
+	}
+	config.CredentialSource = credentialSource
+
+	openAIConnector, err := newOpenAIConnector(
+		catalogs.ProviderIDAzureOpenAI,
+		AzureOpenAIProvider,
+		config,
+		credentialSource,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Azure OpenAI connector: %w", err)
+	}
 
 	return &AzureOpenAIConnector{
 		OpenAIConnector: openAIConnector,
@@ -55,8 +68,24 @@ func (c *AzureOpenAIConnector) Embeddings(ctx context.Context, req *EmbeddingsRe
 // setHeaders sets Azure-specific headers
 func (c *AzureOpenAIConnector) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-	applyRegisteredInferenceAuth(catalogs.ProviderIDAzureOpenAI, req, c.config.APIKey)
+	if c.config.CredentialSource == nil {
+		applyRegisteredInferenceAuth(catalogs.ProviderIDAzureOpenAI, req, c.config.APIKey)
+	}
 	req.Header.Set("User-Agent", "starport/1.0")
+}
+
+func azureCredentialSource(config ProviderConfig) (providerauth.Source, error) {
+	if config.AuthMode != providerauth.ModeDefault {
+		return nil, nil
+	}
+	if config.CredentialSource != nil {
+		return config.CredentialSource, nil
+	}
+	source, err := providerauth.NewAzureDefaultSource()
+	if err != nil {
+		return nil, fmt.Errorf("create Azure OpenAI credential source: %w", err)
+	}
+	return source, nil
 }
 
 // handleError handles error responses from the API (reuse OpenAI's error handling)

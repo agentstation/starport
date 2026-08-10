@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
@@ -71,8 +72,9 @@ func TestNewConnector(t *testing.T) {
 
 	t.Run("Create Azure OpenAI connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			BaseURL: "https://myresource.openai.azure.com",
-			APIKey:  "test-key",
+			BaseURL:  "https://myresource.openai.azure.com",
+			APIKey:   "test-key",
+			AuthMode: providerauth.ModeStatic,
 		}
 
 		connector, err := connectors.NewConnector("azure-openai", config)

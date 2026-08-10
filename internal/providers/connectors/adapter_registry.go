@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 var (
@@ -415,7 +417,8 @@ func validateAdapterDescriptor(descriptor AdapterDescriptor) error {
 
 func inferenceConfigurationPresent(config ProviderConfig) bool {
 	return config.Enabled || strings.TrimSpace(config.APIKey) != "" ||
-		strings.TrimSpace(config.BaseURL) != "" || len(config.EndpointBindings) > 0
+		config.AuthMode != "" || strings.TrimSpace(config.BaseURL) != "" ||
+		len(config.EndpointBindings) > 0
 }
 
 func requiredAPIKeyConfig(config ProviderConfig) error {
@@ -425,8 +428,30 @@ func requiredAPIKeyConfig(config ProviderConfig) error {
 	return nil
 }
 
+func requiredCloudCredentialConfig(config ProviderConfig) error {
+	if err := config.AuthMode.Validate(); err != nil {
+		return err
+	}
+	if config.CredentialSource != nil && config.AuthMode != providerauth.ModeDefault {
+		return errors.New("injected credential source requires default auth mode")
+	}
+	switch config.AuthMode {
+	case providerauth.ModeDefault:
+		if strings.TrimSpace(config.APIKey) != "" {
+			return errors.New("inference API key cannot be combined with default credentials")
+		}
+		return nil
+	case providerauth.ModeStatic:
+		return requiredAPIKeyConfig(config)
+	case "":
+		return errors.New("provider auth mode is required")
+	default:
+		return errors.New("unsupported provider auth mode")
+	}
+}
+
 func requiredAzureConfig(config ProviderConfig) error {
-	if err := requiredAPIKeyConfig(config); err != nil {
+	if err := requiredCloudCredentialConfig(config); err != nil {
 		return err
 	}
 	if strings.TrimSpace(config.BaseURL) == "" {
@@ -436,7 +461,8 @@ func requiredAzureConfig(config ProviderConfig) error {
 }
 
 func azureConfigured(config ProviderConfig) bool {
-	return config.Enabled || strings.TrimSpace(config.APIKey) != "" || strings.TrimSpace(config.BaseURL) != ""
+	return config.Enabled || strings.TrimSpace(config.APIKey) != "" || config.AuthMode != "" ||
+		strings.TrimSpace(config.BaseURL) != ""
 }
 
 func ollamaConfigured(config ProviderConfig) bool { return config.Enabled }

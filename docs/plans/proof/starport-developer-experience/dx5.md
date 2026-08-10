@@ -136,13 +136,15 @@ The all-priority review found and Starport fixed these issues:
 - Badger recovery requirements produced a false startup failure.
 - Short configured values could corrupt diagnostic error messages.
 - Badger does not support read-only mode on Windows or Plan 9.
+- Unsupported-platform classification ran after the Badger path check.
 - Failed JSON validation did not return a machine-readable result.
 
 The fixes replaced dependency-error scrubbing with stable messages, redacted
 complete URL values, added safe loader stages, and classified inconclusive
 storage probes. The convergence review reported no accepted or actionable
-finding and rated the patch correct at 0.87.
+finding and rated the patch correct at 0.88.
 
 ## Pull request gate
 
-Pending.
+PR [#81](https://github.com/agentstation/starport/pull/81) merged as
+`a6687f1f81206123711a3c36d6d07317c7d06c3f` after all 10 CI checks passed.

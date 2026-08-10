@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 // OpenAIConnector implements the Connector interface for OpenAI
@@ -17,11 +19,26 @@ type OpenAIConnector struct {
 
 // NewOpenAIConnector creates a new OpenAI connector
 func NewOpenAIConnector(config ProviderConfig) (*OpenAIConnector, error) {
+	return newOpenAIConnector(catalogs.ProviderIDOpenAI, "openai", config, nil)
+}
+
+func newOpenAIConnector(
+	providerID catalogs.ProviderID,
+	provider string,
+	config ProviderConfig,
+	credentialSource providerauth.Source,
+) (*OpenAIConnector, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient("openai", config)
+	var httpClient *http.Client
+	var err error
+	if credentialSource == nil {
+		httpClient, err = newProviderHTTPClient(provider, config)
+	} else {
+		httpClient, err = newProviderHTTPClient(provider, config, credentialSource)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -29,10 +46,10 @@ func NewOpenAIConnector(config ProviderConfig) (*OpenAIConnector, error) {
 	return &OpenAIConnector{
 		OpenAICompatibleConnector: OpenAICompatibleConnector{
 			config:     config,
-			provider:   "openai",
+			provider:   provider,
 			httpClient: httpClient,
 		},
-		providerID: catalogs.ProviderIDOpenAI,
+		providerID: providerID,
 	}, nil
 }
 

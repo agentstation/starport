@@ -12,6 +12,8 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 func TestNewGoogleAIStudioConnector(t *testing.T) {
@@ -75,6 +77,7 @@ func TestNewVertexAIConnector(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL:        "https://provider.test",
 				APIKey:         "test-token",
+				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -85,6 +88,7 @@ func TestNewVertexAIConnector(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL:        "https://provider.test",
 				APIKey:         "test-token",
+				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -95,10 +99,19 @@ func TestNewVertexAIConnector(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL:        "https://provider.test",
 				APIKey:         "test-token",
+				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
 			wantErr: false,
+		},
+		{
+			name: "missing auth mode",
+			config: ProviderConfig{
+				BaseURL: "https://provider.test",
+				APIKey:  "test-token",
+			},
+			wantErr: true,
 		},
 	}
 
@@ -225,9 +238,10 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 	defer server.Close()
 
 	connector, err := NewVertexAIConnector(ProviderConfig{
-		BaseURL: server.URL,
-		APIKey:  "test-token",
-		Timeout: 10 * time.Second,
+		BaseURL:  server.URL,
+		APIKey:   "test-token",
+		AuthMode: providerauth.ModeStatic,
+		Timeout:  10 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("failed to create connector: %v", err)

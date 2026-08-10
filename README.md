@@ -21,6 +21,7 @@ The current version includes:
 - OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure
   OpenAI, and Ollama adapters.
 - Encrypted BYOK provider credentials.
+- Renewable default credentials for Vertex AI and Azure OpenAI.
 - Header-only gateway authentication and per-key rate limits.
 - Tenant-safe response caching.
 - Badger storage for one node and Valkey storage for multiple nodes.
@@ -138,6 +139,26 @@ prices, and provider service metadata. Read the active values from
 `GET /api/v1/providers` and `GET /api/v1/models`. Starport keeps each ID exact
 and opaque. It does not normalize old or alternate names.
 
+## Cloud Provider Credentials
+
+Vertex AI and Azure OpenAI accept static inference credentials or a default
+cloud credential chain. Both adapters require the provider `AUTH_MODE`
+variable.
+
+```bash
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID=<project-id>
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION=<location>
+
+export STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE=default
+export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL=https://<resource>.openai.azure.com
+```
+
+Default mode uses Google Application Default Credentials or Azure
+`DefaultAzureCredential`. Starport renews each bearer token before expiry.
+Static mode uses the Starport provider `API_KEY` variable. Do not set an API
+key with default mode. Starport rejects an empty cloud auth mode.
+
 ## Containers
 
 Pull the signed-release identity by version, not by an unverified digest:
@@ -187,6 +208,7 @@ TypeScript, and Go SDKs. A missing or incompatible SDK is a failed gate.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Operator guide](docs/OPERATOR-GUIDE.md)
+- [Vertex AI configuration](docs/VERTEX_AI_CONFIG.md)
 - [Model catalog contract](MODELS.md)
 - [Development guide](DEVELOPMENT.md)
 - [Documentation index](docs/README.md)

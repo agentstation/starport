@@ -169,16 +169,38 @@ Starport uses exact adapter IDs. Current IDs are:
 - `azure-openai`
 - `ollama`
 
-Inference secrets use only `STARPORT_PROVIDERS_*_API_KEY` variables. Starmap
-catalog acquisition uses the provider variables in its catalog, such as
-`OPENAI_API_KEY`, or its configured cloud credential chain. Starport never
-copies an acquisition credential into an inference adapter.
+Static inference secrets use `STARPORT_PROVIDERS_*_API_KEY` variables. Starmap
+catalog acquisition uses its own provider variables or cloud credential chain.
+Starport never copies an acquisition credential into an inference adapter.
 
-Vertex AI needs `STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY`, a project ID, and a location.
-The API-key value is an OAuth access token. Set the project with
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID` and the location with
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION`. Ollama needs
-`STARPORT_PROVIDERS_OLLAMA_ENABLED=true` or the `--enable-ollama` flag.
+Vertex AI needs a project ID and one location. Select renewable Google
+Application Default Credentials with this value:
+
+```bash
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
+```
+
+For a static OAuth access token, set `AUTH_MODE=static` and set
+`STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY`. Set the project with
+`STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID`. Set the location with
+`STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION`.
+
+Azure OpenAI needs a resource base URL. Select Azure
+`DefaultAzureCredential` with this value:
+
+```bash
+export STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE=default
+export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL=https://<resource>.openai.azure.com
+```
+
+For a static Azure API key, set `AUTH_MODE=static` and set
+`STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY`. Do not combine an API key with
+default mode. Both cloud adapters require `AUTH_MODE`. Starport refreshes
+default bearer tokens before expiry. Request cancellation also cancels
+credential acquisition.
+
+Ollama needs `STARPORT_PROVIDERS_OLLAMA_ENABLED=true` or the
+`--enable-ollama` flag.
 
 Starmap owns the model catalog. Only offerings from the active Starmap
 generation and configured adapters are routable. A Starmap acquisition failure

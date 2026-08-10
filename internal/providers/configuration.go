@@ -15,7 +15,7 @@ func Configurations(configs config.ProvidersConfig) map[catalogs.ProviderID]conn
 	result := make(map[catalogs.ProviderID]connectors.ProviderConfig)
 	for _, entry := range configs.Entries() {
 		providerConfig := connectors.ProviderConfig{
-			BaseURL: entry.Config.BaseURL, APIKey: entry.Config.APIKey,
+			BaseURL: entry.Config.BaseURL, APIKey: entry.Config.APIKey, AuthMode: entry.Config.AuthMode,
 			Timeout: entry.Config.Timeout, MaxConnections: entry.Config.MaxConnections,
 			Enabled: entry.Config.Enabled,
 		}

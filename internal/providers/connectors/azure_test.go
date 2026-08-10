@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 func TestNewAzureOpenAIConnector(t *testing.T) {
@@ -21,6 +23,7 @@ func TestNewAzureOpenAIConnector(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL:        "https://myresource.openai.azure.com",
 				APIKey:         "test-key",
+				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -31,6 +34,7 @@ func TestNewAzureOpenAIConnector(t *testing.T) {
 			config: ProviderConfig{
 				BaseURL:        "https://myresource.openai.azure.com",
 				APIKey:         "test-key",
+				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -40,8 +44,17 @@ func TestNewAzureOpenAIConnector(t *testing.T) {
 			name: "missing base URL",
 			config: ProviderConfig{
 				APIKey:         "test-key",
+				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing auth mode",
+			config: ProviderConfig{
+				BaseURL: "https://myresource.openai.azure.com",
+				APIKey:  "test-key",
 			},
 			wantErr: true,
 		},
@@ -106,6 +119,7 @@ func TestAzureOpenAIConnector_Chat(t *testing.T) {
 	connector, _ := NewAzureOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
 		APIKey:         "test-key",
+		AuthMode:       providerauth.ModeStatic,
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -154,6 +168,7 @@ func TestAzureOpenAIConnector_PreservesCatalogEndpointQuery(t *testing.T) {
 	connector, _ := NewAzureOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
 		APIKey:         "test-key",
+		AuthMode:       providerauth.ModeStatic,
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -191,6 +206,7 @@ func TestAzureOpenAIConnector_ErrorHandling(t *testing.T) {
 	connector, _ := NewAzureOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
 		APIKey:         "invalid-key",
+		AuthMode:       providerauth.ModeStatic,
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -250,6 +266,7 @@ func TestAzureOpenAIConnector_ChatStream(t *testing.T) {
 	connector, _ := NewAzureOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
 		APIKey:         "test-key",
+		AuthMode:       providerauth.ModeStatic,
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -321,6 +338,7 @@ func TestAzureOpenAIConnector_Embeddings(t *testing.T) {
 	connector, _ := NewAzureOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
 		APIKey:         "test-key",
+		AuthMode:       providerauth.ModeStatic,
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})

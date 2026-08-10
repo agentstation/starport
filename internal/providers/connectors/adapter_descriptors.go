@@ -49,7 +49,7 @@ func productionAdapterDescriptors() []AdapterDescriptor {
 			ProviderID: catalogs.ProviderIDGoogleVertex, Operations: []catalogs.ProviderOperation{chat, embeddings},
 			EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeGoogleCloud, catalogs.EndpointTypeAnthropic},
 			Factory:       connectorFactory(NewVertexAIConnector), Configured: inferenceConfigurationPresent,
-			ValidateConfig: requiredAPIKeyConfig, ResolveBaseURL: resolveProviderBase,
+			ValidateConfig: requiredCloudCredentialConfig, ResolveBaseURL: resolveProviderBase,
 			Credential: InferenceCredentialDescriptor{
 				Fields: []InferenceCredentialField{{Name: "access_token", Required: true, Sensitive: true}},
 				Header: authorizationHeader, Scheme: bearerScheme, Validate: validateGoogleVertexCredential,
