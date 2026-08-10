@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -148,6 +149,42 @@ func TestLoaderRejectsInvalidEnvironmentValue(t *testing.T) {
 		Load(context.Background())
 	if err == nil {
 		t.Fatal("invalid server port was accepted")
+	}
+}
+
+func TestLoaderErrorsDoNotExposeConfigurationValues(t *testing.T) {
+	dir := t.TempDir()
+	secret := "loader-secret-that-must-not-appear"
+	file := writeEnvFile(
+		t,
+		dir,
+		"invalid.env",
+		"STARPORT_PROVIDERS_OPENAI_API_KEY='"+secret,
+	)
+	_, err := NewLoader().
+		WithPaths(PathsForConfigDir(dir)).
+		WithEnvironment(nil).
+		WithEnvFiles(file).
+		Load(context.Background())
+	if err == nil {
+		t.Fatal("malformed environment file was accepted")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Errorf("loader error contains configured secret: %q", err)
+	}
+	if err.Error() != "configuration sources could not be read" {
+		t.Errorf("loader error = %q", err)
+	}
+}
+
+func TestOperatorErrorDoesNotTrustExternalErrors(t *testing.T) {
+	secret := "external-secret-that-must-not-appear"
+	err := OperatorError(fmt.Errorf("dependency included %s", secret))
+	if strings.Contains(err.Error(), secret) {
+		t.Errorf("operator error contains dependency secret: %q", err)
+	}
+	if err.Error() != "configuration could not be loaded" {
+		t.Errorf("operator error = %q", err)
 	}
 }
 

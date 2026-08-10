@@ -28,6 +28,14 @@ var (
 	ErrInvalidMutation = errors.New("invalid compare-and-swap mutation")
 	// ErrStorageClosed is returned when operations are attempted on a closed store
 	ErrStorageClosed = errors.New("storage closed")
+	// ErrReadOnly is returned when a write is attempted through a read-only store.
+	ErrReadOnly = errors.New("storage is read-only")
+	// ErrReadOnlyRecoveryRequired means that a non-mutating inspection cannot
+	// open storage until the normal writable startup performs recovery.
+	ErrReadOnlyRecoveryRequired = errors.New("storage recovery is required before read-only inspection")
+	// ErrReadOnlyUnsupported means that the storage backend cannot provide a
+	// non-mutating inspection on the current platform.
+	ErrReadOnlyUnsupported = errors.New("read-only storage inspection is unsupported")
 	// ErrTimeout is returned when an operation times out
 	ErrTimeout = errors.New("operation timeout")
 )

@@ -115,7 +115,7 @@ func (c *ValkeyConfig) Validate() error {
 
 	u, err := url.Parse(c.URL)
 	if err != nil {
-		return fmt.Errorf("invalid valkey URL: %w", err)
+		return fmt.Errorf("valkey URL is invalid")
 	}
 
 	if u.Scheme != "valkey" && u.Scheme != "redis" && u.Scheme != "rediss" {
@@ -141,7 +141,7 @@ func (c *ValkeyConfig) Validate() error {
 func (c *ProviderConfig) Validate() error {
 	if c.BaseURL != "" {
 		if _, err := url.Parse(c.BaseURL); err != nil {
-			return fmt.Errorf("invalid base URL: %w", err)
+			return fmt.Errorf("base URL is invalid")
 		}
 	}
 

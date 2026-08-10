@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/app"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/diagnosis"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
@@ -45,6 +46,8 @@ func runContext(
 	err := starportcli.Run(ctx, args, starportcli.Dependencies{
 		Stdin: stdin, Stdout: stdout, Stderr: stderr,
 		Build: buildInformation(), RunServer: server, Initialize: initializer,
+		LoadConfig: config.LoadWithDefaults, ResolvePaths: config.PlatformPaths,
+		Diagnose: diagnosis.Run,
 	})
 	if err == nil {
 		return 0

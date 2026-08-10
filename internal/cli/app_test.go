@@ -10,6 +10,9 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	urfavecli "github.com/urfave/cli/v3"
+
+	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/diagnosis"
 )
 
 func TestNoArgumentsShowHelp(t *testing.T) {
@@ -17,7 +20,7 @@ func TestNoArgumentsShowHelp(t *testing.T) {
 	if err := Run(context.Background(), []string{"starport"}, deps); err != nil {
 		t.Fatalf("run without arguments: %v", err)
 	}
-	for _, want := range []string{"NAME:", "starport", "COMMANDS:", "serve", "version"} {
+	for _, want := range []string{"NAME:", "starport", "COMMANDS:", "serve", "doctor", "config", "version"} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("help output does not contain %q:\n%s", want, stdout.String())
 		}
@@ -257,6 +260,134 @@ func TestHelpShowsCommandHelp(t *testing.T) {
 	}
 }
 
+func TestConfigShowJSONRedactsSecrets(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	secret := "secret-that-must-not-appear"
+	deps.LoadConfig = func(context.Context) (*config.Config, error) {
+		return &config.Config{
+			Providers: config.ProvidersConfig{OpenAI: config.ProviderConfig{APIKey: secret}},
+			Security:  config.SecurityConfig{MasterKey: secret},
+		}, nil
+	}
+	if err := Run(context.Background(), []string{"starport", "config", "show", "--json"}, deps); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stdout.String(), secret) || !strings.Contains(stdout.String(), "<redacted>") {
+		t.Errorf("configuration output = %q", stdout.String())
+	}
+}
+
+func TestConfigPathsJSONUsesInjectedResolver(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	want := config.PathsForConfigDir("/test/config")
+	deps.ResolvePaths = func() (config.Paths, error) {
+		return want, nil
+	}
+	if err := Run(context.Background(), []string{"starport", "config", "paths", "--json"}, deps); err != nil {
+		t.Fatal(err)
+	}
+	var paths config.Paths
+	if err := json.Unmarshal(stdout.Bytes(), &paths); err != nil {
+		t.Fatal(err)
+	}
+	if paths.ConfigFile != want.ConfigFile {
+		t.Errorf("paths = %#v", paths)
+	}
+}
+
+func TestConfigValidateUsesInjectedLoader(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	calls := 0
+	deps.LoadConfig = func(context.Context) (*config.Config, error) {
+		calls++
+		return &config.Config{}, nil
+	}
+	if err := Run(context.Background(), []string{"starport", "config", "validate", "--json"}, deps); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || !strings.Contains(stdout.String(), `"valid": true`) {
+		t.Errorf("calls = %d, output = %q", calls, stdout.String())
+	}
+}
+
+func TestConfigInspectionDoesNotExposeLoaderErrors(t *testing.T) {
+	for _, command := range [][]string{
+		{"starport", "config", "show"},
+		{"starport", "config", "validate"},
+	} {
+		deps, _, _ := testDependencies()
+		secret := "loader-secret-that-must-not-appear"
+		deps.LoadConfig = func(context.Context) (*config.Config, error) {
+			return nil, errors.New("malformed credential " + secret)
+		}
+		err := Run(context.Background(), command, deps)
+		if err == nil {
+			t.Fatalf("%v returned no error", command)
+		}
+		if strings.Contains(err.Error(), secret) {
+			t.Errorf("%v error contains loader secret: %q", command, err)
+		}
+	}
+}
+
+func TestConfigValidateJSONReportsSafeFailure(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	secret := "loader-secret-that-must-not-appear"
+	deps.LoadConfig = func(context.Context) (*config.Config, error) {
+		return nil, errors.New("malformed credential " + secret)
+	}
+
+	err := Run(context.Background(), []string{"starport", "config", "validate", "--json"}, deps)
+	if err == nil || ExitCode(err) != ExitCodeRuntime {
+		t.Fatalf("validation error = %v, exit code = %d", err, ExitCode(err))
+	}
+	var result validationResult
+	if decodeErr := json.Unmarshal(stdout.Bytes(), &result); decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	if result.Valid || result.Error != "configuration could not be loaded" {
+		t.Errorf("validation result = %#v", result)
+	}
+	if strings.Contains(stdout.String(), secret) || strings.Contains(err.Error(), secret) {
+		t.Errorf("validation exposed loader secret: output=%q error=%q", stdout.String(), err)
+	}
+}
+
+func TestDoctorReportsExactFailuresAndReturnsRuntimeExit(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	deps.Diagnose = func(context.Context, diagnosis.Options) diagnosis.Report {
+		return diagnosis.Report{
+			OK: false, Failed: 1,
+			Checks: []diagnosis.Check{{
+				ID: "identities", Status: diagnosis.StatusFail,
+				Message: "gateway identity storage is empty",
+			}},
+		}
+	}
+	err := Run(context.Background(), []string{"starport", "doctor"}, deps)
+	if !errors.Is(err, ErrDiagnosisFailed) || ExitCode(err) != ExitCodeRuntime {
+		t.Fatalf("doctor error = %v, exit code = %d", err, ExitCode(err))
+	}
+	if !strings.Contains(stdout.String(), "FAIL identities: gateway identity storage is empty") {
+		t.Errorf("doctor output = %q", stdout.String())
+	}
+}
+
+func TestDoctorPassesProbeOptionAndWritesJSON(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	var got diagnosis.Options
+	deps.Diagnose = func(_ context.Context, options diagnosis.Options) diagnosis.Report {
+		got = options
+		return diagnosis.Report{OK: true, Probed: options.Probe, Checks: []diagnosis.Check{}}
+	}
+	if err := Run(context.Background(), []string{"starport", "doctor", "--probe", "--json"}, deps); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Probe || !strings.Contains(stdout.String(), `"probed": true`) {
+		t.Errorf("options = %#v, output = %q", got, stdout.String())
+	}
+}
+
 func TestRunReturnsServerFailure(t *testing.T) {
 	serverErr := errors.New("server failed")
 	deps, _, _ := testDependencies()
@@ -293,6 +424,9 @@ func TestNewRequiresProcessDependencies(t *testing.T) {
 		{name: "error output", edit: func(deps *Dependencies) { deps.Stderr = nil }, want: ErrStderrRequired},
 		{name: "server", edit: func(deps *Dependencies) { deps.RunServer = nil }, want: ErrServerRunnerRequired},
 		{name: "initializer", edit: func(deps *Dependencies) { deps.Initialize = nil }, want: ErrInitializerRequired},
+		{name: "configuration loader", edit: func(deps *Dependencies) { deps.LoadConfig = nil }, want: ErrConfigLoaderRequired},
+		{name: "path resolver", edit: func(deps *Dependencies) { deps.ResolvePaths = nil }, want: ErrPathResolverRequired},
+		{name: "diagnoser", edit: func(deps *Dependencies) { deps.Diagnose = nil }, want: ErrDiagnoserRequired},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -318,8 +452,13 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 			GitCommit: "abc123", GitBranch: "test", GoVersion: "go1.26.5",
 			OS: "testos", Arch: "testarch",
 		},
-		RunServer:  func(context.Context, ServeOptions) error { return nil },
-		Initialize: func(context.Context, InitOptions) (InitResult, error) { return InitResult{}, nil },
+		RunServer:    func(context.Context, ServeOptions) error { return nil },
+		Initialize:   func(context.Context, InitOptions) (InitResult, error) { return InitResult{}, nil },
+		LoadConfig:   func(context.Context) (*config.Config, error) { return &config.Config{}, nil },
+		ResolvePaths: func() (config.Paths, error) { return config.PathsForConfigDir("/test"), nil },
+		Diagnose: func(context.Context, diagnosis.Options) diagnosis.Report {
+			return diagnosis.Report{OK: true, Checks: []diagnosis.Check{}}
+		},
 	}, stdout, stderr
 }
 

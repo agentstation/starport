@@ -54,8 +54,8 @@ require_text DX-CFG-7 'TestLoaderDoesNotMutateEnvironment' internal/config/loade
 require_text DX-CLI-1 'github.com/urfave/cli/v3' go.mod
 require_file DX-CLI-2 internal/cli/app.go
 require_text DX-CLI-3 'Name:.*"init"' internal/cli/app.go
-require_text DX-CLI-4 'Name:.*"doctor"' internal/cli/app.go
-require_text DX-CLI-5 'Name:.*"config"' internal/cli/app.go
+require_text DX-CLI-4 'Name:.*"doctor"' internal/cli/inspection_commands.go
+require_text DX-CLI-5 'Name:.*"config"' internal/cli/inspection_commands.go
 require_text DX-CLI-6 'Name:.*"completion"' internal/cli/app.go
 require_text DX-CLI-7 'Name:.*"man"' internal/cli/app.go
 require_text DX-CLI-8 '"json"' internal/cli/version.go

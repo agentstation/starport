@@ -64,7 +64,7 @@ type BadgerConfig struct {
 
 // ValkeyConfig defines Valkey/Redis settings
 type ValkeyConfig struct {
-	URL            string        `env:"URL,default=valkey://localhost:6379"`
+	URL            string        `env:"URL,default=valkey://localhost:6379" redact:"url"`
 	MaxConnections int           `env:"MAX_CONNECTIONS,default=50"`
 	MinIdleConns   int           `env:"MIN_IDLE_CONNS,default=10"`
 	DialTimeout    time.Duration `env:"DIAL_TIMEOUT,default=5s"`
@@ -72,7 +72,7 @@ type ValkeyConfig struct {
 	WriteTimeout   time.Duration `env:"WRITE_TIMEOUT,default=3s"`
 	IdleTimeout    time.Duration `env:"IDLE_TIMEOUT,default=5m"`
 	ClusterMode    bool          `env:"CLUSTER_MODE,default=false"`
-	Password       string        `env:"PASSWORD"`
+	Password       string        `env:"PASSWORD" secret:"true"`
 }
 
 // ProvidersConfig defines LLM provider settings
@@ -89,8 +89,8 @@ type ProvidersConfig struct {
 
 // ProviderConfig defines settings for a single LLM provider
 type ProviderConfig struct {
-	BaseURL        string        `env:"BASE_URL"`
-	APIKey         string        `env:"API_KEY"`
+	BaseURL        string        `env:"BASE_URL" redact:"url"`
+	APIKey         string        `env:"API_KEY" secret:"true"`
 	Timeout        time.Duration `env:"TIMEOUT,default=30s"`
 	MaxConnections int           `env:"MAX_CONNECTIONS,default=100"`
 	Enabled        bool          `env:"ENABLED"` // Used for optional providers like Ollama
@@ -145,13 +145,13 @@ type RateLimitingConfig struct {
 
 // SecurityConfig defines security settings
 type SecurityConfig struct {
-	MasterKey          string `env:"MASTER_KEY"`
+	MasterKey          string `env:"MASTER_KEY" secret:"true"`
 	TLSCertPath        string `env:"TLS_CERT_PATH"`
 	TLSKeyPath         string `env:"TLS_KEY_PATH"`
 	EnableTLS          bool   `env:"ENABLE_TLS,default=false"`
 	AllowedOrigins     string `env:"ALLOWED_ORIGINS"`
 	EnableCORS         bool   `env:"ENABLE_CORS,default=false"`
-	JWTSecret          string `env:"JWT_SECRET"`
+	JWTSecret          string `env:"JWT_SECRET" secret:"true"`
 	APIKeyHeader       string `env:"API_KEY_HEADER,default=Authorization"`
 	EnableRateLimiting bool   `env:"ENABLE_RATE_LIMITING,default=true"`
 }

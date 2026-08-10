@@ -7,8 +7,9 @@ Date: 2026-08-09
 - Empty identity storage required a manually selected bootstrap secret.
 - The process converted that temporary secret into a wildcard identity during
   startup.
-- An operator had to start Starport, call the administrator API, save another
-  key, stop Starport, remove the temporary secret, and start Starport again.
+- An operator had to start Starport and call the administrator API. The
+  operator then saved another key, stopped Starport, removed the temporary
+  secret, and started Starport again.
 - Local configuration depended on manual file edits and two manual secrets.
 - Identity creation duplicated credential generation and hashing in the HTTP
   controller.
@@ -32,8 +33,8 @@ Implementation commits: `3e1423e`, `8bcc059`, `d945f8c`, `5321b14`,
   directory. Directory synchronization makes the commit durable.
 - The configuration file uses mode `0600`, and managed directories use mode
   `0700`.
-- The identity repository uses one atomic compare-and-swap batch to claim
-  initial setup and store the identity, hash index, and collection record.
+- The identity repository uses one atomic batch to claim initial setup. The
+  same batch stores the identity, hash index, and collection record.
 - The versioned collection record serializes membership changes. Independent
   key creation retries collection contention, and initial setup proves an
   empty repository in the same transaction.
@@ -85,7 +86,8 @@ The tests cover these contracts:
 - Existing, partial, and concurrent local setup.
 - Atomic initial identity claims under concurrency.
 - Atomic collection membership and retry of independent creation contention.
-- Claim recovery after deletion of the initial identity.
+- The repository recovers the claim after an operator deletes the initial
+  identity.
 - Output-failure rollback and refusal after any setup-state change.
 - No-replace directory installation and supported-platform compilation.
 - Parseable gateway-key output.
@@ -111,12 +113,12 @@ container:
    gateway key.
 2. A second initialization refused the existing repository.
 3. `starport serve` started with the same storage and reported ready.
-4. The temporary container was removed.
+4. The test removed the temporary container.
 
 The OpenAI local scene proved configuration creation, mode `0600`, one-time
-JSON output, overwrite refusal, and ready server startup. The test-created
-macOS platform directory was moved into the temporary evidence directory after
-the scene. The standard Starport configuration path is clean.
+JSON output, overwrite refusal, and ready server startup. The test moved the
+macOS platform directory into its temporary evidence area after the scene. The
+standard Starport configuration path is clean.
 
 The Ollama contract test proves local state creation. Current Starmap owns the
 Ollama service metadata but does not publish arbitrary installed model links.
@@ -156,9 +158,9 @@ accepted and fixed these findings:
 - Loss of the initial credential after output or storage-close failure.
 - Ambiguous remote commit acknowledgments.
 - Invalid identity names reported as runtime failures.
-- A permanent setup claim after deletion of the initial identity.
-- Replacement of a concurrently created empty directory.
-- Deletion of application state during output rollback.
+- Setup kept its claim after an operator deleted the initial identity.
+- Setup replaced an empty directory that another process created.
+- Output rollback deleted application state.
 - Non-atomic repository-emptiness checks.
 - Collection-ledger contention between independent key creations.
 - Missing directory synchronization after the installed rename.
@@ -171,4 +173,5 @@ direct breaking changes instead of legacy storage compatibility.
 
 ## Pull request gate
 
-Pending.
+PR [#80](https://github.com/agentstation/starport/pull/80) merged as
+`75614501448dbe27063e3562a928f5eb6438f3de` after all 10 CI checks passed.

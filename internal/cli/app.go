@@ -11,6 +11,8 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	urfavecli "github.com/urfave/cli/v3"
 
+	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/diagnosis"
 	"github.com/agentstation/starport/internal/identity"
 )
 
@@ -33,6 +35,12 @@ var (
 	ErrServerRunnerRequired = errors.New("server runner is required")
 	// ErrInitializerRequired reports a missing setup runtime boundary.
 	ErrInitializerRequired = errors.New("initializer is required")
+	// ErrConfigLoaderRequired reports a missing configuration reader.
+	ErrConfigLoaderRequired = errors.New("configuration loader is required")
+	// ErrPathResolverRequired reports a missing platform-path reader.
+	ErrPathResolverRequired = errors.New("configuration path resolver is required")
+	// ErrDiagnoserRequired reports a missing diagnostic runtime boundary.
+	ErrDiagnoserRequired = errors.New("diagnoser is required")
 )
 
 // ServeOptions contains explicit server command options.
@@ -46,14 +54,28 @@ type ServerRunner func(context.Context, ServeOptions) error
 // Initializer creates local state and returns the new gateway credential once.
 type Initializer func(context.Context, InitOptions) (InitResult, error)
 
+// ConfigLoader reads and validates effective configuration.
+type ConfigLoader func(context.Context) (*config.Config, error)
+
+// PathResolver resolves platform configuration and data paths.
+type PathResolver func() (config.Paths, error)
+
+// Diagnoser runs read-only startup checks.
+type Diagnoser func(context.Context, diagnosis.Options) diagnosis.Report
+
+type usageErrorHandler = urfavecli.OnUsageErrorFunc
+
 // Dependencies contains all runtime boundaries used by commands.
 type Dependencies struct {
-	Stdin      io.Reader
-	Stdout     io.Writer
-	Stderr     io.Writer
-	Build      BuildInfo
-	RunServer  ServerRunner
-	Initialize Initializer
+	Stdin        io.Reader
+	Stdout       io.Writer
+	Stderr       io.Writer
+	Build        BuildInfo
+	RunServer    ServerRunner
+	Initialize   Initializer
+	LoadConfig   ConfigLoader
+	ResolvePaths PathResolver
+	Diagnose     Diagnoser
 }
 
 // New creates the Starport root command.
@@ -73,8 +95,17 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	if deps.Initialize == nil {
 		return nil, ErrInitializerRequired
 	}
+	if deps.LoadConfig == nil {
+		return nil, ErrConfigLoaderRequired
+	}
+	if deps.ResolvePaths == nil {
+		return nil, ErrPathResolverRequired
+	}
+	if deps.Diagnose == nil {
+		return nil, ErrDiagnoserRequired
+	}
 
-	usageError := func(
+	var usageError usageErrorHandler = func(
 		_ context.Context,
 		cmd *urfavecli.Command,
 		err error,
@@ -209,6 +240,8 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			}
 		},
 	}
+	configCommand := newConfigCommand(deps, usageError)
+	doctor := newDoctorCommand(deps, usageError)
 
 	root := &urfavecli.Command{
 		Name:            "starport",
@@ -218,7 +251,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Writer:          deps.Stdout,
 		ErrWriter:       deps.Stderr,
 		OnUsageError:    usageError,
-		Commands:        []*urfavecli.Command{initialize, serve, version, help},
+		Commands:        []*urfavecli.Command{initialize, serve, doctor, configCommand, version, help},
 		HideHelpCommand: true,
 		Suggest:         true,
 		ExitErrHandler: func(context.Context, *urfavecli.Command, error) {

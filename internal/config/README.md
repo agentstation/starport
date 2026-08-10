@@ -67,6 +67,29 @@ Use [the configuration reference](../../.env.example) for the complete field
 list. Starmap acquisition credentials stay separate from Starport inference
 credentials.
 
+## Inspection
+
+Use these commands to inspect the resolved configuration:
+
+```bash
+starport config paths
+starport config show
+starport config validate
+```
+
+`config show` uses the configuration schema to replace each secret and URL
+with `<redacted>`. Loader errors report only the failed loading stage. These
+commands never show configured values in an error and never change process or
+file state. With `--json`, validation writes `valid: false` and a safe loading
+stage before it returns a nonzero status.
+
+`starport doctor` uses the same loader. Passive diagnosis does not open
+storage. `starport doctor --probe` opens configured storage through a
+write-blocking adapter and checks the stored catalog and identity state. If
+Badger needs writable recovery, the probe skips storage inspection and gives
+recovery instructions. It also skips this inspection on platforms where
+Badger does not support read-only mode.
+
 ## Rate-limit reload
 
 To enable rule reload, set both values:
