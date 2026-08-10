@@ -117,4 +117,8 @@ can retry. A waiter also retries when the refresh leader cancels its own
 context. The bearer transport closes the request body before it returns an
 authentication error.
 
+The first convergence review found a timing assumption in the new failed
+cohort test. The test now verifies the cohort wait contract directly and tests
+a later retry separately. Fifty repeated race runs passed.
+
 The convergence review and pull request gate are pending.

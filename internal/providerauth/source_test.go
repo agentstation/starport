@@ -97,51 +97,35 @@ func TestRefreshingSourceCoalescesConcurrentRefresh(t *testing.T) {
 	}
 }
 
-func TestRefreshingSourceSharesFailedRefreshWithWaiters(t *testing.T) {
+func TestFailedRefreshResultIsSharedWithWaitingCohort(t *testing.T) {
 	injected := errors.New("credential service unavailable")
-	started := make(chan struct{})
-	release := make(chan struct{})
+	attempt := &refreshAttempt{done: make(chan struct{}), err: injected}
+	close(attempt.done)
+	for range 24 {
+		if err := waitForRefresh(context.Background(), attempt); !errors.Is(err, injected) {
+			t.Errorf("wait error = %v, want shared failure", err)
+		}
+	}
+}
+
+func TestRefreshingSourceRetriesOnCallAfterFailure(t *testing.T) {
+	injected := errors.New("credential service unavailable")
 	var calls atomic.Int32
-	upstream := SourceFunc(func(context.Context) (Token, error) {
-		call := calls.Add(1)
-		if call == 1 {
-			close(started)
-			<-release
+	source, err := NewRefreshingSource(SourceFunc(func(context.Context) (Token, error) {
+		if calls.Add(1) == 1 {
 			return Token{}, injected
 		}
 		return Token{Value: "recovered", ExpiresAt: time.Now().Add(time.Hour)}, nil
-	})
-	source, err := NewRefreshingSource(upstream, RefreshOptions{})
+	}), RefreshOptions{})
 	if err != nil {
 		t.Fatalf("new source: %v", err)
 	}
-
-	const callers = 24
-	results := make(chan error, callers)
-	begin := make(chan struct{})
-	for range callers {
-		go func() {
-			<-begin
-			_, tokenErr := source.Token(context.Background())
-			results <- tokenErr
-		}()
+	if _, err := source.Token(context.Background()); !errors.Is(err, injected) {
+		t.Fatalf("first token error = %v, want injected failure", err)
 	}
-	close(begin)
-	<-started
-	time.Sleep(20 * time.Millisecond)
-	close(release)
-	for range callers {
-		if result := <-results; !errors.Is(result, injected) {
-			t.Errorf("token result = %v, want shared failure", result)
-		}
-	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("upstream calls = %d, want 1 for failed cohort", got)
-	}
-
 	token, err := source.Token(context.Background())
 	if err != nil {
-		t.Fatalf("later retry: %v", err)
+		t.Fatalf("second token: %v", err)
 	}
 	if token.Value != "recovered" || calls.Load() != 2 {
 		t.Fatalf("later token = %q after %d calls", token.Value, calls.Load())

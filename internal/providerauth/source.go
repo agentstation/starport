@@ -124,21 +124,10 @@ func (s *refreshingSource) Token(ctx context.Context) (Token, error) {
 		if s.refresh != nil {
 			attempt := s.refresh
 			s.mu.Unlock()
-			select {
-			case <-ctx.Done():
-				return Token{}, ctx.Err()
-			case <-attempt.done:
-				if err := ctx.Err(); err != nil {
-					return Token{}, err
-				}
-				if attempt.err == nil {
-					continue
-				}
-				if attempt.retryForWaiters {
-					continue
-				}
-				return Token{}, attempt.err
+			if err := waitForRefresh(ctx, attempt); err != nil {
+				return Token{}, err
 			}
+			continue
 		}
 
 		attempt := &refreshAttempt{done: make(chan struct{})}
@@ -169,6 +158,21 @@ func (s *refreshingSource) Token(ctx context.Context) (Token, error) {
 			return Token{}, err
 		}
 		return token, nil
+	}
+}
+
+func waitForRefresh(ctx context.Context, attempt *refreshAttempt) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-attempt.done:
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if attempt.err == nil || attempt.retryForWaiters {
+			return nil
+		}
+		return attempt.err
 	}
 }
 
