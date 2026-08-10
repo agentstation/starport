@@ -220,7 +220,11 @@ make release-snapshot
 
 The snapshot checks six target binaries, six archives, six SBOMs, shell
 completions, the manual page, and the generated Homebrew cask. Snapshot mode
-skips Apple notarization. A stable release cannot skip it.
+skips Apple signing and notarization. A stable release signs and notarizes
+macOS binaries when all Apple release credentials are available. The release
+does not require these credentials for the CLI cask. On macOS, the cask
+removes `com.apple.quarantine` only from its staged Starport binary. It does
+not change other user paths or run this hook on Linux.
 
 ## Required pull-request gates
 

@@ -106,9 +106,9 @@ provider-credential master key.
 
 ## Unverified external scenes
 
-- `UNVERIFIED`: a stable signed Homebrew install on macOS and Linux waits for
-  the Apple issuer ID and the CI signing identity. Snapshot cask generation,
-  artifact installation, and strict audit passed.
+- `UNVERIFIED`: a stable Homebrew install on macOS and Linux waits for the
+  next stable release. Snapshot cask generation, artifact installation, and
+  strict audit passed. Apple credentials do not block CLI publication.
 - `UNVERIFIED`: Valkey pub/sub recovery after an external service restart
   needs a controlled restart during the test. All non-restart Valkey
   contracts passed.

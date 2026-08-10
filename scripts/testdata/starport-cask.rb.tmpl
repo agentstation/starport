@@ -23,4 +23,10 @@ cask "starport" do
   bash_completion "completions/starport.bash"
   zsh_completion "completions/starport.zsh"
   fish_completion "completions/starport.fish"
+
+  postflight do
+    if OS.mac? && system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+      system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/starport"], sudo: false
+    end
+  end
 end

@@ -4,12 +4,22 @@ set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workflow="$repository_root/.github/workflows/release.yaml"
+goreleaser="$repository_root/.goreleaser.yaml"
 
 require_text() {
 	local pattern="$1"
 	local description="$2"
 	if ! grep -Eq "$pattern" "$workflow"; then
 		printf 'release workflow is missing %s\n' "$description" >&2
+		exit 1
+	fi
+}
+
+require_goreleaser_text() {
+	local pattern="$1"
+	local description="$2"
+	if ! grep -Eq "$pattern" "$goreleaser"; then
+		printf 'GoReleaser configuration is missing %s\n' "$description" >&2
 		exit 1
 	fi
 }
@@ -50,8 +60,21 @@ require_text '^  verify-homebrew:' 'macOS and Linux Homebrew installation verifi
 require_text 'brew install agentstation/tap/starport' 'the documented Homebrew install command'
 require_text 'MACOS_SIGN_P12' 'the Developer ID signing credential'
 require_text 'MACOS_NOTARY_ISSUER_ID' 'the Apple notarization credential'
-require_text 'spctl --assess' 'the installed Gatekeeper assessment'
-require_text 'Require Apple signing and notarization credentials' 'a hard signing credential gate'
+require_text 'xattr -p com\.apple\.quarantine.*STARPORT_BINARY' 'installed quarantine verification'
+require_goreleaser_text 'branch:[[:space:]]+main' 'the Homebrew tap main branch'
+for credential in \
+	MACOS_SIGN_P12 \
+	MACOS_SIGN_PASSWORD \
+	MACOS_NOTARY_KEY \
+	MACOS_NOTARY_KEY_ID \
+	MACOS_NOTARY_ISSUER_ID; do
+	require_goreleaser_text "enabled:.*isEnvSet.*$credential" "conditional macOS signing credential $credential"
+done
+
+if grep -q 'Require Apple signing and notarization credentials' "$workflow"; then
+	printf 'release workflow has a mandatory Apple credential gate\n' >&2
+	exit 1
+fi
 
 verification_line="$(grep -n -m1 'Verify draft release assets before publication' "$workflow" | cut -d: -f1)"
 publication_line="$(grep -n -m1 'Publish verified immutable release' "$workflow" | cut -d: -f1)"
@@ -99,5 +122,6 @@ fi
 
 "$repository_root/scripts/test-homebrew-publisher.sh" >/dev/null
 "$repository_root/scripts/test-homebrew-audit.sh" >/dev/null
+"$repository_root/scripts/test-homebrew-cask.sh" >/dev/null
 
 printf 'PASS release workflow contract\n'

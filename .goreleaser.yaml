@@ -61,7 +61,7 @@ homebrew_casks:
     repository:
       owner: agentstation
       name: homebrew-tap
-      branch: master
+      branch: main
     directory: Casks
     commit_author:
       name: agentstation-release
@@ -78,10 +78,17 @@ homebrew_casks:
       bash: completions/starport.bash
       zsh: completions/starport.zsh
       fish: completions/starport.fish
+    hooks:
+      post:
+        install: |
+          if OS.mac? && system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/starport"], sudo: false
+          end
 
+# Sign and notarize macOS binaries when Apple credentials are available.
 notarize:
   macos:
-    - enabled: true
+    - enabled: '{{ and (isEnvSet "MACOS_SIGN_P12") (isEnvSet "MACOS_SIGN_PASSWORD") (isEnvSet "MACOS_NOTARY_KEY") (isEnvSet "MACOS_NOTARY_KEY_ID") (isEnvSet "MACOS_NOTARY_ISSUER_ID") }}'
       ids:
         - starport
       sign:
