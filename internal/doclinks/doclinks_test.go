@@ -16,6 +16,9 @@ func TestParseUsesMarkdownSyntax(t *testing.T) {
 		"[nested](target(v2))\n" +
 		"[reference][guide]\n\n" +
 		"[guide]: reference.md\n\n" +
+		"[![status](local.svg)](https://example.com/status)\n" +
+		"[](empty.md)\n" +
+		"![](empty.png)\n\n" +
 		"`[code](missing-code.md)`\n\n" +
 		"```text\n[fenced](missing-fenced.md)\n```\n")
 
@@ -28,6 +31,10 @@ func TestParseUsesMarkdownSyntax(t *testing.T) {
 		{Line: 2, Destination: "target with space.md"},
 		{Line: 3, Destination: "target(v2)"},
 		{Line: 4, Destination: "reference.md"},
+		{Line: 8, Destination: "https://example.com/status"},
+		{Line: 8, Destination: "local.svg"},
+		{Line: 9, Destination: "empty.md"},
+		{Line: 10, Destination: "empty.png"},
 	}
 	if !reflect.DeepEqual(links, want) {
 		t.Fatalf("Parse() = %#v, want %#v", links, want)
@@ -42,8 +49,12 @@ func TestCheckFilesValidatesOnlyLocalDestinations(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "existing file.md"), []byte("ok\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "100%.md"), []byte("ok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	source := "" +
 		"[existing](<existing file.md>?view=1#section)\n" +
+		"[percent](100%25.md)\n" +
 		"[missing](missing.md)\n" +
 		"[anchor](#section)\n" +
 		"[remote](https://example.com/missing.md)\n"
@@ -55,7 +66,7 @@ func TestCheckFilesValidatesOnlyLocalDestinations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckFiles() error = %v", err)
 	}
-	want := []BrokenLink{{Source: document, Line: 2, Target: "missing.md"}}
+	want := []BrokenLink{{Source: document, Line: 3, Target: "missing.md"}}
 	if !reflect.DeepEqual(broken, want) {
 		t.Fatalf("CheckFiles() = %#v, want %#v", broken, want)
 	}

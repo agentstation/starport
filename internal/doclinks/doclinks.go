@@ -37,11 +37,13 @@ func Parse(source []byte) ([]Link, error) {
 		}
 
 		var destination []byte
+		walkStatus := ast.WalkContinue
 		switch typed := node.(type) {
 		case *ast.Link:
 			destination = typed.Destination
 		case *ast.Image:
 			destination = typed.Destination
+			walkStatus = ast.WalkSkipChildren
 		default:
 			return ast.WalkContinue, nil
 		}
@@ -50,7 +52,7 @@ func Parse(source []byte) ([]Link, error) {
 			Line:        sourceLine(source, node),
 			Destination: string(destination),
 		})
-		return ast.WalkSkipChildren, nil
+		return walkStatus, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walk Markdown syntax: %w", err)
@@ -153,15 +155,15 @@ func localTarget(destination string) (string, bool, error) {
 	if parsed.Scheme != "" || parsed.Host != "" || parsed.Path == "" || strings.HasPrefix(parsed.Path, "/") {
 		return "", false, nil
 	}
-	target, err := url.PathUnescape(parsed.Path)
-	if err != nil {
-		return "", false, fmt.Errorf("invalid escaped path %q: %w", parsed.Path, err)
-	}
-	return target, true, nil
+	return parsed.Path, true, nil
 }
 
 func sourceLine(source []byte, node ast.Node) int {
-	offset := -1
+	offset := node.Pos()
+	if offset >= 0 && offset <= len(source) {
+		return bytes.Count(source[:offset], []byte{'\n'}) + 1
+	}
+
 	_ = ast.Walk(node, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
@@ -172,8 +174,8 @@ func sourceLine(source []byte, node ast.Node) int {
 		}
 		return ast.WalkContinue, nil
 	})
-	if offset < 0 || offset > len(source) {
-		return 1
+	if offset >= 0 && offset <= len(source) {
+		return bytes.Count(source[:offset], []byte{'\n'}) + 1
 	}
-	return bytes.Count(source[:offset], []byte{'\n'}) + 1
+	return 1
 }

@@ -164,3 +164,8 @@ tree instead of regular expressions. Tests cover reference links, inline code,
 fenced code, angle destinations, titles, spaces, and balanced parentheses.
 The parser resolves source and target symlinks and rejects paths outside the
 repository root before file access.
+
+The last P3 review found three syntax-tree edge cases. The parser now visits
+images nested inside links, uses Goldmark node positions for empty labels, and
+uses each URL path without a second decode. Regression tests cover all three
+cases.
