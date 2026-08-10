@@ -279,8 +279,9 @@ func TestConfigShowJSONRedactsSecrets(t *testing.T) {
 
 func TestConfigPathsJSONUsesInjectedResolver(t *testing.T) {
 	deps, stdout, _ := testDependencies()
+	want := config.PathsForConfigDir("/test/config")
 	deps.ResolvePaths = func() (config.Paths, error) {
-		return config.PathsForConfigDir("/test/config"), nil
+		return want, nil
 	}
 	if err := Run(context.Background(), []string{"starport", "config", "paths", "--json"}, deps); err != nil {
 		t.Fatal(err)
@@ -289,7 +290,7 @@ func TestConfigPathsJSONUsesInjectedResolver(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &paths); err != nil {
 		t.Fatal(err)
 	}
-	if paths.ConfigFile != "/test/config/config.env" {
+	if paths.ConfigFile != want.ConfigFile {
 		t.Errorf("paths = %#v", paths)
 	}
 }

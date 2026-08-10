@@ -56,6 +56,9 @@ func TestOpenBadgerReadOnlyDoesNotChangeStoredValues(t *testing.T) {
 	}
 
 	store, err := OpenReadOnly(Config{Type: StorageTypeBadger, Badger: configuration})
+	if errors.Is(err, ErrReadOnlyUnsupported) {
+		t.Skipf("Badger read-only inspection is unavailable: %v", err)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

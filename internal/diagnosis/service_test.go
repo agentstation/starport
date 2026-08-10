@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -63,6 +64,14 @@ func TestProbeReadsIdentityWithoutChangingIt(t *testing.T) {
 	if !report.OK {
 		t.Fatalf("report = %#v", report)
 	}
+	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
+		assertCheck(t, report, "storage", StatusSkip)
+		assertCheck(t, report, "identities", StatusSkip)
+		if after := treeFingerprint(t, root); !reflect.DeepEqual(after, before) {
+			t.Fatalf("unsupported diagnosis changed storage files\nbefore: %#v\nafter: %#v", before, after)
+		}
+		return
+	}
 	assertCheck(t, report, "storage", StatusPass)
 	assertCheck(t, report, "identities", StatusPass)
 	if after := treeFingerprint(t, root); !reflect.DeepEqual(after, before) {
@@ -90,14 +99,11 @@ func TestProbeReadsIdentityWithoutChangingIt(t *testing.T) {
 func TestProbeReportsExactEmptyIdentityCheck(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")
 	cfg := loadTestConfig(t, root)
-	store, err := storage.Open(cfg.Storage.RuntimeStorage())
-	if err != nil {
-		t.Fatal(err)
+	service := testService(cfg)
+	service.dependencies.openStorage = func(storage.Config) (storage.KVStore, error) {
+		return storage.NewMockStore(), nil
 	}
-	if err := store.Close(); err != nil {
-		t.Fatal(err)
-	}
-	report := testService(cfg).run(context.Background(), Options{Probe: true})
+	report := service.run(context.Background(), Options{Probe: true})
 	if report.OK {
 		t.Fatalf("report = %#v", report)
 	}
