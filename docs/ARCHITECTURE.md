@@ -92,6 +92,7 @@ starport/
 ├── internal/catalog/          # Starmap facts and derived routable generations
 ├── internal/registry/         # configured connector registry and adapter availability
 ├── internal/providers/        # BYOK provider keys and concrete LLM connectors
+├── internal/providerauth/     # renewable cloud inference credentials
 ├── internal/httpclient/       # shared provider HTTP transport policy
 ├── internal/responsecache/    # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
@@ -221,6 +222,17 @@ Starmap uses its catalog-acquisition API keys, cloud credential chains, and
 workload identity to build catalog generations. Starport stores separate
 gateway and provider inference credentials. Neither credential plane reads or
 reuses secret values from the other plane.
+
+`internal/providerauth` owns renewable inference bearer tokens. Vertex AI uses
+Google Application Default Credentials with the Google Cloud platform scope.
+Azure OpenAI uses `DefaultAzureCredential` with the Azure Cognitive Services
+scope. A synchronized source caches each token and refreshes it two minutes
+before expiry. Waiting requests can stop through their own contexts. The HTTP
+transport gets credentials with the inference request context.
+
+The operator must select default mode. Ambient cloud credentials do not
+activate an adapter. Static credentials remain in Starport provider
+configuration. Starport rejects a static secret combined with default mode.
 
 ## Routing
 

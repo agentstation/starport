@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 // Config represents the complete application configuration
@@ -89,13 +91,14 @@ type ProvidersConfig struct {
 
 // ProviderConfig defines settings for a single LLM provider
 type ProviderConfig struct {
-	BaseURL        string        `env:"BASE_URL" redact:"url"`
-	APIKey         string        `env:"API_KEY" secret:"true"`
-	Timeout        time.Duration `env:"TIMEOUT,default=30s"`
-	MaxConnections int           `env:"MAX_CONNECTIONS,default=100"`
-	Enabled        bool          `env:"ENABLED"` // Used for optional providers like Ollama
-	ProjectID      string        `env:"PROJECT_ID"`
-	Location       string        `env:"LOCATION"`
+	BaseURL        string            `env:"BASE_URL" redact:"url"`
+	APIKey         string            `env:"API_KEY" secret:"true"`
+	AuthMode       providerauth.Mode `env:"AUTH_MODE"`
+	Timeout        time.Duration     `env:"TIMEOUT,default=30s"`
+	MaxConnections int               `env:"MAX_CONNECTIONS,default=100"`
+	Enabled        bool              `env:"ENABLED"` // Used for optional providers like Ollama
+	ProjectID      string            `env:"PROJECT_ID"`
+	Location       string            `env:"LOCATION"`
 }
 
 // ProviderEntry binds external operator configuration to one exact Starmap provider ID.

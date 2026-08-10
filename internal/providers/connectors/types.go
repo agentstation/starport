@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 // Common role constants
@@ -267,7 +269,9 @@ type ProviderConfig struct {
 	MaxConnections int           `json:"max_connections"`
 
 	// Authentication
-	APIKey string `json:"-"` // Never log or serialize
+	APIKey           string              `json:"-"` // Never log or serialize
+	AuthMode         providerauth.Mode   `json:"auth_mode,omitempty"`
+	CredentialSource providerauth.Source `json:"-"`
 
 	// EndpointBindings supplies tenant-specific values for Starmap URL templates.
 	EndpointBindings map[string]string `json:"endpoint_bindings,omitempty"`

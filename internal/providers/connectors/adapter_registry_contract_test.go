@@ -9,6 +9,8 @@ import (
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 func TestActiveProviderIntersection(t *testing.T) {
@@ -130,6 +132,88 @@ func TestAuthPlanesAreIsolated(t *testing.T) {
 
 	err = adapters.ValidateCredential(context.Background(), catalogs.ProviderIDOpenAI, nil, nil)
 	require.Error(t, err)
+}
+
+func TestAmbientCloudCredentialsRequireExplicitInferenceOptIn(t *testing.T) {
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/catalog/acquisition/credential.json")
+	t.Setenv("AZURE_CLIENT_ID", "catalog-acquisition-client")
+	client, err := starmap.New()
+	require.NoError(t, err)
+	adapters, err := ProductionAdapterRegistry()
+	require.NoError(t, err)
+
+	active, err := adapters.Activate(client.Catalog(), map[catalogs.ProviderID]ProviderConfig{
+		catalogs.ProviderIDGoogleVertex: {},
+		catalogs.ProviderIDAzureOpenAI:  {},
+	})
+	require.NoError(t, err)
+	require.Empty(t, active, "ambient cloud credentials must not activate inference")
+}
+
+func TestCloudAdapterDescriptorsAcceptExplicitCredentialModes(t *testing.T) {
+	adapters, err := ProductionAdapterRegistry()
+	require.NoError(t, err)
+	tests := []struct {
+		name       string
+		providerID catalogs.ProviderID
+		config     ProviderConfig
+	}{
+		{
+			name:       "Vertex default credentials",
+			providerID: catalogs.ProviderIDGoogleVertex,
+			config:     ProviderConfig{AuthMode: providerauth.ModeDefault},
+		},
+		{
+			name:       "Vertex static token",
+			providerID: catalogs.ProviderIDGoogleVertex,
+			config:     ProviderConfig{AuthMode: providerauth.ModeStatic, APIKey: "token"},
+		},
+		{
+			name:       "Azure default credentials",
+			providerID: catalogs.ProviderIDAzureOpenAI,
+			config: ProviderConfig{
+				AuthMode: providerauth.ModeDefault,
+				BaseURL:  "https://resource.openai.azure.com",
+			},
+		},
+		{
+			name:       "Azure static API key",
+			providerID: catalogs.ProviderIDAzureOpenAI,
+			config: ProviderConfig{
+				AuthMode: providerauth.ModeStatic,
+				APIKey:   "key",
+				BaseURL:  "https://resource.openai.azure.com",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			descriptor, found := adapters.Descriptor(test.providerID)
+			require.True(t, found)
+			require.True(t, descriptor.Configured(test.config))
+			require.NoError(t, descriptor.ValidateConfig(test.config))
+		})
+	}
+}
+
+func TestCloudAdapterDescriptorsRejectAmbiguousCredentialModes(t *testing.T) {
+	adapters, err := ProductionAdapterRegistry()
+	require.NoError(t, err)
+	for _, providerID := range []catalogs.ProviderID{
+		catalogs.ProviderIDGoogleVertex,
+		catalogs.ProviderIDAzureOpenAI,
+	} {
+		t.Run(string(providerID), func(t *testing.T) {
+			descriptor, found := adapters.Descriptor(providerID)
+			require.True(t, found)
+			config := ProviderConfig{
+				AuthMode: providerauth.ModeDefault,
+				APIKey:   "static-secret",
+				BaseURL:  "https://provider.test",
+			}
+			require.Error(t, descriptor.ValidateConfig(config))
+		})
+	}
 }
 
 func TestAdapterRegistryAppliesInferenceAuthentication(t *testing.T) {

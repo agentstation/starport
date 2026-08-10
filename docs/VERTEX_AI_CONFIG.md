@@ -6,17 +6,40 @@ through hidden backup regions.
 
 ## Configuration
 
+Set the project and one location for both authentication modes:
+
 ```bash
 export STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID=your-project-id
 export STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION=us-central1
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY=<OAuth-access-token>
 ```
 
 You must set `STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID` and
 `STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION`. Starport binds these runtime
-values to the endpoint template from Starmap. The current adapter sends the
-configured API-key value as a bearer access token. It does not load a
-service-account file.
+values to the endpoint template from Starmap.
+
+Use Google Application Default Credentials for a renewable token:
+
+```bash
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
+```
+
+Default mode supports local Application Default Credentials, Google managed
+identity, and workload identity federation. Starport requests the Google Cloud
+platform scope. It refreshes the bearer token two minutes before expiry.
+
+Use a static OAuth access token only when token renewal is external:
+
+```bash
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=static
+export STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY=<OAuth-access-token>
+```
+
+Do not set the API-key variable with default mode. Starport rejects this
+ambiguous configuration. Default mode is opt-in. Ambient Google credentials do
+not activate the inference adapter when `AUTH_MODE` is empty.
+
+Starmap resolves its catalog-acquisition credentials independently. Starport
+does not copy a Starmap credential into an inference request.
 
 ## Failure behavior
 

@@ -8,6 +8,7 @@ Documentation for the Starport open source LLM gateway.
 - **[Architecture Control Plane](ARCHITECTURE_CONTROL_PLANE.md)** - Historical architecture-hardening ledger
 - **[Task Status](TASKS.md)** - Current development status and task tracking
 - **[Operator Guide](OPERATOR-GUIDE.md)** - Setup, deployment, operation, and release checks
+- **[Vertex AI Configuration](VERTEX_AI_CONFIG.md)** - Static and renewable inference authentication
 
 ## Architecture Decision Records
 

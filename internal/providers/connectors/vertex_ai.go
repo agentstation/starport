@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 // VertexAIConnector implements the Connector interface for Google Vertex AI
@@ -18,11 +20,25 @@ type VertexAIConnector struct {
 
 // NewVertexAIConnector creates a new Vertex AI connector
 func NewVertexAIConnector(config ProviderConfig) (*VertexAIConnector, error) {
+	if err := requiredCloudCredentialConfig(config); err != nil {
+		return nil, fmt.Errorf("invalid Vertex AI inference credentials: %w", err)
+	}
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient(GoogleVertexAIProvider, config)
+	credentialSource, err := googleCredentialSource(config)
+	if err != nil {
+		return nil, err
+	}
+	config.CredentialSource = credentialSource
+
+	var httpClient *http.Client
+	if credentialSource == nil {
+		httpClient, err = newProviderHTTPClient(GoogleVertexAIProvider, config)
+	} else {
+		httpClient, err = newProviderHTTPClient(GoogleVertexAIProvider, config, credentialSource)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -161,8 +177,24 @@ func withVertexAnthropicVersion(req *ChatRequest) *ChatRequest {
 
 func (c *VertexAIConnector) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-	applyRegisteredInferenceAuth(catalogs.ProviderIDGoogleVertex, req, c.config.APIKey)
+	if c.config.CredentialSource == nil {
+		applyRegisteredInferenceAuth(catalogs.ProviderIDGoogleVertex, req, c.config.APIKey)
+	}
 	req.Header.Set("User-Agent", "starport/1.0")
+}
+
+func googleCredentialSource(config ProviderConfig) (providerauth.Source, error) {
+	if config.AuthMode != providerauth.ModeDefault {
+		return nil, nil
+	}
+	if config.CredentialSource != nil {
+		return config.CredentialSource, nil
+	}
+	source, err := providerauth.NewGoogleDefaultSource()
+	if err != nil {
+		return nil, fmt.Errorf("create Vertex AI credential source: %w", err)
+	}
+	return source, nil
 }
 
 func (c *VertexAIConnector) handleError(resp *http.Response) error {
