@@ -45,6 +45,8 @@ Implementation branch: `codex/starport-dx8-dev-docs`.
   Valkey health. It supplies test-only configuration. A shell trap removes
   its container, network, and volume.
 - The Compose file publishes a configurable Valkey host port.
+- The Compose file binds the Valkey host port to loopback.
+- Each integration run uses a unique Compose project and uncached Go tests.
 - `STARPORT_CONFIG_DIR` gives first-run tests an explicit and isolated
   configuration root. The resolver rejects relative paths.
 - The first-run scene builds Starport and initializes an identity. It validates
@@ -55,7 +57,10 @@ Implementation branch: `codex/starport-dx8-dev-docs`.
 - The prompt-cache guide derives capability and price facts from Starmap. It
   does not list hard-coded provider support.
 - The document-link verifier checks every current guide from one canonical
-  list.
+  list. Its Bash scanner has no ripgrep dependency and supports one-file runs.
+- The first-run HTTP requests have connection and total time limits.
+- The README lists public release archives first. It marks the signed
+  Homebrew cask as blocked until Apple release credentials are available.
 
 ## Developer workflow verification
 
@@ -69,6 +74,7 @@ make test-integration
 bash scripts/smoke-first-run.sh
 bash scripts/verify-developer-experience.sh
 bash scripts/verify-doc-links.sh
+bash scripts/verify-doc-links.sh README.md
 ```
 
 `make deps` left `go.mod` and `go.sum` unchanged. `make check` reported zero
@@ -82,6 +88,10 @@ Valkey restart.
 The integration target removed its isolated container, network, and volume
 after the tests. Compose configuration also passed with explicit placeholder
 values for its two required Starport secrets.
+
+Two integration targets also passed at the same time on host ports `26379`
+and `36379`. They used different Compose project names. Both targets removed
+their containers, networks, and volumes.
 
 The first-run scene reported:
 
@@ -120,3 +130,14 @@ current guide set.
 
 Historical architecture records and the standard community rules remain
 outside the current-guide lint set. DX8 did not rewrite those records.
+
+## Review fixes
+
+The isolated P2 review found six defects. DX8 fixed all six:
+
+- Valkey now binds only to `127.0.0.1` on the host.
+- Link verification no longer requires an undeclared `rg` command.
+- The README does not claim that the blocked Homebrew cask is available.
+- Each Valkey test command uses `-count=1`.
+- Each integration run uses its shell process ID in the Compose project name.
+- Each smoke-test HTTP request has bounded connection and total times.

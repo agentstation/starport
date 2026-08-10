@@ -23,10 +23,6 @@ if (($# > 0)); then
   files=("$@")
 fi
 
-if ! command -v rg >/dev/null 2>&1; then
-  printf 'documentation link verification requires rg\n' >&2
-  exit 1
-fi
 for file in "${files[@]}"; do
   if [[ ! -f "$file" ]]; then
     printf 'FAIL missing documentation file %s\n' "$file"
@@ -36,13 +32,19 @@ done
 
 records=$(mktemp "${TMPDIR:-/tmp}/starport-doc-links.XXXXXX")
 trap 'rm -f "$records"' EXIT INT TERM
-search_status=0
-rg --no-heading --line-number --only-matching \
-  '\[[^]]+\]\([^ )]+\)' "${files[@]}" >"$records" || search_status=$?
-if ((search_status > 1)); then
-  printf 'documentation link search failed with status %d\n' "$search_status" >&2
-  exit "$search_status"
-fi
+link_pattern='\[[^]]+\]\([^ )]+\)'
+: >"$records"
+for file in "${files[@]}"; do
+  line_number=0
+  while IFS= read -r content || [[ -n "$content" ]]; do
+    line_number=$((line_number + 1))
+    remainder=$content
+    while [[ $remainder =~ $link_pattern ]]; do
+      printf '%s:%d:%s\n' "$file" "$line_number" "${BASH_REMATCH[0]}" >>"$records"
+      remainder=${remainder#*"${BASH_REMATCH[0]}"}
+    done
+  done <"$file"
+done
 
 failures=0
 while IFS= read -r record; do

@@ -65,7 +65,8 @@ server_pid=$!
 
 ready=false
 for _ in {1..60}; do
-	if curl --fail --silent "http://127.0.0.1:$server_port/health/ready" >/dev/null; then
+	if curl --connect-timeout 1 --max-time 2 --fail --silent \
+			"http://127.0.0.1:$server_port/health/ready" >/dev/null; then
 		ready=true
 		break
 	fi
@@ -81,7 +82,7 @@ if [[ "$ready" != true ]]; then
 	exit 1
 fi
 
-curl --fail --silent \
+curl --connect-timeout 2 --max-time 10 --fail --silent \
 	-H "Authorization: Bearer $gateway_key" \
 	"http://127.0.0.1:$server_port/api/v1/models" |
 	jq -e '.data | type == "array"' >/dev/null

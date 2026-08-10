@@ -9,15 +9,17 @@ gateway identities, routing policy, execution, and HTTP protocols.
 
 ## Install
 
-Install the current release with Homebrew on macOS or Linux:
+The current public release contains checksummed archives for macOS, Linux,
+and Windows. Download an archive from
+[GitHub Releases](https://github.com/agentstation/starport/releases).
+
+Apple release credentials still block the signed Homebrew cask. After
+publication, install Starport on macOS or Linux with:
 
 ```bash
 brew install agentstation/tap/starport
 starport --version
 ```
-
-The release also contains checksummed archives for macOS, Linux, and Windows.
-Download them from [GitHub Releases](https://github.com/agentstation/starport/releases).
 
 To build from source, install the Go version from `go.mod`, then run:
 

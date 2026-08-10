@@ -113,16 +113,16 @@ test-coverage: ## Run tests with coverage report
 .PHONY: test-integration
 test-integration: ## Run Valkey integration tests with Docker Compose
 	@set -eu; \
-		export COMPOSE_PROJECT_NAME=starport-integration-test; \
+		export COMPOSE_PROJECT_NAME=starport-integration-test-$$$$; \
 		export STARPORT_SECURITY_MASTER_KEY=integration-test-master-key-0001; \
 		export STARPORT_PROVIDERS_OPENAI_API_KEY=integration-test-provider-key; \
 		export STARPORT_VALKEY_PORT=$(VALKEY_INTEGRATION_PORT); \
 		trap 'docker compose down --volumes --remove-orphans' EXIT INT TERM; \
 		docker compose up -d --wait valkey; \
-		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v ./internal/storage -run 'Test(Valkey|KVStoreContract)'; \
-		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v ./internal/cache -run TestValkey; \
-		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v ./internal/app -run TestAppWithValkey; \
-		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -v \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/storage -run 'Test(Valkey|KVStoreContract)'; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/cache -run TestValkey; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/app -run TestAppWithValkey; \
+		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v \
 			./internal/credentials ./internal/identity ./internal/presets ./internal/ratelimit \
 			-run RepositoryContract
 
