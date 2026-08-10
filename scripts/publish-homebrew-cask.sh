@@ -18,16 +18,16 @@ version="$(ruby -e '
   abort "cask version is missing" unless version
   print version
 ' "$cask")"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+	printf 'Homebrew publication requires a stable MAJOR.MINOR.PATCH version: %s\n' "$version" >&2
+	exit 1
+fi
 
 compare_versions() {
 	ruby - "$1" "$2" <<'RUBY'
 require "rubygems"
 
-def precedence(version)
-  Gem::Version.new(version.split("+", 2).first)
-end
-
-print precedence(ARGV.fetch(0)) <=> precedence(ARGV.fetch(1))
+print Gem::Version.new(ARGV.fetch(0)) <=> Gem::Version.new(ARGV.fetch(1))
 RUBY
 }
 
@@ -47,8 +47,13 @@ for attempt in 1 2 3; do
       abort "tap cask version is missing" unless version
       print version
     ' "$current_cask")"
+		if [[ ! "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			printf 'Homebrew tap contains an unsupported Starport version: %s\n' "$current_version" >&2
+			rm -rf "$checkout"
+			exit 1
+		fi
 		comparison="$(compare_versions "$current_version" "$version")"
-		if ((comparison > 0)) || { ((comparison == 0)) && [[ "$current_version" != "$version" ]]; }; then
+		if ((comparison > 0)); then
 			printf 'Homebrew tap already contains newer Starport %s; keeping it instead of %s\n' \
 				"$current_version" "$version" >&2
 			printf '%s\n' "$current_version"

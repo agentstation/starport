@@ -39,6 +39,8 @@ require_text 'find dist .*chmod u\+x' 'recovered executable permission restorati
 require_text 'build-tag=.*sha-.*GITHUB_SHA.*GITHUB_RUN_ID.*GITHUB_RUN_ATTEMPT' 'a unique staging image tag'
 require_text 'Promote verified container tags' 'verified canonical image promotion'
 require_text 'Publish the generated Homebrew cask' 'post-verification Homebrew publication'
+require_text '!contains\(github\.ref_name, .-rc\..\)' 'stable release Homebrew publication'
+require_text '!contains\(inputs\.tag, .-rc\..\)' 'stable recovery Homebrew publication'
 require_text 'git@github.com:agentstation/homebrew-tap\.git[[:space:]\\]+$' 'the canonical Homebrew tap'
 require_text '^[[:space:]]+main$' 'the Homebrew tap main branch'
 require_text 'homebrew_version:.*steps\.homebrew\.outputs\.version' 'the effective Homebrew version output'

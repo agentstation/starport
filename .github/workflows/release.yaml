@@ -376,7 +376,7 @@ jobs:
 
       - name: Publish the generated Homebrew cask
         id: homebrew
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(github.ref_name, '-rc.') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
@@ -412,7 +412,7 @@ jobs:
     if: >-
       ${{
         always() &&
-        !contains(github.event_name == 'push' && github.ref_name || inputs.tag, '-') &&
+        !contains(github.event_name == 'push' && github.ref_name || inputs.tag, '-rc.') &&
         (
           (github.event_name == 'push' && needs.release.result == 'success') ||
           (github.event_name == 'workflow_dispatch' && needs.recover.result == 'success')
@@ -685,7 +685,7 @@ jobs:
 
       - name: Publish the generated Homebrew cask
         id: homebrew
-        if: ${{ !contains(inputs.tag, '-') }}
+        if: ${{ !contains(inputs.tag, '-rc.') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
