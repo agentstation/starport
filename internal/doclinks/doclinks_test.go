@@ -51,12 +51,26 @@ func TestCheckFilesValidatesOnlyLocalDestinations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	broken, err := CheckFiles([]string{document})
+	broken, err := CheckFiles(root, []string{document})
 	if err != nil {
 		t.Fatalf("CheckFiles() error = %v", err)
 	}
 	want := []BrokenLink{{Source: document, Line: 2, Target: "missing.md"}}
 	if !reflect.DeepEqual(broken, want) {
 		t.Fatalf("CheckFiles() = %#v, want %#v", broken, want)
+	}
+}
+
+func TestCheckFilesRejectsPathsOutsideRoot(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := CheckFiles(root, []string{outside}); err == nil {
+		t.Fatal("CheckFiles() accepted a source outside its root")
 	}
 }

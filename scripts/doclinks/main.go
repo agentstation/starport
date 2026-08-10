@@ -13,7 +13,12 @@ func main() {
 		os.Exit(2)
 	}
 
-	broken, err := doclinks.CheckFiles(os.Args[1:])
+	root, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "documentation link verification failed: resolve repository root: %v\n", err)
+		os.Exit(2)
+	}
+	broken, err := doclinks.CheckFiles(root, os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "documentation link verification failed: %v\n", err)
 		os.Exit(2)

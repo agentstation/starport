@@ -58,11 +58,25 @@ func Parse(source []byte) ([]Link, error) {
 	return links, nil
 }
 
-// CheckFiles returns local link destinations that do not exist.
-func CheckFiles(files []string) ([]BrokenLink, error) {
+// CheckFiles returns local link destinations that do not exist below root.
+func CheckFiles(root string, files []string) ([]BrokenLink, error) {
+	rootPath, err := filepath.Abs(root)
+	if err != nil {
+		return nil, fmt.Errorf("resolve documentation root: %w", err)
+	}
+	rootPath, err = filepath.EvalSymlinks(rootPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve documentation root symlinks: %w", err)
+	}
+
 	broken := make([]BrokenLink, 0)
 	for _, file := range files {
-		source, err := os.ReadFile(file)
+		sourcePath, err := resolveSource(rootPath, file)
+		if err != nil {
+			return nil, err
+		}
+		// #nosec G304 -- resolveSource confines the canonical path below rootPath.
+		source, err := os.ReadFile(sourcePath)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", file, err)
 		}
@@ -78,8 +92,18 @@ func CheckFiles(files []string) ([]BrokenLink, error) {
 			if !local {
 				continue
 			}
-			candidate := filepath.Join(filepath.Dir(file), filepath.FromSlash(target))
+			candidate := filepath.Join(filepath.Dir(sourcePath), filepath.FromSlash(target))
+			if !within(rootPath, candidate) {
+				return nil, fmt.Errorf("link target escapes documentation root in %s:%d: %s", file, link.Line, target)
+			}
 			if _, err := os.Stat(candidate); err == nil {
+				resolved, err := filepath.EvalSymlinks(candidate)
+				if err != nil {
+					return nil, fmt.Errorf("resolve link target %s: %w", candidate, err)
+				}
+				if !within(rootPath, resolved) {
+					return nil, fmt.Errorf("link target escapes documentation root in %s:%d: %s", file, link.Line, target)
+				}
 				continue
 			} else if !os.IsNotExist(err) {
 				return nil, fmt.Errorf("inspect link target %s: %w", candidate, err)
@@ -92,6 +116,30 @@ func CheckFiles(files []string) ([]BrokenLink, error) {
 		}
 	}
 	return broken, nil
+}
+
+func resolveSource(root, file string) (string, error) {
+	path := file
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	path = filepath.Clean(path)
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve documentation file %s: %w", file, err)
+	}
+	if !within(root, resolved) {
+		return "", fmt.Errorf("documentation file escapes root: %s", file)
+	}
+	return resolved, nil
+}
+
+func within(root, path string) bool {
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 func localTarget(destination string) (string, bool, error) {

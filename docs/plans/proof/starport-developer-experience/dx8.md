@@ -162,3 +162,5 @@ file no longer exposes the unauthenticated Valkey service. An integration-only
 override owns the loopback port. The link verifier now uses a Goldmark syntax
 tree instead of regular expressions. Tests cover reference links, inline code,
 fenced code, angle destinations, titles, spaces, and balanced parentheses.
+The parser resolves source and target symlinks and rejects paths outside the
+repository root before file access.
