@@ -390,7 +390,7 @@ jobs:
           scripts/publish-homebrew-cask.sh \
             dist/homebrew/Casks/starport.rb \
             git@github.com:agentstation/homebrew-tap.git \
-            master
+            main
 
       - name: Upload recovery distribution on failure
         if: failure()
@@ -667,6 +667,7 @@ jobs:
       - name: Publish the generated Homebrew cask
         if: ${{ !contains(inputs.tag, '-') }}
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
         shell: bash
         run: |
@@ -681,7 +682,7 @@ jobs:
           scripts/publish-homebrew-cask.sh \
             dist/homebrew/Casks/starport.rb \
             git@github.com:agentstation/homebrew-tap.git \
-            master
+            main
 
       - name: Upload recovery diagnostics on failure
         if: failure()

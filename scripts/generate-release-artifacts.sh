@@ -5,16 +5,17 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output_argument="${1:-build/release-artifacts}"
 
-if [[ "$output_argument" = /* ]]; then
-	output_directory="$output_argument"
-else
-	output_directory="$repository_root/$output_argument"
+if (($# > 1)); then
+	printf 'usage: %s [build/release-artifacts]\n' "$0" >&2
+	exit 1
 fi
 
-case "$output_directory" in
-	"$repository_root"/build/*) ;;
+case "$output_argument" in
+	build/release-artifacts | "$repository_root/build/release-artifacts")
+		output_directory="$repository_root/build/release-artifacts"
+		;;
 	*)
-		printf 'release artifact output must be below %s/build\n' "$repository_root" >&2
+		printf 'release artifact output must be %s/build/release-artifacts\n' "$repository_root" >&2
 		exit 1
 		;;
 esac

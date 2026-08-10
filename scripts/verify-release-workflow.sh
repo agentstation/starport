@@ -39,6 +39,8 @@ require_text 'find dist .*chmod u\+x' 'recovered executable permission restorati
 require_text 'build-tag=.*sha-.*GITHUB_SHA.*GITHUB_RUN_ID.*GITHUB_RUN_ATTEMPT' 'a unique staging image tag'
 require_text 'Promote verified container tags' 'verified canonical image promotion'
 require_text 'Publish the generated Homebrew cask' 'post-verification Homebrew publication'
+require_text 'git@github.com:agentstation/homebrew-tap\.git[[:space:]\\]+$' 'the canonical Homebrew tap'
+require_text '^[[:space:]]+main$' 'the Homebrew tap main branch'
 require_text '^  verify-homebrew:' 'macOS and Linux Homebrew installation verification'
 require_text 'brew install agentstation/tap/starport' 'the documented Homebrew install command'
 require_text 'MACOS_SIGN_P12' 'the Developer ID signing credential'
@@ -81,6 +83,12 @@ fi
 
 if grep -Eq 'pull_request_target|permissions:[[:space:]]*write-all|uses:.*@(v[0-9]|main|master|latest)' "$workflow"; then
 	printf 'release workflow contains an unsafe trigger, permission, or mutable action reference\n' >&2
+	exit 1
+fi
+
+if "$repository_root/scripts/generate-release-artifacts.sh" \
+	build/../../release-artifact-escape >/dev/null 2>&1; then
+	printf 'release artifact generator accepted an unsafe output path\n' >&2
 	exit 1
 fi
 
