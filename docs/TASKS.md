@@ -7,14 +7,13 @@ Last Updated: 2026-08-10
 
 ### Active Work
 
-| Task | Owner | Status | Plan |
-|---|---|---|---|
-| Starport developer experience | DX7 | In progress: release readback hardening | [Developer experience plan](plans/starport-developer-experience-plan.html) |
+No durable plan is active.
 
 ### Recently Completed
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| Starport developer experience | DX | #88 | 2026-08-10 | Published immutable `v1.0.1` and the Homebrew cask. Verified exact-version installation on macOS and Linux, then merged release-readback hardening after all 10 CI jobs passed. |
 | SPR3 | Release | #75 | 2026-08-09 | Stored compact terminal proof and removed the completed release control plane |
 | SPR2 | Release | Release workflow | 2026-08-09 | Published immutable `v1.0.0` with 13 verified assets and a public, attested, two-platform GHCR image at `sha256:f4230687fdf664022e4be80031c4145ff2eb795ff200489216ea76ba4b64bc24` |
 | SPR1 | Release | #73 | 2026-08-09 | Merged the complete v1 release candidate after all 10 CI jobs passed, including cross-platform race tests, official OpenRouter SDK compatibility, release contracts, security, and reproducible release snapshots |
