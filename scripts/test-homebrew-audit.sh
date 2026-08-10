@@ -24,4 +24,4 @@ export PATH="$test_root/bin:$PATH"
 "$repository_root/scripts/audit-homebrew-cask.sh" "$test_root/starport.rb" >/dev/null
 test -f "$test_root/tap/Casks/starport.rb"
 
-printf 'PASS isolated Homebrew audit identity\n'
+printf 'PASS repository-free Homebrew audit tap\n'
