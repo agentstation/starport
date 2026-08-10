@@ -38,6 +38,8 @@ require_text 'verify-release-binaries\.sh' 'the portable binary gate'
 require_text 'verify-release-archives\.sh' 'the archive and SBOM gate'
 require_text 'attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8' 'the pinned provenance action'
 require_text 'Verify draft release assets before publication' 'draft asset verification'
+require_text 'DRAFT_RELEASES=' 'bounded draft release lookup'
+require_text 'select\(.tag_name == \$tag and .draft == true\)' 'draft-only release selection'
 require_text 'Publish verified immutable release' 'one-way release publication'
 require_text 'gh attestation verify' 'attestation readback'
 require_text 'immutable' 'immutable release readback'
@@ -73,6 +75,10 @@ done
 
 if grep -q 'Require Apple signing and notarization credentials' "$workflow"; then
 	printf 'release workflow has a mandatory Apple credential gate\n' >&2
+	exit 1
+fi
+if grep -Fq 'RELEASE_JSON=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME")' "$workflow"; then
+	printf 'release workflow reads an untagged draft through the tag endpoint\n' >&2
 	exit 1
 fi
 
@@ -123,5 +129,6 @@ fi
 "$repository_root/scripts/test-homebrew-publisher.sh" >/dev/null
 "$repository_root/scripts/test-homebrew-audit.sh" >/dev/null
 "$repository_root/scripts/test-homebrew-cask.sh" >/dev/null
+"$repository_root/scripts/test-release-container-verifier.sh" >/dev/null
 
 printf 'PASS release workflow contract\n'
