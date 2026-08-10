@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <body>
 <header id="overview">
   <h1>Starport developer experience plan</h1>
-  <p id="status-line">Status: <code data-plan-status="active">active</code> · Owner: this plan · Created: 2026-08-09 · Baseline: repository @ a62fc289ed59c058013ee0ff5a411dd083e8454c · Proof root: <code>docs/plans/proof/starport-developer-experience/</code>. Next action: review and publish the DX8 developer tooling and documentation while DX7 waits for Apple notarization credentials.</p>
+  <p id="status-line">Status: <code data-plan-status="active">active</code> · Owner: this plan · Created: 2026-08-09 · Baseline: repository @ a62fc289ed59c058013ee0ff5a411dd083e8454c · Proof root: <code>docs/plans/proof/starport-developer-experience/</code>. Next action: run the DX9 completion gate and publish its proof while DX7 waits for Apple notarization credentials.</p>
   <section id="outcome">
     <h2>Outcome</h2>
     <blockquote>Starport gives a developer one tested install, setup, diagnosis, and first-request path. The same release keeps explicit production configuration, renewable cloud credentials, and verified distribution artifacts.</blockquote>
@@ -108,7 +108,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
     </tbody></table>
   </section><section id="verifier-contract">
     <h2>Verifier contract</h2>
-    <p><code>scripts/verify-developer-experience.sh</code> checks 39 fixed conditions. It prints <code>Summary: N passed, M failed</code>.</p>
+    <p><code>scripts/verify-developer-experience.sh</code> checks 41 fixed conditions. It prints <code>Summary: N passed, M failed</code>.</p>
     <table><thead><tr><th>Point</th><th>Required result</th></tr></thead><tbody>
       <tr><td>Baseline</td><td>Record the initial pass and failure counts.</td></tr>
       <tr><td>After DX1</td><td>All three branch conditions pass.</td></tr>
@@ -129,8 +129,8 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
       <tr id="DX5" data-status="done"><td>DX5</td><td>Add configuration inspection and read-only diagnosis.</td><td><code>done</code></td><td>PR <a href="https://github.com/agentstation/starport/pull/81">#81</a>; merge <code>a6687f1</code>; 10 CI checks passed; <a href="proof/starport-developer-experience/dx5.md">DX5 proof</a>.</td></tr>
       <tr id="DX6" data-status="done"><td>DX6</td><td>Add renewable Google Cloud and Azure inference credentials.</td><td><code>done</code></td><td><a href="https://github.com/agentstation/starport/pull/82">PR #82</a> merged as <code>d269c24</code>. See <a href="proof/starport-developer-experience/dx6.md">proof</a>.</td></tr>
       <tr id="DX7" data-status="blocked"><td>DX7</td><td>Add completions, a man page, a Homebrew cask, and install verification.</td><td><code>blocked</code></td><td><a href="https://github.com/agentstation/starport/pull/83">PR #83</a> merged as <code>57608e7</code> after all 10 CI jobs passed. Signed publication waits for the Apple issuer ID and the CI signing identity.</td></tr>
-      <tr id="DX8" data-status="in_progress"><td>DX8</td><td>Repair developer commands and rewrite current user documentation in strict mode.</td><td><code>in_progress</code></td><td>Final branch commit <code>5d7c71c</code>. All local gates and the P3 pre-PR review passed. Publication is pending.</td></tr>
-      <tr id="DX9" data-status="todo"><td>DX9</td><td>Run first-install scenes, repository gates, strict prose review, and the pre-PR review.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DX8" data-status="done"><td>DX8</td><td>Repair developer commands and rewrite current user documentation in strict mode.</td><td><code>done</code></td><td><a href="https://github.com/agentstation/starport/pull/84">PR #84</a> merged as <code>d7bfae4</code> after all 10 CI jobs passed. See the <a href="proof/starport-developer-experience/dx8.md">DX8 proof</a>.</td></tr>
+      <tr id="DX9" data-status="in_progress"><td>DX9</td><td>Run first-install scenes, repository gates, strict prose review, and the pre-PR review.</td><td><code>in_progress</code></td><td>Completion verification is active on <code>codex/starport-dx9-completion-gate</code>.</td></tr>
       <tr id="DX10" data-status="todo"><td>DX10</td><td>Delete the plan, proof root, and index entry after the final pull request merges.</td><td><code>todo</code></td><td></td></tr>
     </tbody></table>
   </section>
@@ -243,7 +243,7 @@ This is a whole-plan goal, not a single-task goal. Read the plan fully,
 then read AGENTS.md, docs/TASKS.md, docs/ARCHITECTURE.md, GLOSSARY.md,
 and the plans and technical-writing skills. Work in
 /Users/jack/src/github.com/agentstation/starport on branch
-codex/starport-dx8-dev-docs for DX8. Update this branch value at
+codex/starport-dx9-completion-gate for DX9. Update this branch value at
 each task transition. Chat history is not progress state. Resume from the
 status ledger, the execution log, and git state. If compaction happens,
 continue from the plan and git state rather than restarting. Loop: keep
@@ -261,7 +261,7 @@ request for each task unless its task evidence permits a mechanical split.
 Run autoreview before each substantive-code pull request. Stop only at a
 valid stop state from the plans skill. Before you stop, update the ledger
 and the log, and record the next action in the status line. The goal is met
-when DX0 through DX9 are terminal, the final pull request is merged, all 39
+when DX0 through DX9 are terminal, the final pull request is merged, all 41
 verifier conditions pass, all repository gates pass, strict prose review
 passes, release-install evidence is recorded, and DX10 removes the active
 plan artifacts.</code></pre>
@@ -288,6 +288,7 @@ plan artifacts.</code></pre>
       <tr><td>2026-08-10</td><td>DX7</td><td>implementation merged</td><td><a href="https://github.com/agentstation/starport/pull/83">PR #83</a> merged as <code>57608e7</code> after all 10 CI jobs passed. The release snapshot proved six platform archives, SBOMs, the generated cask, and the strict Homebrew audit. Signed publication remains blocked on Apple credentials.</td></tr>
       <tr><td>2026-08-10</td><td>DX8</td><td>implemented</td><td>Work commit <code>fa8c73c</code> was replayed on the merged <code>main</code> branch. It owns reproducible developer commands, first-run smoke coverage, link verification, and the strict current-document rewrite.</td></tr>
       <tr><td>2026-08-10</td><td>DX8</td><td>reviewed</td><td>Final branch commit <code>5d7c71c</code> passed strict prose checks, all repository gates, Valkey integration, first-run smoke, all OpenRouter SDK scenes, and the independent P3 pre-PR review.</td></tr>
+      <tr><td>2026-08-10</td><td>DX8</td><td>merged and advanced</td><td><a href="https://github.com/agentstation/starport/pull/84">PR #84</a> merged as <code>d7bfae4</code> after all 10 CI jobs passed. DX9 became active.</td></tr>
     </tbody></table>
   </section>
 </main>
