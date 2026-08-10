@@ -216,6 +216,9 @@ func (m *MockMetricsCollector) RecordRequestError(provider, method, path string,
 
 func TestMetricsCollection(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Keep the request open beyond the coarsest supported timer resolution so
+		// the recorded duration assertion is deterministic on Windows.
+		time.Sleep(20 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
