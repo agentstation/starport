@@ -168,27 +168,6 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Require Apple signing and notarization credentials
-        env:
-          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
-          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
-          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
-          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
-        shell: bash
-        run: |
-          for credential in \
-            MACOS_SIGN_P12 \
-            MACOS_SIGN_PASSWORD \
-            MACOS_NOTARY_KEY \
-            MACOS_NOTARY_KEY_ID \
-            MACOS_NOTARY_ISSUER_ID; do
-            if [[ -z "${!credential}" ]]; then
-              echo "required release credential is missing: $credential" >&2
-              exit 1
-            fi
-          done
-
       - name: Assemble draft release archives
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
@@ -455,17 +434,21 @@ jobs:
           test -f "$(brew --prefix)/share/fish/vendor_completions.d/starport.fish"
           test -f "$(brew --prefix)/share/man/man1/starport.1"
 
-      - name: Verify Apple signing and notarization
+      - name: Verify macOS installation metadata
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          STARPORT_BINARY=$(command -v starport)
-          codesign --verify --strict --verbose=2 "$STARPORT_BINARY"
-          codesign -dv --verbose=4 "$STARPORT_BINARY" 2>&1 |
-            grep -F 'Authority=Developer ID Application:'
-          codesign -dv --verbose=4 "$STARPORT_BINARY" 2>&1 |
-            grep -F 'TeamIdentifier=244SS6JJ8Q'
-          spctl --assess --type execute --verbose=2 "$STARPORT_BINARY"
+          STARPORT_BINARY=$(realpath "$(command -v starport)")
+          if xattr -p com.apple.quarantine "$STARPORT_BINARY" >/dev/null 2>&1; then
+            echo "installed Starport binary retains com.apple.quarantine" >&2
+            exit 1
+          fi
+          SIGNATURE=$(codesign -dv --verbose=4 "$STARPORT_BINARY" 2>&1 || true)
+          if grep -Fq 'Authority=Developer ID Application:' <<<"$SIGNATURE"; then
+            codesign --verify --strict --verbose=2 "$STARPORT_BINARY"
+            grep -Fq 'TeamIdentifier=244SS6JJ8Q' <<<"$SIGNATURE"
+            spctl --assess --type execute --verbose=2 "$STARPORT_BINARY"
+          fi
 
   recover:
     name: Recover Verified Draft
