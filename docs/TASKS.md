@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP5 replaces the fixed Starport provider configuration and legacy environment names with catalog-keyed resolution. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP5.1 adds named credential material, explicit references, core sources, one refresh lifecycle, and the warmed-cache contract. |
 
 ### Proposed Work
 

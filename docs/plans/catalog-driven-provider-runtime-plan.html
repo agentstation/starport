@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-10.<br>
 Baseline: Starport main @ <code>101c32d</code>. Starmap main @ <code>7f53767</code>.<br>
 Proof root: <code>docs/plans/proof/catalog-driven-provider-runtime/</code>.<br>
-Next action: CDP5 replaces the fixed Starport provider configuration and legacy environment names with catalog-keyed resolution.</p>
+Next action: CDP5.1 adds named credential material, explicit references, core sources, one refresh lifecycle, and the warmed-cache contract.</p>
 
 <section id="outcome">
 <h2>Outcome</h2>
@@ -72,8 +72,8 @@ Next action: CDP5 replaces the fixed Starport provider configuration and legacy 
 <tr id="CDP3.2" data-status="done"><td>CDP3.2</td><td>Starmap YAML acquisition and mapping contract.</td><td><code>done</code></td><td>Starmap commit <code>ef79cc38</code>. The synthetic YAML provider, typed mapping contracts, review-candidate trust boundary, OpenBao policy correction, generated data, security scans, and final uncapped repository gate passed. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp3.2.md</code>.</td></tr>
 <tr id="CDP4" data-status="done"><td>CDP4</td><td>Starmap atomic and durable remote subscriber.</td><td><code>done</code></td><td>Starmap commit <code>6697c478</code>. One atomic state, caller-owned durability, pinned bootstrap, degraded recovery, strict documentation, focused race proof, and the final uncapped repository gate passed. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp4.md</code>.</td></tr>
 <tr id="CDP4.1" data-status="done"><td>CDP4.1</td><td>Starmap compatibility release and catalog publication.</td><td><code>done</code></td><td>Starmap v0.4.0, Homebrew, exact Starport consumption, all pending Starmap pull requests, immutable schema-v5 catalog publication, provenance, and compatible rollback verification passed. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp4.1.md</code>.</td></tr>
-<tr id="CDP5" data-status="in_progress"><td>CDP5</td><td>Starport dynamic configuration and environment resolution.</td><td><code>in_progress</code></td><td>CDP4.1 completed the exact released catalog and remote contract that this task consumes.</td></tr>
-<tr id="CDP5.1" data-status="todo"><td>CDP5.1</td><td>Starport credential material and core sources.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP5" data-status="done"><td>CDP5</td><td>Starport dynamic configuration and environment resolution.</td><td><code>done</code></td><td>Starport commit <code>72964ba</code>. Exact active-catalog resolution, alias precedence, pre-read collision rejection, Fireworks discovery, setup migration, and the uncapped focused race gate passed. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp5.md</code>.</td></tr>
+<tr id="CDP5.1" data-status="in_progress"><td>CDP5.1</td><td>Starport credential material and core sources.</td><td><code>in_progress</code></td><td>CDP5 supplies exact catalog profiles, fields, primitives, and ordered ambient aliases.</td></tr>
 <tr id="CDP6" data-status="todo"><td>CDP6</td><td>Credential-free connectors and primitive registries.</td><td><code>todo</code></td><td></td></tr>
 <tr id="CDP6.1" data-status="todo"><td>CDP6.1</td><td>Atomic Starport runtime generation and connector draining.</td><td><code>todo</code></td><td></td></tr>
 <tr id="CDP7" data-status="todo"><td>CDP7</td><td>Request credential policy, BYOK, setup, and diagnosis.</td><td><code>todo</code></td><td></td></tr>
@@ -568,6 +568,7 @@ Next action: CDP5 replaces the fixed Starport provider configuration and legacy 
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>done; CDP4 started</td><td>Starmap commit <code>ef79cc38</code>. YAML-only acquisition, typed mappings, explicit capability evidence, unknown-offering quarantine, OpenBao, strict writing, license and vulnerability scans, and the final uncapped <code>make verify</code> passed. The campaign verifier remains <code>3 passed, 16 failed</code> because later Starport tasks own the remaining conditions.</td></tr>
 <tr><td>2026-08-10</td><td>CDP4</td><td>done; CDP4.1 started</td><td>Starmap commit <code>6697c478</code>. Atomic subscriber state, caller-owned stores, pinned bootstrap, digest-equal identity publication, durable restart, nonterminal recovery, terminal authentication, strict writing, and the final uncapped <code>make verify</code> passed.</td></tr>
 <tr><td>2026-08-11</td><td>CDP4.1</td><td>done; CDP5 started</td><td>Starmap PRs 68, 70, 71, and 72 merged with green hosted checks. Immutable v0.4.0, Homebrew, exact Starport module consumption, public catalog generation <code>29f0711a-39c1-435e-9d56-9552c0f84b59</code>, provenance, public readback, and compatible schema-v5 rollback verification passed. Starport work commit <code>dac601b</code> consumes the release. No verification used a scheduler cap.</td></tr>
+<tr><td>2026-08-11</td><td>CDP5</td><td>done; CDP5.1 started</td><td>Starport commit <code>72964ba</code>. Fixed provider fields and production <code>STARPORT_PROVIDERS_*</code> names are gone. The exact active Starmap snapshot drives ordered ambient aliases and endpoint bindings. Fireworks resolves without a Starport slot. Ordinary, lint, vet, smoke, campaign, and uncapped focused race checks passed. The campaign verifier reached <code>6 passed, 13 failed</code>.</td></tr>
 </tbody></table>
 
 </section>

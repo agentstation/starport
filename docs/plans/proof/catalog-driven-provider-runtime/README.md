@@ -2,7 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP5 is the current task.
+The plan status is `active`. CDP5.1 is the current task.
 
 ## Pinned source state
 
@@ -87,4 +87,8 @@ package deltas are mandatory evidence, but they are not admission limits.
   Starmap v0.4.0, Homebrew, and the exact Starport module passed public
   readback. An immutable schema-v5 catalog passed provenance and compatible
   rollback verification.
+- [CDP5 Starport dynamic provider configuration](cdp5.md): the active Starmap
+  snapshot now drives provider environment resolution. Conventional and
+  product aliases, collision rejection, Fireworks discovery, configuration
+  inspection, and the uncapped focused race gate passed.
 - Per-adapter dependency and binary measurements from CDP7.1.
