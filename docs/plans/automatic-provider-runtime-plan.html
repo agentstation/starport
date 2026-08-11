@@ -109,7 +109,7 @@
     Created: 2026-08-11 ·
     Baseline: main @ b52cd7e286a9a870293155638392ed514b630a47 ·
     Proof root: <code>docs/plans/proof/automatic-provider-runtime/</code> ·
-    Next action: execute APR7 integration, release, and public readback
+    Next action: merge APR7 evidence, then execute APR8 cleanup
   </p>
 
   <section id="outcome">
@@ -389,8 +389,8 @@
         <tr id="APR4" data-status="done"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR4.md</code>; <code>2e894c4</code>; APR-V08 passes</td></tr>
         <tr id="APR5" data-status="done"><td>APR5</td><td>Add authenticated provider status and runtime refresh controls.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR5.md</code>; <code>62ed730</code>; APR-V09 passes</td></tr>
         <tr id="APR6" data-status="done"><td>APR6</td><td>Rewrite and verify the first-run documentation and release examples.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR6.md</code>; <code>6e98bc8</code>; APR-V11 passes</td></tr>
-        <tr id="APR7" data-status="in_progress"><td>APR7</td><td>Merge, release, and verify public binary, cask, container, and protocol artifacts.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="APR8" data-status="todo"><td>APR8</td><td>Delete this completed plan, its proof root, and its index entries after the final pull request merges.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR7" data-status="done"><td>APR7</td><td>Merge, release, and verify public binary, cask, container, and protocol artifacts.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR7.md</code>; <code>c35177c</code>; PR <code>#102</code>; merge <code>a5d9050</code>; immutable <code>v1.0.3</code>; release run <code>31540601957</code>; APR-V12 passes</td></tr>
+        <tr id="APR8" data-status="in_progress"><td>APR8</td><td>Delete this completed plan, its proof root, and its index entries after the final pull request merges.</td><td><code>in_progress</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -498,6 +498,8 @@
         <tr><td>2026-08-11</td><td>APR6</td><td>started</td><td>Strict first-run, provider discovery, and refresh documentation are now active.</td></tr>
         <tr><td>2026-08-11</td><td>APR6</td><td>done</td><td>Replaced the stateful quickstart, removed the Compose provider roster, added strict drift verifiers, and documented catalog-driven provider reconciliation in <code>6e98bc8</code>. APR-V11 passes. Sol autoreview reported no actionable findings.</td></tr>
         <tr><td>2026-08-11</td><td>APR7</td><td>started</td><td>Integration, release publication, and public artifact readback are now active.</td></tr>
+        <tr><td>2026-08-11</td><td>APR7</td><td>done</td><td>Merged release hardening in PR <code>#102</code>, published immutable <code>v1.0.3</code> from <code>a5d9050</code>, and passed all four release jobs plus the independent public readback. APR-V12 passes.</td></tr>
+        <tr><td>2026-08-11</td><td>APR8</td><td>started</td><td>Control-plane cleanup becomes executable after the APR7 evidence pull request merges.</td></tr>
       </tbody>
     </table>
   </section>

@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `active` | Execute APR7 integration, release, and public readback. |
+| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `active` | Merge APR7 evidence, then execute APR8 cleanup. |
 
 ### Proposed Work
 
@@ -63,9 +63,9 @@ No proposed durable plan exists.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
 - Release archives, SBOMs, checksums, attestations, and GHCR publication are
   fail-closed release requirements.
-- Independent checks verify public immutable release `v1.0.2` and its public,
+- Independent checks verify public immutable release `v1.0.3` and its public,
   attested GHCR image at
-  `sha256:818d6e189d144143fbe57f2e09ffd9bb356770670ca3221344ff26d4da5d30bc`.
+  `sha256:a90373ce690fb5ef836a4b4af3d6d82a931db7eca7865031eb9b6ffbb1dfea6a`.
 
 This file keeps task status and the Phase 1 completion history. The canonical
 v1 design is in `docs/ARCHITECTURE.md`.
