@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starmap/pkg/sources"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
@@ -53,6 +54,7 @@ type lifecycleEntry struct {
 // App owns all constructed runtime dependencies.
 type App struct {
 	config           *config.Config
+	providerSettings config.ProvidersConfig
 	httpServer       httpRuntime
 	hotReloader      hotReloadRuntime
 	registry         *registry.Registry
@@ -62,6 +64,7 @@ type App struct {
 	cacheManager     *cache.Manager
 	transports       *connectors.TransportRegistry
 	authentication   *providerauth.Registry
+	newConnector     func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	lifecycle        []lifecycleEntry
 	catalogRefreshWG sync.WaitGroup
 	closeOnce        sync.Once
@@ -84,7 +87,9 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 	}
 	application := &App{
 		config: cfg, transports: transportRegistry, authentication: authenticationRegistry,
-		lifecycle: make([]lifecycleEntry, 0, 5),
+		providerSettings: config.CloneProvidersConfig(cfg.Providers),
+		newConnector:     factories.newConnector,
+		lifecycle:        make([]lifecycleEntry, 0, 5),
 	}
 	builder := runtimeBuilder{application: application, config: cfg, factories: factories}
 	if err := builder.compose(); err != nil {
@@ -181,16 +186,23 @@ func (b *runtimeBuilder) openConcepts() error {
 	b.application.catalogRuntime = catalogRuntime
 	b.application.catalog = catalogRuntime.ControlPlane()
 	if b.config.Catalog.RefreshOnStart {
-		if err := b.application.refreshCatalog(context.Background()); err != nil {
+		state, err := b.application.syncCatalog(context.Background())
+		if err == nil {
+			err = b.application.catalog.Activate(state)
+		}
+		if err != nil {
 			log.Warn().Err(err).Msg("startup Starmap catalog refresh failed; retaining current generation")
 		}
 	}
-	if err := b.config.ResolveProviders(
+	resolvedProviders, err := b.config.ResolveProviderSet(
 		context.Background(),
 		b.application.catalog.Current().Catalog().Providers(),
-	); err != nil {
+		b.application.providerSettings,
+	)
+	if err != nil {
 		return fmt.Errorf("resolve provider configuration: %w", err)
 	}
+	b.config.Providers = resolvedProviders
 
 	b.identities, err = identity.Open(b.application.store)
 	if err != nil {
@@ -213,7 +225,12 @@ func (b *runtimeBuilder) openConcepts() error {
 	}
 	credentialValidator, err := byok.NewCatalogCredentialValidator(
 		func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
-			snapshot := b.application.catalog.Current()
+			var snapshot *runtimecatalog.RoutableSnapshot
+			if b.application.registry != nil {
+				snapshot = b.application.registry.Snapshot()
+			} else {
+				snapshot = b.application.catalog.Current()
+			}
 			if snapshot == nil {
 				return catalogs.Provider{}, false
 			}
@@ -234,7 +251,7 @@ func (b *runtimeBuilder) openConcepts() error {
 func (b *runtimeBuilder) openRegistry() error {
 	providerConfigs := providers.Configurations(b.config.Providers)
 	registrations, err := buildRegistrations(
-		b.application.catalog,
+		b.application.catalog.Current().Catalog(),
 		b.application.transports,
 		b.application.authentication,
 		providerConfigs,
@@ -475,9 +492,9 @@ func defaultRuntimeFactories() runtimeFactories {
 	}
 }
 
-func (a *App) refreshCatalog(ctx context.Context) error {
+func (a *App) syncCatalog(ctx context.Context) (starmap.CatalogState, error) {
 	if a == nil || a.catalogRuntime == nil {
-		return ErrCatalogRequired
+		return starmap.CatalogState{}, ErrCatalogRequired
 	}
 	timeout := a.config.Catalog.RefreshTimeout
 	if timeout <= 0 {
@@ -485,12 +502,53 @@ func (a *App) refreshCatalog(ctx context.Context) error {
 	}
 	refreshCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	_, err := a.catalogRuntime.Refresh(
+	_, state, err := a.catalogRuntime.Sync(
 		refreshCtx,
 		pkgsync.WithSources(sources.ProvidersID, sources.LocalCatalogID),
 		pkgsync.WithTimeout(timeout),
 	)
-	return err
+	return state, err
+}
+
+func (a *App) refreshRuntime(ctx context.Context) error {
+	state, err := a.syncCatalog(ctx)
+	if err != nil {
+		return err
+	}
+	resolved, err := a.config.ResolveProviderSet(
+		ctx,
+		state.Catalog.Providers(),
+		a.providerSettings,
+	)
+	if err != nil {
+		return fmt.Errorf("resolve provider runtime configuration: %w", err)
+	}
+	registrations, err := buildRegistrations(
+		state.Catalog,
+		a.transports,
+		a.authentication,
+		providers.Configurations(resolved),
+		a.newConnector,
+	)
+	if err != nil {
+		return err
+	}
+	candidate, err := a.registry.Prepare(registrations)
+	if err != nil {
+		return err
+	}
+	availability := candidate.Availability()
+	if err := a.catalog.ValidateRuntime(state, availability); err != nil {
+		return errors.Join(err, candidate.Close())
+	}
+	snapshot, err := a.catalog.ReplaceRuntime(state, availability)
+	if err != nil {
+		return errors.Join(err, candidate.Close())
+	}
+	if err := a.registry.Publish(candidate, snapshot); err != nil {
+		return errors.Join(err, candidate.Close())
+	}
+	return nil
 }
 
 func (a *App) refreshCatalogLoop(ctx context.Context) {
@@ -501,8 +559,8 @@ func (a *App) refreshCatalogLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := a.refreshCatalog(ctx); err != nil {
-				log.Warn().Err(err).Msg("Starmap catalog refresh failed; retaining current generation")
+			if err := a.refreshRuntime(ctx); err != nil {
+				log.Warn().Err(err).Msg("provider runtime refresh failed; retaining current generation")
 			}
 		}
 	}
@@ -573,6 +631,12 @@ func splitCommaSeparated(value string) []string {
 }
 
 type connectorRegistryAdapter struct{ registry *registry.Registry }
+
+var _ connectors.LeasingRegistry = connectorRegistryAdapter{}
+
+func (a connectorRegistryAdapter) AcquireRuntime() (connectors.RuntimeLease, error) {
+	return a.registry.AcquireRuntime()
+}
 
 func (a connectorRegistryAdapter) Get(provider string) connectors.Connector {
 	connector, _ := a.registry.Get(provider)

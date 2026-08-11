@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/rs/zerolog/log"
 
@@ -58,14 +59,15 @@ type ProviderMetadata struct {
 
 // Registry manages provider connectors and their lifecycle
 type Registry struct {
-	connectors        map[string]connectors.Connector
-	providerAuth      map[string]bool
-	credentialSources map[string]credentials.MaterialSource
-	mu                sync.RWMutex
-	catalog           *runtimecatalog.ControlPlane
-	lifecycleMu       sync.Mutex
-	started           bool
-	closed            bool
+	catalog *runtimecatalog.ControlPlane
+	current atomic.Pointer[runtimeGeneration]
+
+	lifecycleMu sync.Mutex
+	started     bool
+	closed      bool
+
+	drainMu     sync.Mutex
+	drainErrors []error
 }
 
 // Open creates a registry from explicit production registrations.
@@ -73,32 +75,16 @@ func Open(catalogPlane *runtimecatalog.ControlPlane, registrations []Registratio
 	if catalogPlane == nil {
 		return nil, ErrCatalogRequired
 	}
-	if len(registrations) == 0 {
-		return nil, ErrProvidersRequired
-	}
 	registry := NewEmptyWithCatalog(catalogPlane)
-	for index, registration := range registrations {
-		if registration.Provider == "" {
-			return nil, registry.openFailure(ErrProviderRequired, registrations[index:])
-		}
-		if registration.Connector == nil {
-			return nil, registry.openFailure(
-				fmt.Errorf("%s: %w", registration.Provider, ErrConnectorRequired),
-				registrations[index:],
-			)
-		}
-		if registration.CredentialSource == nil {
-			return nil, registry.openFailure(
-				fmt.Errorf("%s: %w", registration.Provider, ErrCredentialSourceRequired),
-				registrations[index:],
-			)
-		}
-		if err := registry.register(registration); err != nil {
-			return nil, registry.openFailure(
-				fmt.Errorf("register %s: %w", registration.Provider, err),
-				registrations[index:],
-			)
-		}
+	candidate, err := prepareCandidate(registrations, true)
+	if err != nil {
+		return nil, err
+	}
+	if err := catalogPlane.ReplaceAdapters(candidate.Availability()); err != nil {
+		return nil, errors.Join(err, candidate.Close())
+	}
+	if err := registry.Publish(candidate, catalogPlane.Current()); err != nil {
+		return nil, errors.Join(err, candidate.Close())
 	}
 	return registry, nil
 }
@@ -111,12 +97,7 @@ func NewEmpty() *Registry {
 
 // NewEmptyWithCatalog creates an empty registry with a catalog control plane.
 func NewEmptyWithCatalog(catalogPlane *runtimecatalog.ControlPlane) *Registry {
-	return &Registry{
-		connectors:        make(map[string]connectors.Connector),
-		providerAuth:      make(map[string]bool),
-		credentialSources: make(map[string]credentials.MaterialSource),
-		catalog:           catalogPlane,
-	}
+	return &Registry{catalog: catalogPlane}
 }
 
 // Start seals the registry against later registrations.
@@ -141,6 +122,12 @@ func (r *Registry) Start(ctx context.Context) error {
 
 // Register adds a connector to the registry
 func (r *Registry) Register(provider string, connector connectors.Connector) error {
+	if provider == "" {
+		return ErrProviderRequired
+	}
+	if connector == nil {
+		return fmt.Errorf("%s: %w", provider, ErrConnectorRequired)
+	}
 	registration := Registration{Provider: provider, Connector: connector}
 	if snapshot := r.catalogSnapshot(); snapshot != nil {
 		operations := make(map[starmapcatalogs.ProviderOperation]struct{})
@@ -181,12 +168,6 @@ func (r *Registry) Register(provider string, connector connectors.Connector) err
 			return registration.EndpointTypes[left] < registration.EndpointTypes[right]
 		})
 	}
-	return r.register(registration)
-}
-
-func (r *Registry) register(registration Registration) error {
-	provider := registration.Provider
-	connector := registration.Connector
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
 	if r.closed {
@@ -195,38 +176,43 @@ func (r *Registry) register(registration Registration) error {
 	if r.started {
 		return ErrRegistryStarted
 	}
-
-	r.mu.Lock()
-	if _, exists := r.connectors[provider]; exists {
-		r.mu.Unlock()
+	if current := r.current.Load(); current != nil && current.connector(provider) != nil {
 		return fmt.Errorf("connector already registered for provider: %s", provider)
 	}
-
-	r.connectors[provider] = connector
-	r.providerAuth[provider] = registration.RequiresAuth
-	r.credentialSources[provider] = registration.CredentialSource
-	r.mu.Unlock()
+	registrations := []Registration{registration}
+	if current := r.current.Load(); current != nil {
+		registrations = append(current.registrations(), registration)
+	}
+	candidate, err := prepareCandidate(registrations, false)
+	if err != nil {
+		return err
+	}
 	if r.catalog != nil {
-		if err := r.catalog.SetAdapter(runtimecatalog.AdapterAvailability{
-			ProviderID:       starmapcatalogs.ProviderID(provider),
-			Registered:       true,
-			Configured:       true,
-			Operations:       append([]starmapcatalogs.ProviderOperation(nil), registration.Operations...),
-			EndpointTypes:    append([]starmapcatalogs.EndpointType(nil), registration.EndpointTypes...),
-			BaseURL:          registration.BaseURL,
-			EndpointBindings: cloneStringMap(registration.EndpointBindings),
-		}); err != nil {
-			r.mu.Lock()
-			delete(r.connectors, provider)
-			delete(r.providerAuth, provider)
-			delete(r.credentialSources, provider)
-			r.mu.Unlock()
-			return fmt.Errorf("publish %s adapter availability: %w", provider, err)
+		if err := r.catalog.ReplaceAdapters(candidate.Availability()); err != nil {
+			closeErr := connector.Close()
+			if closeErr != nil {
+				closeErr = fmt.Errorf("close unowned %s connector: %w", provider, closeErr)
+			}
+			return errors.Join(err, closeErr)
 		}
 	}
-
+	generation, err := candidate.consume()
+	if err != nil {
+		return err
+	}
+	generation.catalog = r.catalog
+	if r.catalog != nil {
+		generation.snapshot = r.catalog.Current()
+		if generation.snapshot != nil {
+			generation.catalogGenerationID = generation.snapshot.GenerationID()
+		}
+	}
+	// Register is a construction-only API. The new generation reuses prior
+	// connectors, so it replaces the unpublished construction view without
+	// draining it.
+	r.current.Store(generation)
 	log.Info().
-		Str("provider", provider).
+		Str("provider", registration.Provider).
 		Msg("registered connector")
 
 	return nil
@@ -243,30 +229,14 @@ func cloneStringMap(source map[string]string) map[string]string {
 	return result
 }
 
-func (r *Registry) openFailure(cause error, unowned []Registration) error {
-	errs := []error{cause}
-	if err := r.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("close registered connectors: %w", err))
-	}
-	for index := len(unowned) - 1; index >= 0; index-- {
-		registration := unowned[index]
-		if registration.Connector == nil {
-			continue
-		}
-		if err := registration.Connector.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("close unregistered %s connector: %w", registration.Provider, err))
-		}
-	}
-	return errors.Join(errs...)
-}
-
 // Get retrieves a connector by provider name
 func (r *Registry) Get(provider string) (connectors.Connector, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	connector, exists := r.connectors[provider]
-	if !exists {
+	generation := r.current.Load()
+	if generation == nil {
+		return nil, fmt.Errorf("no connector registered for provider: %s", provider)
+	}
+	connector := generation.connector(provider)
+	if connector == nil {
 		return nil, fmt.Errorf("no connector registered for provider: %s", provider)
 	}
 
@@ -276,28 +246,22 @@ func (r *Registry) Get(provider string) (connectors.Connector, error) {
 // ResolveMaterial resolves request-bound inference material for one exact
 // registered provider.
 func (r *Registry) ResolveMaterial(ctx context.Context, provider string) (credentials.Material, error) {
-	r.mu.RLock()
-	source := r.credentialSources[provider]
-	r.mu.RUnlock()
-	if source == nil {
-		return credentials.Material{}, fmt.Errorf("%s: %w", provider, ErrCredentialSourceRequired)
+	generation := r.current.Load()
+	if generation == nil {
+		return credentials.Material{}, ErrProvidersRequired
 	}
-	material, err := source.ResolveMaterial(ctx)
-	if err != nil {
-		return credentials.Material{}, fmt.Errorf("resolve provider %s credential material: %w", provider, err)
-	}
-	return material, nil
+	return generation.resolveMaterial(ctx, provider)
 }
 
 // GetAll returns all registered connectors
 func (r *Registry) GetAll() map[string]connectors.Connector {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	// Return a copy to prevent concurrent modification
-	result := make(map[string]connectors.Connector, len(r.connectors))
-	for k, v := range r.connectors {
-		result[k] = v
+	generation := r.current.Load()
+	if generation == nil {
+		return map[string]connectors.Connector{}
+	}
+	result := make(map[string]connectors.Connector, len(generation.providers))
+	for providerID, entry := range generation.providers {
+		result[providerID] = entry.registration.Connector
 	}
 
 	return result
@@ -305,24 +269,22 @@ func (r *Registry) GetAll() map[string]connectors.Connector {
 
 // ListProviders returns a list of registered provider names
 func (r *Registry) ListProviders() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	providers := make([]string, 0, len(r.connectors))
-	for provider := range r.connectors {
+	generation := r.current.Load()
+	if generation == nil {
+		return nil
+	}
+	providers := make([]string, 0, len(generation.providers))
+	for provider := range generation.providers {
 		providers = append(providers, provider)
 	}
-
+	sort.Strings(providers)
 	return providers
 }
 
 // HasProvider checks if a provider is registered
 func (r *Registry) HasProvider(provider string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	_, exists := r.connectors[provider]
-	return exists
+	generation := r.current.Load()
+	return generation != nil && generation.connector(provider) != nil
 }
 
 // IsProviderConfigured reports whether app composition registered the provider.
@@ -348,39 +310,42 @@ func (r *Registry) Close() error {
 	r.closed = true
 	r.lifecycleMu.Unlock()
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	var errs []error
-
-	for provider, connector := range r.connectors {
-		if err := connector.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("failed to close %s connector: %w", provider, err))
-		}
+	current := r.current.Swap(nil)
+	if current != nil {
+		current.drain()
 	}
-
-	// Clear the map
-	r.connectors = make(map[string]connectors.Connector)
-	r.providerAuth = make(map[string]bool)
-	r.credentialSources = make(map[string]credentials.MaterialSource)
+	var errs []error
 	if r.catalog != nil {
 		if err := r.catalog.ReplaceAdapters(nil); err != nil {
 			errs = append(errs, fmt.Errorf("clear adapter availability: %w", err))
 		}
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("errors closing connectors: %v", errs)
-	}
-
-	return nil
+	r.drainMu.Lock()
+	errs = append(errs, r.drainErrors...)
+	r.drainMu.Unlock()
+	return errors.Join(errs...)
 }
 
 // GetProviderMetadata returns Starmap metadata for registered providers.
 func (r *Registry) GetProviderMetadata() []ProviderMetadata {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	snapshot := r.catalogSnapshot()
+	lease, err := r.AcquireRuntime()
+	if err != nil {
+		return nil
+	}
+	defer lease.Release()
+	return r.GetProviderMetadataForRuntime(lease)
+}
+
+// GetProviderMetadataForRuntime returns provider facts from one retained
+// request generation. The caller owns the lease lifecycle.
+func (r *Registry) GetProviderMetadataForRuntime(
+	lease connectors.RuntimeLease,
+) []ProviderMetadata {
+	if lease == nil {
+		return nil
+	}
+	snapshot := lease.Snapshot()
 	if snapshot == nil {
 		return nil
 	}
@@ -412,11 +377,33 @@ func (r *Registry) GetProviderMetadata() []ProviderMetadata {
 			item.Capabilities = append(item.Capabilities, capability)
 		}
 		sort.Strings(item.Capabilities)
-		item.RequiresAuth = r.providerAuth[string(route.ProviderID)]
+		if generationLease, ok := lease.(*Lease); ok {
+			entry := generationLease.generation.providers[string(route.ProviderID)]
+			item.RequiresAuth = entry.registration.RequiresAuth
+		}
 		seen[route.ProviderID] = struct{}{}
 		metadata = append(metadata, item)
 	}
 	return metadata
+}
+
+// Snapshot returns one complete current runtime snapshot.
+func (r *Registry) Snapshot() *runtimecatalog.RoutableSnapshot {
+	lease, err := r.AcquireRuntime()
+	if err != nil {
+		return nil
+	}
+	defer lease.Release()
+	return lease.Snapshot()
+}
+
+func (r *Registry) recordDrainError(err error) {
+	if err == nil {
+		return
+	}
+	r.drainMu.Lock()
+	r.drainErrors = append(r.drainErrors, err)
+	r.drainMu.Unlock()
 }
 
 func (r *Registry) catalogSnapshot() *runtimecatalog.RoutableSnapshot {

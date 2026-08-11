@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
@@ -107,6 +108,10 @@ type Response struct {
 
 	// Routing metadata
 	Metadata *Metadata `json:"metadata,omitempty"`
+
+	// CatalogSnapshot is the exact leased runtime generation that produced the
+	// response.
+	CatalogSnapshot *runtimecatalog.RoutableSnapshot `json:"-"`
 }
 
 // Metadata contains detailed routing information

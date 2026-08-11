@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
 
@@ -27,7 +28,7 @@ type hotReloadRuntime interface {
 
 type catalogRuntime interface {
 	ControlPlane() *runtimecatalog.ControlPlane
-	Refresh(context.Context, ...pkgsync.Option) (*pkgsync.Result, error)
+	Sync(context.Context, ...pkgsync.Option) (*pkgsync.Result, starmap.CatalogState, error)
 }
 
 type runtimeFactories struct {

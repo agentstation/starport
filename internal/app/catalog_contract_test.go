@@ -51,7 +51,7 @@ func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 	)
 
 	_, err = buildRegistrations(
-		runtime.ControlPlane(),
+		runtime.ControlPlane().Current().Catalog(),
 		transports,
 		authentication,
 		map[catalogs.ProviderID]providers.Configuration{

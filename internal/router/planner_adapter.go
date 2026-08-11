@@ -9,18 +9,23 @@ import (
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 )
 
-func (r *modelRouter) planRoute(ctx context.Context, req *Request) (*routing.Plan, error) {
+func (r *modelRouter) planRoute(
+	ctx context.Context,
+	req *Request,
+	runtime connectors.RuntimeLease,
+) (*routing.Plan, error) {
 	if r.availability != nil {
 		r.availability.Refresh(ctx)
 	}
-	if r.catalog == nil {
-		return r.planRegistryRoute(ctx, req)
+	if runtime == nil || runtime.Snapshot() == nil {
+		return r.planRegistryRoute(ctx, req, runtime)
 	}
 
-	snapshot := r.catalog.Current()
+	snapshot := runtime.Snapshot()
 	if snapshot == nil {
 		return nil, ErrNoModelsAvailable
 	}
@@ -31,7 +36,7 @@ func (r *modelRouter) planRoute(ctx context.Context, req *Request) (*routing.Pla
 	input := routing.Snapshot{
 		CatalogGenerationID:  snapshot.GenerationID(),
 		AvailabilityRevision: snapshot.AvailabilityRevision(),
-		Candidates:           r.toPlanningCandidates(snapshot),
+		Candidates:           r.toPlanningCandidates(snapshot, runtime),
 	}
 	return r.routePlanner.Plan(request, input)
 }
@@ -54,7 +59,11 @@ func splitAutoModel(models []string) ([]string, bool) {
 	return explicit, allowAny
 }
 
-func (r *modelRouter) planRegistryRoute(_ context.Context, req *Request) (*routing.Plan, error) {
+func (r *modelRouter) planRegistryRoute(
+	_ context.Context,
+	req *Request,
+	runtime connectors.RuntimeLease,
+) (*routing.Plan, error) {
 	models := r.getCandidateModels(req)
 	if req != nil {
 		models = r.filterByProviderPreferences(models, req.ProviderPreferences)
@@ -75,7 +84,7 @@ func (r *modelRouter) planRegistryRoute(_ context.Context, req *Request) (*routi
 	seen := make(map[string]struct{}, len(models))
 	for _, modelID := range models {
 		provider := r.extractProvider(modelID)
-		if provider == "" || r.registry.Get(provider) == nil {
+		if provider == "" || runtime == nil || runtime.Get(provider) == nil {
 			continue
 		}
 		providerModelID := modelID
@@ -172,7 +181,10 @@ func cloneModelOverrides(overrides map[string]string) map[string]string {
 	return result
 }
 
-func (r *modelRouter) toPlanningCandidates(snapshot *runtimecatalog.RoutableSnapshot) []routing.Candidate {
+func (r *modelRouter) toPlanningCandidates(
+	snapshot *runtimecatalog.RoutableSnapshot,
+	runtime connectors.RuntimeLease,
+) []routing.Candidate {
 	routes := snapshot.Routes()
 	providerStates := make(map[string]providerPlanningState)
 	for _, route := range routes {
@@ -182,7 +194,7 @@ func (r *modelRouter) toPlanningCandidates(snapshot *runtimecatalog.RoutableSnap
 		}
 		providerStates[provider] = providerPlanningState{
 			latency:     measuredProviderLatency(r.latencyTracker, provider),
-			unavailable: r.registry.Get(provider) == nil,
+			unavailable: runtime == nil || runtime.Get(provider) == nil,
 		}
 	}
 	candidates := make([]routing.Candidate, 0, len(routes))

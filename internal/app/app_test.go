@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/stretchr/testify/require"
@@ -317,12 +318,12 @@ type failingCatalogRuntime struct {
 	calls int
 }
 
-func (runtime *failingCatalogRuntime) Refresh(
+func (runtime *failingCatalogRuntime) Sync(
 	context.Context,
 	...pkgsync.Option,
-) (*pkgsync.Result, error) {
+) (*pkgsync.Result, starmap.CatalogState, error) {
 	runtime.calls++
-	return nil, runtime.err
+	return nil, starmap.CatalogState{}, runtime.err
 }
 
 type blockingHTTPRuntime struct {

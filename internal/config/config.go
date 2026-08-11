@@ -110,6 +110,32 @@ type ProviderEntry struct {
 	Config     ProviderConfig
 }
 
+// CloneProvidersConfig returns a caller-owned copy of deployment provider
+// settings. Material and source values are immutable handles.
+func CloneProvidersConfig(source ProvidersConfig) ProvidersConfig {
+	if source == nil {
+		return nil
+	}
+	result := make(ProvidersConfig, len(source))
+	for providerID, provider := range source {
+		provider.CredentialReferences = cloneCredentialReferences(provider.CredentialReferences)
+		provider.EndpointBindings = cloneProviderStrings(provider.EndpointBindings)
+		result[providerID] = provider
+	}
+	return result
+}
+
+func cloneProviderStrings(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
 // Entries returns all supported external configuration slots. Adapter
 // semantics and provider membership remain outside the configuration package.
 func (c ProvidersConfig) Entries() []ProviderEntry {

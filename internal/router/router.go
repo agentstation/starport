@@ -129,7 +129,14 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 
 // SelectModel chooses the best model based on the request and routing strategy
 func (r *modelRouter) SelectModel(ctx context.Context, req *Request) (string, connectors.Connector, error) {
-	plan, err := r.planRoute(ctx, req)
+	runtime, owned, err := r.acquireRuntime(ctx)
+	if err != nil {
+		return "", nil, ErrNoModelsAvailable
+	}
+	if owned {
+		defer runtime.Release()
+	}
+	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
 		if errors.Is(err, routing.ErrNoCandidate) {
 			return "", nil, ErrNoModelsAvailable
@@ -141,7 +148,7 @@ func (r *modelRouter) SelectModel(ctx context.Context, req *Request) (string, co
 		return "", nil, ErrNoModelsAvailable
 	}
 	selected := attempts[0].Route
-	connector := r.registry.Get(selected.ProviderID)
+	connector := runtime.Get(selected.ProviderID)
 	if connector == nil {
 		return "", nil, fmt.Errorf("no connector for provider %s", selected.ProviderID)
 	}
@@ -153,7 +160,14 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	if req == nil || req.ChatRequest == nil {
 		return nil, ErrNoModelsAvailable
 	}
-	plan, err := r.planRoute(ctx, req)
+	runtime, owned, err := r.acquireRuntime(ctx)
+	if err != nil {
+		return nil, ErrNoModelsAvailable
+	}
+	if owned {
+		defer runtime.Release()
+	}
+	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
 		if errors.Is(err, routing.ErrNoCandidate) {
 			return nil, ErrNoModelsAvailable
@@ -162,7 +176,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 
 	result, err := r.executor.ExecuteChat(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
-		connector := r.registry.Get(planned.Route.ProviderID)
+		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
 			return nil, failure.New(
 				failure.ProviderUnavailable,
@@ -172,7 +186,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 				nil,
 			)
 		}
-		material, materialErr := r.registry.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
+		material, materialErr := runtime.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
 		if materialErr != nil {
 			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, materialErr)
 		}
@@ -212,11 +226,12 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 
 	return &Response{
-		ChatResponse: wireResponse,
-		ModelUsed:    result.Route.ID(),
-		ProviderUsed: provider,
-		Attempts:     len(result.Attempts),
-		Metadata:     responseMetadata(result.Attempts, selectionReason(result.Attempts)),
+		ChatResponse:    wireResponse,
+		ModelUsed:       result.Route.ID(),
+		ProviderUsed:    provider,
+		Attempts:        len(result.Attempts),
+		Metadata:        responseMetadata(result.Attempts, selectionReason(result.Attempts)),
+		CatalogSnapshot: runtime.Snapshot(),
 	}, nil
 }
 

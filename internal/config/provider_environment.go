@@ -33,15 +33,30 @@ type credentialFieldOwner struct {
 // provider collection. It validates the complete alias namespace before the
 // first environment read.
 func (c *Config) ResolveProviders(ctx context.Context, providers catalogs.ProvidersReader) error {
+	resolved, err := c.ResolveProviderSet(ctx, providers, c.Providers)
+	if err != nil {
+		return err
+	}
+	c.Providers = resolved
+	return nil
+}
+
+// ResolveProviderSet resolves one deployment-owned provider configuration
+// against an exact catalog without changing the supplied settings.
+func (c *Config) ResolveProviderSet(
+	ctx context.Context,
+	providers catalogs.ProvidersReader,
+	settings ProvidersConfig,
+) (ProvidersConfig, error) {
 	if c == nil {
-		return errors.New("configuration is required")
+		return nil, errors.New("configuration is required")
 	}
 	if providers == nil {
-		return errors.New("catalog providers are required")
+		return nil, errors.New("catalog providers are required")
 	}
 	providerRecords := providers.List()
 	if err := validateCredentialAliases(providerRecords); err != nil {
-		return err
+		return nil, err
 	}
 	resolver := c.credentialResolver
 	if resolver == nil {
@@ -55,18 +70,18 @@ func (c *Config) ResolveProviders(ctx context.Context, providers catalogs.Provid
 
 	resolved := make(ProvidersConfig)
 	for _, provider := range providerRecords {
-		explicit := c.Providers[provider.ID]
+		explicit := settings[provider.ID]
 		policies, err := credentialReferencePolicies(explicit.CredentialReferences)
 		if err != nil {
-			return fmt.Errorf("provider %s credential reference: %w", provider.ID, err)
+			return nil, fmt.Errorf("provider %s credential reference: %w", provider.ID, err)
 		}
 		handle, err := resolver.Provider(provider, policies, providerConfigurationPresent(explicit))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		material, configured, err := handle.Resolve(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !configured {
 			continue
@@ -75,10 +90,9 @@ func (c *Config) ResolveProviders(ctx context.Context, providers catalogs.Provid
 		resolved[provider.ID] = mergeProviderConfig(catalogConfig, explicit)
 	}
 	if err := resolved.Validate(); err != nil {
-		return err
+		return nil, err
 	}
-	c.Providers = resolved
-	return nil
+	return resolved, nil
 }
 
 func credentialReferencePolicies(

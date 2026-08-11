@@ -5,9 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/agentstation/starmap"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/responsecache"
 	"github.com/stretchr/testify/require"
 )
@@ -195,6 +201,76 @@ func TestCachedServiceListModelsConvertsCachedJSONMap(t *testing.T) {
 	require.Equal(t, 1, upstream.calls["ListModels"])
 }
 
+func TestCachedServiceRetainsOneRuntimeGeneration(t *testing.T) {
+	client, err := starmap.New()
+	require.NoError(t, err)
+	plane, err := runtimecatalog.Open(client)
+	require.NoError(t, err)
+	generationID := plane.Current().GenerationID()
+
+	t.Run("chat", func(t *testing.T) {
+		source := &cacheRuntimeSource{snapshot: plane.Current()}
+		upstream := &mockProxyImpl{chatResponse: canonicalChatResponse()}
+		upstream.onChat = assertBorrowedCacheRuntime(t, source)
+		service := &cachedService{
+			service: upstream, runtime: source, cacheManager: newMockCacheManager(),
+			cacheConfig: CacheConfig{EnableChatCache: true},
+		}
+
+		_, err := service.ProcessChatCompletion(t.Context(), testChatRequest("tenant-1"))
+		require.NoError(t, err)
+		require.True(t, source.lastLease(t).released.Load())
+	})
+
+	t.Run("stream", func(t *testing.T) {
+		source := &cacheRuntimeSource{snapshot: plane.Current()}
+		upstream := &mockProxyImpl{chatResponse: canonicalChatResponse()}
+		upstream.onStream = assertBorrowedCacheRuntime(t, source)
+		service := &cachedService{
+			service: upstream, runtime: source, cacheManager: newMockCacheManager(),
+			cacheConfig: CacheConfig{EnableChatCache: true},
+		}
+		request := testChatRequest("tenant-1")
+		request.Request.Stream = true
+
+		stream, err := service.ProcessChatCompletionStream(t.Context(), request)
+		require.NoError(t, err)
+		lease := source.lastLease(t)
+		require.False(t, lease.released.Load())
+		readAllEvents(t, stream)
+		require.True(t, lease.released.Load())
+	})
+
+	t.Run("discovery", func(t *testing.T) {
+		source := &cacheRuntimeSource{snapshot: plane.Current()}
+		manager := newMockCacheManager()
+		upstream := &mockProxyImpl{modelsResponse: &ModelsResponse{Object: "list"}}
+		upstream.onListModels = assertBorrowedCacheRuntime(t, source)
+		service := &cachedService{
+			service: upstream, runtime: source, cacheManager: manager,
+			cacheConfig: CacheConfig{EnableModelCache: true},
+		}
+
+		_, err := service.ListModels(t.Context())
+		require.NoError(t, err)
+		require.True(t, source.lastLease(t).released.Load())
+		_, found := manager.storage["models:list:"+generationID]
+		require.True(t, found)
+	})
+}
+
+func assertBorrowedCacheRuntime(
+	t *testing.T,
+	source *cacheRuntimeSource,
+) func(context.Context) {
+	t.Helper()
+	return func(ctx context.Context) {
+		runtime := connectors.RuntimeLeaseFromContext(ctx)
+		require.Same(t, source.lastLease(t), runtime)
+		require.False(t, source.lastLease(t).released.Load())
+	}
+}
+
 func testChatRequest(tenantID string) *ChatCompletionRequest {
 	return &ChatCompletionRequest{
 		Request: inference.ChatRequest{
@@ -254,6 +330,9 @@ type mockProxyImpl struct {
 	providersResponse  *ProvidersResponse
 	embeddingsResponse *EmbeddingsResponse
 	shouldError        bool
+	onChat             func(context.Context)
+	onStream           func(context.Context)
+	onListModels       func(context.Context)
 }
 
 func (m *mockProxyImpl) count(name string) {
@@ -263,16 +342,22 @@ func (m *mockProxyImpl) count(name string) {
 	m.calls[name]++
 }
 
-func (m *mockProxyImpl) ProcessChatCompletion(context.Context, *ChatCompletionRequest) (*ChatCompletionResponse, error) {
+func (m *mockProxyImpl) ProcessChatCompletion(ctx context.Context, _ *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	m.count("ProcessChatCompletion")
+	if m.onChat != nil {
+		m.onChat(ctx)
+	}
 	if m.shouldError {
 		return nil, errors.New("proxy error")
 	}
 	return m.chatResponse, nil
 }
 
-func (m *mockProxyImpl) ProcessChatCompletionStream(context.Context, *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
+func (m *mockProxyImpl) ProcessChatCompletionStream(ctx context.Context, _ *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
 	m.count("ProcessChatCompletionStream")
+	if m.onStream != nil {
+		m.onStream(ctx)
+	}
 	if m.shouldError || m.chatResponse == nil {
 		return nil, errors.New("proxy error")
 	}
@@ -284,8 +369,11 @@ func (m *mockProxyImpl) ProcessEmbeddings(context.Context, *EmbeddingsRequest) (
 	return m.embeddingsResponse, nil
 }
 
-func (m *mockProxyImpl) ListModels(context.Context) (*ModelsResponse, error) {
+func (m *mockProxyImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	m.count("ListModels")
+	if m.onListModels != nil {
+		m.onListModels(ctx)
+	}
 	return m.modelsResponse, nil
 }
 
@@ -348,3 +436,38 @@ func (s *errorAfterEventsStream) Read() (*inference.StreamEvent, error) {
 }
 
 func (s *errorAfterEventsStream) Close() error { return nil }
+
+type cacheRuntimeSource struct {
+	snapshot *runtimecatalog.RoutableSnapshot
+
+	mu     sync.Mutex
+	leases []*cacheRuntimeLease
+}
+
+func (s *cacheRuntimeSource) AcquireRuntime() (connectors.RuntimeLease, error) {
+	lease := &cacheRuntimeLease{snapshot: s.snapshot}
+	s.mu.Lock()
+	s.leases = append(s.leases, lease)
+	s.mu.Unlock()
+	return lease, nil
+}
+
+func (s *cacheRuntimeSource) lastLease(t *testing.T) *cacheRuntimeLease {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	require.NotEmpty(t, s.leases)
+	return s.leases[len(s.leases)-1]
+}
+
+type cacheRuntimeLease struct {
+	snapshot *runtimecatalog.RoutableSnapshot
+	released atomic.Bool
+}
+
+func (l *cacheRuntimeLease) Snapshot() *runtimecatalog.RoutableSnapshot { return l.snapshot }
+func (l *cacheRuntimeLease) Get(string) connectors.Connector            { return nil }
+func (l *cacheRuntimeLease) ResolveMaterial(context.Context, string) (credentials.Material, error) {
+	return credentials.Material{}, nil
+}
+func (l *cacheRuntimeLease) Release() { l.released.Store(true) }

@@ -121,23 +121,77 @@ func (p *ControlPlane) ReplaceAdapters(adapters []AdapterAvailability) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	next := make(map[catalogs.ProviderID]AdapterAvailability, len(adapters))
-	for _, adapter := range adapters {
-		if strings.TrimSpace(string(adapter.ProviderID)) == "" {
-			return fmt.Errorf("adapter provider ID is required")
-		}
-		adapter.ProviderID = canonicalProviderID(p.state.Catalog, adapter.ProviderID)
-		if _, exists := next[adapter.ProviderID]; exists {
-			return fmt.Errorf("adapter provider ID %q is duplicated", adapter.ProviderID)
-		}
-		adapter.EndpointBindings = cloneEndpointBindings(adapter.EndpointBindings)
-		next[adapter.ProviderID] = adapter
+	next, err := normalizeAdapters(p.state.Catalog, adapters)
+	if err != nil {
+		return err
 	}
 
 	return p.publishAvailabilityLocked(
 		next,
 		p.unavailableOfferings,
 	)
+}
+
+// ValidateRuntime proves that one catalog state and complete adapter set can
+// produce a routable snapshot without changing published state.
+func (p *ControlPlane) ValidateRuntime(
+	state starmap.CatalogState,
+	adapters []AdapterAvailability,
+) error {
+	if p == nil {
+		return ErrCatalogSourceRequired
+	}
+	if err := validateCatalogState(state); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	next, err := normalizeAdapters(state.Catalog, adapters)
+	if err != nil {
+		return err
+	}
+	_, err = deriveRoutableSnapshot(
+		state,
+		p.availabilityRevision+1,
+		next,
+		p.unavailableOfferings,
+	)
+	return err
+}
+
+// ReplaceRuntime atomically publishes one catalog state and complete adapter
+// set. Retained snapshots remain immutable.
+func (p *ControlPlane) ReplaceRuntime(
+	state starmap.CatalogState,
+	adapters []AdapterAvailability,
+) (*RoutableSnapshot, error) {
+	if p == nil {
+		return nil, ErrCatalogSourceRequired
+	}
+	if err := validateCatalogState(state); err != nil {
+		return nil, err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	next, err := normalizeAdapters(state.Catalog, adapters)
+	if err != nil {
+		return nil, err
+	}
+	nextRevision := p.availabilityRevision + 1
+	snapshot, err := deriveRoutableSnapshot(
+		state,
+		nextRevision,
+		next,
+		p.unavailableOfferings,
+	)
+	if err != nil {
+		return nil, err
+	}
+	p.state = state
+	p.availabilityRevision = nextRevision
+	p.adapters = cloneAdapters(next)
+	p.current.Store(snapshot)
+	return snapshot, nil
 }
 
 // SetAdapter updates one runtime adapter and atomically republishes the derived view.
@@ -385,6 +439,27 @@ func canonicalProviderID(source *catalogs.Catalog, providerID catalogs.ProviderI
 		return providerID
 	}
 	return provider.ID
+}
+
+func normalizeAdapters(
+	source *catalogs.Catalog,
+	adapters []AdapterAvailability,
+) (map[catalogs.ProviderID]AdapterAvailability, error) {
+	next := make(map[catalogs.ProviderID]AdapterAvailability, len(adapters))
+	for _, adapter := range adapters {
+		if strings.TrimSpace(string(adapter.ProviderID)) == "" {
+			return nil, fmt.Errorf("adapter provider ID is required")
+		}
+		adapter.ProviderID = canonicalProviderID(source, adapter.ProviderID)
+		if _, exists := next[adapter.ProviderID]; exists {
+			return nil, fmt.Errorf("adapter provider ID %q is duplicated", adapter.ProviderID)
+		}
+		adapter.Operations = append([]catalogs.ProviderOperation(nil), adapter.Operations...)
+		adapter.EndpointTypes = append([]catalogs.EndpointType(nil), adapter.EndpointTypes...)
+		adapter.EndpointBindings = cloneEndpointBindings(adapter.EndpointBindings)
+		next[adapter.ProviderID] = adapter
+	}
+	return next, nil
 }
 
 func cloneAdapters(source map[catalogs.ProviderID]AdapterAvailability) map[catalogs.ProviderID]AdapterAvailability {

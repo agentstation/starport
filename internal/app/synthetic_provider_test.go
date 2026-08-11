@@ -55,7 +55,7 @@ func TestSyntheticCatalogProviderInferenceContract(t *testing.T) {
 		},
 	}
 	registrations, err := buildRegistrations(
-		plane,
+		catalog,
 		transports,
 		authentication,
 		configurations,

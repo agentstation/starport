@@ -19,17 +19,17 @@ var (
 )
 
 func buildRegistrations(
-	catalogPlane *runtimecatalog.ControlPlane,
+	catalog *catalogs.Catalog,
 	transportRegistry *connectors.TransportRegistry,
 	authenticationRegistry *providerauth.Registry,
 	configurations map[catalogs.ProviderID]providers.Configuration,
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error),
 ) ([]registry.Registration, error) {
-	if catalogPlane == nil || catalogPlane.Current() == nil {
+	if catalog == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
 	active, err := providers.Activate(
-		catalogPlane.Current().Catalog(),
+		catalog,
 		transportRegistry,
 		authenticationRegistry,
 		configurations,

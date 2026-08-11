@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -21,15 +22,22 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 	if req == nil || req.ChatRequest == nil {
 		return nil, ErrNoModelsAvailable
 	}
-	plan, err := r.planRoute(ctx, req)
+	runtime, owned, err := r.acquireRuntime(ctx)
 	if err != nil {
+		return nil, ErrNoModelsAvailable
+	}
+	plan, err := r.planRoute(ctx, req, runtime)
+	if err != nil {
+		if owned {
+			runtime.Release()
+		}
 		if errors.Is(err, routing.ErrNoCandidate) {
 			return nil, ErrNoModelsAvailable
 		}
 		return nil, err
 	}
-	return r.executor.StartChatStream(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (execution.Stream, *failure.Failure) {
-		connector := r.registry.Get(planned.Route.ProviderID)
+	stream, err := r.executor.StartChatStream(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (execution.Stream, *failure.Failure) {
+		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
 			return nil, failure.New(
 				failure.ProviderUnavailable,
@@ -39,7 +47,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 				nil,
 			)
 		}
-		material, materialErr := r.registry.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
+		material, materialErr := runtime.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
 		if materialErr != nil {
 			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, materialErr)
 		}
@@ -56,6 +64,40 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 			modelID:  planned.Route.ID(),
 		}, nil
 	})
+	if err != nil {
+		if owned {
+			runtime.Release()
+		}
+		return nil, err
+	}
+	if !owned {
+		return stream, nil
+	}
+	return &runtimeManagedStream{ManagedStream: stream, runtime: runtime}, nil
+}
+
+type runtimeManagedStream struct {
+	execution.ManagedStream
+	runtime connectors.RuntimeLease
+	once    sync.Once
+}
+
+func (s *runtimeManagedStream) Read() (*inference.StreamEvent, error) {
+	event, err := s.ManagedStream.Read()
+	if err != nil {
+		s.release()
+	}
+	return event, err
+}
+
+func (s *runtimeManagedStream) Close() error {
+	err := s.ManagedStream.Close()
+	s.release()
+	return err
+}
+
+func (s *runtimeManagedStream) release() {
+	s.once.Do(s.runtime.Release)
 }
 
 func prepareChatAttempt(req *Request, route routing.Route, streaming bool) *connectors.ChatRequest {
