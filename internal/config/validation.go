@@ -83,6 +83,27 @@ func (c *CatalogConfig) Validate() error {
 	if c.RefreshTimeout < 0 {
 		return fmt.Errorf("catalog refresh timeout cannot be negative")
 	}
+	if c.RemoteActivationInterval < 0 {
+		return fmt.Errorf("catalog remote activation interval cannot be negative")
+	}
+	if c.RemoteURL == "" {
+		if c.RemoteAPIKey != "" {
+			return fmt.Errorf("catalog remote API key requires a remote URL")
+		}
+		return nil
+	}
+	if c.RemoteActivationInterval == 0 {
+		return fmt.Errorf("catalog remote activation interval must be positive")
+	}
+	if c.WorkspacePath != "" {
+		return fmt.Errorf("catalog remote URL and workspace path are mutually exclusive")
+	}
+	if c.RefreshOnStart {
+		return fmt.Errorf("catalog remote URL and refresh on start are mutually exclusive")
+	}
+	if c.RefreshInterval != 0 {
+		return fmt.Errorf("catalog remote URL and local refresh interval are mutually exclusive")
+	}
 	return nil
 }
 

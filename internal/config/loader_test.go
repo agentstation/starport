@@ -185,6 +185,33 @@ func TestLoaderAppliesDirectSecretRefreshInterval(t *testing.T) {
 	}
 }
 
+func TestLoaderAppliesRemoteCatalogConfiguration(t *testing.T) {
+	cfg, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CATALOG_REMOTE_URL":                 "https://catalog.example/api/v1",
+			"STARPORT_CATALOG_REMOTE_API_KEY":             "catalog-secret",
+			"STARPORT_CATALOG_REMOTE_ACTIVATION_INTERVAL": "750ms",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	if err != nil {
+		t.Fatalf("load remote catalog configuration: %v", err)
+	}
+	if cfg.Catalog.RemoteURL != "https://catalog.example/api/v1" {
+		t.Fatalf("remote catalog URL = %q", cfg.Catalog.RemoteURL)
+	}
+	if cfg.Catalog.RemoteAPIKey != "catalog-secret" {
+		t.Fatal("remote catalog API key was not loaded")
+	}
+	if cfg.Catalog.RemoteActivationInterval != 750*time.Millisecond {
+		t.Fatalf(
+			"remote catalog activation interval = %s, want 750ms",
+			cfg.Catalog.RemoteActivationInterval,
+		)
+	}
+}
+
 func TestLoaderErrorsDoNotExposeConfigurationValues(t *testing.T) {
 	dir := t.TempDir()
 	secret := "loader-secret-that-must-not-appear"

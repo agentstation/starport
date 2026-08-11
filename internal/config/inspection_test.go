@@ -16,6 +16,7 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 		"storage-password-value", "provider-api-key-value",
 		"master-key-value", "jwt-secret-value", "query-token-value",
 		"userinfo-password-value", "fragment-secret-value",
+		"remote-catalog-api-key-value",
 	}
 	cfg := &Config{
 		Storage: StorageConfig{Valkey: ValkeyConfig{
@@ -32,6 +33,10 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 			),
 			BaseURL: "https://example.com/v1?api_key=query-token-value",
 		}},
+		Catalog: CatalogConfig{
+			RemoteURL:    "https://catalog.example/api/v1?token=query-token-value",
+			RemoteAPIKey: secrets[7],
+		},
 		Security: SecurityConfig{MasterKey: secrets[2], JWTSecret: secrets[3]},
 	}
 	encoded, err := json.Marshal(Redacted(cfg))
@@ -55,8 +60,16 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 	}
 	storage := view["storage"].(map[string]any)
 	valkey := storage["valkey"].(map[string]any)
-	if openAI["base_url"] != redactedValue || valkey["url"] != redactedValue {
-		t.Errorf("redacted URLs = %#v, %#v", openAI["base_url"], valkey["url"])
+	catalog := view["catalog"].(map[string]any)
+	if openAI["base_url"] != redactedValue ||
+		valkey["url"] != redactedValue ||
+		catalog["remote_url"] != redactedValue {
+		t.Errorf(
+			"redacted URLs = %#v, %#v, %#v",
+			openAI["base_url"],
+			valkey["url"],
+			catalog["remote_url"],
+		)
 	}
 	if _, found := view["chat_ui"]; !found {
 		t.Fatal("chat_ui key is missing")

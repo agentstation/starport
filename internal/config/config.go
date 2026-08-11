@@ -34,13 +34,17 @@ type CredentialSourcesConfig struct {
 	RemoteRefreshInterval time.Duration `env:"REMOTE_REFRESH_INTERVAL,default=5m"`
 }
 
-// CatalogConfig defines Starmap acquisition and tenant workspace settings.
-// Acquisition credentials remain in Starmap's provider environment contract.
+// CatalogConfig selects local Starmap acquisition or one verified remote
+// Starmap publication source. Acquisition credentials remain in Starmap's
+// provider environment contract.
 type CatalogConfig struct {
-	WorkspacePath   string        `env:"WORKSPACE_PATH"`
-	RefreshOnStart  bool          `env:"REFRESH_ON_START,default=false"`
-	RefreshInterval time.Duration `env:"REFRESH_INTERVAL,default=0s"`
-	RefreshTimeout  time.Duration `env:"REFRESH_TIMEOUT,default=2m"`
+	WorkspacePath            string        `env:"WORKSPACE_PATH"`
+	RefreshOnStart           bool          `env:"REFRESH_ON_START,default=false"`
+	RefreshInterval          time.Duration `env:"REFRESH_INTERVAL,default=0s"`
+	RefreshTimeout           time.Duration `env:"REFRESH_TIMEOUT,default=2m"`
+	RemoteURL                string        `env:"REMOTE_URL" redact:"url"`
+	RemoteAPIKey             string        `env:"REMOTE_API_KEY" secret:"true"`
+	RemoteActivationInterval time.Duration `env:"REMOTE_ACTIVATION_INTERVAL,default=250ms"`
 }
 
 // ServerConfig defines HTTP server settings

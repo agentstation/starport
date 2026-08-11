@@ -59,6 +59,7 @@ type App struct {
 	hotReloader      hotReloadRuntime
 	registry         *registry.Registry
 	catalogRuntime   catalogRuntime
+	catalogUpdates   catalogUpdateRuntime
 	catalog          *runtimecatalog.ControlPlane
 	store            storage.KVStore
 	cacheManager     *cache.Manager
@@ -175,7 +176,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	catalogRuntime, err := b.factories.openCatalog(
 		context.Background(),
 		b.application.store,
-		b.config.Catalog.WorkspacePath,
+		b.config.Catalog,
 	)
 	if err != nil {
 		return fmt.Errorf("open catalog: %w", err)
@@ -185,6 +186,10 @@ func (b *runtimeBuilder) openConcepts() error {
 	}
 	b.application.catalogRuntime = catalogRuntime
 	b.application.catalog = catalogRuntime.ControlPlane()
+	if updates, ok := catalogRuntime.(catalogUpdateRuntime); ok {
+		b.application.catalogUpdates = updates
+		b.application.own("remote catalog", updates.Close)
+	}
 	if b.config.Catalog.RefreshOnStart {
 		state, err := b.application.syncCatalog(context.Background())
 		if err == nil {
@@ -386,12 +391,33 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.registry.Start(runCtx); err != nil {
 		return errors.Join(fmt.Errorf("start registry: %w", err), a.closeWithTimeout())
 	}
+	if a.catalogUpdates != nil {
+		if err := a.catalogUpdates.Start(runCtx); err != nil {
+			return errors.Join(
+				fmt.Errorf("start remote catalog: %w", err),
+				a.closeWithTimeout(),
+			)
+		}
+		if err := a.activateRuntimeState(
+			runCtx,
+			a.catalogUpdates.CurrentCandidate(),
+		); err != nil {
+			log.Warn().Err(err).Msg(
+				"remote catalog candidate failed; serving the current complete runtime",
+			)
+		}
+		a.catalogRefreshWG.Add(1)
+		go func() {
+			defer a.catalogRefreshWG.Done()
+			a.remoteCatalogLoop(runCtx)
+		}()
+	}
 	if a.hotReloader != nil {
 		if err := a.hotReloader.Start(runCtx); err != nil {
 			return errors.Join(fmt.Errorf("start hot reload: %w", err), a.closeWithTimeout())
 		}
 	}
-	if a.config.Catalog.RefreshInterval > 0 {
+	if a.catalogUpdates == nil && a.config.Catalog.RefreshInterval > 0 {
 		a.catalogRefreshWG.Add(1)
 		go func() {
 			defer a.catalogRefreshWG.Done()
@@ -455,9 +481,29 @@ func defaultRuntimeFactories() runtimeFactories {
 		openCatalog: func(
 			ctx context.Context,
 			store storage.KVStore,
-			workspacePath string,
+			catalogConfig config.CatalogConfig,
 		) (catalogRuntime, error) {
-			runtime, err := runtimecatalog.OpenRuntime(ctx, store, workspacePath)
+			if strings.TrimSpace(catalogConfig.RemoteURL) != "" {
+				runtime, err := runtimecatalog.OpenRemoteRuntime(
+					ctx,
+					store,
+					runtimecatalog.RemoteConfig{
+						BaseURL:            catalogConfig.RemoteURL,
+						APIKey:             catalogConfig.RemoteAPIKey,
+						ActivationInterval: catalogConfig.RemoteActivationInterval,
+						FetchTimeout:       catalogConfig.RefreshTimeout,
+					},
+				)
+				if err != nil {
+					return nil, err
+				}
+				return runtime, nil
+			}
+			runtime, err := runtimecatalog.OpenRuntime(
+				ctx,
+				store,
+				catalogConfig.WorkspacePath,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -519,6 +565,19 @@ func (a *App) refreshRuntime(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	return a.activateRuntimeState(ctx, state)
+}
+
+func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogState) error {
+	if state.Catalog == nil || strings.TrimSpace(state.GenerationID) == "" {
+		return ErrCatalogRequired
+	}
+	current := a.catalog.Current()
+	if current != nil &&
+		current.GenerationID() == state.GenerationID &&
+		current.PayloadChecksum() == state.PayloadChecksum {
+		return nil
+	}
 	resolved, err := a.config.ResolveProviderSet(
 		ctx,
 		state.Catalog.Providers(),
@@ -545,6 +604,14 @@ func (a *App) refreshRuntime(ctx context.Context) error {
 	if err := a.catalog.ValidateRuntime(state, availability); err != nil {
 		return errors.Join(err, candidate.Close())
 	}
+	if a.catalogUpdates != nil {
+		if err := a.catalogUpdates.Accept(ctx, state); err != nil {
+			return errors.Join(
+				fmt.Errorf("record accepted remote catalog generation: %w", err),
+				candidate.Close(),
+			)
+		}
+	}
 	snapshot, err := a.catalog.ReplaceRuntime(state, availability)
 	if err != nil {
 		return errors.Join(err, candidate.Close())
@@ -565,6 +632,24 @@ func (a *App) refreshCatalogLoop(ctx context.Context) {
 		case <-ticker.C:
 			if err := a.refreshRuntime(ctx); err != nil {
 				log.Warn().Err(err).Msg("provider runtime refresh failed; retaining current generation")
+			}
+		}
+	}
+}
+
+func (a *App) remoteCatalogLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case state, ok := <-a.catalogUpdates.Updates():
+			if !ok {
+				return
+			}
+			if err := a.activateRuntimeState(ctx, state); err != nil {
+				log.Warn().Err(err).Msg(
+					"remote catalog candidate failed; serving the current complete runtime",
+				)
 			}
 		}
 	}

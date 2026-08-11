@@ -63,6 +63,7 @@ func (r Route) SupportsPromptCache() bool {
 type RoutableSnapshot struct {
 	catalog              *catalogs.Catalog
 	generationID         string
+	payloadChecksum      string
 	generatedAt          time.Time
 	catalogSequence      uint64
 	availabilityRevision uint64
@@ -77,6 +78,7 @@ func newRoutableSnapshot(
 	return &RoutableSnapshot{
 		catalog:              state.Catalog,
 		generationID:         state.GenerationID,
+		payloadChecksum:      state.PayloadChecksum,
 		generatedAt:          state.GeneratedAt,
 		catalogSequence:      state.Sequence,
 		availabilityRevision: availabilityRevision,
@@ -90,6 +92,14 @@ func (s *RoutableSnapshot) GenerationID() string {
 		return ""
 	}
 	return s.generationID
+}
+
+// PayloadChecksum returns the checksum bound to the Starmap generation.
+func (s *RoutableSnapshot) PayloadChecksum() string {
+	if s == nil {
+		return ""
+	}
+	return s.payloadChecksum
 }
 
 // GeneratedAt returns the Starmap generation timestamp.

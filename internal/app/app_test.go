@@ -53,7 +53,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 				factories.openCatalog = func(
 					context.Context,
 					storage.KVStore,
-					string,
+					config.CatalogConfig,
 				) (catalogRuntime, error) {
 					return nil, nil
 				}
@@ -118,7 +118,11 @@ func TestStartupCatalogRefreshIsExplicitAndResilient(t *testing.T) {
 			require.NoError(t, err)
 			catalog := &failingCatalogRuntime{Runtime: baseRuntime, err: refreshErr}
 			factories := explicitTestFactories()
-			factories.openCatalog = func(context.Context, storage.KVStore, string) (catalogRuntime, error) {
+			factories.openCatalog = func(
+				context.Context,
+				storage.KVStore,
+				config.CatalogConfig,
+			) (catalogRuntime, error) {
 				return catalog, nil
 			}
 
@@ -150,6 +154,23 @@ func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Nil(t, store)
+}
+
+func TestDefaultCatalogFactorySelectsVerifiedRemoteRuntime(t *testing.T) {
+	factories := defaultRuntimeFactories()
+	runtime, err := factories.openCatalog(
+		t.Context(),
+		storage.NewMockStore(),
+		config.CatalogConfig{
+			RemoteURL:                "http://127.0.0.1:1/api/v1",
+			RemoteActivationInterval: time.Millisecond,
+			RefreshTimeout:           time.Second,
+		},
+	)
+	require.NoError(t, err)
+	remoteRuntime, ok := runtime.(*runtimecatalog.RemoteRuntime)
+	require.True(t, ok)
+	require.NoError(t, remoteRuntime.Close(t.Context()))
 }
 
 func TestServerConfigCredentialsFollowOriginScope(t *testing.T) {

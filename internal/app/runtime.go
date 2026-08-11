@@ -31,9 +31,17 @@ type catalogRuntime interface {
 	Sync(context.Context, ...pkgsync.Option) (*pkgsync.Result, starmap.CatalogState, error)
 }
 
+type catalogUpdateRuntime interface {
+	Start(context.Context) error
+	CurrentCandidate() starmap.CatalogState
+	Updates() <-chan starmap.CatalogState
+	Accept(context.Context, starmap.CatalogState) error
+	Close(context.Context) error
+}
+
 type runtimeFactories struct {
 	openStorage  func(config.StorageConfig) (storage.KVStore, error)
-	openCatalog  func(context.Context, storage.KVStore, string) (catalogRuntime, error)
+	openCatalog  func(context.Context, storage.KVStore, config.CatalogConfig) (catalogRuntime, error)
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	newCache     func(cache.ManagerConfig, storage.KVStore) (*cache.Manager, error)
 	newHotReload func(string, time.Duration) (hotReloadRuntime, error)
