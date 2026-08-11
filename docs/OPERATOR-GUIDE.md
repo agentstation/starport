@@ -3,45 +3,61 @@
 Last updated: 2026-08-11
 
 This guide covers a single Starport process and a Valkey-backed multi-node
-deployment. Starport starts only when storage, Starmap, provider credentials,
-and the initial gateway identity are usable.
+deployment. Starport starts when storage, Starmap, and the initial gateway
+identity are usable. Provider credential state does not control gateway
+readiness.
 
 ## Requirements
 
 - Go 1.26.5 for a source build.
-- One configured inference provider.
 - A writable Badger path, or a reachable Valkey service.
 
-Local initialization generates the provider-credential master key. A
+Local initialization generates the credential-encryption master key. A
 production deployment must supply a master key with at least 32 bytes through
 its environment or secret manager. Do not reuse that value as a gateway API
 key. Starport stores only the SHA-256 hash of each gateway key.
 
-## First Start
+## Local Development
 
-Build Starport:
-
-```bash
-make build
-```
-
-For OpenAI, supply the conventional provider inference key and run local
-initialization:
+Set any conventional provider credentials that you want Starport to discover.
+Then start an isolated development gateway:
 
 ```bash
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-./starport init
+starport dev
 ```
 
-For Ollama, use this command instead:
+The command binds to `127.0.0.1`, uses in-memory storage, and creates no
+configuration file. It prints one temporary gateway API key:
+
+```text
+Starport development gateway
+URL: http://127.0.0.1:8080
+Gateway API key (shown once): replace-with-generated-gateway-key
+```
+
+Keep the development process open. In a second terminal, set the printed key
+and check the gateway:
 
 ```bash
-./starport init
+export STARPORT_API_KEY="replace-with-generated-gateway-key"
+curl --fail http://127.0.0.1:8080/health/ready
+curl --fail-with-body \
+  -H "Authorization: Bearer $STARPORT_API_KEY" \
+  http://127.0.0.1:8080/api/v1/models
 ```
 
-This command creates Starport state but does not invent catalog facts. Add
-each installed Ollama model to a reviewed Starmap workspace. Then set
-`STARPORT_CATALOG_WORKSPACE_PATH` before you start Starport.
+The model response contains the active Starmap catalog view. It does not prove
+that a provider accepts its resolved credential. The first inference attempt
+provides that evidence.
+
+## Initialize Persistent State
+
+For a persistent single-process installation, run local initialization once:
+
+```bash
+starport init --name primary-admin
+```
 
 Initialization writes the platform `config.env` file with mode `0600`. It
 also creates one named identity in the platform Badger directory. The command
@@ -50,10 +66,12 @@ manager. The command refuses to replace existing configuration or identity
 storage. If it cannot write the gateway key, it removes the new state so that
 you can retry.
 
-Start the gateway:
+Provider inference credentials stay in the process environment or their
+configured secret sources. Initialization does not select, copy, or persist
+them. Start the gateway after you set the provider credentials:
 
 ```bash
-./starport serve
+starport serve
 ```
 
 The default listener is `http://127.0.0.1:8080`. The configuration package
@@ -67,7 +85,7 @@ curl --fail http://localhost:8080/health/live
 curl --fail http://localhost:8080/health/ready
 ```
 
-## Initialize Configured Storage
+### Initialize configured storage
 
 Production keeps configuration in environment variables or a secret manager.
 Set the storage, master-key, and provider values before the first start. Then
@@ -161,10 +179,10 @@ scope.
 
 ## Provider Configuration
 
-Use an exact provider ID from the active Starmap catalog. Starmap owns each
-provider's credential fields, ordered conventional environment names,
-authentication profiles, endpoint templates, and service metadata. Starport
-checks the conventional names first. It then checks a derived
+Starmap owns each provider's exact ID, credential fields, ordered conventional
+environment names, authentication profiles, endpoint templates, and service
+metadata. Starport evaluates every catalog provider against that contract. It
+checks conventional names first. It then checks a derived
 `STARPORT_<PROVIDER>_<FIELD>` name. For example, it checks `OPENAI_API_KEY`
 before `STARPORT_OPENAI_API_KEY`.
 
@@ -178,6 +196,53 @@ resolution uses the catalog contract.
 
 Starmap catalog acquisition uses an independent credential plane. Starport
 never copies an acquisition credential into an inference request.
+
+### Automatic discovery and refresh
+
+During startup, Starport resolves each provider from its ordered
+catalog-declared inference profiles. Deployment-owned material can come from a
+static environment value, an explicit secret reference, or a catalog-declared
+default cloud credential chain. An authentication-free profile needs no
+material. A missing or failed provider credential does not block other
+providers, tenant BYOK, or gateway readiness.
+
+The provider reconciler repeats this work every minute by default. Set
+`STARPORT_CREDENTIAL_SOURCES_RECONCILE_INTERVAL` to another nonnegative
+duration. Set it to `0s` to disable interval reconciliation. The
+`STARPORT_CREDENTIAL_SOURCES_RECONCILE_TIMEOUT` value bounds one source
+operation.
+
+An administrator can inspect the secret-free state or trigger the same shared
+reconciliation work:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $STARPORT_API_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/providers
+
+curl --fail-with-body \
+  -X POST \
+  -H "Authorization: Bearer $STARPORT_API_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/providers/refresh
+```
+
+The status response separates compiled adapter support, operator credential
+state, and offering availability. It contains stable reason codes and no
+credential material. A manual refresh returns revision numbers, whether the
+runtime changed, configured provider IDs, and a failure count. Concurrent
+manual and scheduled refreshes share one operation. Request cancellation
+cancels that caller's wait and any source work that it owns.
+
+Starport does not send a billable provider request during discovery. A
+resolved credential becomes `ready` before a provider accepts it. The
+first inference result can change credential state to authentication,
+permission, quota, or billing failure. Offering failures remain separate.
+
+A running Starport process does not receive environment changes from another
+process. Restart Starport after you change an environment value. File and
+remote secret sources can return new material during scheduled or manual
+refreshes. The resolver keeps cache hits off the network and uses the source
+lifecycle for renewal and expiry.
 
 ### Direct secret sources
 
@@ -342,7 +407,9 @@ or not. Tenant credential lookup uses the exact authenticated gateway-key ID.
 It never merges a global stored record.
 
 Set `STARPORT_CATALOG_REFRESH_ON_START=true` to run Starmap acquisition before
-adapter activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later refreshes.
+runtime activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later catalog
+refreshes. These values update catalog facts. They do not control inference
+credential reconciliation.
 Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed tenant facts, including
 Azure deployment names and local Ollama model mappings. Those facts enter a
 durable Starmap generation before Starport makes the adapter routable.
@@ -420,12 +487,14 @@ backup, access-control, and failover procedures.
 
 ## Container Start
 
-The Compose file starts Starport with Valkey and requires two environment
-values. Initialize the shared identity repository before you start Starport:
+The Compose file starts Starport with Valkey. Its optional `.env` file passes
+catalog-declared provider values into the Starport container without a provider
+roster in the Compose file. Copy the example, set the master key, and set the
+provider values that this deployment needs. This example uses OpenAI:
 
 ```bash
-export STARPORT_SECURITY_MASTER_KEY="replace-with-random-secret-at-least-32-bytes"
-export OPENAI_API_KEY="replace-with-provider-inference-key"
+cp .env.example .env
+# Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose up -d starport
@@ -456,8 +525,8 @@ each failed check and keeps all secret values redacted.
   `STARPORT_SECURITY_MASTER_KEY`.
 - `gateway identity is required; run "starport init"`: create the first named
   identity in local or configured storage.
-- `at least one production provider is required`: configure one catalog
-  provider's required inference fields.
+- Provider credential state is `not_configured`: set one of the conventional,
+  derived, cloud, or secret-reference values that its Starmap profile declares.
 - HTTP 401: the bearer value does not match an active stored identity.
 - HTTP 403: the identity lacks the required scope or owns a different key.
 - No route candidate: the model, provider policy, tenant policy, capability,
