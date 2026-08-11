@@ -1,0 +1,6 @@
+adapter	new_owner_count	binary_delta_percent	verdict	follow_up_owner
+gcp	0	4.5325	accepted	(none)
+azure	0	0.2343	accepted	(none)
+aws	0	0.5500	accepted	(none)
+vault	5	1.1000	accepted	(none)
+openbao	6	1.0796	rejected(budget)	later direct-secret-source plan

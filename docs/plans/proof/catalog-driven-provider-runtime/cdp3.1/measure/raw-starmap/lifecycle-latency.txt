@@ -1,0 +1,19 @@
+=== RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget
+=== RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/gcp
+    secret_source_test.go:371: cancellation = 71.167µs
+=== RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/azure
+    secret_source_test.go:371: cancellation = 2.917µs
+=== RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/aws
+    secret_source_test.go:371: cancellation = 1.417µs
+=== RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/vault
+    secret_source_test.go:371: cancellation = 958ns
+--- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget (0.00s)
+    --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/gcp (0.00s)
+    --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/azure (0.00s)
+    --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/aws (0.00s)
+    --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/vault (0.00s)
+=== RUN   TestDirectSecretSourceColdFakeP95Budget
+    secret_source_test.go:391: cold fake calls = 10000, p95 = 834ns
+--- PASS: TestDirectSecretSourceColdFakeP95Budget (0.01s)
+PASS
+ok  	github.com/agentstation/starmap/internal/auth	0.300s
