@@ -108,13 +108,13 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 			return nil, io.EOF
 		}
 
-		providerFailure := failureFromError(s.currentRoute.Route.ProviderID, err)
+		providerFailure, action := failureFromError(s.currentRoute.Route.ProviderID, err)
 		s.mu.Lock()
 		if s.terminal {
 			s.mu.Unlock()
 			return nil, io.EOF
 		}
-		decision := s.session.fail(s.evidenceIndex, providerFailure)
+		decision := s.session.fail(s.evidenceIndex, providerFailure, action)
 		if s.committed || decision == decisionStop {
 			s.terminal = true
 			s.cancel()
@@ -154,7 +154,7 @@ func (s *managedStream) Close() error {
 	if s.evidenceIndex >= 0 && s.evidenceIndex < len(s.session.evidence) {
 		evidence := &s.session.evidence[s.evidenceIndex]
 		if evidence.State == StateRunning {
-			s.session.fail(s.evidenceIndex, contextFailure(context.Canceled))
+			s.session.fail(s.evidenceIndex, contextFailure(context.Canceled), AttemptActionDefault)
 		}
 	}
 	current := s.current
@@ -202,7 +202,7 @@ func (s *managedStream) startNext() error {
 		}
 		s.mu.Unlock()
 
-		stream, providerFailure := s.start(s.ctx, planned)
+		stream, providerFailure, action := s.start(s.ctx, planned)
 
 		s.mu.Lock()
 		providerFailure = s.session.normalizeOutcome(s.ctx, stream != nil, providerFailure)
@@ -213,7 +213,7 @@ func (s *managedStream) startNext() error {
 			s.mu.Unlock()
 			return nil
 		}
-		decision := s.session.fail(evidenceIndex, providerFailure)
+		decision := s.session.fail(evidenceIndex, providerFailure, action)
 		if decision == decisionStop {
 			terminalError := s.session.terminalError(ErrAllAttemptsFailed)
 			s.mu.Unlock()
@@ -235,16 +235,21 @@ func (s *managedStream) startNext() error {
 	}
 }
 
-func failureFromError(provider string, err error) *failure.Failure {
+func failureFromError(provider string, err error) (*failure.Failure, AttemptAction) {
+	action := AttemptActionDefault
+	var actionError *attemptActionError
+	if errors.As(err, &actionError) {
+		action = actionError.action
+	}
 	var providerFailure *failure.Failure
 	if errors.As(err, &providerFailure) {
-		return providerFailure
+		return providerFailure, action
 	}
 	if errors.Is(err, context.Canceled) {
-		return contextFailure(context.Canceled)
+		return contextFailure(context.Canceled), AttemptActionDefault
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return contextFailure(context.DeadlineExceeded)
+		return contextFailure(context.DeadlineExceeded), AttemptActionDefault
 	}
 	return failure.New(
 		failure.ProviderUnavailable,
@@ -252,5 +257,5 @@ func failureFromError(provider string, err error) *failure.Failure {
 		true,
 		failure.ProviderDetails{Provider: provider},
 		err,
-	)
+	), action
 }

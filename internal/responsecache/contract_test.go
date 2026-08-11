@@ -47,7 +47,7 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 		Request:           request,
 		Policy: Policy{
 			Provider: ProviderPolicy{Order: []string{"openai", "anthropic"}, Only: []string{"openai", "anthropic"}, AllowFallbacks: true, Route: "fallback", ModelOverrides: map[string]string{"openai/gpt-4": "openai/gpt-4.1"}},
-			Tenant:   TenantPolicy{AllowedModels: []string{"openai/gpt-4.1"}, AllowedProviders: []string{"openai"}, RateLimitTier: "pro"},
+			Tenant:   TenantPolicy{AllowedModels: []string{"openai/gpt-4.1"}, AllowedProviders: []string{"openai"}, RateLimitTier: "pro", CredentialStrategy: "operator_first"},
 		},
 	}
 	baseKey, err := ChatKey(base)
@@ -101,6 +101,7 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 		"allowed models":         func(value *ChatIdentity) { value.Policy.Tenant.AllowedModels = []string{"openai/gpt-4.2"} },
 		"allowed providers":      func(value *ChatIdentity) { value.Policy.Tenant.AllowedProviders = []string{"anthropic"} },
 		"tenant tier":            func(value *ChatIdentity) { value.Policy.Tenant.RateLimitTier = "enterprise" },
+		"credential strategy":    func(value *ChatIdentity) { value.Policy.Tenant.CredentialStrategy = "user_only" },
 	}
 	for name, mutate := range variants {
 		t.Run(name, func(t *testing.T) {

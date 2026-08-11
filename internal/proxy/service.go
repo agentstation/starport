@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/providers/byok"
 )
 
 // Proxy defines the core proxy interface for LLM request handling.
@@ -185,10 +186,11 @@ type ProviderPreferences struct {
 
 // APIKeyRoutingConfig contains API-key scoped routing restrictions.
 type APIKeyRoutingConfig struct {
-	AllowedProviders []string
-	AllowedModels    []string
-	ModelOverrides   map[string]string
-	RateLimitTier    string
+	AllowedProviders   []string
+	AllowedModels      []string
+	ModelOverrides     map[string]string
+	RateLimitTier      string
+	CredentialStrategy byok.Strategy
 }
 
 // CacheCost represents the cost of cache operations

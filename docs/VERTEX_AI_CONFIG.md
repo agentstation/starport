@@ -6,21 +6,23 @@ through hidden backup regions.
 
 ## Configuration
 
-Set the project and one location for both authentication modes:
+Set the project and one location with the conventional names declared by the
+Starmap provider record:
 
 ```bash
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID=your-project-id
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION=us-central1
+export GOOGLE_CLOUD_PROJECT=your-project-id
+export GOOGLE_CLOUD_LOCATION=us-central1
 ```
 
-You must set `STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID` and
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION`. Starport binds these runtime
-values to the endpoint template from Starmap.
+Starport checks the ordered conventional names before the derived
+`STARPORT_GOOGLE_VERTEX_PROJECT` and `STARPORT_GOOGLE_VERTEX_LOCATION` names.
+It binds the selected values to the endpoint template from Starmap.
 
-Use Google Application Default Credentials for a renewable token:
+Configure Google Application Default Credentials for a renewable token. For
+example, use one of the standard Google credential mechanisms:
 
 ```bash
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
+gcloud auth application-default login
 ```
 
 Default mode supports local Application Default Credentials, Google managed
@@ -29,16 +31,11 @@ platform scope. It preserves the quota project from the detected credentials
 and sends it with each request. It refreshes the bearer token two minutes
 before expiry.
 
-Use a static OAuth access token only when token renewal is external:
-
-```bash
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=static
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY="replace-with-oauth-access-token"
-```
-
-Do not set the API-key variable with default mode. Starport rejects this
-ambiguous configuration. The adapter requires `AUTH_MODE`. Ambient Google
-credentials do not activate Vertex AI when this value is empty.
+The current Starmap Vertex AI inference profile uses the compiled
+`google-default` authentication primitive. It does not declare a static token
+profile or an `AUTH_MODE` field. If the catalog adds a new typed profile,
+Starport can select it without a provider-specific branch when the primitive
+is already compiled.
 
 Starmap resolves its catalog-acquisition credentials independently. Starport
 does not copy a Starmap credential into an inference request.

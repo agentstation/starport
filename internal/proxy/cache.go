@@ -555,6 +555,7 @@ func cachePolicy(route string, provider *ProviderPreferences, tenant *APIKeyRout
 		policy.Tenant.AllowedModels = append([]string(nil), tenant.AllowedModels...)
 		policy.Tenant.AllowedProviders = append([]string(nil), tenant.AllowedProviders...)
 		policy.Tenant.RateLimitTier = tenant.RateLimitTier
+		policy.Tenant.CredentialStrategy = string(tenant.CredentialStrategy)
 		policy.Provider.ModelOverrides = make(map[string]string, len(tenant.ModelOverrides))
 		for model, override := range tenant.ModelOverrides {
 			policy.Provider.ModelOverrides[model] = override

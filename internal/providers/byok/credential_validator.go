@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // CredentialValidator validates Starport-owned inference material without
@@ -45,18 +47,31 @@ func (v *catalogCredentialValidator) ValidateCredential(
 	if !found || provider.Credentials == nil {
 		return &ValidationError{Provider: providerID, Message: "provider has no inference credential contract"}
 	}
-	credentials := provider.Credentials
-	fields := make(map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField, len(credentials.Fields))
-	for _, field := range credentials.Fields {
+	_, err := buildCredentialMaterial(provider, key, config)
+	return err
+}
+
+func buildCredentialMaterial(
+	provider catalogs.Provider,
+	key map[string]string,
+	config map[string]any,
+) (credentials.Material, error) {
+	providerID := string(provider.ID)
+	if provider.Credentials == nil {
+		return credentials.Material{}, &ValidationError{Provider: providerID, Message: "provider has no inference credential contract"}
+	}
+	contract := provider.Credentials
+	fields := make(map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField, len(contract.Fields))
+	for _, field := range contract.Fields {
 		fields[field.ID] = field
 	}
-	profiles := make(map[catalogs.ProviderCredentialProfileID]catalogs.ProviderCredentialProfile, len(credentials.Profiles))
-	for _, profile := range credentials.Profiles {
+	profiles := make(map[catalogs.ProviderCredentialProfileID]catalogs.ProviderCredentialProfile, len(contract.Profiles))
+	for _, profile := range contract.Profiles {
 		profiles[profile.ID] = profile
 	}
 	allowedSecrets := make(map[string]struct{})
 	allowedParameters := make(map[string]struct{})
-	for _, profileID := range credentials.Inference.Alternatives {
+	for _, profileID := range contract.Inference.Alternatives {
 		profile, exists := profiles[profileID]
 		if !exists {
 			continue
@@ -72,31 +87,32 @@ func (v *catalogCredentialValidator) ValidateCredential(
 	}
 	for fieldID := range key {
 		if _, exists := allowedSecrets[fieldID]; !exists {
-			return &ValidationError{Provider: providerID, Field: fieldID, Message: "is not declared by an inference profile"}
+			return credentials.Material{}, &ValidationError{Provider: providerID, Field: fieldID, Message: "is not declared by an inference profile"}
 		}
 	}
 	for fieldID := range config {
 		if _, exists := allowedParameters[fieldID]; !exists {
-			return &ValidationError{Provider: providerID, Field: fieldID, Message: "is not declared as an inference parameter"}
+			return credentials.Material{}, &ValidationError{Provider: providerID, Field: fieldID, Message: "is not declared as an inference parameter"}
 		}
 	}
 
 	var firstError error
-	for _, profileID := range credentials.Inference.Alternatives {
+	for _, profileID := range contract.Inference.Alternatives {
 		profile, exists := profiles[profileID]
 		if !exists {
 			continue
 		}
-		if err := validateProfileMaterial(providerID, profile, fields, key, config); err == nil {
-			return nil
+		values, err := validateProfileMaterial(providerID, profile, fields, key, config)
+		if err == nil {
+			return credentials.NewMaterial(profile, values, credentials.MaterialMetadata{}), nil
 		} else if firstError == nil {
 			firstError = err
 		}
 	}
 	if firstError != nil {
-		return firstError
+		return credentials.Material{}, firstError
 	}
-	return &ValidationError{Provider: providerID, Message: "provider has no usable inference credential profile"}
+	return credentials.Material{}, &ValidationError{Provider: providerID, Message: "provider has no usable inference credential profile"}
 }
 
 func validateProfileMaterial(
@@ -105,11 +121,12 @@ func validateProfileMaterial(
 	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
 	key map[string]string,
 	config map[string]any,
-) error {
+) (map[catalogs.ProviderCredentialFieldID]string, error) {
+	values := make(map[catalogs.ProviderCredentialFieldID]string, len(profile.Fields))
 	for _, fieldID := range profile.Fields {
 		field, exists := fields[fieldID]
 		if !exists {
-			return &ValidationError{Provider: providerID, Field: string(fieldID), Message: "is missing from the provider field contract"}
+			return nil, &ValidationError{Provider: providerID, Field: string(fieldID), Message: "is missing from the provider field contract"}
 		}
 		value := ""
 		switch field.Kind {
@@ -124,18 +141,31 @@ func validateProfileMaterial(
 			}
 		}
 		if field.Required && strings.TrimSpace(value) == "" {
-			return &ValidationError{Provider: providerID, Field: string(fieldID), Message: "is required"}
+			return nil, &ValidationError{Provider: providerID, Field: string(fieldID), Message: "is required"}
+		}
+		if value != "" {
+			values[fieldID] = value
 		}
 		if value == "" || field.Pattern == "" {
 			continue
 		}
 		pattern, err := regexp.Compile(field.Pattern)
 		if err != nil {
-			return fmt.Errorf("provider %s field %s pattern is invalid", providerID, fieldID)
+			return nil, fmt.Errorf("provider %s field %s pattern is invalid", providerID, fieldID)
 		}
 		if !pattern.MatchString(value) {
-			return &ValidationError{Provider: providerID, Field: string(fieldID), Message: "does not match the catalog pattern"}
+			return nil, &ValidationError{Provider: providerID, Field: string(fieldID), Message: "does not match the catalog pattern"}
 		}
 	}
-	return nil
+	return values, nil
+}
+
+func materialValues(material credentials.Material) map[catalogs.ProviderCredentialFieldID]string {
+	values := make(map[catalogs.ProviderCredentialFieldID]string)
+	for _, fieldID := range material.Profile().Fields {
+		if value, exists := material.Value(fieldID); exists {
+			values[fieldID] = value
+		}
+	}
+	return values
 }

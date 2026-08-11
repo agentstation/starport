@@ -43,10 +43,6 @@ func writeInitResult(writer io.Writer, result InitResult, asJSON bool) error {
 		)
 		return err
 	}
-	next := "Run: starport serve"
-	if result.Provider == catalogs.ProviderIDOllama {
-		next = "Next: add installed Ollama models to a reviewed Starmap workspace, then run starport serve"
-	}
 	_, err := fmt.Fprintf(
 		writer,
 		"Initialized Starport for %s.\nConfiguration: %s\nData: %s\nGateway API key (shown once): %s\n%s\n",
@@ -54,7 +50,7 @@ func writeInitResult(writer io.Writer, result InitResult, asJSON bool) error {
 		result.ConfigFile,
 		result.DataDir,
 		result.APIKey,
-		next,
+		"Run: starport serve",
 	)
 	return err
 }

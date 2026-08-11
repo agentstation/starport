@@ -11,7 +11,6 @@ import (
 
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
@@ -164,10 +163,11 @@ func transformAPIKeyConfig(config *APIKeyRoutingConfig) *router.APIKeyConfig {
 	}
 
 	return &router.APIKeyConfig{
-		AllowedProviders: append([]string(nil), config.AllowedProviders...),
-		AllowedModels:    append([]string(nil), config.AllowedModels...),
-		ModelOverrides:   modelOverrides,
-		RateLimitTier:    config.RateLimitTier,
+		AllowedProviders:   append([]string(nil), config.AllowedProviders...),
+		AllowedModels:      append([]string(nil), config.AllowedModels...),
+		ModelOverrides:     modelOverrides,
+		RateLimitTier:      config.RateLimitTier,
+		CredentialStrategy: config.CredentialStrategy,
 	}
 }
 
@@ -276,6 +276,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		ProviderPreferences: transformProviderPreferences(req.Provider),
 		APIKeyConfig:        transformAPIKeyConfig(req.APIKeyConfig),
 		Metadata:            buildRequestMetadata(req),
+		TenantID:            req.TenantID,
 	}
 	if hasCacheControl {
 		routingReq.PrepareAttempt = func(route routing.Route, attempt *connectors.ChatRequest) *connectors.ChatRequest {
@@ -360,6 +361,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 		ProviderPreferences: transformProviderPreferences(req.Provider),
 		APIKeyConfig:        transformAPIKeyConfig(req.APIKeyConfig),
 		Metadata:            buildRequestMetadata(req),
+		TenantID:            req.TenantID,
 	}
 	if hasCacheControl {
 		routingReq.PrepareAttempt = func(route routing.Route, attempt *connectors.ChatRequest) *connectors.ChatRequest {
@@ -412,98 +414,17 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 	// Transform to connector request
 	connReq := TransformEmbeddingsRequest(req)
 
-	runtime, owned, err := p.acquireRuntime(ctx)
+	result, err := p.router.RouteEmbeddings(ctx, &router.EmbeddingRequest{
+		EmbeddingsRequest: connReq,
+		APIKeyConfig:      transformAPIKeyConfig(req.APIKeyConfig),
+		TenantID:          req.TenantID,
+	})
 	if err != nil {
-		return nil, ErrEmbeddingsNotSupported
-	}
-	if owned {
-		defer runtime.Release()
-	}
-	connector, route, err := p.findOperationProvider(
-		runtime,
-		req.Request.Model,
-		starmapcatalogs.ProviderOperationEmbeddings,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if !embeddingRouteAllowed(req.Request.Model, route, req.APIKeyConfig) {
-		return nil, failure.New(
-			failure.Permission,
-			"The API key cannot use this model.",
-			false,
-			failure.ProviderDetails{},
-			nil,
-		)
-	}
-	provider := string(route.ProviderID)
-	endpoint, found := route.Endpoint(starmapcatalogs.ProviderOperationEmbeddings)
-	if !found {
-		return nil, ErrEmbeddingsNotSupported
-	}
-	connReq.Model = string(route.ProviderModelID)
-	connReq.Endpoint = connectors.InferenceEndpoint{Type: endpoint.Type, URL: endpoint.URL}
-	material, err := runtime.ResolveMaterial(ctx, provider)
-	if err != nil {
-		return nil, &ProviderError{
-			Provider: provider,
-			Code:     "credential_resolution_failed",
-			Message:  "failed to resolve provider credential material",
-			Err:      connectors.NormalizeFailure(provider, err),
+		return nil, &RoutingError{
+			Model: req.Request.Model, Reason: "failed to route embedding request", Err: err,
 		}
 	}
-	connReq.Credential = material
-
-	// Execute the request
-	resp, err := connector.Embeddings(ctx, connReq)
-	if err != nil {
-		return nil, &ProviderError{
-			Provider: provider,
-			Code:     "embeddings_failed",
-			Message:  "failed to generate embeddings",
-			Err:      connectors.NormalizeFailure(provider, err),
-		}
-	}
-
-	// Transform response
-	proxyResp, err := TransformEmbeddingsResponse(resp)
-	if err != nil {
-		return nil, fmt.Errorf("transform embedding response: %w", err)
-	}
-
-	return proxyResp, nil
-}
-
-func embeddingRouteAllowed(
-	requestedModel string,
-	route runtimecatalog.Route,
-	config *APIKeyRoutingConfig,
-) bool {
-	if config == nil {
-		return true
-	}
-	if len(config.AllowedProviders) > 0 {
-		allowed := false
-		for _, providerID := range config.AllowedProviders {
-			if providerID == "*" || providerID == string(route.ProviderID) {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return false
-		}
-	}
-	if len(config.AllowedModels) == 0 {
-		return true
-	}
-	for _, modelID := range config.AllowedModels {
-		if modelID == "*" || modelID == requestedModel ||
-			modelID == string(route.DefinitionID) || modelID == route.ID() {
-			return true
-		}
-	}
-	return false
+	return &EmbeddingsResponse{Response: result.Response}, nil
 }
 
 // ListModels returns models from one retained routable catalog generation.
@@ -792,27 +713,4 @@ func (p *proxy) acquireRuntime(
 	}
 	lease, err := p.registry.AcquireRuntime()
 	return lease, true, err
-}
-
-func (p *proxy) findOperationProvider(
-	runtime connectors.RuntimeLease,
-	modelID string,
-	operation starmapcatalogs.ProviderOperation,
-) (connectors.Connector, runtimecatalog.Route, error) {
-	if runtime == nil {
-		return nil, runtimecatalog.Route{}, ErrEmbeddingsNotSupported
-	}
-	snapshot := runtime.Snapshot()
-	if snapshot == nil {
-		return nil, runtimecatalog.Route{}, ErrEmbeddingsNotSupported
-	}
-	route, found := snapshot.ResolveOperation(modelID, operation)
-	if !found {
-		return nil, runtimecatalog.Route{}, ErrEmbeddingsNotSupported
-	}
-	connector := runtime.Get(string(route.ProviderID))
-	if connector == nil {
-		return nil, runtimecatalog.Route{}, ErrEmbeddingsNotSupported
-	}
-	return connector, route, nil
 }

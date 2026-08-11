@@ -18,19 +18,32 @@ func (r *modelRouter) planRoute(
 	req *Request,
 	runtime connectors.RuntimeLease,
 ) (*routing.Plan, error) {
+	request := r.toPlanningRequest(req)
+	return r.planOperation(ctx, request, routing.OperationChatCompletions, runtime, req)
+}
+
+func (r *modelRouter) planOperation(
+	ctx context.Context,
+	request routing.Request,
+	operation routing.Operation,
+	runtime connectors.RuntimeLease,
+	registryRequest *Request,
+) (*routing.Plan, error) {
 	if r.availability != nil {
 		r.availability.Refresh(ctx)
 	}
 	if runtime == nil || runtime.Snapshot() == nil {
-		return r.planRegistryRoute(ctx, req, runtime)
+		if operation == routing.OperationChatCompletions {
+			return r.planRegistryRoute(ctx, registryRequest, runtime)
+		}
+		return nil, ErrNoModelsAvailable
 	}
 
 	snapshot := runtime.Snapshot()
 	if snapshot == nil {
 		return nil, ErrNoModelsAvailable
 	}
-	request := r.toPlanningRequest(req)
-	request.Operation = routing.OperationChatCompletions
+	request.Operation = operation
 	request.Models, request.AllowAnyModelFallback = splitAutoModel(request.Models)
 	request.AllowModelFallbacks = len(request.Models) > 1
 	input := routing.Snapshot{

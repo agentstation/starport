@@ -7,6 +7,8 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/execution"
+	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 )
@@ -23,6 +25,10 @@ type ModelRouter interface {
 
 	// RouteStream executes the same immutable route plan and budget for streaming.
 	RouteStream(ctx context.Context, req *Request) (execution.ManagedStream, error)
+
+	// RouteEmbeddings executes one embedding request through the same route,
+	// credential, availability, and total-attempt policies as chat requests.
+	RouteEmbeddings(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error)
 }
 
 // Request contains the original request plus routing preferences
@@ -38,6 +44,9 @@ type Request struct {
 
 	// API key configuration (for provider restrictions)
 	APIKeyConfig *APIKeyConfig
+
+	// TenantID selects the exact user-scoped provider credential record.
+	TenantID string
 
 	// Request metadata for routing decisions
 	Metadata *RequestMetadata
@@ -75,6 +84,9 @@ type APIKeyConfig struct {
 
 	// Rate limit tier
 	RateLimitTier string
+
+	// CredentialStrategy selects request-bound operator and tenant credential order.
+	CredentialStrategy byok.Strategy
 }
 
 // RequestMetadata contains information for routing decisions
@@ -112,6 +124,24 @@ type Response struct {
 	// CatalogSnapshot is the exact leased runtime generation that produced the
 	// response.
 	CatalogSnapshot *runtimecatalog.RoutableSnapshot `json:"-"`
+}
+
+// EmbeddingRequest contains one provider-neutral embedding request plus
+// tenant routing and credential policy.
+type EmbeddingRequest struct {
+	*connectors.EmbeddingsRequest
+	APIKeyConfig *APIKeyConfig
+	TenantID     string
+}
+
+// EmbeddingResponse wraps one embedding result with route evidence.
+type EmbeddingResponse struct {
+	Response        inference.EmbeddingResponse
+	ModelUsed       string
+	ProviderUsed    string
+	Attempts        int
+	Metadata        *Metadata
+	CatalogSnapshot *runtimecatalog.RoutableSnapshot
 }
 
 // Metadata contains detailed routing information

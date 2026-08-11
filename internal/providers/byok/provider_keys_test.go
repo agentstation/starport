@@ -2,13 +2,93 @@ package byok
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
+	ctx := t.Context()
+	store := storage.NewMockStore()
+	repository, err := credentials.Open(store)
+	require.NoError(t, err)
+	provider := syntheticCredentialProvider()
+	validator, err := NewCatalogCredentialValidator(func(id catalogs.ProviderID) (catalogs.Provider, bool) {
+		return provider, id == provider.ID
+	})
+	require.NoError(t, err)
+	masterKey, err := credentials.GenerateMasterKey()
+	require.NoError(t, err)
+	manager, err := NewProviderKeys(repository, masterKey, validator)
+	require.NoError(t, err)
+
+	for tenant, secret := range map[string]string{"tenant-a": "secret-a", "tenant-b": "secret-b"} {
+		_, err := manager.AddKey(ctx, UserScope(tenant), string(provider.ID), map[string]string{"api-key": secret}, nil, false, 0)
+		require.NoError(t, err)
+	}
+	_, err = manager.AddGlobalKey(ctx, string(provider.ID), map[string]string{"api-key": "global-secret"}, nil, nil)
+	require.NoError(t, err)
+
+	var wait sync.WaitGroup
+	errors := make(chan error, 2)
+	for tenant, want := range map[string]string{"tenant-a": "secret-a", "tenant-b": "secret-b"} {
+		tenant, want := tenant, want
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			for range 100 {
+				material, resolveErr := manager.ResolveUserMaterial(ctx, UserScope(tenant), provider)
+				if resolveErr != nil {
+					errors <- resolveErr
+					return
+				}
+				value, exists := material.Value("api-key")
+				if !exists || value != want {
+					errors <- fmt.Errorf("tenant %s resolved another tenant's credential", tenant)
+					return
+				}
+			}
+		}()
+	}
+	wait.Wait()
+	close(errors)
+	for resolveErr := range errors {
+		require.NoError(t, resolveErr)
+	}
+
+	missing, err := manager.GetKeys(ctx, UserScope("missing"), string(provider.ID))
+	require.NoError(t, err)
+	require.Empty(t, missing, "an exact tenant lookup must not merge global material")
+}
+
+func syntheticCredentialProvider() catalogs.Provider {
+	return catalogs.Provider{
+		ID: "acme",
+		Credentials: &catalogs.ProviderCredentials{
+			Fields: []catalogs.ProviderCredentialField{{
+				ID: "api-key", Kind: catalogs.ProviderCredentialFieldSecret, Required: true,
+			}},
+			Profiles: []catalogs.ProviderCredentialProfile{{
+				ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+				Fields: []catalogs.ProviderCredentialFieldID{"api-key"},
+				Placements: []catalogs.ProviderCredentialPlacement{{
+					Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader,
+					Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer,
+				}},
+			}},
+			Inference: catalogs.ProviderCredentialPlane{
+				Required: true, Alternatives: []catalogs.ProviderCredentialProfileID{"api-key"},
+			},
+		},
+	}
+}
 
 // TestListKeys tests the ListKeys function
 func TestListKeys(t *testing.T) {

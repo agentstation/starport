@@ -47,7 +47,11 @@ func (h *EmbeddingsController) Create(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req.APIKey = h.getAPIKey(ctx)
 	req.TenantID = h.getTenantID(ctx)
-	req.APIKeyConfig = h.getAPIKeyRoutingConfig(ctx)
+	req.APIKeyConfig, err = h.getAPIKeyRoutingConfig(ctx)
+	if err != nil {
+		h.writeInvalidRequest(w, "Invalid provider credential strategy")
+		return
+	}
 	req.RequestID = h.getRequestID(ctx)
 
 	// Process the request

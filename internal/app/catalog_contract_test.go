@@ -71,6 +71,72 @@ func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 	require.ErrorIs(t, err, providers.ErrProviderMissingCatalog)
 }
 
+func TestUnsupportedCatalogPrimitivesFailClosed(t *testing.T) {
+	t.Run("transport", func(t *testing.T) {
+		transports, err := connectors.ProductionTransportRegistry()
+		require.NoError(t, err)
+		_, err = transports.NewProviderConnector(
+			"acme",
+			[]catalogs.EndpointType{"future-transport"},
+			connectors.ProviderConfig{Enabled: true},
+		)
+		require.ErrorIs(t, err, connectors.ErrTransportUnsupported)
+	})
+
+	t.Run("authentication", func(t *testing.T) {
+		builder, err := catalogs.NewEmbedded()
+		require.NoError(t, err)
+		catalog, err := builder.Build()
+		require.NoError(t, err)
+		provider, err := catalog.Provider(catalogs.ProviderIDOpenAI)
+		require.NoError(t, err)
+		provider.Credentials.Fields = append(provider.Credentials.Fields, catalogs.ProviderCredentialField{
+			ID: "region", Kind: catalogs.ProviderCredentialFieldParameter, Required: true,
+		})
+		var profile catalogs.ProviderCredentialProfile
+		for index := range provider.Credentials.Profiles {
+			if provider.Credentials.Profiles[index].ID != "api-key" {
+				continue
+			}
+			profile = catalogs.ProviderCredentialProfile{
+				ID: "api-key", Primitive: catalogs.ProviderAuthenticationAWSDefault,
+				Fields: []catalogs.ProviderCredentialFieldID{"region"},
+				ProtocolOptions: catalogs.ProviderAuthenticationProtocolOptions{
+					AWSDefault: &catalogs.ProviderAWSDefaultProtocolOptions{RegionField: "region", Service: "bedrock"},
+				},
+			}
+			provider.Credentials.Profiles[index] = profile
+		}
+		require.NotEmpty(t, profile.ID)
+		catalogBuilder, err := catalogs.NewBuilderFrom(catalog)
+		require.NoError(t, err)
+		require.NoError(t, catalogBuilder.SetProvider(provider))
+		catalog, err = catalogBuilder.Build()
+		require.NoError(t, err)
+		transports, err := connectors.ProductionTransportRegistry()
+		require.NoError(t, err)
+		authentication, err := providerauth.ProductionRegistry()
+		require.NoError(t, err)
+		_, err = providers.Activate(
+			catalog,
+			transports,
+			authentication,
+			map[catalogs.ProviderID]providers.Configuration{
+				catalogs.ProviderIDOpenAI: {
+					Connector: connectors.ProviderConfig{Enabled: true},
+					CredentialSource: appStaticMaterialSource{material: credentials.NewMaterial(
+						profile,
+						map[catalogs.ProviderCredentialFieldID]string{"region": "test-region"},
+						credentials.MaterialMetadata{Version: "test"},
+					)},
+					Profile: profile,
+				},
+			},
+		)
+		require.ErrorIs(t, err, providerauth.ErrPrimitiveUnsupported)
+	})
+}
+
 type appStaticMaterialSource struct{ material credentials.Material }
 
 func (s appStaticMaterialSource) ResolveMaterial(context.Context) (credentials.Material, error) {

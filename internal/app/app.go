@@ -290,7 +290,11 @@ func (b *runtimeBuilder) openCache() error {
 
 func (b *runtimeBuilder) buildGateway() error {
 	registryAdapter := connectorRegistryAdapter{registry: b.application.registry}
-	modelRouter := router.New(registryAdapter, router.WithCatalog(b.application.catalog))
+	modelRouter := router.New(
+		registryAdapter,
+		router.WithCatalog(b.application.catalog),
+		router.WithUserCredentials(b.providerKeys),
+	)
 	proxyOptions := make([]proxy.Option, 0, 1)
 	if b.application.cacheManager != nil {
 		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, &proxy.CacheConfig{

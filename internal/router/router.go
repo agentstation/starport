@@ -57,6 +57,7 @@ type modelRouter struct {
 	routePlanner routing.Planner
 	availability *availability.Tracker
 	executor     *execution.Executor
+	userKeys     UserCredentialResolver
 
 	// Advanced routing features
 	config                       Config
@@ -85,6 +86,13 @@ func WithAvailability(tracker *availability.Tracker) Option {
 func WithExecutionConfig(config execution.Config) Option {
 	return func(r *modelRouter) {
 		r.config.Execution = config
+	}
+}
+
+// WithUserCredentials supplies the tenant-scoped inference credential plane.
+func WithUserCredentials(resolver UserCredentialResolver) Option {
+	return func(r *modelRouter) {
+		r.userKeys = resolver
 	}
 }
 
@@ -174,8 +182,13 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		}
 		return nil, fmt.Errorf("plan fallback route: %w", err)
 	}
+	strategy, tenantID := credentialRequestPolicy(req)
+	credentialPolicy, err := newCredentialPolicy(strategy, tenantID, runtime, r.userKeys)
+	if err != nil {
+		return nil, err
+	}
 
-	result, err := r.executor.ExecuteChat(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
+	result, err := r.executor.ExecuteChat(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (*inference.ChatResponse, *failure.Failure, execution.AttemptAction) {
 		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
 			return nil, failure.New(
@@ -184,17 +197,18 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 				true,
 				failure.ProviderDetails{Provider: planned.Route.ProviderID},
 				nil,
-			)
+			), execution.AttemptActionDefault
 		}
-		material, materialErr := runtime.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
-		if materialErr != nil {
-			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, materialErr)
+		material, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
+		if materialFailure != nil {
+			return nil, materialFailure, action
 		}
 		request := prepareChatAttempt(req, planned.Route, false)
 		request.Credential = material
 		response, requestErr := connector.Chat(attemptCtx, request)
 		if requestErr != nil {
-			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
+			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
+			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
 		}
 		canonical, conversionErr := connectors.ChatResponseToInference(response, planned.Route.ID())
 		if conversionErr != nil {
@@ -204,9 +218,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 				false,
 				failure.ProviderDetails{Provider: planned.Route.ProviderID},
 				conversionErr,
-			)
+			), execution.AttemptActionDefault
 		}
-		return &canonical, nil
+		return &canonical, nil, execution.AttemptActionDefault
 	})
 	if err != nil {
 		evidence := executionEvidence(err)

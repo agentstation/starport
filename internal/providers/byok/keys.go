@@ -3,32 +3,111 @@ package byok
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/failure"
 )
-
-// ProviderKeyType indicates which type of key was used for a request
-type ProviderKeyType string
 
 const (
-	// ProviderKeyTypeGateway indicates gateway-provided keys were used (global keys)
-	ProviderKeyTypeGateway ProviderKeyType = "gateway"
-	// ProviderKeyTypeUser indicates user's own keys were used
-	ProviderKeyTypeUser ProviderKeyType = "user"
+	// StrategyMetadataKey is the API-key metadata field that selects inference
+	// credential order.
+	StrategyMetadataKey = "provider_credential_strategy"
+	userScopePrefix     = "user:"
 )
 
-// FallbackStrategy defines how to handle key selection between user and gateway keys
-type FallbackStrategy string
+// CredentialSource identifies one request-bound inference credential plane.
+type CredentialSource string
 
 const (
-	// GatewayFirst uses gateway keys initially, falls back to user keys on rate limit
-	GatewayFirst FallbackStrategy = "gateway_first"
-	// UserKeyFirst prefers user's keys, falls back to gateway if user key fails
-	UserKeyFirst FallbackStrategy = "user_first"
-	// UserKeyOnly never uses gateway keys, fails if user key unavailable
-	UserKeyOnly FallbackStrategy = "user_only"
+	// CredentialSourceOperator selects deployment-owned runtime material.
+	CredentialSourceOperator CredentialSource = "operator"
+	// CredentialSourceUser selects the authenticated tenant's stored material.
+	CredentialSourceUser CredentialSource = "user"
 )
+
+// Strategy defines request-bound inference credential order.
+type Strategy string
+
+const (
+	// OperatorFirst tries deployment-owned material before tenant material.
+	OperatorFirst Strategy = "operator_first"
+	// UserFirst tries tenant material before deployment-owned material.
+	UserFirst Strategy = "user_first"
+	// UserOnly uses only tenant material.
+	UserOnly Strategy = "user_only"
+)
+
+// ErrInvalidStrategy reports an unknown request credential strategy.
+var ErrInvalidStrategy = errors.New("invalid provider credential strategy")
+
+// ParseStrategy validates one exact strategy value. An empty value selects the
+// default operator-first policy.
+func ParseStrategy(value string) (Strategy, error) {
+	strategy := Strategy(value)
+	if strategy == "" {
+		return OperatorFirst, nil
+	}
+	switch strategy {
+	case OperatorFirst, UserFirst, UserOnly:
+		return strategy, nil
+	default:
+		return "", fmt.Errorf("%w: %q", ErrInvalidStrategy, value)
+	}
+}
+
+// StrategyFromMetadata reads the strategy from authenticated identity
+// metadata without accepting non-string values.
+func StrategyFromMetadata(metadata map[string]any) (Strategy, error) {
+	value, exists := metadata[StrategyMetadataKey]
+	if !exists {
+		return OperatorFirst, nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("%w: metadata value must be a string", ErrInvalidStrategy)
+	}
+	return ParseStrategy(text)
+}
+
+// Sources returns a caller-owned credential order.
+func (s Strategy) Sources() []CredentialSource {
+	switch s {
+	case UserFirst:
+		return []CredentialSource{CredentialSourceUser, CredentialSourceOperator}
+	case UserOnly:
+		return []CredentialSource{CredentialSourceUser}
+	default:
+		return []CredentialSource{CredentialSourceOperator, CredentialSourceUser}
+	}
+}
+
+// CanAdvance reports whether credential policy can try the next source after
+// the current failure. Not-configured resolution is represented separately by
+// the caller and always permits an available next source.
+func CanAdvance(providerFailure *failure.Failure) bool {
+	return providerFailure != nil &&
+		(providerFailure.Kind() == failure.Authentication || providerFailure.Kind() == failure.RateLimit)
+}
+
+// UnavailableFailure returns the one external credential-availability shape.
+// Its message does not depend on operator material or internal failure detail.
+func UnavailableFailure(providerID string, cause error) *failure.Failure {
+	return failure.New(
+		failure.Authentication,
+		"Provider credentials are not configured.",
+		false,
+		failure.ProviderDetails{Provider: providerID},
+		cause,
+	)
+}
+
+// UserScope returns the exact credential repository scope for one tenant.
+func UserScope(tenantID string) string { return userScopePrefix + tenantID }
 
 // ProviderKey represents a decrypted provider key with metadata
 type ProviderKey struct {
@@ -65,6 +144,7 @@ type ProviderKeys interface {
 	UpdateKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback *bool, priority *int) (*credentials.ProviderKey, error)
 	DeleteKey(ctx context.Context, scope, provider string) error
 	ValidateKey(ctx context.Context, provider string, key map[string]string, config map[string]any) error
+	ResolveUserMaterial(ctx context.Context, scope string, provider catalogs.Provider) (credentials.Material, error)
 
 	// Global key management (scope = "*")
 	AddGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error)
@@ -73,8 +153,7 @@ type ProviderKeys interface {
 	DeleteGlobalKey(ctx context.Context, provider string) error
 	ListGlobalKeys(ctx context.Context) ([]*credentials.ProviderKey, error)
 
-	// Request routing
-	DetermineKeyStrategy(ctx context.Context, scope string, provider string) FallbackStrategy
+	// Request accounting
 	RecordUsage(ctx context.Context, scope string, provider string, usage *Usage) error
 
 	// Security

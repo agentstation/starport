@@ -1,6 +1,6 @@
 # Starport v1 Operator Guide
 
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 This guide covers a single Starport process and a Valkey-backed multi-node
 deployment. Starport starts only when storage, Starmap, provider credentials,
@@ -25,10 +25,11 @@ Build Starport:
 make build
 ```
 
-For OpenAI, supply the provider inference key and run local initialization:
+For OpenAI, supply the conventional provider inference key and run local
+initialization:
 
 ```bash
-export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
+export OPENAI_API_KEY="replace-with-provider-inference-key"
 ./starport init --provider openai
 ```
 
@@ -158,53 +159,68 @@ scope.
 
 ## Provider Configuration
 
-Starport uses exact adapter IDs. Current IDs are:
+Use an exact provider ID from the active Starmap catalog. Starmap owns each
+provider's credential fields, ordered conventional environment names,
+authentication profiles, endpoint templates, and service metadata. Starport
+checks the conventional names first. It then checks a derived
+`STARPORT_<PROVIDER>_<FIELD>` name. For example, it checks `OPENAI_API_KEY`
+before `STARPORT_OPENAI_API_KEY`.
 
-- `openai`
-- `anthropic`
-- `google-ai-studio`
-- `google-vertex`
-- `groq`
-- `mistral`
-- `azure-openai`
-- `ollama`
+`starport init --provider <id>` uses the same catalog contract. It writes the
+selected value under the first conventional name. When a required field is
+absent or invalid, initialization fails before it creates local state.
 
-Static inference secrets use `STARPORT_PROVIDERS_*_API_KEY` variables. Starmap
-catalog acquisition uses its own provider variables or cloud credential chain.
-Starport never copies an acquisition credential into an inference adapter.
+Starmap catalog acquisition uses an independent credential plane. Starport
+never copies an acquisition credential into an inference request.
 
-Vertex AI needs a project ID and one location. Select renewable Google
-Application Default Credentials with this value:
+Vertex AI needs a project ID, one location, and Google Application Default
+Credentials:
 
 ```bash
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
+export GOOGLE_CLOUD_PROJECT="replace-with-project-id"
+export GOOGLE_CLOUD_LOCATION="us-central1"
 ```
-
-For a static OAuth access token, set `AUTH_MODE=static` and set
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY`. Set the project with
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID`. Set the location with
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION`.
 
 Azure OpenAI needs a resource base URL. Select Azure
 `DefaultAzureCredential` with this value:
 
 ```bash
-export STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE=default
-export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL="https://replace-with-resource.openai.azure.com"
+export AZURE_OPENAI_ENDPOINT="https://replace-with-resource.openai.azure.com"
 ```
 
-For a static Azure API key, set `AUTH_MODE=static` and set
-`STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY`. Do not combine an API key with
-default mode. Both cloud adapters require `AUTH_MODE`. Starport refreshes
-default bearer tokens before expiry. Request cancellation also cancels
-credential acquisition.
+Set `AZURE_OPENAI_API_KEY` to select the catalog's static API-key profile.
+Without that key, Starport uses the catalog's `azure-default` profile. Starport
+refreshes default bearer tokens before expiry. Request cancellation also
+cancels credential acquisition.
 
-Ollama needs `STARPORT_PROVIDERS_OLLAMA_ENABLED=true` or the
-`--enable-ollama` flag.
+Ollama uses the catalog default `OLLAMA_BASE_URL` value when the environment
+does not set it. You do not need a provider-specific CLI flag.
 
 Starmap owns the model catalog. Only offerings from the active Starmap
 generation and configured adapters are routable. A Starmap acquisition failure
 does not add a static model list.
+
+### Tenant provider credentials
+
+An authenticated gateway identity can own an encrypted provider credential at
+`/api/v1/keys/{key_id}/provider-keys`. Set its
+`provider_credential_strategy` metadata to one of these exact values:
+
+- `operator_first`: try deployment-owned material, then tenant material.
+- `user_first`: try tenant material, then deployment-owned material.
+- `user_only`: use only tenant material.
+
+The default is `operator_first`. Starport can advance to the next credential
+only when material is not configured or when the provider reports an
+authentication or rate-limit failure. Permission, invalid-material, timeout,
+cancellation, and internal failures are terminal. Each credential advance
+uses the existing total attempt budget. It does not create a provider-health
+failure or a hidden retry budget.
+
+`user_only` does not read or test deployment-owned material. Its external
+missing-credential error is the same whether deployment-owned material exists
+or not. Tenant credential lookup uses the exact authenticated gateway-key ID.
+It never merges a global stored record.
 
 Set `STARPORT_CATALOG_REFRESH_ON_START=true` to run Starmap acquisition before
 adapter activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later refreshes.
@@ -241,7 +257,7 @@ values. Initialize the shared identity repository before you start Starport:
 
 ```bash
 export STARPORT_SECURITY_MASTER_KEY="replace-with-random-secret-at-least-32-bytes"
-export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
+export OPENAI_API_KEY="replace-with-provider-inference-key"
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose up -d starport
@@ -272,8 +288,8 @@ each failed check and keeps all secret values redacted.
   `STARPORT_SECURITY_MASTER_KEY`.
 - `gateway identity is required; run "starport init"`: create the first named
   identity in local or configured storage.
-- `at least one production provider is required`: configure one provider or
-  enable Ollama.
+- `at least one production provider is required`: configure one catalog
+  provider's required inference fields.
 - HTTP 401: the bearer value does not match an active stored identity.
 - HTTP 403: the identity lacks the required scope or owns a different key.
 - No route candidate: the model, provider policy, tenant policy, capability,

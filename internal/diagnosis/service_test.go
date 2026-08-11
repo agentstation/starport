@@ -13,8 +13,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/stretchr/testify/require"
 
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providerauth"
@@ -22,6 +25,46 @@ import (
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
 )
+
+func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
+	embedded, err := catalogs.NewEmbedded()
+	require.NoError(t, err)
+	baseline, err := embedded.Build()
+	require.NoError(t, err)
+	provider, err := baseline.Provider(catalogs.ProviderIDOpenAI)
+	require.NoError(t, err)
+	provider.ID = "acme"
+	provider.Aliases = nil
+	provider.Name = "Acme"
+	for index := range provider.Credentials.Fields {
+		provider.Credentials.Fields[index].Environment = nil
+	}
+	provider.Credentials.Fields[0].Environment = []string{"ACME_API_KEY"}
+	builder, err := catalogs.NewBuilderFrom(baseline)
+	require.NoError(t, err)
+	require.NoError(t, builder.SetProvider(provider))
+	catalog, err := builder.Build()
+	require.NoError(t, err)
+
+	cfg, err := config.NewLoader().
+		WithPaths(config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))).
+		WithEnvironment(map[string]string{
+			"STARPORT_SECURITY_MASTER_KEY": strings.Repeat("master-secret-", 3),
+			"ACME_API_KEY":                 "acme-secret",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	require.NoError(t, err)
+	plane, err := runtimecatalog.Open(staticSource{state: starmap.CatalogState{
+		Catalog: catalog, GenerationID: "synthetic-acme", Sequence: 1,
+	}})
+	require.NoError(t, err)
+	report := Report{OK: true}
+	testService(cfg).checkAdapters(cfg, plane, catalog, &report)
+	require.True(t, report.OK, "%#v", report)
+	check := assertCheck(t, report, "adapters", StatusPass)
+	require.Contains(t, check.Message, "configured provider adapters")
+}
 
 func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")

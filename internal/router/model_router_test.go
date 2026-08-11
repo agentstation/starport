@@ -15,6 +15,7 @@ type mockConnector struct {
 	name           string
 	chatFunc       func(ctx context.Context, req *connectors.ChatRequest) (*connectors.ChatResponse, error)
 	chatStreamFunc func(ctx context.Context, req *connectors.ChatRequest) (connectors.ChatStream, error)
+	embeddingsFunc func(ctx context.Context, req *connectors.EmbeddingsRequest) (*connectors.EmbeddingsResponse, error)
 	shouldFail     bool
 	failureStatus  int
 }
@@ -58,6 +59,9 @@ func (m *mockConnector) ChatStream(ctx context.Context, req *connectors.ChatRequ
 }
 
 func (m *mockConnector) Embeddings(ctx context.Context, req *connectors.EmbeddingsRequest) (*connectors.EmbeddingsResponse, error) {
+	if m.embeddingsFunc != nil {
+		return m.embeddingsFunc(ctx, req)
+	}
 	return nil, errors.New("embeddings not implemented")
 }
 

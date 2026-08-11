@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -59,6 +60,69 @@ func (e *Executor) ExecuteChat(
 	if attempt == nil {
 		return nil, ErrAttemptRequired
 	}
+	result, err := executeInference(ctx, e, plan, func(
+		attemptCtx context.Context,
+		planned routing.Attempt,
+	) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+		return attempt(attemptCtx, planned)
+	}, inference.ChatResponse.Clone)
+	if err != nil {
+		return nil, err
+	}
+	return &ChatResult{
+		Response: result.response, Route: result.route, Attempts: result.attempts,
+		StartedAt: result.startedAt, FinishedAt: result.finishedAt,
+	}, nil
+}
+
+// ExecuteEmbedding executes one immutable plan for an embedding request.
+func (e *Executor) ExecuteEmbedding(
+	ctx context.Context,
+	plan *routing.Plan,
+	attempt EmbeddingAttempt,
+) (*EmbeddingResult, error) {
+	if plan == nil {
+		return nil, ErrPlanRequired
+	}
+	if attempt == nil {
+		return nil, ErrAttemptRequired
+	}
+	result, err := executeInference(ctx, e, plan, func(
+		attemptCtx context.Context,
+		planned routing.Attempt,
+	) (*inference.EmbeddingResponse, *failure.Failure, AttemptAction) {
+		return attempt(attemptCtx, planned)
+	}, inference.EmbeddingResponse.Clone)
+	if err != nil {
+		return nil, err
+	}
+	return &EmbeddingResult{
+		Response: result.response, Route: result.route, Attempts: result.attempts,
+		StartedAt: result.startedAt, FinishedAt: result.finishedAt,
+	}, nil
+}
+
+type inferenceResult[T any] struct {
+	response   T
+	route      routing.Route
+	attempts   []AttemptEvidence
+	startedAt  time.Time
+	finishedAt time.Time
+}
+
+func executeInference[T any](
+	ctx context.Context,
+	e *Executor,
+	plan *routing.Plan,
+	attempt func(context.Context, routing.Attempt) (*T, *failure.Failure, AttemptAction),
+	clone func(T) T,
+) (*inferenceResult[T], error) {
+	if plan == nil {
+		return nil, ErrPlanRequired
+	}
+	if attempt == nil {
+		return nil, ErrAttemptRequired
+	}
 
 	session := newSession(e, plan)
 	for {
@@ -68,21 +132,21 @@ func (e *Executor) ExecuteChat(
 		}
 
 		attemptCtx, cancel := session.attemptContext(ctx)
-		response, providerFailure := attempt(attemptCtx, planned)
+		response, providerFailure, action := attempt(attemptCtx, planned)
 		providerFailure = session.normalizeOutcome(attemptCtx, response != nil, providerFailure)
 		cancel()
 		if providerFailure == nil {
 			session.succeed(evidenceIndex)
-			return &ChatResult{
-				Response:   response.Clone(),
-				Route:      planned.Route,
-				Attempts:   session.evidenceCopy(),
-				StartedAt:  session.startedAt,
-				FinishedAt: e.clock.Now(),
+			return &inferenceResult[T]{
+				response:   clone(*response),
+				route:      planned.Route,
+				attempts:   session.evidenceCopy(),
+				startedAt:  session.startedAt,
+				finishedAt: e.clock.Now(),
 			}, nil
 		}
 
-		decision := session.fail(evidenceIndex, providerFailure)
+		decision := session.fail(evidenceIndex, providerFailure, action)
 		if decision == decisionStop {
 			return nil, session.terminalError(ErrAllAttemptsFailed)
 		}
@@ -96,6 +160,7 @@ type decision uint8
 
 const (
 	decisionStop decision = iota
+	decisionContinueRoute
 	decisionRetry
 	decisionFallback
 )
@@ -104,12 +169,14 @@ type session struct {
 	executor *Executor
 	attempts []routing.Attempt
 
-	startedAt      time.Time
-	routeIndex     int
-	routeRetry     int
-	actualAttempts int
-	evidence       []AttemptEvidence
-	lastFailure    *failure.Failure
+	startedAt        time.Time
+	routeIndex       int
+	routeRetry       int
+	actualAttempts   int
+	evidence         []AttemptEvidence
+	lastFailure      *failure.Failure
+	continueRoute    bool
+	availabilityHeld bool
 }
 
 func newSession(executor *Executor, plan *routing.Plan) *session {
@@ -124,20 +191,26 @@ func newSession(executor *Executor, plan *routing.Plan) *session {
 func (s *session) begin(ctx context.Context) (routing.Attempt, int, error) {
 	for {
 		if err := ctx.Err(); err != nil {
+			s.releaseAvailability()
 			return routing.Attempt{}, -1, s.cancelError(err)
 		}
 		if s.elapsedBudgetExhausted() {
+			s.releaseAvailability()
 			return routing.Attempt{}, -1, s.terminalError(ErrElapsedBudget)
 		}
 		if s.actualAttempts >= s.executor.config.MaxAttempts {
+			s.releaseAvailability()
 			return routing.Attempt{}, -1, s.terminalError(ErrAttemptBudget)
 		}
 		if s.routeIndex >= len(s.attempts) {
+			s.releaseAvailability()
 			return routing.Attempt{}, -1, s.terminalError(ErrAllAttemptsFailed)
 		}
 
 		planned := s.attempts[s.routeIndex]
-		if s.executor.availability != nil && !s.executor.availability.Acquire(planned.Route) {
+		continuing := s.continueRoute
+		s.continueRoute = false
+		if !continuing && s.executor.availability != nil && !s.executor.availability.Acquire(planned.Route) {
 			now := s.executor.clock.Now()
 			s.evidence = append(s.evidence, AttemptEvidence{
 				Number:     len(s.evidence) + 1,
@@ -154,6 +227,9 @@ func (s *session) begin(ctx context.Context) (routing.Attempt, int, error) {
 			s.routeIndex++
 			s.routeRetry = 0
 			continue
+		}
+		if !continuing && s.executor.availability != nil {
+			s.availabilityHeld = true
 		}
 
 		now := s.executor.clock.Now()
@@ -182,10 +258,15 @@ func (s *session) succeed(evidenceIndex int) {
 	evidence.Transitions = append(evidence.Transitions, Transition{From: StateRunning, To: StateSucceeded, At: now})
 	if s.executor.availability != nil {
 		s.executor.availability.RecordSuccess(evidence.Route, evidence.Duration)
+		s.availabilityHeld = false
 	}
 }
 
-func (s *session) fail(evidenceIndex int, providerFailure *failure.Failure) decision {
+func (s *session) fail(
+	evidenceIndex int,
+	providerFailure *failure.Failure,
+	action AttemptAction,
+) decision {
 	now := s.executor.clock.Now()
 	evidence := &s.evidence[evidenceIndex]
 	state := StateFailed
@@ -198,13 +279,36 @@ func (s *session) fail(evidenceIndex int, providerFailure *failure.Failure) deci
 	evidence.Failure = providerFailure
 	evidence.Transitions = append(evidence.Transitions, Transition{From: StateRunning, To: state, At: now})
 	s.lastFailure = providerFailure
-	if s.executor.availability != nil {
-		s.executor.availability.RecordFailure(evidence.Route, providerFailure, evidence.Duration)
-	}
-
 	if state == StateCanceled {
+		if action == AttemptActionStop {
+			s.releaseAvailability()
+			return decisionStop
+		}
+		s.recordFailure(evidence, providerFailure)
 		return decisionStop
 	}
+	if action == AttemptActionContinueRoute && s.actualAttempts < s.executor.config.MaxAttempts {
+		s.continueRoute = true
+		return decisionContinueRoute
+	}
+	if action == AttemptActionContinueRoute {
+		s.releaseAvailability()
+		return decisionStop
+	}
+	if action == AttemptActionFallbackRoute {
+		s.releaseAvailability()
+		if s.routeIndex+1 < len(s.attempts) && s.actualAttempts < s.executor.config.MaxAttempts {
+			s.routeIndex++
+			s.routeRetry = 0
+			return decisionFallback
+		}
+		return decisionStop
+	}
+	if action == AttemptActionStop {
+		s.releaseAvailability()
+		return decisionStop
+	}
+	s.recordFailure(evidence, providerFailure)
 	if canRetry(providerFailure) && s.routeRetry < s.executor.config.MaxRetriesPerRoute && s.actualAttempts < s.executor.config.MaxAttempts {
 		s.routeRetry++
 		return decisionRetry
@@ -215,6 +319,22 @@ func (s *session) fail(evidenceIndex int, providerFailure *failure.Failure) deci
 		return decisionFallback
 	}
 	return decisionStop
+}
+
+func (s *session) recordFailure(evidence *AttemptEvidence, providerFailure *failure.Failure) {
+	if s.executor.availability == nil {
+		return
+	}
+	s.executor.availability.RecordFailure(evidence.Route, providerFailure, evidence.Duration)
+	s.availabilityHeld = false
+}
+
+func (s *session) releaseAvailability() {
+	if !s.availabilityHeld || s.executor.availability == nil || s.routeIndex >= len(s.attempts) {
+		return
+	}
+	s.executor.availability.Release(s.attempts[s.routeIndex].Route)
+	s.availabilityHeld = false
 }
 
 func (s *session) wait(ctx context.Context, next decision) error {

@@ -36,7 +36,15 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		}
 		return nil, err
 	}
-	stream, err := r.executor.StartChatStream(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (execution.Stream, *failure.Failure) {
+	strategy, tenantID := credentialRequestPolicy(req)
+	credentialPolicy, err := newCredentialPolicy(strategy, tenantID, runtime, r.userKeys)
+	if err != nil {
+		if owned {
+			runtime.Release()
+		}
+		return nil, err
+	}
+	stream, err := r.executor.StartChatStream(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (execution.Stream, *failure.Failure, execution.AttemptAction) {
 		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
 			return nil, failure.New(
@@ -45,24 +53,28 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 				true,
 				failure.ProviderDetails{Provider: planned.Route.ProviderID},
 				nil,
-			)
+			), execution.AttemptActionDefault
 		}
-		material, materialErr := runtime.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
-		if materialErr != nil {
-			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, materialErr)
+		material, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
+		if materialFailure != nil {
+			return nil, materialFailure, action
 		}
 		request := prepareChatAttempt(req, planned.Route, true)
 		request.Credential = material
 		request.Stream = true
 		stream, streamErr := connector.ChatStream(attemptCtx, request)
 		if streamErr != nil {
-			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, streamErr)
+			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, streamErr)
+			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
 		}
 		return &connectorEventStream{
 			stream:   stream,
 			provider: planned.Route.ProviderID,
 			modelID:  planned.Route.ID(),
-		}, nil
+			action: func(providerFailure *failure.Failure) execution.AttemptAction {
+				return credentialPolicy.afterFailure(planned.Route, providerFailure)
+			},
+		}, nil, execution.AttemptActionDefault
 	})
 	if err != nil {
 		if owned {
@@ -181,6 +193,7 @@ type connectorEventStream struct {
 	modelID  string
 	pending  []inference.StreamEvent
 	terminal error
+	action   func(*failure.Failure) execution.AttemptAction
 }
 
 func (s *connectorEventStream) Read() (*inference.StreamEvent, error) {
@@ -201,13 +214,15 @@ func (s *connectorEventStream) Read() (*inference.StreamEvent, error) {
 			if errors.Is(err, io.EOF) {
 				return nil, io.EOF
 			}
-			return nil, connectors.NormalizeFailure(s.provider, err)
+			providerFailure := connectors.NormalizeFailure(s.provider, err)
+			return nil, execution.WithAttemptAction(providerFailure, s.failureAction(providerFailure))
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				s.terminal = io.EOF
 			} else {
-				s.terminal = connectors.NormalizeFailure(s.provider, err)
+				providerFailure := connectors.NormalizeFailure(s.provider, err)
+				s.terminal = execution.WithAttemptAction(providerFailure, s.failureAction(providerFailure))
 			}
 		}
 		events, conversionErr := connectors.StreamEventsToInference(chunk, s.modelID)
@@ -229,3 +244,10 @@ func (s *connectorEventStream) Read() (*inference.StreamEvent, error) {
 }
 
 func (s *connectorEventStream) Close() error { return s.stream.Close() }
+
+func (s *connectorEventStream) failureAction(providerFailure *failure.Failure) execution.AttemptAction {
+	if s.action == nil {
+		return execution.AttemptActionDefault
+	}
+	return s.action(providerFailure)
+}

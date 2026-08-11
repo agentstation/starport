@@ -39,17 +39,20 @@ Set the executable once. The default uses a release installation from
 export STARPORT_BIN="${STARPORT_BIN:-starport}"
 ```
 
-You need an OpenAI inference key. Initialize one local Starport instance:
+For this example, set the conventional OpenAI inference key and initialize one
+local Starport instance:
 
 ```bash
-export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
+export OPENAI_API_KEY="replace-with-provider-inference-key"
 "$STARPORT_BIN" init --provider openai
 ```
 
-Initialization creates a provider-credential master key and one gateway
-identity. It writes the OpenAI key, master key, and local state under the
-owner-only platform configuration directory. It prints the new gateway API
-key once. Save that key, then set it for the client examples:
+Initialization reads the selected provider's credential contract from
+Starmap. It checks each conventional environment name before the derived
+`STARPORT_<PROVIDER>_<FIELD>` name. It writes the selected values, a new
+provider-credential master key, and local state under the owner-only platform
+configuration directory. It also creates one gateway identity and prints its
+new API key once. Save that key, then set it for the client examples:
 
 ```bash
 export STARPORT_API_KEY="replace-with-gateway-api-key-from-init"
@@ -136,26 +139,32 @@ together.
 `starport doctor` runs passive checks. Add `--probe` for read-only storage and
 identity checks.
 
+Provider IDs, credential fields, conventional environment names, defaults,
+authentication profiles, and endpoints come from the active Starmap catalog.
+For example, Starport checks `OPENAI_API_KEY` before
+`STARPORT_OPENAI_API_KEY`. A provider that uses an already compiled transport
+and authentication primitive needs no Starport provider switch.
+
 See the [configuration reference](.env.example) and
 [operator guide](docs/OPERATOR-GUIDE.md) for production settings.
 
 ## Cloud credentials
 
-Vertex AI and Azure OpenAI accept static credentials or renewable default
-cloud credentials. Both adapters require an explicit `AUTH_MODE`.
+Vertex AI and Azure OpenAI can use renewable default cloud credentials. Their
+project, location, and endpoint fields use the conventional names declared by
+Starmap:
 
 ```bash
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID="replace-with-project-id"
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION="us-central1"
+export GOOGLE_CLOUD_PROJECT="replace-with-project-id"
+export GOOGLE_CLOUD_LOCATION="us-central1"
 
-export STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE=default
-export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL="https://replace-with-resource.openai.azure.com"
+export AZURE_OPENAI_ENDPOINT="https://replace-with-resource.openai.azure.com"
 ```
 
-Default mode uses Google Application Default Credentials or Azure
-`DefaultAzureCredential`. Static mode uses the provider `API_KEY` variable.
-Starport rejects a static key in default mode.
+Vertex AI uses Google Application Default Credentials. Azure OpenAI uses
+`AZURE_OPENAI_API_KEY` when present. Without it, Azure OpenAI uses
+`DefaultAzureCredential`. Starport gets renewable bearer tokens before an
+inference request uses them.
 
 Starmap catalog-acquisition credentials remain separate from Starport
 inference credentials.
@@ -176,7 +185,7 @@ The Compose file builds Starport locally and uses Valkey for shared state:
 
 ```bash
 export STARPORT_SECURITY_MASTER_KEY="replace-with-random-secret-at-least-32-bytes"
-export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
+export OPENAI_API_KEY="replace-with-provider-inference-key"
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose up -d starport
@@ -191,8 +200,8 @@ Version 1 includes:
 
 - Chat completions, streaming chat, embeddings, and model discovery.
 - Exact provider and model routing with fallback and `openrouter/auto`.
-- OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI,
-  and Ollama adapters.
+- Catalog-driven providers over the compiled OpenAI, Anthropic, Google Cloud,
+  Google AI Studio, and Ollama transport primitives.
 - Encrypted provider credentials and renewable cloud credentials.
 - Header-only gateway authentication and per-key rate limits.
 - Tenant-safe response caching.

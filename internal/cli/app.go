@@ -43,13 +43,8 @@ var (
 	ErrDiagnoserRequired = errors.New("diagnoser is required")
 )
 
-// ServeOptions contains explicit server command options.
-type ServeOptions struct {
-	EnableOllama bool
-}
-
 // ServerRunner starts the gateway and blocks until it stops.
-type ServerRunner func(context.Context, ServeOptions) error
+type ServerRunner func(context.Context) error
 
 // Initializer creates local state and returns the new gateway credential once.
 type Initializer func(context.Context, InitOptions) (InitResult, error)
@@ -124,17 +119,11 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Aliases:      []string{"server"},
 		Usage:        "Run the LLM gateway server",
 		OnUsageError: usageError,
-		Flags: []urfavecli.Flag{
-			&urfavecli.BoolFlag{
-				Name:  "enable-ollama",
-				Usage: "Enable Ollama for local model inference",
-			},
-		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if err := rejectArguments(cmd); err != nil {
 				return err
 			}
-			if err := deps.RunServer(ctx, ServeOptions{EnableOllama: cmd.Bool("enable-ollama")}); err != nil {
+			if err := deps.RunServer(ctx); err != nil {
 				return runtimeFailure{cause: err}
 			}
 			return nil
@@ -148,7 +137,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{
 				Name:  "provider",
-				Usage: "Local provider profile: openai or ollama",
+				Usage: "Provider ID from the current Starmap catalog",
 			},
 			&urfavecli.StringFlag{
 				Name:  "name",
@@ -176,9 +165,9 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 					ExitCodeUsage,
 				)
 			}
-			if !configuredStorage && provider != catalogs.ProviderIDOpenAI && provider != catalogs.ProviderIDOllama {
+			if !configuredStorage && provider == "" {
 				return urfavecli.Exit(
-					fmt.Sprintf("unsupported local provider profile %q; use --provider openai or --provider ollama", provider),
+					"--provider is required unless --configured-storage is used",
 					ExitCodeUsage,
 				)
 			}
