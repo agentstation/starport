@@ -147,7 +147,9 @@ Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven o
 
 <li>Direct breaking changes remove old environment names and provider configuration structures.</li>
 
-<li>Capability facts preserve unknown values. Provider IDs, model IDs, author names, family names, and free text cannot create a capability fact.</li>
+<li>One provider claim can populate each canonical fact that its documented semantics entail. It cannot populate facts beyond that entailment. Unknown and false values remain distinct.</li>
+
+<li>Provider IDs, model IDs, author names, family names, and free text cannot create a capability fact.</li>
 </ol>
 
 </section>
@@ -167,7 +169,7 @@ Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven o
 <tr><td>D9</td><td>Connectors are credential-free. An explicit invocation value carries selected material to catalog-declared authentication placement for each attempt.</td><td>Concurrent tenants can share transports without sharing credentials. Credential rotation does not rebuild connectors.</td><td>A transport proves that request-bound authentication cannot be applied safely.</td></tr>
 <tr><td>D10</td><td>One immutable runtime generation contains catalog state, validated operator configuration, source handles, credential-free connectors, operation support, and availability.</td><td>Starport builds and validates a candidate before one atomic swap. Old connectors close after their in-flight requests finish.</td><td>Measured request draining needs a smaller equivalent ownership boundary.</td></tr>
 <tr><td>D11</td><td>Starmap catalog mappings use one declared authority. Transport adapters own typed wire schemas, source vocabulary, target writers, and documented transport-wide conventions. Provider YAML owns provider selection and provider-specific interpretation.</td><td>The mapper normalizes provider <code>/models</code> responses into catalog models. It does not normalize Starport inference traffic. New providers can use existing transport vocabulary without Go changes. New wire vocabulary can require a transport change.</td><td>A verified provider catalog response needs a wire shape that no compiled acquisition transport can represent.</td></tr>
-<tr><td>D12</td><td>Starmap does not restore schema-v5 <code>feature_rules</code>. Capability normalization uses explicit provider response fields and exact typed targets.</td><td>Direct claims do not imply stronger or related capabilities. Configurable normalization uses typed mappings with deterministic precedence and source provenance.</td><td>A provider contract documents an equivalence that needs one explicit typed mapping profile.</td></tr>
+<tr><td>D12</td><td>Starmap does not restore schema-v5 <code>feature_rules</code>. Capability normalization uses documented predicates and exact typed target sets.</td><td>Mappings can use any deliberate cardinality when semantics entail each target. Combination rules define priority, any, all, or conflict. False, unknown, provenance, and contradictions remain explicit.</td><td>A provider contract documents an equivalence that needs one explicit typed mapping profile.</td></tr>
 </tbody></table>
 
 </section>
@@ -199,7 +201,7 @@ Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven o
 <table><thead><tr><th>Dimension</th><th>Required cases</th></tr></thead><tbody>
 <tr><td>Provider identity</td><td>Unknown OpenAI-compatible provider, exact opaque model ID, alias collision, missing reviewed model link.</td></tr>
 <tr><td>Catalog acquisition</td><td>YAML-only provider, endpoint selection, credential metadata, typed field mapping, author mapping, explicit model link, unknown review candidate, and pre-I/O validation.</td></tr>
-<tr><td>Capabilities</td><td>Direct true, direct false, unknown, exact token mapping, no semantic widening, deterministic precedence, provenance, and collision rejection.</td></tr>
+<tr><td>Capabilities</td><td>Direct true, direct false, unknown, exact predicates, documented target entailment, combination rules, contradictions, deterministic precedence, provenance, and collision rejection.</td></tr>
 <tr><td>Transport</td><td>Supported primitive, unsupported primitive, provider protocol override, missing endpoint binding.</td></tr>
 <tr><td>Authentication</td><td>API key, no auth, Google default, Azure default, AWS default, unsupported method.</td></tr>
 <tr><td>Environment</td><td>Conventional only, product alias only, both present, invalid selected value, empty candidates, and whole-catalog collision.</td></tr>
@@ -351,9 +353,9 @@ Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven o
 
 <li><strong>Owning seam and paths:</strong> Provider catalog validation, transport mapping contracts, provider client selection, reconciliation review candidates, embedded YAML, and onboarding documentation.</li>
 
-<li><strong>Steps:</strong> Add one YAML-only <code>acme</code> acquisition test with an existing transport. Inventory each OpenAI-endpoint provider and automatic limit mapping, and audit all provider capability projections for semantic widening. Select one authority for common mappings, with explicit YAML as the default and each retained transport default named and tested. Validate typed mapping and author contracts before I/O. Resolve <code>ProviderCatalog.Authors</code> semantics and Ollama acquisition capability. Keep the Groq source selectors while removing only unused destination aliases after repository and history scans.</li>
+<li><strong>Steps:</strong> Add one YAML-only <code>acme</code> acquisition test with an existing transport. Inventory each provider mapping and define provider-scoped entailment, combination, contradiction, and provenance rules. Select one authority for common mappings, with explicit YAML as the default and each retained transport default named and tested. Validate typed mapping and author contracts before I/O. Resolve <code>ProviderCatalog.Authors</code> semantics and Ollama acquisition capability. Keep the Groq source selectors while removing only unused destination aliases after repository and history scans.</li>
 
-<li><strong>Acceptance:</strong> The <code>acme</code> test proves endpoint selection, catalog credential metadata, model retrieval, field and author mappings, exact provider model IDs, and explicit canonical model links. Groq-like tests cover mapped, unmapped, override, precedence, and missing extension fields. One documented authority owns each common mapping and preserves direct true, direct false, and unknown capability facts. Known linked offerings publish while unknown offerings stay unpublished and create durable review candidates. Invalid mapping contracts fail with typed errors before network I/O. Ollama either uses a compiled acquisition adapter or fails capability validation before I/O, and tests define or remove <code>ProviderCatalog.Authors</code>.</li>
+<li><strong>Acceptance:</strong> The <code>acme</code> test proves endpoint selection, catalog credential metadata, model retrieval, field and author mappings, exact provider model IDs, and explicit canonical model links. Groq-like tests cover mapped, unmapped, override, precedence, and missing extension fields. Fireworks tests map <code>supports_tools</code> to each documented target, while unverified Groq semantics stay unchanged without evidence. Known linked offerings publish while unknown offerings stay unpublished and create durable review candidates. Invalid mapping contracts fail with typed errors before network I/O. Ollama either uses a compiled acquisition adapter or fails capability validation before I/O, and tests define or remove <code>ProviderCatalog.Authors</code>.</li>
 
 <li><strong>Fail-before:</strong> No synthetic test proves the complete YAML acquisition path. Groq YAML duplicates unconditional provider-limit fallback behavior. OpenAI mapping accepts noncanonical compatibility destinations. Ollama passes schema validation without a compiled acquisition client. <code>ProviderCatalog.Authors</code> has no production consumer.</li>
 
@@ -556,6 +558,7 @@ Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven o
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>scoped before release</td><td>The mapping review added complete YAML acquisition, typed mapping validation, author-contract, trust-boundary, and Ollama capability proof. The frozen verifier keeps 19 IDs and expands CDP-V14.</td></tr>
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>mapping authority refined</td><td>The OpenAI-compatible review found that Groq YAML mappings duplicate unconditional provider-limit fallback logic. CDP3.2 now requires a provider inventory and one tested mapping authority.</td></tr>
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>capability trust refined</td><td>The acquisition review kept schema-v5 <code>feature_rules</code> removed and added a semantic-widening audit. Typed evidence must preserve true, false, and unknown capability facts.</td></tr>
+<tr><td>2026-08-10</td><td>CDP3.2</td><td>entailment correction</td><td>Fireworks documentation proves that <code>supportsTools</code> entails multiple tool capabilities. CDP3.2 now permits any documented relation cardinality and requires explicit combination rules.</td></tr>
 </tbody></table>
 
 </section>
