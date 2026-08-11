@@ -2,7 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP7.1 is the current task.
+The plan status is `active`. CDP9 is the current task.
 
 ## Pinned source state
 
@@ -105,3 +105,7 @@ package deltas are mandatory evidence, but they are not admission limits.
 - [CDP7.1 Starport direct secret sources](cdp7.1.md): all five sources passed
   dependency and security checks. Lifecycle, cancellation, and warmed-cache
   checks also passed.
+- [CDP8 verified remote catalog activation](cdp8.md): an authenticated remote
+  `acme` generation activated without a rebuild. Independent remote and accepted
+  pointers preserve the last complete runtime across invalid updates and
+  restarts. The campaign verifier passed all 19 conditions.
