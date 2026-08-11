@@ -9,7 +9,7 @@ Last Updated: 2026-08-10
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP3 adds Starmap credential-source lifecycles and catalog-driven operator surfaces. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP3 adds Starmap credential-source lifecycles. CDP3.2 then proves the full YAML acquisition contract before release. |
 
 ### Proposed Work
 
