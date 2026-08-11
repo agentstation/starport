@@ -2,7 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP4 is the current task.
+The plan status is `active`. CDP4.1 is the current task.
 
 ## Pinned source state
 
@@ -79,6 +79,8 @@ package deltas are mandatory evidence, but they are not admission limits.
 - [CDP3.2 YAML acquisition contract](cdp3.2.md): YAML drives a synthetic
   provider with no provider branch. Acquisition, mapping, trust review,
   publication, and the final uncapped gate passed.
+- [CDP4 atomic remote subscriber](cdp4.md): one atomic state, caller-owned
+  durability, pinned bootstrap, degraded recovery, and the full uncapped gate
+  passed.
 - Per-adapter dependency and binary measurements from CDP7.1.
-- CDP4 will record atomic subscriber state, durable store ownership, bootstrap,
-  recovery, and remote protocol evidence.
+- CDP4.1 will record the Starmap compatibility release and catalog publication.

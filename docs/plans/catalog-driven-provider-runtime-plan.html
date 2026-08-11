@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-10.<br>
 Baseline: Starport main @ <code>101c32d</code>. Starmap main @ <code>7f53767</code>.<br>
 Proof root: <code>docs/plans/proof/catalog-driven-provider-runtime/</code>.<br>
-Next action: CDP4 makes the Starmap remote subscriber atomic, caller-stored, and durable before the release gate.</p>
+Next action: CDP4.1 publishes the verified Starmap compatibility release and catalog generation.</p>
 
 <section id="outcome">
 <h2>Outcome</h2>
@@ -70,8 +70,8 @@ Next action: CDP4 makes the Starmap remote subscriber atomic, caller-stored, and
 <tr id="CDP3" data-status="done"><td>CDP3</td><td>Starmap credential sources and operator surfaces.</td><td><code>done</code></td><td>Starmap commit <code>54bd8de9</code>. The full uncapped gate passed across 85 packages, 14 source vectors, six pure-Go consumers, race, lint, vet, 15 coverage gates, generated data, build, and CLI smoke checks. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp3.md</code>.</td></tr>
 <tr id="CDP3.1" data-status="done"><td>CDP3.1</td><td>Starmap direct secret-source measurements and accepted adapters.</td><td><code>done</code></td><td>Starmap commit <code>4b556428</code> established the harness and four adapters. The 2026-08-10 policy correction classified six OpenBao source owners as a mandatory review trigger, not a rejection. CDP3.2 carries the direct OpenBao implementation correction. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp3.1.md</code>.</td></tr>
 <tr id="CDP3.2" data-status="done"><td>CDP3.2</td><td>Starmap YAML acquisition and mapping contract.</td><td><code>done</code></td><td>Starmap commit <code>ef79cc38</code>. The synthetic YAML provider, typed mapping contracts, review-candidate trust boundary, OpenBao policy correction, generated data, security scans, and final uncapped repository gate passed. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp3.2.md</code>.</td></tr>
-<tr id="CDP4" data-status="in_progress"><td>CDP4</td><td>Starmap atomic and durable remote subscriber.</td><td><code>in_progress</code></td><td>CDP3.2 completed the last Starmap acquisition hardening task before the remote subscriber and release gates.</td></tr>
-<tr id="CDP4.1" data-status="todo"><td>CDP4.1</td><td>Starmap compatibility release and catalog publication.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP4" data-status="done"><td>CDP4</td><td>Starmap atomic and durable remote subscriber.</td><td><code>done</code></td><td>Starmap commit <code>6697c478</code>. One atomic state, caller-owned durability, pinned bootstrap, degraded recovery, strict documentation, focused race proof, and the final uncapped repository gate passed. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp4.md</code>.</td></tr>
+<tr id="CDP4.1" data-status="in_progress"><td>CDP4.1</td><td>Starmap compatibility release and catalog publication.</td><td><code>in_progress</code></td><td>CDP4 completed the remote contract and all local release prerequisites.</td></tr>
 <tr id="CDP5" data-status="todo"><td>CDP5</td><td>Starport dynamic configuration and environment resolution.</td><td><code>todo</code></td><td></td></tr>
 <tr id="CDP5.1" data-status="todo"><td>CDP5.1</td><td>Starport credential material and core sources.</td><td><code>todo</code></td><td></td></tr>
 <tr id="CDP6" data-status="todo"><td>CDP6</td><td>Credential-free connectors and primitive registries.</td><td><code>todo</code></td><td></td></tr>
@@ -566,6 +566,7 @@ Next action: CDP4 makes the Starmap remote subscriber atomic, caller-stored, and
 <tr><td>2026-08-10</td><td>CDP3.1</td><td>done; CDP3.2 started</td><td>Starmap commit <code>4b556428</code>. Four official direct secret sources passed all fixed budgets. OpenBao exceeded the five-owner limit. The final uncapped <code>make verify</code>, license scan, vulnerability scan, proof harness, and campaign verifier passed their expected conditions.</td></tr>
 <tr><td>2026-08-10</td><td>policy correction</td><td>review thresholds separated from hard gates</td><td>Source-owner and binary-size counts now trigger review. They do not reject adapters. <code>rejected(budget)</code> remains for an approved hard product or operational budget. OpenBao entered CDP3.2 implementation because its six-owner count was its only rejection reason. The latency contract now measures 10,000 warmed cache hits with zero extra backend calls and concurrent race coverage.</td></tr>
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>done; CDP4 started</td><td>Starmap commit <code>ef79cc38</code>. YAML-only acquisition, typed mappings, explicit capability evidence, unknown-offering quarantine, OpenBao, strict writing, license and vulnerability scans, and the final uncapped <code>make verify</code> passed. The campaign verifier remains <code>3 passed, 16 failed</code> because later Starport tasks own the remaining conditions.</td></tr>
+<tr><td>2026-08-10</td><td>CDP4</td><td>done; CDP4.1 started</td><td>Starmap commit <code>6697c478</code>. Atomic subscriber state, caller-owned stores, pinned bootstrap, digest-equal identity publication, durable restart, nonterminal recovery, terminal authentication, strict writing, and the final uncapped <code>make verify</code> passed.</td></tr>
 </tbody></table>
 
 </section>
