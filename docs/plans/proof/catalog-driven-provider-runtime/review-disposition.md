@@ -1,7 +1,7 @@
 # Catalog-driven provider runtime review disposition
 
-Status: accepted for plan activation on 2026-08-10. Production implementation
-has not started.
+Status: accepted for plan activation on 2026-08-10. Later policy corrections
+in this file govern active execution.
 
 ## Review basis
 
@@ -25,7 +25,7 @@ has not started.
 | B5 | Accepted | D10 and CDP6.1 define complete runtime candidate construction, atomic publication, rollback, and connector draining. |
 | B6 | Accepted and strengthened | CDP-V01 through CDP-V19 freeze the terminal verifier contract. CDP-V19 proves BYOK order and `user_only` noninterference. |
 | B7 | Accepted | CDP2, CDP3, CDP4, CDP6, CDP7, and CDP9 now have smaller follow-on tasks. |
-| B8 | Accepted | D6 and the dependency budget table define evidence-based admission limits for both binaries. |
+| B8 | Accepted with a policy correction | D6 and the dependency policy separate hard budgets, review thresholds, and hard safety, correctness, and compatibility gates. Numeric heuristics cannot reject an adapter by themselves. |
 
 ## Independent review non-blocking findings
 
@@ -52,7 +52,7 @@ has not started.
 
 | ID | Disposition | Evidence and plan route |
 |---|---|---|
-| A1 | Accepted with an evidence qualification | Raw module and package counts measure vendor packaging as well as runtime cost. The budget now records both graphs, limits new source repository owners, constrains dependency families, and keeps binary, lifecycle, license, and vulnerability limits. CDP3.1 and CDP7.1 must reproduce the reported measurements. |
+| A1 | Accepted with a later policy correction | Raw module, package, owner, and binary counts are review evidence. More than five owners and the 8 or 15 percent size deltas trigger review. They do not reject an adapter. Hard safety, correctness, compatibility, provenance, license, vulnerability, and approved operational gates remain. |
 | A2 | Accepted | CDP-V19 freezes BYOK order, forbids operator use under `user_only`, and requires the same external error whether operator material exists. |
 | A3 | Accepted as a factual correction | GPT-5.6-sol xhigh ran the independent review prompt. The plan no longer attributes the completed review to a different model. |
 | A4 | Accepted | CDP9 documents strict ambient precedence, explicit `env:` override, wrapper quickstarts, and projected or mounted file rotation. |
@@ -112,11 +112,15 @@ command log, source harness, module graph, or binary. These values are
 | All four | 7,208,960 bytes | 70 total modules | 240 |
 
 The reported data supports one structural correction: raw module and package
-counts do not measure runtime cost by themselves. The revised admission rule
-keeps complete graph evidence. It limits new source repository owners and
-unrelated dependency families instead of raw counts. The per-adapter and
-aggregate binary limits remain. CDP3.1 and CDP7.1 repeat the aggregate build
-after every accepted adapter. OpenBao is not preapproved.
+counts do not measure runtime cost by themselves. The policy keeps complete
+graph evidence. More than five owners requires dependency and security review.
+The 8 percent per-adapter and 15 percent aggregate binary deltas require
+release review. These thresholds do not select the verdict. CDP3.1 and CDP7.1
+repeat the aggregate build after every accepted adapter.
+
+OpenBao passed its
+mandatory review because the six-owner count was its only prior rejection
+reason.
 
 ## Library disposition
 
@@ -125,10 +129,11 @@ after every accepted adapter. OpenBao is not preapproved.
 - Keep Go CDK runtimevar as a comparator. Version 0.46 includes AWS Secrets
   Manager, AWS Parameter Store, Google Cloud Secret Manager, filevar, and
   HashiCorp Vault. It has no equivalent Azure runtimevar package.
-- Use official service clients for direct adapters that pass the revised
-  budgets.
+- Prefer official service clients. Evaluate maintained protocol-native clients
+  with the same evidence.
 - Prefer `github.com/hashicorp/vault/api` for Vault.
-- Treat OpenBao as a separate adapter and conformance target.
+- Use the official `github.com/openbao/openbao/api/v2` client for the separate
+  OpenBao adapter and conformance target.
 
 ## Measured baseline
 

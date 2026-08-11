@@ -1,4 +1,4 @@
-/var/folders/kw/d608x5pn4cq73rz78ztl92cw0000gn/T/tmp.d9r5mMKODz/baseline: go1.26.5
+/var/folders/kw/d608x5pn4cq73rz78ztl92cw0000gn/T/tmp.AerBcUgJQV/baseline: go1.26.5
 	path	github.com/agentstation/starmap/cmd/starmap
 	mod	github.com/agentstation/starmap	(devel)	
 	dep	cloud.google.com/go	v0.120.0	h1:wc6bgG9DHyKqF5/vQvX1CiZrtHnxJjBlKUyF9nP6meA=

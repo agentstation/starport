@@ -33,8 +33,8 @@ for adapter in baseline gcp azure aws vault openbao accepted all; do
 		vault) build_tags='measure_vault'; cp "$root/starmap-tags/measure_vault.go" "$source/cmd/starmap/" ;;
 		openbao) build_tags='measure_openbao'; cp "$root/starmap-tags/measure_openbao.go" "$source/cmd/starmap/" ;;
 		accepted)
-			build_tags='measure_gcp,measure_azure,measure_aws,measure_vault'
-			cp "$root"/starmap-tags/measure_{gcp,azure,aws,vault}.go "$source/cmd/starmap/"
+			build_tags='measure_gcp,measure_azure,measure_aws,measure_vault,measure_openbao'
+			cp "$root"/starmap-tags/*.go "$source/cmd/starmap/"
 			;;
 		all)
 			build_tags='measure_gcp,measure_azure,measure_aws,measure_vault,measure_openbao'
@@ -64,7 +64,8 @@ for adapter in baseline gcp azure aws vault openbao accepted all; do
 					cloud.google.com/go/secretmanager@v1.21.0 \
 					github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets@v1.5.0 \
 					github.com/aws/aws-sdk-go-v2/service/secretsmanager@v1.44.5 \
-					github.com/hashicorp/vault/api@v1.23.0
+					github.com/hashicorp/vault/api@v1.23.0 \
+					github.com/openbao/openbao/api/v2@v2.6.0
 				;;
 			all)
 				go get \

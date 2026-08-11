@@ -2,8 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP0 starts the evidence phase. Production
-implementation has not started.
+The plan status is `active`. CDP4 is the current task.
 
 ## Pinned source state
 
@@ -28,8 +27,9 @@ implementation has not started.
 ## Secret-source research
 
 Core V1 uses ambient, explicit `env:`, explicit `file:`, and cloud default
-credential sources. Direct secret-store clients must pass the plan budgets
-before either binary links them.
+credential sources. Direct secret-store clients must pass the plan hard gates
+before either binary links them. Numeric review thresholds require review but
+do not select the result.
 
 - Reject [Helmfile vals v0.45.0](https://github.com/helmfile/vals/tree/v0.45.0).
   It requires Go 1.26 and has a broad provider closure. Its provider API does
@@ -41,7 +41,9 @@ before either binary links them.
 - Official AWS, Google Cloud, and Azure clients remain the direct-adapter
   baseline.
 - [`github.com/hashicorp/vault/api`](https://pkg.go.dev/github.com/hashicorp/vault/api)
-  is the preferred Vault candidate. OpenBao remains a separate adapter and
+  is the selected Vault client.
+- [`github.com/openbao/openbao/api/v2`](https://openbao.org/api-docs/libraries/)
+  is the official maintained OpenBao client and remains a separate adapter and
   conformance target.
 
 The repository-owned credential layer owns caching, resolution, versions,
@@ -71,9 +73,12 @@ package deltas are mandatory evidence, but they are not admission limits.
 - [CDP0 red verifier](cdp0.md): `Summary: 0 passed, 19 failed`.
 - [CDP3 credential sources](cdp3.md): the full uncapped Starmap gate passed,
   and the campaign verifier reported `Summary: 3 passed, 16 failed`.
-- [CDP3.1 direct secret sources](cdp3.1.md): four official adapters met all
-  admission limits. OpenBao exceeded the source-owner budget. Starmap rejected
-  it.
+- [CDP3.1 direct secret sources](cdp3.1.md): five direct adapters passed the
+  hard gates. OpenBao's six owners triggered and passed the required dependency
+  and security review.
+- [CDP3.2 YAML acquisition contract](cdp3.2.md): YAML drives a synthetic
+  provider with no provider branch. Acquisition, mapping, trust review,
+  publication, and the final uncapped gate passed.
 - Per-adapter dependency and binary measurements from CDP7.1.
-- CDP3.2 will record the YAML acquisition fail-before scans, contract tests,
-  generated-data checks, and uncapped verification results.
+- CDP4 will record atomic subscriber state, durable store ownership, bootstrap,
+  recovery, and remote protocol evidence.

@@ -325,6 +325,7 @@ github.com/aws/smithy-go/traits
 github.com/aws/smithy-go/transport/http
 github.com/aws/smithy-go/transport/http/internal/io
 github.com/cenkalti/backoff/v4
+github.com/cenkalti/backoff/v5
 github.com/cespare/xxhash/v2
 github.com/clipperhouse/displaywidth
 github.com/clipperhouse/uax29/v2/graphemes
@@ -428,6 +429,7 @@ github.com/olekukonko/tablewriter/pkg/twwarp
 github.com/olekukonko/tablewriter/pkg/twwidth
 github.com/olekukonko/tablewriter/renderer
 github.com/olekukonko/tablewriter/tw
+github.com/openbao/openbao/api/v2
 github.com/patrickmn/go-cache
 github.com/pelletier/go-toml/v2
 github.com/pelletier/go-toml/v2/internal/characters

@@ -1,7 +1,7 @@
-W0810 21:21:00.505403   26142 library.go:101] "golang.org/x/sys/unix" contains non-Go code that can't be inspected for further dependencies:
+W0810 21:44:42.629195   37673 library.go:101] "golang.org/x/sys/unix" contains non-Go code that can't be inspected for further dependencies:
 /Users/jack/go/pkg/mod/golang.org/x/sys@v0.47.0/unix/asm_bsd_arm64.s
 /Users/jack/go/pkg/mod/golang.org/x/sys@v0.47.0/unix/zsyscall_darwin_arm64.s
-W0810 21:21:02.858009   26142 library.go:101] "github.com/cespare/xxhash/v2" contains non-Go code that can't be inspected for further dependencies:
+W0810 21:44:44.956110   37673 library.go:101] "github.com/cespare/xxhash/v2" contains non-Go code that can't be inspected for further dependencies:
 /Users/jack/go/pkg/mod/github.com/cespare/xxhash/v2@v2.3.0/xxhash_arm64.s
-W0810 21:21:03.393283   26142 library.go:101] "golang.org/x/crypto/chacha20" contains non-Go code that can't be inspected for further dependencies:
+W0810 21:44:45.496434   37673 library.go:101] "golang.org/x/crypto/chacha20" contains non-Go code that can't be inspected for further dependencies:
 /Users/jack/go/pkg/mod/golang.org/x/crypto@v0.53.0/chacha20/chacha_arm64.s

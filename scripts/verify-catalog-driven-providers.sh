@@ -182,8 +182,10 @@ connectors_are_credential_free() {
 }
 
 synthetic_provider_inference_works() {
-  starport_tests "./internal/app ./internal/proxy" \
-    TestSyntheticCatalogProviderInferenceContract
+  starmap_tests "./internal/catalog/pipeline" \
+    TestYAMLOnlyProviderAcquisitionPublishesReviewedOfferingAndQuarantinesUnknown &&
+    starport_tests "./internal/app ./internal/proxy" \
+      TestSyntheticCatalogProviderInferenceContract
 }
 
 synthetic_provider_operator_surfaces_work() {

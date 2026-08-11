@@ -1,19 +1,22 @@
 === RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget
 === RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/gcp
-    secret_source_test.go:371: cancellation = 71.167µs
+    secret_source_test.go:382: cancellation = 50.583µs
 === RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/azure
-    secret_source_test.go:371: cancellation = 2.917µs
+    secret_source_test.go:382: cancellation = 3.084µs
 === RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/aws
-    secret_source_test.go:371: cancellation = 1.417µs
+    secret_source_test.go:382: cancellation = 1.333µs
 === RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/vault
-    secret_source_test.go:371: cancellation = 958ns
+    secret_source_test.go:382: cancellation = 875ns
+=== RUN   TestDirectSecretSourcesPropagateCancellationWithinBudget/openbao
+    secret_source_test.go:382: cancellation = 833ns
 --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget (0.00s)
     --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/gcp (0.00s)
     --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/azure (0.00s)
     --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/aws (0.00s)
     --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/vault (0.00s)
-=== RUN   TestDirectSecretSourceColdFakeP95Budget
-    secret_source_test.go:391: cold fake calls = 10000, p95 = 834ns
---- PASS: TestDirectSecretSourceColdFakeP95Budget (0.01s)
+    --- PASS: TestDirectSecretSourcesPropagateCancellationWithinBudget/openbao (0.00s)
+=== RUN   TestCredentialResolverWarmCacheHitLatencyAndConcurrency
+    source_conformance_test.go:170: warm cache-hit samples = 10000, p95 = 3.042µs
+--- PASS: TestCredentialResolverWarmCacheHitLatencyAndConcurrency (0.03s)
 PASS
-ok  	github.com/agentstation/starmap/internal/auth	0.300s
+ok  	github.com/agentstation/starmap/internal/auth	0.307s
