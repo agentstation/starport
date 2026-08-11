@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP6 removes credential values and sources from connectors, keys runtime factories by compiled primitives, and proves synthetic-provider inference without a provider roster. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP6.1 builds complete runtime generations, publishes each valid generation atomically, and drains replaced connectors after request leases end. |
 
 ### Proposed Work
 
