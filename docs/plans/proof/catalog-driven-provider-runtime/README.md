@@ -69,6 +69,8 @@ package deltas are mandatory evidence, but they are not admission limits.
 ## Evidence
 
 - [CDP0 red verifier](cdp0.md): `Summary: 0 passed, 19 failed`.
+- [CDP3 credential sources](cdp3.md): the full uncapped Starmap gate passed,
+  and the campaign verifier reported `Summary: 3 passed, 16 failed`.
 - Per-adapter dependency and binary measurements from CDP3.1 and CDP7.1.
 - CDP3.2 will record the YAML acquisition fail-before scans, contract tests,
   generated-data checks, and uncapped verification results.

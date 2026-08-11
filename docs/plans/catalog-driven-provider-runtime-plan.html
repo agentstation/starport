@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-10.<br>
 Baseline: Starport main @ <code>101c32d</code>. Starmap main @ <code>7f53767</code>.<br>
 Proof root: <code>docs/plans/proof/catalog-driven-provider-runtime/</code>.<br>
-Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven operator surfaces.</p>
+Next action: CDP3.1 measures direct Starmap secret-source adapters and implements only the candidates that pass every fixed budget.</p>
 
 <section id="outcome">
 <h2>Outcome</h2>
@@ -67,8 +67,8 @@ Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven o
 <tr id="CDP1" data-status="done"><td>CDP1</td><td>Starmap credential profiles and authentication alternatives.</td><td><code>done</code></td><td>Starmap commits <code>3d3428f9</code> and <code>2f858ac4</code>. Ordinary <code>make verify</code> passed, and the verifier reached <code>1 passed, 18 failed</code>. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp1.md</code>.</td></tr>
 <tr id="CDP2" data-status="done"><td>CDP2</td><td>Starmap provider YAML and acquisition-fact migration.</td><td><code>done</code></td><td>Starmap commit <code>201a78fb</code>. Ordinary <code>make verify</code> passed without a scheduler cap. The verifier reached <code>3 passed, 16 failed</code>. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp2.md</code>.</td></tr>
 <tr id="CDP2.1" data-status="done"><td>CDP2.1</td><td>Starmap model-fact migration and review candidates.</td><td><code>done</code></td><td>Starmap commit <code>b5bb3a3a</code>. Normal-scheduling <code>make verify</code> passed. Unknown models stay unpublished and produce evidence-bound review candidates. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp2.1.md</code>.</td></tr>
-<tr id="CDP3" data-status="in_progress"><td>CDP3</td><td>Starmap credential sources and operator surfaces.</td><td><code>in_progress</code></td><td>CDP2 supplies the catalog credential contract and provider-independent acquisition clients.</td></tr>
-<tr id="CDP3.1" data-status="todo"><td>CDP3.1</td><td>Starmap direct secret-source measurements and accepted adapters.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP3" data-status="done"><td>CDP3</td><td>Starmap credential sources and operator surfaces.</td><td><code>done</code></td><td>Starmap commit <code>54bd8de9</code>. The full uncapped gate passed across 85 packages, 14 source vectors, six pure-Go consumers, race, lint, vet, 15 coverage gates, generated data, build, and CLI smoke checks. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp3.md</code>.</td></tr>
+<tr id="CDP3.1" data-status="in_progress"><td>CDP3.1</td><td>Starmap direct secret-source measurements and accepted adapters.</td><td><code>in_progress</code></td><td>CDP3 supplies the common credential material and source lifecycle.</td></tr>
 <tr id="CDP3.2" data-status="todo"><td>CDP3.2</td><td>Starmap YAML acquisition and mapping contract.</td><td><code>todo</code></td><td>The 2026-08-10 mapping review found missing end-to-end proof and validation gaps before the Starmap release gate.</td></tr>
 <tr id="CDP4" data-status="todo"><td>CDP4</td><td>Starmap atomic and durable remote subscriber.</td><td><code>todo</code></td><td></td></tr>
 <tr id="CDP4.1" data-status="todo"><td>CDP4.1</td><td>Starmap compatibility release and catalog publication.</td><td><code>todo</code></td><td></td></tr>
@@ -559,6 +559,7 @@ Next action: CDP3 adds Starmap credential-source lifecycles and catalog-driven o
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>mapping authority refined</td><td>The OpenAI-compatible review found that Groq YAML mappings duplicate unconditional provider-limit fallback logic. CDP3.2 now requires a provider inventory and one tested mapping authority.</td></tr>
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>capability trust refined</td><td>The acquisition review kept schema-v5 <code>feature_rules</code> removed and added a semantic-widening audit. Typed evidence must preserve true, false, and unknown capability facts.</td></tr>
 <tr><td>2026-08-10</td><td>CDP3.2</td><td>entailment correction</td><td>Fireworks documentation proves that <code>supportsTools</code> entails multiple tool capabilities. CDP3.2 now permits any documented relation cardinality and requires explicit combination rules.</td></tr>
+<tr><td>2026-08-10</td><td>CDP3</td><td>done; CDP3.1 started</td><td>Starmap commit <code>54bd8de9</code>. The final uncapped <code>make verify</code> passed 85 packages, the full race suite, 15 coverage gates, pure-Go consumers, generated data, build, and CLI smoke checks. The campaign verifier reported <code>3 passed, 16 failed</code>.</td></tr>
 </tbody></table>
 
 </section>
