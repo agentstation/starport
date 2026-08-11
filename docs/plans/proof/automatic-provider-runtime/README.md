@@ -18,3 +18,7 @@ No implementation evidence exists at plan authorship.
   and local Go toolchain evidence.
 - [`APR0.md`](APR0.md): named red verifier, fail-before output, and preserved
   green baseline controls.
+- [`APR1.md`](APR1.md): provider-neutral production bootstrap and isolated
+  local development runtime.
+- [`APR2.md`](APR2.md): catalog-wide provider registration, request-bound
+  endpoint binding, and credential-independent readiness.
