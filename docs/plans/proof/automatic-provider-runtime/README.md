@@ -26,3 +26,5 @@ No implementation evidence exists at plan authorship.
   reconciliation with atomic runtime publication.
 - [`APR4.md`](APR4.md): secret-free provider state, evidence-scoped failures,
   and exact material-version recovery.
+- [`APR5.md`](APR5.md): authenticated provider status and forced credential
+  reconciliation routes.
