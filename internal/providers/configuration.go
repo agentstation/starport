@@ -7,42 +7,49 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
-// Configurations projects external settings by exact Starmap provider ID.
-func Configurations(configs config.ProvidersConfig) map[catalogs.ProviderID]connectors.ProviderConfig {
-	result := make(map[catalogs.ProviderID]connectors.ProviderConfig)
+// Configuration binds operator settings and one request-time material source to
+// an exact catalog provider. It contains no credential value.
+type Configuration struct {
+	Connector        connectors.ProviderConfig
+	CredentialSource credentials.MaterialSource
+	Profile          catalogs.ProviderCredentialProfile
+}
+
+// Configurations projects external settings by exact Starmap provider ID. The
+// connector projection contains operational values only.
+func Configurations(
+	configs config.ProvidersConfig,
+) map[catalogs.ProviderID]Configuration {
+	result := make(map[catalogs.ProviderID]Configuration)
 	for _, entry := range configs.Entries() {
 		providerConfig := connectors.ProviderConfig{
-			BaseURL: entry.Config.BaseURL, APIKey: entry.Config.APIKey, AuthMode: entry.Config.AuthMode,
+			BaseURL: entry.Config.BaseURL,
 			Timeout: entry.Config.Timeout, MaxConnections: entry.Config.MaxConnections,
-			Enabled: entry.Config.Enabled,
+			Enabled: entry.Config.Enabled, EndpointBindings: cloneStrings(entry.Config.EndpointBindings),
 		}
-		if entry.Config.ProjectID != "" || entry.Config.Location != "" {
-			providerConfig.EndpointBindings = make(map[string]string, 2)
-			if entry.Config.ProjectID != "" {
-				providerConfig.EndpointBindings["project"] = entry.Config.ProjectID
-			}
-			if entry.Config.Location != "" {
-				providerConfig.EndpointBindings["location"] = entry.Config.Location
-			}
+		result[entry.ProviderID] = Configuration{
+			Connector:        providerConfig,
+			CredentialSource: entry.Config.CredentialSource,
+			Profile:          entry.Config.Material.Profile(),
 		}
-		result[entry.ProviderID] = providerConfig
 	}
 	return result
 }
 
 // Availability projects active adapters into the runtime catalog contract.
-func Availability(activations []connectors.AdapterActivation) []runtimecatalog.AdapterAvailability {
+func Availability(activations []Activation) []runtimecatalog.AdapterAvailability {
 	result := make([]runtimecatalog.AdapterAvailability, 0, len(activations))
 	for _, activation := range activations {
 		result = append(result, runtimecatalog.AdapterAvailability{
 			ProviderID: activation.ProviderID, Registered: true, Configured: true,
-			Operations:       append([]catalogs.ProviderOperation(nil), activation.Descriptor.Operations...),
-			EndpointTypes:    append([]catalogs.EndpointType(nil), activation.Descriptor.EndpointTypes...),
-			BaseURL:          activation.Config.BaseURL,
-			EndpointBindings: cloneStrings(activation.Config.EndpointBindings),
+			Operations:       append([]catalogs.ProviderOperation(nil), activation.Operations...),
+			EndpointTypes:    append([]catalogs.EndpointType(nil), activation.EndpointTypes...),
+			BaseURL:          activation.Configuration.Connector.BaseURL,
+			EndpointBindings: cloneStrings(activation.Configuration.Connector.EndpointBindings),
 		})
 	}
 	return result

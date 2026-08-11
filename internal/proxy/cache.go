@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
-	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/responsecache"
 	"github.com/rs/zerolog/log"
 )
@@ -23,23 +24,23 @@ type CacheManager interface {
 	SetResponse(ctx context.Context, key string, response []byte) error
 }
 
-type catalogGenerationSource interface {
-	Current() *runtimecatalog.RoutableSnapshot
+type runtimeGenerationSource interface {
+	AcquireRuntime() (connectors.RuntimeLease, error)
 }
 
 // CacheMiddleware provides caching functionality for proxy services.
 type CacheMiddleware struct {
 	manager CacheManager
 	config  *CacheConfig
-	catalog catalogGenerationSource
+	runtime runtimeGenerationSource
 }
 
 // NewCacheMiddleware creates a new cache middleware.
-func NewCacheMiddleware(manager CacheManager, config *CacheConfig, catalog catalogGenerationSource) Middleware {
+func NewCacheMiddleware(manager CacheManager, config *CacheConfig, runtime runtimeGenerationSource) Middleware {
 	return &CacheMiddleware{
 		manager: manager,
 		config:  config,
-		catalog: catalog,
+		runtime: runtime,
 	}
 }
 
@@ -49,7 +50,7 @@ func (m *CacheMiddleware) Wrap(next Proxy) Proxy {
 		service:      next,
 		cacheManager: m.manager,
 		cacheConfig:  *m.config,
-		catalog:      m.catalog,
+		runtime:      m.runtime,
 	}
 }
 
@@ -58,7 +59,7 @@ type cachedService struct {
 	service      Proxy
 	cacheManager CacheManager
 	cacheConfig  CacheConfig
-	catalog      catalogGenerationSource
+	runtime      runtimeGenerationSource
 	generation   string
 }
 
@@ -74,9 +75,16 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	if req.Request.Stream || !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Request.Model) {
 		return s.service.ProcessChatCompletion(ctx, req)
 	}
+	ctx, runtime, owned := s.runtimeContext(ctx)
+	if owned {
+		defer runtime.Release()
+	}
+	if s.runtime != nil && runtime == nil {
+		return s.service.ProcessChatCompletion(ctx, req)
+	}
 
 	// Generate cache key
-	cacheKey, err := s.generateChatCacheKey(req)
+	cacheKey, err := s.generateChatCacheKey(ctx, req)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to generate cache key")
 		return s.service.ProcessChatCompletion(ctx, req)
@@ -149,21 +157,46 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 	if !s.cacheConfig.EnableChatCache || s.shouldSkipCache(ctx, req.Request.Model) {
 		return s.service.ProcessChatCompletionStream(ctx, req)
 	}
+	ctx, runtime, owned := s.runtimeContext(ctx)
+	finish := func(
+		stream ChatCompletionStreamResponse,
+		err error,
+	) (ChatCompletionStreamResponse, error) {
+		if err != nil {
+			if owned {
+				runtime.Release()
+			}
+			return nil, err
+		}
+		if stream == nil {
+			if owned {
+				runtime.Release()
+			}
+			return nil, errors.New("stream response is required")
+		}
+		if owned {
+			return newRuntimeLeaseStream(stream, runtime), nil
+		}
+		return stream, nil
+	}
+	if s.runtime != nil && runtime == nil {
+		return s.service.ProcessChatCompletionStream(ctx, req)
+	}
 
 	// Generate cache key - same as non-streaming
-	cacheKey, err := s.generateChatCacheKey(req)
+	cacheKey, err := s.generateChatCacheKey(ctx, req)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to generate cache key for streaming")
-		return s.service.ProcessChatCompletionStream(ctx, req)
+		return finish(s.service.ProcessChatCompletionStream(ctx, req))
 	}
 
 	repository, err := responsecache.Open(s.cacheManager, nil)
 	if err != nil {
-		return s.service.ProcessChatCompletionStream(ctx, req)
+		return finish(s.service.ProcessChatCompletionStream(ctx, req))
 	}
 	canonicalRequest, err := canonicalChatRequest(req)
 	if err != nil {
-		return s.service.ProcessChatCompletionStream(ctx, req)
+		return finish(s.service.ProcessChatCompletionStream(ctx, req))
 	}
 	cachedResp, cachedAt, found, err := repository.GetChat(ctx, cacheKey)
 	if err != nil {
@@ -171,9 +204,9 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		// Continue without cache on error
 		stream, err := s.service.ProcessChatCompletionStream(ctx, req)
 		if err != nil {
-			return nil, err
+			return finish(nil, err)
 		}
-		return newCachingStreamWrapper(stream, repository, cacheKey), nil
+		return finish(newCachingStreamWrapper(stream, repository, cacheKey), nil)
 	}
 
 	if found {
@@ -184,9 +217,9 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 
 		events, err := responsecache.StreamEvents(cachedResp, canonicalRequest.StreamOptions)
 		if err != nil {
-			return s.service.ProcessChatCompletionStream(ctx, req)
+			return finish(s.service.ProcessChatCompletionStream(ctx, req))
 		}
-		return newCachedEventStream(events, cachedAt), nil
+		return finish(newCachedEventStream(events, cachedAt), nil)
 	}
 
 	log.Info().
@@ -197,11 +230,11 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 	// Cache miss - get stream from service
 	stream, err := s.service.ProcessChatCompletionStream(ctx, req)
 	if err != nil {
-		return nil, err
+		return finish(nil, err)
 	}
 
 	// Wrap stream to cache the response
-	return newCachingStreamWrapper(stream, repository, cacheKey), nil
+	return finish(newCachingStreamWrapper(stream, repository, cacheKey), nil)
 }
 
 // ProcessEmbeddings handles embeddings with caching
@@ -210,9 +243,16 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 	if !s.cacheConfig.EnableEmbeddingCache || s.shouldSkipCache(ctx, req.Request.Model) {
 		return s.service.ProcessEmbeddings(ctx, req)
 	}
+	ctx, runtime, owned := s.runtimeContext(ctx)
+	if owned {
+		defer runtime.Release()
+	}
+	if s.runtime != nil && runtime == nil {
+		return s.service.ProcessEmbeddings(ctx, req)
+	}
 
 	// Generate cache key
-	cacheKey, err := s.generateEmbeddingsCacheKey(req)
+	cacheKey, err := s.generateEmbeddingsCacheKey(ctx, req)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to generate embeddings cache key")
 		return s.service.ProcessEmbeddings(ctx, req)
@@ -277,8 +317,8 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 			}
 
 			// Determine the type based on cache key and unmarshal
-			switch cacheKey {
-			case "models:list":
+			switch {
+			case strings.HasPrefix(cacheKey, "models:list:"):
 				var resp ModelsResponse
 				if err := json.Unmarshal(jsonData, &resp); err != nil {
 					log.Warn().Err(err).Msg("failed to unmarshal models response")
@@ -286,7 +326,7 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 				}
 				resp.CacheStatus = CacheStatusHit
 				return &resp, nil
-			case "providers:list":
+			case strings.HasPrefix(cacheKey, "providers:list:"):
 				var resp ProvidersResponse
 				if err := json.Unmarshal(jsonData, &resp); err != nil {
 					log.Warn().Err(err).Msg("failed to unmarshal providers response")
@@ -340,8 +380,16 @@ func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error)
 	if !s.cacheConfig.EnableModelCache {
 		return s.service.ListModels(ctx)
 	}
+	ctx, runtime, owned := s.runtimeContext(ctx)
+	if owned {
+		defer runtime.Release()
+	}
+	if s.runtime != nil && runtime == nil {
+		return s.service.ListModels(ctx)
+	}
+	cacheKey := "models:list:" + s.catalogGeneration(ctx)
 
-	resp, err := s.cacheListResponse(ctx, "models:list", "models",
+	resp, err := s.cacheListResponse(ctx, cacheKey, "models",
 		func() (any, error) { return s.service.ListModels(ctx) })
 	if err != nil {
 		return nil, err
@@ -354,8 +402,16 @@ func (s *cachedService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 	if !s.cacheConfig.EnableProviderCache {
 		return s.service.ListProviders(ctx)
 	}
+	ctx, runtime, owned := s.runtimeContext(ctx)
+	if owned {
+		defer runtime.Release()
+	}
+	if s.runtime != nil && runtime == nil {
+		return s.service.ListProviders(ctx)
+	}
+	cacheKey := "providers:list:" + s.catalogGeneration(ctx)
 
-	resp, err := s.cacheListResponse(ctx, "providers:list", "providers",
+	resp, err := s.cacheListResponse(ctx, cacheKey, "providers",
 		func() (any, error) { return s.service.ListProviders(ctx) })
 	if err != nil {
 		return nil, err
@@ -368,8 +424,15 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	if !s.cacheConfig.EnableModelCache {
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
+	ctx, runtime, owned := s.runtimeContext(ctx)
+	if owned {
+		defer runtime.Release()
+	}
+	if s.runtime != nil && runtime == nil {
+		return s.service.GetModelEndpoints(ctx, modelID)
+	}
 
-	cacheKey := fmt.Sprintf("model:endpoints:%s", modelID)
+	cacheKey := fmt.Sprintf("model:endpoints:%s:%s", s.catalogGeneration(ctx), modelID)
 
 	// Try to get from cache using GetModel
 	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)
@@ -417,36 +480,59 @@ func (s *cachedService) shouldSkipCache(ctx context.Context, model string) bool 
 }
 
 // generateChatCacheKey generates a cache key for chat completions
-func (s *cachedService) generateChatCacheKey(req *ChatCompletionRequest) (string, error) {
+func (s *cachedService) generateChatCacheKey(
+	ctx context.Context,
+	req *ChatCompletionRequest,
+) (string, error) {
 	canonical, err := canonicalChatRequest(req)
 	if err != nil {
 		return "", err
 	}
 	return responsecache.ChatKey(responsecache.ChatIdentity{
 		TenantID:          req.TenantID,
-		CatalogGeneration: s.catalogGeneration(),
+		CatalogGeneration: s.catalogGeneration(ctx),
 		Request:           canonical,
 		Policy:            cachePolicy(req.Route, req.Provider, req.APIKeyConfig),
 	})
 }
 
 // generateEmbeddingsCacheKey generates a cache key for embeddings
-func (s *cachedService) generateEmbeddingsCacheKey(req *EmbeddingsRequest) (string, error) {
+func (s *cachedService) generateEmbeddingsCacheKey(
+	ctx context.Context,
+	req *EmbeddingsRequest,
+) (string, error) {
 	return responsecache.EmbeddingKey(responsecache.EmbeddingIdentity{
 		TenantID:          req.TenantID,
-		CatalogGeneration: s.catalogGeneration(),
+		CatalogGeneration: s.catalogGeneration(ctx),
 		Request:           req.Request,
 		Policy:            cachePolicy("", nil, req.APIKeyConfig),
 	})
 }
 
-func (s *cachedService) catalogGeneration() string {
-	if s.catalog != nil {
-		if snapshot := s.catalog.Current(); snapshot != nil {
+func (s *cachedService) catalogGeneration(ctx context.Context) string {
+	if runtime := connectors.RuntimeLeaseFromContext(ctx); runtime != nil {
+		if snapshot := runtime.Snapshot(); snapshot != nil {
 			return snapshot.GenerationID()
 		}
 	}
 	return s.generation
+}
+
+func (s *cachedService) runtimeContext(
+	ctx context.Context,
+) (context.Context, connectors.RuntimeLease, bool) {
+	if runtime := connectors.RuntimeLeaseFromContext(ctx); runtime != nil {
+		return ctx, runtime, false
+	}
+	if s.runtime == nil {
+		return ctx, nil, false
+	}
+	runtime, err := s.runtime.AcquireRuntime()
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to retain provider runtime for cache operation")
+		return ctx, nil, false
+	}
+	return connectors.ContextWithRuntimeLease(ctx, runtime), runtime, true
 }
 
 func canonicalChatRequest(req *ChatCompletionRequest) (inference.ChatRequest, error) {
@@ -469,6 +555,7 @@ func cachePolicy(route string, provider *ProviderPreferences, tenant *APIKeyRout
 		policy.Tenant.AllowedModels = append([]string(nil), tenant.AllowedModels...)
 		policy.Tenant.AllowedProviders = append([]string(nil), tenant.AllowedProviders...)
 		policy.Tenant.RateLimitTier = tenant.RateLimitTier
+		policy.Tenant.CredentialStrategy = string(tenant.CredentialStrategy)
 		policy.Provider.ModelOverrides = make(map[string]string, len(tenant.ModelOverrides))
 		for model, override := range tenant.ModelOverrides {
 			policy.Provider.ModelOverrides[model] = override
@@ -595,3 +682,56 @@ func (w *cachingStreamWrapper) cacheResponse() {
 
 var _ ChatCompletionStreamResponse = (*cachingStreamWrapper)(nil)
 var _ CacheStatusProvider = (*cachingStreamWrapper)(nil)
+
+// runtimeLeaseStream keeps the cache lookup, routed stream, and cache write on
+// one complete runtime generation.
+type runtimeLeaseStream struct {
+	stream  ChatCompletionStreamResponse
+	runtime connectors.RuntimeLease
+	once    sync.Once
+}
+
+func newRuntimeLeaseStream(
+	stream ChatCompletionStreamResponse,
+	runtime connectors.RuntimeLease,
+) ChatCompletionStreamResponse {
+	if stream == nil || runtime == nil {
+		return stream
+	}
+	return &runtimeLeaseStream{stream: stream, runtime: runtime}
+}
+
+func (s *runtimeLeaseStream) Read() (*inference.StreamEvent, error) {
+	event, err := s.stream.Read()
+	if err != nil {
+		s.release()
+	}
+	return event, err
+}
+
+func (s *runtimeLeaseStream) Close() error {
+	err := s.stream.Close()
+	s.release()
+	return err
+}
+
+func (s *runtimeLeaseStream) GetCacheStatus() string {
+	if status, ok := s.stream.(CacheStatusProvider); ok {
+		return status.GetCacheStatus()
+	}
+	return ""
+}
+
+func (s *runtimeLeaseStream) GetCacheAge() int {
+	if status, ok := s.stream.(CacheStatusProvider); ok {
+		return status.GetCacheAge()
+	}
+	return 0
+}
+
+func (s *runtimeLeaseStream) release() {
+	s.once.Do(s.runtime.Release)
+}
+
+var _ ChatCompletionStreamResponse = (*runtimeLeaseStream)(nil)
+var _ CacheStatusProvider = (*runtimeLeaseStream)(nil)

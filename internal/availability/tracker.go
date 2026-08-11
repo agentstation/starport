@@ -156,6 +156,23 @@ func (t *Tracker) Acquire(route routing.Route) bool {
 	return admitted
 }
 
+// Release ends a prior half-open admission without recording a provider
+// outcome. Credential selection uses it when no provider request ran.
+func (t *Tracker) Release(route routing.Route) {
+	if t == nil {
+		return
+	}
+	offering := OfferingFromRoute(route)
+	if validateOffering(offering) != nil {
+		return
+	}
+	t.mu.Lock()
+	if entry := t.records[offering]; entry != nil {
+		entry.probeInFlight = false
+	}
+	t.mu.Unlock()
+}
+
 // Refresh makes expired open offerings eligible for one half-open probe.
 func (t *Tracker) Refresh(_ context.Context) {
 	if t == nil {

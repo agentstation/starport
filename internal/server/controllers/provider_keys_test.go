@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/go-chi/chi/v5"
@@ -99,8 +101,8 @@ func (m *mockKeyManager) ListGlobalKeys(ctx context.Context) ([]*credentials.Pro
 	}, nil
 }
 
-func (m *mockKeyManager) DetermineKeyStrategy(ctx context.Context, scope string, provider string) byok.FallbackStrategy {
-	return byok.GatewayFirst
+func (m *mockKeyManager) ResolveUserMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error) {
+	return credentials.Material{}, nil
 }
 
 func (m *mockKeyManager) RecordUsage(ctx context.Context, scope string, provider string, usage *byok.Usage) error {

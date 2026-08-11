@@ -6,10 +6,12 @@ import (
 	"testing"
 
 	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
@@ -32,10 +34,12 @@ func TestOpenRegistersOnlyExplicitProviders(t *testing.T) {
 	require.NoError(t, err)
 	providerID, _ := firstCatalogOffering(t, client.Catalog())
 	provider := string(providerID)
-	providerConfig := connectors.ProviderConfig{BaseURL: "http://provider.test", APIKey: "test-key"}
+	providerConfig := connectors.ProviderConfig{BaseURL: "http://provider.test"}
 	connector := connectors.NewMockConnector(providerConfig)
 
-	registry, err := Open(plane, []Registration{{Provider: provider, Connector: connector}})
+	registry, err := Open(plane, []Registration{{
+		Provider: provider, Connector: connector, CredentialSource: registryTestMaterialSource{},
+	}})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, registry.Close()) })
 	assert.Equal(t, []string{provider}, registry.ListProviders())
@@ -65,14 +69,24 @@ func TestOpenFailureClosesEveryConnectorOnce(t *testing.T) {
 	duplicate := newCloseTrackingConnector()
 	future := newCloseTrackingConnector()
 	_, err = Open(plane, []Registration{
-		{Provider: "openai", Connector: first},
-		{Provider: "openai", Connector: duplicate},
-		{Provider: "anthropic", Connector: future},
+		{Provider: "openai", Connector: first, CredentialSource: registryTestMaterialSource{}},
+		{Provider: "openai", Connector: duplicate, CredentialSource: registryTestMaterialSource{}},
+		{Provider: "anthropic", Connector: future, CredentialSource: registryTestMaterialSource{}},
 	})
 	require.Error(t, err)
 	require.Equal(t, int32(1), first.closeCount.Load())
 	require.Equal(t, int32(1), duplicate.closeCount.Load())
 	require.Equal(t, int32(1), future.closeCount.Load())
+}
+
+type registryTestMaterialSource struct{}
+
+func (registryTestMaterialSource) ResolveMaterial(context.Context) (credentials.Material, error) {
+	return credentials.NewMaterial(
+		catalogs.ProviderCredentialProfile{ID: "none", Primitive: catalogs.ProviderAuthenticationNone},
+		nil,
+		credentials.MaterialMetadata{Version: "test"},
+	), nil
 }
 
 func TestRegistryStartAndCloseLifecycle(t *testing.T) {

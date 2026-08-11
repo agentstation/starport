@@ -31,20 +31,21 @@ func TestOfferingCacheCapability(t *testing.T) {
 		Configured:    true,
 		Operations:    append([]catalogs.ProviderOperation(nil), offering.Service.Operations...),
 		EndpointTypes: types,
+		BaseURL:       "https://provider.test",
 	}))
 
 	routeID := string(providerID) + "/" + string(offering.ProviderModelID)
 	route, found := plane.Current().ResolveRoute(routeID)
 	require.True(t, found)
 	require.True(t, route.SupportsPromptCache())
-	write, read, ok := cacheTokenPrices(plane, routeID)
+	write, read, ok := cacheTokenPrices(plane.Current(), routeID)
 	require.True(t, ok)
 	require.Equal(t, modelTokenPrice(offering.Pricing.Tokens.CacheWrite), write)
 	require.Equal(t, modelTokenPrice(offering.Pricing.Tokens.CacheRead), read)
 
 	_, _, ok = cacheTokenPrices(nil, routeID)
 	require.False(t, ok)
-	_, _, ok = cacheTokenPrices(plane, "missing/model")
+	_, _, ok = cacheTokenPrices(plane.Current(), "missing/model")
 	require.False(t, ok)
 }
 
@@ -65,8 +66,11 @@ func TestOfferingPriceHasNoFallback(t *testing.T) {
 	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{
 		ProviderID: providerID, Registered: true, Configured: true,
 		Operations: offering.Service.Operations, EndpointTypes: types,
+		BaseURL: "https://provider.test",
 	}))
-	_, _, ok = cacheTokenPrices(plane, string(providerID)+"/"+string(offering.ProviderModelID))
+	_, found := plane.Current().ResolveRoute(string(providerID) + "/" + string(offering.ProviderModelID))
+	require.True(t, found)
+	_, _, ok = cacheTokenPrices(plane.Current(), string(providerID)+"/"+string(offering.ProviderModelID))
 	require.False(t, ok)
 }
 

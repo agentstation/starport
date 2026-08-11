@@ -1,6 +1,6 @@
 # Starport v1 Operator Guide
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 This guide covers a single Starport process and a Valkey-backed multi-node
 deployment. Starport starts only when storage, Starmap, provider credentials,
@@ -25,10 +25,11 @@ Build Starport:
 make build
 ```
 
-For OpenAI, supply the provider inference key and run local initialization:
+For OpenAI, supply the conventional provider inference key and run local
+initialization:
 
 ```bash
-export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
+export OPENAI_API_KEY="replace-with-provider-inference-key"
 ./starport init --provider openai
 ```
 
@@ -116,7 +117,9 @@ starport doctor
 
 Passive checks load configuration and Starmap facts. They also compile the
 configured adapter and catalog intersection. They do not open configured
-storage or use a network connection.
+storage or send a provider inference request. A selected cloud identity or
+direct secret reference can use its authentication network during credential
+resolution.
 
 Add `--probe` to open Badger or Valkey in read-only mode. This probe verifies
 the current catalog generation and gateway identity state. Diagnosis never
@@ -158,59 +161,240 @@ scope.
 
 ## Provider Configuration
 
-Starport uses exact adapter IDs. Current IDs are:
+Use an exact provider ID from the active Starmap catalog. Starmap owns each
+provider's credential fields, ordered conventional environment names,
+authentication profiles, endpoint templates, and service metadata. Starport
+checks the conventional names first. It then checks a derived
+`STARPORT_<PROVIDER>_<FIELD>` name. For example, it checks `OPENAI_API_KEY`
+before `STARPORT_OPENAI_API_KEY`.
 
-- `openai`
-- `anthropic`
-- `google-ai-studio`
-- `google-vertex`
-- `groq`
-- `mistral`
-- `azure-openai`
-- `ollama`
+Starport selects the first nonempty value in that order. If the selected value
+does not satisfy the catalog field contract, resolution fails. Starport does
+not continue to a later name.
 
-Static inference secrets use `STARPORT_PROVIDERS_*_API_KEY` variables. Starmap
-catalog acquisition uses its own provider variables or cloud credential chain.
-Starport never copies an acquisition credential into an inference adapter.
+`starport init --provider <id>` uses the same catalog contract. It writes the
+selected value under the first conventional name. When a required field is
+absent or invalid, initialization fails before it creates local state.
 
-Vertex AI needs a project ID and one location. Select renewable Google
-Application Default Credentials with this value:
+Starmap catalog acquisition uses an independent credential plane. Starport
+never copies an acquisition credential into an inference request.
+
+### Direct secret sources
+
+For each catalog field, Starport derives a product name such as
+`STARPORT_OPENAI_API_KEY`. Add `_REFERENCE` to select a direct secret source:
 
 ```bash
-export STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE=default
+export STARPORT_OPENAI_API_KEY_REFERENCE='aws-secrets-manager:starport/openai#api-key'
 ```
 
-For a static OAuth access token, set `AUTH_MODE=static` and set
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY`. Set the project with
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID`. Set the location with
-`STARPORT_PROVIDERS_GOOGLE_VERTEX_LOCATION`.
+This table defines the supported reference resources and source
+authentication:
+
+| Backend | Resource | Source authentication |
+| --- | --- | --- |
+| `gcp-secret-manager` | `projects/PROJECT/secrets/SECRET` or `projects/PROJECT/locations/LOCATION/secrets/SECRET` | Google Application Default Credentials |
+| `azure-key-vault` | `https://VAULT_HOST/secrets/SECRET` | `DefaultAzureCredential` |
+| `aws-secrets-manager` | A secret name or ARN | AWS default credential chain |
+| `vault` | `MOUNT/PATH` for a KV v2 secret | Vault client environment |
+| `openbao` | `MOUNT/PATH` for a KV v2 secret | OpenBao client environment |
+
+The full grammar is
+`backend:resource?version=VERSION#field`. The version is optional. A
+`#field` suffix selects one exact top-level JSON string from Google, Azure, or
+AWS. Without a field, these sources preserve the complete scalar payload.
+Vault and OpenBao select one exact string field. Without `#field`, their KV v2
+record must contain exactly one string value.
+
+For Google, `VERSION` is a version number or alias. For Azure, it is the secret
+version. For AWS, it is `VersionId`. Vault and OpenBao require a positive KV v2
+version number.
+
+Quote a reference that contains `#field` in a shell or environment file.
+
+An explicit reference precedes conventional and product environment values.
+It fails closed by default. To use ambient discovery only when the direct
+source reports `not_configured`, set the derived fallback name to `true`:
+
+```bash
+export STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT=true
+```
+
+Denied access, invalid material, source unavailability, timeout, and
+cancellation never fall back. A reference contains resource identity only. It
+must not contain credentials for the secret store. Starport uses the store's
+default identity chain or client environment for that authentication.
+
+Use `env:NAME` when an operator-chosen environment variable must override the
+catalog's conventional ambient discovery. For example, this value makes
+`TEAM_OPENAI_API_KEY` authoritative even when `OPENAI_API_KEY` is also set:
+
+```bash
+export TEAM_OPENAI_API_KEY="replace-with-provider-inference-key"
+export STARPORT_OPENAI_API_KEY_REFERENCE='env:TEAM_OPENAI_API_KEY'
+```
+
+The selected explicit value must satisfy the catalog field contract. Starport
+does not continue to an ambient value after an invalid explicit value. Set
+`STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT=true` only if an absent
+`TEAM_OPENAI_API_KEY` can fall back to conventional discovery.
+
+Use `file:/absolute/path` for a mounted or projected secret. The file must be a
+nonempty regular file no larger than 1 MiB. Starport preserves every byte and
+does not trim a trailing newline. The resolver detects these replacement
+patterns without depending only on modification time:
+
+- An in-place rewrite.
+- An atomic file replacement or rename.
+- A symbolic-link target swap.
+- A Kubernetes projected-volume `..data` symbolic-link swap.
+- Mounted-content replacement by a CSI driver.
+- A secret-agent rerender that replaces the file.
+
+Use a new material version for a deliberate rotation. Concurrent resolutions
+share one refresh operation. A cache hit makes no file or network request.
+Environment values that a wrapper injects belong to that child process. Restart
+the process to receive a changed value unless the wrapper owns a supervised
+restart policy.
+
+### Secret-manager command wrappers
+
+These wrappers can inject the catalog-declared conventional names, such as
+`OPENAI_API_KEY`, without a Starport-specific integration. Authenticate and
+select the wrapper project or environment first. Then use one of these verified
+forms:
+
+```bash
+# Doppler
+doppler run -- starport serve
+
+# 1Password: .env.starport contains NAME=op://vault/item/field references
+op run --env-file="./.env.starport" -- starport serve
+
+# Infisical
+infisical run -- starport serve
+```
+
+See the official command references for
+[Doppler](https://docs.doppler.com/docs/cli),
+[1Password](https://www.1password.dev/cli/reference/commands/run), and
+[Infisical](https://infisical.com/docs/cli/commands/run). Apply each product's
+least-privilege workload authentication and production lifecycle guidance.
+
+Vault uses its standard client environment, such as `VAULT_ADDR`,
+`VAULT_TOKEN`, and `VAULT_NAMESPACE`. OpenBao uses `BAO_ADDR`, `BAO_TOKEN`, and
+`BAO_NAMESPACE`.
+
+Starport resolves a direct reference before inference uses the material. It
+caches the result in memory and refreshes it through the credential lifecycle.
+A cache hit does not contact the secret store. By default, the next resolution
+after five minutes refreshes direct-source material. Set
+`STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL` to a different positive
+duration. Starport never logs or serializes the returned material.
+
+Vertex AI needs a project ID, one location, and Google Application Default
+Credentials:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="replace-with-project-id"
+export GOOGLE_CLOUD_LOCATION="us-central1"
+```
 
 Azure OpenAI needs a resource base URL. Select Azure
 `DefaultAzureCredential` with this value:
 
 ```bash
-export STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE=default
-export STARPORT_PROVIDERS_AZURE_OPENAI_BASE_URL="https://replace-with-resource.openai.azure.com"
+export AZURE_OPENAI_ENDPOINT="https://replace-with-resource.openai.azure.com"
 ```
 
-For a static Azure API key, set `AUTH_MODE=static` and set
-`STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY`. Do not combine an API key with
-default mode. Both cloud adapters require `AUTH_MODE`. Starport refreshes
-default bearer tokens before expiry. Request cancellation also cancels
-credential acquisition.
+Set `AZURE_OPENAI_API_KEY` to select the catalog's static API-key profile.
+Without that key, Starport uses the catalog's `azure-default` profile. Starport
+refreshes default bearer tokens before expiry. Request cancellation also
+cancels credential acquisition.
 
-Ollama needs `STARPORT_PROVIDERS_OLLAMA_ENABLED=true` or the
-`--enable-ollama` flag.
+Ollama uses the catalog default `OLLAMA_BASE_URL` value when the environment
+does not set it. You do not need a provider-specific CLI flag.
 
 Starmap owns the model catalog. Only offerings from the active Starmap
 generation and configured adapters are routable. A Starmap acquisition failure
 does not add a static model list.
+
+### Tenant provider credentials
+
+An authenticated gateway identity can own an encrypted provider credential at
+`/api/v1/keys/{key_id}/provider-keys`. Set its
+`provider_credential_strategy` metadata to one of these exact values:
+
+- `operator_first`: try deployment-owned material, then tenant material.
+- `user_first`: try tenant material, then deployment-owned material.
+- `user_only`: use only tenant material.
+
+The default is `operator_first`. Starport can advance to the next credential
+only when material is not configured or when the provider reports an
+authentication or rate-limit failure. Permission, invalid-material, timeout,
+cancellation, and internal failures are terminal. Each credential advance
+uses the existing total attempt budget. It does not create a provider-health
+failure or a hidden retry budget.
+
+`user_only` does not read or test deployment-owned material. Its external
+missing-credential error is the same whether deployment-owned material exists
+or not. Tenant credential lookup uses the exact authenticated gateway-key ID.
+It never merges a global stored record.
 
 Set `STARPORT_CATALOG_REFRESH_ON_START=true` to run Starmap acquisition before
 adapter activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later refreshes.
 Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed tenant facts, including
 Azure deployment names and local Ollama model mappings. Those facts enter a
 durable Starmap generation before Starport makes the adapter routable.
+
+## Remote Starmap Catalogs
+
+Set one versioned Starmap API base URL to receive verified catalog generations:
+
+```bash
+export STARPORT_CATALOG_REMOTE_URL="https://catalog.example.com/api/v1"
+export STARPORT_CATALOG_REMOTE_API_KEY="replace-if-the-server-requires-one"
+export STARPORT_CATALOG_REMOTE_ACTIVATION_INTERVAL="250ms"
+```
+
+Starport sends the optional API key as `X-API-Key`. Configuration inspection
+redacts the key and the remote URL. A non-loopback publisher must use HTTPS
+with a valid certificate chain. Starmap accepts plain HTTP only for a loopback
+publisher. The URL identifies the publisher origin and must include the
+server's versioned path, normally `/api/v1`.
+
+Remote mode is mutually exclusive with
+`STARPORT_CATALOG_WORKSPACE_PATH`,
+`STARPORT_CATALOG_REFRESH_ON_START=true`, and a nonzero
+`STARPORT_CATALOG_REFRESH_INTERVAL`. The remote API key is invalid without the
+remote URL. `STARPORT_CATALOG_REFRESH_TIMEOUT` bounds manifest and payload
+requests. It does not impose a timeout on the SSE connection. Starmap heartbeat
+and liveness rules own that connection.
+
+Starmap verifies the manifest, schema range, immutable payload identity,
+content type, size, and SHA-256 checksum before it publishes one atomic
+candidate. Starport then validates the complete routable catalog, connector,
+and credential projection before it accepts that generation. A failed
+candidate leaves the current routes, connectors, and response-cache identity
+unchanged.
+
+Starport stores two current pointers over shared immutable generation records:
+
+- The remote head records the latest Starmap-verified generation.
+- The accepted head records the latest generation that passed the complete
+  Starport runtime transaction.
+
+This separation prevents a Starmap-valid but Starport-incompatible generation
+from replacing restart-safe routing state. On restart, the accepted generation
+is the pinned bootstrap. A network failure keeps that last accepted state while
+the subscriber uses bounded reconnect and catch-up. HTTP 401 and 403 stop the
+active subscriber lifecycle and require corrected credentials or access before
+a new process starts it again.
+
+The activation interval samples Starmap's in-memory atomic state. It causes no
+catalog network request and is not on the inference path. `starport doctor`
+and `starport doctor --probe` inspect the durable accepted generation without a
+remote fetch.
 
 ## Storage Modes
 
@@ -241,7 +425,7 @@ values. Initialize the shared identity repository before you start Starport:
 
 ```bash
 export STARPORT_SECURITY_MASTER_KEY="replace-with-random-secret-at-least-32-bytes"
-export STARPORT_PROVIDERS_OPENAI_API_KEY="replace-with-provider-inference-key"
+export OPENAI_API_KEY="replace-with-provider-inference-key"
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose up -d starport
@@ -272,8 +456,8 @@ each failed check and keeps all secret values redacted.
   `STARPORT_SECURITY_MASTER_KEY`.
 - `gateway identity is required; run "starport init"`: create the first named
   identity in local or configured storage.
-- `at least one production provider is required`: configure one provider or
-  enable Ollama.
+- `at least one production provider is required`: configure one catalog
+  provider's required inference fields.
 - HTTP 401: the bearer value does not match an active stored identity.
 - HTTP 403: the identity lacks the required scope or owns a different key.
 - No route candidate: the model, provider policy, tenant policy, capability,

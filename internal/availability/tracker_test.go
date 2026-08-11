@@ -30,6 +30,9 @@ func TestOfferingAvailabilityStateMachine(t *testing.T) {
 	tracker.Refresh(context.Background())
 	require.True(t, tracker.Acquire(route))
 	require.False(t, tracker.Acquire(route), "only one half-open probe is admitted")
+	tracker.Release(route)
+	require.True(t, tracker.Acquire(route), "a neutral release must make the half-open probe available")
+	require.False(t, tracker.Acquire(route), "the replacement half-open probe remains exclusive")
 
 	tracker.RecordSuccess(route, time.Second)
 	require.True(t, tracker.Acquire(route))

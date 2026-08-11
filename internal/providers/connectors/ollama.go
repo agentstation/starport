@@ -14,22 +14,25 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
-const ollamaProviderName = string(catalogs.ProviderIDOllama)
-
 // OllamaConnector implements the Connector interface for Ollama
 type OllamaConnector struct {
 	config     ProviderConfig
 	httpClient *http.Client
+	provider   string
 }
 
 // NewOllamaConnector creates a new Ollama connector
 func NewOllamaConnector(config ProviderConfig) (*OllamaConnector, error) {
+	return newOllamaConnector(string(catalogs.ProviderIDOllama), config)
+}
+
+func newOllamaConnector(provider string, config ProviderConfig) (*OllamaConnector, error) {
 	// Set default base URL if not provided
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient(ollamaProviderName, config)
+	httpClient, err := newProviderHTTPClient(provider, config)
 	if err != nil {
 		return nil, err
 	}
@@ -37,12 +40,13 @@ func NewOllamaConnector(config ProviderConfig) (*OllamaConnector, error) {
 	return &OllamaConnector{
 		config:     config,
 		httpClient: httpClient,
+		provider:   provider,
 	}, nil
 }
 
 // Name returns the provider name
 func (c *OllamaConnector) Name() string {
-	return ollamaProviderName
+	return c.provider
 }
 
 // Chat performs a chat completion request
@@ -79,9 +83,12 @@ func (c *OllamaConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatResp
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	if err := applyRequestAuthentication(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -169,9 +176,12 @@ func (c *OllamaConnector) ChatStream(ctx context.Context, req *ChatRequest) (Cha
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	if err := applyRequestAuthentication(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -210,9 +220,12 @@ func (c *OllamaConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	if err := applyRequestAuthentication(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
@@ -266,7 +279,7 @@ func (c *OllamaConnector) handleError(resp *http.Response) error {
 		return &APIError{
 			StatusCode: resp.StatusCode,
 			Message:    errResp.Error,
-			Provider:   ollamaProviderName,
+			Provider:   c.provider,
 		}
 	}
 
@@ -274,7 +287,7 @@ func (c *OllamaConnector) handleError(resp *http.Response) error {
 	return &APIError{
 		StatusCode: resp.StatusCode,
 		Message:    string(body),
-		Provider:   ollamaProviderName,
+		Provider:   c.provider,
 	}
 }
 

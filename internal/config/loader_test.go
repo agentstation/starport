@@ -8,49 +8,42 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
-func TestLoaderUsesExactProviderEnvironmentNamespaces(t *testing.T) {
+func TestLoaderDefersProviderEnvironmentUntilCatalogResolution(t *testing.T) {
 	environment := map[string]string{
-		"STARPORT_PROVIDERS_GOOGLE_AI_STUDIO_API_KEY": "studio-key",
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY":    "vertex-token",
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE":  "static",
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID": "vertex-project",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY":     "azure-key",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE":   "static",
+		"GOOGLE_API_KEY":          "studio-key",
+		"AZURE_OPENAI_ENDPOINT":   "https://azure.example",
+		"AZURE_OPENAI_API_KEY":    "azure-key",
+		"FIREWORKS_API_KEY":       "fireworks-key",
+		"STARPORT_OPENAI_API_KEY": "openai-product-key",
 	}
 	cfg := loadTestConfig(t, environment)
+	if len(cfg.Providers) != 0 {
+		t.Fatalf("provider values were read before catalog resolution: %#v", cfg.Providers)
+	}
+	resolveTestProviders(t, cfg)
 
-	if cfg.Providers.GoogleAIStudio.APIKey != "studio-key" {
-		t.Fatalf("Google AI Studio API key = %q", cfg.Providers.GoogleAIStudio.APIKey)
-	}
-	if cfg.Providers.GoogleVertexAI.APIKey != "vertex-token" {
-		t.Fatalf("Google Vertex token = %q", cfg.Providers.GoogleVertexAI.APIKey)
-	}
-	if cfg.Providers.GoogleVertexAI.ProjectID != "vertex-project" {
-		t.Fatalf("Google Vertex project = %q", cfg.Providers.GoogleVertexAI.ProjectID)
-	}
-	if cfg.Providers.Azure.APIKey != "azure-key" {
-		t.Fatalf("Azure OpenAI API key = %q", cfg.Providers.Azure.APIKey)
-	}
+	assertProviderMaterialValue(t, cfg, catalogs.ProviderIDGoogleAIStudio, "api-key", "studio-key")
+	assertProviderMaterialValue(t, cfg, catalogs.ProviderIDAzureOpenAI, "api-key", "azure-key")
+	assertProviderMaterialValue(t, cfg, "fireworks-ai", "api-key", "fireworks-key")
+	assertProviderMaterialValue(t, cfg, catalogs.ProviderIDOpenAI, "api-key", "openai-product-key")
 }
 
-func TestLoaderIgnoresOldProviderEnvironmentNamespaces(t *testing.T) {
+func TestLoaderIgnoresRemovedProviderEnvironmentNamespaces(t *testing.T) {
 	environment := map[string]string{
 		"STARPORT_PROVIDERS_GOOGLE_AISTUDIO_API_KEY": "old-studio-key",
 		"STARPORT_PROVIDERS_GOOGLE_VERTEXAI_API_KEY": "old-vertex-token",
 		"STARPORT_PROVIDERS_AZURE_API_KEY":           "old-azure-key",
 	}
 	cfg := loadTestConfig(t, environment)
+	resolveTestProviders(t, cfg)
 
-	if cfg.Providers.GoogleAIStudio.APIKey != "" {
-		t.Fatal("old Google AI Studio namespace was accepted")
-	}
-	if cfg.Providers.GoogleVertexAI.APIKey != "" {
-		t.Fatal("old Google Vertex namespace was accepted")
-	}
-	if cfg.Providers.Azure.APIKey != "" {
-		t.Fatal("old Azure OpenAI namespace was accepted")
+	if len(cfg.Providers) != 0 {
+		t.Fatalf("removed provider namespaces were accepted: %#v", cfg.Providers)
 	}
 }
 
@@ -79,6 +72,12 @@ func TestLoaderSecurePlatformDefaults(t *testing.T) {
 	}
 	if cfg.Storage.Badger.Path != paths.BadgerDir {
 		t.Errorf("default badger path = %q, want %q", cfg.Storage.Badger.Path, paths.BadgerDir)
+	}
+	if cfg.CredentialSources.RemoteRefreshInterval != 5*time.Minute {
+		t.Errorf(
+			"credential source refresh interval = %s, want 5m",
+			cfg.CredentialSources.RemoteRefreshInterval,
+		)
 	}
 	if cfg.RateLimiting.ConfigPath != paths.RateLimitsFile {
 		t.Errorf("default rate-limit path = %q, want %q", cfg.RateLimiting.ConfigPath, paths.RateLimitsFile)
@@ -154,6 +153,65 @@ func TestLoaderRejectsInvalidEnvironmentValue(t *testing.T) {
 	}
 }
 
+func TestLoaderRejectsNegativeDirectSecretRefreshInterval(t *testing.T) {
+	_, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL": "-1s",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	if err == nil {
+		t.Fatal("negative direct secret refresh interval was accepted")
+	}
+}
+
+func TestLoaderAppliesDirectSecretRefreshInterval(t *testing.T) {
+	cfg, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL": "9m",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	if err != nil {
+		t.Fatalf("load direct secret refresh interval: %v", err)
+	}
+	if cfg.CredentialSources.RemoteRefreshInterval != 9*time.Minute {
+		t.Fatalf(
+			"direct secret refresh interval = %s, want 9m",
+			cfg.CredentialSources.RemoteRefreshInterval,
+		)
+	}
+}
+
+func TestLoaderAppliesRemoteCatalogConfiguration(t *testing.T) {
+	cfg, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CATALOG_REMOTE_URL":                 "https://catalog.example/api/v1",
+			"STARPORT_CATALOG_REMOTE_API_KEY":             "catalog-secret",
+			"STARPORT_CATALOG_REMOTE_ACTIVATION_INTERVAL": "750ms",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	if err != nil {
+		t.Fatalf("load remote catalog configuration: %v", err)
+	}
+	if cfg.Catalog.RemoteURL != "https://catalog.example/api/v1" {
+		t.Fatalf("remote catalog URL = %q", cfg.Catalog.RemoteURL)
+	}
+	if cfg.Catalog.RemoteAPIKey != "catalog-secret" {
+		t.Fatal("remote catalog API key was not loaded")
+	}
+	if cfg.Catalog.RemoteActivationInterval != 750*time.Millisecond {
+		t.Fatalf(
+			"remote catalog activation interval = %s, want 750ms",
+			cfg.Catalog.RemoteActivationInterval,
+		)
+	}
+}
+
 func TestLoaderErrorsDoNotExposeConfigurationValues(t *testing.T) {
 	dir := t.TempDir()
 	secret := "loader-secret-that-must-not-appear"
@@ -161,7 +219,7 @@ func TestLoaderErrorsDoNotExposeConfigurationValues(t *testing.T) {
 		t,
 		dir,
 		"invalid.env",
-		"STARPORT_PROVIDERS_OPENAI_API_KEY='"+secret,
+		"OPENAI_API_KEY='"+secret,
 	)
 	_, err := NewLoader().
 		WithPaths(PathsForConfigDir(dir)).
@@ -201,7 +259,7 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 		"STARPORT_LOGGING_OUTPUT":                  "file",
 		"STARPORT_LOGGING_FILE_PATH":               "logs/starport.log",
 		"STARPORT_SECURITY_MASTER_KEY":             strings.Repeat("m", 32),
-		"STARPORT_PROVIDERS_OPENAI_API_KEY":        "provider-key",
+		"OPENAI_API_KEY":                           "provider-key",
 		"STARPORT_RATE_LIMITING_ENABLE_HOT_RELOAD": "false",
 	}
 	cfg, err := NewLoader().
@@ -233,6 +291,39 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 		if got[name] != want {
 			t.Errorf("%s path = %q, want %q", name, got[name], want)
 		}
+	}
+}
+
+func resolveTestProviders(t *testing.T, cfg *Config) {
+	t.Helper()
+	builder, err := catalogs.NewEmbedded()
+	if err != nil {
+		t.Fatalf("open embedded catalog: %v", err)
+	}
+	catalog, err := builder.Build()
+	if err != nil {
+		t.Fatalf("build embedded catalog: %v", err)
+	}
+	if err := cfg.ResolveProviders(context.Background(), catalog.Providers()); err != nil {
+		t.Fatalf("resolve providers: %v", err)
+	}
+}
+
+func assertProviderMaterialValue(
+	t *testing.T,
+	cfg *Config,
+	providerID catalogs.ProviderID,
+	fieldID catalogs.ProviderCredentialFieldID,
+	want string,
+) {
+	t.Helper()
+	provider, found := cfg.Providers[providerID]
+	if !found {
+		t.Fatalf("provider %s was not resolved", providerID)
+	}
+	got, found := provider.Material.Value(fieldID)
+	if !found || got != want {
+		t.Fatalf("provider %s field %s = %q, %t", providerID, fieldID, got, found)
 	}
 }
 

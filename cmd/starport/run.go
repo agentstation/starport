@@ -66,9 +66,7 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 	}
 	service := setup.New(paths)
 	result, err := service.Initialize(ctx, setup.Request{
-		Provider:           options.Provider,
-		ProviderCredential: os.Getenv(setup.OpenAIProviderCredentialEnvironment),
-		IdentityName:       options.IdentityName,
+		Provider: options.Provider, IdentityName: options.IdentityName,
 	})
 	initialized := starportcli.InitResult{
 		Provider: result.Provider, IdentityName: result.IdentityName,
@@ -148,15 +146,11 @@ func rollbackConfiguredIdentity(
 	return nil
 }
 
-func runServer(ctx context.Context, options starportcli.ServeOptions) error {
+func runServer(ctx context.Context) error {
 	cfg, err := config.LoadWithDefaults(ctx)
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
-	if options.EnableOllama {
-		cfg.Providers.Ollama.Enabled = true
-	}
-
 	application, err := app.New(cfg)
 	if err != nil {
 		return fmt.Errorf("create application: %w", err)

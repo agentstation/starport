@@ -7,10 +7,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-
-	"github.com/agentstation/starmap/pkg/catalogs"
-
-	"github.com/agentstation/starport/internal/providerauth"
 )
 
 var hostnameRegex = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
@@ -87,6 +83,35 @@ func (c *CatalogConfig) Validate() error {
 	if c.RefreshTimeout < 0 {
 		return fmt.Errorf("catalog refresh timeout cannot be negative")
 	}
+	if c.RemoteActivationInterval < 0 {
+		return fmt.Errorf("catalog remote activation interval cannot be negative")
+	}
+	if c.RemoteURL == "" {
+		if c.RemoteAPIKey != "" {
+			return fmt.Errorf("catalog remote API key requires a remote URL")
+		}
+		return nil
+	}
+	if c.RemoteActivationInterval == 0 {
+		return fmt.Errorf("catalog remote activation interval must be positive")
+	}
+	if c.WorkspacePath != "" {
+		return fmt.Errorf("catalog remote URL and workspace path are mutually exclusive")
+	}
+	if c.RefreshOnStart {
+		return fmt.Errorf("catalog remote URL and refresh on start are mutually exclusive")
+	}
+	if c.RefreshInterval != 0 {
+		return fmt.Errorf("catalog remote URL and local refresh interval are mutually exclusive")
+	}
+	return nil
+}
+
+// Validate validates the direct inference secret-source lifecycle.
+func (c *CredentialSourcesConfig) Validate() error {
+	if c.RemoteRefreshInterval < 0 {
+		return fmt.Errorf("credential source remote refresh interval cannot be negative")
+	}
 	return nil
 }
 
@@ -141,17 +166,8 @@ func (c *ValkeyConfig) Validate() error {
 	return nil
 }
 
-// Validate validates ProviderConfig
+// Validate validates ProviderConfig.
 func (c *ProviderConfig) Validate() error {
-	if err := c.AuthMode.Validate(); err != nil {
-		return err
-	}
-	if c.AuthMode == providerauth.ModeDefault && c.APIKey != "" {
-		return fmt.Errorf("provider API key cannot be combined with default credentials")
-	}
-	if c.AuthMode == providerauth.ModeStatic && c.APIKey == "" {
-		return fmt.Errorf("provider API key is required for static credentials")
-	}
 	if c.BaseURL != "" {
 		if _, err := url.Parse(c.BaseURL); err != nil {
 			return fmt.Errorf("base URL is invalid")
@@ -173,18 +189,11 @@ func (c *ProviderConfig) Validate() error {
 func (c *ProvidersConfig) Validate() error {
 	for _, entry := range c.Entries() {
 		provider := entry.Config
-		active := provider.APIKey != "" || provider.AuthMode != "" || provider.BaseURL != "" ||
-			provider.ProjectID != "" || provider.Location != "" || provider.Enabled
+		active := !provider.Material.Empty() || provider.CredentialSource != nil ||
+			provider.BaseURL != "" || len(provider.CredentialReferences) > 0 ||
+			len(provider.EndpointBindings) > 0 || provider.Enabled
 		if !active {
 			continue
-		}
-		cloudAdapter := entry.ProviderID == catalogs.ProviderIDGoogleVertex ||
-			entry.ProviderID == catalogs.ProviderIDAzureOpenAI
-		if provider.AuthMode != "" && !cloudAdapter {
-			return fmt.Errorf("invalid %s provider config: auth mode is not supported", entry.ProviderID)
-		}
-		if cloudAdapter && provider.AuthMode == "" {
-			return fmt.Errorf("invalid %s provider config: auth mode is required", entry.ProviderID)
 		}
 		if err := provider.Validate(); err != nil {
 			return fmt.Errorf("invalid %s provider config: %w", entry.ProviderID, err)

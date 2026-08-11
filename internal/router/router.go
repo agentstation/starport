@@ -57,6 +57,7 @@ type modelRouter struct {
 	routePlanner routing.Planner
 	availability *availability.Tracker
 	executor     *execution.Executor
+	userKeys     UserCredentialResolver
 
 	// Advanced routing features
 	config                       Config
@@ -85,6 +86,13 @@ func WithAvailability(tracker *availability.Tracker) Option {
 func WithExecutionConfig(config execution.Config) Option {
 	return func(r *modelRouter) {
 		r.config.Execution = config
+	}
+}
+
+// WithUserCredentials supplies the tenant-scoped inference credential plane.
+func WithUserCredentials(resolver UserCredentialResolver) Option {
+	return func(r *modelRouter) {
+		r.userKeys = resolver
 	}
 }
 
@@ -129,7 +137,14 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 
 // SelectModel chooses the best model based on the request and routing strategy
 func (r *modelRouter) SelectModel(ctx context.Context, req *Request) (string, connectors.Connector, error) {
-	plan, err := r.planRoute(ctx, req)
+	runtime, owned, err := r.acquireRuntime(ctx)
+	if err != nil {
+		return "", nil, ErrNoModelsAvailable
+	}
+	if owned {
+		defer runtime.Release()
+	}
+	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
 		if errors.Is(err, routing.ErrNoCandidate) {
 			return "", nil, ErrNoModelsAvailable
@@ -141,7 +156,7 @@ func (r *modelRouter) SelectModel(ctx context.Context, req *Request) (string, co
 		return "", nil, ErrNoModelsAvailable
 	}
 	selected := attempts[0].Route
-	connector := r.registry.Get(selected.ProviderID)
+	connector := runtime.Get(selected.ProviderID)
 	if connector == nil {
 		return "", nil, fmt.Errorf("no connector for provider %s", selected.ProviderID)
 	}
@@ -153,16 +168,28 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	if req == nil || req.ChatRequest == nil {
 		return nil, ErrNoModelsAvailable
 	}
-	plan, err := r.planRoute(ctx, req)
+	runtime, owned, err := r.acquireRuntime(ctx)
+	if err != nil {
+		return nil, ErrNoModelsAvailable
+	}
+	if owned {
+		defer runtime.Release()
+	}
+	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
 		if errors.Is(err, routing.ErrNoCandidate) {
 			return nil, ErrNoModelsAvailable
 		}
 		return nil, fmt.Errorf("plan fallback route: %w", err)
 	}
+	strategy, tenantID := credentialRequestPolicy(req)
+	credentialPolicy, err := newCredentialPolicy(strategy, tenantID, runtime, r.userKeys)
+	if err != nil {
+		return nil, err
+	}
 
-	result, err := r.executor.ExecuteChat(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
-		connector := r.registry.Get(planned.Route.ProviderID)
+	result, err := r.executor.ExecuteChat(ctx, plan, func(attemptCtx context.Context, planned routing.Attempt) (*inference.ChatResponse, *failure.Failure, execution.AttemptAction) {
+		connector := runtime.Get(planned.Route.ProviderID)
 		if connector == nil {
 			return nil, failure.New(
 				failure.ProviderUnavailable,
@@ -170,12 +197,18 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 				true,
 				failure.ProviderDetails{Provider: planned.Route.ProviderID},
 				nil,
-			)
+			), execution.AttemptActionDefault
+		}
+		material, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
+		if materialFailure != nil {
+			return nil, materialFailure, action
 		}
 		request := prepareChatAttempt(req, planned.Route, false)
+		request.Credential = material
 		response, requestErr := connector.Chat(attemptCtx, request)
 		if requestErr != nil {
-			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
+			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
+			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
 		}
 		canonical, conversionErr := connectors.ChatResponseToInference(response, planned.Route.ID())
 		if conversionErr != nil {
@@ -185,9 +218,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 				false,
 				failure.ProviderDetails{Provider: planned.Route.ProviderID},
 				conversionErr,
-			)
+			), execution.AttemptActionDefault
 		}
-		return &canonical, nil
+		return &canonical, nil, execution.AttemptActionDefault
 	})
 	if err != nil {
 		evidence := executionEvidence(err)
@@ -207,11 +240,12 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 
 	return &Response{
-		ChatResponse: wireResponse,
-		ModelUsed:    result.Route.ID(),
-		ProviderUsed: provider,
-		Attempts:     len(result.Attempts),
-		Metadata:     responseMetadata(result.Attempts, selectionReason(result.Attempts)),
+		ChatResponse:    wireResponse,
+		ModelUsed:       result.Route.ID(),
+		ProviderUsed:    provider,
+		Attempts:        len(result.Attempts),
+		Metadata:        responseMetadata(result.Attempts, selectionReason(result.Attempts)),
+		CatalogSnapshot: runtime.Snapshot(),
 	}, nil
 }
 

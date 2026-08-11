@@ -6,8 +6,9 @@ import "errors"
 var (
 	// ErrRepositoryRequired is returned when the credential repository is missing.
 	ErrRepositoryRequired = errors.New("credential repository is required")
-	// ErrAdapterRegistryRequired is returned when the compiled inference adapter registry is missing.
-	ErrAdapterRegistryRequired = errors.New("inference adapter registry is required")
+	// ErrCredentialValidatorRequired is returned when catalog-driven inference
+	// credential validation is unavailable.
+	ErrCredentialValidatorRequired = errors.New("inference credential validator is required")
 	// ErrScopeRequired is returned when scope is not provided
 	ErrScopeRequired = errors.New("scope is required")
 	// ErrProviderRequired is returned when provider is not provided

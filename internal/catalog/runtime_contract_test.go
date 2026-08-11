@@ -69,7 +69,7 @@ func tenantOfferingObservation(t *testing.T, baseline *catalogs.Catalog) sources
 			Output: []catalogs.ModelModality{catalogs.ModelModalityText},
 		}},
 	}))
-	catalog, err := builder.Build()
+	catalog, err := catalogs.NewObservationCatalog(builder)
 	require.NoError(t, err)
 	observation, err := sources.NewObservation(
 		sources.LocalCatalogID,

@@ -24,12 +24,12 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 		})
 		plan := testPlan(t, "provider-a/model", "provider-b/model")
 		calls := 0
-		result, err := executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
+		result, err := executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
 			calls++
 			if attempt.Route.ProviderID == "provider-a" {
-				return nil, retryableFailure(attempt.Route.ProviderID)
+				return nil, retryableFailure(attempt.Route.ProviderID), AttemptActionDefault
 			}
-			return &inference.ChatResponse{ID: "ok", ModelUsed: attempt.Route.ID()}, nil
+			return &inference.ChatResponse{ID: "ok", ModelUsed: attempt.Route.ID()}, nil, AttemptActionDefault
 		})
 		require.NoError(t, err)
 		require.Equal(t, 3, calls)
@@ -46,22 +46,152 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 			RetryBackoff: time.Second, BackoffMultiplier: 2, MaxBackoff: time.Minute,
 		})
 		calls := 0
-		_, err := executor.ExecuteChat(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
+		_, err := executor.ExecuteChat(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
 			calls++
-			return nil, retryableFailure(attempt.Route.ProviderID)
+			return nil, retryableFailure(attempt.Route.ProviderID), AttemptActionDefault
 		})
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrAllAttemptsFailed)
 		require.Equal(t, 2, calls)
 	})
 
+	t.Run("embedding uses the same fallback budget and returns an isolated result", func(t *testing.T) {
+		executor := newTestExecutor(t, newFakeClock(), testConfig())
+		providerResponse := &inference.EmbeddingResponse{
+			Model: "provider-b/model",
+			Data:  []inference.Embedding{{Index: 0, Vector: []float32{0.25, 0.75}}},
+		}
+		result, err := executor.ExecuteEmbedding(
+			context.Background(),
+			testPlan(t, "provider-a/model", "provider-b/model"),
+			func(_ context.Context, attempt routing.Attempt) (*inference.EmbeddingResponse, *failure.Failure, AttemptAction) {
+				if attempt.Route.ProviderID == "provider-a" {
+					return nil, retryableFailure(attempt.Route.ProviderID), AttemptActionDefault
+				}
+				return providerResponse, nil, AttemptActionDefault
+			},
+		)
+		require.NoError(t, err)
+		require.Equal(t, "provider-b/model", result.Route.ID())
+		require.Equal(t, []State{StateFailed, StateSucceeded}, evidenceStates(result.Attempts))
+		providerResponse.Data[0].Vector[0] = 1
+		require.Equal(t, []float32{0.25, 0.75}, result.Response.Data[0].Vector)
+	})
+
+	t.Run("credential continuation consumes the total budget without retry policy", func(t *testing.T) {
+		clock := newFakeClock()
+		executor := newTestExecutor(t, clock, Config{
+			MaxAttempts: 2, MaxRetriesPerRoute: 0, MaxElapsed: time.Minute,
+			RetryBackoff: time.Second, BackoffMultiplier: 2, MaxBackoff: time.Minute,
+		})
+		calls := 0
+		result, err := executor.ExecuteChat(context.Background(), testPlan(t, "provider-a/model"), func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			calls++
+			if calls == 1 {
+				return nil, failure.New(failure.Authentication, "credential failed", false, failure.ProviderDetails{}, nil), AttemptActionContinueRoute
+			}
+			return &inference.ChatResponse{ID: "ok", ModelUsed: attempt.Route.ID()}, nil, AttemptActionDefault
+		})
+		require.NoError(t, err)
+		require.Equal(t, 2, calls)
+		require.Equal(t, []State{StateFailed, StateSucceeded}, evidenceStates(result.Attempts))
+		require.Equal(t, time.Unix(100, 0), clock.Now(), "credential continuation must not apply retry backoff")
+	})
+
+	t.Run("credential continuation does not change provider health", func(t *testing.T) {
+		tracker, err := availability.New(
+			availability.Config{FailureThreshold: 1, OpenDuration: time.Minute},
+			newFakeClock(),
+			nil,
+		)
+		require.NoError(t, err)
+		executor, err := New(testConfig(), newFakeClock(), tracker)
+		require.NoError(t, err)
+		calls := 0
+		_, err = executor.ExecuteChat(context.Background(), testPlan(t, "provider-a/model"), func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			calls++
+			if calls == 1 {
+				return nil, failure.New(failure.RateLimit, "credential limited", true, failure.ProviderDetails{}, nil), AttemptActionContinueRoute
+			}
+			return &inference.ChatResponse{ID: "ok", ModelUsed: attempt.Route.ID()}, nil, AttemptActionDefault
+		})
+		require.NoError(t, err)
+		require.Empty(t, tracker.Snapshot().Records, "credential failures must not create provider-health records")
+	})
+
+	t.Run("credential exhaustion falls back without retry or provider health", func(t *testing.T) {
+		tracker, err := availability.New(
+			availability.Config{FailureThreshold: 1, OpenDuration: time.Minute},
+			newFakeClock(),
+			nil,
+		)
+		require.NoError(t, err)
+		config := testConfig()
+		config.MaxRetriesPerRoute = 2
+		executor, err := New(config, newFakeClock(), tracker)
+		require.NoError(t, err)
+		calls := map[string]int{}
+		result, err := executor.ExecuteChat(
+			context.Background(),
+			testPlan(t, "provider-a/model", "provider-b/model"),
+			func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+				calls[attempt.Route.ProviderID]++
+				if attempt.Route.ProviderID == "provider-a" {
+					return nil, failure.New(
+						failure.RateLimit, "credential limited", true,
+						failure.ProviderDetails{}, nil,
+					), AttemptActionFallbackRoute
+				}
+				return &inference.ChatResponse{ID: "ok", ModelUsed: attempt.Route.ID()}, nil, AttemptActionDefault
+			},
+		)
+		require.NoError(t, err)
+		require.Equal(t, "provider-b/model", result.Route.ID())
+		require.Equal(t, map[string]int{"provider-a": 1, "provider-b": 1}, calls)
+		require.Empty(t, tracker.Snapshot().Records, "credential failures must not create provider-health records")
+	})
+
+	t.Run("credential continuation retains one half-open admission", func(t *testing.T) {
+		clock := newFakeClock()
+		tracker, err := availability.New(
+			availability.Config{FailureThreshold: 1, OpenDuration: time.Minute},
+			clock,
+			nil,
+		)
+		require.NoError(t, err)
+		config := testConfig()
+		config.MaxAttempts = 2
+		executor, err := New(config, clock, tracker)
+		require.NoError(t, err)
+		plan := testPlan(t, "provider-a/model")
+		_, err = executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			return nil, retryableFailure(attempt.Route.ProviderID), AttemptActionDefault
+		})
+		require.Error(t, err)
+		clock.Advance(time.Minute)
+		tracker.Refresh(context.Background())
+
+		calls := 0
+		result, err := executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			calls++
+			if calls == 1 {
+				return nil, failure.New(failure.Authentication, "credential failed", false, failure.ProviderDetails{}, nil), AttemptActionContinueRoute
+			}
+			return &inference.ChatResponse{ID: "recovered", ModelUsed: attempt.Route.ID()}, nil, AttemptActionDefault
+		})
+		require.NoError(t, err)
+		require.Equal(t, 2, calls)
+		require.Equal(t, "recovered", result.Response.ID)
+		require.Equal(t, availability.StateHealthy, tracker.Snapshot().Records[0].State)
+	})
+
 	t.Run("cancellation is terminal", func(t *testing.T) {
 		executor := newTestExecutor(t, newFakeClock(), testConfig())
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_, err := executor.ExecuteChat(ctx, testPlan(t, "provider-a/model"), func(context.Context, routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
+		_, err := executor.ExecuteChat(ctx, testPlan(t, "provider-a/model"), func(context.Context, routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
 			t.Fatal("canceled execution invoked a provider")
-			return nil, nil
+			return nil, nil, AttemptActionDefault
 		})
 		require.Error(t, err)
 		var executionError *Error
@@ -74,9 +204,9 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 		config := testConfig()
 		config.MaxElapsed = 5 * time.Second
 		executor := newTestExecutor(t, clock, config)
-		_, err := executor.ExecuteChat(context.Background(), testPlan(t, "provider-a/model"), func(context.Context, routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
+		_, err := executor.ExecuteChat(context.Background(), testPlan(t, "provider-a/model"), func(context.Context, routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
 			clock.Advance(6 * time.Second)
-			return &inference.ChatResponse{ID: "late"}, nil
+			return &inference.ChatResponse{ID: "late"}, nil, AttemptActionDefault
 		})
 		require.Error(t, err)
 		var executionError *Error
@@ -87,12 +217,12 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 	t.Run("stream can fall back before first event", func(t *testing.T) {
 		executor := newTestExecutor(t, newFakeClock(), testConfig())
 		starts := 0
-		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure) {
+		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure, AttemptAction) {
 			starts++
 			if attempt.Route.ProviderID == "provider-a" {
-				return &scriptedStream{errors: []error{retryableFailure("provider-a")}}, nil
+				return &scriptedStream{errors: []error{retryableFailure("provider-a")}}, nil, AttemptActionDefault
 			}
-			return &scriptedStream{events: []*inference.StreamEvent{{Kind: inference.StreamDelta, ModelUsed: attempt.Route.ID()}}}, nil
+			return &scriptedStream{events: []*inference.StreamEvent{{Kind: inference.StreamDelta, ModelUsed: attempt.Route.ID()}}}, nil, AttemptActionDefault
 		})
 		require.NoError(t, err)
 		event, err := stream.Read()
@@ -107,12 +237,12 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 	t.Run("stream never falls back after first event", func(t *testing.T) {
 		executor := newTestExecutor(t, newFakeClock(), testConfig())
 		starts := 0
-		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure) {
+		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure, AttemptAction) {
 			starts++
 			return &scriptedStream{
 				events: []*inference.StreamEvent{{Kind: inference.StreamDelta, ModelUsed: attempt.Route.ID()}},
 				errors: []error{nil, retryableFailure(attempt.Route.ProviderID)},
-			}, nil
+			}, nil, AttemptActionDefault
 		})
 		require.NoError(t, err)
 		_, err = stream.Read()
@@ -126,12 +256,12 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 	t.Run("stream returns an event before its terminal error", func(t *testing.T) {
 		executor := newTestExecutor(t, newFakeClock(), testConfig())
 		starts := 0
-		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure) {
+		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure, AttemptAction) {
 			starts++
 			return &scriptedStream{
 				events: []*inference.StreamEvent{{Kind: inference.StreamDelta, ModelUsed: attempt.Route.ID()}},
 				errors: []error{retryableFailure(attempt.Route.ProviderID)},
-			}, nil
+			}, nil, AttemptActionDefault
 		})
 		require.NoError(t, err)
 
@@ -147,8 +277,8 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 	t.Run("close interrupts a blocked provider read", func(t *testing.T) {
 		executor := newTestExecutor(t, newFakeClock(), testConfig())
 		providerStream := newCloseDrivenStream()
-		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model"), func(context.Context, routing.Attempt) (Stream, *failure.Failure) {
-			return providerStream, nil
+		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model"), func(context.Context, routing.Attempt) (Stream, *failure.Failure, AttemptAction) {
+			return providerStream, nil, AttemptActionDefault
 		})
 		require.NoError(t, err)
 
@@ -179,12 +309,12 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 	t.Run("stream start failures use the same budget", func(t *testing.T) {
 		executor := newTestExecutor(t, newFakeClock(), testConfig())
 		starts := 0
-		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure) {
+		stream, err := executor.StartChatStream(context.Background(), testPlan(t, "provider-a/model", "provider-b/model"), func(_ context.Context, attempt routing.Attempt) (Stream, *failure.Failure, AttemptAction) {
 			starts++
 			if attempt.Route.ProviderID == "provider-a" {
-				return nil, retryableFailure(attempt.Route.ProviderID)
+				return nil, retryableFailure(attempt.Route.ProviderID), AttemptActionDefault
 			}
-			return &scriptedStream{}, nil
+			return &scriptedStream{}, nil, AttemptActionDefault
 		})
 		require.NoError(t, err)
 		require.Equal(t, 2, starts)
@@ -207,16 +337,16 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 		require.NoError(t, err)
 		plan := testPlan(t, "provider-a/model")
 
-		_, err = executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
-			return nil, retryableFailure(attempt.Route.ProviderID)
+		_, err = executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			return nil, retryableFailure(attempt.Route.ProviderID), AttemptActionDefault
 		})
 		require.Error(t, err)
 		require.Equal(t, availability.StateOpen, tracker.Snapshot().Records[0].State)
 
 		clock.Advance(time.Minute)
 		tracker.Refresh(context.Background())
-		result, err := executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure) {
-			return &inference.ChatResponse{ID: "recovered", ModelUsed: attempt.Route.ID()}, nil
+		result, err := executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			return &inference.ChatResponse{ID: "recovered", ModelUsed: attempt.Route.ID()}, nil, AttemptActionDefault
 		})
 		require.NoError(t, err)
 		require.Equal(t, "recovered", result.Response.ID)

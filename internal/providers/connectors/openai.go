@@ -8,7 +8,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // OpenAIConnector implements the Connector interface for OpenAI
@@ -19,26 +19,19 @@ type OpenAIConnector struct {
 
 // NewOpenAIConnector creates a new OpenAI connector
 func NewOpenAIConnector(config ProviderConfig) (*OpenAIConnector, error) {
-	return newOpenAIConnector(catalogs.ProviderIDOpenAI, "openai", config, nil)
+	return newOpenAIConnector(catalogs.ProviderIDOpenAI, "openai", config)
 }
 
 func newOpenAIConnector(
 	providerID catalogs.ProviderID,
 	provider string,
 	config ProviderConfig,
-	credentialSource providerauth.Source,
 ) (*OpenAIConnector, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	var httpClient *http.Client
-	var err error
-	if credentialSource == nil {
-		httpClient, err = newProviderHTTPClient(provider, config)
-	} else {
-		httpClient, err = newProviderHTTPClient(provider, config, credentialSource)
-	}
+	httpClient, err := newProviderHTTPClient(provider, config)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +48,7 @@ func newOpenAIConnector(
 
 // Name returns the provider name
 func (c *OpenAIConnector) Name() string {
-	return "openai"
+	return c.provider
 }
 
 // Chat performs a chat completion request
@@ -80,9 +73,12 @@ func (c *OpenAIConnector) Close() error {
 }
 
 // setHeaders sets OpenAI-specific headers
-func (c *OpenAIConnector) setHeaders(req *http.Request) {
-	applyRegisteredInferenceAuth(c.providerID, req, c.config.APIKey)
+func (c *OpenAIConnector) setHeaders(material credentials.Material, req *http.Request) error {
+	if err := applyRequestAuthentication(material, req); err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
+	return nil
 }
 
 // handleError handles OpenAI-specific error responses

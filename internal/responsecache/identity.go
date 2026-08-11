@@ -15,7 +15,7 @@ import (
 )
 
 // SemanticKeyVersion identifies the canonical cache-identity encoding.
-const SemanticKeyVersion = 1
+const SemanticKeyVersion = 2
 
 var (
 	// ErrIneligible reports a request whose identity is not cache-safe.
@@ -44,9 +44,10 @@ type ProviderPolicy struct {
 
 // TenantPolicy contains tenant-scoped route restrictions.
 type TenantPolicy struct {
-	AllowedModels    []string `json:"allowed_models,omitempty"`
-	AllowedProviders []string `json:"allowed_providers,omitempty"`
-	RateLimitTier    string   `json:"rate_limit_tier,omitempty"`
+	AllowedModels      []string `json:"allowed_models,omitempty"`
+	AllowedProviders   []string `json:"allowed_providers,omitempty"`
+	RateLimitTier      string   `json:"rate_limit_tier,omitempty"`
+	CredentialStrategy string   `json:"credential_strategy,omitempty"`
 }
 
 // Policy contains all routing policy that can change a response.

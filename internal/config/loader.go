@@ -9,6 +9,9 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/sethvargo/go-envconfig"
+
+	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 // Loader reads configuration without changing process state.
@@ -103,6 +106,9 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 	}); err != nil {
 		return nil, newLoadFailure("configuration values could not be decoded", err)
 	}
+	if cfg.CredentialSources.RemoteRefreshInterval == 0 {
+		cfg.CredentialSources.RemoteRefreshInterval = credentials.DefaultDirectSecretRefreshInterval
+	}
 
 	if err := resolveConfiguredPaths(cfg, paths); err != nil {
 		return nil, newLoadFailure("configured paths could not be resolved", err)
@@ -110,6 +116,15 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, newLoadFailure("configuration values are invalid", err)
 	}
+	cfg.providerEnvironment = lookuper
+	resolverOptions := []credentials.ResolverOption{
+		credentials.WithEnvironmentLookup(lookuper.Lookup),
+		credentials.WithDirectSecretRefreshInterval(cfg.CredentialSources.RemoteRefreshInterval),
+	}
+	for primitive, chain := range providerauth.DefaultCloudChains() {
+		resolverOptions = append(resolverOptions, credentials.WithCloudChain(primitive, chain))
+	}
+	cfg.credentialResolver = credentials.NewResolver(resolverOptions...)
 
 	return cfg, nil
 }

@@ -78,17 +78,34 @@ func (r *Runtime) ControlPlane() *ControlPlane {
 // Refresh runs Starmap acquisition and publishes any new generation into the
 // Starport routable view.
 func (r *Runtime) Refresh(ctx context.Context, options ...pkgsync.Option) (*pkgsync.Result, error) {
-	if r == nil || r.acquisition == nil || r.control == nil {
-		return nil, ErrCatalogSourceRequired
-	}
-	result, err := r.acquisition.Sync(ctx, options...)
+	result, state, err := r.Sync(ctx, options...)
 	if err != nil {
 		return nil, err
 	}
-	if err := r.control.Refresh(); err != nil {
+	if err := r.control.Activate(state); err != nil {
 		return nil, fmt.Errorf("activate acquired Starmap generation: %w", err)
 	}
 	return result, nil
+}
+
+// Sync runs Starmap acquisition and returns the complete unpublished catalog
+// state for runtime-candidate construction.
+func (r *Runtime) Sync(
+	ctx context.Context,
+	options ...pkgsync.Option,
+) (*pkgsync.Result, starmap.CatalogState, error) {
+	if r == nil || r.acquisition == nil || r.control == nil {
+		return nil, starmap.CatalogState{}, ErrCatalogSourceRequired
+	}
+	result, err := r.acquisition.Sync(ctx, options...)
+	if err != nil {
+		return nil, starmap.CatalogState{}, err
+	}
+	state := r.client.CurrentCatalogState()
+	if state.Catalog == nil || strings.TrimSpace(state.GenerationID) == "" {
+		return nil, starmap.CatalogState{}, ErrCatalogRequired
+	}
+	return result, state, nil
 }
 
 // PublishObservations reconciles tenant or operator observations through

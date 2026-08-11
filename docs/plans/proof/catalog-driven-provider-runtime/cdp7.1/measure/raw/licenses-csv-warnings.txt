@@ -1,0 +1,22 @@
+W0811 07:17:59.514652   64580 library.go:101] "golang.org/x/sys/unix" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/golang.org/x/sys@v0.47.0/unix/asm_bsd_arm64.s
+/Users/jack/go/pkg/mod/golang.org/x/sys@v0.47.0/unix/zsyscall_darwin_arm64.s
+W0811 07:18:00.398322   64580 library.go:101] "github.com/cespare/xxhash/v2" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/github.com/cespare/xxhash/v2@v2.3.0/xxhash_arm64.s
+W0811 07:18:00.400137   64580 library.go:101] "github.com/dgraph-io/ristretto/v2/z" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/github.com/dgraph-io/ristretto/v2@v2.4.2/z/rtutil.s
+W0811 07:18:00.409597   64580 library.go:101] "github.com/klauspost/compress/zstd" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/github.com/klauspost/compress@v1.19.2/zstd/fse_decoder_arm64.s
+/Users/jack/go/pkg/mod/github.com/klauspost/compress@v1.19.2/zstd/seqdec_arm64.s
+W0811 07:18:00.489907   64580 library.go:101] "github.com/klauspost/compress/huff0" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/github.com/klauspost/compress@v1.19.2/huff0/decompress_arm64.s
+W0811 07:18:00.583444   64580 library.go:101] "github.com/klauspost/compress/zstd/internal/xxhash" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/github.com/klauspost/compress@v1.19.2/zstd/internal/xxhash/xxhash_arm64.s
+W0811 07:18:00.617533   64580 library.go:101] "github.com/klauspost/compress/s2" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/github.com/klauspost/compress@v1.19.2/s2/decode_arm64.s
+W0811 07:18:01.137323   64580 library.go:101] "golang.org/x/sys/cpu" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/golang.org/x/sys@v0.47.0/cpu/asm_darwin_arm64_gc.s
+/Users/jack/go/pkg/mod/golang.org/x/sys@v0.47.0/cpu/cpu_arm64.s
+W0811 07:18:03.085722   64580 library.go:101] "golang.org/x/crypto/chacha20" contains non-Go code that can't be inspected for further dependencies:
+/Users/jack/go/pkg/mod/golang.org/x/crypto@v0.54.0/chacha20/chacha_arm64.s
+W0811 07:18:11.117917   64580 library.go:276] module github.com/agentstation/starport has empty version, defaults to HEAD. The license URL may be incorrect. Please verify!

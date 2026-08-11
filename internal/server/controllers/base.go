@@ -11,6 +11,7 @@ import (
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/httpapi/openai"
 	"github.com/agentstation/starport/internal/httpapi/openrouter"
+	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/requestctx"
 )
@@ -88,19 +89,21 @@ func (h *BaseHandler) writeInvalidRequest(w http.ResponseWriter, message string)
 }
 
 // getAPIKeyRoutingConfig extracts routing restrictions from the authenticated API key.
-func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) *proxy.APIKeyRoutingConfig {
+func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) (*proxy.APIKeyRoutingConfig, error) {
 	apiKey, ok := requestctx.GetAPIKeyModel(ctx)
 	if !ok || apiKey == nil {
-		return nil
+		return nil, nil
 	}
 
-	if len(apiKey.AllowedModels) == 0 {
-		return nil
+	strategy, err := byok.StrategyFromMetadata(apiKey.Metadata)
+	if err != nil {
+		return nil, err
 	}
 
 	return &proxy.APIKeyRoutingConfig{
-		AllowedModels: append([]string(nil), apiKey.AllowedModels...),
-	}
+		AllowedModels:      append([]string(nil), apiKey.AllowedModels...),
+		CredentialStrategy: strategy,
+	}, nil
 }
 
 // logError logs an error with context

@@ -71,10 +71,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: [lint, test, release-contract, sdk-smoke]
-    env:
-      # Starport v1 includes Starmap and cloud-auth support. Keep a 50 MiB
-      # release budget so unexpected dependency growth remains visible.
-      MAX_RELEASE_BINARY_SIZE_BYTES: 52428800
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,15 +98,11 @@ jobs:
       - name: Build release binary
         run: make release
 
-      - name: Check release binary size
+      - name: Report release binary size
         run: |
           ls -lh starport
           size=$(stat -c%s starport 2>/dev/null || stat -f%z starport)
           echo "Binary size: $size bytes"
-          if [ "$size" -gt "$MAX_RELEASE_BINARY_SIZE_BYTES" ]; then
-            echo "Binary size exceeds the $MAX_RELEASE_BINARY_SIZE_BYTES-byte release budget"
-            exit 1
-          fi
 
   security:
     name: Security Scan

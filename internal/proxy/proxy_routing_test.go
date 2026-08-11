@@ -5,7 +5,6 @@ import (
 	"io"
 	"testing"
 
-	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -15,7 +14,8 @@ import (
 )
 
 type capturingRouter struct {
-	req *routepkg.Request
+	req          *routepkg.Request
+	embeddingReq *routepkg.EmbeddingRequest
 }
 
 func (r *capturingRouter) SelectModel(context.Context, *routepkg.Request) (string, connectors.Connector, error) {
@@ -46,6 +46,14 @@ func (r *capturingRouter) RouteWithFallback(_ context.Context, req *routepkg.Req
 
 func (r *capturingRouter) RouteStream(context.Context, *routepkg.Request) (execution.ManagedStream, error) {
 	return nil, nil
+}
+
+func (r *capturingRouter) RouteEmbeddings(_ context.Context, req *routepkg.EmbeddingRequest) (*routepkg.EmbeddingResponse, error) {
+	r.embeddingReq = req
+	return &routepkg.EmbeddingResponse{Response: inference.EmbeddingResponse{
+		Model: "acme/opaque/embed@002",
+		Data:  []inference.Embedding{{Index: 0, Vector: []float32{0.25, 0.75}}},
+	}}, nil
 }
 
 func TestProcessChatCompletionPassesProviderPreferences(t *testing.T) {
@@ -87,21 +95,26 @@ func TestProcessChatCompletionPassesProviderPreferences(t *testing.T) {
 	require.Positive(t, router.req.Metadata.EstimatedTokens)
 }
 
-func TestEmbeddingRouteHonorsAPIKeyRestrictions(t *testing.T) {
-	route := runtimecatalog.Route{
-		DefinitionID: "openai/text-embedding-3-small",
-		ProviderID:   "openai", ProviderModelID: "text-embedding-3-small",
-	}
-	require.True(t, embeddingRouteAllowed("openai/text-embedding-3-small", route, nil))
-	require.True(t, embeddingRouteAllowed("openai/text-embedding-3-small", route, &APIKeyRoutingConfig{
-		AllowedModels: []string{"openai/text-embedding-3-small"}, AllowedProviders: []string{"openai"},
-	}))
-	require.False(t, embeddingRouteAllowed("openai/text-embedding-3-small", route, &APIKeyRoutingConfig{
-		AllowedModels: []string{"openai/gpt-4.1"},
-	}))
-	require.False(t, embeddingRouteAllowed("openai/text-embedding-3-small", route, &APIKeyRoutingConfig{
-		AllowedModels: []string{"*"}, AllowedProviders: []string{"anthropic"},
-	}))
+func TestProcessEmbeddingsDelegatesTenantCredentialAndRoutingPolicy(t *testing.T) {
+	router := &capturingRouter{}
+	service := &proxy{router: router}
+
+	response, err := service.ProcessEmbeddings(t.Context(), &EmbeddingsRequest{
+		Request: inference.EmbeddingRequest{
+			Model: "acme/opaque/embed@002", Input: inference.EmbeddingInput{Texts: []string{"hello"}},
+		},
+		TenantID: "tenant-a",
+		APIKeyConfig: &APIKeyRoutingConfig{
+			AllowedModels: []string{"acme/opaque/embed@002"}, AllowedProviders: []string{"acme"},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, router.embeddingReq)
+	require.Equal(t, "tenant-a", router.embeddingReq.TenantID)
+	require.Equal(t, []string{"acme"}, router.embeddingReq.APIKeyConfig.AllowedProviders)
+	require.Equal(t, []string{"acme/opaque/embed@002"}, router.embeddingReq.APIKeyConfig.AllowedModels)
+	require.Equal(t, "acme/opaque/embed@002", response.Response.Model)
+	require.Equal(t, []float32{0.25, 0.75}, response.Response.Data[0].Vector)
 }
 
 type preparingRouter struct {
@@ -145,6 +158,10 @@ func (r *preparingRouter) RouteWithFallback(_ context.Context, req *routepkg.Req
 }
 
 func (r *preparingRouter) RouteStream(context.Context, *routepkg.Request) (execution.ManagedStream, error) {
+	return nil, nil
+}
+
+func (r *preparingRouter) RouteEmbeddings(context.Context, *routepkg.EmbeddingRequest) (*routepkg.EmbeddingResponse, error) {
 	return nil, nil
 }
 
@@ -201,6 +218,10 @@ func (r *streamCapturingRouter) RouteStream(_ context.Context, req *routepkg.Req
 		ModelUsed: attempt.Model,
 		Deltas:    []inference.ChoiceDelta{{Index: 0, Text: "ok"}},
 	}}, nil
+}
+
+func (r *streamCapturingRouter) RouteEmbeddings(context.Context, *routepkg.EmbeddingRequest) (*routepkg.EmbeddingResponse, error) {
+	return nil, nil
 }
 
 func TestProcessChatCompletionStreamDelegatesOneRouteRequest(t *testing.T) {

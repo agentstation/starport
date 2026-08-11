@@ -5,6 +5,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 func TestRedactedNeverReturnsSecrets(t *testing.T) {
@@ -12,15 +16,27 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 		"storage-password-value", "provider-api-key-value",
 		"master-key-value", "jwt-secret-value", "query-token-value",
 		"userinfo-password-value", "fragment-secret-value",
+		"remote-catalog-api-key-value",
 	}
 	cfg := &Config{
 		Storage: StorageConfig{Valkey: ValkeyConfig{
 			URL:      "rediss://user:userinfo-password-value@example.com:6379/0?token=query-token-value#fragment-secret-value",
 			Password: secrets[0],
 		}},
-		Providers: ProvidersConfig{OpenAI: ProviderConfig{
-			APIKey: secrets[1], BaseURL: "https://example.com/v1?api_key=query-token-value",
+		Providers: ProvidersConfig{"openai": {
+			Material: credentials.NewMaterial(
+				catalogs.ProviderCredentialProfile{
+					ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+				},
+				map[catalogs.ProviderCredentialFieldID]string{"api-key": secrets[1]},
+				credentials.MaterialMetadata{Version: "opaque"},
+			),
+			BaseURL: "https://example.com/v1?api_key=query-token-value",
 		}},
+		Catalog: CatalogConfig{
+			RemoteURL:    "https://catalog.example/api/v1?token=query-token-value",
+			RemoteAPIKey: secrets[7],
+		},
 		Security: SecurityConfig{MasterKey: secrets[2], JWTSecret: secrets[3]},
 	}
 	encoded, err := json.Marshal(Redacted(cfg))
@@ -36,13 +52,24 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 	providers := view["providers"].(map[string]any)
 	openAI := providers["openai"].(map[string]any)
 	security := view["security"].(map[string]any)
-	if openAI["api_key"] != redactedValue || security["master_key"] != redactedValue {
-		t.Errorf("redacted fields = %#v, %#v", openAI["api_key"], security["master_key"])
+	if security["master_key"] != redactedValue {
+		t.Errorf("redacted master key = %#v", security["master_key"])
+	}
+	if material, found := openAI["material"]; !found || len(material.(map[string]any)) != 0 {
+		t.Errorf("redacted material = %#v", material)
 	}
 	storage := view["storage"].(map[string]any)
 	valkey := storage["valkey"].(map[string]any)
-	if openAI["base_url"] != redactedValue || valkey["url"] != redactedValue {
-		t.Errorf("redacted URLs = %#v, %#v", openAI["base_url"], valkey["url"])
+	catalog := view["catalog"].(map[string]any)
+	if openAI["base_url"] != redactedValue ||
+		valkey["url"] != redactedValue ||
+		catalog["remote_url"] != redactedValue {
+		t.Errorf(
+			"redacted URLs = %#v, %#v, %#v",
+			openAI["base_url"],
+			valkey["url"],
+			catalog["remote_url"],
+		)
 	}
 	if _, found := view["chat_ui"]; !found {
 		t.Fatal("chat_ui key is missing")

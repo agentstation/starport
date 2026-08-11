@@ -26,6 +26,23 @@ var (
 	ErrAllAttemptsFailed = errors.New("all planned attempts failed")
 )
 
+// AttemptAction tells the executor how an attempt failure affects the current
+// route. The executor still applies the one total attempt budget.
+type AttemptAction uint8
+
+const (
+	// AttemptActionDefault applies normal retry and route-fallback policy.
+	AttemptActionDefault AttemptAction = iota
+	// AttemptActionContinueRoute consumes another attempt on the same route
+	// without changing provider-health state or applying retry backoff.
+	AttemptActionContinueRoute
+	// AttemptActionFallbackRoute moves directly to the next planned route
+	// without changing provider-health state or applying retry policy.
+	AttemptActionFallbackRoute
+	// AttemptActionStop ends execution without changing provider-health state.
+	AttemptActionStop
+)
+
 // State is one state in the logical-attempt state machine.
 type State string
 
@@ -96,16 +113,29 @@ type Clock interface {
 // Availability owns attempt admission and offering outcome transitions.
 type Availability interface {
 	Acquire(routing.Route) bool
+	Release(routing.Route)
 	RecordSuccess(routing.Route, time.Duration)
 	RecordFailure(routing.Route, *failure.Failure, time.Duration)
 }
 
 // ChatAttempt makes one non-streaming provider invocation.
-type ChatAttempt func(context.Context, routing.Attempt) (*inference.ChatResponse, *failure.Failure)
+type ChatAttempt func(context.Context, routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction)
 
 // ChatResult is one canonical completed result with execution evidence.
 type ChatResult struct {
 	Response   inference.ChatResponse
+	Route      routing.Route
+	Attempts   []AttemptEvidence
+	StartedAt  time.Time
+	FinishedAt time.Time
+}
+
+// EmbeddingAttempt makes one non-streaming provider invocation.
+type EmbeddingAttempt func(context.Context, routing.Attempt) (*inference.EmbeddingResponse, *failure.Failure, AttemptAction)
+
+// EmbeddingResult is one canonical completed embedding result with execution evidence.
+type EmbeddingResult struct {
+	Response   inference.EmbeddingResponse
 	Route      routing.Route
 	Attempts   []AttemptEvidence
 	StartedAt  time.Time
@@ -119,8 +149,23 @@ type Stream interface {
 }
 
 // StreamAttempt starts one provider stream. Read failures should be normalized
-// as *failure.Failure values.
-type StreamAttempt func(context.Context, routing.Attempt) (Stream, *failure.Failure)
+// as *failure.Failure values. Wrap a pre-commit read error with
+// WithAttemptAction when it must continue the same route.
+type StreamAttempt func(context.Context, routing.Attempt) (Stream, *failure.Failure, AttemptAction)
+
+// WithAttemptAction annotates a stream read failure with execution policy.
+// The wrapped error remains available through errors.Is and errors.As.
+func WithAttemptAction(err error, action AttemptAction) error {
+	if err == nil || action == AttemptActionDefault {
+		return err
+	}
+	return &attemptActionError{error: err, action: action}
+}
+
+type attemptActionError struct {
+	error
+	action AttemptAction
+}
 
 // ManagedStream exposes execution evidence without changing the protocol stream contract.
 type ManagedStream interface {

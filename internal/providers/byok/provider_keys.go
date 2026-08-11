@@ -8,8 +8,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -17,7 +18,7 @@ import (
 type keyManager struct {
 	repository credentials.Repository
 	encryption *credentials.EncryptionService
-	adapters   *connectors.AdapterRegistry
+	validator  CredentialValidator
 }
 
 const providerCredentialScanLimit = 1000
@@ -27,13 +28,13 @@ const maxCredentialUpdateAttempts = 256
 func NewProviderKeys(
 	repository credentials.Repository,
 	masterKey []byte,
-	adapters *connectors.AdapterRegistry,
+	validator CredentialValidator,
 ) (ProviderKeys, error) {
 	if repository == nil {
 		return nil, ErrRepositoryRequired
 	}
-	if adapters == nil {
-		return nil, ErrAdapterRegistryRequired
+	if validator == nil {
+		return nil, ErrCredentialValidatorRequired
 	}
 
 	encryption, err := credentials.NewEncryptionService(masterKey)
@@ -44,7 +45,7 @@ func NewProviderKeys(
 	return &keyManager{
 		repository: repository,
 		encryption: encryption,
-		adapters:   adapters,
+		validator:  validator,
 	}, nil
 }
 
@@ -118,43 +119,25 @@ func (m *keyManager) GetKey(ctx context.Context, scope, provider string) (*crede
 	return keys[0], nil
 }
 
-// GetKeys retrieves all provider keys for a provider sorted by priority
-// This includes both user-specific keys and global keys
+// GetKeys retrieves provider keys from one exact scope. Global credentials are
+// managed through the explicit global-key methods and are never merged into a
+// tenant lookup.
 func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*credentials.ProviderKey, error) {
 	if scope == "" || provider == "" {
 		return nil, ErrScopeAndProviderRequired
 	}
 
-	userRecords, err := m.repository.ListScope(ctx, scope, providerCredentialScanLimit)
+	records, err := m.repository.ListScope(ctx, scope, providerCredentialScanLimit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list user keys: %w", err)
-	}
-	globalRecords, err := m.repository.ListScope(ctx, "*", providerCredentialScanLimit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list global keys: %w", err)
+		return nil, fmt.Errorf("failed to list scoped keys: %w", err)
 	}
 
 	var keys []*credentials.ProviderKey
-	for _, record := range append(userRecords, globalRecords...) {
+	for _, record := range records {
 		providerKey := record.Key
 		if providerKey.Provider != provider {
 			continue
 		}
-
-		// Decrypt key
-		decryptedJSON, err := m.encryption.DecryptCredential(providerKey.EncryptedCredential)
-		if err != nil {
-			log.Warn().Str("provider", providerKey.Provider).Err(err).Msg("Failed to decrypt key")
-			continue
-		}
-
-		var keyData map[string]string
-		if err := json.Unmarshal([]byte(decryptedJSON), &keyData); err != nil {
-			log.Warn().Str("provider", providerKey.Provider).Err(err).Msg("Failed to unmarshal key")
-			continue
-		}
-
-		// For now, just append the provider key
 		keys = append(keys, &providerKey)
 	}
 
@@ -165,6 +148,45 @@ func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*cr
 	})
 
 	return keys, nil
+}
+
+// ResolveUserMaterial decrypts and validates one exact tenant record against
+// the provider contract from the leased runtime generation.
+func (m *keyManager) ResolveUserMaterial(
+	ctx context.Context,
+	scope string,
+	provider catalogs.Provider,
+) (credentials.Material, error) {
+	if scope == "" {
+		return credentials.Material{}, ErrScopeRequired
+	}
+	if provider.ID == "" {
+		return credentials.Material{}, ErrProviderRequired
+	}
+	record, err := m.repository.Get(ctx, scope, string(provider.ID))
+	if err != nil {
+		if errors.Is(err, credentials.ErrNotFound) {
+			return credentials.Material{}, ErrKeyNotFound
+		}
+		return credentials.Material{}, fmt.Errorf("read scoped provider credential: %w", err)
+	}
+	decrypted, err := m.encryption.DecryptCredential(record.Key.EncryptedCredential)
+	if err != nil {
+		return credentials.Material{}, fmt.Errorf("%w: decrypt scoped provider credential", ErrDecryptionFailed)
+	}
+	var secretValues map[string]string
+	if err := json.Unmarshal([]byte(decrypted), &secretValues); err != nil {
+		return credentials.Material{}, fmt.Errorf("%w: decode scoped provider credential", ErrDecryptionFailed)
+	}
+	material, err := buildCredentialMaterial(provider, secretValues, record.Key.Config)
+	if err != nil {
+		return credentials.Material{}, err
+	}
+	return credentials.NewMaterial(
+		material.Profile(),
+		materialValues(material),
+		credentials.MaterialMetadata{Version: fmt.Sprintf("stored:%d", record.Revision)},
+	), nil
 }
 
 // ListKeys lists all provider keys for a scope
@@ -391,21 +413,6 @@ func (m *keyManager) ListGlobalKeys(ctx context.Context) ([]*credentials.Provide
 	sort.Slice(keys, func(i, j int) bool { return keys[i].Provider < keys[j].Provider })
 
 	return keys, nil
-}
-
-// DetermineKeyStrategy determines the fallback strategy for a given scope and provider
-func (m *keyManager) DetermineKeyStrategy(ctx context.Context, scope string, provider string) FallbackStrategy {
-	// Check if scope has provider keys
-	keys, err := m.GetKeys(ctx, scope, provider)
-	if err != nil || len(keys) == 0 {
-		// No user keys, use gateway
-		return GatewayFirst
-	}
-
-	// Check for user-only preference in scope metadata
-	// This would be implemented by checking the scope's configuration
-	// For now, default to GatewayFirst
-	return GatewayFirst
 }
 
 // RecordUsage records usage of a provider key

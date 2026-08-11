@@ -1,13 +1,19 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-10
+Last Updated: 2026-08-11
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-No durable plan is active.
+| Task | Plan | Status | Next action |
+|------|------|--------|-------------|
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP9.1 replaces the unsupported release-size gate with exact measurement evidence, then completes merge and public readback. |
+
+### Proposed Work
+
+No proposed durable plan exists.
 
 ### Recently Completed
 
@@ -51,7 +57,7 @@ No durable plan is active.
 - Authentication uses hash-based identity lookup and fails closed.
 - Response caching uses tenant-safe canonical semantic keys.
 - HTTP middleware enforces rate limits through the concept repository.
-- Starmap v0.3.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
+- Starmap v0.4.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
 - Starport owns inference credentials, request policy, route planning, execution, and protocol adaptation.
 - OpenAI and OpenRouter raw protocol smoke tests pass.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.

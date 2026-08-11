@@ -67,6 +67,25 @@ Use [the configuration reference](../../.env.example) for the complete field
 list. Starmap acquisition credentials stay separate from Starport inference
 credentials.
 
+## Provider credential references
+
+The active Starmap catalog defines each provider field. Without an explicit
+reference, Starport checks its conventional environment names first. It then
+checks the derived `STARPORT_<PROVIDER>_<FIELD>` value.
+
+Set `STARPORT_<PROVIDER>_<FIELD>_REFERENCE` to select an explicit `env:`,
+`file:`, Google Cloud Secret Manager, Azure Key Vault, AWS Secrets Manager,
+Vault KV v2, or OpenBao KV v2 source. The reference precedes ambient values.
+Set the matching `_REFERENCE_FALLBACK_AMBIENT` value to `true` only when a
+typed `not_configured` result can use ambient discovery. Other source failures
+stay terminal.
+
+The credential resolver owns initial resolution, caching, single-flight work,
+refresh, revocation, and expiry. Secret-store network access does not occur on
+a warmed cache hit. Direct-source material has a five-minute refresh interval
+by default. Set `STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL` to a
+different positive duration.
+
 ## Inspection
 
 Use these commands to inspect the resolved configuration:
@@ -84,11 +103,15 @@ file state. With `--json`, validation writes `valid: false` and a safe loading
 stage before it returns a nonzero status.
 
 `starport doctor` uses the same loader. Passive diagnosis does not open
-storage. `starport doctor --probe` opens configured storage through a
-write-blocking adapter and checks the stored catalog and identity state. If
-Badger needs writable recovery, the probe skips storage inspection and gives
-recovery instructions. It also skips this inspection on platforms where
-Badger does not support read-only mode.
+storage. It does not send provider inference.
+
+A selected cloud identity can use its authentication network during credential
+resolution. A selected direct secret reference can do the same.
+`starport doctor --probe` opens configured storage through a write-blocking
+adapter and checks the stored catalog and identity state. If Badger needs
+writable recovery, the probe skips storage inspection and gives recovery
+instructions. It also skips this inspection on platforms where Badger does not
+support read-only mode.
 
 ## Rate-limit reload
 

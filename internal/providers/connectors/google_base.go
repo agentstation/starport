@@ -10,17 +10,20 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // googleBaseConnector provides shared implementation for Google connectors
 type googleBaseConnector struct {
-	config     ProviderConfig
-	httpClient *http.Client
-	name       string
+	config          ProviderConfig
+	httpClient      *http.Client
+	name            string
+	mapFinishReason func(string) string
 }
 
 // Chat performs a chat completion request
-func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEndpoint func(*ChatRequest, bool) (string, error), setHeaders func(*http.Request)) (*ChatResponse, error) {
+func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEndpoint func(*ChatRequest, bool) (string, error), setHeaders func(credentials.Material, *http.Request) error) (*ChatResponse, error) {
 	geminiReq := c.convertToGeminiRequest(req)
 
 	body, err := json.Marshal(geminiReq)
@@ -37,7 +40,9 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	setHeaders(httpReq)
+	if err := setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 
 	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
@@ -60,7 +65,7 @@ func (c *googleBaseConnector) Chat(ctx context.Context, req *ChatRequest, getEnd
 }
 
 // ChatStream performs a streaming chat completion request
-func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, getEndpoint func(*ChatRequest, bool) (string, error), setHeaders func(*http.Request)) (ChatStream, error) {
+func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, getEndpoint func(*ChatRequest, bool) (string, error), setHeaders func(credentials.Material, *http.Request) error) (ChatStream, error) {
 	geminiReq := c.convertToGeminiRequest(req)
 
 	body, err := json.Marshal(geminiReq)
@@ -77,7 +82,9 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	setHeaders(httpReq)
+	if err := setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	resp, err := doRequest(c.httpClient, httpReq)
@@ -90,7 +97,12 @@ func (c *googleBaseConnector) ChatStream(ctx context.Context, req *ChatRequest, 
 		return nil, c.handleError(resp)
 	}
 
-	return newGoogleStream(resp, req.Model, c.name, req.Reasoning != nil && req.Reasoning.Exclude), nil
+	return newGoogleStream(
+		resp,
+		req.Model,
+		c.mapFinishReason,
+		req.Reasoning != nil && req.Reasoning.Exclude,
+	), nil
 }
 
 // handleError handles error responses from Google APIs
@@ -275,7 +287,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 			{
 				Index:        0,
 				Message:      message,
-				FinishReason: mapFinishReason(candidate.FinishReason),
+				FinishReason: c.mapFinishReason(candidate.FinishReason),
 			},
 		},
 		Usage: Usage{
@@ -299,18 +311,23 @@ type googleStream struct {
 	response         *http.Response
 	reader           *bufio.Reader
 	model            string
-	provider         string
+	mapFinishReason  func(string) string
 	closed           bool
 	buffer           []byte
 	excludeReasoning bool
 }
 
-func newGoogleStream(resp *http.Response, model, provider string, excludeReasoning bool) *googleStream {
+func newGoogleStream(
+	resp *http.Response,
+	model string,
+	mapReason func(string) string,
+	excludeReasoning bool,
+) *googleStream {
 	return &googleStream{
 		response:         resp,
 		reader:           bufio.NewReader(resp.Body),
 		model:            model,
-		provider:         provider,
+		mapFinishReason:  mapReason,
 		buffer:           make([]byte, 0),
 		excludeReasoning: excludeReasoning,
 	}
@@ -391,12 +408,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 				}
 			}
 
-			finishReason := ""
-			if s.provider == GoogleVertexAIProvider {
-				finishReason = mapVertexFinishReason(geminiResp.Candidates[0].FinishReason)
-			} else {
-				finishReason = mapFinishReason(geminiResp.Candidates[0].FinishReason)
-			}
+			finishReason := s.mapFinishReason(geminiResp.Candidates[0].FinishReason)
 
 			// Create delta with content and/or reasoning
 			delta := MessageDelta{}
@@ -509,19 +521,6 @@ func (s *googleStream) Close() error {
 }
 
 func mapFinishReason(reason string) string {
-	switch reason {
-	case "STOP":
-		return finishReasonStop
-	case "MAX_TOKENS":
-		return "length"
-	case "SAFETY":
-		return "content_filter"
-	default:
-		return reason
-	}
-}
-
-func mapVertexFinishReason(reason string) string {
 	switch reason {
 	case "STOP":
 		return finishReasonStop

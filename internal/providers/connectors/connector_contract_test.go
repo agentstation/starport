@@ -15,7 +15,7 @@ func TestConnectorContract(t *testing.T) {
 	t.Run("mock", func(t *testing.T) {
 		runConnectorContract(t, "http://mock.local/v1", func(t *testing.T) Connector {
 			t.Helper()
-			return NewMockConnector(ProviderConfig{BaseURL: "http://mock.local", APIKey: "test-key"})
+			return NewMockConnector(ProviderConfig{BaseURL: "http://mock.local"})
 		})
 	})
 
@@ -25,7 +25,6 @@ func TestConnectorContract(t *testing.T) {
 			t.Helper()
 			connector, err := NewOpenAIConnector(ProviderConfig{
 				BaseURL: server.URL + "/v1",
-				APIKey:  "test-key",
 				Timeout: 2 * time.Second,
 			})
 			if err != nil {
@@ -47,7 +46,8 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 	}
 
 	chatResp, err := connector.Chat(ctx, &ChatRequest{
-		Model: "openai/gpt-4o-mini",
+		Credential: testAPIMaterial("test-key"),
+		Model:      "openai/gpt-4o-mini",
 		Endpoint: InferenceEndpoint{
 			Type: "openai",
 			URL:  endpointBaseURL + "/chat/completions",
@@ -64,8 +64,9 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 	}
 
 	stream, err := connector.ChatStream(ctx, &ChatRequest{
-		Model:  "openai/gpt-4o-mini",
-		Stream: true,
+		Credential: testAPIMaterial("test-key"),
+		Model:      "openai/gpt-4o-mini",
+		Stream:     true,
 		Endpoint: InferenceEndpoint{
 			Type: "openai",
 			URL:  endpointBaseURL + "/chat/completions",
@@ -98,8 +99,9 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 	}
 
 	embeddingsResp, err := connector.Embeddings(ctx, &EmbeddingsRequest{
-		Model: "openai/text-embedding-3-small",
-		Input: "hello",
+		Credential: testAPIMaterial("test-key"),
+		Model:      "openai/text-embedding-3-small",
+		Input:      "hello",
 		Endpoint: InferenceEndpoint{
 			Type: "openai",
 			URL:  endpointBaseURL + "/embeddings",

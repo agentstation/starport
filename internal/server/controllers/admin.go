@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/server/dto"
 )
 
@@ -80,6 +81,10 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
+		return
+	}
+	if _, err := byok.ParseStrategy(req.Metadata[byok.StrategyMetadataKey]); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 		return
 	}
 
@@ -181,6 +186,10 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		apiKey.Scopes = req.Scopes
 	}
 	if req.Metadata != nil {
+		if _, err := byok.ParseStrategy(req.Metadata[byok.StrategyMetadataKey]); err != nil {
+			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
+			return
+		}
 		apiKey.Metadata = convertStringMapToInterface(req.Metadata)
 	}
 	if req.Active != nil {

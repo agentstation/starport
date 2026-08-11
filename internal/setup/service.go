@@ -10,8 +10,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/joho/godotenv"
 
@@ -25,8 +27,7 @@ const (
 	configFileMode = 0o600
 	privateDirMode = 0o700
 
-	// OpenAIProviderCredentialEnvironment supplies the local OpenAI inference credential.
-	OpenAIProviderCredentialEnvironment = "STARPORT_PROVIDERS_OPENAI_API_KEY"
+	credentialProduct = "STARPORT"
 )
 
 var (
@@ -38,10 +39,10 @@ var (
 	ErrPartialState = errors.New("starport setup state is incomplete")
 	// ErrProviderRequired reports an absent provider selection.
 	ErrProviderRequired = errors.New("setup provider is required")
-	// ErrUnsupportedProvider reports a provider outside the local setup profiles.
-	ErrUnsupportedProvider = errors.New("setup supports only OpenAI or Ollama")
-	// ErrProviderCredentialRequired reports an absent OpenAI inference credential.
-	ErrProviderCredentialRequired = errors.New("OpenAI provider credential is required")
+	// ErrUnsupportedProvider reports a provider absent from the current catalog.
+	ErrUnsupportedProvider = errors.New("setup provider is not in the current Starmap catalog")
+	// ErrProviderCredentialRequired reports incomplete catalog-declared material.
+	ErrProviderCredentialRequired = errors.New("required provider credential is not configured")
 	// ErrRollbackRefused reports state that does not match an initialization result.
 	ErrRollbackRefused = errors.New("setup rollback refused")
 )
@@ -60,9 +61,8 @@ const (
 
 // Request contains the explicit choices for local initialization.
 type Request struct {
-	Provider           catalogs.ProviderID
-	ProviderCredential string
-	IdentityName       string
+	Provider     catalogs.ProviderID
+	IdentityName string
 }
 
 // Result contains initialized paths and the one-time gateway credential.
@@ -81,21 +81,56 @@ type Service struct {
 	paths             config.Paths
 	openStore         func(string) (storage.KVStore, error)
 	generateMasterKey func() (string, error)
+	providerLookup    ProviderLookup
+	environmentLookup func(string) (string, bool)
+}
+
+// ProviderLookup returns one exact provider from the setup catalog.
+type ProviderLookup func(context.Context, catalogs.ProviderID) (catalogs.Provider, bool, error)
+
+// Option configures catalog and environment setup boundaries.
+type Option func(*Service)
+
+// WithProviderLookup replaces the current Starmap provider lookup.
+func WithProviderLookup(lookup ProviderLookup) Option {
+	return func(service *Service) {
+		if lookup != nil {
+			service.providerLookup = lookup
+		}
+	}
+}
+
+// WithEnvironmentLookup replaces process environment access.
+func WithEnvironmentLookup(lookup func(string) (string, bool)) Option {
+	return func(service *Service) {
+		if lookup != nil {
+			service.environmentLookup = lookup
+		}
+	}
 }
 
 // New returns a local setup service for the supplied managed paths.
-func New(paths config.Paths) *Service {
-	return &Service{
+func New(paths config.Paths, options ...Option) *Service {
+	service := &Service{
 		paths:             paths,
 		openStore:         openLocalStore,
 		generateMasterKey: generateMasterKey,
+		providerLookup:    currentProvider,
+		environmentLookup: os.LookupEnv,
 	}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service
 }
 
 // Initialize creates local configuration and one named gateway identity.
 // It never replaces an existing configuration file or identity store.
 func (s *Service) Initialize(ctx context.Context, request Request) (Result, error) {
-	if err := s.validate(request); err != nil {
+	providerSettings, err := s.validate(ctx, request)
+	if err != nil {
 		return Result{}, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -117,7 +152,7 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 	if err != nil {
 		return Result{}, fmt.Errorf("generate provider credential master key: %w", err)
 	}
-	contents, err := localConfig(request, masterKey)
+	contents, err := localConfig(providerSettings, masterKey)
 	if err != nil {
 		return Result{}, err
 	}
@@ -307,32 +342,35 @@ func (s *Service) restoreRollback(rollbackDir string, cause error) error {
 	return cause
 }
 
-func (s *Service) validate(request Request) error {
+func (s *Service) validate(ctx context.Context, request Request) (map[string]string, error) {
 	if s == nil || s.openStore == nil || s.generateMasterKey == nil ||
+		s.providerLookup == nil || s.environmentLookup == nil ||
 		s.paths.ConfigDir == "" || s.paths.ConfigFile == "" ||
 		s.paths.DataDir == "" || s.paths.BadgerDir == "" {
-		return ErrPathsRequired
+		return nil, ErrPathsRequired
 	}
 	expected := config.PathsForConfigDir(s.paths.ConfigDir)
 	if !filepath.IsAbs(s.paths.ConfigDir) || s.paths != expected {
-		return ErrPathsRequired
+		return nil, ErrPathsRequired
 	}
 	if request.Provider == "" {
-		return ErrProviderRequired
+		return nil, ErrProviderRequired
 	}
-	switch request.Provider {
-	case catalogs.ProviderIDOpenAI:
-		if strings.TrimSpace(request.ProviderCredential) == "" {
-			return ErrProviderCredentialRequired
-		}
-	case catalogs.ProviderIDOllama:
-	default:
-		return fmt.Errorf("%w: %s", ErrUnsupportedProvider, request.Provider)
+	provider, found, err := s.providerLookup(ctx, request.Provider)
+	if err != nil {
+		return nil, fmt.Errorf("read current Starmap provider: %w", err)
+	}
+	if !found {
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedProvider, request.Provider)
 	}
 	if err := (identity.APIKey{ID: "validation", Name: request.IdentityName, Hash: "validation", Scopes: []string{"*"}}).Validate(); err != nil {
-		return fmt.Errorf("identity name: %w", err)
+		return nil, fmt.Errorf("identity name: %w", err)
 	}
-	return nil
+	settings, err := resolveProviderSettings(provider, s.environmentLookup)
+	if err != nil {
+		return nil, err
+	}
+	return settings, nil
 }
 
 // Inspect reads the managed local setup state without changing it.
@@ -424,21 +462,115 @@ func ReleaseIdentity(ctx context.Context, store storage.KVStore, id string) erro
 	return nil
 }
 
-func localConfig(request Request, masterKey string) ([]byte, error) {
+func localConfig(providerSettings map[string]string, masterKey string) ([]byte, error) {
 	values := map[string]string{"STARPORT_SECURITY_MASTER_KEY": masterKey}
-	switch request.Provider {
-	case catalogs.ProviderIDOpenAI:
-		values[OpenAIProviderCredentialEnvironment] = request.ProviderCredential
-	case catalogs.ProviderIDOllama:
-		values["STARPORT_PROVIDERS_OLLAMA_ENABLED"] = "true"
-	default:
-		return nil, ErrUnsupportedProvider
+	for name, value := range providerSettings {
+		values[name] = value
 	}
 	encoded, err := godotenv.Marshal(values)
 	if err != nil {
 		return nil, fmt.Errorf("encode local configuration: %w", err)
 	}
 	return []byte("# Generated by starport init. Keep this file secret.\n" + encoded + "\n"), nil
+}
+
+func currentProvider(
+	ctx context.Context,
+	providerID catalogs.ProviderID,
+) (catalogs.Provider, bool, error) {
+	client, err := starmap.NewContext(ctx)
+	if err != nil {
+		return catalogs.Provider{}, false, err
+	}
+	provider, err := client.Catalog().Provider(providerID)
+	if err != nil {
+		return catalogs.Provider{}, false, nil
+	}
+	return provider, true, nil
+}
+
+func resolveProviderSettings(
+	provider catalogs.Provider,
+	lookup func(string) (string, bool),
+) (map[string]string, error) {
+	if provider.Credentials == nil || len(provider.Credentials.Inference.Alternatives) == 0 {
+		return nil, fmt.Errorf("%w: %s has no inference credential profile", ErrProviderCredentialRequired, provider.ID)
+	}
+	fields := make(map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField, len(provider.Credentials.Fields))
+	for _, field := range provider.Credentials.Fields {
+		fields[field.ID] = field
+	}
+	profiles := make(map[catalogs.ProviderCredentialProfileID]catalogs.ProviderCredentialProfile, len(provider.Credentials.Profiles))
+	for _, profile := range provider.Credentials.Profiles {
+		profiles[profile.ID] = profile
+	}
+	var firstError error
+	for _, profileID := range provider.Credentials.Inference.Alternatives {
+		profile, exists := profiles[profileID]
+		if !exists {
+			continue
+		}
+		settings, err := resolveProfileSettings(provider.ID, profile, fields, lookup)
+		if err == nil {
+			return settings, nil
+		}
+		if firstError == nil {
+			firstError = err
+		}
+	}
+	if firstError != nil {
+		return nil, firstError
+	}
+	return nil, fmt.Errorf("%w: %s has no usable inference credential profile", ErrProviderCredentialRequired, provider.ID)
+}
+
+func resolveProfileSettings(
+	providerID catalogs.ProviderID,
+	profile catalogs.ProviderCredentialProfile,
+	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+	lookup func(string) (string, bool),
+) (map[string]string, error) {
+	settings := make(map[string]string)
+	for _, fieldID := range profile.Fields {
+		field, exists := fields[fieldID]
+		if !exists {
+			return nil, fmt.Errorf("%w: %s field %s is absent", ErrProviderCredentialRequired, providerID, fieldID)
+		}
+		environments := append([]string(nil), field.Environment...)
+		derived, err := catalogs.DerivedCredentialEnvironmentName(credentialProduct, providerID, field.ID)
+		if err != nil {
+			return nil, fmt.Errorf("derive setup environment for %s field %s: %w", providerID, field.ID, err)
+		}
+		environments = append(environments, derived)
+		value := ""
+		for _, environment := range environments {
+			if candidate, found := lookup(environment); found && strings.TrimSpace(candidate) != "" {
+				value = candidate
+				break
+			}
+		}
+		if value == "" {
+			value = field.Default
+		}
+		if value == "" {
+			if field.Required {
+				return nil, fmt.Errorf("%w: %s field %s; set %s", ErrProviderCredentialRequired, providerID, field.ID, environments[0])
+			}
+			continue
+		}
+		if field.Pattern != "" {
+			matched, err := regexp.MatchString(field.Pattern, value)
+			if err != nil || !matched {
+				return nil, fmt.Errorf("%w: %s field %s has an invalid selected value", ErrProviderCredentialRequired, providerID, field.ID)
+			}
+		}
+		target := derived
+		if len(field.Environment) > 0 {
+			target = field.Environment[0]
+		}
+		settings[target] = value
+	}
+	return settings, nil
 }
 
 func openLocalStore(path string) (storage.KVStore, error) {

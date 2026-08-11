@@ -20,7 +20,6 @@ func TestNewAnthropicConnector(t *testing.T) {
 			name: "valid config with custom base URL",
 			config: ProviderConfig{
 				BaseURL:        "https://custom.anthropic.com",
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -29,7 +28,6 @@ func TestNewAnthropicConnector(t *testing.T) {
 		{
 			name: "missing catalog base URL",
 			config: ProviderConfig{
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 				BaseURL:        "",
@@ -40,7 +38,6 @@ func TestNewAnthropicConnector(t *testing.T) {
 			name: "invalid config - missing timeout",
 			config: ProviderConfig{
 				BaseURL: "https://api.anthropic.com",
-				APIKey:  "test-key",
 			},
 			wantErr: false, // Validate sets defaults
 		},
@@ -75,7 +72,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 	}{
 		{
 			name: "successful chat completion",
-			request: &ChatRequest{
+			request: &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 				Model: "claude-3-haiku-20240307",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
@@ -103,7 +100,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 		},
 		{
 			name: "chat with system message",
-			request: &ChatRequest{
+			request: &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 				Model: "claude-3-haiku-20240307",
 				Messages: []Message{
 					{Role: "system", Content: "You are a helpful assistant."},
@@ -132,7 +129,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 		},
 		{
 			name: "API error response",
-			request: &ChatRequest{
+			request: &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 				Model: "claude-3-haiku-20240307",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
@@ -149,7 +146,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 		},
 		{
 			name: "rate limit error",
-			request: &ChatRequest{
+			request: &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 				Model: "claude-3-haiku-20240307",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
@@ -203,7 +200,6 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 
 			connector, _ := NewAnthropicConnector(ProviderConfig{
 				BaseURL:        server.URL + "/v1",
-				APIKey:         "test-key",
 				Timeout:        5 * time.Second,
 				MaxConnections: 10,
 			})
@@ -262,12 +258,11 @@ func TestAnthropicConnector_ChatStream(t *testing.T) {
 
 	connector, _ := NewAnthropicConnector(ProviderConfig{
 		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
 
-	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
+	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 		Model:    "claude-3-haiku-20240307",
 		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
 		Messages: []Message{
@@ -317,12 +312,11 @@ func TestAnthropicConnector_ChatStream(t *testing.T) {
 func TestAnthropicConnector_Embeddings(t *testing.T) {
 	connector, _ := NewAnthropicConnector(ProviderConfig{
 		BaseURL:        "https://provider.test",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
 
-	_, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
+	_, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testAnthropicMaterial("test-key"),
 		Model: "text-embedding-ada-002",
 		Input: "Hello world",
 	})
@@ -380,11 +374,10 @@ func TestAnthropicConnector_ConvertMessageContent(t *testing.T) {
 
 	connector, _ := NewAnthropicConnector(ProviderConfig{
 		BaseURL: server.URL + "/v1",
-		APIKey:  "test-key",
 	})
 
 	// Test multimodal content
-	_, err := connector.Chat(context.Background(), &ChatRequest{
+	_, err := connector.Chat(context.Background(), &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 		Model:    "claude-3-haiku-20240307",
 		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
 		Messages: []Message{
@@ -406,7 +399,6 @@ func TestAnthropicConnector_ConvertMessageContent(t *testing.T) {
 func TestAnthropicConnector_Name(t *testing.T) {
 	connector, err := NewAnthropicConnector(ProviderConfig{
 		BaseURL:        "https://provider.test",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -422,7 +414,6 @@ func TestAnthropicConnector_Name(t *testing.T) {
 func TestAnthropicConnector_Close(t *testing.T) {
 	connector, err := NewAnthropicConnector(ProviderConfig{
 		BaseURL:        "https://provider.test",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})

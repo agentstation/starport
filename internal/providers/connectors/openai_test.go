@@ -20,7 +20,6 @@ func TestNewOpenAIConnector(t *testing.T) {
 			name: "valid config with custom base URL",
 			config: ProviderConfig{
 				BaseURL:        "https://custom.openai.com",
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -29,7 +28,6 @@ func TestNewOpenAIConnector(t *testing.T) {
 		{
 			name: "missing catalog base URL",
 			config: ProviderConfig{
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -39,7 +37,6 @@ func TestNewOpenAIConnector(t *testing.T) {
 			name: "invalid config - missing timeout",
 			config: ProviderConfig{
 				BaseURL: "https://api.openai.com",
-				APIKey:  "test-key",
 			},
 			wantErr: false, // Validate sets defaults
 		},
@@ -47,7 +44,6 @@ func TestNewOpenAIConnector(t *testing.T) {
 			name: "empty base URL fails closed",
 			config: ProviderConfig{
 				BaseURL:        "",
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -84,7 +80,7 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 	}{
 		{
 			name: "successful chat completion",
-			request: &ChatRequest{
+			request: &ChatRequest{Credential: testAPIMaterial("test-key"),
 				Model: "gpt-4",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
@@ -113,7 +109,7 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 		},
 		{
 			name: "API error response",
-			request: &ChatRequest{
+			request: &ChatRequest{Credential: testAPIMaterial("test-key"),
 				Model: "gpt-4",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
@@ -131,7 +127,7 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 		},
 		{
 			name: "rate limit error",
-			request: &ChatRequest{
+			request: &ChatRequest{Credential: testAPIMaterial("test-key"),
 				Model: "gpt-4",
 				Messages: []Message{
 					{Role: "user", Content: "Hello"},
@@ -175,7 +171,6 @@ func TestOpenAIConnector_Chat(t *testing.T) {
 
 			connector, _ := NewOpenAIConnector(ProviderConfig{
 				BaseURL:        server.URL + "/v1",
-				APIKey:         "test-key",
 				Timeout:        5 * time.Second,
 				MaxConnections: 10,
 			})
@@ -232,12 +227,11 @@ func TestOpenAIConnector_ChatStream(t *testing.T) {
 
 	connector, _ := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
 
-	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
+	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
 		Model: "gpt-4",
 		Endpoint: InferenceEndpoint{
 			Type: "openai",
@@ -305,12 +299,11 @@ func TestOpenAIConnector_Embeddings(t *testing.T) {
 
 	connector, _ := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
 
-	resp, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
+	resp, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testAPIMaterial("test-key"),
 		Model: "text-embedding-ada-002",
 		Input: "Hello world",
 		Endpoint: InferenceEndpoint{
@@ -333,7 +326,6 @@ func TestOpenAIConnector_Embeddings(t *testing.T) {
 func TestOpenAIConnector_Name(t *testing.T) {
 	connector, err := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        "https://provider.test",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -349,7 +341,6 @@ func TestOpenAIConnector_Name(t *testing.T) {
 func TestOpenAIConnector_Close(t *testing.T) {
 	connector, err := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        "https://provider.test",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -401,12 +392,11 @@ func TestOpenAIConnector_ChatStreamErrors(t *testing.T) {
 
 			connector, _ := NewOpenAIConnector(ProviderConfig{
 				BaseURL:        server.URL + "/v1",
-				APIKey:         "test-key",
 				Timeout:        5 * time.Second,
 				MaxConnections: 10,
 			})
 
-			_, err := connector.ChatStream(context.Background(), &ChatRequest{
+			_, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
 				Model: "gpt-3.5-turbo",
 				Endpoint: InferenceEndpoint{
 					Type: "openai",
@@ -438,12 +428,11 @@ func TestOpenAIConnector_EmbeddingsError(t *testing.T) {
 
 	connector, _ := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL + "/v1",
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
 
-	_, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
+	_, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testAPIMaterial("test-key"),
 		Model: "invalid-model",
 		Input: "test",
 		Endpoint: InferenceEndpoint{

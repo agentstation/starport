@@ -13,12 +13,58 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/stretchr/testify/require"
+
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
 )
+
+func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
+	embedded, err := catalogs.NewEmbedded()
+	require.NoError(t, err)
+	baseline, err := embedded.Build()
+	require.NoError(t, err)
+	provider, err := baseline.Provider(catalogs.ProviderIDOpenAI)
+	require.NoError(t, err)
+	provider.ID = "acme"
+	provider.Aliases = nil
+	provider.Name = "Acme"
+	for index := range provider.Credentials.Fields {
+		provider.Credentials.Fields[index].Environment = nil
+	}
+	provider.Credentials.Fields[0].Environment = []string{"ACME_API_KEY"}
+	builder, err := catalogs.NewBuilderFrom(baseline)
+	require.NoError(t, err)
+	require.NoError(t, builder.SetProvider(provider))
+	catalog, err := builder.Build()
+	require.NoError(t, err)
+
+	cfg, err := config.NewLoader().
+		WithPaths(config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))).
+		WithEnvironment(map[string]string{
+			"STARPORT_SECURITY_MASTER_KEY": strings.Repeat("master-secret-", 3),
+			"ACME_API_KEY":                 "acme-secret",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	require.NoError(t, err)
+	plane, err := runtimecatalog.Open(staticSource{state: starmap.CatalogState{
+		Catalog: catalog, GenerationID: "synthetic-acme", Sequence: 1,
+	}})
+	require.NoError(t, err)
+	report := Report{OK: true}
+	testService(cfg).checkAdapters(t.Context(), cfg, plane, catalog, &report)
+	require.True(t, report.OK, "%#v", report)
+	check := assertCheck(t, report, "adapters", StatusPass)
+	require.Contains(t, check.Message, "configured provider adapters")
+}
 
 func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")
@@ -34,7 +80,8 @@ func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{cfg.Security.MasterKey, cfg.Providers.OpenAI.APIKey} {
+	providerSecret, _ := cfg.Providers[catalogs.ProviderIDOpenAI].Material.Value("api-key")
+	for _, secret := range []string{cfg.Security.MasterKey, providerSecret} {
 		if strings.Contains(string(encoded), secret) {
 			t.Errorf("diagnosis output contains secret %q", secret)
 		}
@@ -116,13 +163,20 @@ func TestProbeReportsExactEmptyIdentityCheck(t *testing.T) {
 func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")
 	cfg := loadTestConfig(t, root)
-	cfg.Providers.OpenAI.BaseURL = "https://" + "url-user:url-password" + "@provider.example?token=" +
-		cfg.Providers.OpenAI.APIKey + "#base-url-secret"
+	resolveEmbeddedProviders(t, cfg)
+	openAI := cfg.Providers[catalogs.ProviderIDOpenAI]
+	openAISecret, found := openAI.Material.Value("api-key")
+	if !found {
+		t.Fatal("OpenAI inference material is missing")
+	}
+	openAI.BaseURL = "https://" + "url-user:url-password" + "@provider.example?token=" +
+		openAISecret + "#base-url-secret"
+	cfg.Providers[catalogs.ProviderIDOpenAI] = openAI
 	service := testService(cfg)
-	service.dependencies.adapters = func() (*connectors.AdapterRegistry, error) {
+	service.dependencies.transports = func() (*connectors.TransportRegistry, error) {
 		return nil, errors.New(
-			"failure " + cfg.Providers.OpenAI.APIKey + " " +
-				cfg.Providers.OpenAI.BaseURL + " " + cfg.Security.MasterKey +
+			"failure " + openAISecret + " " +
+				openAI.BaseURL + " " + cfg.Security.MasterKey +
 				" url-password base-url-secret",
 		)
 	}
@@ -132,8 +186,8 @@ func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, secret := range []string{
-		cfg.Providers.OpenAI.APIKey,
-		cfg.Providers.OpenAI.BaseURL,
+		openAISecret,
+		openAI.BaseURL,
 		cfg.Security.MasterKey,
 		"url-password",
 		"base-url-secret",
@@ -143,7 +197,7 @@ func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 		}
 	}
 	check := assertCheck(t, report, "adapters", StatusFail)
-	if check.Message != "provider adapter registry could not be created" {
+	if check.Message != "provider transport registry could not be created" {
 		t.Errorf("adapter failure = %q", check.Message)
 	}
 }
@@ -204,8 +258,8 @@ func loadTestConfig(t *testing.T, root string) *config.Config {
 	cfg, err := config.NewLoader().
 		WithPaths(config.PathsForConfigDir(root)).
 		WithEnvironment(map[string]string{
-			"STARPORT_SECURITY_MASTER_KEY":      strings.Repeat("master-secret-", 3),
-			"STARPORT_PROVIDERS_OPENAI_API_KEY": "provider-secret-value",
+			"STARPORT_SECURITY_MASTER_KEY": strings.Repeat("master-secret-", 3),
+			"OPENAI_API_KEY":               "provider-secret-value",
 		}).
 		Load(context.Background())
 	if err != nil {
@@ -214,14 +268,30 @@ func loadTestConfig(t *testing.T, root string) *config.Config {
 	return cfg
 }
 
+func resolveEmbeddedProviders(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	builder, err := catalogs.NewEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.ResolveProviders(context.Background(), catalog.Providers()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func testService(cfg *config.Config) service {
 	return service{dependencies: dependencies{
 		loadConfig: func(context.Context) (*config.Config, error) { return cfg, nil },
 		resolvePaths: func() (config.Paths, error) {
 			return config.PathsForConfigDir(filepath.Dir(filepath.Dir(cfg.Storage.Badger.Path))), nil
 		},
-		openStorage: storage.OpenReadOnly,
-		adapters:    connectors.ProductionAdapterRegistry,
+		openStorage:    storage.OpenReadOnly,
+		transports:     connectors.ProductionTransportRegistry,
+		authentication: providerauth.ProductionRegistry,
 	}}
 }
 

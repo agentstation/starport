@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starmap/pkg/sources"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
@@ -20,6 +21,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -52,14 +54,18 @@ type lifecycleEntry struct {
 // App owns all constructed runtime dependencies.
 type App struct {
 	config           *config.Config
+	providerSettings config.ProvidersConfig
 	httpServer       httpRuntime
 	hotReloader      hotReloadRuntime
 	registry         *registry.Registry
 	catalogRuntime   catalogRuntime
+	catalogUpdates   catalogUpdateRuntime
 	catalog          *runtimecatalog.ControlPlane
 	store            storage.KVStore
 	cacheManager     *cache.Manager
-	adapters         *connectors.AdapterRegistry
+	transports       *connectors.TransportRegistry
+	authentication   *providerauth.Registry
+	newConnector     func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	lifecycle        []lifecycleEntry
 	catalogRefreshWG sync.WaitGroup
 	closeOnce        sync.Once
@@ -72,12 +78,19 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	adapterRegistry, err := connectors.ProductionAdapterRegistry()
+	transportRegistry, err := connectors.ProductionTransportRegistry()
 	if err != nil {
-		return nil, fmt.Errorf("open adapter registry: %w", err)
+		return nil, fmt.Errorf("open transport registry: %w", err)
+	}
+	authenticationRegistry, err := providerauth.ProductionRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("open provider authentication registry: %w", err)
 	}
 	application := &App{
-		config: cfg, adapters: adapterRegistry, lifecycle: make([]lifecycleEntry, 0, 5),
+		config: cfg, transports: transportRegistry, authentication: authenticationRegistry,
+		providerSettings: config.CloneProvidersConfig(cfg.Providers),
+		newConnector:     factories.newConnector,
+		lifecycle:        make([]lifecycleEntry, 0, 5),
 	}
 	builder := runtimeBuilder{application: application, config: cfg, factories: factories}
 	if err := builder.compose(); err != nil {
@@ -163,7 +176,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	catalogRuntime, err := b.factories.openCatalog(
 		context.Background(),
 		b.application.store,
-		b.config.Catalog.WorkspacePath,
+		b.config.Catalog,
 	)
 	if err != nil {
 		return fmt.Errorf("open catalog: %w", err)
@@ -173,11 +186,28 @@ func (b *runtimeBuilder) openConcepts() error {
 	}
 	b.application.catalogRuntime = catalogRuntime
 	b.application.catalog = catalogRuntime.ControlPlane()
+	if updates, ok := catalogRuntime.(catalogUpdateRuntime); ok {
+		b.application.catalogUpdates = updates
+		b.application.own("remote catalog", updates.Close)
+	}
 	if b.config.Catalog.RefreshOnStart {
-		if err := b.application.refreshCatalog(context.Background()); err != nil {
+		state, err := b.application.syncCatalog(context.Background())
+		if err == nil {
+			err = b.application.catalog.Activate(state)
+		}
+		if err != nil {
 			log.Warn().Err(err).Msg("startup Starmap catalog refresh failed; retaining current generation")
 		}
 	}
+	resolvedProviders, err := b.config.ResolveProviderSet(
+		context.Background(),
+		b.application.catalog.Current().Catalog().Providers(),
+		b.application.providerSettings,
+	)
+	if err != nil {
+		return fmt.Errorf("resolve provider configuration: %w", err)
+	}
+	b.config.Providers = resolvedProviders
 
 	b.identities, err = identity.Open(b.application.store)
 	if err != nil {
@@ -198,7 +228,25 @@ func (b *runtimeBuilder) openConcepts() error {
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
 	}
-	b.providerKeys, err = byok.NewProviderKeys(credentialRepository, masterKey, b.application.adapters)
+	credentialValidator, err := byok.NewCatalogCredentialValidator(
+		func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
+			var snapshot *runtimecatalog.RoutableSnapshot
+			if b.application.registry != nil {
+				snapshot = b.application.registry.Snapshot()
+			} else {
+				snapshot = b.application.catalog.Current()
+			}
+			if snapshot == nil {
+				return catalogs.Provider{}, false
+			}
+			provider, lookupErr := snapshot.Catalog().Provider(providerID)
+			return provider, lookupErr == nil
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("open provider credential validator: %w", err)
+	}
+	b.providerKeys, err = byok.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
 	if err != nil {
 		return fmt.Errorf("open provider key service: %w", err)
 	}
@@ -206,10 +254,12 @@ func (b *runtimeBuilder) openConcepts() error {
 }
 
 func (b *runtimeBuilder) openRegistry() error {
+	providerConfigs := providers.Configurations(b.config.Providers)
 	registrations, err := buildRegistrations(
-		b.application.catalog,
-		b.application.adapters,
-		providers.Configurations(b.config.Providers),
+		b.application.catalog.Current().Catalog(),
+		b.application.transports,
+		b.application.authentication,
+		providerConfigs,
 		b.factories.newConnector,
 	)
 	if err != nil {
@@ -245,7 +295,11 @@ func (b *runtimeBuilder) openCache() error {
 
 func (b *runtimeBuilder) buildGateway() error {
 	registryAdapter := connectorRegistryAdapter{registry: b.application.registry}
-	modelRouter := router.New(registryAdapter, router.WithCatalog(b.application.catalog))
+	modelRouter := router.New(
+		registryAdapter,
+		router.WithCatalog(b.application.catalog),
+		router.WithUserCredentials(b.providerKeys),
+	)
 	proxyOptions := make([]proxy.Option, 0, 1)
 	if b.application.cacheManager != nil {
 		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, &proxy.CacheConfig{
@@ -337,12 +391,33 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.registry.Start(runCtx); err != nil {
 		return errors.Join(fmt.Errorf("start registry: %w", err), a.closeWithTimeout())
 	}
+	if a.catalogUpdates != nil {
+		if err := a.catalogUpdates.Start(runCtx); err != nil {
+			return errors.Join(
+				fmt.Errorf("start remote catalog: %w", err),
+				a.closeWithTimeout(),
+			)
+		}
+		if err := a.activateRuntimeState(
+			runCtx,
+			a.catalogUpdates.CurrentCandidate(),
+		); err != nil {
+			log.Warn().Err(err).Msg(
+				"remote catalog candidate failed; serving the current complete runtime",
+			)
+		}
+		a.catalogRefreshWG.Add(1)
+		go func() {
+			defer a.catalogRefreshWG.Done()
+			a.remoteCatalogLoop(runCtx)
+		}()
+	}
 	if a.hotReloader != nil {
 		if err := a.hotReloader.Start(runCtx); err != nil {
 			return errors.Join(fmt.Errorf("start hot reload: %w", err), a.closeWithTimeout())
 		}
 	}
-	if a.config.Catalog.RefreshInterval > 0 {
+	if a.catalogUpdates == nil && a.config.Catalog.RefreshInterval > 0 {
 		a.catalogRefreshWG.Add(1)
 		go func() {
 			defer a.catalogRefreshWG.Done()
@@ -406,20 +481,48 @@ func defaultRuntimeFactories() runtimeFactories {
 		openCatalog: func(
 			ctx context.Context,
 			store storage.KVStore,
-			workspacePath string,
+			catalogConfig config.CatalogConfig,
 		) (catalogRuntime, error) {
-			runtime, err := runtimecatalog.OpenRuntime(ctx, store, workspacePath)
+			if strings.TrimSpace(catalogConfig.RemoteURL) != "" {
+				runtime, err := runtimecatalog.OpenRemoteRuntime(
+					ctx,
+					store,
+					runtimecatalog.RemoteConfig{
+						BaseURL:            catalogConfig.RemoteURL,
+						APIKey:             catalogConfig.RemoteAPIKey,
+						ActivationInterval: catalogConfig.RemoteActivationInterval,
+						FetchTimeout:       catalogConfig.RefreshTimeout,
+					},
+				)
+				if err != nil {
+					return nil, err
+				}
+				return runtime, nil
+			}
+			runtime, err := runtimecatalog.OpenRuntime(
+				ctx,
+				store,
+				catalogConfig.WorkspacePath,
+			)
 			if err != nil {
 				return nil, err
 			}
 			return runtime, nil
 		},
-		newConnector: func(provider string, config connectors.ProviderConfig) (connectors.Connector, error) {
-			adapterRegistry, err := connectors.ProductionAdapterRegistry()
+		newConnector: func(
+			provider string,
+			endpointTypes []catalogs.EndpointType,
+			config connectors.ProviderConfig,
+		) (connectors.Connector, error) {
+			transportRegistry, err := connectors.ProductionTransportRegistry()
 			if err != nil {
 				return nil, err
 			}
-			return adapterRegistry.NewConnector(catalogs.ProviderID(provider), config)
+			return transportRegistry.NewProviderConnector(
+				catalogs.ProviderID(provider),
+				endpointTypes,
+				config,
+			)
 		},
 		newCache: cache.NewCacheManager,
 		newHotReload: func(path string, interval time.Duration) (hotReloadRuntime, error) {
@@ -439,9 +542,9 @@ func defaultRuntimeFactories() runtimeFactories {
 	}
 }
 
-func (a *App) refreshCatalog(ctx context.Context) error {
+func (a *App) syncCatalog(ctx context.Context) (starmap.CatalogState, error) {
 	if a == nil || a.catalogRuntime == nil {
-		return ErrCatalogRequired
+		return starmap.CatalogState{}, ErrCatalogRequired
 	}
 	timeout := a.config.Catalog.RefreshTimeout
 	if timeout <= 0 {
@@ -449,12 +552,74 @@ func (a *App) refreshCatalog(ctx context.Context) error {
 	}
 	refreshCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	_, err := a.catalogRuntime.Refresh(
+	_, state, err := a.catalogRuntime.Sync(
 		refreshCtx,
 		pkgsync.WithSources(sources.ProvidersID, sources.LocalCatalogID),
 		pkgsync.WithTimeout(timeout),
 	)
-	return err
+	return state, err
+}
+
+func (a *App) refreshRuntime(ctx context.Context) error {
+	state, err := a.syncCatalog(ctx)
+	if err != nil {
+		return err
+	}
+	return a.activateRuntimeState(ctx, state)
+}
+
+func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogState) error {
+	if state.Catalog == nil || strings.TrimSpace(state.GenerationID) == "" {
+		return ErrCatalogRequired
+	}
+	current := a.catalog.Current()
+	if current != nil &&
+		current.GenerationID() == state.GenerationID &&
+		current.PayloadChecksum() == state.PayloadChecksum {
+		return nil
+	}
+	resolved, err := a.config.ResolveProviderSet(
+		ctx,
+		state.Catalog.Providers(),
+		a.providerSettings,
+	)
+	if err != nil {
+		return fmt.Errorf("resolve provider runtime configuration: %w", err)
+	}
+	registrations, err := buildRegistrations(
+		state.Catalog,
+		a.transports,
+		a.authentication,
+		providers.Configurations(resolved),
+		a.newConnector,
+	)
+	if err != nil {
+		return err
+	}
+	candidate, err := a.registry.Prepare(registrations)
+	if err != nil {
+		return err
+	}
+	availability := candidate.Availability()
+	if err := a.catalog.ValidateRuntime(state, availability); err != nil {
+		return errors.Join(err, candidate.Close())
+	}
+	if a.catalogUpdates != nil {
+		if err := a.catalogUpdates.Accept(ctx, state); err != nil {
+			return errors.Join(
+				fmt.Errorf("record accepted remote catalog generation: %w", err),
+				candidate.Close(),
+			)
+		}
+	}
+	snapshot, err := a.catalog.ReplaceRuntime(state, availability)
+	if err != nil {
+		return errors.Join(err, candidate.Close())
+	}
+	if err := a.registry.Publish(candidate, snapshot); err != nil {
+		return errors.Join(err, candidate.Close())
+	}
+	return nil
 }
 
 func (a *App) refreshCatalogLoop(ctx context.Context) {
@@ -465,8 +630,26 @@ func (a *App) refreshCatalogLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := a.refreshCatalog(ctx); err != nil {
-				log.Warn().Err(err).Msg("Starmap catalog refresh failed; retaining current generation")
+			if err := a.refreshRuntime(ctx); err != nil {
+				log.Warn().Err(err).Msg("provider runtime refresh failed; retaining current generation")
+			}
+		}
+	}
+}
+
+func (a *App) remoteCatalogLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case state, ok := <-a.catalogUpdates.Updates():
+			if !ok {
+				return
+			}
+			if err := a.activateRuntimeState(ctx, state); err != nil {
+				log.Warn().Err(err).Msg(
+					"remote catalog candidate failed; serving the current complete runtime",
+				)
 			}
 		}
 	}
@@ -538,9 +721,22 @@ func splitCommaSeparated(value string) []string {
 
 type connectorRegistryAdapter struct{ registry *registry.Registry }
 
+var _ connectors.LeasingRegistry = connectorRegistryAdapter{}
+
+func (a connectorRegistryAdapter) AcquireRuntime() (connectors.RuntimeLease, error) {
+	return a.registry.AcquireRuntime()
+}
+
 func (a connectorRegistryAdapter) Get(provider string) connectors.Connector {
 	connector, _ := a.registry.Get(provider)
 	return connector
 }
 
 func (a connectorRegistryAdapter) List() []string { return a.registry.ListProviders() }
+
+func (a connectorRegistryAdapter) ResolveMaterial(
+	ctx context.Context,
+	provider string,
+) (credentials.Material, error) {
+	return a.registry.ResolveMaterial(ctx, provider)
+}

@@ -15,7 +15,6 @@ func IntPtr(i int) *int             { return &i }
 func BenchmarkConnectorOperations(b *testing.B) {
 	config := ProviderConfig{
 		BaseURL:        "http://mock",
-		APIKey:         "test-key",
 		Timeout:        30 * time.Second,
 		MaxConnections: 100,
 	}

@@ -1,6 +1,6 @@
 # Starport Architecture
 
-Last updated: 2026-08-03
+Last updated: 2026-08-11
 
 Starport is a single-binary Go LLM gateway. It exposes OpenAI-compatible and OpenRouter-compatible APIs over one provider-neutral inference core. `cmd/starport` loads configuration and starts the application. `internal/app` owns production composition and lifecycle. The OpenAI and OpenRouter HTTP adapters own their wire formats. `internal/proxy` owns gateway use cases. `internal/router` adapts requests to the pure planner and attempt executor. Starmap owns catalog facts. Concept repositories own durable schemas. `internal/storage` owns KV adapters only.
 
@@ -14,7 +14,8 @@ Implemented:
 - Badger and Valkey KV storage backends behind a shared `KVStore` interface.
 - Versioned repositories for identities, provider credentials, rate limits, and presets.
 - Tenant-safe response caching with canonical chat and embedding records, catalog-generation invalidation, and stream reconstruction.
-- Provider connectors for OpenAI, Anthropic, Google AI Studio, Vertex AI, Groq, Mistral, Azure OpenAI, and Ollama.
+- Catalog-driven provider activation over the compiled OpenAI-compatible,
+  Anthropic, Google AI, Google Cloud, and Ollama transport primitives.
 - Shared provider HTTP-client construction for timeout and connection-pool semantics.
 - Separate OpenAI `/v1` and OpenRouter `/api/v1` protocol adapters for chat, embeddings, models, errors, and streaming events.
 - Routing uses provider preferences, fallback chains, one attempt budget, and offering-level availability. It supports cost, latency, affinity, and restrictions.
@@ -50,17 +51,19 @@ graph TD
   Router --> Executor["internal/execution attempt executor"]
   Executor --> Availability["internal/availability offering state"]
   Availability --> Catalog["internal/catalog derived routable view"]
-  Catalog --> Starmap["Starmap immutable catalog generation"]
+  Catalog --> AcceptedCatalog["accepted Starmap generation"]
+  RemotePublisher["remote Starmap publisher"] --> Subscriber["verified manifest, payload, and SSE subscriber"]
+  Subscriber --> RemoteHead["durable verified remote head"]
+  RemoteHead --> RuntimeTransaction["complete Starport runtime candidate"]
+  RuntimeTransaction --> AcceptedCatalog
+  EmbeddedCatalog["embedded or local Starmap source"] --> AcceptedCatalog
   Router --> Registry["internal/registry connector registry"]
-  Registry --> Connectors["internal/providers/connectors"]
-  Connectors --> OpenAI["OpenAI"]
-  Connectors --> Anthropic["Anthropic"]
-  Connectors --> GoogleAI["Google AI Studio"]
-  Connectors --> Vertex["Vertex AI"]
-  Connectors --> Groq["Groq"]
-  Connectors --> Mistral["Mistral"]
-  Connectors --> Azure["Azure OpenAI"]
-  Connectors --> Ollama["Ollama"]
+  Registry --> Connectors["compiled transport primitives"]
+  Connectors --> OpenAITransport["OpenAI-compatible"]
+  Connectors --> AnthropicTransport["Anthropic"]
+  Connectors --> GoogleTransport["Google AI"]
+  Connectors --> GoogleCloudTransport["Google Cloud"]
+  Connectors --> OllamaTransport["Ollama"]
   Proxy --> ResponseCache["internal/responsecache semantic records"]
   ResponseCache --> Cache["internal/cache byte storage"]
   Auth --> IdentityRepo["internal/identity repository"]
@@ -134,13 +137,20 @@ Tests can replace factories through an explicit test-only builder.
 - Storage backend.
 - Cache manager.
 - Connector registry.
-- Hot reload worker.
+- Local acquisition or verified remote-catalog worker.
 - HTTP server.
 
 `App.Run` seals provider registration, starts optional catalog refresh and hot
 reload work, and starts the HTTP listener. `App.Close` closes owned resources
 once in reverse construction order. Constructor rollback uses the same
 ownership ledger.
+
+Concept ownership does not depend on process topology. In local mode, Starport
+composes the Starmap acquisition package for single-binary startup and scheduled
+refresh. Starmap still owns acquisition protocols, credentials, mapping,
+reconciliation, and publication. In remote mode, a separately operated Starmap
+publisher provides operational isolation. Both modes publish the same immutable
+catalog-generation contract into the same atomic Starport activation transaction.
 
 `internal/server.Server` receives ready use-case and repository ports. It owns
 only the HTTP listener and route tree. `Server.Shutdown` drains HTTP requests
@@ -149,6 +159,19 @@ receives explicit connector registrations. It does not read environment
 values, select fallback mocks, discover models, or probe provider health.
 `Registry.Start` prevents later registrations. `Registry.Close` closes each
 registered inference adapter.
+
+Remote catalog activation uses two durable current pointers over one set of
+immutable generation records. The Starmap subscriber advances the verified
+remote head only after protocol and payload verification. Starport advances
+the accepted head only after it constructs and validates the complete catalog,
+connector registry, credential projection, routing view, and cache identity.
+The process publishes that candidate atomically. A rejected candidate leaves
+the accepted head and live runtime unchanged.
+
+The subscriber owns remote fetch, SSE, reconnect, catch-up, and liveness. A
+small Starport sampler observes only the subscriber's process-local atomic
+state. Its interval causes no network request. Neither catalog acquisition nor
+remote secret-store I/O is part of the inference hot path.
 
 ## Storage
 
@@ -177,6 +200,8 @@ Concept repositories own these version 1 namespaces:
 - `internal/credentials`: `credentials:v1:`
 - `internal/ratelimit`: `ratelimit:v1:subject:`
 - `internal/presets`: `presets:v1:name:`
+- `internal/catalog`: `catalog_generation:v1:` for accepted state and
+  `catalog_remote_generation:v1:` for the independently verified remote head
 
 Each repository owns its key encoding, record envelope, validation, revisions, and compare-and-swap rules. Controllers and business services use repository contracts. They do not construct durable keys or serialize durable records. The cache package stores response and model-cache data only.
 
@@ -221,7 +246,9 @@ availability tracker.
 Starmap uses its catalog-acquisition API keys, cloud credential chains, and
 workload identity to build catalog generations. Starport stores separate
 gateway and provider inference credentials. Neither credential plane reads or
-reuses secret values from the other plane.
+reuses secret values from the other plane. Remote catalog authentication proves
+access to a publisher. It is a third, separate protocol credential and never
+becomes provider material.
 
 `internal/providerauth` owns renewable inference bearer tokens. Vertex AI uses
 Google Application Default Credentials with the Google Cloud platform scope.
@@ -239,6 +266,20 @@ The operator must select a cloud auth mode. Ambient cloud credentials do not
 activate an adapter. Static credentials remain in Starport provider
 configuration. Starport rejects an empty mode or a static secret combined with
 default mode.
+
+`internal/credentials` also owns direct inference secret-source adapters.
+It supports Google Cloud Secret Manager, Azure Key Vault, AWS Secrets Manager,
+HashiCorp Vault KV v2, and OpenBao KV v2. Catalog-derived
+`STARPORT_<PROVIDER>_<FIELD>_REFERENCE` names select these adapters. The
+reference contains resource identity, an optional version, and an optional
+field. Secret-store authentication stays in each platform's default identity
+chain or client environment.
+
+All direct adapters use the same resolver cache, single-flight work, refresh,
+revocation, and failure types. They do not add a second cache. A direct source
+without its own expiry gets the configured remote refresh interval. Cache hits
+make no secret-store request. Each selected read owns and closes its client or
+idle HTTP resources.
 
 ## Routing
 

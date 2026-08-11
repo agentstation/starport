@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/stretchr/testify/require"
 
@@ -51,7 +53,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 				factories.openCatalog = func(
 					context.Context,
 					storage.KVStore,
-					string,
+					config.CatalogConfig,
 				) (catalogRuntime, error) {
 					return nil, nil
 				}
@@ -116,7 +118,11 @@ func TestStartupCatalogRefreshIsExplicitAndResilient(t *testing.T) {
 			require.NoError(t, err)
 			catalog := &failingCatalogRuntime{Runtime: baseRuntime, err: refreshErr}
 			factories := explicitTestFactories()
-			factories.openCatalog = func(context.Context, storage.KVStore, string) (catalogRuntime, error) {
+			factories.openCatalog = func(
+				context.Context,
+				storage.KVStore,
+				config.CatalogConfig,
+			) (catalogRuntime, error) {
 				return catalog, nil
 			}
 
@@ -148,6 +154,23 @@ func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Nil(t, store)
+}
+
+func TestDefaultCatalogFactorySelectsVerifiedRemoteRuntime(t *testing.T) {
+	factories := defaultRuntimeFactories()
+	runtime, err := factories.openCatalog(
+		t.Context(),
+		storage.NewMockStore(),
+		config.CatalogConfig{
+			RemoteURL:                "http://127.0.0.1:1/api/v1",
+			RemoteActivationInterval: time.Millisecond,
+			RefreshTimeout:           time.Second,
+		},
+	)
+	require.NoError(t, err)
+	remoteRuntime, ok := runtime.(*runtimecatalog.RemoteRuntime)
+	require.True(t, ok)
+	require.NoError(t, remoteRuntime.Close(t.Context()))
 }
 
 func TestServerConfigCredentialsFollowOriginScope(t *testing.T) {
@@ -239,6 +262,8 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 
 func validProductionConfig(t *testing.T) *config.Config {
 	t.Helper()
+	credentialPath := filepath.Join(t.TempDir(), "openai-api-key")
+	require.NoError(t, os.WriteFile(credentialPath, []byte("sk-test-key"), 0o600))
 	return &config.Config{
 		Server: config.ServerConfig{
 			Port: 18080, Host: "127.0.0.1", ReadTimeout: time.Second,
@@ -253,8 +278,11 @@ func validProductionConfig(t *testing.T) *config.Config {
 			},
 		},
 		Providers: config.ProvidersConfig{
-			OpenAI: config.ProviderConfig{
-				BaseURL: "https://api.openai.com/v1", APIKey: "test-key",
+			catalogs.ProviderIDOpenAI: {
+				BaseURL: "https://api.openai.com/v1",
+				CredentialReferences: map[catalogs.ProviderCredentialFieldID]config.CredentialReference{
+					"api-key": {Reference: "file:" + credentialPath},
+				},
 				Timeout: time.Second, MaxConnections: 10,
 			},
 		},
@@ -287,7 +315,11 @@ func explicitTestFactories() runtimeFactories {
 	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
 		return store, nil
 	}
-	factories.newConnector = func(_ string, providerConfig connectors.ProviderConfig) (connectors.Connector, error) {
+	factories.newConnector = func(
+		_ string,
+		_ []catalogs.EndpointType,
+		providerConfig connectors.ProviderConfig,
+	) (connectors.Connector, error) {
 		return connectors.NewMockConnector(providerConfig), nil
 	}
 	return factories
@@ -307,12 +339,12 @@ type failingCatalogRuntime struct {
 	calls int
 }
 
-func (runtime *failingCatalogRuntime) Refresh(
+func (runtime *failingCatalogRuntime) Sync(
 	context.Context,
 	...pkgsync.Option,
-) (*pkgsync.Result, error) {
+) (*pkgsync.Result, starmap.CatalogState, error) {
 	runtime.calls++
-	return nil, runtime.err
+	return nil, starmap.CatalogState{}, runtime.err
 }
 
 type blockingHTTPRuntime struct {

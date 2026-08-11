@@ -45,7 +45,7 @@ starport_environment=(
 	env -i
 	"PATH=${PATH:-/usr/bin:/bin}"
 	"STARPORT_CONFIG_DIR=$config_directory"
-	"STARPORT_PROVIDERS_OPENAI_API_KEY=first-run-provider-key"
+	"OPENAI_API_KEY=first-run-provider-key"
 	"STARPORT_SERVER_PORT=$server_port"
 )
 

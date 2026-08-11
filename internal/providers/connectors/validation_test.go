@@ -16,7 +16,6 @@ func TestProviderConfig_ValidateEdgeCases(t *testing.T) {
 			name: "base URL with trailing slash",
 			config: ProviderConfig{
 				BaseURL:        "https://api.example.com/",
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -26,7 +25,6 @@ func TestProviderConfig_ValidateEdgeCases(t *testing.T) {
 			name: "zero timeout sets default",
 			config: ProviderConfig{
 				BaseURL:        "https://api.example.com",
-				APIKey:         "test-key",
 				Timeout:        0, // Should be set to default
 				MaxConnections: 100,
 			},
@@ -41,7 +39,6 @@ func TestProviderConfig_ValidateEdgeCases(t *testing.T) {
 			name: "zero max connections sets default",
 			config: ProviderConfig{
 				BaseURL:        "https://api.example.com",
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 0, // Should be set to default
 			},

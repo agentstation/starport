@@ -15,6 +15,7 @@ import (
 
 const (
 	catalogCurrentGenerationKey = "catalog_generation:v1:current"
+	remoteCurrentGenerationKey  = "catalog_remote_generation:v1:current"
 	catalogGenerationKeyPrefix  = "catalog_generation:v1:generation:"
 	catalogGenerationResource   = "catalog generation"
 )
@@ -22,20 +23,35 @@ const (
 // GenerationStore adapts Starport's configured KV store to Starmap's durable
 // immutable-generation contract.
 type GenerationStore struct {
-	store storage.KVStore
+	store      storage.KVStore
+	currentKey string
 }
 
 // NewGenerationStore creates a durable Starmap generation store.
 func NewGenerationStore(store storage.KVStore) (*GenerationStore, error) {
+	return newGenerationStore(store, catalogCurrentGenerationKey)
+}
+
+// newRemoteGenerationStore creates the verified remote-head store. It shares
+// immutable generation records with the accepted runtime store but owns a
+// separate current pointer.
+func newRemoteGenerationStore(store storage.KVStore) (*GenerationStore, error) {
+	return newGenerationStore(store, remoteCurrentGenerationKey)
+}
+
+func newGenerationStore(store storage.KVStore, currentKey string) (*GenerationStore, error) {
 	if store == nil {
 		return nil, stderrors.New("catalog generation KV store is required")
 	}
-	return &GenerationStore{store: store}, nil
+	if currentKey == "" {
+		return nil, stderrors.New("catalog generation current key is required")
+	}
+	return &GenerationStore{store: store, currentKey: currentKey}, nil
 }
 
 // Current returns the atomically selected generation.
 func (s *GenerationStore) Current(ctx context.Context) (catalogstore.Generation, error) {
-	currentID, err := s.store.Get(ctx, catalogCurrentGenerationKey)
+	currentID, err := s.store.Get(ctx, s.currentKey)
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
 			return catalogstore.Generation{}, &starmaperrors.NotFoundError{
@@ -112,11 +128,11 @@ func (s *GenerationStore) Commit(
 		expected = []byte(expectedGenerationID)
 	}
 	actual := []byte(generation.Manifest.GenerationID)
-	if err := s.store.CompareAndSwap(ctx, catalogCurrentGenerationKey, expected, actual); err != nil {
+	if err := s.store.CompareAndSwap(ctx, s.currentKey, expected, actual); err != nil {
 		if !stderrors.Is(err, storage.ErrConflict) {
 			return fmt.Errorf("select catalog generation %q: %w", generation.Manifest.GenerationID, err)
 		}
-		current, readErr := s.store.Get(ctx, catalogCurrentGenerationKey)
+		current, readErr := s.store.Get(ctx, s.currentKey)
 		if readErr == nil && bytes.Equal(current, actual) {
 			return nil
 		}

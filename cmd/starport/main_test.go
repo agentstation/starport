@@ -22,7 +22,7 @@ func TestRunContextNoArgumentsShowsHelp(t *testing.T) {
 		bytes.NewReader(nil),
 		stdout,
 		stderr,
-		func(context.Context, starportcli.ServeOptions) error {
+		func(context.Context) error {
 			calls++
 			return nil
 		},
@@ -40,15 +40,15 @@ func TestRunContextNoArgumentsShowsHelp(t *testing.T) {
 }
 
 func TestRunContextServeDelegatesToRunner(t *testing.T) {
-	var got starportcli.ServeOptions
+	called := false
 	code := runContext(
 		context.Background(),
-		[]string{"starport", "serve", "--enable-ollama"},
+		[]string{"starport", "serve"},
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-		func(_ context.Context, options starportcli.ServeOptions) error {
-			got = options
+		func(context.Context) error {
+			called = true
 			return nil
 		},
 		noopInitializer,
@@ -56,8 +56,8 @@ func TestRunContextServeDelegatesToRunner(t *testing.T) {
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0", code)
 	}
-	if !got.EnableOllama {
-		t.Fatal("serve option did not reach the process runner")
+	if !called {
+		t.Fatal("serve did not reach the process runner")
 	}
 }
 
@@ -70,7 +70,7 @@ func TestRunContextMapsRuntimeError(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		stderr,
-		func(context.Context, starportcli.ServeOptions) error { return serverErr },
+		func(context.Context) error { return serverErr },
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeRuntime {
@@ -89,7 +89,7 @@ func TestRunContextWritesUsageErrorOnce(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		stderr,
-		func(context.Context, starportcli.ServeOptions) error { return nil },
+		func(context.Context) error { return nil },
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
@@ -107,7 +107,7 @@ func TestRunContextNormalizesMissingHelpTopic(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		&bytes.Buffer{},
-		func(context.Context, starportcli.ServeOptions) error { return nil },
+		func(context.Context) error { return nil },
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
@@ -123,7 +123,7 @@ func TestRunContextWritesInvalidHelpErrorOnce(t *testing.T) {
 		bytes.NewReader(nil),
 		&bytes.Buffer{},
 		stderr,
-		func(context.Context, starportcli.ServeOptions) error { return nil },
+		func(context.Context) error { return nil },
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
@@ -143,7 +143,7 @@ func TestRunContextVersionJSON(t *testing.T) {
 		bytes.NewReader(nil),
 		stdout,
 		stderr,
-		func(context.Context, starportcli.ServeOptions) error { return nil },
+		func(context.Context) error { return nil },
 		noopInitializer,
 	)
 	if code != 0 {
@@ -167,7 +167,7 @@ func TestRunContextInitDelegatesToInitializer(t *testing.T) {
 		bytes.NewReader(nil),
 		stdout,
 		&bytes.Buffer{},
-		func(context.Context, starportcli.ServeOptions) error { return nil },
+		func(context.Context) error { return nil },
 		func(_ context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {
 			got = options
 			return starportcli.InitResult{

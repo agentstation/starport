@@ -9,9 +9,11 @@ import (
 	"testing"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/stretchr/testify/require"
 	urfavecli "github.com/urfave/cli/v3"
 
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/diagnosis"
 )
 
@@ -97,20 +99,20 @@ func TestVersionFlagUsesInjectedOutput(t *testing.T) {
 
 func TestServeUsesInjectedRunner(t *testing.T) {
 	deps, _, _ := testDependencies()
-	var got ServeOptions
-	deps.RunServer = func(_ context.Context, options ServeOptions) error {
-		got = options
+	called := false
+	deps.RunServer = func(context.Context) error {
+		called = true
 		return nil
 	}
 	if err := Run(
 		context.Background(),
-		[]string{"starport", "serve", "--enable-ollama"},
+		[]string{"starport", "serve"},
 		deps,
 	); err != nil {
 		t.Fatalf("run serve: %v", err)
 	}
-	if !got.EnableOllama {
-		t.Fatal("serve did not pass the Ollama option")
+	if !called {
+		t.Fatal("serve did not invoke the runner")
 	}
 }
 
@@ -141,11 +143,10 @@ func TestInitUsesInjectedRunnerAndJSONOutput(t *testing.T) {
 	}
 }
 
-func TestInitRejectsUnsupportedProviderAsUsageError(t *testing.T) {
+func TestInitRejectsIncompleteOrConflictingProviderSelection(t *testing.T) {
 	deps, _, _ := testDependencies()
 	for _, args := range [][]string{
 		{"starport", "init"},
-		{"starport", "init", "--provider", "unknown"},
 		{"starport", "init", "--provider", "ollama", "--configured-storage"},
 	} {
 		err := Run(context.Background(), args, deps)
@@ -153,6 +154,17 @@ func TestInitRejectsUnsupportedProviderAsUsageError(t *testing.T) {
 			t.Fatalf("%v error = %v, exit code = %d", args, err, ExitCode(err))
 		}
 	}
+}
+
+func TestInitDelegatesCatalogProviderValidation(t *testing.T) {
+	deps, _, _ := testDependencies()
+	var got InitOptions
+	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
+		got = options
+		return InitResult{}, nil
+	}
+	require.NoError(t, Run(context.Background(), []string{"starport", "init", "--provider", "acme"}, deps))
+	require.Equal(t, catalogs.ProviderID("acme"), got.Provider)
 }
 
 func TestInitRejectsInvalidIdentityNameAsUsageError(t *testing.T) {
@@ -234,7 +246,7 @@ func TestInitConfiguredStorageNeedsNoProvider(t *testing.T) {
 	}
 }
 
-func TestInitOllamaOutputRequiresStarmapWorkspace(t *testing.T) {
+func TestInitOutputUsesProviderNeutralNextStep(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
 		return InitResult{
@@ -247,8 +259,8 @@ func TestInitOllamaOutputRequiresStarmapWorkspace(t *testing.T) {
 	}, deps); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "reviewed Starmap workspace") {
-		t.Errorf("Ollama setup output = %q", stdout.String())
+	if !strings.Contains(stdout.String(), "Run: starport serve") {
+		t.Errorf("setup output = %q", stdout.String())
 	}
 }
 
@@ -323,8 +335,16 @@ func TestConfigShowJSONRedactsSecrets(t *testing.T) {
 	secret := "secret-that-must-not-appear"
 	deps.LoadConfig = func(context.Context) (*config.Config, error) {
 		return &config.Config{
-			Providers: config.ProvidersConfig{OpenAI: config.ProviderConfig{APIKey: secret}},
-			Security:  config.SecurityConfig{MasterKey: secret},
+			Providers: config.ProvidersConfig{"openai": {
+				Material: credentials.NewMaterial(
+					catalogs.ProviderCredentialProfile{
+						ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+					},
+					map[catalogs.ProviderCredentialFieldID]string{"api-key": secret},
+					credentials.MaterialMetadata{Version: "opaque"},
+				),
+			}},
+			Security: config.SecurityConfig{MasterKey: secret},
 		}, nil
 	}
 	if err := Run(context.Background(), []string{"starport", "config", "show", "--json"}, deps); err != nil {
@@ -449,7 +469,7 @@ func TestDoctorPassesProbeOptionAndWritesJSON(t *testing.T) {
 func TestRunReturnsServerFailure(t *testing.T) {
 	serverErr := errors.New("server failed")
 	deps, _, _ := testDependencies()
-	deps.RunServer = func(context.Context, ServeOptions) error { return serverErr }
+	deps.RunServer = func(context.Context) error { return serverErr }
 	err := Run(context.Background(), []string{"starport", "serve"}, deps)
 	if !errors.Is(err, serverErr) {
 		t.Fatalf("run error = %v, want %v", err, serverErr)
@@ -461,7 +481,7 @@ func TestRunReturnsServerFailure(t *testing.T) {
 
 func TestServerExitCoderRemainsRuntimeFailure(t *testing.T) {
 	deps, _, _ := testDependencies()
-	deps.RunServer = func(context.Context, ServeOptions) error {
+	deps.RunServer = func(context.Context) error {
 		return urfavecli.Exit("server dependency failed", 42)
 	}
 	err := Run(context.Background(), []string{"starport", "serve"}, deps)
@@ -510,7 +530,7 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 			GitCommit: "abc123", GitBranch: "test", GoVersion: "go1.26.5",
 			OS: "testos", Arch: "testarch",
 		},
-		RunServer:    func(context.Context, ServeOptions) error { return nil },
+		RunServer:    func(context.Context) error { return nil },
 		Initialize:   func(context.Context, InitOptions) (InitResult, error) { return InitResult{}, nil },
 		LoadConfig:   func(context.Context) (*config.Config, error) { return &config.Config{}, nil },
 		ResolvePaths: func() (config.Paths, error) { return config.PathsForConfigDir("/test"), nil },

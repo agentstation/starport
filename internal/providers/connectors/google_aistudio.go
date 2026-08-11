@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // GoogleAIStudioConnector implements the Connector interface for Google AI Studio (Gemini)
@@ -17,27 +19,32 @@ type GoogleAIStudioConnector struct {
 
 // NewGoogleAIStudioConnector creates a new Google AI Studio connector
 func NewGoogleAIStudioConnector(config ProviderConfig) (*GoogleAIStudioConnector, error) {
+	return newGoogleAIStudioConnector(string(catalogs.ProviderIDGoogleAIStudio), config)
+}
+
+func newGoogleAIStudioConnector(provider string, config ProviderConfig) (*GoogleAIStudioConnector, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient(GoogleAIStudioProvider, config)
+	httpClient, err := newProviderHTTPClient(provider, config)
 	if err != nil {
 		return nil, err
 	}
 
 	return &GoogleAIStudioConnector{
 		googleBaseConnector: googleBaseConnector{
-			config:     config,
-			httpClient: httpClient,
-			name:       GoogleAIStudioProvider,
+			config:          config,
+			httpClient:      httpClient,
+			name:            provider,
+			mapFinishReason: mapFinishReason,
 		},
 	}, nil
 }
 
 // Name returns the provider name
 func (c *GoogleAIStudioConnector) Name() string {
-	return GoogleAIStudioProvider
+	return c.name
 }
 
 // Chat performs a chat completion request
@@ -80,7 +87,9 @@ func (c *GoogleAIStudioConnector) Embeddings(ctx context.Context, req *Embedding
 		if requestErr != nil {
 			return nil, fmt.Errorf("create Google embedding request: %w", requestErr)
 		}
-		c.setHeaders(httpReq)
+		if err := c.setHeaders(req.Credential, httpReq); err != nil {
+			return nil, fmt.Errorf("apply provider request authentication: %w", err)
+		}
 		resp, requestErr := doRequest(c.httpClient, httpReq)
 		if requestErr != nil {
 			return nil, requestErr
@@ -119,10 +128,13 @@ func (c *GoogleAIStudioConnector) getEndpoint(req *ChatRequest, _ bool) (string,
 	return selectedEndpoint(req.Endpoint, catalogs.EndpointTypeGoogle)
 }
 
-func (c *GoogleAIStudioConnector) setHeaders(req *http.Request) {
-	applyRegisteredInferenceAuth(catalogs.ProviderIDGoogleAIStudio, req, c.config.APIKey)
+func (c *GoogleAIStudioConnector) setHeaders(material credentials.Material, req *http.Request) error {
+	if err := applyRequestAuthentication(material, req); err != nil {
+		return err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "starport/1.0")
+	return nil
 }
 
 func embeddingInputs(input any) ([]string, error) {

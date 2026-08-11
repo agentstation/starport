@@ -11,23 +11,28 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
-)
 
-const anthropicProviderName = string(catalogs.ProviderIDAnthropic)
+	"github.com/agentstation/starport/internal/credentials"
+)
 
 // AnthropicConnector implements the Connector interface for Anthropic
 type AnthropicConnector struct {
 	config     ProviderConfig
 	httpClient *http.Client
+	provider   string
 }
 
 // NewAnthropicConnector creates a new Anthropic connector
 func NewAnthropicConnector(config ProviderConfig) (*AnthropicConnector, error) {
+	return newAnthropicConnector(string(catalogs.ProviderIDAnthropic), config)
+}
+
+func newAnthropicConnector(provider string, config ProviderConfig) (*AnthropicConnector, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient(anthropicProviderName, config)
+	httpClient, err := newProviderHTTPClient(provider, config)
 	if err != nil {
 		return nil, err
 	}
@@ -35,12 +40,13 @@ func NewAnthropicConnector(config ProviderConfig) (*AnthropicConnector, error) {
 	return &AnthropicConnector{
 		config:     config,
 		httpClient: httpClient,
+		provider:   provider,
 	}, nil
 }
 
 // Name returns the provider name
 func (c *AnthropicConnector) Name() string {
-	return anthropicProviderName
+	return c.provider
 }
 
 // Chat performs a chat completion request
@@ -49,7 +55,8 @@ func (c *AnthropicConnector) Chat(ctx context.Context, req *ChatRequest) (*ChatR
 	if err != nil {
 		return nil, err
 	}
-	return executeAnthropicChat(ctx, c.httpClient, endpoint, req, true, c.setHeaders, c.handleError)
+	request, includeModel := prepareAnthropicRequest(req)
+	return executeAnthropicChat(ctx, c.httpClient, endpoint, request, includeModel, c.setHeaders, c.handleError)
 }
 
 func executeAnthropicChat(
@@ -58,7 +65,7 @@ func executeAnthropicChat(
 	endpoint string,
 	req *ChatRequest,
 	includeModel bool,
-	setHeaders func(*http.Request),
+	setHeaders func(credentials.Material, *http.Request) error,
 	handleError func(*http.Response) error,
 ) (*ChatResponse, error) {
 	anthropicReq := convertToAnthropicRequest(req, includeModel)
@@ -74,7 +81,9 @@ func executeAnthropicChat(
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	setHeaders(httpReq)
+	if err := setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 
 	resp, err := doRequest(client, httpReq)
 	if err != nil {
@@ -102,7 +111,8 @@ func (c *AnthropicConnector) ChatStream(ctx context.Context, req *ChatRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return executeAnthropicStream(ctx, c.httpClient, endpoint, req, true, c.setHeaders, c.handleError)
+	request, includeModel := prepareAnthropicRequest(req)
+	return executeAnthropicStream(ctx, c.httpClient, endpoint, request, includeModel, c.setHeaders, c.handleError)
 }
 
 func executeAnthropicStream(
@@ -111,7 +121,7 @@ func executeAnthropicStream(
 	endpoint string,
 	req *ChatRequest,
 	includeModel bool,
-	setHeaders func(*http.Request),
+	setHeaders func(credentials.Material, *http.Request) error,
 	handleError func(*http.Response) error,
 ) (ChatStream, error) {
 	anthropicReq := convertToAnthropicRequest(req, includeModel)
@@ -127,7 +137,9 @@ func executeAnthropicStream(
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	setHeaders(httpReq)
+	if err := setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	resp, err := doRequest(client, httpReq)
@@ -147,7 +159,7 @@ func executeAnthropicStream(
 func (c *AnthropicConnector) Embeddings(_ context.Context, _ *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	// Anthropic doesn't support embeddings directly
 	return nil, &APIError{
-		Provider:   anthropicProviderName,
+		Provider:   c.provider,
 		StatusCode: http.StatusNotImplemented,
 		Message:    "Anthropic does not support embeddings endpoint",
 	}
@@ -160,11 +172,16 @@ func (c *AnthropicConnector) Close() error {
 }
 
 // setHeaders sets common headers for requests
-func (c *AnthropicConnector) setHeaders(req *http.Request) {
+func (c *AnthropicConnector) setHeaders(material credentials.Material, req *http.Request) error {
 	req.Header.Set("Content-Type", "application/json")
-	applyRegisteredInferenceAuth(catalogs.ProviderIDAnthropic, req, c.config.APIKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	if err := applyRequestAuthentication(material, req); err != nil {
+		return err
+	}
+	if material.Profile().Primitive != catalogs.ProviderAuthenticationGoogleDefault {
+		req.Header.Set("anthropic-version", "2023-06-01")
+	}
 	req.Header.Set("User-Agent", "starport/1.0")
+	return nil
 }
 
 // handleError handles error responses from the API
@@ -178,18 +195,31 @@ func (c *AnthropicConnector) handleError(resp *http.Response) error {
 
 	if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
 		return &APIError{
-			Provider:   anthropicProviderName,
+			Provider:   c.provider,
 			StatusCode: resp.StatusCode,
 			Message:    fmt.Sprintf("HTTP %d", resp.StatusCode),
 		}
 	}
 
 	return &APIError{
-		Provider:   anthropicProviderName,
+		Provider:   c.provider,
 		StatusCode: resp.StatusCode,
 		Type:       errResp.Error.Type,
 		Message:    errResp.Error.Message,
 	}
+}
+
+func prepareAnthropicRequest(req *ChatRequest) (*ChatRequest, bool) {
+	if req.Credential.Profile().Primitive != catalogs.ProviderAuthenticationGoogleDefault {
+		return req, true
+	}
+	copyRequest := *req
+	copyRequest.ProviderOptions = make(map[string]any, len(req.ProviderOptions)+1)
+	for field, value := range req.ProviderOptions {
+		copyRequest.ProviderOptions[field] = value
+	}
+	copyRequest.ProviderOptions["anthropic_version"] = "vertex-2023-10-16"
+	return &copyRequest, false
 }
 
 // convertToAnthropicRequest converts OpenAI format to Anthropic format

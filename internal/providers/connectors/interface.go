@@ -6,13 +6,6 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
-// Provider name constants
-const (
-	GoogleAIStudioProvider = "google-ai-studio"
-	GoogleVertexAIProvider = "google-vertex"
-	AzureOpenAIProvider    = "azure-openai"
-)
-
 // Connector defines the interface for LLM provider integrations
 type Connector interface {
 	// Chat performs a chat completion request
@@ -41,11 +34,15 @@ type ChatStream interface {
 	Close() error
 }
 
-// NewConnector delegates construction to the compiled adapter registry.
-func NewConnector(provider string, config ProviderConfig) (Connector, error) {
-	registry, err := ProductionAdapterRegistry()
+// NewConnector composes catalog-selected endpoint protocols for one provider.
+func NewConnector(
+	provider string,
+	endpointTypes []catalogs.EndpointType,
+	config ProviderConfig,
+) (Connector, error) {
+	registry, err := ProductionTransportRegistry()
 	if err != nil {
 		return nil, err
 	}
-	return registry.NewConnector(catalogs.ProviderID(provider), config)
+	return registry.NewProviderConnector(catalogs.ProviderID(provider), endpointTypes, config)
 }

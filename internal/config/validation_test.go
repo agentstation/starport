@@ -85,6 +85,55 @@ func TestServerConfig_Validate(t *testing.T) {
 	}
 }
 
+func TestCatalogConfigRejectsMixedLocalAndRemoteSources(t *testing.T) {
+	tests := []struct {
+		name   string
+		config CatalogConfig
+	}{
+		{
+			name:   "API key without URL",
+			config: CatalogConfig{RemoteAPIKey: "secret"},
+		},
+		{
+			name: "remote with workspace",
+			config: CatalogConfig{
+				RemoteURL:                "https://catalog.example/api/v1",
+				RemoteActivationInterval: time.Second,
+				WorkspacePath:            "/catalog",
+			},
+		},
+		{
+			name: "remote with startup acquisition",
+			config: CatalogConfig{
+				RemoteURL:                "https://catalog.example/api/v1",
+				RemoteActivationInterval: time.Second,
+				RefreshOnStart:           true,
+			},
+		},
+		{
+			name: "remote with scheduled acquisition",
+			config: CatalogConfig{
+				RemoteURL:                "https://catalog.example/api/v1",
+				RemoteActivationInterval: time.Second,
+				RefreshInterval:          time.Minute,
+			},
+		},
+		{
+			name: "remote without activation interval",
+			config: CatalogConfig{
+				RemoteURL: "https://catalog.example/api/v1",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.config.Validate(); err == nil {
+				t.Fatal("invalid mixed catalog source was accepted")
+			}
+		})
+	}
+}
+
 func TestBadgerConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string

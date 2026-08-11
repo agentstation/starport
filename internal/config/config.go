@@ -4,33 +4,47 @@
 package config
 
 import (
+	"sort"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // Config represents the complete application configuration
 type Config struct {
-	Server       ServerConfig       `env:",prefix=SERVER_"`
-	Storage      StorageConfig      `env:",prefix=STORAGE_"`
-	Catalog      CatalogConfig      `env:",prefix=CATALOG_"`
-	Providers    ProvidersConfig    `env:",prefix=PROVIDERS_"`
-	RateLimiting RateLimitingConfig `env:",prefix=RATE_LIMITING_"`
-	Security     SecurityConfig     `env:",prefix=SECURITY_"`
-	Logging      LoggingConfig      `env:",prefix=LOGGING_"`
-	Cache        CacheConfig        `env:",prefix=CACHE_"`
-	ChatUI       ChatUIConfig       `env:",prefix=CHATUI_"`
+	Server            ServerConfig            `env:",prefix=SERVER_"`
+	Storage           StorageConfig           `env:",prefix=STORAGE_"`
+	Catalog           CatalogConfig           `env:",prefix=CATALOG_"`
+	CredentialSources CredentialSourcesConfig `env:",prefix=CREDENTIAL_SOURCES_"`
+	Providers         ProvidersConfig
+	RateLimiting      RateLimitingConfig `env:",prefix=RATE_LIMITING_"`
+	Security          SecurityConfig     `env:",prefix=SECURITY_"`
+	Logging           LoggingConfig      `env:",prefix=LOGGING_"`
+	Cache             CacheConfig        `env:",prefix=CACHE_"`
+	ChatUI            ChatUIConfig       `env:",prefix=CHATUI_"`
+
+	providerEnvironment environmentLookup
+	credentialResolver  *credentials.Resolver
 }
 
-// CatalogConfig defines Starmap acquisition and tenant workspace settings.
-// Acquisition credentials remain in Starmap's provider environment contract.
+// CredentialSourcesConfig defines direct inference secret-source lifecycle.
+type CredentialSourcesConfig struct {
+	RemoteRefreshInterval time.Duration `env:"REMOTE_REFRESH_INTERVAL,default=5m"`
+}
+
+// CatalogConfig selects local Starmap acquisition or one verified remote
+// Starmap publication source. Acquisition credentials remain in Starmap's
+// provider environment contract.
 type CatalogConfig struct {
-	WorkspacePath   string        `env:"WORKSPACE_PATH"`
-	RefreshOnStart  bool          `env:"REFRESH_ON_START,default=false"`
-	RefreshInterval time.Duration `env:"REFRESH_INTERVAL,default=0s"`
-	RefreshTimeout  time.Duration `env:"REFRESH_TIMEOUT,default=2m"`
+	WorkspacePath            string        `env:"WORKSPACE_PATH"`
+	RefreshOnStart           bool          `env:"REFRESH_ON_START,default=false"`
+	RefreshInterval          time.Duration `env:"REFRESH_INTERVAL,default=0s"`
+	RefreshTimeout           time.Duration `env:"REFRESH_TIMEOUT,default=2m"`
+	RemoteURL                string        `env:"REMOTE_URL" redact:"url"`
+	RemoteAPIKey             string        `env:"REMOTE_API_KEY" secret:"true"`
+	RemoteActivationInterval time.Duration `env:"REMOTE_ACTIVATION_INTERVAL,default=250ms"`
 }
 
 // ServerConfig defines HTTP server settings
@@ -77,28 +91,27 @@ type ValkeyConfig struct {
 	Password       string        `env:"PASSWORD" secret:"true"`
 }
 
-// ProvidersConfig defines LLM provider settings
-type ProvidersConfig struct {
-	OpenAI         ProviderConfig `env:",prefix=OPENAI_"`
-	Anthropic      ProviderConfig `env:",prefix=ANTHROPIC_"`
-	GoogleAIStudio ProviderConfig `env:",prefix=GOOGLE_AI_STUDIO_"`
-	GoogleVertexAI ProviderConfig `env:",prefix=GOOGLE_VERTEX_"`
-	Groq           ProviderConfig `env:",prefix=GROQ_"`
-	Mistral        ProviderConfig `env:",prefix=MISTRAL_"`
-	Azure          ProviderConfig `env:",prefix=AZURE_OPENAI_"`
-	Ollama         ProviderConfig `env:",prefix=OLLAMA_"`
-}
+// ProvidersConfig stores inference settings by exact Starmap provider ID.
+// Provider membership comes from the active catalog, not this map.
+type ProvidersConfig map[catalogs.ProviderID]ProviderConfig
 
 // ProviderConfig defines settings for a single LLM provider
 type ProviderConfig struct {
-	BaseURL        string            `env:"BASE_URL" redact:"url"`
-	APIKey         string            `env:"API_KEY" secret:"true"`
-	AuthMode       providerauth.Mode `env:"AUTH_MODE"`
-	Timeout        time.Duration     `env:"TIMEOUT,default=30s"`
-	MaxConnections int               `env:"MAX_CONNECTIONS,default=100"`
-	Enabled        bool              `env:"ENABLED"` // Used for optional providers like Ollama
-	ProjectID      string            `env:"PROJECT_ID"`
-	Location       string            `env:"LOCATION"`
+	BaseURL              string                                                     `redact:"url"`
+	CredentialReferences map[catalogs.ProviderCredentialFieldID]CredentialReference `json:"credential_references,omitempty"`
+	Material             credentials.Material                                       `json:"-"`
+	CredentialSource     credentials.MaterialSource                                 `json:"-"`
+	Timeout              time.Duration                                              `json:"timeout"`
+	MaxConnections       int                                                        `json:"max_connections"`
+	Enabled              bool                                                       `json:"enabled"`
+	EndpointBindings     map[string]string                                          `json:"endpoint_bindings,omitempty"`
+}
+
+// CredentialReference selects one explicit source for a catalog credential
+// field. Ambient fallback applies only to a not-configured source result.
+type CredentialReference struct {
+	Reference       string `json:"reference"`
+	FallbackAmbient bool   `json:"fallback_ambient,omitempty"`
 }
 
 // ProviderEntry binds external operator configuration to one exact Starmap provider ID.
@@ -107,19 +120,56 @@ type ProviderEntry struct {
 	Config     ProviderConfig
 }
 
+// CloneProvidersConfig returns a caller-owned copy of deployment provider
+// settings. Material and source values are immutable handles.
+func CloneProvidersConfig(source ProvidersConfig) ProvidersConfig {
+	if source == nil {
+		return nil
+	}
+	result := make(ProvidersConfig, len(source))
+	for providerID, provider := range source {
+		provider.CredentialReferences = cloneCredentialReferences(provider.CredentialReferences)
+		provider.EndpointBindings = cloneProviderStrings(provider.EndpointBindings)
+		result[providerID] = provider
+	}
+	return result
+}
+
+func cloneProviderStrings(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
 // Entries returns all supported external configuration slots. Adapter
 // semantics and provider membership remain outside the configuration package.
 func (c ProvidersConfig) Entries() []ProviderEntry {
-	return []ProviderEntry{
-		{ProviderID: catalogs.ProviderIDOpenAI, Config: c.OpenAI},
-		{ProviderID: catalogs.ProviderIDAnthropic, Config: c.Anthropic},
-		{ProviderID: catalogs.ProviderIDGoogleAIStudio, Config: c.GoogleAIStudio},
-		{ProviderID: catalogs.ProviderIDGoogleVertex, Config: c.GoogleVertexAI},
-		{ProviderID: catalogs.ProviderIDGroq, Config: c.Groq},
-		{ProviderID: catalogs.ProviderIDMistralAI, Config: c.Mistral},
-		{ProviderID: catalogs.ProviderIDAzureOpenAI, Config: c.Azure},
-		{ProviderID: catalogs.ProviderIDOllama, Config: c.Ollama},
+	providerIDs := make([]catalogs.ProviderID, 0, len(c))
+	for providerID := range c {
+		providerIDs = append(providerIDs, providerID)
 	}
+	sort.Slice(providerIDs, func(left, right int) bool { return providerIDs[left] < providerIDs[right] })
+	entries := make([]ProviderEntry, 0, len(providerIDs))
+	for _, providerID := range providerIDs {
+		entries = append(entries, ProviderEntry{ProviderID: providerID, Config: c[providerID]})
+	}
+	return entries
+}
+
+// EnableProvider marks one exact catalog provider for activation. Catalog
+// resolution supplies its defaults and endpoint bindings later.
+func (c *Config) EnableProvider(providerID catalogs.ProviderID) {
+	if c.Providers == nil {
+		c.Providers = make(ProvidersConfig)
+	}
+	provider := c.Providers[providerID]
+	provider.Enabled = true
+	c.Providers[providerID] = provider
 }
 
 // RateLimitingConfig defines rate limiting settings
@@ -195,6 +245,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Catalog.Validate(); err != nil {
+		return err
+	}
+	if err := c.CredentialSources.Validate(); err != nil {
 		return err
 	}
 	if err := c.Providers.Validate(); err != nil {

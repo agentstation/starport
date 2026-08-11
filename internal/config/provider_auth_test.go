@@ -1,80 +1,97 @@
 package config
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
-func TestLoaderUsesExplicitCloudAuthModes(t *testing.T) {
-	cfg := loadTestConfig(t, map[string]string{
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE": "default",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE":  "static",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY":    "azure-key",
-	})
-	if cfg.Providers.GoogleVertexAI.AuthMode != providerauth.ModeDefault {
-		t.Errorf("Vertex auth mode = %q", cfg.Providers.GoogleVertexAI.AuthMode)
+func TestLoaderDerivesCloudAuthenticationFromCatalogProfiles(t *testing.T) {
+	provider := testCloudProvider()
+	providers := catalogs.NewProviders()
+	if err := providers.Set(provider.ID, &provider); err != nil {
+		t.Fatal(err)
 	}
-	if cfg.Providers.Azure.AuthMode != providerauth.ModeStatic {
-		t.Errorf("Azure auth mode = %q", cfg.Providers.Azure.AuthMode)
+	lookup := mapEnvironmentLookup(map[string]string{"ACME_PROJECT": "project"})
+	cfg := &Config{providerEnvironment: lookup}
+	cfg.credentialResolver = credentials.NewResolver(
+		credentials.WithEnvironmentLookup(lookup.Lookup),
+		credentials.WithCloudChain(
+			catalogs.ProviderAuthenticationGoogleDefault,
+			credentials.CloudChainFunc(func(
+				context.Context,
+				catalogs.ProviderCredentialProfile,
+				map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+			) (credentials.SourceMaterial, error) {
+				return credentials.NewSourceMaterial(
+					map[string]string{"access-token": "cloud-token"},
+					"renewable-version",
+					time.Now().Add(time.Hour),
+					&credentials.Lease{Renewable: true},
+				), nil
+			}),
+		),
+	)
+
+	if err := cfg.ResolveProviders(context.Background(), providers); err != nil {
+		t.Fatalf("resolve cloud provider: %v", err)
+	}
+	resolved := cfg.Providers[provider.ID]
+	if resolved.Material.Profile().Primitive != catalogs.ProviderAuthenticationGoogleDefault {
+		t.Fatalf("selected primitive = %q", resolved.Material.Profile().Primitive)
+	}
+	assertProviderMaterialValue(t, cfg, provider.ID, "access-token", "cloud-token")
+	if resolved.EndpointBindings["project"] != "project" {
+		t.Fatalf("endpoint bindings = %#v", resolved.EndpointBindings)
 	}
 }
 
-func TestProviderConfigRejectsAmbiguousCloudCredentials(t *testing.T) {
-	tests := []struct {
-		name   string
-		config ProviderConfig
-		match  string
-	}{
-		{
-			name:   "default with API key",
-			config: ProviderConfig{AuthMode: providerauth.ModeDefault, APIKey: "secret"},
-			match:  "cannot be combined",
-		},
-		{
-			name:   "static without API key",
-			config: ProviderConfig{AuthMode: providerauth.ModeStatic},
-			match:  "is required",
-		},
-		{
-			name:   "unknown mode",
-			config: ProviderConfig{AuthMode: "ambient"},
-			match:  "is invalid",
-		},
-		{
-			name:   "mode with whitespace",
-			config: ProviderConfig{AuthMode: " default "},
-			match:  "is invalid",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			test.config.Timeout = time.Second
-			test.config.MaxConnections = 1
-			err := test.config.Validate()
-			if err == nil || !strings.Contains(err.Error(), test.match) {
-				t.Fatalf("Validate() error = %v, want text %q", err, test.match)
-			}
-		})
-	}
-}
-
-func TestProvidersConfigLimitsDefaultCredentialsToCloudAdapters(t *testing.T) {
-	providers := ProvidersConfig{OpenAI: ProviderConfig{
-		AuthMode: providerauth.ModeDefault, Timeout: time.Second, MaxConnections: 1,
-	}}
-	if err := providers.Validate(); err == nil || !strings.Contains(err.Error(), "not supported") {
+func TestProviderConfigRejectsInvalidOperationalValues(t *testing.T) {
+	config := ProviderConfig{BaseURL: "://invalid", Timeout: time.Second, MaxConnections: 1}
+	if err := config.Validate(); err == nil || !strings.Contains(err.Error(), "base URL") {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
-func TestProvidersConfigRequiresExplicitCloudAuthMode(t *testing.T) {
-	providers := ProvidersConfig{GoogleVertexAI: ProviderConfig{
-		APIKey: "token", Timeout: time.Second, MaxConnections: 1,
+func TestProvidersConfigDoesNotOwnProviderAuthenticationRoster(t *testing.T) {
+	providers := ProvidersConfig{"yaml-only": {
+		BaseURL: "https://provider.test", Timeout: time.Second, MaxConnections: 1,
 	}}
-	if err := providers.Validate(); err == nil || !strings.Contains(err.Error(), "auth mode is required") {
+	if err := providers.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func testCloudProvider() catalogs.Provider {
+	return catalogs.Provider{
+		ID: "acme-cloud", Name: "Acme Cloud",
+		Inference: &catalogs.ProviderInference{BaseURL: "https://{project}.example.test"},
+		Credentials: &catalogs.ProviderCredentials{
+			Fields: []catalogs.ProviderCredentialField{
+				{ID: "project", Kind: catalogs.ProviderCredentialFieldParameter, Required: true, Environment: []string{"ACME_PROJECT"}},
+				{ID: "access-token", Kind: catalogs.ProviderCredentialFieldSecret, Required: true},
+			},
+			Profiles: []catalogs.ProviderCredentialProfile{{
+				ID: "default", Primitive: catalogs.ProviderAuthenticationGoogleDefault,
+				Scopes: []string{"https://example.test/.default"},
+				Fields: []catalogs.ProviderCredentialFieldID{"project", "access-token"},
+				Placements: []catalogs.ProviderCredentialPlacement{{
+					Field: "access-token", Kind: catalogs.ProviderCredentialPlacementHeader,
+					Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer,
+				}},
+				EndpointBindings: []catalogs.ProviderCredentialEndpointBinding{{
+					Variable: "project", Field: "project",
+					Format: catalogs.ProviderCredentialEndpointBindingPathSegment,
+				}},
+			}},
+			Inference: catalogs.ProviderCredentialPlane{
+				Required: true, Alternatives: []catalogs.ProviderCredentialProfileID{"default"},
+			},
+		},
 	}
 }
