@@ -240,6 +240,20 @@ activate an adapter. Static credentials remain in Starport provider
 configuration. Starport rejects an empty mode or a static secret combined with
 default mode.
 
+`internal/credentials` also owns direct inference secret-source adapters.
+It supports Google Cloud Secret Manager, Azure Key Vault, AWS Secrets Manager,
+HashiCorp Vault KV v2, and OpenBao KV v2. Catalog-derived
+`STARPORT_<PROVIDER>_<FIELD>_REFERENCE` names select these adapters. The
+reference contains resource identity, an optional version, and an optional
+field. Secret-store authentication stays in each platform's default identity
+chain or client environment.
+
+All direct adapters use the same resolver cache, single-flight work, refresh,
+revocation, and failure types. They do not add a second cache. A direct source
+without its own expiry gets the configured remote refresh interval. Cache hits
+make no secret-store request. Each selected read owns and closes its client or
+idle HTTP resources.
+
 ## Routing
 
 The router accepts a `router.Request` with:

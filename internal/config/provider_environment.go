@@ -27,6 +27,7 @@ type environmentLookup interface {
 type credentialFieldOwner struct {
 	providerID catalogs.ProviderID
 	fieldID    catalogs.ProviderCredentialFieldID
+	role       string
 }
 
 // ResolveProviders resolves named inference material from the active Starmap
@@ -71,7 +72,15 @@ func (c *Config) ResolveProviderSet(
 	resolved := make(ProvidersConfig)
 	for _, provider := range providerRecords {
 		explicit := settings[provider.ID]
-		policies, err := credentialReferencePolicies(explicit.CredentialReferences)
+		references, err := providerCredentialReferences(
+			provider,
+			explicit.CredentialReferences,
+			c.providerEnvironment,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("provider %s credential reference: %w", provider.ID, err)
+		}
+		policies, err := credentialReferencePolicies(references)
 		if err != nil {
 			return nil, fmt.Errorf("provider %s credential reference: %w", provider.ID, err)
 		}
@@ -87,12 +96,67 @@ func (c *Config) ResolveProviderSet(
 			continue
 		}
 		catalogConfig := projectResolvedProvider(provider, material, handle)
-		resolved[provider.ID] = mergeProviderConfig(catalogConfig, explicit)
+		resolved[provider.ID] = mergeProviderConfig(catalogConfig, explicit, references)
 	}
 	if err := resolved.Validate(); err != nil {
 		return nil, err
 	}
 	return resolved, nil
+}
+
+func providerCredentialReferences(
+	provider catalogs.Provider,
+	configured map[catalogs.ProviderCredentialFieldID]CredentialReference,
+	lookup environmentLookup,
+) (map[catalogs.ProviderCredentialFieldID]CredentialReference, error) {
+	references := cloneCredentialReferences(configured)
+	if references == nil {
+		references = make(map[catalogs.ProviderCredentialFieldID]CredentialReference)
+	}
+	if lookup == nil || provider.Credentials == nil {
+		return references, nil
+	}
+	for _, field := range provider.Credentials.Fields {
+		if _, exists := references[field.ID]; exists {
+			continue
+		}
+		base, err := catalogs.DerivedCredentialEnvironmentName(
+			starportCredentialProduct,
+			provider.ID,
+			field.ID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		referenceName := base + "_REFERENCE"
+		fallbackName := referenceName + "_FALLBACK_AMBIENT"
+		referenceValue, referenceFound := lookup.Lookup(referenceName)
+		fallbackValue, fallbackFound := lookup.Lookup(fallbackName)
+		if !referenceFound || referenceValue == "" {
+			if fallbackFound && fallbackValue != "" {
+				return nil, fmt.Errorf("%s requires %s", fallbackName, referenceName)
+			}
+			continue
+		}
+		fallback, err := parseReferenceFallback(fallbackName, fallbackValue, fallbackFound)
+		if err != nil {
+			return nil, err
+		}
+		references[field.ID] = CredentialReference{
+			Reference: referenceValue, FallbackAmbient: fallback,
+		}
+	}
+	return references, nil
+}
+
+func parseReferenceFallback(name, value string, found bool) (bool, error) {
+	if !found || value == "" || value == "false" {
+		return false, nil
+	}
+	if value == "true" {
+		return true, nil
+	}
+	return false, fmt.Errorf("%s must be true or false", name)
 }
 
 func credentialReferencePolicies(
@@ -121,7 +185,6 @@ func validateCredentialAliases(providers []catalogs.Provider) error {
 			continue
 		}
 		for _, field := range provider.Credentials.Fields {
-			owner := credentialFieldOwner{providerID: provider.ID, fieldID: field.ID}
 			candidates := append([]string(nil), field.Environment...)
 			derived, err := catalogs.DerivedCredentialEnvironmentName(
 				starportCredentialProduct,
@@ -133,23 +196,53 @@ func validateCredentialAliases(providers []catalogs.Provider) error {
 			}
 			candidates = append(candidates, derived)
 			for _, candidate := range candidates {
-				prior, exists := aliases[candidate]
-				if exists && prior != owner {
-					return fmt.Errorf(
-						"%s is owned by %s/%s and %s/%s: %w",
-						candidate,
-						prior.providerID,
-						prior.fieldID,
-						owner.providerID,
-						owner.fieldID,
-						ErrCredentialAliasCollision,
-					)
+				owner := credentialFieldOwner{
+					providerID: provider.ID, fieldID: field.ID, role: "value",
 				}
-				aliases[candidate] = owner
+				if err := claimCredentialAlias(aliases, candidate, owner); err != nil {
+					return err
+				}
+			}
+			for _, alias := range []struct {
+				name string
+				role string
+			}{
+				{name: derived + "_REFERENCE", role: "reference"},
+				{name: derived + "_REFERENCE_FALLBACK_AMBIENT", role: "fallback"},
+			} {
+				owner := credentialFieldOwner{
+					providerID: provider.ID, fieldID: field.ID, role: alias.role,
+				}
+				if err := claimCredentialAlias(aliases, alias.name, owner); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
+}
+
+func claimCredentialAlias(
+	aliases map[string]credentialFieldOwner,
+	name string,
+	owner credentialFieldOwner,
+) error {
+	prior, exists := aliases[name]
+	if !exists || prior == owner {
+		aliases[name] = owner
+		return nil
+	}
+	return fmt.Errorf(
+		"%s is owned by %s/%s %s and %s/%s %s: %w",
+		name,
+		prior.providerID,
+		prior.fieldID,
+		prior.role,
+		owner.providerID,
+		owner.fieldID,
+		owner.role,
+		ErrCredentialAliasCollision,
+	)
 }
 
 func projectResolvedProvider(
@@ -171,7 +264,11 @@ func projectResolvedProvider(
 	return result
 }
 
-func mergeProviderConfig(resolved, explicit ProviderConfig) ProviderConfig {
+func mergeProviderConfig(
+	resolved ProviderConfig,
+	explicit ProviderConfig,
+	references map[catalogs.ProviderCredentialFieldID]CredentialReference,
+) ProviderConfig {
 	if explicit.BaseURL != "" {
 		resolved.BaseURL = explicit.BaseURL
 	}
@@ -182,7 +279,7 @@ func mergeProviderConfig(resolved, explicit ProviderConfig) ProviderConfig {
 		resolved.MaxConnections = explicit.MaxConnections
 	}
 	resolved.Enabled = resolved.Enabled || explicit.Enabled
-	resolved.CredentialReferences = cloneCredentialReferences(explicit.CredentialReferences)
+	resolved.CredentialReferences = cloneCredentialReferences(references)
 	return resolved
 }
 

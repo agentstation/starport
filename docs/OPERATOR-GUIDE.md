@@ -1,6 +1,6 @@
 # Starport v1 Operator Guide
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 This guide covers a single Starport process and a Valkey-backed multi-node
 deployment. Starport starts only when storage, Starmap, provider credentials,
@@ -117,7 +117,9 @@ starport doctor
 
 Passive checks load configuration and Starmap facts. They also compile the
 configured adapter and catalog intersection. They do not open configured
-storage or use a network connection.
+storage or send a provider inference request. A selected cloud identity or
+direct secret reference can use its authentication network during credential
+resolution.
 
 Add `--probe` to open Badger or Valkey in read-only mode. This probe verifies
 the current catalog generation and gateway identity state. Diagnosis never
@@ -172,6 +174,63 @@ absent or invalid, initialization fails before it creates local state.
 
 Starmap catalog acquisition uses an independent credential plane. Starport
 never copies an acquisition credential into an inference request.
+
+### Direct secret sources
+
+For each catalog field, Starport derives a product name such as
+`STARPORT_OPENAI_API_KEY`. Add `_REFERENCE` to select a direct secret source:
+
+```bash
+export STARPORT_OPENAI_API_KEY_REFERENCE='aws-secrets-manager:starport/openai#api-key'
+```
+
+This table defines the supported reference resources and source
+authentication:
+
+| Backend | Resource | Source authentication |
+| --- | --- | --- |
+| `gcp-secret-manager` | `projects/PROJECT/secrets/SECRET` or `projects/PROJECT/locations/LOCATION/secrets/SECRET` | Google Application Default Credentials |
+| `azure-key-vault` | `https://VAULT_HOST/secrets/SECRET` | `DefaultAzureCredential` |
+| `aws-secrets-manager` | A secret name or ARN | AWS default credential chain |
+| `vault` | `MOUNT/PATH` for a KV v2 secret | Vault client environment |
+| `openbao` | `MOUNT/PATH` for a KV v2 secret | OpenBao client environment |
+
+The full grammar is
+`backend:resource?version=VERSION#field`. The version is optional. A
+`#field` suffix selects one exact top-level JSON string from Google, Azure, or
+AWS. Without a field, these sources preserve the complete scalar payload.
+Vault and OpenBao select one exact string field. Without `#field`, their KV v2
+record must contain exactly one string value.
+
+For Google, `VERSION` is a version number or alias. For Azure, it is the secret
+version. For AWS, it is `VersionId`. Vault and OpenBao require a positive KV v2
+version number.
+
+Quote a reference that contains `#field` in a shell or environment file.
+
+An explicit reference precedes conventional and product environment values.
+It fails closed by default. To use ambient discovery only when the direct
+source reports `not_configured`, set the derived fallback name to `true`:
+
+```bash
+export STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT=true
+```
+
+Denied access, invalid material, source unavailability, timeout, and
+cancellation never fall back. A reference contains resource identity only. It
+must not contain credentials for the secret store. Starport uses the store's
+default identity chain or client environment for that authentication.
+
+Vault uses its standard client environment, such as `VAULT_ADDR`,
+`VAULT_TOKEN`, and `VAULT_NAMESPACE`. OpenBao uses `BAO_ADDR`, `BAO_TOKEN`, and
+`BAO_NAMESPACE`.
+
+Starport resolves a direct reference before inference uses the material. It
+caches the result in memory and refreshes it through the credential lifecycle.
+A cache hit does not contact the secret store. By default, the next resolution
+after five minutes refreshes direct-source material. Set
+`STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL` to a different positive
+duration. Starport never logs or serializes the returned material.
 
 Vertex AI needs a project ID, one location, and Google Application Default
 Credentials:

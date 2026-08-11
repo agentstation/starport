@@ -17,6 +17,16 @@ const (
 	ReferenceBackendEnvironment ReferenceBackend = "env"
 	// ReferenceBackendFile reads one exact local file.
 	ReferenceBackendFile ReferenceBackend = "file"
+	// ReferenceBackendGCPStore reads Google Cloud Secret Manager.
+	ReferenceBackendGCPStore ReferenceBackend = "gcp-secret-manager"
+	// ReferenceBackendAzureVault reads Azure Key Vault.
+	ReferenceBackendAzureVault ReferenceBackend = "azure-key-vault"
+	// ReferenceBackendAWSStore reads AWS Secrets Manager.
+	ReferenceBackendAWSStore ReferenceBackend = "aws-secrets-manager"
+	// ReferenceBackendVault reads HashiCorp Vault KV v2.
+	ReferenceBackendVault ReferenceBackend = "vault"
+	// ReferenceBackendOpenBao reads OpenBao KV v2.
+	ReferenceBackendOpenBao ReferenceBackend = "openbao"
 )
 
 var (

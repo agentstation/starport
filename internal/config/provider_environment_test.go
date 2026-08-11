@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -67,10 +68,139 @@ func TestCatalogCredentialEnvironmentPrecedence(t *testing.T) {
 		if !errors.As(err, &selectedErr) {
 			t.Fatalf("ResolveProviders error = %v", err)
 		}
-		if !reflect.DeepEqual(lookups, []string{"OPENAI_API_KEY"}) {
+		if !reflect.DeepEqual(lookups, []string{
+			"STARPORT_OPENAI_API_KEY_REFERENCE",
+			"STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT",
+			"OPENAI_API_KEY",
+		}) {
 			t.Fatalf("lookups = %#v, want terminal conventional selection", lookups)
 		}
 	})
+}
+
+func TestCatalogDerivedCredentialReferenceEnvironment(t *testing.T) {
+	provider := testCredentialProvider("openai", "OPENAI_API_KEY", `^valid-`)
+	providers := catalogs.NewProviders()
+	if err := providers.Set(provider.ID, &provider); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("reference precedes ambient value", func(t *testing.T) {
+		lookup := mapEnvironmentLookup(map[string]string{
+			"OPENAI_API_KEY":                                     "valid-ambient",
+			"STARPORT_OPENAI_API_KEY_REFERENCE":                  "test:operator-key",
+			"STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT": "false",
+		})
+		var sourceCalls int
+		cfg := &Config{providerEnvironment: lookup}
+		cfg.credentialResolver = credentials.NewResolver(
+			credentials.WithEnvironmentLookup(lookup.Lookup),
+			credentials.WithReferenceSource(&configReferenceSource{
+				backend: "test",
+				resolve: func(_ context.Context, reference credentials.Reference) (credentials.SourceMaterial, error) {
+					sourceCalls++
+					if reference.Resource() != "operator-key" {
+						t.Fatalf("resource = %q", reference.Resource())
+					}
+					return credentials.NewSourceMaterial(
+						map[string]string{"value": "valid-reference"},
+						"version-1",
+						time.Time{},
+						nil,
+					), nil
+				},
+			}),
+		)
+
+		if err := cfg.ResolveProviders(t.Context(), providers); err != nil {
+			t.Fatalf("resolve providers: %v", err)
+		}
+		value, _ := cfg.Providers[provider.ID].Material.Value("api-key")
+		if value != "valid-reference" || sourceCalls != 1 {
+			t.Fatalf("resolved value = %q after %d source calls", value, sourceCalls)
+		}
+	})
+
+	t.Run("programmatic reference precedes environment reference", func(t *testing.T) {
+		lookup := mapEnvironmentLookup(map[string]string{
+			"STARPORT_OPENAI_API_KEY_REFERENCE": "test:environment-key",
+		})
+		cfg := &Config{
+			providerEnvironment: lookup,
+			Providers: ProvidersConfig{provider.ID: {
+				CredentialReferences: map[catalogs.ProviderCredentialFieldID]CredentialReference{
+					"api-key": {Reference: "test:programmatic-key"},
+				},
+			}},
+		}
+		cfg.credentialResolver = credentials.NewResolver(
+			credentials.WithEnvironmentLookup(lookup.Lookup),
+			credentials.WithReferenceSource(&configReferenceSource{
+				backend: "test",
+				resolve: func(_ context.Context, reference credentials.Reference) (credentials.SourceMaterial, error) {
+					if reference.Resource() != "programmatic-key" {
+						t.Fatalf("resource = %q", reference.Resource())
+					}
+					return credentials.NewSourceMaterial(
+						map[string]string{"value": "valid-programmatic"},
+						"version-1",
+						time.Time{},
+						nil,
+					), nil
+				},
+			}),
+		)
+
+		if err := cfg.ResolveProviders(t.Context(), providers); err != nil {
+			t.Fatalf("resolve providers: %v", err)
+		}
+		value, _ := cfg.Providers[provider.ID].Material.Value("api-key")
+		if value != "valid-programmatic" {
+			t.Fatalf("resolved value = %q", value)
+		}
+	})
+
+	t.Run("typed not-configured result permits declared fallback", func(t *testing.T) {
+		lookup := mapEnvironmentLookup(map[string]string{
+			"OPENAI_API_KEY":                                     "valid-ambient",
+			"STARPORT_OPENAI_API_KEY_REFERENCE":                  "test:missing",
+			"STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT": "true",
+		})
+		cfg := &Config{providerEnvironment: lookup}
+		cfg.credentialResolver = credentials.NewResolver(
+			credentials.WithEnvironmentLookup(lookup.Lookup),
+			credentials.WithReferenceSource(&configReferenceSource{
+				backend: "test",
+				resolve: func(context.Context, credentials.Reference) (credentials.SourceMaterial, error) {
+					return credentials.SourceMaterial{}, credentials.NewSourceError(
+						credentials.SourceErrorNotConfigured,
+						"test",
+					)
+				},
+			}),
+		)
+
+		if err := cfg.ResolveProviders(t.Context(), providers); err != nil {
+			t.Fatalf("resolve providers: %v", err)
+		}
+		value, _ := cfg.Providers[provider.ID].Material.Value("api-key")
+		if value != "valid-ambient" {
+			t.Fatalf("resolved value = %q", value)
+		}
+	})
+
+	for _, values := range []map[string]string{
+		{"STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT": "true"},
+		{
+			"STARPORT_OPENAI_API_KEY_REFERENCE":                  "test:key",
+			"STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT": "yes",
+		},
+	} {
+		cfg := &Config{providerEnvironment: mapEnvironmentLookup(values)}
+		if err := cfg.ResolveProviders(t.Context(), providers); err == nil {
+			t.Fatalf("invalid reference environment was accepted: %#v", values)
+		}
+	}
 }
 
 func TestCatalogOnlyProviderEnvironmentResolvesWithoutSourceRoster(t *testing.T) {
@@ -119,6 +249,29 @@ func TestCredentialAliasCollisionsFailBeforeConnectorConstruction(t *testing.T) 
 	}
 }
 
+func TestCredentialReferenceAliasCollisionsFailBeforeReads(t *testing.T) {
+	first := testCredentialProvider("one", "STARPORT_TWO_API_KEY_REFERENCE", "")
+	second := testCredentialProvider("two", "TWO_API_KEY", "")
+	providers := catalogs.NewProviders()
+	for _, provider := range []catalogs.Provider{first, second} {
+		if err := providers.Set(provider.ID, &provider); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reads := 0
+	cfg := &Config{providerEnvironment: lookupFunc(func(string) (string, bool) {
+		reads++
+		return "must-not-be-read", true
+	})}
+	err := cfg.ResolveProviders(t.Context(), providers)
+	if !errors.Is(err, ErrCredentialAliasCollision) {
+		t.Fatalf("resolve providers error = %v", err)
+	}
+	if reads != 0 {
+		t.Fatalf("environment reads = %d, want zero", reads)
+	}
+}
+
 func testCredentialProvider(
 	providerID catalogs.ProviderID,
 	environment string,
@@ -155,4 +308,18 @@ func mapEnvironmentLookup(values map[string]string) environmentLookup {
 		value, found := values[name]
 		return value, found
 	})
+}
+
+type configReferenceSource struct {
+	backend credentials.ReferenceBackend
+	resolve func(context.Context, credentials.Reference) (credentials.SourceMaterial, error)
+}
+
+func (s *configReferenceSource) Backend() credentials.ReferenceBackend { return s.backend }
+
+func (s *configReferenceSource) Resolve(
+	ctx context.Context,
+	reference credentials.Reference,
+) (credentials.SourceMaterial, error) {
+	return s.resolve(ctx, reference)
 }

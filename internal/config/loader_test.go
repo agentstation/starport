@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
@@ -71,6 +72,12 @@ func TestLoaderSecurePlatformDefaults(t *testing.T) {
 	}
 	if cfg.Storage.Badger.Path != paths.BadgerDir {
 		t.Errorf("default badger path = %q, want %q", cfg.Storage.Badger.Path, paths.BadgerDir)
+	}
+	if cfg.CredentialSources.RemoteRefreshInterval != 5*time.Minute {
+		t.Errorf(
+			"credential source refresh interval = %s, want 5m",
+			cfg.CredentialSources.RemoteRefreshInterval,
+		)
 	}
 	if cfg.RateLimiting.ConfigPath != paths.RateLimitsFile {
 		t.Errorf("default rate-limit path = %q, want %q", cfg.RateLimiting.ConfigPath, paths.RateLimitsFile)
@@ -143,6 +150,38 @@ func TestLoaderRejectsInvalidEnvironmentValue(t *testing.T) {
 		Load(context.Background())
 	if err == nil {
 		t.Fatal("invalid server port was accepted")
+	}
+}
+
+func TestLoaderRejectsNegativeDirectSecretRefreshInterval(t *testing.T) {
+	_, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL": "-1s",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	if err == nil {
+		t.Fatal("negative direct secret refresh interval was accepted")
+	}
+}
+
+func TestLoaderAppliesDirectSecretRefreshInterval(t *testing.T) {
+	cfg, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CREDENTIAL_SOURCES_REMOTE_REFRESH_INTERVAL": "9m",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	if err != nil {
+		t.Fatalf("load direct secret refresh interval: %v", err)
+	}
+	if cfg.CredentialSources.RemoteRefreshInterval != 9*time.Minute {
+		t.Fatalf(
+			"direct secret refresh interval = %s, want 9m",
+			cfg.CredentialSources.RemoteRefreshInterval,
+		)
 	}
 }
 

@@ -145,6 +145,17 @@ For example, Starport checks `OPENAI_API_KEY` before
 `STARPORT_OPENAI_API_KEY`. A provider that uses an already compiled transport
 and authentication primitive needs no Starport provider switch.
 
+Add `_REFERENCE` to the catalog-derived Starport name to select a direct secret
+source. Starport supports Google Cloud Secret Manager, Azure Key Vault, AWS
+Secrets Manager, HashiCorp Vault KV v2, and OpenBao KV v2. For example:
+
+```bash
+export STARPORT_OPENAI_API_KEY_REFERENCE='aws-secrets-manager:starport/openai#api-key'
+```
+
+The [operator guide](docs/OPERATOR-GUIDE.md#direct-secret-sources) defines the
+resource syntax, source authentication, version selection, and fallback rule.
+
 See the [configuration reference](.env.example) and
 [operator guide](docs/OPERATOR-GUIDE.md) for production settings.
 
@@ -202,7 +213,8 @@ Version 1 includes:
 - Exact provider and model routing with fallback and `openrouter/auto`.
 - Catalog-driven providers over the compiled OpenAI, Anthropic, Google Cloud,
   Google AI Studio, and Ollama transport primitives.
-- Encrypted provider credentials and renewable cloud credentials.
+- Encrypted provider credentials, renewable cloud credentials, and direct
+  secret-source references.
 - Header-only gateway authentication and per-key rate limits.
 - Tenant-safe response caching.
 - Badger storage for one process and Valkey storage for multiple processes.

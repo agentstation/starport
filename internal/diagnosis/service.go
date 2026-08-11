@@ -160,7 +160,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 					len(state.Catalog.Providers().List()),
 				),
 			)
-			s.checkAdapters(cfg, plane, state.Catalog, &report)
+			s.checkAdapters(ctx, cfg, plane, state.Catalog, &report)
 		}
 	}
 
@@ -173,12 +173,13 @@ func (s service) run(ctx context.Context, options Options) Report {
 }
 
 func (s service) checkAdapters(
+	ctx context.Context,
 	cfg *config.Config,
 	plane *runtimecatalog.ControlPlane,
 	source *catalogs.Catalog,
 	report *Report,
 ) {
-	if err := cfg.ResolveProviders(context.Background(), source.Providers()); err != nil {
+	if err := cfg.ResolveProviders(ctx, source.Providers()); err != nil {
 		report.addFailure("adapters", "provider configuration could not be resolved")
 		return
 	}

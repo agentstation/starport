@@ -15,7 +15,12 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
-const starportCredentialProduct = "STARPORT"
+const (
+	starportCredentialProduct = "STARPORT"
+	// DefaultDirectSecretRefreshInterval is the cache lifetime for a direct
+	// secret source that does not publish its own expiry or lease.
+	DefaultDirectSecretRefreshInterval = 5 * time.Minute
+)
 
 var (
 	// ErrResolverRequired reports an absent inference credential resolver.
@@ -104,14 +109,25 @@ func WithResolverClock(now func() time.Time) ResolverOption {
 	}
 }
 
+// WithDirectSecretRefreshInterval sets the cache lifetime for direct secret
+// sources that do not publish an expiry or renewable lease.
+func WithDirectSecretRefreshInterval(interval time.Duration) ResolverOption {
+	return func(resolver *Resolver) {
+		if interval > 0 {
+			resolver.directSecretRefreshInterval = interval
+		}
+	}
+}
+
 // Resolver owns inference credential source selection, caching, refresh, and
 // single-flight work. It contains no provider roster.
 type Resolver struct {
-	lookup      EnvironmentLookup
-	sources     map[ReferenceBackend]ReferenceSource
-	cloudChains map[catalogs.ProviderAuthenticationPrimitive]CloudChain
-	versionSeed maphash.Seed
-	now         func() time.Time
+	lookup                      EnvironmentLookup
+	sources                     map[ReferenceBackend]ReferenceSource
+	cloudChains                 map[catalogs.ProviderAuthenticationPrimitive]CloudChain
+	versionSeed                 maphash.Seed
+	now                         func() time.Time
+	directSecretRefreshInterval time.Duration
 
 	mu       sync.Mutex
 	cache    map[string]Material
@@ -137,12 +153,16 @@ func NewResolver(options ...ResolverOption) *Resolver {
 			ReferenceBackendEnvironment: environmentSource{lookup: lookup},
 			ReferenceBackendFile:        fileSource{},
 		},
-		cloudChains: make(map[catalogs.ProviderAuthenticationPrimitive]CloudChain),
-		versionSeed: maphash.MakeSeed(),
-		now:         time.Now,
-		cache:       make(map[string]Material),
-		inflight:    make(map[string]*resolutionCall),
-		epochs:      make(map[string]uint64),
+		cloudChains:                 make(map[catalogs.ProviderAuthenticationPrimitive]CloudChain),
+		versionSeed:                 maphash.MakeSeed(),
+		now:                         time.Now,
+		directSecretRefreshInterval: DefaultDirectSecretRefreshInterval,
+		cache:                       make(map[string]Material),
+		inflight:                    make(map[string]*resolutionCall),
+		epochs:                      make(map[string]uint64),
+	}
+	for _, source := range defaultDirectSecretSources() {
+		resolver.sources[source.Backend()] = source
 	}
 	for _, option := range options {
 		if option != nil {
@@ -402,6 +422,7 @@ func (r *Resolver) resolveField(
 		source := r.sources[policy.Reference.backend]
 		material, err := source.Resolve(ctx, policy.Reference)
 		if err == nil {
+			material = r.applyDirectSecretRefresh(policy.Reference.backend, material)
 			value, selectErr := referenceValue(material, policy.Reference)
 			if selectErr != nil {
 				return resolvedField{}, false, true, selectErr
@@ -416,6 +437,33 @@ func (r *Resolver) resolveField(
 		}
 	}
 	return r.resolveAmbientField(providerID, field)
+}
+
+func (r *Resolver) applyDirectSecretRefresh(
+	backend ReferenceBackend,
+	material SourceMaterial,
+) SourceMaterial {
+	if !isDirectSecretBackend(backend) || !material.expiresAt.IsZero() || material.lease != nil {
+		return material
+	}
+	material.lease = &Lease{
+		Renewable:    true,
+		RefreshAfter: r.now().Add(r.directSecretRefreshInterval),
+	}
+	return material
+}
+
+func isDirectSecretBackend(backend ReferenceBackend) bool {
+	switch backend {
+	case ReferenceBackendGCPStore,
+		ReferenceBackendAzureVault,
+		ReferenceBackendAWSStore,
+		ReferenceBackendVault,
+		ReferenceBackendOpenBao:
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *Resolver) resolveAmbientField(
@@ -480,7 +528,7 @@ func referenceValue(material SourceMaterial, reference Reference) (string, error
 		}
 		return value, nil
 	}
-	if value, exists := material.Value("value"); exists && value != "" {
+	if value, exists := material.Value(sourceScalarField); exists && value != "" {
 		return value, nil
 	}
 	if len(material.values) == 1 {

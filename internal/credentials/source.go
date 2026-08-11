@@ -10,7 +10,10 @@ import (
 	"time"
 )
 
-const maxCredentialFileBytes = 1 << 20
+const (
+	maxCredentialFileBytes = 1 << 20
+	sourceScalarField      = "value"
+)
 
 // SourceMaterial is one source result before profile assembly. Values and
 // source versions stay private outside the credential package.
@@ -80,7 +83,7 @@ func (s environmentSource) Resolve(ctx context.Context, reference Reference) (So
 		return SourceMaterial{}, NewSourceError(SourceErrorNotConfigured, s.Backend())
 	}
 	return NewSourceMaterial(
-		map[string]string{"value": value},
+		map[string]string{sourceScalarField: value},
 		reference.resource+"\x00"+value,
 		time.Time{},
 		nil,
@@ -124,7 +127,7 @@ func (s fileSource) Resolve(ctx context.Context, reference Reference) (SourceMat
 		return SourceMaterial{}, NewSourceError(SourceErrorNotConfigured, s.Backend())
 	}
 	return NewSourceMaterial(
-		map[string]string{"value": string(data)},
+		map[string]string{sourceScalarField: string(data)},
 		string(data),
 		time.Time{},
 		nil,

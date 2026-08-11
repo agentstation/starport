@@ -106,6 +106,9 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 	}); err != nil {
 		return nil, newLoadFailure("configuration values could not be decoded", err)
 	}
+	if cfg.CredentialSources.RemoteRefreshInterval == 0 {
+		cfg.CredentialSources.RemoteRefreshInterval = credentials.DefaultDirectSecretRefreshInterval
+	}
 
 	if err := resolveConfiguredPaths(cfg, paths); err != nil {
 		return nil, newLoadFailure("configured paths could not be resolved", err)
@@ -116,6 +119,7 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 	cfg.providerEnvironment = lookuper
 	resolverOptions := []credentials.ResolverOption{
 		credentials.WithEnvironmentLookup(lookuper.Lookup),
+		credentials.WithDirectSecretRefreshInterval(cfg.CredentialSources.RemoteRefreshInterval),
 	}
 	for primitive, chain := range providerauth.DefaultCloudChains() {
 		resolverOptions = append(resolverOptions, credentials.WithCloudChain(primitive, chain))

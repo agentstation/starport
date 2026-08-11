@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -186,6 +187,114 @@ func TestCredentialResolverWarmCacheHitLatencyAndConcurrency(t *testing.T) {
 	}
 	if got := backendCalls.Load(); got != 1 {
 		t.Fatalf("backend calls after concurrent hits = %d", got)
+	}
+}
+
+func TestDirectSecretSourcesUseRefreshAndWarmCacheLifecycle(t *testing.T) {
+	for _, backend := range []ReferenceBackend{
+		ReferenceBackendGCPStore,
+		ReferenceBackendAzureVault,
+		ReferenceBackendAWSStore,
+		ReferenceBackendVault,
+		ReferenceBackendOpenBao,
+	} {
+		t.Run(string(backend), func(t *testing.T) {
+			now := time.Unix(1_000, 0)
+			var backendCalls atomic.Int32
+			source := &testReferenceSource{
+				backend: backend,
+				resolve: func(context.Context, Reference) (SourceMaterial, error) {
+					call := backendCalls.Add(1)
+					return NewSourceMaterial(
+						map[string]string{"value": "valid-direct-" + strconv.Itoa(int(call))},
+						"source-"+strconv.Itoa(int(call)),
+						time.Time{},
+						nil,
+					), nil
+				},
+			}
+			provider := staticCredentialProvider()
+			provider.Credentials.Fields[0].Pattern = ""
+			resolver := NewResolver(
+				WithResolverClock(func() time.Time { return now }),
+				WithDirectSecretRefreshInterval(time.Minute),
+				WithReferenceSource(source),
+			)
+			handle := referenceHandle(
+				t,
+				provider,
+				resolver,
+				string(backend)+":resource",
+				false,
+			)
+
+			first, err := handle.ResolveMaterial(t.Context())
+			if err != nil {
+				t.Fatalf("warm material: %v", err)
+			}
+			lease, found := first.Lease()
+			if !found || !lease.Renewable || !lease.RefreshAfter.Equal(now.Add(time.Minute)) {
+				t.Fatalf("lease = %#v, %t", lease, found)
+			}
+
+			const samples = 10_000
+			durations := make([]time.Duration, 0, samples)
+			for range samples {
+				started := time.Now()
+				if _, err := handle.ResolveMaterial(t.Context()); err != nil {
+					t.Fatalf("cached material: %v", err)
+				}
+				durations = append(durations, time.Since(started))
+			}
+			if got := backendCalls.Load(); got != 1 {
+				t.Fatalf("backend calls after cache hits = %d", got)
+			}
+			sort.Slice(durations, func(left, right int) bool {
+				return durations[left] < durations[right]
+			})
+			p95 := durations[(samples*95)/100-1]
+			t.Logf("warm cache-hit samples = %d, p95 = %s", samples, p95)
+			if p95 > time.Millisecond {
+				t.Fatalf("warm cache-hit p95 = %s, limit = 1ms", p95)
+			}
+
+			now = now.Add(time.Minute)
+			second, err := handle.ResolveMaterial(t.Context())
+			if err != nil {
+				t.Fatalf("renew material: %v", err)
+			}
+			if got := backendCalls.Load(); got != 2 {
+				t.Fatalf("backend calls after renewal = %d", got)
+			}
+			if first.Version() == second.Version() {
+				t.Fatalf("material version did not change: %q", first.Version())
+			}
+
+			const workers = 16
+			const hitsPerWorker = 25
+			errs := make(chan error, workers)
+			var wait sync.WaitGroup
+			for range workers {
+				wait.Add(1)
+				go func() {
+					defer wait.Done()
+					for range hitsPerWorker {
+						if _, err := handle.ResolveMaterial(context.Background()); err != nil {
+							errs <- err
+							return
+						}
+					}
+				}()
+			}
+			wait.Wait()
+			close(errs)
+			for err := range errs {
+				t.Fatalf("concurrent cache hit: %v", err)
+			}
+			if got := backendCalls.Load(); got != 2 {
+				t.Fatalf("backend calls after concurrent hits = %d", got)
+			}
+		})
 	}
 }
 

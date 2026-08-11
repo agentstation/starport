@@ -60,7 +60,7 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 	}})
 	require.NoError(t, err)
 	report := Report{OK: true}
-	testService(cfg).checkAdapters(cfg, plane, catalog, &report)
+	testService(cfg).checkAdapters(t.Context(), cfg, plane, catalog, &report)
 	require.True(t, report.OK, "%#v", report)
 	check := assertCheck(t, report, "adapters", StatusPass)
 	require.Contains(t, check.Message, "configured provider adapters")

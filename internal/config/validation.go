@@ -86,6 +86,14 @@ func (c *CatalogConfig) Validate() error {
 	return nil
 }
 
+// Validate validates the direct inference secret-source lifecycle.
+func (c *CredentialSourcesConfig) Validate() error {
+	if c.RemoteRefreshInterval < 0 {
+		return fmt.Errorf("credential source remote refresh interval cannot be negative")
+	}
+	return nil
+}
+
 // Validate validates BadgerConfig
 func (c *BadgerConfig) Validate() error {
 	if c.Path == "" {

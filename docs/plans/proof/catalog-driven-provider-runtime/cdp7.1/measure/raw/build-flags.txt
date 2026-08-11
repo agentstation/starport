@@ -1,0 +1,5 @@
+baseline_commit=613e4fa3a9e912faa064a488d983aaf1f380cee4
+CGO_ENABLED=0
+GOOS=linux
+GOARCH=amd64
+flags=-trimpath -ldflags=-s -w

@@ -14,18 +14,24 @@ import (
 
 // Config represents the complete application configuration
 type Config struct {
-	Server       ServerConfig  `env:",prefix=SERVER_"`
-	Storage      StorageConfig `env:",prefix=STORAGE_"`
-	Catalog      CatalogConfig `env:",prefix=CATALOG_"`
-	Providers    ProvidersConfig
-	RateLimiting RateLimitingConfig `env:",prefix=RATE_LIMITING_"`
-	Security     SecurityConfig     `env:",prefix=SECURITY_"`
-	Logging      LoggingConfig      `env:",prefix=LOGGING_"`
-	Cache        CacheConfig        `env:",prefix=CACHE_"`
-	ChatUI       ChatUIConfig       `env:",prefix=CHATUI_"`
+	Server            ServerConfig            `env:",prefix=SERVER_"`
+	Storage           StorageConfig           `env:",prefix=STORAGE_"`
+	Catalog           CatalogConfig           `env:",prefix=CATALOG_"`
+	CredentialSources CredentialSourcesConfig `env:",prefix=CREDENTIAL_SOURCES_"`
+	Providers         ProvidersConfig
+	RateLimiting      RateLimitingConfig `env:",prefix=RATE_LIMITING_"`
+	Security          SecurityConfig     `env:",prefix=SECURITY_"`
+	Logging           LoggingConfig      `env:",prefix=LOGGING_"`
+	Cache             CacheConfig        `env:",prefix=CACHE_"`
+	ChatUI            ChatUIConfig       `env:",prefix=CHATUI_"`
 
 	providerEnvironment environmentLookup
 	credentialResolver  *credentials.Resolver
+}
+
+// CredentialSourcesConfig defines direct inference secret-source lifecycle.
+type CredentialSourcesConfig struct {
+	RemoteRefreshInterval time.Duration `env:"REMOTE_REFRESH_INTERVAL,default=5m"`
 }
 
 // CatalogConfig defines Starmap acquisition and tenant workspace settings.
@@ -235,6 +241,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Catalog.Validate(); err != nil {
+		return err
+	}
+	if err := c.CredentialSources.Validate(); err != nil {
 		return err
 	}
 	if err := c.Providers.Validate(); err != nil {
