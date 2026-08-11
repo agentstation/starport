@@ -166,7 +166,7 @@ tar -xzf "$native_archive" -C "$native_directory"
 native_binary="$native_directory/starport"
 require_equal "$($native_binary --version)" "starport version $version" \
 	'native binary version'
-if ! "$native_binary" help | grep -Eq '(^|[[:space:]])dev([[:space:]]|$)'; then
+if ! "$native_binary" dev --help >/dev/null 2>&1; then
 	fail 'released binary does not expose the provider-neutral dev command'
 fi
 STARPORT_README_ROOT="$native_directory" "$repository_root/scripts/verify-readme-quickstart.sh" >/dev/null
