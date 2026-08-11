@@ -9,7 +9,6 @@ import (
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providerauth"
 )
 
 func TestConfigurationsPreservesExactProviderSettings(t *testing.T) {
@@ -31,26 +30,25 @@ func TestConfigurationsPreservesExactProviderSettings(t *testing.T) {
 		MaxConnections: 12, Enabled: true,
 		EndpointBindings: map[string]string{"project": "project", "location": "location"},
 	}}
-	projected, err := Configurations(settings)
-	if err != nil {
-		t.Fatalf("project configurations: %v", err)
-	}
+	projected := Configurations(settings)
 	vertex := projected[catalogs.ProviderIDGoogleVertex]
-	if vertex.APIKey != "token" || vertex.BaseURL != "https://vertex.example" ||
-		vertex.AuthMode != providerauth.ModeStatic || vertex.Timeout != time.Minute ||
-		vertex.MaxConnections != 12 || !vertex.Enabled {
+	if vertex.Connector.BaseURL != "https://vertex.example" ||
+		vertex.Connector.Timeout != time.Minute ||
+		vertex.Connector.MaxConnections != 12 || !vertex.Connector.Enabled ||
+		vertex.Profile.Primitive != catalogs.ProviderAuthenticationAPIKey {
 		t.Fatalf("projected Vertex configuration = %#v", vertex)
 	}
-	if vertex.EndpointBindings["project"] != "project" || vertex.EndpointBindings["location"] != "location" {
-		t.Errorf("endpoint bindings = %#v", vertex.EndpointBindings)
+	if vertex.Connector.EndpointBindings["project"] != "project" ||
+		vertex.Connector.EndpointBindings["location"] != "location" {
+		t.Errorf("endpoint bindings = %#v", vertex.Connector.EndpointBindings)
 	}
-	vertex.EndpointBindings["project"] = "changed"
+	vertex.Connector.EndpointBindings["project"] = "changed"
 	if settings[catalogs.ProviderIDGoogleVertex].EndpointBindings["project"] != "project" {
 		t.Fatal("projection changed the source configuration")
 	}
 }
 
-func TestConfigurationsProjectsDefaultMaterialThroughBearerSource(t *testing.T) {
+func TestConfigurationsPreservesRequestTimeMaterialSource(t *testing.T) {
 	profile := catalogs.ProviderCredentialProfile{
 		ID: "default", Primitive: catalogs.ProviderAuthenticationGoogleDefault,
 		Fields: []catalogs.ProviderCredentialFieldID{"access-token"},
@@ -65,20 +63,22 @@ func TestConfigurationsProjectsDefaultMaterialThroughBearerSource(t *testing.T) 
 		credentials.MaterialMetadata{Version: "opaque", ExpiresAt: time.Now().Add(time.Hour)},
 	)
 	source := staticMaterialSource{material: material}
-	projected, err := Configurations(config.ProvidersConfig{"yaml-cloud": {
+	projected := Configurations(config.ProvidersConfig{"yaml-cloud": {
 		Material: material, CredentialSource: source,
 		Timeout: time.Second, MaxConnections: 1, Enabled: true,
 	}})
-	if err != nil {
-		t.Fatalf("project configurations: %v", err)
-	}
 	configured := projected["yaml-cloud"]
-	if configured.AuthMode != providerauth.ModeDefault || configured.CredentialSource == nil {
+	if configured.Profile.Primitive != catalogs.ProviderAuthenticationGoogleDefault ||
+		configured.CredentialSource == nil {
 		t.Fatalf("projected cloud configuration = %#v", configured)
 	}
-	token, err := configured.CredentialSource.Token(t.Context())
-	if err != nil || token.Value != "renewable" {
-		t.Fatalf("projected bearer token = %#v, %v", token, err)
+	resolved, err := configured.CredentialSource.ResolveMaterial(t.Context())
+	if err != nil {
+		t.Fatalf("resolve projected material: %v", err)
+	}
+	value, found := resolved.Value("access-token")
+	if !found || value != "renewable" {
+		t.Fatalf("projected material value = %q, %t", value, found)
 	}
 }
 

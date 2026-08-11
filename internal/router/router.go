@@ -172,7 +172,12 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 				nil,
 			)
 		}
+		material, materialErr := r.registry.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
+		if materialErr != nil {
+			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, materialErr)
+		}
 		request := prepareChatAttempt(req, planned.Route, false)
+		request.Credential = material
 		response, requestErr := connector.Chat(attemptCtx, request)
 		if requestErr != nil {
 			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)

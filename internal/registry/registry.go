@@ -12,6 +12,7 @@ import (
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
@@ -24,6 +25,9 @@ var (
 	ErrProviderRequired = errors.New("provider registration name is required")
 	// ErrConnectorRequired reports a registration without a connector.
 	ErrConnectorRequired = errors.New("provider connector is required")
+	// ErrCredentialSourceRequired reports a production registration without a
+	// request-time material source.
+	ErrCredentialSourceRequired = errors.New("provider credential material source is required")
 	// ErrRegistryStarted reports a second start request.
 	ErrRegistryStarted = errors.New("registry already started")
 	// ErrRegistryClosed reports an operation after registry shutdown.
@@ -39,6 +43,7 @@ type Registration struct {
 	BaseURL          string
 	EndpointBindings map[string]string
 	RequiresAuth     bool
+	CredentialSource credentials.MaterialSource
 }
 
 // ProviderMetadata contains catalog facts needed by gateway provider discovery.
@@ -53,13 +58,14 @@ type ProviderMetadata struct {
 
 // Registry manages provider connectors and their lifecycle
 type Registry struct {
-	connectors   map[string]connectors.Connector
-	providerAuth map[string]bool
-	mu           sync.RWMutex
-	catalog      *runtimecatalog.ControlPlane
-	lifecycleMu  sync.Mutex
-	started      bool
-	closed       bool
+	connectors        map[string]connectors.Connector
+	providerAuth      map[string]bool
+	credentialSources map[string]credentials.MaterialSource
+	mu                sync.RWMutex
+	catalog           *runtimecatalog.ControlPlane
+	lifecycleMu       sync.Mutex
+	started           bool
+	closed            bool
 }
 
 // Open creates a registry from explicit production registrations.
@@ -78,6 +84,12 @@ func Open(catalogPlane *runtimecatalog.ControlPlane, registrations []Registratio
 		if registration.Connector == nil {
 			return nil, registry.openFailure(
 				fmt.Errorf("%s: %w", registration.Provider, ErrConnectorRequired),
+				registrations[index:],
+			)
+		}
+		if registration.CredentialSource == nil {
+			return nil, registry.openFailure(
+				fmt.Errorf("%s: %w", registration.Provider, ErrCredentialSourceRequired),
 				registrations[index:],
 			)
 		}
@@ -100,9 +112,10 @@ func NewEmpty() *Registry {
 // NewEmptyWithCatalog creates an empty registry with a catalog control plane.
 func NewEmptyWithCatalog(catalogPlane *runtimecatalog.ControlPlane) *Registry {
 	return &Registry{
-		connectors:   make(map[string]connectors.Connector),
-		providerAuth: make(map[string]bool),
-		catalog:      catalogPlane,
+		connectors:        make(map[string]connectors.Connector),
+		providerAuth:      make(map[string]bool),
+		credentialSources: make(map[string]credentials.MaterialSource),
+		catalog:           catalogPlane,
 	}
 }
 
@@ -129,14 +142,44 @@ func (r *Registry) Start(ctx context.Context) error {
 // Register adds a connector to the registry
 func (r *Registry) Register(provider string, connector connectors.Connector) error {
 	registration := Registration{Provider: provider, Connector: connector}
-	adapters, err := connectors.ProductionAdapterRegistry()
-	if err != nil {
-		return fmt.Errorf("load production adapter registry: %w", err)
-	}
-	if descriptor, found := adapters.Descriptor(starmapcatalogs.ProviderID(provider)); found {
-		registration.Operations = descriptor.Operations
-		registration.EndpointTypes = descriptor.EndpointTypes
-		registration.RequiresAuth = len(descriptor.Credential.Fields) > 0
+	if snapshot := r.catalogSnapshot(); snapshot != nil {
+		operations := make(map[starmapcatalogs.ProviderOperation]struct{})
+		endpointTypes := make(map[starmapcatalogs.EndpointType]struct{})
+		providerID := starmapcatalogs.ProviderID(provider)
+		if providerRecord, lookupErr := snapshot.Catalog().Provider(providerID); lookupErr == nil && providerRecord.Credentials != nil {
+			profiles := make(map[starmapcatalogs.ProviderCredentialProfileID]starmapcatalogs.ProviderCredentialProfile)
+			for _, profile := range providerRecord.Credentials.Profiles {
+				profiles[profile.ID] = profile
+			}
+			for _, profileID := range providerRecord.Credentials.Inference.Alternatives {
+				if profile, exists := profiles[profileID]; exists &&
+					profile.Primitive != starmapcatalogs.ProviderAuthenticationNone {
+					registration.RequiresAuth = true
+					break
+				}
+			}
+		}
+		offerings, _ := snapshot.Catalog().ProviderOfferings(providerID)
+		for _, offering := range offerings {
+			for _, operation := range offering.Service.Operations {
+				operations[operation] = struct{}{}
+				if endpoint, found := offering.Endpoint(operation); found {
+					endpointTypes[endpoint.Type] = struct{}{}
+				}
+			}
+		}
+		for operation := range operations {
+			registration.Operations = append(registration.Operations, operation)
+		}
+		for endpointType := range endpointTypes {
+			registration.EndpointTypes = append(registration.EndpointTypes, endpointType)
+		}
+		sort.Slice(registration.Operations, func(left, right int) bool {
+			return registration.Operations[left] < registration.Operations[right]
+		})
+		sort.Slice(registration.EndpointTypes, func(left, right int) bool {
+			return registration.EndpointTypes[left] < registration.EndpointTypes[right]
+		})
 	}
 	return r.register(registration)
 }
@@ -161,6 +204,7 @@ func (r *Registry) register(registration Registration) error {
 
 	r.connectors[provider] = connector
 	r.providerAuth[provider] = registration.RequiresAuth
+	r.credentialSources[provider] = registration.CredentialSource
 	r.mu.Unlock()
 	if r.catalog != nil {
 		if err := r.catalog.SetAdapter(runtimecatalog.AdapterAvailability{
@@ -175,6 +219,7 @@ func (r *Registry) register(registration Registration) error {
 			r.mu.Lock()
 			delete(r.connectors, provider)
 			delete(r.providerAuth, provider)
+			delete(r.credentialSources, provider)
 			r.mu.Unlock()
 			return fmt.Errorf("publish %s adapter availability: %w", provider, err)
 		}
@@ -226,6 +271,22 @@ func (r *Registry) Get(provider string) (connectors.Connector, error) {
 	}
 
 	return connector, nil
+}
+
+// ResolveMaterial resolves request-bound inference material for one exact
+// registered provider.
+func (r *Registry) ResolveMaterial(ctx context.Context, provider string) (credentials.Material, error) {
+	r.mu.RLock()
+	source := r.credentialSources[provider]
+	r.mu.RUnlock()
+	if source == nil {
+		return credentials.Material{}, fmt.Errorf("%s: %w", provider, ErrCredentialSourceRequired)
+	}
+	material, err := source.ResolveMaterial(ctx)
+	if err != nil {
+		return credentials.Material{}, fmt.Errorf("resolve provider %s credential material: %w", provider, err)
+	}
+	return material, nil
 }
 
 // GetAll returns all registered connectors
@@ -301,6 +362,7 @@ func (r *Registry) Close() error {
 	// Clear the map
 	r.connectors = make(map[string]connectors.Connector)
 	r.providerAuth = make(map[string]bool)
+	r.credentialSources = make(map[string]credentials.MaterialSource)
 	if r.catalog != nil {
 		if err := r.catalog.ReplaceAdapters(nil); err != nil {
 			errs = append(errs, fmt.Errorf("clear adapter availability: %w", err))

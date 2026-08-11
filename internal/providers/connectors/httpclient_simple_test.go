@@ -35,7 +35,6 @@ func TestHTTPClientConnectionReuse(t *testing.T) {
 
 	connector, err := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -59,7 +58,6 @@ func TestHTTPClientCleanup(t *testing.T) {
 	for range 3 {
 		connector, err := NewAnthropicConnector(ProviderConfig{
 			BaseURL:        "http://127.0.0.1",
-			APIKey:         "test-key",
 			Timeout:        time.Second,
 			MaxConnections: 10,
 		})
@@ -73,7 +71,7 @@ func TestHTTPClientCleanup(t *testing.T) {
 }
 
 func testChatRequest(endpointType, endpointURL string) *ChatRequest {
-	return &ChatRequest{
+	return &ChatRequest{Credential: testAPIMaterial("test-key"),
 		Model:    "opaque/model@001",
 		Messages: []Message{{Role: RoleUser, Content: "hello"}},
 		Endpoint: InferenceEndpoint{Type: catalogs.EndpointType(endpointType), URL: endpointURL},

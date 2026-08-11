@@ -20,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -59,7 +60,8 @@ type App struct {
 	catalog          *runtimecatalog.ControlPlane
 	store            storage.KVStore
 	cacheManager     *cache.Manager
-	adapters         *connectors.AdapterRegistry
+	transports       *connectors.TransportRegistry
+	authentication   *providerauth.Registry
 	lifecycle        []lifecycleEntry
 	catalogRefreshWG sync.WaitGroup
 	closeOnce        sync.Once
@@ -72,12 +74,17 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	adapterRegistry, err := connectors.ProductionAdapterRegistry()
+	transportRegistry, err := connectors.ProductionTransportRegistry()
 	if err != nil {
-		return nil, fmt.Errorf("open adapter registry: %w", err)
+		return nil, fmt.Errorf("open transport registry: %w", err)
+	}
+	authenticationRegistry, err := providerauth.ProductionRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("open provider authentication registry: %w", err)
 	}
 	application := &App{
-		config: cfg, adapters: adapterRegistry, lifecycle: make([]lifecycleEntry, 0, 5),
+		config: cfg, transports: transportRegistry, authentication: authenticationRegistry,
+		lifecycle: make([]lifecycleEntry, 0, 5),
 	}
 	builder := runtimeBuilder{application: application, config: cfg, factories: factories}
 	if err := builder.compose(); err != nil {
@@ -204,7 +211,20 @@ func (b *runtimeBuilder) openConcepts() error {
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
 	}
-	b.providerKeys, err = byok.NewProviderKeys(credentialRepository, masterKey, b.application.adapters)
+	credentialValidator, err := byok.NewCatalogCredentialValidator(
+		func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
+			snapshot := b.application.catalog.Current()
+			if snapshot == nil {
+				return catalogs.Provider{}, false
+			}
+			provider, lookupErr := snapshot.Catalog().Provider(providerID)
+			return provider, lookupErr == nil
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("open provider credential validator: %w", err)
+	}
+	b.providerKeys, err = byok.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
 	if err != nil {
 		return fmt.Errorf("open provider key service: %w", err)
 	}
@@ -212,13 +232,11 @@ func (b *runtimeBuilder) openConcepts() error {
 }
 
 func (b *runtimeBuilder) openRegistry() error {
-	providerConfigs, err := providers.Configurations(b.config.Providers)
-	if err != nil {
-		return err
-	}
+	providerConfigs := providers.Configurations(b.config.Providers)
 	registrations, err := buildRegistrations(
 		b.application.catalog,
-		b.application.adapters,
+		b.application.transports,
+		b.application.authentication,
 		providerConfigs,
 		b.factories.newConnector,
 	)
@@ -424,12 +442,20 @@ func defaultRuntimeFactories() runtimeFactories {
 			}
 			return runtime, nil
 		},
-		newConnector: func(provider string, config connectors.ProviderConfig) (connectors.Connector, error) {
-			adapterRegistry, err := connectors.ProductionAdapterRegistry()
+		newConnector: func(
+			provider string,
+			endpointTypes []catalogs.EndpointType,
+			config connectors.ProviderConfig,
+		) (connectors.Connector, error) {
+			transportRegistry, err := connectors.ProductionTransportRegistry()
 			if err != nil {
 				return nil, err
 			}
-			return adapterRegistry.NewConnector(catalogs.ProviderID(provider), config)
+			return transportRegistry.NewProviderConnector(
+				catalogs.ProviderID(provider),
+				endpointTypes,
+				config,
+			)
 		},
 		newCache: cache.NewCacheManager,
 		newHotReload: func(path string, interval time.Duration) (hotReloadRuntime, error) {
@@ -554,3 +580,10 @@ func (a connectorRegistryAdapter) Get(provider string) connectors.Connector {
 }
 
 func (a connectorRegistryAdapter) List() []string { return a.registry.ListProviders() }
+
+func (a connectorRegistryAdapter) ResolveMaterial(
+	ctx context.Context,
+	provider string,
+) (credentials.Material, error) {
+	return a.registry.ResolveMaterial(ctx, provider)
+}

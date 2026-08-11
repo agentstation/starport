@@ -434,6 +434,16 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 	}
 	connReq.Model = string(route.ProviderModelID)
 	connReq.Endpoint = connectors.InferenceEndpoint{Type: endpoint.Type, URL: endpoint.URL}
+	material, err := p.registry.ResolveMaterial(ctx, provider)
+	if err != nil {
+		return nil, &ProviderError{
+			Provider: provider,
+			Code:     "credential_resolution_failed",
+			Message:  "failed to resolve provider credential material",
+			Err:      connectors.NormalizeFailure(provider, err),
+		}
+	}
+	connReq.Credential = material
 
 	// Execute the request
 	resp, err := connector.Embeddings(ctx, connReq)

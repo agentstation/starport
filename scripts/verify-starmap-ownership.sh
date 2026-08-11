@@ -114,9 +114,11 @@ test -d "$STARMAP_ROOT/pkg/catalogs" || {
 run_check O01 "active providers are the catalog, adapter, and configuration intersection" \
   starport_tests "./internal/app ./internal/catalog" \
   TestActiveProviderIntersection TestConfiguredProviderMissingCatalogFailsStartup
-run_check O02 "one adapter registry owns inference credential dispatch" \
-  starport_tests "./internal/providers/connectors ./internal/providers/byok" \
-  TestAdapterRegistryDrivesInferenceCredentialValidation TestUnsupportedInferenceProviderFailsClosed
+run_check O02 "primitive registries own inference transport and authentication dispatch" \
+  starport_tests "./internal/architecture ./internal/providers/byok" \
+  TestStarportProductionHasNoProviderRoster \
+  TestTransportAuthenticationRegistriesUsePrimitives \
+  TestValidateKeyUsesCatalogCredentialContracts
 run_check O03 "catalog-acquisition and inference credential planes are isolated" \
   starport_tests "./internal/app" \
   TestAuthPlanesAreIsolated TestStarmapAcquisitionPublishesRefresh

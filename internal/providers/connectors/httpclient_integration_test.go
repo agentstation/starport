@@ -34,7 +34,6 @@ func TestHTTPClientConnectionPooling(t *testing.T) {
 
 	connector, err := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 5,
 	})
@@ -71,7 +70,6 @@ func TestHTTPClientSingleAttempt(t *testing.T) {
 
 	connector, err := NewOpenAIConnector(ProviderConfig{
 		BaseURL:        server.URL,
-		APIKey:         "test-key",
 		Timeout:        5 * time.Second,
 		MaxConnections: 10,
 	})
@@ -97,7 +95,6 @@ func TestHTTPClientTimeouts(t *testing.T) {
 
 	connector, err := NewAnthropicConnector(ProviderConfig{
 		BaseURL:        server.URL,
-		APIKey:         "test-key",
 		Timeout:        500 * time.Millisecond,
 		MaxConnections: 10,
 	})

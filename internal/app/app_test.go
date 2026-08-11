@@ -293,7 +293,11 @@ func explicitTestFactories() runtimeFactories {
 	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
 		return store, nil
 	}
-	factories.newConnector = func(_ string, providerConfig connectors.ProviderConfig) (connectors.Connector, error) {
+	factories.newConnector = func(
+		_ string,
+		_ []catalogs.EndpointType,
+		providerConfig connectors.ProviderConfig,
+	) (connectors.Connector, error) {
 		return connectors.NewMockConnector(providerConfig), nil
 	}
 	return factories

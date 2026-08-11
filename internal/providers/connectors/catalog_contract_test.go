@@ -9,8 +9,6 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
-
-	"github.com/agentstation/starport/internal/providerauth"
 )
 
 func TestExactProviderModelIDIsOpaque(t *testing.T) {
@@ -29,10 +27,10 @@ func TestExactProviderModelIDIsOpaque(t *testing.T) {
 	}))
 	defer server.Close()
 
-	connector, err := NewOpenAIConnector(ProviderConfig{BaseURL: server.URL, APIKey: "inference-key"})
+	connector, err := NewOpenAIConnector(ProviderConfig{BaseURL: server.URL})
 	require.NoError(t, err)
 	defer connector.Close()
-	response, err := connector.Chat(context.Background(), &ChatRequest{
+	response, err := connector.Chat(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
 		Model:    providerModelID,
 		Messages: []Message{{Role: RoleUser, Content: "hello"}},
 		Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/selected/chat"},
@@ -58,13 +56,11 @@ func TestOfferingEndpointSelectsProtocol(t *testing.T) {
 	defer server.Close()
 
 	connector, err := NewVertexAIConnector(ProviderConfig{
-		BaseURL:  server.URL,
-		APIKey:   "inference-token",
-		AuthMode: providerauth.ModeStatic,
+		BaseURL: server.URL,
 	})
 	require.NoError(t, err)
 	defer connector.Close()
-	response, err := connector.Chat(context.Background(), &ChatRequest{
+	response, err := connector.Chat(context.Background(), &ChatRequest{Credential: testAPIMaterial("test-key"),
 		Model:     providerModelID,
 		Messages:  []Message{{Role: RoleUser, Content: "hello"}},
 		MaxTokens: IntPtr(8),

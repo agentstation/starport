@@ -3,7 +3,6 @@ package connectors
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
 func TestOllamaConnector_Chat(t *testing.T) {
@@ -18,6 +19,10 @@ func TestOllamaConnector_Chat(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/chat":
+			if got, want := r.Header.Get("Authorization"), "Bearer hosted-ollama-key"; got != want {
+				http.Error(w, "unexpected authorization", http.StatusUnauthorized)
+				return
+			}
 			// Verify request
 			var req map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -71,7 +76,8 @@ func TestOllamaConnector_Chat(t *testing.T) {
 	// Test chat
 	ctx := context.Background()
 	req := &ChatRequest{
-		Model: "ollama/llama2",
+		Model:      "ollama/llama2",
+		Credential: testAPIMaterial("hosted-ollama-key"),
 		Endpoint: InferenceEndpoint{
 			Type: "ollama",
 			URL:  server.URL + "/api/chat",
@@ -202,7 +208,8 @@ func TestOllamaConnector_ChatStream(t *testing.T) {
 	// Test streaming chat
 	ctx := context.Background()
 	req := &ChatRequest{
-		Model: "ollama/llama2",
+		Model:      "ollama/llama2",
+		Credential: testNoAuthenticationMaterial(),
 		Endpoint: InferenceEndpoint{
 			Type: "ollama",
 			URL:  server.URL + "/api/chat",
@@ -280,7 +287,8 @@ func TestOllamaConnector_ErrorHandling(t *testing.T) {
 	// Test chat with error
 	ctx := context.Background()
 	req := &ChatRequest{
-		Model: "ollama/unknown-model",
+		Model:      "ollama/unknown-model",
+		Credential: testNoAuthenticationMaterial(),
 		Endpoint: InferenceEndpoint{
 			Type: "ollama",
 			URL:  server.URL + "/api/chat",
@@ -313,19 +321,18 @@ func TestOllamaConnector_ErrorHandling(t *testing.T) {
 	}
 }
 
-func TestOllamaConnector_DisabledError(t *testing.T) {
-	// Try to create connector when not enabled
+func TestOllamaTransportSelectionDoesNotDependOnProviderFlags(t *testing.T) {
 	config := ProviderConfig{
 		BaseURL: "http://localhost:11434",
 		Enabled: false,
 	}
 
-	_, err := NewConnector("ollama", config)
-	if err == nil {
-		t.Fatal("expected error when ollama not enabled")
+	connector, err := NewConnector("local-runtime", []catalogs.EndpointType{catalogs.EndpointTypeOllama}, config)
+	if err != nil {
+		t.Fatalf("new Ollama transport: %v", err)
 	}
-
-	if !errors.Is(err, ErrAdapterConfigurationInvalid) {
-		t.Errorf("expected adapter configuration error, got: %v", err)
+	t.Cleanup(func() { _ = connector.Close() })
+	if connector.Name() != "local-runtime" {
+		t.Fatalf("connector name = %q", connector.Name())
 	}
 }

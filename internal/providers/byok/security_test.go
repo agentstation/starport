@@ -32,10 +32,10 @@ func TestEncryptionIsolation(t *testing.T) {
 	secretKey2 := "sk-key2-secret-987654321"
 
 	// Add keys
-	_, err = manager.AddKey(ctx, scope1, provider, map[string]string{"api_key": secretKey1}, nil, false, 0)
+	_, err = manager.AddKey(ctx, scope1, provider, map[string]string{"api-key": secretKey1}, nil, false, 0)
 	require.NoError(t, err)
 
-	_, err = manager.AddKey(ctx, scope2, provider, map[string]string{"api_key": secretKey2}, nil, false, 0)
+	_, err = manager.AddKey(ctx, scope2, provider, map[string]string{"api-key": secretKey2}, nil, false, 0)
 	require.NoError(t, err)
 
 	// Get raw encrypted data from store
@@ -188,16 +188,17 @@ func TestKeyLeakage(t *testing.T) {
 
 	secretKey := "sk-super-secret-key-123456789"
 	sensitiveData := map[string]string{
-		"api_key":      secretKey,
-		"access_token": "secret-token-xyz",
-		"password":     "my-password-123",
+		"api-key": secretKey,
+	}
+	invalidData := map[string]string{
+		"api-key": secretKey, "not-declared": "secret-token-xyz",
 	}
 
 	// Test validation errors don't leak keys
-	err = manager.ValidateKey(ctx, "openai", sensitiveData, nil)
+	err = manager.ValidateKey(ctx, "openai", invalidData, nil)
 	if err != nil {
 		errStr := err.Error()
-		for key, value := range sensitiveData {
+		for key, value := range invalidData {
 			assert.NotContains(t, errStr, value, "Error should not contain %s value", key)
 		}
 	}
@@ -312,7 +313,7 @@ func TestConcurrentAccess(t *testing.T) {
 	// Add initial key
 	scope := "user:test-key"
 	provider := "openai"
-	_, err = manager.AddKey(ctx, scope, provider, map[string]string{"api_key": "sk-initial"}, nil, false, 0)
+	_, err = manager.AddKey(ctx, scope, provider, map[string]string{"api-key": "sk-initial"}, nil, false, 0)
 	require.NoError(t, err)
 
 	// Concurrent operations
@@ -331,7 +332,7 @@ func TestConcurrentAccess(t *testing.T) {
 	go func() {
 		for i := 0; i < 50; i++ {
 			newKey := fmt.Sprintf("sk-update-%d", i)
-			_, err := manager.UpdateKey(ctx, scope, provider, map[string]string{"api_key": newKey}, nil, nil, nil)
+			_, err := manager.UpdateKey(ctx, scope, provider, map[string]string{"api-key": newKey}, nil, nil, nil)
 			assert.NoError(t, err)
 		}
 		done <- true

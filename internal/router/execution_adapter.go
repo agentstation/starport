@@ -39,7 +39,12 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 				nil,
 			)
 		}
+		material, materialErr := r.registry.ResolveMaterial(attemptCtx, planned.Route.ProviderID)
+		if materialErr != nil {
+			return nil, connectors.NormalizeFailure(planned.Route.ProviderID, materialErr)
+		}
 		request := prepareChatAttempt(req, planned.Route, true)
+		request.Credential = material
 		request.Stream = true
 		stream, streamErr := connector.ChatStream(attemptCtx, request)
 		if streamErr != nil {

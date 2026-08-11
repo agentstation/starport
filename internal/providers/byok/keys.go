@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
 // ProviderKeyType indicates which type of key was used for a request
@@ -82,5 +81,17 @@ type ProviderKeys interface {
 	RotateEncryptionKey(ctx context.Context) error
 }
 
-// ValidationError is the adapter-owned inference credential validation error.
-type ValidationError = connectors.InferenceCredentialValidationError
+// ValidationError reports an invalid catalog-declared inference credential.
+type ValidationError struct {
+	Provider string
+	Field    string
+	Message  string
+}
+
+// Error returns a secret-free validation message.
+func (e *ValidationError) Error() string {
+	if e.Field != "" {
+		return "validation failed for " + e.Provider + " " + e.Field + ": " + e.Message
+	}
+	return "validation failed for " + e.Provider + ": " + e.Message
+}

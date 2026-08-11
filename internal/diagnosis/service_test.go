@@ -17,6 +17,7 @@ import (
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
@@ -129,7 +130,7 @@ func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 		openAISecret + "#base-url-secret"
 	cfg.Providers[catalogs.ProviderIDOpenAI] = openAI
 	service := testService(cfg)
-	service.dependencies.adapters = func() (*connectors.AdapterRegistry, error) {
+	service.dependencies.transports = func() (*connectors.TransportRegistry, error) {
 		return nil, errors.New(
 			"failure " + openAISecret + " " +
 				openAI.BaseURL + " " + cfg.Security.MasterKey +
@@ -153,7 +154,7 @@ func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 		}
 	}
 	check := assertCheck(t, report, "adapters", StatusFail)
-	if check.Message != "provider adapter registry could not be created" {
+	if check.Message != "provider transport registry could not be created" {
 		t.Errorf("adapter failure = %q", check.Message)
 	}
 }
@@ -245,8 +246,9 @@ func testService(cfg *config.Config) service {
 		resolvePaths: func() (config.Paths, error) {
 			return config.PathsForConfigDir(filepath.Dir(filepath.Dir(cfg.Storage.Badger.Path))), nil
 		},
-		openStorage: storage.OpenReadOnly,
-		adapters:    connectors.ProductionAdapterRegistry,
+		openStorage:    storage.OpenReadOnly,
+		transports:     connectors.ProductionTransportRegistry,
+		authentication: providerauth.ProductionRegistry,
 	}}
 }
 

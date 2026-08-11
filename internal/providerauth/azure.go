@@ -1,3 +1,5 @@
+// Package providerauth applies catalog-declared authentication primitives to
+// provider inference requests.
 package providerauth
 
 import (

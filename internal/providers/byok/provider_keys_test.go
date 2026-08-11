@@ -25,9 +25,9 @@ func TestListKeys(t *testing.T) {
 
 	// Add multiple keys with proper format
 	keys := map[string]map[string]string{
-		"openai":    {"api_key": "sk-test123"},
-		"anthropic": {"api_key": "sk-ant-test123"},
-		"groq":      {"api_key": "gsk_test123"},
+		"openai":    {"api-key": "sk-test123"},
+		"anthropic": {"api-key": "sk-ant-test123"},
+		"groq":      {"api-key": "gsk_test123"},
 	}
 	for provider, key := range keys {
 		_, err := manager.AddKey(ctx, scope, provider, key, nil, false, 0)
@@ -73,7 +73,7 @@ func TestGlobalKeyOperations(t *testing.T) {
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
 	// Test adding global key with empty provider
-	_, err = manager.AddGlobalKey(ctx, "", map[string]string{"api_key": "sk-test"}, nil, nil)
+	_, err = manager.AddGlobalKey(ctx, "", map[string]string{"api-key": "sk-test"}, nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "provider is required")
 
@@ -151,7 +151,7 @@ func newProviderCredentialFixture(t *testing.T) (context.Context, *storage.MockS
 
 func addGlobalProviderCredential(t *testing.T, ctx context.Context, manager ProviderKeys) {
 	t.Helper()
-	_, err := manager.AddGlobalKey(ctx, "openai", map[string]string{"api_key": "sk-test"}, nil, nil)
+	_, err := manager.AddGlobalKey(ctx, "openai", map[string]string{"api-key": "sk-test"}, nil, nil)
 	require.NoError(t, err)
 }
 
@@ -194,43 +194,43 @@ func TestValidateKeyEdgeCases(t *testing.T) {
 		{
 			name:     "Empty OpenAI API key",
 			provider: "openai",
-			key:      map[string]string{"api_key": ""},
+			key:      map[string]string{"api-key": ""},
 			wantErr:  true,
 		},
 		{
 			name:     "Empty Anthropic API key",
 			provider: "anthropic",
-			key:      map[string]string{"api_key": ""},
+			key:      map[string]string{"api-key": ""},
 			wantErr:  true,
 		},
 		{
 			name:     "Empty Azure API key",
 			provider: "azure-openai",
-			key:      map[string]string{"api_key": ""},
+			key:      map[string]string{"api-key": ""},
 			wantErr:  true,
 		},
 		{
 			name:     "Empty Google AI Studio API key",
 			provider: "google-ai-studio",
-			key:      map[string]string{"api_key": ""},
+			key:      map[string]string{"api-key": ""},
 			wantErr:  true,
 		},
 		{
 			name:     "Empty Vertex AI access token",
 			provider: "google-vertex",
-			key:      map[string]string{"access_token": ""},
+			key:      map[string]string{"access-token": ""},
 			wantErr:  true,
 		},
 		{
 			name:     "Empty Groq API key",
 			provider: "groq",
-			key:      map[string]string{"api_key": ""},
+			key:      map[string]string{"api-key": ""},
 			wantErr:  true,
 		},
 		{
 			name:     "Empty Mistral API key",
 			provider: "mistral",
-			key:      map[string]string{"api_key": ""},
+			key:      map[string]string{"api-key": ""},
 			wantErr:  true,
 		},
 	}
@@ -280,7 +280,7 @@ func TestUpdateKeyEdgeCases(t *testing.T) {
 	// Add initial key
 	scope := "user:test-key"
 	provider := "openai"
-	_, err = manager.AddKey(ctx, scope, provider, map[string]string{"api_key": "sk-initial"}, nil, false, 0)
+	_, err = manager.AddKey(ctx, scope, provider, map[string]string{"api-key": "sk-initial"}, nil, false, 0)
 	require.NoError(t, err)
 
 	// Update with only config (no new key)
@@ -296,8 +296,8 @@ func TestUpdateKeyEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, decrypted, "sk-initial")
 
-	// Update with invalid new key
-	_, err = manager.UpdateKey(ctx, scope, provider, map[string]string{"api_key": "invalid"}, nil, nil, nil)
+	// Update with a field outside the catalog credential contract.
+	_, err = manager.UpdateKey(ctx, scope, provider, map[string]string{"not-declared": "invalid"}, nil, nil, nil)
 	assert.Error(t, err)
 }
 

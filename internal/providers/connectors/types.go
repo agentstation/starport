@@ -6,7 +6,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // Common role constants
@@ -77,6 +77,10 @@ type ChatRequest struct {
 
 	// Endpoint is the exact Starmap offering endpoint selected by the route plan.
 	Endpoint InferenceEndpoint `json:"-"`
+
+	// Credential is the request-selected inference material. Connector instances
+	// never retain it.
+	Credential credentials.Material `json:"-"`
 }
 
 // Message represents a chat message
@@ -232,12 +236,13 @@ type MessageDelta struct {
 
 // EmbeddingsRequest represents an embeddings request
 type EmbeddingsRequest struct {
-	Model          string            `json:"model"`
-	Input          any               `json:"input"`
-	EncodingFormat string            `json:"encoding_format,omitempty"`
-	Dimensions     *int              `json:"dimensions,omitempty"`
-	User           string            `json:"user,omitempty"`
-	Endpoint       InferenceEndpoint `json:"-"`
+	Model          string               `json:"model"`
+	Input          any                  `json:"input"`
+	EncodingFormat string               `json:"encoding_format,omitempty"`
+	Dimensions     *int                 `json:"dimensions,omitempty"`
+	User           string               `json:"user,omitempty"`
+	Endpoint       InferenceEndpoint    `json:"-"`
+	Credential     credentials.Material `json:"-"`
 }
 
 // InferenceEndpoint is a selected provider endpoint and wire protocol.
@@ -267,11 +272,6 @@ type ProviderConfig struct {
 	BaseURL        string        `json:"base_url"`
 	Timeout        time.Duration `json:"timeout"`
 	MaxConnections int           `json:"max_connections"`
-
-	// Authentication
-	APIKey           string              `json:"-"` // Never log or serialize
-	AuthMode         providerauth.Mode   `json:"auth_mode,omitempty"`
-	CredentialSource providerauth.Source `json:"-"`
 
 	// EndpointBindings supplies tenant-specific values for Starmap URL templates.
 	EndpointBindings map[string]string `json:"endpoint_bindings,omitempty"`

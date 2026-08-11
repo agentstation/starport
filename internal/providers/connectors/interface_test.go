@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
@@ -16,19 +17,20 @@ func TestNewConnector(t *testing.T) {
 			BaseURL: "http://unknown.api",
 		}
 
-		_, err := connectors.NewConnector("unknown", config)
-		if !errors.Is(err, connectors.ErrAdapterProviderUnsupported) {
-			t.Errorf("expected ErrAdapterProviderUnsupported, got %v", err)
+		_, err := connectors.NewConnector("unknown", []catalogs.EndpointType{"unknown"}, config)
+		if !errors.Is(err, connectors.ErrTransportUnsupported) {
+			t.Errorf("expected ErrTransportUnsupported, got %v", err)
 		}
 	})
 
 	t.Run("Create Google AI Studio connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			BaseURL: "https://provider.test",
-			APIKey:  "test-key",
 		}
 
-		connector, err := connectors.NewConnector("google-ai-studio", config)
+		connector, err := connectors.NewConnector(
+			"google-ai-studio", []catalogs.EndpointType{catalogs.EndpointTypeGoogle}, config,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -41,10 +43,11 @@ func TestNewConnector(t *testing.T) {
 	t.Run("Create Groq connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			BaseURL: "https://provider.test",
-			APIKey:  "test-key",
 		}
 
-		connector, err := connectors.NewConnector("groq", config)
+		connector, err := connectors.NewConnector(
+			"groq", []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, config,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -57,10 +60,11 @@ func TestNewConnector(t *testing.T) {
 	t.Run("Create Mistral connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			BaseURL: "https://provider.test",
-			APIKey:  "test-key",
 		}
 
-		connector, err := connectors.NewConnector("mistral", config)
+		connector, err := connectors.NewConnector(
+			"mistral", []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, config,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -72,12 +76,12 @@ func TestNewConnector(t *testing.T) {
 
 	t.Run("Create Azure OpenAI connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
-			BaseURL:  "https://myresource.openai.azure.com",
-			APIKey:   "test-key",
-			AuthMode: providerauth.ModeStatic,
+			BaseURL: "https://myresource.openai.azure.com",
 		}
 
-		connector, err := connectors.NewConnector("azure-openai", config)
+		connector, err := connectors.NewConnector(
+			"azure-openai", []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, config,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -90,10 +94,11 @@ func TestNewConnector(t *testing.T) {
 	t.Run("Create OpenAI connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			BaseURL: "https://provider.test",
-			APIKey:  "test-key",
 		}
 
-		connector, err := connectors.NewConnector("openai", config)
+		connector, err := connectors.NewConnector(
+			"openai", []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, config,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -106,10 +111,11 @@ func TestNewConnector(t *testing.T) {
 	t.Run("Create Anthropic connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			BaseURL: "https://provider.test",
-			APIKey:  "test-key",
 		}
 
-		connector, err := connectors.NewConnector("anthropic", config)
+		connector, err := connectors.NewConnector(
+			"anthropic", []catalogs.EndpointType{catalogs.EndpointTypeAnthropic}, config,
+		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -178,7 +184,6 @@ func TestConnectorInterface(t *testing.T) {
 	// Create mock connector
 	config := connectors.ProviderConfig{
 		BaseURL: "http://mock.api",
-		APIKey:  "test-key",
 	}
 	mock := connectors.NewMockConnector(config)
 	defer mock.Close()

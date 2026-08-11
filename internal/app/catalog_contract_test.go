@@ -15,6 +15,9 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -29,28 +32,49 @@ func TestActiveProviderIntersection(t *testing.T) {
 func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 	runtime, err := runtimecatalog.OpenRuntime(context.Background(), storage.NewMockStore(), "")
 	require.NoError(t, err)
-	adapters, err := connectors.NewAdapterRegistry(connectors.AdapterDescriptor{
-		ProviderID:    "synthetic-provider",
-		Operations:    []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions},
-		EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI},
-		Factory: func(value connectors.ProviderConfig) (connectors.Connector, error) {
-			return connectors.NewMockConnector(value), nil
-		},
-		Configured: connectors.APIKeyConfigured,
-	})
+	transports, err := connectors.ProductionTransportRegistry()
 	require.NoError(t, err)
+	authentication, err := providerauth.ProductionRegistry()
+	require.NoError(t, err)
+	profile := catalogs.ProviderCredentialProfile{
+		ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+		Fields: []catalogs.ProviderCredentialFieldID{"api-key"},
+		Placements: []catalogs.ProviderCredentialPlacement{{
+			Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader,
+			Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer,
+		}},
+	}
+	material := credentials.NewMaterial(
+		profile,
+		map[catalogs.ProviderCredentialFieldID]string{"api-key": "inference-secret"},
+		credentials.MaterialMetadata{Version: "test"},
+	)
 
 	_, err = buildRegistrations(
 		runtime.ControlPlane(),
-		adapters,
-		map[catalogs.ProviderID]connectors.ProviderConfig{
-			"synthetic-provider": {APIKey: "inference-secret"},
+		transports,
+		authentication,
+		map[catalogs.ProviderID]providers.Configuration{
+			"synthetic-provider": {
+				Connector: connectors.ProviderConfig{BaseURL: "https://provider.test"},
+				Profile:   profile, CredentialSource: appStaticMaterialSource{material: material},
+			},
 		},
-		func(_ string, value connectors.ProviderConfig) (connectors.Connector, error) {
+		func(
+			_ string,
+			_ []catalogs.EndpointType,
+			value connectors.ProviderConfig,
+		) (connectors.Connector, error) {
 			return connectors.NewMockConnector(value), nil
 		},
 	)
-	require.ErrorIs(t, err, connectors.ErrAdapterProviderMissingCatalog)
+	require.ErrorIs(t, err, providers.ErrProviderMissingCatalog)
+}
+
+type appStaticMaterialSource struct{ material credentials.Material }
+
+func (s appStaticMaterialSource) ResolveMaterial(context.Context) (credentials.Material, error) {
+	return s.material, nil
 }
 
 func TestInferenceCredentialsNeverEnterCatalogState(t *testing.T) {

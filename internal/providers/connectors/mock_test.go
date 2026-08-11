@@ -13,7 +13,6 @@ import (
 func TestMockConnector(t *testing.T) {
 	config := connectors.ProviderConfig{
 		BaseURL: "http://mock.api",
-		APIKey:  "test-key",
 	}
 
 	t.Run("Basic operations", func(t *testing.T) {

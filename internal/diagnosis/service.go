@@ -15,6 +15,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/storage"
@@ -52,17 +53,20 @@ type Report struct {
 }
 
 type dependencies struct {
-	loadConfig   func(context.Context) (*config.Config, error)
-	resolvePaths func() (config.Paths, error)
-	openStorage  func(storage.Config) (storage.KVStore, error)
-	adapters     func() (*connectors.AdapterRegistry, error)
+	loadConfig     func(context.Context) (*config.Config, error)
+	resolvePaths   func() (config.Paths, error)
+	openStorage    func(storage.Config) (storage.KVStore, error)
+	transports     func() (*connectors.TransportRegistry, error)
+	authentication func() (*providerauth.Registry, error)
 }
 
 // Run performs production diagnosis without constructing the server.
 func Run(ctx context.Context, options Options) Report {
 	service := service{dependencies: dependencies{
 		loadConfig: config.LoadWithDefaults, resolvePaths: config.PlatformPaths,
-		openStorage: storage.OpenReadOnly, adapters: connectors.ProductionAdapterRegistry,
+		openStorage:    storage.OpenReadOnly,
+		transports:     connectors.ProductionTransportRegistry,
+		authentication: providerauth.ProductionRegistry,
 	}}
 	return service.run(ctx, options)
 }
@@ -178,17 +182,23 @@ func (s service) checkAdapters(
 		report.addFailure("adapters", "provider configuration could not be resolved")
 		return
 	}
-	adapterRegistry, err := s.dependencies.adapters()
+	transportRegistry, err := s.dependencies.transports()
 	if err != nil {
-		report.addFailure("adapters", "provider adapter registry could not be created")
+		report.addFailure("adapters", "provider transport registry could not be created")
 		return
 	}
-	providerConfigs, err := providers.Configurations(cfg.Providers)
+	authenticationRegistry, err := s.dependencies.authentication()
 	if err != nil {
-		report.addFailure("adapters", "provider credentials could not be projected")
+		report.addFailure("adapters", "provider authentication registry could not be created")
 		return
 	}
-	activations, err := adapterRegistry.Activate(source, providerConfigs)
+	providerConfigs := providers.Configurations(cfg.Providers)
+	activations, err := providers.Activate(
+		source,
+		transportRegistry,
+		authenticationRegistry,
+		providerConfigs,
+	)
 	if err != nil {
 		report.addFailure("adapters", "provider adapters could not be activated")
 		return

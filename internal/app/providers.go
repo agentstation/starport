@@ -7,6 +7,8 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
 )
@@ -18,14 +20,20 @@ var (
 
 func buildRegistrations(
 	catalogPlane *runtimecatalog.ControlPlane,
-	adapterRegistry *connectors.AdapterRegistry,
-	configurations map[catalogs.ProviderID]connectors.ProviderConfig,
-	newConnector func(string, connectors.ProviderConfig) (connectors.Connector, error),
+	transportRegistry *connectors.TransportRegistry,
+	authenticationRegistry *providerauth.Registry,
+	configurations map[catalogs.ProviderID]providers.Configuration,
+	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error),
 ) ([]registry.Registration, error) {
 	if catalogPlane == nil || catalogPlane.Current() == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
-	active, err := adapterRegistry.Activate(catalogPlane.Current().Catalog(), configurations)
+	active, err := providers.Activate(
+		catalogPlane.Current().Catalog(),
+		transportRegistry,
+		authenticationRegistry,
+		configurations,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +44,11 @@ func buildRegistrations(
 	registrations := make([]registry.Registration, 0, len(active))
 	for _, activation := range active {
 		providerID := string(activation.ProviderID)
-		connector, err := newConnector(providerID, activation.Config)
+		connector, err := newConnector(
+			providerID,
+			activation.EndpointTypes,
+			activation.Configuration.Connector,
+		)
 		if err != nil {
 			if connector != nil {
 				if closeErr := connector.Close(); closeErr != nil {
@@ -52,11 +64,12 @@ func buildRegistrations(
 		}
 		registrations = append(registrations, registry.Registration{
 			Provider: providerID, Connector: connector,
-			Operations:       activation.Descriptor.Operations,
-			EndpointTypes:    activation.Descriptor.EndpointTypes,
-			BaseURL:          activation.Config.BaseURL,
-			EndpointBindings: activation.Config.EndpointBindings,
-			RequiresAuth:     len(activation.Descriptor.Credential.Fields) > 0,
+			Operations:       activation.Operations,
+			EndpointTypes:    activation.EndpointTypes,
+			BaseURL:          activation.Configuration.Connector.BaseURL,
+			EndpointBindings: activation.Configuration.Connector.EndpointBindings,
+			RequiresAuth:     activation.RequiresAuth,
+			CredentialSource: activation.Configuration.CredentialSource,
 		})
 	}
 	return registrations, nil

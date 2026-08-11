@@ -10,7 +10,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // VertexAIConnector implements the Connector interface for Google Vertex AI
@@ -20,41 +20,32 @@ type VertexAIConnector struct {
 
 // NewVertexAIConnector creates a new Vertex AI connector
 func NewVertexAIConnector(config ProviderConfig) (*VertexAIConnector, error) {
-	if err := requiredCloudCredentialConfig(config); err != nil {
-		return nil, fmt.Errorf("invalid Vertex AI inference credentials: %w", err)
-	}
+	return newGoogleCloudConnector(string(catalogs.ProviderIDGoogleVertex), config)
+}
+
+func newGoogleCloudConnector(provider string, config ProviderConfig) (*VertexAIConnector, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	credentialSource, err := googleCredentialSource(config)
-	if err != nil {
-		return nil, err
-	}
-	config.CredentialSource = credentialSource
-
-	var httpClient *http.Client
-	if credentialSource == nil {
-		httpClient, err = newProviderHTTPClient(GoogleVertexAIProvider, config)
-	} else {
-		httpClient, err = newProviderHTTPClient(GoogleVertexAIProvider, config, credentialSource)
-	}
+	httpClient, err := newProviderHTTPClient(provider, config)
 	if err != nil {
 		return nil, err
 	}
 
 	return &VertexAIConnector{
 		googleBaseConnector: googleBaseConnector{
-			config:     config,
-			httpClient: httpClient,
-			name:       GoogleVertexAIProvider,
+			config:          config,
+			httpClient:      httpClient,
+			name:            provider,
+			mapFinishReason: mapFinishReason,
 		},
 	}, nil
 }
 
 // Name returns the provider name
 func (c *VertexAIConnector) Name() string {
-	return GoogleVertexAIProvider
+	return c.name
 }
 
 // Chat performs a chat completion request
@@ -108,7 +99,9 @@ func (c *VertexAIConnector) Embeddings(ctx context.Context, req *EmbeddingsReque
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	c.setHeaders(httpReq)
+	if err := c.setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 
 	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
@@ -175,22 +168,13 @@ func withVertexAnthropicVersion(req *ChatRequest) *ChatRequest {
 	return &copyRequest
 }
 
-func (c *VertexAIConnector) setHeaders(req *http.Request) {
+func (c *VertexAIConnector) setHeaders(material credentials.Material, req *http.Request) error {
 	req.Header.Set("Content-Type", "application/json")
-	if c.config.CredentialSource == nil {
-		applyRegisteredInferenceAuth(catalogs.ProviderIDGoogleVertex, req, c.config.APIKey)
+	if err := applyRequestAuthentication(material, req); err != nil {
+		return err
 	}
 	req.Header.Set("User-Agent", "starport/1.0")
-}
-
-func googleCredentialSource(config ProviderConfig) (providerauth.Source, error) {
-	if config.AuthMode != providerauth.ModeDefault {
-		return nil, nil
-	}
-	if config.CredentialSource == nil {
-		return nil, fmt.Errorf("vertex AI resolved credential source is required")
-	}
-	return config.CredentialSource, nil
+	return nil
 }
 
 func (c *VertexAIConnector) handleError(resp *http.Response) error {
@@ -204,14 +188,14 @@ func (c *VertexAIConnector) handleError(resp *http.Response) error {
 
 	if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
 		return &APIError{
-			Provider:   GoogleVertexAIProvider,
+			Provider:   c.name,
 			StatusCode: resp.StatusCode,
 			Message:    fmt.Sprintf("HTTP %d", resp.StatusCode),
 		}
 	}
 
 	return &APIError{
-		Provider:   GoogleVertexAIProvider,
+		Provider:   c.name,
 		StatusCode: resp.StatusCode,
 		Type:       errResp.Error.Status,
 		Message:    errResp.Error.Message,

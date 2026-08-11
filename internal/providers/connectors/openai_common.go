@@ -10,6 +10,8 @@ import (
 	"net/http"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // OpenAICompatibleConnector provides common implementation for OpenAI-compatible APIs
@@ -56,7 +58,7 @@ func marshalOpenAIChatRequest(req *ChatRequest) ([]byte, error) {
 }
 
 // Chat performs a chat completion request for OpenAI-compatible APIs
-func (c *OpenAICompatibleConnector) Chat(ctx context.Context, req *ChatRequest, setHeaders func(*http.Request), handleError func(*http.Response) error) (*ChatResponse, error) {
+func (c *OpenAICompatibleConnector) Chat(ctx context.Context, req *ChatRequest, setHeaders func(credentials.Material, *http.Request) error, handleError func(*http.Response) error) (*ChatResponse, error) {
 	// Ensure stream is false for non-streaming request
 	req.Stream = false
 
@@ -74,7 +76,9 @@ func (c *OpenAICompatibleConnector) Chat(ctx context.Context, req *ChatRequest, 
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	setHeaders(httpReq)
+	if err := setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 
 	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {
@@ -95,7 +99,7 @@ func (c *OpenAICompatibleConnector) Chat(ctx context.Context, req *ChatRequest, 
 }
 
 // ChatStream performs a streaming chat completion request for OpenAI-compatible APIs
-func (c *OpenAICompatibleConnector) ChatStream(ctx context.Context, req *ChatRequest, setHeaders func(*http.Request), handleError func(*http.Response) error, newStream func(*http.Response) ChatStream) (ChatStream, error) {
+func (c *OpenAICompatibleConnector) ChatStream(ctx context.Context, req *ChatRequest, setHeaders func(credentials.Material, *http.Request) error, handleError func(*http.Response) error, newStream func(*http.Response) ChatStream) (ChatStream, error) {
 	// Ensure stream is true for streaming request
 	req.Stream = true
 
@@ -113,7 +117,9 @@ func (c *OpenAICompatibleConnector) ChatStream(ctx context.Context, req *ChatReq
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	setHeaders(httpReq)
+	if err := setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	resp, err := doRequest(c.httpClient, httpReq)
@@ -130,7 +136,7 @@ func (c *OpenAICompatibleConnector) ChatStream(ctx context.Context, req *ChatReq
 }
 
 // Embeddings generates embeddings for OpenAI-compatible APIs
-func (c *OpenAICompatibleConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest, setHeaders func(*http.Request), handleError func(*http.Response) error) (*EmbeddingsResponse, error) {
+func (c *OpenAICompatibleConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest, setHeaders func(credentials.Material, *http.Request) error, handleError func(*http.Response) error) (*EmbeddingsResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -145,7 +151,9 @@ func (c *OpenAICompatibleConnector) Embeddings(ctx context.Context, req *Embeddi
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	setHeaders(httpReq)
+	if err := setHeaders(req.Credential, httpReq); err != nil {
+		return nil, fmt.Errorf("apply provider request authentication: %w", err)
+	}
 
 	resp, err := doRequest(c.httpClient, httpReq)
 	if err != nil {

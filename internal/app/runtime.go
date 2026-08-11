@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
 
 	"github.com/agentstation/starport/internal/cache"
@@ -32,7 +33,7 @@ type catalogRuntime interface {
 type runtimeFactories struct {
 	openStorage  func(config.StorageConfig) (storage.KVStore, error)
 	openCatalog  func(context.Context, storage.KVStore, string) (catalogRuntime, error)
-	newConnector func(string, connectors.ProviderConfig) (connectors.Connector, error)
+	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	newCache     func(cache.ManagerConfig, storage.KVStore) (*cache.Manager, error)
 	newHotReload func(string, time.Duration) (hotReloadRuntime, error)
 	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)

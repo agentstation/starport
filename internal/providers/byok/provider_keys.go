@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -17,7 +16,7 @@ import (
 type keyManager struct {
 	repository credentials.Repository
 	encryption *credentials.EncryptionService
-	adapters   *connectors.AdapterRegistry
+	validator  CredentialValidator
 }
 
 const providerCredentialScanLimit = 1000
@@ -27,13 +26,13 @@ const maxCredentialUpdateAttempts = 256
 func NewProviderKeys(
 	repository credentials.Repository,
 	masterKey []byte,
-	adapters *connectors.AdapterRegistry,
+	validator CredentialValidator,
 ) (ProviderKeys, error) {
 	if repository == nil {
 		return nil, ErrRepositoryRequired
 	}
-	if adapters == nil {
-		return nil, ErrAdapterRegistryRequired
+	if validator == nil {
+		return nil, ErrCredentialValidatorRequired
 	}
 
 	encryption, err := credentials.NewEncryptionService(masterKey)
@@ -44,7 +43,7 @@ func NewProviderKeys(
 	return &keyManager{
 		repository: repository,
 		encryption: encryption,
-		adapters:   adapters,
+		validator:  validator,
 	}, nil
 }
 

@@ -1,7 +1,11 @@
 package server
 
 import (
+	"context"
 	"testing"
+
+	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
@@ -27,6 +31,17 @@ func (a testRegistryAdapter) Get(provider string) connectors.Connector {
 }
 
 func (a testRegistryAdapter) List() []string { return a.registry.ListProviders() }
+
+func (a testRegistryAdapter) ResolveMaterial(
+	context.Context,
+	string,
+) (credentials.Material, error) {
+	return credentials.NewMaterial(
+		catalogs.ProviderCredentialProfile{ID: "none", Primitive: catalogs.ProviderAuthenticationNone},
+		nil,
+		credentials.MaterialMetadata{Version: "test"},
+	), nil
+}
 
 type testServerOption func(*testServerConfig)
 
@@ -59,11 +74,19 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
-	adapterRegistry, err := connectors.ProductionAdapterRegistry()
+	client, err := starmap.NewContext(context.Background())
 	if err != nil {
 		tb.Fatal(err)
 	}
-	providerKeys, err := byok.NewProviderKeys(credentialsRepository, testConfig.masterKey, adapterRegistry)
+	catalog := client.CurrentCatalogState().Catalog
+	validator, err := byok.NewCatalogCredentialValidator(func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
+		provider, lookupErr := catalog.Provider(providerID)
+		return provider, lookupErr == nil
+	})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	providerKeys, err := byok.NewProviderKeys(credentialsRepository, testConfig.masterKey, validator)
 	if err != nil {
 		tb.Fatal(err)
 	}

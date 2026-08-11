@@ -12,8 +12,6 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
-
-	"github.com/agentstation/starport/internal/providerauth"
 )
 
 func TestNewGoogleAIStudioConnector(t *testing.T) {
@@ -25,7 +23,6 @@ func TestNewGoogleAIStudioConnector(t *testing.T) {
 		{
 			name: "missing catalog base URL",
 			config: ProviderConfig{
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -35,7 +32,6 @@ func TestNewGoogleAIStudioConnector(t *testing.T) {
 			name: "custom base URL",
 			config: ProviderConfig{
 				BaseURL:        "https://custom.api",
-				APIKey:         "test-key",
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -45,7 +41,6 @@ func TestNewGoogleAIStudioConnector(t *testing.T) {
 			name: "invalid config - missing timeout",
 			config: ProviderConfig{
 				BaseURL:        "https://provider.test",
-				APIKey:         "test-key",
 				Timeout:        0,
 				MaxConnections: 100,
 			},
@@ -76,8 +71,6 @@ func TestNewVertexAIConnector(t *testing.T) {
 			name: "valid config",
 			config: ProviderConfig{
 				BaseURL:        "https://provider.test",
-				APIKey:         "test-token",
-				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -87,8 +80,6 @@ func TestNewVertexAIConnector(t *testing.T) {
 			name: "project identity is validated by adapter registry",
 			config: ProviderConfig{
 				BaseURL:        "https://provider.test",
-				APIKey:         "test-token",
-				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
@@ -98,20 +89,17 @@ func TestNewVertexAIConnector(t *testing.T) {
 			name: "default location",
 			config: ProviderConfig{
 				BaseURL:        "https://provider.test",
-				APIKey:         "test-token",
-				AuthMode:       providerauth.ModeStatic,
 				Timeout:        30 * time.Second,
 				MaxConnections: 100,
 			},
 			wantErr: false,
 		},
 		{
-			name: "missing auth mode",
+			name: "authentication is request bound",
 			config: ProviderConfig{
 				BaseURL: "https://provider.test",
-				APIKey:  "test-token",
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
@@ -168,14 +156,13 @@ func TestGoogleAPIKeyUsesInferenceHeader(t *testing.T) {
 
 	connector, err := NewGoogleAIStudioConnector(ProviderConfig{
 		BaseURL: server.URL,
-		APIKey:  "test-key",
 		Timeout: 10 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("failed to create connector: %v", err)
 	}
 
-	resp, err := connector.Chat(context.Background(), &ChatRequest{
+	resp, err := connector.Chat(context.Background(), &ChatRequest{Credential: testGoogleMaterial("test-key"),
 		Model: "google-ai-studio/gemini-1.5-flash",
 		Endpoint: InferenceEndpoint{
 			Type: catalogs.EndpointTypeGoogle,
@@ -238,16 +225,14 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 	defer server.Close()
 
 	connector, err := NewVertexAIConnector(ProviderConfig{
-		BaseURL:  server.URL,
-		APIKey:   "test-token",
-		AuthMode: providerauth.ModeStatic,
-		Timeout:  10 * time.Second,
+		BaseURL: server.URL,
+		Timeout: 10 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("failed to create connector: %v", err)
 	}
 
-	resp, err := connector.Chat(context.Background(), &ChatRequest{
+	resp, err := connector.Chat(context.Background(), &ChatRequest{Credential: testGoogleDefaultMaterial("test-token"),
 		Model: "google-vertex/gemini-1.5-flash",
 		Endpoint: InferenceEndpoint{
 			Type: catalogs.EndpointTypeGoogleCloud,
@@ -312,14 +297,13 @@ func TestGoogleAIStudioConnector_ChatStream(t *testing.T) {
 
 	connector, err := NewGoogleAIStudioConnector(ProviderConfig{
 		BaseURL: server.URL,
-		APIKey:  "test-key",
 		Timeout: 10 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("failed to create connector: %v", err)
 	}
 
-	stream, err := connector.ChatStream(context.Background(), &ChatRequest{
+	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testGoogleMaterial("test-key"),
 		Model: "google-ai-studio/gemini-1.5-flash",
 		Endpoint: InferenceEndpoint{
 			Type: catalogs.EndpointTypeGoogle,
@@ -364,11 +348,10 @@ func TestGoogleAIStudioConnector_EmbeddingsUsesOfferingEndpoint(t *testing.T) {
 
 	connector, err := NewGoogleAIStudioConnector(ProviderConfig{
 		BaseURL: server.URL,
-		APIKey:  "inference-key",
 	})
 	require.NoError(t, err)
 	defer connector.Close()
-	response, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{
+	response, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testGoogleMaterial("test-key"),
 		Model: "opaque/embedding@001",
 		Input: []string{"first", "second"},
 		Endpoint: InferenceEndpoint{
