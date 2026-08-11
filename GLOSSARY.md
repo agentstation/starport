@@ -15,9 +15,9 @@
 | OpenAI-compatible API | The Starport HTTP contract under `/v1`. | | approved | `docs/ARCHITECTURE.md` |
 | OpenRouter-compatible API | The Starport HTTP contract under `/api/v1`. | | approved | `docs/ARCHITECTURE.md` |
 | BYOK | Bring your own key, which stores a tenant provider inference credential. | | approved | `internal/providers/byok/provider_keys.go` |
-| credential material | One resolved set of named credential fields with an opaque version and optional lifecycle metadata. | | approved | `docs/plans/catalog-driven-provider-runtime-plan.html` |
-| credential source | A Starport or Starmap concept that resolves credential material from one configured source. | | approved | `docs/plans/catalog-driven-provider-runtime-plan.html` |
-| secret reference | Operator configuration that identifies one external credential without containing credential or backend authentication values. | | approved | `docs/plans/catalog-driven-provider-runtime-plan.html` |
-| runtime generation | One immutable Starport runtime value that binds catalog state, configuration, source handles, connectors, operations, and availability. | | approved | `docs/plans/catalog-driven-provider-runtime-plan.html` |
+| credential material | One resolved set of named credential fields with an opaque version and optional lifecycle metadata. | | approved | `internal/credentials/material.go` |
+| credential source | A Starport or Starmap concept that resolves credential material from one configured source. | | approved | `internal/credentials/source.go` |
+| secret reference | Operator configuration that identifies one external credential without containing credential or backend authentication values. | | approved | `internal/credentials/reference.go` |
+| runtime generation | One immutable Starport runtime value that binds catalog state, configuration, source handles, connectors, operations, and availability. | | approved | `internal/registry/generation.go` |
 | Badger | The embedded storage backend for one Starport process. | | approved | `docs/ARCHITECTURE.md` |
 | Valkey | The shared storage backend for a multi-process Starport deployment. | | approved | `docs/ARCHITECTURE.md` |

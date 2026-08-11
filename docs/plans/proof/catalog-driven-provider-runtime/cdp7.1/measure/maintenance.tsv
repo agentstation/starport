@@ -1,6 +1,0 @@
-observed_at_utc	repository	archived	last_push_utc	github_license
-2026-08-11T12:15:00Z	googleapis/google-cloud-go	false	2026-08-11T10:53:36Z	Apache-2.0
-2026-08-11T12:15:00Z	Azure/azure-sdk-for-go	false	2026-08-11T09:23:35Z	MIT
-2026-08-11T12:15:00Z	aws/aws-sdk-go-v2	false	2026-08-10T22:00:01Z	Apache-2.0
-2026-08-11T12:15:00Z	hashicorp/vault	false	2026-08-11T12:13:02Z	NOASSERTION
-2026-08-11T12:15:00Z	openbao/openbao	false	2026-08-10T15:40:06Z	MPL-2.0
