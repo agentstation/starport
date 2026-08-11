@@ -187,14 +187,10 @@ func googleCredentialSource(config ProviderConfig) (providerauth.Source, error) 
 	if config.AuthMode != providerauth.ModeDefault {
 		return nil, nil
 	}
-	if config.CredentialSource != nil {
-		return config.CredentialSource, nil
+	if config.CredentialSource == nil {
+		return nil, fmt.Errorf("vertex AI resolved credential source is required")
 	}
-	source, err := providerauth.NewGoogleDefaultSource()
-	if err != nil {
-		return nil, fmt.Errorf("create Vertex AI credential source: %w", err)
-	}
-	return source, nil
+	return config.CredentialSource, nil
 }
 
 func (c *VertexAIConnector) handleError(resp *http.Response) error {

@@ -5,6 +5,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 func TestRedactedNeverReturnsSecrets(t *testing.T) {
@@ -19,7 +23,14 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 			Password: secrets[0],
 		}},
 		Providers: ProvidersConfig{"openai": {
-			APIKey: secrets[1], BaseURL: "https://example.com/v1?api_key=query-token-value",
+			Material: credentials.NewMaterial(
+				catalogs.ProviderCredentialProfile{
+					ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+				},
+				map[catalogs.ProviderCredentialFieldID]string{"api-key": secrets[1]},
+				credentials.MaterialMetadata{Version: "opaque"},
+			),
+			BaseURL: "https://example.com/v1?api_key=query-token-value",
 		}},
 		Security: SecurityConfig{MasterKey: secrets[2], JWTSecret: secrets[3]},
 	}
@@ -36,8 +47,11 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 	providers := view["providers"].(map[string]any)
 	openAI := providers["openai"].(map[string]any)
 	security := view["security"].(map[string]any)
-	if openAI["api_key"] != redactedValue || security["master_key"] != redactedValue {
-		t.Errorf("redacted fields = %#v, %#v", openAI["api_key"], security["master_key"])
+	if security["master_key"] != redactedValue {
+		t.Errorf("redacted master key = %#v", security["master_key"])
+	}
+	if material, found := openAI["material"]; !found || len(material.(map[string]any)) != 0 {
+		t.Errorf("redacted material = %#v", material)
 	}
 	storage := view["storage"].(map[string]any)
 	valkey := storage["valkey"].(map[string]any)

@@ -16,17 +16,11 @@ import (
 	"github.com/agentstation/starport/internal/providerauth"
 )
 
-func TestVertexAIConnectorRefreshesDefaultCredential(t *testing.T) {
-	now := time.Unix(1_000, 0)
-	source, err := newTestRefreshingSource(&now, "quota-project")
-	if err != nil {
-		t.Fatalf("new credential source: %v", err)
-	}
+func TestVertexAIConnectorUsesResolvedDefaultCredential(t *testing.T) {
+	source := newTestCredentialSource()
 	var authorizations []string
-	var quotaProjects []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		authorizations = append(authorizations, request.Header.Get("Authorization"))
-		quotaProjects = append(quotaProjects, request.Header.Get("X-Goog-User-Project"))
 		_ = json.NewEncoder(w).Encode(geminiResponse{
 			Candidates: []geminiCandidate{{
 				Content:      geminiContent{Parts: []geminiPart{{Text: "ok"}}, Role: "model"},
@@ -55,22 +49,14 @@ func TestVertexAIConnectorRefreshesDefaultCredential(t *testing.T) {
 		if err != nil {
 			t.Fatalf("chat: %v", err)
 		}
-		now = now.Add(9 * time.Minute)
 	}
 	if want := []string{"Bearer token-1", "Bearer token-2"}; !slices.Equal(authorizations, want) {
 		t.Errorf("Authorization values = %v, want %v", authorizations, want)
 	}
-	if want := []string{"quota-project", "quota-project"}; !slices.Equal(quotaProjects, want) {
-		t.Errorf("quota project values = %v, want %v", quotaProjects, want)
-	}
 }
 
-func TestAzureOpenAIConnectorRefreshesDefaultCredential(t *testing.T) {
-	now := time.Unix(1_000, 0)
-	source, err := newTestRefreshingSource(&now, "")
-	if err != nil {
-		t.Fatalf("new credential source: %v", err)
-	}
+func TestAzureOpenAIConnectorUsesResolvedDefaultCredential(t *testing.T) {
+	source := newTestCredentialSource()
 	var authorizations []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		authorizations = append(authorizations, request.Header.Get("Authorization"))
@@ -103,7 +89,6 @@ func TestAzureOpenAIConnectorRefreshesDefaultCredential(t *testing.T) {
 		if err != nil {
 			t.Fatalf("chat: %v", err)
 		}
-		now = now.Add(9 * time.Minute)
 	}
 	if want := []string{"Bearer token-1", "Bearer token-2"}; !slices.Equal(authorizations, want) {
 		t.Errorf("Authorization values = %v, want %v", authorizations, want)
@@ -167,20 +152,10 @@ func TestCloudConnectorsForwardCredentialCancellation(t *testing.T) {
 	}
 }
 
-func newTestRefreshingSource(now *time.Time, quotaProjectID string) (providerauth.Source, error) {
+func newTestCredentialSource() providerauth.Source {
 	call := 0
-	return providerauth.NewRefreshingSource(
-		providerauth.SourceFunc(func(context.Context) (providerauth.Token, error) {
-			call++
-			return providerauth.Token{
-				Value:          fmt.Sprintf("token-%d", call),
-				ExpiresAt:      now.Add(10 * time.Minute),
-				QuotaProjectID: quotaProjectID,
-			}, nil
-		}),
-		providerauth.RefreshOptions{
-			RefreshBefore: 2 * time.Minute,
-			Now:           func() time.Time { return *now },
-		},
-	)
+	return providerauth.SourceFunc(func(context.Context) (providerauth.Token, error) {
+		call++
+		return providerauth.Token{Value: fmt.Sprintf("token-%d", call)}, nil
+	})
 }

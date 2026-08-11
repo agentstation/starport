@@ -7,8 +7,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-
-	"github.com/agentstation/starport/internal/providerauth"
 )
 
 var hostnameRegex = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
@@ -139,17 +137,8 @@ func (c *ValkeyConfig) Validate() error {
 	return nil
 }
 
-// Validate validates ProviderConfig
+// Validate validates ProviderConfig.
 func (c *ProviderConfig) Validate() error {
-	if err := c.AuthMode.Validate(); err != nil {
-		return err
-	}
-	if c.AuthMode == providerauth.ModeDefault && c.APIKey != "" {
-		return fmt.Errorf("provider API key cannot be combined with default credentials")
-	}
-	if c.AuthMode == providerauth.ModeStatic && c.APIKey == "" {
-		return fmt.Errorf("provider API key is required for static credentials")
-	}
 	if c.BaseURL != "" {
 		if _, err := url.Parse(c.BaseURL); err != nil {
 			return fmt.Errorf("base URL is invalid")
@@ -171,7 +160,8 @@ func (c *ProviderConfig) Validate() error {
 func (c *ProvidersConfig) Validate() error {
 	for _, entry := range c.Entries() {
 		provider := entry.Config
-		active := provider.APIKey != "" || provider.AuthMode != "" || provider.BaseURL != "" ||
+		active := !provider.Material.Empty() || provider.CredentialSource != nil ||
+			provider.BaseURL != "" || len(provider.CredentialReferences) > 0 ||
 			len(provider.EndpointBindings) > 0 || provider.Enabled
 		if !active {
 			continue

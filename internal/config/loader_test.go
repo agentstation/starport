@@ -15,7 +15,6 @@ import (
 func TestLoaderDefersProviderEnvironmentUntilCatalogResolution(t *testing.T) {
 	environment := map[string]string{
 		"GOOGLE_API_KEY":          "studio-key",
-		"GOOGLE_CLOUD_PROJECT":    "vertex-project",
 		"AZURE_OPENAI_ENDPOINT":   "https://azure.example",
 		"AZURE_OPENAI_API_KEY":    "azure-key",
 		"FIREWORKS_API_KEY":       "fireworks-key",
@@ -27,24 +26,10 @@ func TestLoaderDefersProviderEnvironmentUntilCatalogResolution(t *testing.T) {
 	}
 	resolveTestProviders(t, cfg)
 
-	if cfg.Providers[catalogs.ProviderIDGoogleAIStudio].APIKey != "studio-key" {
-		t.Fatalf("Google AI Studio API key = %q", cfg.Providers[catalogs.ProviderIDGoogleAIStudio].APIKey)
-	}
-	if cfg.Providers[catalogs.ProviderIDGoogleVertex].AuthMode != "default" {
-		t.Fatalf("Google Vertex auth mode = %q", cfg.Providers[catalogs.ProviderIDGoogleVertex].AuthMode)
-	}
-	if cfg.Providers[catalogs.ProviderIDGoogleVertex].EndpointBindings["project"] != "vertex-project" {
-		t.Fatalf("Google Vertex bindings = %#v", cfg.Providers[catalogs.ProviderIDGoogleVertex].EndpointBindings)
-	}
-	if cfg.Providers[catalogs.ProviderIDAzureOpenAI].APIKey != "azure-key" {
-		t.Fatalf("Azure OpenAI API key = %q", cfg.Providers[catalogs.ProviderIDAzureOpenAI].APIKey)
-	}
-	if cfg.Providers["fireworks-ai"].APIKey != "fireworks-key" {
-		t.Fatalf("Fireworks API key = %q", cfg.Providers["fireworks-ai"].APIKey)
-	}
-	if cfg.Providers[catalogs.ProviderIDOpenAI].APIKey != "openai-product-key" {
-		t.Fatalf("OpenAI product alias = %q", cfg.Providers[catalogs.ProviderIDOpenAI].APIKey)
-	}
+	assertProviderMaterialValue(t, cfg, catalogs.ProviderIDGoogleAIStudio, "api-key", "studio-key")
+	assertProviderMaterialValue(t, cfg, catalogs.ProviderIDAzureOpenAI, "api-key", "azure-key")
+	assertProviderMaterialValue(t, cfg, "fireworks-ai", "api-key", "fireworks-key")
+	assertProviderMaterialValue(t, cfg, catalogs.ProviderIDOpenAI, "api-key", "openai-product-key")
 }
 
 func TestLoaderIgnoresRemovedProviderEnvironmentNamespaces(t *testing.T) {
@@ -253,8 +238,26 @@ func resolveTestProviders(t *testing.T, cfg *Config) {
 	if err != nil {
 		t.Fatalf("build embedded catalog: %v", err)
 	}
-	if err := cfg.ResolveProviders(catalog.Providers()); err != nil {
+	if err := cfg.ResolveProviders(context.Background(), catalog.Providers()); err != nil {
 		t.Fatalf("resolve providers: %v", err)
+	}
+}
+
+func assertProviderMaterialValue(
+	t *testing.T,
+	cfg *Config,
+	providerID catalogs.ProviderID,
+	fieldID catalogs.ProviderCredentialFieldID,
+	want string,
+) {
+	t.Helper()
+	provider, found := cfg.Providers[providerID]
+	if !found {
+		t.Fatalf("provider %s was not resolved", providerID)
+	}
+	got, found := provider.Material.Value(fieldID)
+	if !found || got != want {
+		t.Fatalf("provider %s field %s = %q, %t", providerID, fieldID, got, found)
 	}
 }
 

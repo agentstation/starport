@@ -12,6 +12,7 @@ import (
 	urfavecli "github.com/urfave/cli/v3"
 
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/diagnosis"
 )
 
@@ -323,8 +324,16 @@ func TestConfigShowJSONRedactsSecrets(t *testing.T) {
 	secret := "secret-that-must-not-appear"
 	deps.LoadConfig = func(context.Context) (*config.Config, error) {
 		return &config.Config{
-			Providers: config.ProvidersConfig{"openai": {APIKey: secret}},
-			Security:  config.SecurityConfig{MasterKey: secret},
+			Providers: config.ProvidersConfig{"openai": {
+				Material: credentials.NewMaterial(
+					catalogs.ProviderCredentialProfile{
+						ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+					},
+					map[catalogs.ProviderCredentialFieldID]string{"api-key": secret},
+					credentials.MaterialMetadata{Version: "opaque"},
+				),
+			}},
+			Security: config.SecurityConfig{MasterKey: secret},
 		}, nil
 	}
 	if err := Run(context.Background(), []string{"starport", "config", "show", "--json"}, deps); err != nil {

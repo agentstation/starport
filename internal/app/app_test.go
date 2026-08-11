@@ -240,6 +240,8 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 
 func validProductionConfig(t *testing.T) *config.Config {
 	t.Helper()
+	credentialPath := filepath.Join(t.TempDir(), "openai-api-key")
+	require.NoError(t, os.WriteFile(credentialPath, []byte("sk-test-key"), 0o600))
 	return &config.Config{
 		Server: config.ServerConfig{
 			Port: 18080, Host: "127.0.0.1", ReadTimeout: time.Second,
@@ -255,7 +257,10 @@ func validProductionConfig(t *testing.T) *config.Config {
 		},
 		Providers: config.ProvidersConfig{
 			catalogs.ProviderIDOpenAI: {
-				BaseURL: "https://api.openai.com/v1", APIKey: "test-key",
+				BaseURL: "https://api.openai.com/v1",
+				CredentialReferences: map[catalogs.ProviderCredentialFieldID]config.CredentialReference{
+					"api-key": {Reference: "file:" + credentialPath},
+				},
 				Timeout: time.Second, MaxConnections: 10,
 			},
 		},

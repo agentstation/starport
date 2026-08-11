@@ -9,6 +9,9 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/sethvargo/go-envconfig"
+
+	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/providerauth"
 )
 
 // Loader reads configuration without changing process state.
@@ -111,6 +114,13 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 		return nil, newLoadFailure("configuration values are invalid", err)
 	}
 	cfg.providerEnvironment = lookuper
+	resolverOptions := []credentials.ResolverOption{
+		credentials.WithEnvironmentLookup(lookuper.Lookup),
+	}
+	for primitive, chain := range providerauth.DefaultCloudChains() {
+		resolverOptions = append(resolverOptions, credentials.WithCloudChain(primitive, chain))
+	}
+	cfg.credentialResolver = credentials.NewResolver(resolverOptions...)
 
 	return cfg, nil
 }

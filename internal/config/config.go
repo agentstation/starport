@@ -9,7 +9,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 // Config represents the complete application configuration
@@ -25,6 +25,7 @@ type Config struct {
 	ChatUI       ChatUIConfig       `env:",prefix=CHATUI_"`
 
 	providerEnvironment environmentLookup
+	credentialResolver  *credentials.Resolver
 }
 
 // CatalogConfig defines Starmap acquisition and tenant workspace settings.
@@ -86,15 +87,21 @@ type ProvidersConfig map[catalogs.ProviderID]ProviderConfig
 
 // ProviderConfig defines settings for a single LLM provider
 type ProviderConfig struct {
-	BaseURL          string                                   `redact:"url"`
-	APIKey           string                                   `secret:"true"`
-	AuthMode         providerauth.Mode                        `json:"auth_mode,omitempty"`
-	ProfileID        catalogs.ProviderCredentialProfileID     `json:"profile_id,omitempty"`
-	Primitive        catalogs.ProviderAuthenticationPrimitive `json:"primitive,omitempty"`
-	Timeout          time.Duration                            `json:"timeout"`
-	MaxConnections   int                                      `json:"max_connections"`
-	Enabled          bool                                     `json:"enabled"`
-	EndpointBindings map[string]string                        `json:"endpoint_bindings,omitempty"`
+	BaseURL              string                                                     `redact:"url"`
+	CredentialReferences map[catalogs.ProviderCredentialFieldID]CredentialReference `json:"credential_references,omitempty"`
+	Material             credentials.Material                                       `json:"-"`
+	CredentialSource     credentials.MaterialSource                                 `json:"-"`
+	Timeout              time.Duration                                              `json:"timeout"`
+	MaxConnections       int                                                        `json:"max_connections"`
+	Enabled              bool                                                       `json:"enabled"`
+	EndpointBindings     map[string]string                                          `json:"endpoint_bindings,omitempty"`
+}
+
+// CredentialReference selects one explicit source for a catalog credential
+// field. Ambient fallback applies only to a not-configured source result.
+type CredentialReference struct {
+	Reference       string `json:"reference"`
+	FallbackAmbient bool   `json:"fallback_ambient,omitempty"`
 }
 
 // ProviderEntry binds external operator configuration to one exact Starmap provider ID.

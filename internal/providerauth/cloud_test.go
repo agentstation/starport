@@ -10,6 +10,7 @@ import (
 	"cloud.google.com/go/auth"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
 type googleTokenProviderFunc func(context.Context) (*auth.Token, error)
@@ -27,135 +28,128 @@ func (f azureTokenCredentialFunc) GetToken(
 	return f(ctx, options)
 }
 
-func TestGoogleSourceAdaptsTokenAndCancellation(t *testing.T) {
+func TestGoogleDefaultChainUsesCatalogScopeAndBearerField(t *testing.T) {
 	expiresAt := time.Now().Add(time.Hour)
-	provider := googleTokenProviderFunc(func(ctx context.Context) (*auth.Token, error) {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		return &auth.Token{Value: "google-token", Expiry: expiresAt}, nil
-	})
-	source, err := newGoogleSource(provider, "quota-project")
+	var requested bool
+	chain := googleDefaultChain{provider: googleTokenProviderFunc(
+		func(ctx context.Context) (*auth.Token, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			requested = true
+			return &auth.Token{Value: "google-token", Expiry: expiresAt}, nil
+		},
+	)}
+	material, err := chain.Resolve(context.Background(), cloudTestProfile(
+		catalogs.ProviderAuthenticationGoogleDefault,
+		[]string{"https://example.test/scope"},
+	), cloudTestFields())
 	if err != nil {
-		t.Fatalf("new Google source: %v", err)
+		t.Fatalf("resolve Google default chain: %v", err)
 	}
-	token, err := source.Token(context.Background())
-	if err != nil {
-		t.Fatalf("Google token: %v", err)
+	if value, exists := material.Value("access-token"); !exists || value != "google-token" {
+		t.Fatalf("Google bearer value = %q, %t", value, exists)
 	}
-	if token.Value != "google-token" || !token.ExpiresAt.Equal(expiresAt) ||
-		token.QuotaProjectID != "quota-project" {
-		t.Fatalf("Google token = %#v", token)
+	if !requested {
+		t.Fatal("Google token provider was not called")
 	}
+}
 
-	canceledSource, err := newGoogleSource(googleTokenProviderFunc(
+func TestGoogleDefaultChainForwardsCancellation(t *testing.T) {
+	chain := googleDefaultChain{provider: googleTokenProviderFunc(
 		func(ctx context.Context) (*auth.Token, error) {
 			<-ctx.Done()
 			return nil, ctx.Err()
 		},
-	), "")
-	if err != nil {
-		t.Fatalf("new canceled Google source: %v", err)
-	}
+	)}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = canceledSource.Token(ctx)
+	_, err := chain.Resolve(ctx, cloudTestProfile(
+		catalogs.ProviderAuthenticationGoogleDefault,
+		nil,
+	), cloudTestFields())
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("Google token error = %v, want context cancellation", err)
+		t.Fatalf("Google chain error = %v", err)
 	}
 }
 
-func TestGoogleCredentialSourcePreservesQuotaProject(t *testing.T) {
+func TestAzureDefaultChainUsesCatalogScopesAndBearerField(t *testing.T) {
 	expiresAt := time.Now().Add(time.Hour)
-	credential := auth.NewCredentials(&auth.CredentialsOptions{
-		TokenProvider: googleTokenProviderFunc(func(context.Context) (*auth.Token, error) {
-			return &auth.Token{Value: "google-token", Expiry: expiresAt}, nil
-		}),
-		QuotaProjectIDProvider: auth.CredentialsPropertyFunc(
-			func(context.Context) (string, error) { return "quota-project", nil },
-		),
-	})
-	source, err := newGoogleCredentialSource(credential)
-	if err != nil {
-		t.Fatalf("new Google credential source: %v", err)
-	}
-	token, err := source.Token(context.Background())
-	if err != nil {
-		t.Fatalf("Google token: %v", err)
-	}
-	if token.QuotaProjectID != "quota-project" {
-		t.Fatalf("Google quota project = %q, want quota-project", token.QuotaProjectID)
-	}
-}
-
-func TestGoogleCredentialSourceRejectsQuotaProjectFailure(t *testing.T) {
-	injected := errors.New("quota project unavailable")
-	credential := auth.NewCredentials(&auth.CredentialsOptions{
-		TokenProvider: googleTokenProviderFunc(func(context.Context) (*auth.Token, error) {
-			return nil, errors.New("unexpected token request")
-		}),
-		QuotaProjectIDProvider: auth.CredentialsPropertyFunc(
-			func(context.Context) (string, error) { return "", injected },
-		),
-	})
-	if _, err := newGoogleCredentialSource(credential); !errors.Is(err, injected) {
-		t.Fatalf("new Google credential source error = %v, want quota failure", err)
-	}
-}
-
-func TestAzureSourceUsesCognitiveServicesScopeAndCancellation(t *testing.T) {
-	expiresAt := time.Now().Add(time.Hour)
-	var scopes []string
-	credential := azureTokenCredentialFunc(func(
-		ctx context.Context,
-		options policy.TokenRequestOptions,
-	) (azcore.AccessToken, error) {
-		if err := ctx.Err(); err != nil {
-			return azcore.AccessToken{}, err
-		}
-		scopes = append([]string(nil), options.Scopes...)
-		return azcore.AccessToken{Token: "azure-token", ExpiresOn: expiresAt}, nil
-	})
-	source, err := newAzureSource(credential)
-	if err != nil {
-		t.Fatalf("new Azure source: %v", err)
-	}
-	token, err := source.Token(context.Background())
-	if err != nil {
-		t.Fatalf("Azure token: %v", err)
-	}
-	if token.Value != "azure-token" || !token.ExpiresAt.Equal(expiresAt) {
-		t.Fatalf("Azure token = %#v", token)
-	}
-	if want := []string{azureCognitiveServicesScope}; !slices.Equal(scopes, want) {
-		t.Errorf("Azure scopes = %v, want %v", scopes, want)
-	}
-
-	canceledSource, err := newAzureSource(azureTokenCredentialFunc(
-		func(ctx context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
-			<-ctx.Done()
-			return azcore.AccessToken{}, ctx.Err()
+	wantScopes := []string{"https://example.test/.default"}
+	var gotScopes []string
+	chain := azureDefaultChain{credential: azureTokenCredentialFunc(
+		func(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
+			if err := ctx.Err(); err != nil {
+				return azcore.AccessToken{}, err
+			}
+			gotScopes = append([]string(nil), options.Scopes...)
+			return azcore.AccessToken{Token: "azure-token", ExpiresOn: expiresAt}, nil
 		},
-	))
+	)}
+	material, err := chain.Resolve(context.Background(), cloudTestProfile(
+		catalogs.ProviderAuthenticationAzureDefault,
+		wantScopes,
+	), cloudTestFields())
 	if err != nil {
-		t.Fatalf("new canceled Azure source: %v", err)
+		t.Fatalf("resolve Azure default chain: %v", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err = canceledSource.Token(ctx)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("Azure token error = %v, want context cancellation", err)
+	if value, exists := material.Value("access-token"); !exists || value != "azure-token" {
+		t.Fatalf("Azure bearer value = %q, %t", value, exists)
+	}
+	if !slices.Equal(gotScopes, wantScopes) {
+		t.Fatalf("Azure scopes = %v, want %v", gotScopes, wantScopes)
 	}
 }
 
-func TestCloudSourcesRequireSDKCredentials(t *testing.T) {
-	if _, err := newGoogleCredentialSource(nil); err == nil {
-		t.Error("Google source accepted nil credentials")
+func TestCloudChainsAreKeyedOnlyByAuthenticationPrimitive(t *testing.T) {
+	chains := DefaultCloudChains()
+	if len(chains) != 2 ||
+		chains[catalogs.ProviderAuthenticationGoogleDefault] == nil ||
+		chains[catalogs.ProviderAuthenticationAzureDefault] == nil {
+		t.Fatalf("default cloud chains = %#v", chains)
 	}
-	if _, err := newGoogleSource(nil, ""); err == nil {
-		t.Error("Google source accepted a nil provider")
+}
+
+func TestCloudChainRejectsAmbiguousBearerFields(t *testing.T) {
+	profile := cloudTestProfile(catalogs.ProviderAuthenticationGoogleDefault, nil)
+	profile.Fields = append(profile.Fields, "second-token")
+	profile.Placements = append(profile.Placements, catalogs.ProviderCredentialPlacement{
+		Field: "second-token", Kind: catalogs.ProviderCredentialPlacementHeader,
+		Name: "X-Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer,
+	})
+	fields := cloudTestFields()
+	fields["second-token"] = catalogs.ProviderCredentialField{
+		ID: "second-token", Kind: catalogs.ProviderCredentialFieldSecret, Required: true,
 	}
-	if _, err := newAzureSource(nil); err == nil {
-		t.Error("Azure source accepted a nil credential")
+	chain := googleDefaultChain{provider: googleTokenProviderFunc(
+		func(context.Context) (*auth.Token, error) {
+			return &auth.Token{Value: "token", Expiry: time.Now().Add(time.Hour)}, nil
+		},
+	)}
+	if _, err := chain.Resolve(context.Background(), profile, fields); err == nil {
+		t.Fatal("ambiguous bearer profile was accepted")
+	}
+}
+
+func cloudTestProfile(
+	primitive catalogs.ProviderAuthenticationPrimitive,
+	scopes []string,
+) catalogs.ProviderCredentialProfile {
+	return catalogs.ProviderCredentialProfile{
+		ID: "default", Primitive: primitive,
+		Fields: []catalogs.ProviderCredentialFieldID{"access-token"},
+		Placements: []catalogs.ProviderCredentialPlacement{{
+			Field: "access-token", Kind: catalogs.ProviderCredentialPlacementHeader,
+			Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer,
+		}},
+		Scopes: append([]string(nil), scopes...),
+	}
+}
+
+func cloudTestFields() map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField {
+	return map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField{
+		"access-token": {
+			ID: "access-token", Kind: catalogs.ProviderCredentialFieldSecret, Required: true,
+		},
 	}
 }

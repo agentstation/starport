@@ -440,6 +440,9 @@ func requiredCloudCredentialConfig(config ProviderConfig) error {
 		if strings.TrimSpace(config.APIKey) != "" {
 			return errors.New("inference API key cannot be combined with default credentials")
 		}
+		if config.CredentialSource == nil {
+			return errors.New("resolved credential source is required for default credentials")
+		}
 		return nil
 	case providerauth.ModeStatic:
 		return requiredAPIKeyConfig(config)

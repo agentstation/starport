@@ -1,11 +1,14 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/credentials"
 )
 
 func TestCatalogCredentialEnvironmentPrecedence(t *testing.T) {
@@ -38,10 +41,11 @@ func TestCatalogCredentialEnvironmentPrecedence(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := &Config{providerEnvironment: mapEnvironmentLookup(test.values)}
-			if err := cfg.ResolveProviders(providers); err != nil {
+			if err := cfg.ResolveProviders(context.Background(), providers); err != nil {
 				t.Fatalf("ResolveProviders: %v", err)
 			}
-			if got := cfg.Providers[provider.ID].APIKey; got != test.want {
+			got, _ := cfg.Providers[provider.ID].Material.Value("api-key")
+			if got != test.want {
 				t.Fatalf("API key = %q, want selected source", got)
 			}
 		})
@@ -58,8 +62,9 @@ func TestCatalogCredentialEnvironmentPrecedence(t *testing.T) {
 			value, found := values[name]
 			return value, found
 		})}
-		err := cfg.ResolveProviders(providers)
-		if !errors.Is(err, ErrProviderCredentialInvalid) {
+		err := cfg.ResolveProviders(context.Background(), providers)
+		var selectedErr *credentials.SelectedValueError
+		if !errors.As(err, &selectedErr) {
 			t.Fatalf("ResolveProviders error = %v", err)
 		}
 		if !reflect.DeepEqual(lookups, []string{"OPENAI_API_KEY"}) {
@@ -80,12 +85,13 @@ func TestCatalogOnlyProviderEnvironmentResolvesWithoutSourceRoster(t *testing.T)
 	cfg := &Config{providerEnvironment: mapEnvironmentLookup(map[string]string{
 		"FIREWORKS_API_KEY": "fireworks-key",
 	})}
-	if err := cfg.ResolveProviders(catalog.Providers()); err != nil {
+	if err := cfg.ResolveProviders(context.Background(), catalog.Providers()); err != nil {
 		t.Fatal(err)
 	}
 	resolved, found := cfg.Providers["fireworks-ai"]
-	if !found || resolved.APIKey != "fireworks-key" ||
-		resolved.Primitive != catalogs.ProviderAuthenticationAPIKey {
+	value, exists := resolved.Material.Value("api-key")
+	if !found || !exists || value != "fireworks-key" ||
+		resolved.Material.Profile().Primitive != catalogs.ProviderAuthenticationAPIKey {
 		t.Fatalf("Fireworks configuration = %#v", resolved)
 	}
 }
@@ -104,7 +110,7 @@ func TestCredentialAliasCollisionsFailBeforeConnectorConstruction(t *testing.T) 
 		reads++
 		return "must-not-be-read", true
 	})}
-	err := cfg.ResolveProviders(providers)
+	err := cfg.ResolveProviders(context.Background(), providers)
 	if !errors.Is(err, ErrCredentialAliasCollision) {
 		t.Fatalf("ResolveProviders error = %v", err)
 	}

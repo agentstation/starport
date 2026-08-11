@@ -78,14 +78,10 @@ func azureCredentialSource(config ProviderConfig) (providerauth.Source, error) {
 	if config.AuthMode != providerauth.ModeDefault {
 		return nil, nil
 	}
-	if config.CredentialSource != nil {
-		return config.CredentialSource, nil
+	if config.CredentialSource == nil {
+		return nil, fmt.Errorf("azure OpenAI resolved credential source is required")
 	}
-	source, err := providerauth.NewAzureDefaultSource()
-	if err != nil {
-		return nil, fmt.Errorf("create Azure OpenAI credential source: %w", err)
-	}
-	return source, nil
+	return config.CredentialSource, nil
 }
 
 // handleError handles error responses from the API (reuse OpenAI's error handling)

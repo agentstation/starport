@@ -174,7 +174,7 @@ func (s service) checkAdapters(
 	source *catalogs.Catalog,
 	report *Report,
 ) {
-	if err := cfg.ResolveProviders(source.Providers()); err != nil {
+	if err := cfg.ResolveProviders(context.Background(), source.Providers()); err != nil {
 		report.addFailure("adapters", "provider configuration could not be resolved")
 		return
 	}
@@ -183,7 +183,12 @@ func (s service) checkAdapters(
 		report.addFailure("adapters", "provider adapter registry could not be created")
 		return
 	}
-	activations, err := adapterRegistry.Activate(source, providers.Configurations(cfg.Providers))
+	providerConfigs, err := providers.Configurations(cfg.Providers)
+	if err != nil {
+		report.addFailure("adapters", "provider credentials could not be projected")
+		return
+	}
+	activations, err := adapterRegistry.Activate(source, providerConfigs)
 	if err != nil {
 		report.addFailure("adapters", "provider adapters could not be activated")
 		return

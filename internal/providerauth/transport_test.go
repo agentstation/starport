@@ -72,68 +72,6 @@ func TestBearerTransportAuthorizesARequestCopy(t *testing.T) {
 	}
 }
 
-func TestBearerTransportAddsGoogleQuotaProject(t *testing.T) {
-	request, err := http.NewRequest(http.MethodPost, "https://provider.test/inference", nil)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	base := roundTripperFunc(func(got *http.Request) (*http.Response, error) {
-		if value := got.Header.Get(googleQuotaProjectHeader); value != "quota-project" {
-			t.Errorf("%s = %q", googleQuotaProjectHeader, value)
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader("ok")),
-			Header:     make(http.Header),
-			Request:    got,
-		}, nil
-	})
-	transport := NewBearerTransport(base, SourceFunc(func(context.Context) (Token, error) {
-		return Token{
-			Value:          "renewable",
-			ExpiresAt:      time.Now().Add(time.Hour),
-			QuotaProjectID: "quota-project",
-		}, nil
-	}))
-
-	if _, err := transport.RoundTrip(request); err != nil {
-		t.Fatalf("round trip: %v", err)
-	}
-	if value := request.Header.Get(googleQuotaProjectHeader); value != "" {
-		t.Errorf("original %s = %q", googleQuotaProjectHeader, value)
-	}
-}
-
-func TestBearerTransportPreservesExplicitGoogleQuotaProject(t *testing.T) {
-	request, err := http.NewRequest(http.MethodPost, "https://provider.test/inference", nil)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	request.Header.Set(googleQuotaProjectHeader, "request-project")
-	base := roundTripperFunc(func(got *http.Request) (*http.Response, error) {
-		if value := got.Header.Get(googleQuotaProjectHeader); value != "request-project" {
-			t.Errorf("%s = %q", googleQuotaProjectHeader, value)
-		}
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader("ok")),
-			Header:     make(http.Header),
-			Request:    got,
-		}, nil
-	})
-	transport := NewBearerTransport(base, SourceFunc(func(context.Context) (Token, error) {
-		return Token{
-			Value:          "renewable",
-			ExpiresAt:      time.Now().Add(time.Hour),
-			QuotaProjectID: "credential-project",
-		}, nil
-	}))
-
-	if _, err := transport.RoundTrip(request); err != nil {
-		t.Fatalf("round trip: %v", err)
-	}
-}
-
 func TestBearerTransportRejectsCredentialRedirect(t *testing.T) {
 	var targetRequests atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -145,9 +83,6 @@ func TestBearerTransportRejectsCredentialRedirect(t *testing.T) {
 		if value := request.Header.Get("Authorization"); value != "Bearer renewable" {
 			t.Errorf("Authorization = %q", value)
 		}
-		if value := request.Header.Get(googleQuotaProjectHeader); value != "quota-project" {
-			t.Errorf("%s = %q", googleQuotaProjectHeader, value)
-		}
 		http.Redirect(w, request, target.URL, http.StatusTemporaryRedirect)
 	}))
 	defer origin.Close()
@@ -155,11 +90,7 @@ func TestBearerTransportRejectsCredentialRedirect(t *testing.T) {
 	client := &http.Client{
 		Transport: NewBearerTransport(http.DefaultTransport, SourceFunc(
 			func(context.Context) (Token, error) {
-				return Token{
-					Value:          "renewable",
-					ExpiresAt:      time.Now().Add(time.Hour),
-					QuotaProjectID: "quota-project",
-				}, nil
+				return Token{Value: "renewable", ExpiresAt: time.Now().Add(time.Hour)}, nil
 			},
 		)),
 	}

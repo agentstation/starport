@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"testing"
@@ -52,7 +53,16 @@ func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 	require.ErrorIs(t, err, connectors.ErrAdapterProviderMissingCatalog)
 }
 
+func TestInferenceCredentialsNeverEnterCatalogState(t *testing.T) {
+	testAuthPlanesAreIsolated(t)
+}
+
 func TestAuthPlanesAreIsolated(t *testing.T) {
+	testAuthPlanesAreIsolated(t)
+}
+
+func testAuthPlanesAreIsolated(t *testing.T) {
+	t.Helper()
 	t.Setenv("OPENAI_API_KEY", "sk-acquisition-secret")
 	cfg, err := config.NewLoader().
 		WithEnvironment(map[string]string{"STARPORT_OPENAI_API_KEY": "sk-inference-secret"}).
@@ -62,15 +72,23 @@ func TestAuthPlanesAreIsolated(t *testing.T) {
 
 	runtime, err := runtimecatalog.OpenRuntime(context.Background(), storage.NewMockStore(), "")
 	require.NoError(t, err)
-	require.NoError(t, cfg.ResolveProviders(runtime.ControlPlane().Current().Catalog().Providers()))
-	require.Equal(t, "sk-inference-secret", cfg.Providers[catalogs.ProviderIDOpenAI].APIKey)
+	require.NoError(t, cfg.ResolveProviders(
+		context.Background(), runtime.ControlPlane().Current().Catalog().Providers(),
+	))
+	inferenceSecret, found := cfg.Providers[catalogs.ProviderIDOpenAI].Material.Value("api-key")
+	require.True(t, found)
+	require.Equal(t, "sk-inference-secret", inferenceSecret)
 	provider, err := runtime.ControlPlane().Current().Catalog().Provider(catalogs.ProviderIDOpenAI)
 	require.NoError(t, err)
 	acquisitionField, found := credentialFieldForEnvironment(provider.Credentials, "OPENAI_API_KEY")
 	require.True(t, found)
 	require.Equal(t, catalogs.ProviderCredentialFieldSecret, acquisitionField.Kind)
 	require.NotContains(t, fmt.Sprintf("%#v", provider), "sk-acquisition-secret")
-	require.NotEqual(t, cfg.Providers[catalogs.ProviderIDOpenAI].APIKey, "sk-acquisition-secret")
+	require.NotEqual(t, inferenceSecret, "sk-acquisition-secret")
+	catalogBytes, err := json.Marshal(runtime.ControlPlane().Current().Catalog())
+	require.NoError(t, err)
+	require.NotContains(t, string(catalogBytes), inferenceSecret)
+	require.NotContains(t, string(catalogBytes), "sk-acquisition-secret")
 }
 
 func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {

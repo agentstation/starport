@@ -155,6 +155,9 @@ func TestAmbientCloudCredentialsRequireExplicitInferenceOptIn(t *testing.T) {
 func TestCloudAdapterDescriptorsAcceptExplicitCredentialModes(t *testing.T) {
 	adapters, err := ProductionAdapterRegistry()
 	require.NoError(t, err)
+	resolvedSource := providerauth.SourceFunc(func(context.Context) (providerauth.Token, error) {
+		return providerauth.Token{Value: "resolved-token"}, nil
+	})
 	tests := []struct {
 		name       string
 		providerID catalogs.ProviderID
@@ -163,7 +166,9 @@ func TestCloudAdapterDescriptorsAcceptExplicitCredentialModes(t *testing.T) {
 		{
 			name:       "Vertex default credentials",
 			providerID: catalogs.ProviderIDGoogleVertex,
-			config:     ProviderConfig{AuthMode: providerauth.ModeDefault},
+			config: ProviderConfig{
+				AuthMode: providerauth.ModeDefault, CredentialSource: resolvedSource,
+			},
 		},
 		{
 			name:       "Vertex static token",
@@ -174,8 +179,9 @@ func TestCloudAdapterDescriptorsAcceptExplicitCredentialModes(t *testing.T) {
 			name:       "Azure default credentials",
 			providerID: catalogs.ProviderIDAzureOpenAI,
 			config: ProviderConfig{
-				AuthMode: providerauth.ModeDefault,
-				BaseURL:  "https://resource.openai.azure.com",
+				AuthMode:         providerauth.ModeDefault,
+				CredentialSource: resolvedSource,
+				BaseURL:          "https://resource.openai.azure.com",
 			},
 		},
 		{

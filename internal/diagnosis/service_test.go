@@ -36,7 +36,8 @@ func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{cfg.Security.MasterKey, cfg.Providers[catalogs.ProviderIDOpenAI].APIKey} {
+	providerSecret, _ := cfg.Providers[catalogs.ProviderIDOpenAI].Material.Value("api-key")
+	for _, secret := range []string{cfg.Security.MasterKey, providerSecret} {
 		if strings.Contains(string(encoded), secret) {
 			t.Errorf("diagnosis output contains secret %q", secret)
 		}
@@ -120,13 +121,17 @@ func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 	cfg := loadTestConfig(t, root)
 	resolveEmbeddedProviders(t, cfg)
 	openAI := cfg.Providers[catalogs.ProviderIDOpenAI]
+	openAISecret, found := openAI.Material.Value("api-key")
+	if !found {
+		t.Fatal("OpenAI inference material is missing")
+	}
 	openAI.BaseURL = "https://" + "url-user:url-password" + "@provider.example?token=" +
-		openAI.APIKey + "#base-url-secret"
+		openAISecret + "#base-url-secret"
 	cfg.Providers[catalogs.ProviderIDOpenAI] = openAI
 	service := testService(cfg)
 	service.dependencies.adapters = func() (*connectors.AdapterRegistry, error) {
 		return nil, errors.New(
-			"failure " + openAI.APIKey + " " +
+			"failure " + openAISecret + " " +
 				openAI.BaseURL + " " + cfg.Security.MasterKey +
 				" url-password base-url-secret",
 		)
@@ -137,7 +142,7 @@ func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, secret := range []string{
-		openAI.APIKey,
+		openAISecret,
 		openAI.BaseURL,
 		cfg.Security.MasterKey,
 		"url-password",
@@ -229,7 +234,7 @@ func resolveEmbeddedProviders(t *testing.T, cfg *config.Config) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.ResolveProviders(catalog.Providers()); err != nil {
+	if err := cfg.ResolveProviders(context.Background(), catalog.Providers()); err != nil {
 		t.Fatal(err)
 	}
 }
