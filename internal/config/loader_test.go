@@ -347,6 +347,56 @@ func TestLoaderDoesNotMutateEnvironment(t *testing.T) {
 	}
 }
 
+func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
+	paths := PathsForConfigDir(t.TempDir())
+	writeEnvFile(
+		t,
+		paths.ConfigDir,
+		filepath.Base(paths.ConfigFile),
+		"STARPORT_SERVER_PORT=19001\nOPENAI_API_KEY=file-secret",
+	)
+	loader := NewLoader().
+		WithPaths(paths).
+		WithEnvironment(map[string]string{
+			"OPENAI_API_KEY":                           "process-secret",
+			"STARPORT_CATALOG_REFRESH_INTERVAL":        "1m",
+			"STARPORT_CATALOG_REFRESH_ON_START":        "true",
+			"STARPORT_SERVER_HOST":                     "0.0.0.0",
+			"STARPORT_SERVER_PORT":                     "18994",
+			"STARPORT_STORAGE_MODE":                    "valkey",
+			"STARPORT_SECURITY_MASTER_KEY":             "short",
+			"STARPORT_SECURITY_ENABLE_TLS":             "true",
+			"STARPORT_LOGGING_OUTPUT":                  "file",
+			"STARPORT_RATE_LIMITING_ENABLE_HOT_RELOAD": "true",
+		}).
+		WithEnvFiles()
+
+	cfg, err := loader.LoadDevelopment(t.Context())
+	if err != nil {
+		t.Fatalf("load development config: %v", err)
+	}
+	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 18994 {
+		t.Fatalf("development server = %s:%d", cfg.Server.Host, cfg.Server.Port)
+	}
+	if cfg.Catalog.RefreshOnStart || cfg.Catalog.RefreshInterval != 0 {
+		t.Fatalf("development catalog refresh = %#v", cfg.Catalog)
+	}
+	storageConfig := cfg.Storage.RuntimeStorage()
+	if storageConfig.Type != "badger" || !storageConfig.Badger.InMemory || storageConfig.Badger.Path != "" {
+		t.Fatalf("development storage = %#v", storageConfig)
+	}
+	if cfg.Security.MasterKey != "" || cfg.Security.EnableTLS || cfg.Security.EnableCORS {
+		t.Fatalf("development security = %#v", cfg.Security)
+	}
+	if cfg.Logging.Output != "stdout" || cfg.Logging.FilePath != "" || cfg.RateLimiting.EnableHotReload {
+		t.Fatalf("development local settings were not guarded")
+	}
+	credential, found := cfg.providerEnvironment.Lookup("OPENAI_API_KEY")
+	if !found || credential != "process-secret" {
+		t.Fatalf("development provider environment = %q, %t", credential, found)
+	}
+}
+
 func loadTestConfig(t *testing.T, environment map[string]string) *Config {
 	t.Helper()
 	cfg, err := NewLoader().

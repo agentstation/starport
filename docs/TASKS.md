@@ -7,13 +7,13 @@ Last Updated: 2026-08-11
 
 ### Active Work
 
-No active durable plan exists.
+| Task | Plan | Status | Next action |
+|------|------|--------|-------------|
+| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `active` | Execute APR2 catalog-wide provider registration. |
 
 ### Proposed Work
 
-| Task | Plan | Status | Next action |
-|------|------|--------|-------------|
-| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `proposed` | Approve activation and start APR0. |
+No proposed durable plan exists.
 
 ### Recently Completed
 

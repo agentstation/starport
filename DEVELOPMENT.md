@@ -34,7 +34,7 @@ Use an isolated configuration directory during development:
 ```bash
 export STARPORT_CONFIG_DIR="$PWD/tmp/config"
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-go run ./cmd/starport init --provider openai
+go run ./cmd/starport init
 go run ./cmd/starport doctor --probe
 go run ./cmd/starport serve
 ```

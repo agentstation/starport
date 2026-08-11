@@ -104,12 +104,12 @@
 <header id="overview">
   <h1>Automatic provider runtime</h1>
   <p id="status-line">
-    Status: <code data-plan-status="proposed">proposed</code> ·
+    Status: <code data-plan-status="active">active</code> ·
     Owner: this plan ·
     Created: 2026-08-11 ·
     Baseline: main @ b52cd7e286a9a870293155638392ed514b630a47 ·
     Proof root: <code>docs/plans/proof/automatic-provider-runtime/</code> ·
-    Next action: approve activation and start APR0
+    Next action: execute APR2 catalog-wide provider registration
   </p>
 
   <section id="outcome">
@@ -382,9 +382,9 @@
     <table>
       <thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead>
       <tbody>
-        <tr id="APR0" data-status="todo"><td>APR0</td><td>Pin the baseline, author the red verifier, and record fail-before behavior.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="APR1" data-status="todo"><td>APR1</td><td>Separate provider-neutral bootstrap and explicit local development bootstrap.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="APR2" data-status="todo"><td>APR2</td><td>Register every executable catalog provider and separate operator credential eligibility from tenant BYOK.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR0" data-status="done"><td>APR0</td><td>Pin the baseline, author the red verifier, and record fail-before behavior.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR0.md</code>; <code>21d2579</code></td></tr>
+        <tr id="APR1" data-status="done"><td>APR1</td><td>Separate provider-neutral bootstrap and explicit local development bootstrap.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR1.md</code>; <code>0a31858</code>; APR-V01 and APR-V02 pass</td></tr>
+        <tr id="APR2" data-status="in_progress"><td>APR2</td><td>Register every executable catalog provider and separate operator credential eligibility from tenant BYOK.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="APR3" data-status="todo"><td>APR3</td><td>Add credential-driven runtime refresh with interval and manual triggers.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR4" data-status="todo"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR5" data-status="todo"><td>APR5</td><td>Add authenticated provider status and runtime refresh controls.</td><td><code>todo</code></td><td></td></tr>
@@ -408,11 +408,11 @@
 
     <h3 id="task-APR1">APR1 Provider-neutral bootstrap</h3>
       <p><strong>Problem:</strong> local setup joins gateway identity creation with one provider credential.</p>
-      <p><strong>Owning seam and paths:</strong> <code>internal/cli</code>, <code>internal/setup</code>, <code>cmd/starport</code>, and first-run smoke tests.</p>
+      <p><strong>Owning seam and paths:</strong> <code>internal/cli</code>, <code>internal/setup</code>, <code>internal/app</code>, <code>internal/config</code>, <code>internal/storage</code>, <code>cmd/starport</code>, first-run docs, and smoke tests.</p>
       <p><strong>Steps:</strong> Remove the provider flag, limit <code>init</code> output, add guarded <code>starport dev</code>, and preserve explicit production bootstrap.</p>
       <p><strong>Acceptance:</strong> <code>TestInitRejectsProviderFlag</code>, <code>TestLocalInitPersistsNoProviderCredential</code>, <code>TestDevUsesInMemoryBadger</code>, <code>TestDevBindsLoopbackOnly</code>, and <code>TestDevPrintsGatewayKeyOnce</code> pass without provider-secret output.</p>
       <p><strong>Fail-before:</strong> Run each named test before implementation and record its failure.</p>
-      <p><strong>Verification:</strong> <code>go test ./internal/cli ./internal/setup ./cmd/starport</code>, <code>bash scripts/smoke-first-run.sh</code>, and the campaign verifier.</p>
+      <p><strong>Verification:</strong> Focused Go and race tests, repository architecture checks, <code>bash scripts/smoke-first-run.sh</code>, SDK smoke tests, strict documentation lint, and the campaign verifier.</p>
 
     <h3 id="task-APR2">APR2 Catalog-wide provider registration</h3>
       <p><strong>Problem:</strong> runtime registration requires operator material and cannot represent a BYOK-only or empty operator provider set.</p>
@@ -483,6 +483,11 @@
       <tbody>
         <tr><td>2026-08-11</td><td>meta</td><td>authored</td><td>Proposed plan created at baseline <code>b52cd7e286a9a870293155638392ed514b630a47</code>. No production behavior changed.</td></tr>
         <tr><td>2026-08-11</td><td>meta</td><td>audited</td><td>Verified current source behavior, dependency currency, cloud-chain contracts, in-memory storage, failure scope, and the request-bound endpoint gap. See <code>proof/automatic-provider-runtime/audit.md</code>.</td></tr>
+        <tr><td>2026-08-11</td><td>APR0</td><td>started</td><td>Plan PR <code>#95</code> merged after all 10 hosted checks passed. APR0 is the only active task.</td></tr>
+        <tr><td>2026-08-11</td><td>APR0</td><td>done</td><td>Added APR-V01 through APR-V12 in <code>21d2579</code>. Baseline result: 1 passed and 11 failed. Preserved green controls passed without a scheduler cap.</td></tr>
+        <tr><td>2026-08-11</td><td>APR1</td><td>started</td><td>Provider-neutral production bootstrap and in-memory loopback development mode are now active.</td></tr>
+        <tr><td>2026-08-11</td><td>APR1</td><td>done</td><td>Implemented the guarded bootstrap split in <code>0a31858</code>. APR-V01 and APR-V02 pass. Sol autoreview reported no actionable findings.</td></tr>
+        <tr><td>2026-08-11</td><td>APR2</td><td>started</td><td>Catalog-wide provider registration and request-bound credential selection are now active.</td></tr>
       </tbody>
     </table>
   </section>

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
-	"github.com/stretchr/testify/require"
 	urfavecli "github.com/urfave/cli/v3"
 
 	"github.com/agentstation/starport/internal/config"
@@ -23,7 +22,7 @@ func TestNoArgumentsShowHelp(t *testing.T) {
 		t.Fatalf("run without arguments: %v", err)
 	}
 	for _, want := range []string{
-		"NAME:", "starport", "COMMANDS:", "serve", "doctor", "config", "version", "completion", "man",
+		"NAME:", "starport", "COMMANDS:", "dev", "serve", "doctor", "config", "version", "completion", "man",
 	} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("help output does not contain %q:\n%s", want, stdout.String())
@@ -116,22 +115,83 @@ func TestServeUsesInjectedRunner(t *testing.T) {
 	}
 }
 
+func TestDevPrintsGatewayKeyOnce(t *testing.T) {
+	deps, stdout, _ := testDependencies()
+	runs := 0
+	closes := 0
+	deps.StartDevelopment = func(context.Context) (DevelopmentSession, error) {
+		return DevelopmentSession{
+			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			Run: func(context.Context) error {
+				runs++
+				return nil
+			},
+			Close: func(context.Context) error {
+				closes++
+				return nil
+			},
+		}, nil
+	}
+	if err := Run(context.Background(), []string{"starport", "dev"}, deps); err != nil {
+		t.Fatalf("run dev: %v", err)
+	}
+	if runs != 1 {
+		t.Fatalf("development runs = %d, want 1", runs)
+	}
+	if closes != 1 {
+		t.Fatalf("development closes = %d, want 1", closes)
+	}
+	if strings.Count(stdout.String(), "development-key") != 1 ||
+		!strings.Contains(stdout.String(), "http://127.0.0.1:8080") {
+		t.Fatalf("development output = %q", stdout.String())
+	}
+}
+
+func TestDevClosesSessionWhenCredentialOutputFails(t *testing.T) {
+	deps, _, _ := testDependencies()
+	outputErr := errors.New("development output unavailable")
+	deps.Stdout = failingWriter{err: outputErr}
+	closeCalls := 0
+	runCalls := 0
+	deps.StartDevelopment = func(context.Context) (DevelopmentSession, error) {
+		return DevelopmentSession{
+			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			Run: func(context.Context) error {
+				runCalls++
+				return nil
+			},
+			Close: func(context.Context) error {
+				closeCalls++
+				return nil
+			},
+		}, nil
+	}
+
+	err := Run(context.Background(), []string{"starport", "dev"}, deps)
+	if !errors.Is(err, outputErr) || ExitCode(err) != ExitCodeRuntime {
+		t.Fatalf("development output error = %v, exit code = %d", err, ExitCode(err))
+	}
+	if closeCalls != 1 || runCalls != 0 {
+		t.Fatalf("close calls = %d, run calls = %d", closeCalls, runCalls)
+	}
+}
+
 func TestInitUsesInjectedRunnerAndJSONOutput(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	var got InitOptions
 	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
 		got = options
 		return InitResult{
-			Provider: options.Provider, IdentityName: options.IdentityName,
-			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			IdentityName: options.IdentityName,
+			ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 		}, nil
 	}
 	if err := Run(context.Background(), []string{
-		"starport", "init", "--provider", "ollama", "--name", "developer", "--json",
+		"starport", "init", "--name", "developer", "--json",
 	}, deps); err != nil {
 		t.Fatalf("run init: %v", err)
 	}
-	if got.Provider != catalogs.ProviderIDOllama || got.IdentityName != "developer" {
+	if got.IdentityName != "developer" {
 		t.Errorf("init options = %#v", got)
 	}
 	var result InitResult
@@ -143,28 +203,20 @@ func TestInitUsesInjectedRunnerAndJSONOutput(t *testing.T) {
 	}
 }
 
-func TestInitRejectsIncompleteOrConflictingProviderSelection(t *testing.T) {
+func TestInitRejectsProviderFlag(t *testing.T) {
 	deps, _, _ := testDependencies()
-	for _, args := range [][]string{
-		{"starport", "init"},
-		{"starport", "init", "--provider", "ollama", "--configured-storage"},
-	} {
-		err := Run(context.Background(), args, deps)
-		if err == nil || ExitCode(err) != ExitCodeUsage {
-			t.Fatalf("%v error = %v, exit code = %d", args, err, ExitCode(err))
-		}
-	}
-}
-
-func TestInitDelegatesCatalogProviderValidation(t *testing.T) {
-	deps, _, _ := testDependencies()
-	var got InitOptions
-	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
-		got = options
+	called := false
+	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
+		called = true
 		return InitResult{}, nil
 	}
-	require.NoError(t, Run(context.Background(), []string{"starport", "init", "--provider", "acme"}, deps))
-	require.Equal(t, catalogs.ProviderID("acme"), got.Provider)
+	err := Run(context.Background(), []string{"starport", "init", "--provider", "openai"}, deps)
+	if err == nil || ExitCode(err) != ExitCodeUsage {
+		t.Fatalf("provider flag error = %v, exit code = %d", err, ExitCode(err))
+	}
+	if called {
+		t.Fatal("initializer ran for a removed provider flag")
+	}
 }
 
 func TestInitRejectsInvalidIdentityNameAsUsageError(t *testing.T) {
@@ -175,7 +227,7 @@ func TestInitRejectsInvalidIdentityNameAsUsageError(t *testing.T) {
 		return InitResult{}, nil
 	}
 	err := Run(context.Background(), []string{
-		"starport", "init", "--provider", "ollama", "--name", "invalid name",
+		"starport", "init", "--name", "invalid name",
 	}, deps)
 	if err == nil || ExitCode(err) != ExitCodeUsage {
 		t.Fatalf("invalid name error = %v, exit code = %d", err, ExitCode(err))
@@ -192,15 +244,15 @@ func TestInitRollsBackWhenCredentialOutputFails(t *testing.T) {
 	rollbackCalls := 0
 	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
 		return InitResult{
-			Provider: catalogs.ProviderIDOllama, IdentityName: "local-admin",
-			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			IdentityName: "local-admin",
+			ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 			Rollback: func(context.Context) error {
 				rollbackCalls++
 				return nil
 			},
 		}, nil
 	}
-	err := Run(context.Background(), []string{"starport", "init", "--provider", "ollama"}, deps)
+	err := Run(context.Background(), []string{"starport", "init"}, deps)
 	if !errors.Is(err, outputErr) || ExitCode(err) != ExitCodeRuntime {
 		t.Fatalf("output error = %v, exit code = %d", err, ExitCode(err))
 	}
@@ -238,7 +290,7 @@ func TestInitConfiguredStorageNeedsNoProvider(t *testing.T) {
 	}, deps); err != nil {
 		t.Fatalf("run configured setup: %v", err)
 	}
-	if !got.ConfiguredStorage || got.Provider != "" {
+	if !got.ConfiguredStorage {
 		t.Errorf("init options = %#v", got)
 	}
 	if strings.Contains(stdout.String(), "Configuration:") || !strings.Contains(stdout.String(), "gateway-key") {
@@ -250,13 +302,11 @@ func TestInitOutputUsesProviderNeutralNextStep(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
 		return InitResult{
-			Provider: options.Provider, IdentityName: options.IdentityName,
-			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			IdentityName: options.IdentityName,
+			ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 		}, nil
 	}
-	if err := Run(context.Background(), []string{
-		"starport", "init", "--provider", "ollama",
-	}, deps); err != nil {
+	if err := Run(context.Background(), []string{"starport", "init"}, deps); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(stdout.String(), "Run: starport serve") {
@@ -501,6 +551,7 @@ func TestNewRequiresProcessDependencies(t *testing.T) {
 		{name: "output", edit: func(deps *Dependencies) { deps.Stdout = nil }, want: ErrStdoutRequired},
 		{name: "error output", edit: func(deps *Dependencies) { deps.Stderr = nil }, want: ErrStderrRequired},
 		{name: "server", edit: func(deps *Dependencies) { deps.RunServer = nil }, want: ErrServerRunnerRequired},
+		{name: "development", edit: func(deps *Dependencies) { deps.StartDevelopment = nil }, want: ErrDevelopmentStarterRequired},
 		{name: "initializer", edit: func(deps *Dependencies) { deps.Initialize = nil }, want: ErrInitializerRequired},
 		{name: "configuration loader", edit: func(deps *Dependencies) { deps.LoadConfig = nil }, want: ErrConfigLoaderRequired},
 		{name: "path resolver", edit: func(deps *Dependencies) { deps.ResolvePaths = nil }, want: ErrPathResolverRequired},
@@ -530,7 +581,14 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 			GitCommit: "abc123", GitBranch: "test", GoVersion: "go1.26.5",
 			OS: "testos", Arch: "testarch",
 		},
-		RunServer:    func(context.Context) error { return nil },
+		RunServer: func(context.Context) error { return nil },
+		StartDevelopment: func(context.Context) (DevelopmentSession, error) {
+			return DevelopmentSession{
+				URL: "http://127.0.0.1:8080", APIKey: "development-key",
+				Run:   func(context.Context) error { return nil },
+				Close: func(context.Context) error { return nil },
+			}, nil
+		},
 		Initialize:   func(context.Context, InitOptions) (InitResult, error) { return InitResult{}, nil },
 		LoadConfig:   func(context.Context) (*config.Config, error) { return &config.Config{}, nil },
 		ResolvePaths: func() (config.Paths, error) { return config.PathsForConfigDir("/test"), nil },

@@ -31,7 +31,16 @@ var (
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runContext(ctx, args, stdin, stdout, stderr, runServer, runInitializer)
+	return runContext(
+		ctx,
+		args,
+		stdin,
+		stdout,
+		stderr,
+		runServer,
+		startDevelopment,
+		runInitializer,
+	)
 }
 
 func runContext(
@@ -41,11 +50,13 @@ func runContext(
 	stdout io.Writer,
 	stderr io.Writer,
 	server starportcli.ServerRunner,
+	development starportcli.DevelopmentStarter,
 	initializer starportcli.Initializer,
 ) int {
 	err := starportcli.Run(ctx, args, starportcli.Dependencies{
 		Stdin: stdin, Stdout: stdout, Stderr: stderr,
-		Build: buildInformation(), RunServer: server, Initialize: initializer,
+		Build: buildInformation(), RunServer: server,
+		StartDevelopment: development, Initialize: initializer,
 		LoadConfig: config.LoadWithDefaults, ResolvePaths: config.PlatformPaths,
 		Diagnose: diagnosis.Run,
 	})
@@ -66,11 +77,11 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 	}
 	service := setup.New(paths)
 	result, err := service.Initialize(ctx, setup.Request{
-		Provider: options.Provider, IdentityName: options.IdentityName,
+		IdentityName: options.IdentityName,
 	})
 	initialized := starportcli.InitResult{
-		Provider: result.Provider, IdentityName: result.IdentityName,
-		ConfigFile: result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
+		IdentityName: result.IdentityName,
+		ConfigFile:   result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
 		Rollback: func(rollbackCtx context.Context) error {
 			return service.Rollback(rollbackCtx, result)
 		},
@@ -79,6 +90,21 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 		initialized = starportcli.InitResult{}
 	}
 	return initialized, err
+}
+
+func startDevelopment(ctx context.Context) (starportcli.DevelopmentSession, error) {
+	cfg, err := config.LoadDevelopment(ctx)
+	if err != nil {
+		return starportcli.DevelopmentSession{}, fmt.Errorf("load development configuration: %w", err)
+	}
+	runtime, err := app.NewDevelopment(ctx, cfg)
+	if err != nil {
+		return starportcli.DevelopmentSession{}, err
+	}
+	return starportcli.DevelopmentSession{
+		URL: runtime.URL(), APIKey: runtime.APIKey(),
+		Run: runtime.Run, Close: runtime.Close,
+	}, nil
 }
 
 func initializeConfiguredStorage(

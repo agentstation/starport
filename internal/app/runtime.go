@@ -48,7 +48,10 @@ type runtimeFactories struct {
 	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)
 }
 
-type buildOptions struct{ factories runtimeFactories }
+type buildOptions struct {
+	factories           runtimeFactories
+	allowEmptyProviders bool
+}
 
 // Option changes runtime factories for explicit test composition.
 type Option func(*buildOptions)

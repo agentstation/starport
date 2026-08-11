@@ -117,11 +117,12 @@ type Config struct {
 // BadgerConfig represents Badger-specific configuration
 type BadgerConfig struct {
 	Path         string `env:"PATH,default=./data/badger"`
-	SyncWrites   bool   `env:"SYNC_WRITES,default=false"`
-	Compression  bool   `env:"COMPRESSION,default=true"`
-	NumVersions  int    `env:"NUM_VERSIONS,default=1"`
-	NumLevelZero int    `env:"NUM_LEVEL_ZERO,default=5"`
-	MemTableSize int64  `env:"MEM_TABLE_SIZE,default=67108864"` // 64MB
+	InMemory     bool
+	SyncWrites   bool  `env:"SYNC_WRITES,default=false"`
+	Compression  bool  `env:"COMPRESSION,default=true"`
+	NumVersions  int   `env:"NUM_VERSIONS,default=1"`
+	NumLevelZero int   `env:"NUM_LEVEL_ZERO,default=5"`
+	MemTableSize int64 `env:"MEM_TABLE_SIZE,default=67108864"` // 64MB
 }
 
 // ValkeyConfig represents Valkey/Redis-specific configuration
@@ -148,8 +149,11 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Type == StorageTypeBadger {
-		if c.Badger.Path == "" {
+		if !c.Badger.InMemory && c.Badger.Path == "" {
 			return errors.New("badger path cannot be empty")
+		}
+		if c.Badger.InMemory && c.Badger.Path != "" {
+			return errors.New("in-memory badger cannot use a filesystem path")
 		}
 		if c.Badger.NumVersions < 1 {
 			return errors.New("badger num_versions must be at least 1")
