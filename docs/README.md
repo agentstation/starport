@@ -5,8 +5,8 @@ Use this index to find current product, operator, and developer information.
 ## Start and operate Starport
 
 - [README](../README.md): install, initialize, and send a first request.
-- [Operator guide](OPERATOR-GUIDE.md): configure storage, providers, clients,
-  containers, diagnosis, and shutdown.
+- [Operator guide](OPERATOR-GUIDE.md): configure storage, provider credentials,
+  direct secret sources, remote catalogs, clients, diagnosis, and shutdown.
 - [Configuration reference](../.env.example): list all supported environment
   fields and secure defaults.
 - [Vertex AI configuration](VERTEX_AI_CONFIG.md): configure static or renewable

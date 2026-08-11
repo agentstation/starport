@@ -156,6 +156,18 @@ export STARPORT_OPENAI_API_KEY_REFERENCE='aws-secrets-manager:starport/openai#ap
 The [operator guide](docs/OPERATOR-GUIDE.md#direct-secret-sources) defines the
 resource syntax, source authentication, version selection, and fallback rule.
 
+To consume verified catalog publications from a Starmap server, set its
+versioned API base URL:
+
+```bash
+export STARPORT_CATALOG_REMOTE_URL="https://catalog.example.com/api/v1"
+export STARPORT_CATALOG_REMOTE_API_KEY="replace-if-the-server-requires-one"
+```
+
+Remote mode keeps the last accepted generation for restart and recovery. It is
+mutually exclusive with a local catalog workspace and local acquisition. See
+the [remote catalog guide](docs/OPERATOR-GUIDE.md#remote-starmap-catalogs).
+
 See the [configuration reference](.env.example) and
 [operator guide](docs/OPERATOR-GUIDE.md) for production settings.
 

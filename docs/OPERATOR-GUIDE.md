@@ -168,6 +168,10 @@ checks the conventional names first. It then checks a derived
 `STARPORT_<PROVIDER>_<FIELD>` name. For example, it checks `OPENAI_API_KEY`
 before `STARPORT_OPENAI_API_KEY`.
 
+Starport selects the first nonempty value in that order. If the selected value
+does not satisfy the catalog field contract, resolution fails. Starport does
+not continue to a later name.
+
 `starport init --provider <id>` uses the same catalog contract. It writes the
 selected value under the first conventional name. When a required field is
 absent or invalid, initialization fails before it creates local state.
@@ -220,6 +224,62 @@ Denied access, invalid material, source unavailability, timeout, and
 cancellation never fall back. A reference contains resource identity only. It
 must not contain credentials for the secret store. Starport uses the store's
 default identity chain or client environment for that authentication.
+
+Use `env:NAME` when an operator-chosen environment variable must override the
+catalog's conventional ambient discovery. For example, this value makes
+`TEAM_OPENAI_API_KEY` authoritative even when `OPENAI_API_KEY` is also set:
+
+```bash
+export TEAM_OPENAI_API_KEY="replace-with-provider-inference-key"
+export STARPORT_OPENAI_API_KEY_REFERENCE='env:TEAM_OPENAI_API_KEY'
+```
+
+The selected explicit value must satisfy the catalog field contract. Starport
+does not continue to an ambient value after an invalid explicit value. Set
+`STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT=true` only if an absent
+`TEAM_OPENAI_API_KEY` can fall back to conventional discovery.
+
+Use `file:/absolute/path` for a mounted or projected secret. The file must be a
+nonempty regular file no larger than 1 MiB. Starport preserves every byte and
+does not trim a trailing newline. The resolver detects these replacement
+patterns without depending only on modification time:
+
+- An in-place rewrite.
+- An atomic file replacement or rename.
+- A symbolic-link target swap.
+- A Kubernetes projected-volume `..data` symbolic-link swap.
+- Mounted-content replacement by a CSI driver.
+- A secret-agent rerender that replaces the file.
+
+Use a new material version for a deliberate rotation. Concurrent resolutions
+share one refresh operation. A cache hit makes no file or network request.
+Environment values that a wrapper injects belong to that child process. Restart
+the process to receive a changed value unless the wrapper owns a supervised
+restart policy.
+
+### Secret-manager command wrappers
+
+These wrappers can inject the catalog-declared conventional names, such as
+`OPENAI_API_KEY`, without a Starport-specific integration. Authenticate and
+select the wrapper project or environment first. Then use one of these verified
+forms:
+
+```bash
+# Doppler
+doppler run -- starport serve
+
+# 1Password: .env.starport contains NAME=op://vault/item/field references
+op run --env-file="./.env.starport" -- starport serve
+
+# Infisical
+infisical run -- starport serve
+```
+
+See the official command references for
+[Doppler](https://docs.doppler.com/docs/cli),
+[1Password](https://www.1password.dev/cli/reference/commands/run), and
+[Infisical](https://infisical.com/docs/cli/commands/run). Apply each product's
+least-privilege workload authentication and production lifecycle guidance.
 
 Vault uses its standard client environment, such as `VAULT_ADDR`,
 `VAULT_TOKEN`, and `VAULT_NAMESPACE`. OpenBao uses `BAO_ADDR`, `BAO_TOKEN`, and
@@ -286,6 +346,55 @@ adapter activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later refreshes.
 Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed tenant facts, including
 Azure deployment names and local Ollama model mappings. Those facts enter a
 durable Starmap generation before Starport makes the adapter routable.
+
+## Remote Starmap Catalogs
+
+Set one versioned Starmap API base URL to receive verified catalog generations:
+
+```bash
+export STARPORT_CATALOG_REMOTE_URL="https://catalog.example.com/api/v1"
+export STARPORT_CATALOG_REMOTE_API_KEY="replace-if-the-server-requires-one"
+export STARPORT_CATALOG_REMOTE_ACTIVATION_INTERVAL="250ms"
+```
+
+Starport sends the optional API key as `X-API-Key`. Configuration inspection
+redacts the key and the remote URL. A non-loopback publisher must use HTTPS
+with a valid certificate chain. Starmap accepts plain HTTP only for a loopback
+publisher. The URL identifies the publisher origin and must include the
+server's versioned path, normally `/api/v1`.
+
+Remote mode is mutually exclusive with
+`STARPORT_CATALOG_WORKSPACE_PATH`,
+`STARPORT_CATALOG_REFRESH_ON_START=true`, and a nonzero
+`STARPORT_CATALOG_REFRESH_INTERVAL`. The remote API key is invalid without the
+remote URL. `STARPORT_CATALOG_REFRESH_TIMEOUT` bounds manifest and payload
+requests. It does not impose a timeout on the SSE connection. Starmap heartbeat
+and liveness rules own that connection.
+
+Starmap verifies the manifest, schema range, immutable payload identity,
+content type, size, and SHA-256 checksum before it publishes one atomic
+candidate. Starport then validates the complete routable catalog, connector,
+and credential projection before it accepts that generation. A failed
+candidate leaves the current routes, connectors, and response-cache identity
+unchanged.
+
+Starport stores two current pointers over shared immutable generation records:
+
+- The remote head records the latest Starmap-verified generation.
+- The accepted head records the latest generation that passed the complete
+  Starport runtime transaction.
+
+This separation prevents a Starmap-valid but Starport-incompatible generation
+from replacing restart-safe routing state. On restart, the accepted generation
+is the pinned bootstrap. A network failure keeps that last accepted state while
+the subscriber uses bounded reconnect and catch-up. HTTP 401 and 403 stop the
+active subscriber lifecycle and require corrected credentials or access before
+a new process starts it again.
+
+The activation interval samples Starmap's in-memory atomic state. It causes no
+catalog network request and is not on the inference path. `starport doctor`
+and `starport doctor --probe` inspect the durable accepted generation without a
+remote fetch.
 
 ## Storage Modes
 

@@ -67,9 +67,9 @@ require_file DX-SETUP-1 internal/setup/service.go
 require_text DX-SETUP-2 '0600|0o600' internal/setup/service_test.go
 require_text DX-SETUP-3 'TestInitializeCreatesNamedIdentity' internal/setup/service_test.go
 
-require_file DX-AUTH-1 internal/providerauth/source.go
-require_text DX-AUTH-2 'providerauth' internal/providers/connectors/vertex_ai.go
-require_text DX-AUTH-3 'providerauth' internal/providers/connectors/azure.go
+require_file DX-AUTH-1 internal/providerauth/cloud.go
+require_text DX-AUTH-2 'providerauth\.DefaultCloudChains' internal/config/loader.go
+require_text DX-AUTH-3 'providerauth\.ProductionRegistry' internal/providers/connectors/authentication.go
 
 require_text DX-BREW-1 '^homebrew_casks:' .goreleaser.yaml
 require_text DX-BREW-2 'completions/\*' .goreleaser.yaml
