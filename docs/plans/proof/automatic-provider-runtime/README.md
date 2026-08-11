@@ -28,3 +28,5 @@ No implementation evidence exists at plan authorship.
   and exact material-version recovery.
 - [`APR5.md`](APR5.md): authenticated provider status and forced credential
   reconciliation routes.
+- [`APR6.md`](APR6.md): verified first-run, automatic provider discovery,
+  refresh operations, and provider-neutral container configuration.
