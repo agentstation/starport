@@ -399,7 +399,7 @@ func (b *runtimeBuilder) openHotReload() error {
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, ProviderKeys: b.providerKeys,
-		RateLimits: b.rateLimits, ChatUI: b.chatUI,
+		RateLimits: b.rateLimits, ProviderOperations: b.application, ChatUI: b.chatUI,
 	})
 	if err != nil {
 		if httpServer != nil {
