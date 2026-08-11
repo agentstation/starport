@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP5.1 adds named credential material, explicit references, core sources, one refresh lifecycle, and the warmed-cache contract. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP6 removes credential values and sources from connectors, keys runtime factories by compiled primitives, and proves synthetic-provider inference without a provider roster. |
 
 ### Proposed Work
 
