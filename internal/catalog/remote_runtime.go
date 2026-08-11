@@ -26,7 +26,7 @@ const (
 	// DefaultRemoteFetchTimeout bounds manifest and payload requests. The SSE
 	// stream uses Starmap's heartbeat and liveness contract instead.
 	DefaultRemoteFetchTimeout  = 2 * time.Minute
-	remoteAPIKeyHeader         = "X-API-Key" //nolint:gosec // This is a public HTTP header name.
+	remoteAPIKeyHeader         = "X-API-Key" // #nosec G101 -- Public HTTP header name, not credential material.
 	remoteEventStreamMediaType = "text/event-stream"
 )
 
