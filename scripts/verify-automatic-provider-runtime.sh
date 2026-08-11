@@ -70,7 +70,7 @@ provider_neutral_bootstrap() {
 }
 
 in_memory_local_development() {
-  named_tests "./internal/cli ./internal/setup" \
+  named_tests "./internal/cli ./internal/app ./internal/storage" \
     TestDevUsesInMemoryBadger \
     TestDevBindsLoopbackOnly \
     TestDevPrintsGatewayKeyOnce

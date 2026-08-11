@@ -89,6 +89,16 @@ func (l *Loader) WithPaths(paths Paths) *Loader {
 
 // Load resolves configuration sources, applies defaults, and validates the result.
 func (l *Loader) Load(ctx context.Context) (*Config, error) {
+	return l.load(ctx, nil)
+}
+
+// LoadDevelopment reads process settings, applies the guarded development
+// runtime contract, and validates the result.
+func (l *Loader) LoadDevelopment(ctx context.Context) (*Config, error) {
+	return l.load(ctx, func(cfg *Config) { cfg.ConfigureDevelopmentRuntime() })
+}
+
+func (l *Loader) load(ctx context.Context, prepare func(*Config)) (*Config, error) {
 	paths, err := l.resolvePaths()
 	if err != nil {
 		return nil, newLoadFailure("configuration paths could not be resolved", err)
@@ -108,6 +118,9 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 	}
 	if cfg.CredentialSources.RemoteRefreshInterval == 0 {
 		cfg.CredentialSources.RemoteRefreshInterval = credentials.DefaultDirectSecretRefreshInterval
+	}
+	if prepare != nil {
+		prepare(cfg)
 	}
 
 	if err := resolveConfiguredPaths(cfg, paths); err != nil {
@@ -160,7 +173,7 @@ func (l *Loader) sourceLookuper(paths Paths) (envconfig.Lookuper, error) {
 
 func resolveConfiguredPaths(cfg *Config, paths Paths) error {
 	var err error
-	if cfg.Storage.Mode == "badger" {
+	if cfg.Storage.Mode == storageModeBadger {
 		cfg.Storage.Badger.Path, err = resolvePath(paths.ConfigDir, cfg.Storage.Badger.Path)
 		if err != nil {
 			return fmt.Errorf("badger path: %w", err)
@@ -202,6 +215,12 @@ func resolvePath(base, value string) (string, error) {
 // LoadWithDefaults loads configuration from the standard sources.
 func LoadWithDefaults(ctx context.Context) (*Config, error) {
 	return NewLoader().Load(ctx)
+}
+
+// LoadDevelopment loads process environment settings without a configuration
+// file and applies the guarded development runtime contract.
+func LoadDevelopment(ctx context.Context) (*Config, error) {
+	return NewLoader().WithEnvFiles().LoadDevelopment(ctx)
 }
 
 // MustLoad loads configuration and panics if loading fails.

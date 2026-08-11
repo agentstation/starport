@@ -30,6 +30,32 @@ func TestBadgerStore(t *testing.T) {
 	t.Run("Performance", testBadgerPerformance)
 }
 
+func TestBadgerInMemoryModeCreatesNoPersistentWorkers(t *testing.T) {
+	config := BadgerConfig{
+		InMemory: true, NumVersions: 1, NumLevelZero: 5, MemTableSize: 64 << 20,
+	}
+	store, err := OpenBadger(config)
+	if err != nil {
+		t.Fatalf("open in-memory Badger: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("close in-memory Badger: %v", err)
+		}
+	})
+
+	options := store.db.Opts()
+	if !options.InMemory || options.Dir != "" || options.ValueDir != "" {
+		t.Fatalf("Badger options = %#v", options)
+	}
+	if store.gcTicker != nil || store.compactTicker != nil {
+		t.Fatal("in-memory Badger started persistent maintenance workers")
+	}
+	if err := store.Set(t.Context(), "development-key", []byte("value")); err != nil {
+		t.Fatalf("write in-memory Badger: %v", err)
+	}
+}
+
 // createTestBadgerStore creates a BadgerStore for testing
 func createTestBadgerStore(t *testing.T) (*BadgerStore, func()) {
 	t.Helper()

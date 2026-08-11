@@ -44,7 +44,7 @@ local Starport instance:
 
 ```bash
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-"$STARPORT_BIN" init --provider openai
+"$STARPORT_BIN" init
 ```
 
 Initialization reads the selected provider's credential contract from
@@ -91,9 +91,9 @@ curl --fail-with-body \
   http://127.0.0.1:8080/api/v1/chat/completions
 ```
 
-For local Ollama inference, run `starport init --provider ollama`. Add each
-installed model to a reviewed Starmap workspace before startup. Then set
-`STARPORT_CATALOG_WORKSPACE_PATH` to that workspace.
+Local Ollama inference uses the same provider-neutral `starport init` step.
+Add each installed model to a reviewed Starmap workspace before startup. Then
+set `STARPORT_CATALOG_WORKSPACE_PATH` to that workspace.
 
 ## Replace an existing gateway URL
 

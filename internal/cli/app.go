@@ -8,7 +8,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/agentstation/starmap/pkg/catalogs"
 	urfavecli "github.com/urfave/cli/v3"
 
 	"github.com/agentstation/starport/internal/config"
@@ -62,42 +61,22 @@ type usageErrorHandler = urfavecli.OnUsageErrorFunc
 
 // Dependencies contains all runtime boundaries used by commands.
 type Dependencies struct {
-	Stdin        io.Reader
-	Stdout       io.Writer
-	Stderr       io.Writer
-	Build        BuildInfo
-	RunServer    ServerRunner
-	Initialize   Initializer
-	LoadConfig   ConfigLoader
-	ResolvePaths PathResolver
-	Diagnose     Diagnoser
+	Stdin            io.Reader
+	Stdout           io.Writer
+	Stderr           io.Writer
+	Build            BuildInfo
+	RunServer        ServerRunner
+	StartDevelopment DevelopmentStarter
+	Initialize       Initializer
+	LoadConfig       ConfigLoader
+	ResolvePaths     PathResolver
+	Diagnose         Diagnoser
 }
 
 // New creates the Starport root command.
 func New(deps Dependencies) (*urfavecli.Command, error) {
-	if deps.Stdin == nil {
-		return nil, ErrStdinRequired
-	}
-	if deps.Stdout == nil {
-		return nil, ErrStdoutRequired
-	}
-	if deps.Stderr == nil {
-		return nil, ErrStderrRequired
-	}
-	if deps.RunServer == nil {
-		return nil, ErrServerRunnerRequired
-	}
-	if deps.Initialize == nil {
-		return nil, ErrInitializerRequired
-	}
-	if deps.LoadConfig == nil {
-		return nil, ErrConfigLoaderRequired
-	}
-	if deps.ResolvePaths == nil {
-		return nil, ErrPathResolverRequired
-	}
-	if deps.Diagnose == nil {
-		return nil, ErrDiagnoserRequired
+	if err := validateDependencies(deps); err != nil {
+		return nil, err
 	}
 
 	var usageError usageErrorHandler = func(
@@ -129,16 +108,42 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			return nil
 		},
 	}
+	development := &urfavecli.Command{
+		Name:         "dev",
+		Usage:        "Run an isolated local development gateway",
+		OnUsageError: usageError,
+		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
+			if err := rejectArguments(cmd); err != nil {
+				return err
+			}
+			session, err := deps.StartDevelopment(ctx)
+			if err != nil {
+				return runtimeFailure{cause: err}
+			}
+			if err := session.validate(); err != nil {
+				if session.Close != nil {
+					err = closeDevelopmentSession(ctx, session, err)
+				}
+				return runtimeFailure{cause: err}
+			}
+			if err := writeDevelopmentResult(cmd.Writer, session); err != nil {
+				return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
+			}
+			if err := session.Run(ctx); err != nil {
+				return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
+			}
+			if err := closeDevelopmentSession(ctx, session, nil); err != nil {
+				return runtimeFailure{cause: err}
+			}
+			return nil
+		},
+	}
 
 	initialize := &urfavecli.Command{
 		Name:         "init",
 		Usage:        "Initialize secure local configuration and identity storage",
 		OnUsageError: usageError,
 		Flags: []urfavecli.Flag{
-			&urfavecli.StringFlag{
-				Name:  "provider",
-				Usage: "Provider ID from the current Starmap catalog",
-			},
 			&urfavecli.StringFlag{
 				Name:  "name",
 				Usage: "Name for the first gateway identity",
@@ -157,26 +162,13 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			if err := rejectArguments(cmd); err != nil {
 				return err
 			}
-			provider := catalogs.ProviderID(cmd.String("provider"))
 			configuredStorage := cmd.Bool("configured-storage")
-			if configuredStorage && provider != "" {
-				return urfavecli.Exit(
-					"--provider and --configured-storage cannot be used together",
-					ExitCodeUsage,
-				)
-			}
-			if !configuredStorage && provider == "" {
-				return urfavecli.Exit(
-					"--provider is required unless --configured-storage is used",
-					ExitCodeUsage,
-				)
-			}
 			identityName := cmd.String("name")
 			if err := identity.ValidateName(identityName); err != nil {
 				return urfavecli.Exit(err.Error(), ExitCodeUsage)
 			}
 			result, initializeErr := deps.Initialize(ctx, InitOptions{
-				Provider: provider, IdentityName: identityName, ConfiguredStorage: configuredStorage,
+				IdentityName: identityName, ConfiguredStorage: configuredStorage,
 			})
 			if result.APIKey != "" {
 				if err := writeInitResult(cmd.Writer, result, cmd.Bool(initFormatJSON)); err != nil {
@@ -258,7 +250,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Writer:          deps.Stdout,
 		ErrWriter:       deps.Stderr,
 		OnUsageError:    usageError,
-		Commands:        []*urfavecli.Command{initialize, serve, doctor, configCommand, version, man, help},
+		Commands:        []*urfavecli.Command{initialize, development, serve, doctor, configCommand, version, man, help},
 		HideHelpCommand: true,
 		ConfigureShellCompletionCommand: configureCompletionCommand(
 			completion,
@@ -280,6 +272,37 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		},
 	}
 	return root, nil
+}
+
+func validateDependencies(deps Dependencies) error {
+	if deps.Stdin == nil {
+		return ErrStdinRequired
+	}
+	if deps.Stdout == nil {
+		return ErrStdoutRequired
+	}
+	if deps.Stderr == nil {
+		return ErrStderrRequired
+	}
+	if deps.RunServer == nil {
+		return ErrServerRunnerRequired
+	}
+	if deps.StartDevelopment == nil {
+		return ErrDevelopmentStarterRequired
+	}
+	if deps.Initialize == nil {
+		return ErrInitializerRequired
+	}
+	if deps.LoadConfig == nil {
+		return ErrConfigLoaderRequired
+	}
+	if deps.ResolvePaths == nil {
+		return ErrPathResolverRequired
+	}
+	if deps.Diagnose == nil {
+		return ErrDiagnoserRequired
+	}
+	return nil
 }
 
 // Run builds and executes the command for the supplied argument slice.

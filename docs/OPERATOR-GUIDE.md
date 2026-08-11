@@ -30,13 +30,13 @@ initialization:
 
 ```bash
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-./starport init --provider openai
+./starport init
 ```
 
 For Ollama, use this command instead:
 
 ```bash
-./starport init --provider ollama
+./starport init
 ```
 
 This command creates Starport state but does not invent catalog facts. Add
@@ -172,9 +172,9 @@ Starport selects the first nonempty value in that order. If the selected value
 does not satisfy the catalog field contract, resolution fails. Starport does
 not continue to a later name.
 
-`starport init --provider <id>` uses the same catalog contract. It writes the
-selected value under the first conventional name. When a required field is
-absent or invalid, initialization fails before it creates local state.
+`starport init` creates gateway security and identity state. It never selects
+or writes provider inference credential material. Runtime credential
+resolution uses the catalog contract.
 
 Starmap catalog acquisition uses an independent credential plane. Starport
 never copies an acquisition credential into an inference request.

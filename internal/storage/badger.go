@@ -44,17 +44,25 @@ func OpenBadgerReadOnly(config BadgerConfig) (*BadgerStore, error) {
 }
 
 func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
+	if readOnly && config.InMemory {
+		return nil, errors.New("in-memory badger cannot open read-only")
+	}
 	// Ensure the directory exists
-	if readOnly {
-		if err := badgerReadOnlyPreflight(config.Path, runtime.GOOS); err != nil {
-			return nil, err
+	if !config.InMemory {
+		if readOnly {
+			if err := badgerReadOnlyPreflight(config.Path, runtime.GOOS); err != nil {
+				return nil, err
+			}
+		} else if err := os.MkdirAll(config.Path, 0750); err != nil {
+			return nil, fmt.Errorf("failed to create badger directory: %w", err)
 		}
-	} else if err := os.MkdirAll(config.Path, 0750); err != nil {
-		return nil, fmt.Errorf("failed to create badger directory: %w", err)
 	}
 
 	// Configure Badger options for performance
 	opts := badger.DefaultOptions(config.Path)
+	if config.InMemory {
+		opts = badger.DefaultOptions("").WithInMemory(true)
+	}
 	opts.SyncWrites = config.SyncWrites
 	opts.NumVersionsToKeep = config.NumVersions
 	opts.NumLevelZeroTables = config.NumLevelZero
@@ -80,7 +88,7 @@ func openBadger(config BadgerConfig, readOnly bool) (*BadgerStore, error) {
 		compactStop: make(chan struct{}),
 	}
 
-	if !readOnly {
+	if !readOnly && !config.InMemory {
 		// Start garbage collection for expired keys.
 		store.startGarbageCollection()
 

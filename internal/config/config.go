@@ -76,6 +76,7 @@ type BadgerConfig struct {
 	Compression    string        `env:"COMPRESSION,default=snappy"`
 	GCInterval     time.Duration `env:"GC_INTERVAL,default=5m"`
 	GCDiscardRatio float64       `env:"GC_DISCARD_RATIO,default=0.5"`
+	inMemory       bool
 }
 
 // ValkeyConfig defines Valkey/Redis settings

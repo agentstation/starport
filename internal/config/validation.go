@@ -66,7 +66,7 @@ func (c *ServerConfig) Validate() error {
 // Validate validates StorageConfig
 func (c *StorageConfig) Validate() error {
 	switch c.Mode {
-	case "badger":
+	case storageModeBadger:
 		return c.Badger.Validate()
 	case "valkey":
 		return c.Valkey.Validate()
@@ -117,12 +117,18 @@ func (c *CredentialSourcesConfig) Validate() error {
 
 // Validate validates BadgerConfig
 func (c *BadgerConfig) Validate() error {
-	if c.Path == "" {
+	if !c.inMemory && c.Path == "" {
 		return fmt.Errorf("badger path cannot be empty")
 	}
+	if c.inMemory && c.Path != "" {
+		return fmt.Errorf("in-memory badger cannot use a filesystem path")
+	}
 
-	if c.Compression != "" && c.Compression != "none" && c.Compression != "snappy" && c.Compression != "zstd" {
+	if c.Compression != "" && c.Compression != compressionNone && c.Compression != "snappy" && c.Compression != "zstd" {
 		return fmt.Errorf("invalid compression type: %s", c.Compression)
+	}
+	if c.inMemory {
+		return nil
 	}
 
 	if c.GCInterval <= 0 {

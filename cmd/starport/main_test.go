@@ -26,6 +26,7 @@ func TestRunContextNoArgumentsShowsHelp(t *testing.T) {
 			calls++
 			return nil
 		},
+		noopDevelopmentStarter,
 		noopInitializer,
 	)
 	if code != 0 {
@@ -51,6 +52,7 @@ func TestRunContextServeDelegatesToRunner(t *testing.T) {
 			called = true
 			return nil
 		},
+		noopDevelopmentStarter,
 		noopInitializer,
 	)
 	if code != 0 {
@@ -71,6 +73,7 @@ func TestRunContextMapsRuntimeError(t *testing.T) {
 		&bytes.Buffer{},
 		stderr,
 		func(context.Context) error { return serverErr },
+		noopDevelopmentStarter,
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeRuntime {
@@ -90,6 +93,7 @@ func TestRunContextWritesUsageErrorOnce(t *testing.T) {
 		&bytes.Buffer{},
 		stderr,
 		func(context.Context) error { return nil },
+		noopDevelopmentStarter,
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
@@ -108,6 +112,7 @@ func TestRunContextNormalizesMissingHelpTopic(t *testing.T) {
 		&bytes.Buffer{},
 		&bytes.Buffer{},
 		func(context.Context) error { return nil },
+		noopDevelopmentStarter,
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
@@ -124,6 +129,7 @@ func TestRunContextWritesInvalidHelpErrorOnce(t *testing.T) {
 		&bytes.Buffer{},
 		stderr,
 		func(context.Context) error { return nil },
+		noopDevelopmentStarter,
 		noopInitializer,
 	)
 	if code != starportcli.ExitCodeUsage {
@@ -144,6 +150,7 @@ func TestRunContextVersionJSON(t *testing.T) {
 		stdout,
 		stderr,
 		func(context.Context) error { return nil },
+		noopDevelopmentStarter,
 		noopInitializer,
 	)
 	if code != 0 {
@@ -163,16 +170,17 @@ func TestRunContextInitDelegatesToInitializer(t *testing.T) {
 	var got starportcli.InitOptions
 	code := runContext(
 		context.Background(),
-		[]string{"starport", "init", "--provider", "ollama", "--json"},
+		[]string{"starport", "init", "--json"},
 		bytes.NewReader(nil),
 		stdout,
 		&bytes.Buffer{},
 		func(context.Context) error { return nil },
+		noopDevelopmentStarter,
 		func(_ context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {
 			got = options
 			return starportcli.InitResult{
-				Provider: options.Provider, IdentityName: options.IdentityName,
-				ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+				IdentityName: options.IdentityName,
+				ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 			}, nil
 		},
 	)
@@ -200,4 +208,12 @@ func TestBuildInformationUsesRuntimeGoVersionFallback(t *testing.T) {
 
 func noopInitializer(context.Context, starportcli.InitOptions) (starportcli.InitResult, error) {
 	return starportcli.InitResult{}, nil
+}
+
+func noopDevelopmentStarter(context.Context) (starportcli.DevelopmentSession, error) {
+	return starportcli.DevelopmentSession{
+		URL: "http://127.0.0.1:8080", APIKey: "development-key",
+		Run:   func(context.Context) error { return nil },
+		Close: func(context.Context) error { return nil },
+	}, nil
 }
