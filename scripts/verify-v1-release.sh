@@ -75,6 +75,13 @@ else
 	fail 'CI does not invoke the v1 release verifier'
 fi
 
+if grep -q 'syft-version: v1\.51\.0' "$repository_root/.github/workflows/ci.yml" &&
+	grep -q 'SYFT_VERSION: v1\.51\.0' "$repository_root/.github/workflows/release.yaml"; then
+	pass 'CI and release publication use the reviewed Syft version'
+else
+	fail 'CI and release publication do not use the same reviewed Syft version'
+fi
+
 if [ -f "$repository_root/.goreleaser.yaml" ] &&
 	grep -q 'linux' "$repository_root/.goreleaser.yaml" &&
 	grep -q 'darwin' "$repository_root/.goreleaser.yaml" &&
