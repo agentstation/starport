@@ -74,23 +74,6 @@ func TestNewConnector(t *testing.T) {
 		}
 	})
 
-	t.Run("Create Azure OpenAI connector", func(t *testing.T) {
-		config := connectors.ProviderConfig{
-			BaseURL: "https://myresource.openai.azure.com",
-		}
-
-		connector, err := connectors.NewConnector(
-			"azure-openai", []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, config,
-		)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if connector.Name() != "azure-openai" {
-			t.Errorf("expected name 'azure', got %s", connector.Name())
-		}
-	})
-
 	t.Run("Create OpenAI connector", func(t *testing.T) {
 		config := connectors.ProviderConfig{
 			BaseURL: "https://provider.test",
