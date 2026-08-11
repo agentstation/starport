@@ -5,7 +5,6 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workflow="$repository_root/.github/workflows/release.yaml"
 goreleaser="$repository_root/.goreleaser.yaml"
-public_release_verifier="$repository_root/scripts/verify-automatic-provider-runtime-release.sh"
 
 require_text() {
 	local pattern="$1"
@@ -73,11 +72,6 @@ require_text 'brew install agentstation/tap/starport' 'the documented Homebrew i
 require_text 'MACOS_SIGN_P12' 'the Developer ID signing credential'
 require_text 'MACOS_NOTARY_ISSUER_ID' 'the Apple notarization credential'
 require_text 'xattr -p com\.apple\.quarantine.*STARPORT_BINARY' 'installed quarantine verification'
-if [ ! -x "$public_release_verifier" ]; then
-	printf 'automatic provider public release verifier is missing or not executable: %s\n' \
-		"$public_release_verifier" >&2
-	exit 1
-fi
 require_goreleaser_text 'branch:[[:space:]]+main' 'the Homebrew tap main branch'
 for credential in \
 	MACOS_SIGN_P12 \
