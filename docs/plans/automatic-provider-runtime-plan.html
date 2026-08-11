@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automatic provider runtime plan</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code { color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code { color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code { color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code { color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Automatic provider runtime</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="proposed">proposed</code> ·
+    Owner: this plan ·
+    Created: 2026-08-11 ·
+    Baseline: main @ b52cd7e286a9a870293155638392ed514b630a47 ·
+    Proof root: <code>docs/plans/proof/automatic-provider-runtime/</code> ·
+    Next action: approve activation and start APR0
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      Starport derives every executable provider and its secret-free inference
+      authentication contract from one Starmap generation. It registers those
+      providers without operator credential material. After request policy
+      selects operator or tenant material, Starport binds the catalog endpoint
+      and applies the selected compiled authentication primitive. A reconciler
+      publishes changes through atomic runtime generations and reports scoped
+      provider state. <code>starport dev</code> provides a one-command local
+      start. Production bootstrap stays explicit and fail-closed.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">The status ledger supplies progress.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 360 250" role="img"
+          aria-label="Operator credentials filter catalog providers before request authentication">
+          <rect x="10" y="10" width="155" height="48" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="87" y="30" text-anchor="middle" fill="currentColor">Starmap generation</text>
+          <text x="87" y="48" text-anchor="middle" fill="currentColor">and auth contract</text>
+          <rect x="195" y="10" width="155" height="48" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="272" y="30" text-anchor="middle" fill="currentColor">credential material</text>
+          <text x="272" y="48" text-anchor="middle" fill="currentColor">sources and tenant BYOK</text>
+          <rect x="75" y="88" width="210" height="48" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="180" y="108" text-anchor="middle" fill="currentColor">startup projection</text>
+          <text x="180" y="126" text-anchor="middle" fill="currentColor">filters by operator material</text>
+          <rect x="10" y="170" width="155" height="65" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="87" y="198" text-anchor="middle" fill="currentColor">runtime generation</text>
+          <text x="87" y="219" text-anchor="middle" fill="currentColor">operator-filtered routes</text>
+          <rect x="195" y="170" width="155" height="65" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="272" y="198" text-anchor="middle" fill="currentColor">request auth + binding</text>
+          <text x="272" y="219" text-anchor="middle" fill="currentColor">operator bindings baked early</text>
+          <line x1="87" y1="58" x2="145" y2="84" stroke="currentColor"/>
+          <line x1="272" y1="58" x2="215" y2="84" stroke="currentColor"/>
+          <line x1="150" y1="136" x2="100" y2="166" stroke="currentColor"/>
+          <line x1="210" y1="136" x2="260" y2="166" stroke="currentColor"/>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 360 250" role="img"
+          aria-label="Catalog and credential sources drive atomic provider runtime generations">
+          <defs>
+            <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4"
+              markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <rect x="10" y="10" width="155" height="48" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="87" y="30" text-anchor="middle" fill="currentColor">Starmap generation</text>
+          <text x="87" y="48" text-anchor="middle" fill="currentColor">and auth contract</text>
+          <rect x="195" y="10" width="155" height="48" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="272" y="30" text-anchor="middle" fill="currentColor">credential material</text>
+          <text x="272" y="48" text-anchor="middle" fill="currentColor">sources and tenant BYOK</text>
+          <rect x="75" y="88" width="210" height="48" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="180" y="108" text-anchor="middle" fill="currentColor">provider reconciler</text>
+          <text x="180" y="126" text-anchor="middle" fill="currentColor">refresh + safe state</text>
+          <rect x="10" y="170" width="155" height="65" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="87" y="198" text-anchor="middle" fill="currentColor">runtime generation</text>
+          <text x="87" y="219" text-anchor="middle" fill="currentColor">all executable routes</text>
+          <rect x="195" y="170" width="155" height="65" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="272" y="198" text-anchor="middle" fill="currentColor">request auth + binding</text>
+          <text x="272" y="219" text-anchor="middle" fill="currentColor">selected request material</text>
+          <line x1="87" y1="58" x2="145" y2="84" stroke="currentColor"
+            marker-end="url(#arrow)"/>
+          <line x1="272" y1="58" x2="215" y2="84" stroke="currentColor"
+            marker-end="url(#arrow)"/>
+          <line x1="150" y1="136" x2="100" y2="166" stroke="currentColor"
+            marker-end="url(#arrow)"/>
+          <line x1="210" y1="136" x2="260" y2="166" stroke="currentColor"
+            marker-end="url(#arrow)"/>
+        </svg>
+      </figure>
+    </div>
+    <p>Starmap provides metadata, not credential material. Its
+      <code>credentials.inference</code> plane declares fields, conventional
+      environment names, profiles, primitives, placements, scopes, and endpoint
+      bindings. Starport reads actual material from deployment sources or
+      tenant BYOK. Starport then binds the declared endpoint and applies the
+      selected compiled primitive. Starmap catalog
+      acquisition and Starport inference can read the same environment name
+      independently. They never share resolved material or cache state.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns:</strong> provider-neutral bootstrap, local development,
+      catalog-wide registration, credential resolution, endpoint binding,
+      refresh, provider state, admin controls, and first-run docs.</p>
+    <p><strong>Does not own:</strong> new provider transports, new Starmap
+      providers, model identity rules, routing aliases, or catalog acquisition
+      protocols, which require their owning repository or plan.</p>
+    <p><strong>Non-goals:</strong> unauthenticated production, billable startup
+      probes, process environment mutation, provider rosters, local provider
+      authentication tables, model-name inference, or use of acquisition
+      success as inference health. Circuit retuning and new compiled primitives
+      are also outside this plan.</p>
+    <p><strong>Executable provider:</strong> a catalog provider with a
+      non-retired offering, a compiled transport, and a compiled inference
+      authentication primitive, including no-auth. Its endpoint can remain a
+      template until request material binds it.</p>
+  </section>
+
+  <section id="promotion-gate">
+    <h2>Promotion gate</h2>
+    <p>Promote this plan to <code>active</code> only when every item holds:</p>
+    <ul>
+      <li>The owner approves the provider-neutral <code>init</code> contract.</li>
+      <li>The owner approves the local <code>starport dev</code> trust boundary.</li>
+      <li>The owner approves the provider state and admin API contracts.</li>
+      <li>The baseline, proof root, and audit verify current behavior, dependency currency, and request binding.</li>
+      <li>Every task has falsifiable acceptance criteria.</li>
+      <li>The goal block has no placeholder.</li>
+    </ul>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <ol>
+      <li>Starmap owns provider IDs, credential fields and environment names, ordered inference profiles, authentication primitives, placements, scopes, endpoint bindings, offerings, endpoints, and model facts.</li>
+      <li>Starport owns inference credential material, deployment source policy, compiled primitive implementations, provider state, routing, execution, and HTTP protocols.</li>
+      <li>Provider IDs label state. They never select compiled behavior.</li>
+      <li>A compiled transport and authentication primitive define the executable boundary.</li>
+      <li>Operator credentials and tenant BYOK remain separate request policies.</li>
+    </ol>
+    <ol start="6">
+      <li>A <code>user_only</code> request never reads operator credential material.</li>
+      <li>Catalog acquisition credentials never establish inference readiness.</li>
+      <li>Bootstrap never writes an ambient provider inference credential to disk.</li>
+      <li>Production never creates a gateway identity or master key implicitly.</li>
+      <li>A runtime generation changes atomically and drains after request leases end.</li>
+      <li>Transient source failure retains valid material and the accepted runtime generation.</li>
+    </ol>
+    <ol start="12">
+      <li>No warmed inference request contacts a secret store.</li>
+      <li>An external environment change requires process restart.</li>
+      <li>Provider state exposes safe reason codes and never exposes credential material.</li>
+      <li>One failure changes only the scope that provider evidence supports.</li>
+      <li>Verification uses normal Go scheduling without <code>-p</code> limits.</li>
+    </ol>
+    <ol start="17">
+      <li>Gateway readiness reports internal operation while provider state reports inference eligibility.</li>
+      <li>Inference resolution reads only the Starmap <code>credentials.inference</code> plane, never <code>credentials.catalog_acquisition</code>.</li>
+      <li>Starmap supplies environment-name and profile order, and Starport adds no provider-specific credential alias or profile table.</li>
+      <li>Starport attempts a cloud default chain only when a candidate Starmap inference profile declares that compiled primitive.</li>
+      <li>Starport binds endpoint templates after request policy selects credential material.</li>
+      <li>A provider-local credential failure cannot block other providers or gateway readiness.</li>
+    </ol>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Decision</th><th>Reason and reopen condition</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td>Remove <code>init --provider</code>. Keep <code>starport init</code> for explicit security and identity bootstrap.</td><td>The provider flag joins unrelated concepts and writes ambient secrets. Reopen only if a durable provider artifact requires explicit creation.</td></tr>
+        <tr><td>D2</td><td>Add <code>starport dev</code> for automatic local bootstrap.</td><td>The command binds to loopback, uses Badger in-memory mode, and prints one ephemeral gateway API key. It creates no persistent state. Reopen if a smaller explicit mode provides the same trust boundary.</td></tr>
+        <tr><td>D3</td><td>Register executable catalog providers without requiring operator credentials.</td><td>Operator routes require operator material. Tenant BYOK routes use request-bound material. Unsupported catalog providers remain visible in safe admin state. Reopen if a transport cannot remain credential-free.</td></tr>
+        <tr><td>D4</td><td>Project adapter, operator credential, and observed health state from their owners.</td><td>Adapter activation and credentials keep their state machines. Offering health stays in availability. The admin view is immutable projection, not a duplicate state machine. Reopen if a smaller typed view preserves every distinction.</td></tr>
+        <tr><td>D5</td><td>Reconcile providers at startup, on a configurable interval, and through an authenticated manual request.</td><td>A credential source can change while the catalog stays constant. Source material renewal remains in the credential lifecycle. Reopen if source events replace interval or manual reconciliation.</td></tr>
+        <tr><td>D6</td><td>Do not validate inference with catalog acquisition or a billable request.</td><td>Acquisition and inference use separate permission and budget contracts. Reopen for a documented, non-billable provider validation contract.</td></tr>
+        <tr><td>D7</td><td>Keep gateway readiness separate from provider eligibility.</td><td>Readiness reports that internal dependencies and the reconciler can operate. It does not require operator provider material. Reopen if deployment evidence requires a separate inference-readiness probe.</td></tr>
+        <tr><td>D8</td><td>Use the Starmap <code>credentials.inference</code> plane as the only provider authentication contract.</td><td>Starport resolves deployment-owned material through the declared field and profile order, uses the Starmap-derived <code>STARPORT_&lt;PROVIDER&gt;_&lt;FIELD&gt;</code> fallback, and implements the selected primitive. Reopen only if the typed Starmap schema cannot represent a required inference contract.</td></tr>
+        <tr><td>D9</td><td>Discover catalog-declared cloud default profiles during bounded background refresh.</td><td>A default chain can supply material without an API-key environment variable. Resolve ambient and default fields first. Let the typed primitive supply only its contract-declared fields. Do not call the chain when another required parameter is absent. Run only declared compiled primitives with cancellation and deadlines. Treat <code>not_configured</code> as normal provider state. Reopen if platform evidence requires explicit opt-in.</td></tr>
+        <tr><td>D10</td><td>Bind catalog endpoint templates after request credential selection.</td><td>Operator bindings cannot serve tenant-only Azure or Vertex requests. Use the selected operator or tenant fields without cross-request reuse. Reopen only if Starmap supplies a credential-independent concrete endpoint.</td></tr>
+        <tr><td>D11</td><td>Add no runtime dependency unless an owning task proves a missing capability.</td><td>Relevant direct modules are current at audit time. Dependency size and owner counts trigger review. They do not reject a design without a verified product, security, licensing, maintenance, or operational reason.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="dependency-policy">
+    <h2>Dependency policy</h2>
+    <p>The audit found no required new dependency because current modules and
+      standard library lifecycle controls cover the planned work. APR0 records
+      the module check. If a task needs a new module, its proof names the
+      missing capability and selected version. It also records license, provenance,
+      maintenance evidence, vulnerability result, runtime closure, and binary
+      effect. Numeric measurements trigger review. They become rejection gates
+      only when an approved product or operational budget defines the limit,
+      owner, consequence, exception path, and reopen condition.</p>
+  </section>
+
+  <section id="state-contract">
+    <h2>State and failure contract</h2>
+    <p>Adapter support uses <code>ready</code>,
+      <code>unsupported_transport</code>, <code>unsupported_authentication</code>,
+      or <code>no_offerings</code>. Operator credential state uses
+      <code>ready</code>, <code>not_configured</code>, <code>denied</code>,
+      <code>invalid</code>, <code>unavailable</code>, or
+      <code>refreshing</code>. Offering health keeps the existing
+      <code>healthy</code>, <code>open</code>, <code>half_open</code>, and
+      <code>unavailable</code> states, while tenant BYOK stays request-scoped.</p>
+    <p>An authentication result can invalidate only the exact material version.
+      Broader permission, quota, or billing state requires normalized evidence
+      that proves the scope. Offering circuits handle rate limits, timeouts,
+      and outages, while request errors, cancellation, and unknown failures do
+      not change durable state.</p>
+  </section>
+
+  <section id="test-matrix">
+    <h2>Test matrix</h2>
+    <table>
+      <thead><tr><th>Dimension</th><th>Required cases</th></tr></thead>
+      <tbody>
+        <tr><td>Provider set</td><td>None, one, several, synthetic YAML-only provider, unsupported primitive, and no-auth provider.</td></tr>
+        <tr><td>Credential material source</td><td>Starmap-ordered conventional environment, Starmap-derived environment, file, AWS Secrets Manager, Azure Key Vault, Google Secret Manager, Vault, and OpenBao.</td></tr>
+        <tr><td>Authentication profile</td><td>API key, bearer token, Google default, Azure default, no-auth, and catalog-declared unsupported primitive.</td></tr>
+        <tr><td>Request policy</td><td>Operator only, prefer user, user only, missing user material, and missing operator material.</td></tr>
+        <tr><td>Source lifecycle</td><td>Appears, rotates, expires, revokes, disappears, conflicts, times out, and recovers.</td></tr>
+        <tr><td>Failure scope</td><td>Exact material version, credential account, route operation, exact offering, request only, and unknown cause. Each transition requires provider evidence for that scope.</td></tr>
+        <tr><td>Concurrency</td><td>Concurrent cache hits, one source refresh, one runtime refresh, request lease drain, cancellation, and shutdown.</td></tr>
+        <tr><td>Protocol</td><td>OpenAI routes, OpenRouter routes, admin authorization, safe errors, models, providers, chat, embeddings, and streaming.</td></tr>
+        <tr><td>Deployment</td><td>Local dev, local explicit bootstrap, Badger production, Valkey production, local Starmap, and remote Starmap.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-automatic-provider-runtime.sh</code> owns named
+      structural assertions and prints <code>Summary: N passed, M failed</code>.
+      APR0 records its red baseline. A discovered obligation adds a named
+      assertion. The assertion count records plan progress and does not limit
+      the product.</p>
+    <table>
+      <thead><tr><th>ID</th><th>Required assertion</th></tr></thead>
+      <tbody>
+        <tr><td>APR-V01</td><td>Provider-neutral production bootstrap persists no provider credential.</td></tr>
+        <tr><td>APR-V02</td><td>Local development uses loopback and in-memory storage.</td></tr>
+        <tr><td>APR-V03</td><td>Every executable catalog provider registers without operator material.</td></tr>
+        <tr><td>APR-V04</td><td>Request policy selects material before endpoint binding and authentication.</td></tr>
+        <tr><td>APR-V05</td><td>Only Starmap inference profiles and their declared order drive resolution.</td></tr>
+        <tr><td>APR-V06</td><td>Declared cloud chains discover material outside the inference hot path.</td></tr>
+        <tr><td>APR-V07</td><td>Startup, interval, and manual reconciliation publish atomic generations.</td></tr>
+        <tr><td>APR-V08</td><td>Provider state and failure transitions remain safe and correctly scoped.</td></tr>
+        <tr><td>APR-V09</td><td>Authenticated admin routes report state and trigger bounded reconciliation.</td></tr>
+        <tr><td>APR-V10</td><td>Gateway readiness does not require provider credential availability.</td></tr>
+        <tr><td>APR-V11</td><td>The tested quickstart uses plain commands and current release artifacts.</td></tr>
+        <tr><td>APR-V12</td><td>Repository, release, protocol, and public readback gates pass.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr id="APR0" data-status="todo"><td>APR0</td><td>Pin the baseline, author the red verifier, and record fail-before behavior.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR1" data-status="todo"><td>APR1</td><td>Separate provider-neutral bootstrap and explicit local development bootstrap.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR2" data-status="todo"><td>APR2</td><td>Register every executable catalog provider and separate operator credential eligibility from tenant BYOK.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR3" data-status="todo"><td>APR3</td><td>Add credential-driven runtime refresh with interval and manual triggers.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR4" data-status="todo"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR5" data-status="todo"><td>APR5</td><td>Add authenticated provider status and runtime refresh controls.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR6" data-status="todo"><td>APR6</td><td>Rewrite and verify the first-run documentation and release examples.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR7" data-status="todo"><td>APR7</td><td>Merge, release, and verify public binary, cask, container, and protocol artifacts.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR8" data-status="todo"><td>APR8</td><td>Delete this completed plan, its proof root, and its index entries after the final pull request merges.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <h3 id="task-APR0">APR0 Baseline and verifier</h3>
+      <p><strong>Problem:</strong> execution needs reproducible evidence for the current joined bootstrap and fixed provider set.</p>
+      <p><strong>Owning seam and paths:</strong> <code>scripts/verify-automatic-provider-runtime.sh</code> and <code>docs/plans/proof/automatic-provider-runtime/</code>.</p>
+      <p><strong>Steps:</strong> Record current behavior and dependency evidence, author APR-V01 through APR-V12, capture focused failures, and change no production behavior.</p>
+      <p><strong>Acceptance:</strong> The verifier reports every named assertion, records expected baseline failures, and identifies preserved green behavior.</p>
+      <p><strong>Fail-before:</strong> Record provider-required init, secret persistence, empty-provider rejection, absent cloud-chain discovery, and unchanged auth state while preserving green plane-isolation evidence.</p>
+      <p><strong>Verification:</strong> <code>bash scripts/verify-automatic-provider-runtime.sh</code>, focused Go tests, documentation links, and <code>git diff --check</code>.</p>
+
+    <h3 id="task-APR1">APR1 Provider-neutral bootstrap</h3>
+      <p><strong>Problem:</strong> local setup joins gateway identity creation with one provider credential.</p>
+      <p><strong>Owning seam and paths:</strong> <code>internal/cli</code>, <code>internal/setup</code>, <code>cmd/starport</code>, and first-run smoke tests.</p>
+      <p><strong>Steps:</strong> Remove the provider flag, limit <code>init</code> output, add guarded <code>starport dev</code>, and preserve explicit production bootstrap.</p>
+      <p><strong>Acceptance:</strong> <code>TestInitRejectsProviderFlag</code>, <code>TestLocalInitPersistsNoProviderCredential</code>, <code>TestDevUsesInMemoryBadger</code>, <code>TestDevBindsLoopbackOnly</code>, and <code>TestDevPrintsGatewayKeyOnce</code> pass without provider-secret output.</p>
+      <p><strong>Fail-before:</strong> Run each named test before implementation and record its failure.</p>
+      <p><strong>Verification:</strong> <code>go test ./internal/cli ./internal/setup ./cmd/starport</code>, <code>bash scripts/smoke-first-run.sh</code>, and the campaign verifier.</p>
+
+    <h3 id="task-APR2">APR2 Catalog-wide provider registration</h3>
+      <p><strong>Problem:</strong> runtime registration requires operator material and cannot represent a BYOK-only or empty operator provider set.</p>
+      <p><strong>Owning seam and paths:</strong> <code>internal/config</code>, <code>internal/providers</code>, <code>internal/registry</code>, <code>internal/routing</code>, and <code>internal/app</code>.</p>
+      <p><strong>Steps:</strong> Enumerate catalog providers, register executable adapters, retain endpoint templates, separate operator eligibility, select request material, bind its endpoint, and permit empty operator credentials.</p>
+      <p><strong>Acceptance:</strong> Synthetic tests prove catalog-order resolution, inference-plane isolation, tenant-only endpoint binding, route policy, and readiness with empty material or an unsupported primitive.</p>
+      <p><strong>Fail-before:</strong> <code>TestCatalogProviderRegistersWithoutOperatorMaterial</code>, <code>TestTenantOnlyBindsEndpointFromTenantMaterial</code>, <code>TestOperatorAndTenantBindingsDoNotCross</code>, <code>TestRuntimeStartsWithoutOperatorCredentials</code>, and <code>TestUserOnlySkipsOperatorResolution</code> fail before the change.</p>
+      <p><strong>Verification:</strong> Focused package tests, <code>bash scripts/verify-starmap-ownership.sh</code>, <code>bash scripts/verify-v1-architecture.sh</code>, and the campaign verifier.</p>
+
+    <h3 id="task-APR3">APR3 Credential-driven runtime refresh</h3>
+      <p><strong>Problem:</strong> a source can appear or change while the catalog generation stays constant.</p>
+      <p><strong>Owning seam and paths:</strong> <code>internal/credentials</code>, <code>internal/providers/reconciler.go</code>, <code>internal/registry</code>, and thin <code>internal/app</code> composition.</p>
+      <p><strong>Steps:</strong> Add startup, configurable interval, and authenticated manual triggers while sharing work, preserving source-owned renewal, and publishing only changed generations.</p>
+      <p><strong>Acceptance:</strong> Named tests prove API-key and Google-default discovery, project projection, declared-profile-only access, per-provider failure isolation, revocation, retention, single-flight, cancellation, and request-lease drain.</p>
+      <p><strong>Fail-before:</strong> <code>TestProviderReconcilerDiscoversAmbientKey</code>, <code>TestProviderReconcilerDiscoversGoogleDefault</code>, <code>TestGoogleDefaultProjectsCatalogProjectField</code>, <code>TestProviderFailureDoesNotBlockOthers</code>, <code>TestProviderReconcilerManualRefreshSharesInflight</code>, and lifecycle tests fail before implementation.</p>
+      <p><strong>Verification:</strong> Focused tests, <code>go test -race ./internal/credentials ./internal/registry ./internal/app</code>, lifecycle benchmarks, and the campaign verifier.</p>
+
+    <h3 id="task-APR4">APR4 Provider state and failure scope</h3>
+      <p><strong>Problem:</strong> one offering circuit cannot explain adapter support, operator credential state, tenant BYOK, and provider failure causes.</p>
+      <p><strong>Owning seam and paths:</strong> <code>internal/providerstate</code>, <code>internal/failure</code>, <code>internal/availability</code>, and execution outcome publication.</p>
+      <p><strong>Steps:</strong> Project adapter, operator credential, and offering health state with safe reasons, evidence-based failure scope, and material-version recovery.</p>
+      <p><strong>Acceptance:</strong> Tests prove exact material-version authentication effects and documented scopes for permission, quota, billing, rate limit, timeout, availability, cancellation, and unknown failures.</p>
+      <p><strong>Fail-before:</strong> Record unchanged authentication and permission state and absent operator-material state.</p>
+      <p><strong>Verification:</strong> <code>go test -race ./internal/failure ./internal/availability ./internal/execution ./internal/router</code>, redaction tests, and the campaign verifier.</p>
+
+    <h3 id="task-APR5">APR5 Provider operations API</h3>
+      <p><strong>Problem:</strong> operators cannot inspect every catalog provider or request a credential-driven runtime refresh.</p>
+      <p><strong>Owning seam and paths:</strong> <code>internal/server</code>, <code>internal/server/controllers</code>, protocol DTOs, and provider refresh application ports.</p>
+      <p><strong>Steps:</strong> Preserve OpenRouter output while adding authenticated <code>GET /api/v1/admin/providers</code> and <code>POST /api/v1/admin/providers/refresh</code> routes that honor cancellation.</p>
+      <p><strong>Acceptance:</strong> GET returns stable safe state, while POST returns bounded reconciliation revisions and changes, and unauthorized requests change no state.</p>
+      <p><strong>Fail-before:</strong> Both exact admin routes return not found before implementation.</p>
+      <p><strong>Verification:</strong> Controller and server contract tests, raw HTTP smoke tests, official OpenRouter SDK smoke tests, and the campaign verifier.</p>
+
+    <h3 id="task-APR6">APR6 Developer documentation</h3>
+      <p><strong>Problem:</strong> the README uses a documentation-only binary variable, reverses terminal state, and shows a stale container version.</p>
+      <p><strong>Owning seam and paths:</strong> <code>README.md</code>, <code>docs/OPERATOR-GUIDE.md</code>, <code>docs/ARCHITECTURE.md</code>, <code>.env.example</code>, <code>GLOSSARY.md</code>, and DX verifiers.</p>
+      <p><strong>Steps:</strong> Use plain commands, lead with <code>starport dev</code>, label terminals, document catalog-declared credential discovery and refresh, and detect release-version drift.</p>
+      <p><strong>Acceptance:</strong> The quickstart removes <code>STARPORT_BIN</code> and provider-specific init, retains client state, and gives tested expected results.</p>
+      <p><strong>Fail-before:</strong> The DX verifier detects <code>STARPORT_BIN</code>, the reversed terminal instruction, provider-specific init, and the stale container version.</p>
+      <p><strong>Verification:</strong> Strict technical-writing lint, documentation links, DX verifier tests, first-run smoke, container command smoke, and <code>git diff --check</code>.</p>
+
+    <h3 id="task-APR7">APR7 Integration, release, and readback</h3>
+      <p><strong>Problem:</strong> the direct CLI and runtime changes need complete repository and public distribution evidence under the published no-compatibility-window policy.</p>
+      <p><strong>Owning seam and paths:</strong> repository checks, release workflows, Homebrew cask, GHCR, release docs, and terminal proof.</p>
+      <p><strong>Steps:</strong> Select the version under repository policy, then run all gates and autoreview, merge the reviewed head, publish it, and verify artifacts.</p>
+      <p><strong>Acceptance:</strong> Local, hosted, Homebrew, checksum, SBOM, attestation, archive, container, and provenance checks pass.</p>
+      <p><strong>Fail-before:</strong> The release verifier rejects docs or artifacts that retain the old init and quickstart contract.</p>
+      <p><strong>Verification:</strong> Repository-required architecture, Go, race, lint, SDK, release, cask, container, documentation, provenance, and public readback checks.</p>
+
+    <h3 id="task-APR8">APR8 Cleanup</h3>
+      <p><strong>Problem:</strong> a merged plan must not remain as an active control plane.</p>
+      <p><strong>Owning seam and paths:</strong> this plan, its proof root, <code>docs/plans/README.md</code>, and <code>docs/TASKS.md</code>.</p>
+      <p><strong>Steps:</strong> Confirm final evidence, delete the control plane, and fast-forward clean worktrees to protected <code>main</code>.</p>
+      <p><strong>Acceptance:</strong> No reference contains the plan slug, and no pull request queue contains campaign work.</p>
+      <p><strong>Fail-before:</strong> The plan and proof root exist before cleanup.</p>
+      <p><strong>Verification:</strong> Search for the plan slug, run documentation checks, inspect pull request queues, and inspect both worktrees.</p>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute /Users/jack/src/github.com/agentstation/starport/docs/plans/automatic-provider-runtime-plan.html to completion. This is a whole-plan goal, not a single-task goal. Read the plan fully, then read: /Users/jack/src/github.com/agentstation/starport/AGENTS.md, docs/TASKS.md, docs/ARCHITECTURE.md, README.md, GLOSSARY.md, and the plans, technical-writing, autoreview, and gh skills. Work in /Users/jack/src/github.com/agentstation/starport. Start implementation on branch codex/automatic-provider-runtime. After a task pull request merges, fast-forward main and create codex/automatic-provider-runtime-&lt;task-id&gt; for the next pull request. Chat history is not progress state. Resume from the status ledger, execution log, and git state. If compaction happens, continue from the plan and git state. Loop: keep one task in_progress, implement at its owning seam, capture fail-before evidence, run its verification commands, commit its work, write its proof file, append the execution log with the work commit, mark the task terminal with evidence, commit the plan transition, and advance to the next task. Decide rather than ask. Mark a wrong or satisfied task no-action with a short reason. Record a blocker and continue with the next eligible task. Binding constraints: preserve all invariants, decisions, and non-goals. Use direct breaking changes under the repository's published no-compatibility-window policy. Add no compatibility path. Treat the Starmap <code>credentials.inference</code> plane as the only provider authentication contract. Preserve its environment-name and profile order. Never read <code>credentials.catalog_acquisition</code> for inference or add a local provider authentication table. Attempt only catalog-declared compiled cloud profiles, outside the inference hot path, with cancellation and deadlines. Select request credential material before binding the catalog endpoint or applying authentication. Never reuse operator endpoint fields for tenant BYOK. Use no provider roster, billable startup probe, ambient secret persistence, acquisition-to-inference trust, or Go scheduling cap. Add no dependency unless the owning task proves a missing capability and records the required evidence. Preserve request-bound BYOK isolation, exact model IDs, atomic runtime generations, OpenAI and OpenRouter protocol contracts, immutable release artifacts, main branches, and the Homebrew cask. Commit policy: use one focused work commit and one plan evidence commit for each task. Run the repository autoreview gate before each substantive pull request. Push and merge only the exact reviewed head after every required hosted check passes. Stop only at a valid stop state from the plans skill. Before stopping, update the ledger, log, and next action. The goal is met when APR0 through APR7 are terminal, APR-V01 through APR-V12 and every discovered assertion pass, all repository gates pass, the public release readback passes, the final pull request merges, and APR8 removes the completed control plane.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <table>
+      <thead><tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>2026-08-11</td><td>meta</td><td>authored</td><td>Proposed plan created at baseline <code>b52cd7e286a9a870293155638392ed514b630a47</code>. No production behavior changed.</td></tr>
+        <tr><td>2026-08-11</td><td>meta</td><td>audited</td><td>Verified current source behavior, dependency currency, cloud-chain contracts, in-memory storage, failure scope, and the request-bound endpoint gap. See <code>proof/automatic-provider-runtime/audit.md</code>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>

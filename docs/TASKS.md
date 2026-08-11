@@ -11,7 +11,9 @@ No active durable plan exists.
 
 ### Proposed Work
 
-No proposed durable plan exists.
+| Task | Plan | Status | Next action |
+|------|------|--------|-------------|
+| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `proposed` | Approve activation and start APR0. |
 
 ### Recently Completed
 
