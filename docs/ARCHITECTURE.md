@@ -145,6 +145,13 @@ reload work, and starts the HTTP listener. `App.Close` closes owned resources
 once in reverse construction order. Constructor rollback uses the same
 ownership ledger.
 
+Concept ownership does not depend on process topology. In local mode, Starport
+composes the Starmap acquisition package for single-binary startup and scheduled
+refresh. Starmap still owns acquisition protocols, credentials, mapping,
+reconciliation, and publication. In remote mode, a separately operated Starmap
+publisher provides operational isolation. Both modes publish the same immutable
+catalog-generation contract into the same atomic Starport activation transaction.
+
 `internal/server.Server` receives ready use-case and repository ports. It owns
 only the HTTP listener and route tree. `Server.Shutdown` drains HTTP requests
 and does not close the registry, storage, or cache. `internal/registry`

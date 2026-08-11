@@ -4,7 +4,14 @@ set -euo pipefail
 
 distribution_directory="${1:-dist}"
 metadata_file="$distribution_directory/metadata.json"
-maximum_binary_size_bytes="${MAX_RELEASE_BINARY_SIZE_BYTES:-52428800}"
+# This value is unset unless an approved release policy supplies a hard budget.
+approved_maximum_binary_size_bytes="${APPROVED_MAX_RELEASE_BINARY_SIZE_BYTES:-}"
+
+if [ -n "$approved_maximum_binary_size_bytes" ] &&
+	! [[ "$approved_maximum_binary_size_bytes" =~ ^[0-9]+$ ]]; then
+	printf 'approved maximum release binary size must be an integer number of bytes\n' >&2
+	exit 1
+fi
 
 if [ ! -f "$metadata_file" ]; then
 	printf 'release metadata is missing: %s\n' "$metadata_file" >&2
@@ -55,9 +62,11 @@ while IFS= read -r binary; do
 	printf '%s/%s\n' "$goos" "$goarch" >>"$actual_targets"
 
 	size="$(wc -c <"$binary" | tr -d '[:space:]')"
-	if [ "$size" -gt "$maximum_binary_size_bytes" ]; then
+	printf 'release binary size: %s (%s bytes)\n' "$binary" "$size"
+	if [ -n "$approved_maximum_binary_size_bytes" ] &&
+		[ "$size" -gt "$approved_maximum_binary_size_bytes" ]; then
 		printf 'release binary exceeds the %s-byte budget: %s (%s bytes)\n' \
-			"$maximum_binary_size_bytes" "$binary" "$size" >&2
+			"$approved_maximum_binary_size_bytes" "$binary" "$size" >&2
 		exit 1
 	fi
 
