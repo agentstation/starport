@@ -117,6 +117,7 @@ jobs:
     outputs:
       homebrew_version: ${{ steps.homebrew.outputs.version }}
     permissions:
+      artifact-metadata: write
       attestations: write
       contents: write
       id-token: write
@@ -414,7 +415,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@fd832223f9f99ebf0244dd20658680e5d4aca049 # 2026.08.03.2
+        uses: Homebrew/actions/setup-homebrew@c8707045ccae42888fe98e86f2ee8938bc7cc193 # 2026.08.10.1
 
       - name: Install Starport from the AgentStation tap
         shell: bash
@@ -465,6 +466,7 @@ jobs:
       homebrew_version: ${{ steps.homebrew.outputs.version }}
     permissions:
       actions: read
+      artifact-metadata: write
       attestations: write
       contents: write
       id-token: write
