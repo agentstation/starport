@@ -7,9 +7,7 @@ Last Updated: 2026-08-11
 
 ### Active Work
 
-| Task | Plan | Status | Next action |
-|------|------|--------|-------------|
-| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `active` | Merge APR7 evidence, then execute APR8 cleanup. |
+No active durable work exists.
 
 ### Proposed Work
 
@@ -19,6 +17,7 @@ No proposed durable plan exists.
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| Automatic provider runtime | APR | #96–#103 | 2026-08-11 | Published immutable `v1.0.3`. Starport now derives executable providers and inference authentication profiles from one Starmap generation. It supports credential refresh, safe provider state, authenticated provider operations, and provider-neutral local development. |
 | Starport developer experience | DX | #88 | 2026-08-10 | Published immutable `v1.0.1` and the Homebrew cask. Verified exact-version installation on macOS and Linux, then merged release-readback hardening after all 10 CI jobs passed. |
 | SPR3 | Release | #75 | 2026-08-09 | Stored compact terminal proof and removed the completed release control plane |
 | SPR2 | Release | Release workflow | 2026-08-09 | Published immutable `v1.0.0` with 13 verified assets and a public, attested, two-platform GHCR image at `sha256:f4230687fdf664022e4be80031c4145ff2eb795ff200489216ea76ba4b64bc24` |
