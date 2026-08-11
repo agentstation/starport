@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-10
+Last Updated: 2026-08-11
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -9,7 +9,7 @@ Last Updated: 2026-08-10
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP4.1 publishes the verified Starmap compatibility release and catalog generation. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP5 replaces the fixed Starport provider configuration and legacy environment names with catalog-keyed resolution. |
 
 ### Proposed Work
 
