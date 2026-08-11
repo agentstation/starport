@@ -53,6 +53,7 @@ func TestNewRequiresReadyDependencies(t *testing.T) {
 	base := Dependencies{
 		Service: ready.service, Identities: ready.identities,
 		ProviderKeys: ready.providerKeys, RateLimits: ready.rateLimits,
+		ProviderOperations: ready.providerOperations,
 	}
 	tests := []struct {
 		name   string
@@ -63,6 +64,7 @@ func TestNewRequiresReadyDependencies(t *testing.T) {
 		{"identities", func(value *Dependencies) { value.Identities = nil }, ErrIdentitiesRequired},
 		{"provider keys", func(value *Dependencies) { value.ProviderKeys = nil }, ErrProviderKeysRequired},
 		{"rate limits", func(value *Dependencies) { value.RateLimits = nil }, ErrRateLimitsRequired},
+		{"provider operations", func(value *Dependencies) { value.ProviderOperations = nil }, ErrProviderOperationsRequired},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

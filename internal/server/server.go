@@ -28,6 +28,8 @@ var (
 	ErrProviderKeysRequired = errors.New("provider key service is required")
 	// ErrRateLimitsRequired reports an absent rate-limit repository.
 	ErrRateLimitsRequired = errors.New("rate-limit repository is required")
+	// ErrProviderOperationsRequired reports an absent provider operations port.
+	ErrProviderOperationsRequired = errors.New("provider operations are required")
 )
 
 // Server represents the HTTP server with new handler organization
@@ -37,10 +39,11 @@ type Server struct {
 	httpServer *http.Server
 
 	// Ready application dependencies
-	service      proxy.Proxy
-	identities   identity.Repository
-	providerKeys byok.ProviderKeys
-	rateLimits   ratelimit.Repository
+	service            proxy.Proxy
+	identities         identity.Repository
+	providerKeys       byok.ProviderKeys
+	rateLimits         ratelimit.Repository
+	providerOperations controllers.ProviderOperations
 
 	// Handler collection
 	controllers *controllers.Controllers
@@ -51,11 +54,12 @@ type Server struct {
 
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
-	Service      proxy.Proxy
-	Identities   identity.Repository
-	ProviderKeys byok.ProviderKeys
-	RateLimits   ratelimit.Repository
-	ChatUI       *chatui.Handler
+	Service            proxy.Proxy
+	Identities         identity.Repository
+	ProviderKeys       byok.ProviderKeys
+	RateLimits         ratelimit.Repository
+	ProviderOperations controllers.ProviderOperations
+	ChatUI             *chatui.Handler
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -75,24 +79,29 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	if dependencies.RateLimits == nil {
 		return nil, ErrRateLimitsRequired
 	}
+	if dependencies.ProviderOperations == nil {
+		return nil, ErrProviderOperationsRequired
+	}
 
 	s := &Server{
-		router:       chi.NewRouter(),
-		cfg:          config,
-		service:      dependencies.Service,
-		identities:   dependencies.Identities,
-		providerKeys: dependencies.ProviderKeys,
-		rateLimits:   dependencies.RateLimits,
+		router:             chi.NewRouter(),
+		cfg:                config,
+		service:            dependencies.Service,
+		identities:         dependencies.Identities,
+		providerKeys:       dependencies.ProviderKeys,
+		rateLimits:         dependencies.RateLimits,
+		providerOperations: dependencies.ProviderOperations,
 	}
 	s.auth = NewAuthMiddleware(s.identities)
 
 	handlerConfig := controllers.Config{
-		Service:      s.service,
-		ProviderKeys: s.providerKeys,
-		Identities:   s.identities,
-		ServiceName:  "starport",
-		Version:      "1.0.0",
-		ChatUI:       dependencies.ChatUI,
+		Service:            s.service,
+		ProviderKeys:       s.providerKeys,
+		Identities:         s.identities,
+		ProviderOperations: s.providerOperations,
+		ServiceName:        "starport",
+		Version:            "1.0.0",
+		ChatUI:             dependencies.ChatUI,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

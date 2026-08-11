@@ -19,17 +19,19 @@ type Controllers struct {
 	Providers            *ProvidersController
 	ProviderKeys         *ProviderKeysController
 	Admin                *AdminController
+	ProviderOperations   *ProviderOperationsController
 	ChatUI               *chatui.Handler
 }
 
 // Config holds configuration for creating handlers
 type Config struct {
-	Service      proxy.Proxy
-	ProviderKeys byok.ProviderKeys
-	Identities   identity.Repository
-	ServiceName  string
-	Version      string
-	ChatUI       *chatui.Handler
+	Service            proxy.Proxy
+	ProviderKeys       byok.ProviderKeys
+	Identities         identity.Repository
+	ProviderOperations ProviderOperations
+	ServiceName        string
+	Version            string
+	ChatUI             *chatui.Handler
 }
 
 // NewControllers creates a new controller collection
@@ -45,6 +47,7 @@ func NewControllers(cfg Config) *Controllers {
 		Providers:            NewProvidersController(cfg.Service),
 		ProviderKeys:         NewProviderKeysController(cfg.ProviderKeys),
 		Admin:                NewAdminController(cfg.Identities),
+		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
 		ChatUI:               cfg.ChatUI,
 	}
 

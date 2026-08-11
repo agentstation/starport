@@ -96,6 +96,8 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			// System information
 			r.Get("/info", s.controllers.Admin.SystemInfo)
 			r.Get("/metrics", s.controllers.Admin.Metrics)
+			r.Get("/providers", s.controllers.ProviderOperations.Status)
+			r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
 		})
 	})
 
@@ -165,3 +167,5 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   DELETE /api/v1/admin/keys/{key_id}     - Delete API key
 //   GET    /api/v1/admin/info              - System information
 //   GET    /api/v1/admin/metrics           - System metrics
+//   GET    /api/v1/admin/providers         - Provider runtime status
+//   POST   /api/v1/admin/providers/refresh - Reconcile provider credentials

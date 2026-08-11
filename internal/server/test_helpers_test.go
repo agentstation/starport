@@ -9,18 +9,22 @@ import (
 
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providerstate"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/router"
+	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/storage"
 )
 
 type testServerConfig struct {
-	store     storage.KVStore
-	masterKey []byte
+	store              storage.KVStore
+	masterKey          []byte
+	providerOperations controllers.ProviderOperations
 }
 
 type testRegistryAdapter struct{ registry *registry.Registry }
@@ -55,12 +59,27 @@ func withTestMasterKey(masterKey []byte) testServerOption {
 	}
 }
 
+func withTestProviderOperations(operations controllers.ProviderOperations) testServerOption {
+	return func(config *testServerConfig) { config.providerOperations = operations }
+}
+
+type staticTestProviderOperations struct{}
+
+func (staticTestProviderOperations) ProviderStates() providerstate.Snapshot {
+	return providerstate.Snapshot{}
+}
+
+func (staticTestProviderOperations) RefreshProviders(context.Context) (providers.ReconcileReport, error) {
+	return providers.ReconcileReport{}, nil
+}
+
 // newTestServer is the explicit server test composition root.
 func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *Server {
 	tb.Helper()
 	testConfig := testServerConfig{
-		store:     storage.NewMockStore(),
-		masterKey: make([]byte, 32),
+		store:              storage.NewMockStore(),
+		masterKey:          make([]byte, 32),
+		providerOperations: staticTestProviderOperations{},
 	}
 	for _, option := range options {
 		option(&testConfig)
@@ -105,6 +124,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 
 	result, err := New(config, Dependencies{
 		Service: service, Identities: identities, ProviderKeys: providerKeys, RateLimits: rateLimits,
+		ProviderOperations: testConfig.providerOperations,
 	})
 	if err != nil {
 		tb.Fatal(err)
