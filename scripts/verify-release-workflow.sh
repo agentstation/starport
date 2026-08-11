@@ -5,6 +5,7 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workflow="$repository_root/.github/workflows/release.yaml"
 goreleaser="$repository_root/.goreleaser.yaml"
+public_release_verifier="$repository_root/scripts/verify-automatic-provider-runtime-release.sh"
 
 require_text() {
 	local pattern="$1"
@@ -38,6 +39,10 @@ fi
 require_text 'git merge-base --is-ancestor .* origin/main' 'a main ancestry check'
 require_text 'test .*origin/main' 'an exact main-head check'
 require_text 'smoke-openrouter-sdks\.sh' 'the required official SDK gate'
+require_text 'verify-developer-experience\.sh' 'the developer-experience release gate'
+require_text 'verify-doc-links\.sh' 'the documentation link release gate'
+require_text 'test-doc-link-verifier\.sh' 'the documentation verifier regression gate'
+require_text 'smoke-first-run\.sh' 'the first-run release gate'
 require_text 'verify-release-binaries\.sh' 'the portable binary gate'
 require_text 'verify-release-archives\.sh' 'the archive and SBOM gate'
 require_text 'attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8' 'the pinned provenance action'
@@ -50,6 +55,7 @@ require_text 'immutable' 'immutable release readback'
 require_text 'source_run_id' 'bounded recovery input'
 require_text 'SOURCE_RUN.*conclusion.*failure|conclusion.*SOURCE_RUN.*failure' 'failed-run recovery validation'
 require_text 'ghcr\.io/agentstation/starport' 'the canonical GHCR image'
+require_text 'SYFT_VERSION: v1\.51\.0' 'the reviewed Syft release'
 require_text 'container-digest\.txt' 'container digest recovery evidence'
 require_text 'find dist .*chmod u\+x' 'recovered executable permission restoration'
 require_text 'build-tag=.*sha-.*GITHUB_SHA.*GITHUB_RUN_ID.*GITHUB_RUN_ATTEMPT' 'a unique staging image tag'
@@ -67,6 +73,11 @@ require_text 'brew install agentstation/tap/starport' 'the documented Homebrew i
 require_text 'MACOS_SIGN_P12' 'the Developer ID signing credential'
 require_text 'MACOS_NOTARY_ISSUER_ID' 'the Apple notarization credential'
 require_text 'xattr -p com\.apple\.quarantine.*STARPORT_BINARY' 'installed quarantine verification'
+if [ ! -x "$public_release_verifier" ]; then
+	printf 'automatic provider public release verifier is missing or not executable: %s\n' \
+		"$public_release_verifier" >&2
+	exit 1
+fi
 require_goreleaser_text 'branch:[[:space:]]+main' 'the Homebrew tap main branch'
 for credential in \
 	MACOS_SIGN_P12 \

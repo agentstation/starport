@@ -214,7 +214,7 @@ jobs:
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
-          syft-version: v1.50.0
+          syft-version: v1.51.0
 
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@c8707045ccae42888fe98e86f2ee8938bc7cc193 # 2026.08.10.1

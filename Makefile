@@ -18,6 +18,7 @@ GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 GO_VERSION = $(shell go version | awk '{print $$3}')
 GORELEASER_VERSION=2.17.1
+SYFT_VERSION=1.51.0
 GOLANGCI_LINT_VERSION=v2.12.2
 AIR_VERSION=v1.67.4
 GOIMPORTS_VERSION=v0.48.0
@@ -153,7 +154,9 @@ release-check: verify ## Check the release configuration and online action prove
 
 .PHONY: release-snapshot
 release-snapshot: release-check ## Build and verify the complete local release snapshot
-	@command -v syft >/dev/null 2>&1 || (echo "syft is required"; exit 1)
+	@command -v syft >/dev/null 2>&1 || (echo "syft $(SYFT_VERSION) is required"; exit 1)
+	@test "$$(syft version | awk '/^Version:/ {print $$2}')" = "$(SYFT_VERSION)" || \
+		(echo "syft $(SYFT_VERSION) is required"; exit 1)
 	goreleaser release --snapshot --clean --skip=notarize
 	scripts/verify-release-binaries.sh dist
 	scripts/verify-release-archives.sh dist
