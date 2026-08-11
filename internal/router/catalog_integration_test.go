@@ -75,10 +75,8 @@ func routerAdapterAvailability(
 	return runtimecatalog.AdapterAvailability{
 		ProviderID:    providerID,
 		Registered:    true,
-		Configured:    true,
 		Operations:    append([]catalogs.ProviderOperation(nil), offering.Service.Operations...),
 		EndpointTypes: types,
-		BaseURL:       "https://provider.test",
 	}
 }
 

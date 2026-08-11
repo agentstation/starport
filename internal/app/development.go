@@ -56,7 +56,6 @@ func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, erro
 
 	claimed := false
 	application, err := New(cfg, func(options *buildOptions) {
-		options.allowEmptyProviders = true
 		options.factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
 			claimed = true
 			return store, nil

@@ -13,11 +13,6 @@ import (
 	"github.com/agentstation/starport/internal/registry"
 )
 
-var (
-	// ErrProvidersRequired reports an empty production provider set.
-	ErrProvidersRequired = errors.New("at least one production provider is required")
-)
-
 func buildRegistrations(
 	catalog *catalogs.Catalog,
 	transportRegistry *connectors.TransportRegistry,
@@ -37,10 +32,6 @@ func buildRegistrations(
 	if err != nil {
 		return nil, err
 	}
-	if len(active) == 0 {
-		return nil, ErrProvidersRequired
-	}
-
 	registrations := make([]registry.Registration, 0, len(active))
 	for _, activation := range active {
 		providerID := string(activation.ProviderID)
@@ -64,12 +55,12 @@ func buildRegistrations(
 		}
 		registrations = append(registrations, registry.Registration{
 			Provider: providerID, Connector: connector,
-			Operations:       activation.Operations,
-			EndpointTypes:    activation.EndpointTypes,
-			BaseURL:          activation.Configuration.Connector.BaseURL,
-			EndpointBindings: activation.Configuration.Connector.EndpointBindings,
-			RequiresAuth:     activation.RequiresAuth,
-			CredentialSource: activation.Configuration.CredentialSource,
+			Operations:      activation.Operations,
+			EndpointTypes:   activation.EndpointTypes,
+			OperatorBaseURL: activation.OperatorBaseURL,
+			RequiresAuth:    activation.RequiresAuth,
+			OperatorSource:  activation.Configuration.CredentialSource,
+			Anonymous:       activation.Anonymous,
 		})
 	}
 	return registrations, nil

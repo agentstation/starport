@@ -15,7 +15,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
-func TestOpenRequiresExplicitCatalogAndProviders(t *testing.T) {
+func TestOpenRequiresCatalogAndPermitsEmptyProviderSet(t *testing.T) {
 	_, err := Open(nil, []Registration{{Provider: "openai"}})
 	require.ErrorIs(t, err, ErrCatalogRequired)
 
@@ -23,8 +23,10 @@ func TestOpenRequiresExplicitCatalogAndProviders(t *testing.T) {
 	require.NoError(t, err)
 	plane, err := runtimecatalog.Open(client)
 	require.NoError(t, err)
-	_, err = Open(plane, nil)
-	require.ErrorIs(t, err, ErrProvidersRequired)
+	registry, err := Open(plane, nil)
+	require.NoError(t, err)
+	require.Empty(t, registry.ListProviders())
+	require.NoError(t, registry.Close())
 }
 
 func TestOpenRegistersOnlyExplicitProviders(t *testing.T) {
@@ -38,7 +40,7 @@ func TestOpenRegistersOnlyExplicitProviders(t *testing.T) {
 	connector := connectors.NewMockConnector(providerConfig)
 
 	registry, err := Open(plane, []Registration{{
-		Provider: provider, Connector: connector, CredentialSource: registryTestMaterialSource{},
+		Provider: provider, Connector: connector, OperatorSource: registryTestMaterialSource{},
 	}})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, registry.Close()) })
@@ -69,9 +71,9 @@ func TestOpenFailureClosesEveryConnectorOnce(t *testing.T) {
 	duplicate := newCloseTrackingConnector()
 	future := newCloseTrackingConnector()
 	_, err = Open(plane, []Registration{
-		{Provider: "openai", Connector: first, CredentialSource: registryTestMaterialSource{}},
-		{Provider: "openai", Connector: duplicate, CredentialSource: registryTestMaterialSource{}},
-		{Provider: "anthropic", Connector: future, CredentialSource: registryTestMaterialSource{}},
+		{Provider: "openai", Connector: first, OperatorSource: registryTestMaterialSource{}},
+		{Provider: "openai", Connector: duplicate, OperatorSource: registryTestMaterialSource{}},
+		{Provider: "anthropic", Connector: future, OperatorSource: registryTestMaterialSource{}},
 	})
 	require.Error(t, err)
 	require.Equal(t, int32(1), first.closeCount.Load())

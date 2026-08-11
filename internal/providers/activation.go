@@ -3,12 +3,13 @@ package providers
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
@@ -17,26 +18,23 @@ var (
 	// ErrProviderMissingCatalog reports configured runtime state without an
 	// exact catalog provider.
 	ErrProviderMissingCatalog = errors.New("configured provider is missing from Starmap")
-	// ErrProviderMissingOffering reports a configured provider without one
-	// routable offering supported by compiled primitives.
-	ErrProviderMissingOffering = errors.New("configured provider has no supported Starmap offering")
-	// ErrProviderConfigurationInvalid reports invalid operational settings or
-	// endpoint bindings.
-	ErrProviderConfigurationInvalid = errors.New("provider runtime configuration is invalid")
 )
 
-// Activation is the intersection of one configured catalog provider and
-// Starport's compiled transport and authentication primitives.
+// Activation is the intersection of one catalog provider and Starport's
+// compiled transport and authentication primitives. Operator state is
+// optional.
 type Activation struct {
-	ProviderID    catalogs.ProviderID
-	Configuration Configuration
-	Operations    []catalogs.ProviderOperation
-	EndpointTypes []catalogs.EndpointType
-	RequiresAuth  bool
+	ProviderID      catalogs.ProviderID
+	Configuration   Configuration
+	Operations      []catalogs.ProviderOperation
+	EndpointTypes   []catalogs.EndpointType
+	RequiresAuth    bool
+	Anonymous       credentials.Material
+	OperatorBaseURL string
 }
 
-// Activate derives runtime providers from catalog facts. A provider ID labels
-// the activation but never selects compiled behavior.
+// Activate derives every executable runtime provider from catalog facts. A
+// provider ID labels the activation but never selects compiled behavior.
 func Activate(
 	catalog *catalogs.Catalog,
 	transports *connectors.TransportRegistry,
@@ -52,43 +50,50 @@ func Activate(
 	if authentication == nil {
 		return nil, errors.New("provider authentication registry is required")
 	}
-	providerIDs := make([]catalogs.ProviderID, 0, len(configurations))
 	for providerID := range configurations {
-		providerIDs = append(providerIDs, providerID)
+		provider, err := catalog.Provider(providerID)
+		if err != nil || provider.ID != providerID {
+			return nil, fmt.Errorf("%s: %w", providerID, ErrProviderMissingCatalog)
+		}
+	}
+
+	providerRecords := catalog.Providers().List()
+	providerIDs := make([]catalogs.ProviderID, 0, len(providerRecords))
+	providersByID := make(map[catalogs.ProviderID]catalogs.Provider, len(providerRecords))
+	for _, provider := range providerRecords {
+		providerIDs = append(providerIDs, provider.ID)
+		providersByID[provider.ID] = provider
 	}
 	sort.Slice(providerIDs, func(left, right int) bool { return providerIDs[left] < providerIDs[right] })
 
 	activations := make([]Activation, 0, len(providerIDs))
 	for _, providerID := range providerIDs {
-		configured := configurations[providerID]
-		provider, err := catalog.Provider(providerID)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", providerID, ErrProviderMissingCatalog)
-		}
-		if configured.Profile.ID == "" {
-			return nil, fmt.Errorf("%s: credential profile is required: %w", providerID, ErrProviderConfigurationInvalid)
-		}
-		declaredProfile, err := inferenceProfile(provider, configured.Profile.ID)
-		if err != nil || !reflect.DeepEqual(declaredProfile, configured.Profile) {
-			return nil, fmt.Errorf("%s: selected credential profile does not match Starmap: %w", providerID, ErrProviderConfigurationInvalid)
-		}
-		if !authentication.Supports(declaredProfile.Primitive) {
-			return nil, fmt.Errorf("%s authentication %s: %w", providerID, declaredProfile.Primitive, providerauth.ErrPrimitiveUnsupported)
-		}
-		if configured.CredentialSource == nil {
-			return nil, fmt.Errorf("%s: credential material source is required: %w", providerID, ErrProviderConfigurationInvalid)
-		}
+		provider := providersByID[providerID]
 		if provider.Inference == nil {
-			return nil, fmt.Errorf("%s: Starmap inference service is required: %w", providerID, ErrProviderConfigurationInvalid)
+			continue
 		}
+		requiresAuth, anonymous, supported := supportedAuthentication(provider, authentication)
+		if !supported {
+			continue
+		}
+
+		configured := configurations[providerID]
+		operatorBaseURL := strings.TrimRight(strings.TrimSpace(configured.Connector.BaseURL), "/")
 		baseURL := strings.TrimSpace(configured.Connector.BaseURL)
 		if baseURL == "" {
 			baseURL = strings.TrimSpace(provider.Inference.BaseURL)
 		}
 		if baseURL == "" {
-			return nil, fmt.Errorf("%s: Starmap inference base URL is required: %w", providerID, ErrProviderConfigurationInvalid)
+			continue
 		}
 		configured.Connector.BaseURL = strings.TrimRight(baseURL, "/")
+		if configured.Connector.Timeout <= 0 {
+			configured.Connector.Timeout = 30 * time.Second
+		}
+		if configured.Connector.MaxConnections <= 0 {
+			configured.Connector.MaxConnections = 100
+		}
+		configured.Connector.Enabled = true
 
 		offerings, err := catalog.ProviderOfferings(providerID)
 		if err != nil {
@@ -96,7 +101,6 @@ func Activate(
 		}
 		operations := make(map[catalogs.ProviderOperation]struct{})
 		endpointTypes := make(map[catalogs.EndpointType]struct{})
-		var firstUnsupported error
 		for _, offering := range offerings {
 			if offering.Availability == catalogs.OfferingAvailabilityUnavailable ||
 				offering.Lifecycle == catalogs.OfferingLifecycleRetired {
@@ -108,33 +112,22 @@ func Activate(
 					continue
 				}
 				if !transports.Supports(endpoint.Type, operation) {
-					if firstUnsupported == nil {
-						firstUnsupported = fmt.Errorf("%s %s: %w", endpoint.Type, operation, connectors.ErrTransportOperationUnsupported)
-					}
 					continue
-				}
-				if _, err := provider.Inference.BindOfferingEndpoint(
-					endpoint,
-					configured.Connector.BaseURL,
-					configured.Connector.EndpointBindings,
-				); err != nil {
-					return nil, fmt.Errorf("%s: %w: %v", providerID, ErrProviderConfigurationInvalid, err)
 				}
 				operations[operation] = struct{}{}
 				endpointTypes[endpoint.Type] = struct{}{}
 			}
 		}
 		if len(endpointTypes) == 0 {
-			if firstUnsupported != nil {
-				return nil, fmt.Errorf("%s: %w", providerID, firstUnsupported)
-			}
-			return nil, fmt.Errorf("%s: %w", providerID, ErrProviderMissingOffering)
+			continue
 		}
 
 		activation := Activation{
-			ProviderID:    providerID,
-			Configuration: configured,
-			RequiresAuth:  configured.Profile.Primitive != catalogs.ProviderAuthenticationNone,
+			ProviderID:      providerID,
+			Configuration:   configured,
+			RequiresAuth:    requiresAuth,
+			Anonymous:       anonymous,
+			OperatorBaseURL: operatorBaseURL,
 		}
 		for operation := range operations {
 			activation.Operations = append(activation.Operations, operation)
@@ -153,27 +146,57 @@ func Activate(
 	return activations, nil
 }
 
-func inferenceProfile(
+func supportedAuthentication(
 	provider catalogs.Provider,
-	profileID catalogs.ProviderCredentialProfileID,
-) (catalogs.ProviderCredentialProfile, error) {
+	authentication *providerauth.Registry,
+) (bool, credentials.Material, bool) {
 	if provider.Credentials == nil {
-		return catalogs.ProviderCredentialProfile{}, errors.New("provider has no credential contract")
+		return true, credentials.Material{}, false
 	}
-	allowed := false
-	for _, candidate := range provider.Credentials.Inference.Alternatives {
-		if candidate == profileID {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		return catalogs.ProviderCredentialProfile{}, errors.New("profile is not allowed for inference")
-	}
+	profiles := make(map[catalogs.ProviderCredentialProfileID]catalogs.ProviderCredentialProfile)
 	for _, profile := range provider.Credentials.Profiles {
-		if profile.ID == profileID {
-			return profile, nil
+		profiles[profile.ID] = profile
+	}
+	fields := make(map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField)
+	for _, field := range provider.Credentials.Fields {
+		fields[field.ID] = field
+	}
+	requiresAuth := true
+	var anonymous credentials.Material
+	var supported bool
+	for _, profileID := range provider.Credentials.Inference.Alternatives {
+		profile, exists := profiles[profileID]
+		if !exists || !authentication.Supports(profile.Primitive) {
+			continue
+		}
+		supported = true
+		if profile.Primitive != catalogs.ProviderAuthenticationNone {
+			continue
+		}
+		requiresAuth = false
+		if anonymous.Empty() {
+			anonymous = defaultAnonymousMaterial(profile, fields)
 		}
 	}
-	return catalogs.ProviderCredentialProfile{}, errors.New("profile is not declared")
+	return requiresAuth, anonymous, supported
+}
+
+func defaultAnonymousMaterial(
+	profile catalogs.ProviderCredentialProfile,
+	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+) credentials.Material {
+	values := make(map[catalogs.ProviderCredentialFieldID]string)
+	for _, fieldID := range profile.Fields {
+		field, exists := fields[fieldID]
+		if !exists || field.Kind != catalogs.ProviderCredentialFieldParameter {
+			return credentials.Material{}
+		}
+		if field.Required && strings.TrimSpace(field.Default) == "" {
+			return credentials.Material{}
+		}
+		if field.Default != "" {
+			values[fieldID] = field.Default
+		}
+	}
+	return credentials.NewMaterial(profile, values, credentials.MaterialMetadata{Version: "catalog-default"})
 }

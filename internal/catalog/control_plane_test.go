@@ -177,7 +177,7 @@ func firstOffering(t *testing.T, source *catalogs.Catalog) (catalogs.ProviderID,
 func testAdapterAvailability(
 	providerID catalogs.ProviderID,
 	offering catalogs.ProviderOffering,
-	configured bool,
+	registered bool,
 ) AdapterAvailability {
 	types := make([]catalogs.EndpointType, 0, len(offering.Endpoints))
 	for _, endpoint := range offering.Endpoints {
@@ -185,10 +185,8 @@ func testAdapterAvailability(
 	}
 	return AdapterAvailability{
 		ProviderID:    providerID,
-		Registered:    true,
-		Configured:    configured,
+		Registered:    registered,
 		Operations:    append([]catalogs.ProviderOperation(nil), offering.Service.Operations...),
 		EndpointTypes: types,
-		BaseURL:       "https://provider.test",
 	}
 }

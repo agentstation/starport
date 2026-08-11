@@ -28,23 +28,13 @@ func TestConfigurationsPreservesExactProviderSettings(t *testing.T) {
 		),
 		BaseURL: "https://vertex.example", Timeout: time.Minute,
 		MaxConnections: 12, Enabled: true,
-		EndpointBindings: map[string]string{"project": "project", "location": "location"},
 	}}
 	projected := Configurations(settings)
 	vertex := projected[catalogs.ProviderIDGoogleVertex]
 	if vertex.Connector.BaseURL != "https://vertex.example" ||
 		vertex.Connector.Timeout != time.Minute ||
-		vertex.Connector.MaxConnections != 12 || !vertex.Connector.Enabled ||
-		vertex.Profile.Primitive != catalogs.ProviderAuthenticationAPIKey {
+		vertex.Connector.MaxConnections != 12 || !vertex.Connector.Enabled {
 		t.Fatalf("projected Vertex configuration = %#v", vertex)
-	}
-	if vertex.Connector.EndpointBindings["project"] != "project" ||
-		vertex.Connector.EndpointBindings["location"] != "location" {
-		t.Errorf("endpoint bindings = %#v", vertex.Connector.EndpointBindings)
-	}
-	vertex.Connector.EndpointBindings["project"] = "changed"
-	if settings[catalogs.ProviderIDGoogleVertex].EndpointBindings["project"] != "project" {
-		t.Fatal("projection changed the source configuration")
 	}
 }
 
@@ -68,8 +58,7 @@ func TestConfigurationsPreservesRequestTimeMaterialSource(t *testing.T) {
 		Timeout: time.Second, MaxConnections: 1, Enabled: true,
 	}})
 	configured := projected["yaml-cloud"]
-	if configured.Profile.Primitive != catalogs.ProviderAuthenticationGoogleDefault ||
-		configured.CredentialSource == nil {
+	if configured.CredentialSource == nil {
 		t.Fatalf("projected cloud configuration = %#v", configured)
 	}
 	resolved, err := configured.CredentialSource.ResolveMaterial(t.Context())

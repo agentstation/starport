@@ -30,20 +30,17 @@ type Source interface {
 	CurrentCatalogState() starmap.CatalogState
 }
 
-// AdapterAvailability is runtime state for one provider adapter. It is not a
-// catalog fact. The router can use an adapter only after registration and configuration.
+// AdapterAvailability is runtime state for one compiled provider adapter. It
+// is not a catalog fact and does not contain operator credential state.
 type AdapterAvailability struct {
-	ProviderID       catalogs.ProviderID
-	Registered       bool
-	Configured       bool
-	Operations       []catalogs.ProviderOperation
-	EndpointTypes    []catalogs.EndpointType
-	BaseURL          string
-	EndpointBindings map[string]string
+	ProviderID    catalogs.ProviderID
+	Registered    bool
+	Operations    []catalogs.ProviderOperation
+	EndpointTypes []catalogs.EndpointType
 }
 
 func (a AdapterAvailability) routable() bool {
-	return a.Registered && a.Configured
+	return a.Registered
 }
 
 // ControlPlane atomically publishes one routable view derived from an immutable
@@ -207,7 +204,6 @@ func (p *ControlPlane) SetAdapter(adapter AdapterAvailability) error {
 	defer p.mu.Unlock()
 
 	adapter.ProviderID = canonicalProviderID(p.state.Catalog, adapter.ProviderID)
-	adapter.EndpointBindings = cloneEndpointBindings(adapter.EndpointBindings)
 	next := cloneAdapters(p.adapters)
 	next[adapter.ProviderID] = adapter
 	return p.publishAvailabilityLocked(
@@ -339,7 +335,7 @@ func deriveRoutableSnapshot(
 			if _, blocked := unavailable[offering.Key()]; blocked {
 				continue
 			}
-			operations, endpoints := compatibleOfferingService(provider, adapter, offering)
+			operations, endpoints := compatibleOfferingService(adapter, offering)
 			if len(operations) == 0 {
 				continue
 			}
@@ -369,7 +365,6 @@ func deriveRoutableSnapshot(
 }
 
 func compatibleOfferingService(
-	provider catalogs.Provider,
 	adapter AdapterAvailability,
 	offering catalogs.ProviderOffering,
 ) ([]catalogs.ProviderOperation, []catalogs.ProviderOfferingEndpoint) {
@@ -383,12 +378,7 @@ func compatibleOfferingService(
 		if !found || !containsEndpointType(adapter.EndpointTypes, endpoint.Type) {
 			continue
 		}
-		endpoint, err := provider.Inference.BindOfferingEndpoint(
-			endpoint,
-			adapter.BaseURL,
-			adapter.EndpointBindings,
-		)
-		if err != nil || strings.TrimSpace(endpoint.URL) == "" {
+		if strings.TrimSpace(endpoint.URL) == "" {
 			continue
 		}
 		operations = append(operations, operation)
@@ -456,7 +446,6 @@ func normalizeAdapters(
 		}
 		adapter.Operations = append([]catalogs.ProviderOperation(nil), adapter.Operations...)
 		adapter.EndpointTypes = append([]catalogs.EndpointType(nil), adapter.EndpointTypes...)
-		adapter.EndpointBindings = cloneEndpointBindings(adapter.EndpointBindings)
 		next[adapter.ProviderID] = adapter
 	}
 	return next, nil
@@ -467,19 +456,7 @@ func cloneAdapters(source map[catalogs.ProviderID]AdapterAvailability) map[catal
 	for providerID, adapter := range source {
 		adapter.Operations = append([]catalogs.ProviderOperation(nil), adapter.Operations...)
 		adapter.EndpointTypes = append([]catalogs.EndpointType(nil), adapter.EndpointTypes...)
-		adapter.EndpointBindings = cloneEndpointBindings(adapter.EndpointBindings)
 		result[providerID] = adapter
-	}
-	return result
-}
-
-func cloneEndpointBindings(source map[string]string) map[string]string {
-	if source == nil {
-		return nil
-	}
-	result := make(map[string]string, len(source))
-	for key, value := range source {
-		result[key] = value
 	}
 	return result
 }

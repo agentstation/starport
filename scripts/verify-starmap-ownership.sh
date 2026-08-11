@@ -111,9 +111,9 @@ test -d "$STARMAP_ROOT/pkg/catalogs" || {
   exit 2
 }
 
-run_check O01 "active providers are the catalog, adapter, and configuration intersection" \
+run_check O01 "active providers are the catalog and compiled primitive intersection" \
   starport_tests "./internal/app ./internal/catalog" \
-  TestActiveProviderIntersection TestConfiguredProviderMissingCatalogFailsStartup
+  TestCatalogWideProviderActivation TestConfiguredProviderMissingCatalogFailsStartup
 run_check O02 "primitive registries own inference transport and authentication dispatch" \
   starport_tests "./internal/architecture ./internal/providers/byok" \
   TestStarportProductionHasNoProviderRoster \

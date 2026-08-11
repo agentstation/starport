@@ -49,8 +49,7 @@ type runtimeFactories struct {
 }
 
 type buildOptions struct {
-	factories           runtimeFactories
-	allowEmptyProviders bool
+	factories runtimeFactories
 }
 
 // Option changes runtime factories for explicit test composition.

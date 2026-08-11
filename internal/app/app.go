@@ -53,24 +53,23 @@ type lifecycleEntry struct {
 
 // App owns all constructed runtime dependencies.
 type App struct {
-	config              *config.Config
-	providerSettings    config.ProvidersConfig
-	httpServer          httpRuntime
-	hotReloader         hotReloadRuntime
-	registry            *registry.Registry
-	catalogRuntime      catalogRuntime
-	catalogUpdates      catalogUpdateRuntime
-	catalog             *runtimecatalog.ControlPlane
-	store               storage.KVStore
-	cacheManager        *cache.Manager
-	transports          *connectors.TransportRegistry
-	authentication      *providerauth.Registry
-	newConnector        func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
-	allowEmptyProviders bool
-	lifecycle           []lifecycleEntry
-	catalogRefreshWG    sync.WaitGroup
-	closeOnce           sync.Once
-	closeErr            error
+	config           *config.Config
+	providerSettings config.ProvidersConfig
+	httpServer       httpRuntime
+	hotReloader      hotReloadRuntime
+	registry         *registry.Registry
+	catalogRuntime   catalogRuntime
+	catalogUpdates   catalogUpdateRuntime
+	catalog          *runtimecatalog.ControlPlane
+	store            storage.KVStore
+	cacheManager     *cache.Manager
+	transports       *connectors.TransportRegistry
+	authentication   *providerauth.Registry
+	newConnector     func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
+	lifecycle        []lifecycleEntry
+	catalogRefreshWG sync.WaitGroup
+	closeOnce        sync.Once
+	closeErr         error
 }
 
 // New creates the complete production runtime without starting background work.
@@ -89,10 +88,9 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 	}
 	application := &App{
 		config: cfg, transports: transportRegistry, authentication: authenticationRegistry,
-		providerSettings:    config.CloneProvidersConfig(cfg.Providers),
-		newConnector:        build.factories.newConnector,
-		allowEmptyProviders: build.allowEmptyProviders,
-		lifecycle:           make([]lifecycleEntry, 0, 5),
+		providerSettings: config.CloneProvidersConfig(cfg.Providers),
+		newConnector:     build.factories.newConnector,
+		lifecycle:        make([]lifecycleEntry, 0, 5),
 	}
 	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories}
 	if err := builder.compose(); err != nil {
@@ -265,16 +263,6 @@ func (b *runtimeBuilder) openRegistry() error {
 		b.factories.newConnector,
 	)
 	if err != nil {
-		if b.application.allowEmptyProviders && errors.Is(err, ErrProvidersRequired) {
-			b.application.registry = registry.NewEmptyWithCatalog(b.application.catalog)
-			if err := b.application.catalog.ReplaceAdapters(nil); err != nil {
-				return fmt.Errorf("open empty provider registry: %w", err)
-			}
-			b.application.own("registry", func(context.Context) error {
-				return b.application.registry.Close()
-			})
-			return nil
-		}
 		return err
 	}
 	b.application.registry, err = registry.Open(b.application.catalog, registrations)

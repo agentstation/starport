@@ -60,17 +60,21 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 				nil,
 			), execution.AttemptActionDefault
 		}
-		material, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
+		selected, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
 		if materialFailure != nil {
 			return nil, materialFailure, action
 		}
-		request := *req.EmbeddingsRequest
-		request.Model = planned.Route.ProviderModelID
-		request.Endpoint = connectors.InferenceEndpoint{
-			Type: catalogs.EndpointType(planned.Route.Endpoint.Protocol),
-			URL:  planned.Route.Endpoint.URL,
+		boundRoute, bindFailure := bindSelectedEndpoint(runtime, planned.Route, selected)
+		if bindFailure != nil {
+			return nil, bindFailure, execution.AttemptActionStop
 		}
-		request.Credential = material
+		request := *req.EmbeddingsRequest
+		request.Model = boundRoute.ProviderModelID
+		request.Endpoint = connectors.InferenceEndpoint{
+			Type: catalogs.EndpointType(boundRoute.Endpoint.Protocol),
+			URL:  boundRoute.Endpoint.URL,
+		}
+		request.Credential = selected.material
 		response, requestErr := connector.Embeddings(attemptCtx, &request)
 		if requestErr != nil {
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)

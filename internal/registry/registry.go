@@ -20,31 +20,30 @@ import (
 var (
 	// ErrCatalogRequired reports an absent Starmap control plane.
 	ErrCatalogRequired = errors.New("registry catalog is required")
-	// ErrProvidersRequired reports an empty provider registration set.
-	ErrProvidersRequired = errors.New("at least one provider registration is required")
+	// ErrRuntimeUnavailable reports an absent published provider runtime
+	// generation.
+	ErrRuntimeUnavailable = errors.New("provider runtime generation is unavailable")
 	// ErrProviderRequired reports a registration without a provider ID.
 	ErrProviderRequired = errors.New("provider registration name is required")
 	// ErrConnectorRequired reports a registration without a connector.
 	ErrConnectorRequired = errors.New("provider connector is required")
-	// ErrCredentialSourceRequired reports a production registration without a
-	// request-time material source.
-	ErrCredentialSourceRequired = errors.New("provider credential material source is required")
 	// ErrRegistryStarted reports a second start request.
 	ErrRegistryStarted = errors.New("registry already started")
 	// ErrRegistryClosed reports an operation after registry shutdown.
 	ErrRegistryClosed = errors.New("registry is closed")
 )
 
-// Registration binds one configured connector to a provider ID.
+// Registration binds one compiled connector and optional operator state to a
+// provider ID.
 type Registration struct {
-	Provider         string
-	Connector        connectors.Connector
-	Operations       []starmapcatalogs.ProviderOperation
-	EndpointTypes    []starmapcatalogs.EndpointType
-	BaseURL          string
-	EndpointBindings map[string]string
-	RequiresAuth     bool
-	CredentialSource credentials.MaterialSource
+	Provider        string
+	Connector       connectors.Connector
+	Operations      []starmapcatalogs.ProviderOperation
+	EndpointTypes   []starmapcatalogs.EndpointType
+	OperatorBaseURL string
+	RequiresAuth    bool
+	OperatorSource  credentials.MaterialSource
+	Anonymous       credentials.Material
 }
 
 // ProviderMetadata contains catalog facts needed by gateway provider discovery.
@@ -70,13 +69,13 @@ type Registry struct {
 	drainErrors []error
 }
 
-// Open creates a registry from explicit production registrations.
+// Open creates a registry from one complete executable provider set.
 func Open(catalogPlane *runtimecatalog.ControlPlane, registrations []Registration) (*Registry, error) {
 	if catalogPlane == nil {
 		return nil, ErrCatalogRequired
 	}
 	registry := NewEmptyWithCatalog(catalogPlane)
-	candidate, err := prepareCandidate(registrations, true)
+	candidate, err := prepareCandidate(registrations)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +182,7 @@ func (r *Registry) Register(provider string, connector connectors.Connector) err
 	if current := r.current.Load(); current != nil {
 		registrations = append(current.registrations(), registration)
 	}
-	candidate, err := prepareCandidate(registrations, false)
+	candidate, err := prepareCandidate(registrations)
 	if err != nil {
 		return err
 	}
@@ -218,17 +217,6 @@ func (r *Registry) Register(provider string, connector connectors.Connector) err
 	return nil
 }
 
-func cloneStringMap(source map[string]string) map[string]string {
-	if source == nil {
-		return nil
-	}
-	result := make(map[string]string, len(source))
-	for key, value := range source {
-		result[key] = value
-	}
-	return result
-}
-
 // Get retrieves a connector by provider name
 func (r *Registry) Get(provider string) (connectors.Connector, error) {
 	generation := r.current.Load()
@@ -248,7 +236,7 @@ func (r *Registry) Get(provider string) (connectors.Connector, error) {
 func (r *Registry) ResolveMaterial(ctx context.Context, provider string) (credentials.Material, error) {
 	generation := r.current.Load()
 	if generation == nil {
-		return credentials.Material{}, ErrProvidersRequired
+		return credentials.Material{}, ErrRuntimeUnavailable
 	}
 	return generation.resolveMaterial(ctx, provider)
 }
@@ -285,11 +273,6 @@ func (r *Registry) ListProviders() []string {
 func (r *Registry) HasProvider(provider string) bool {
 	generation := r.current.Load()
 	return generation != nil && generation.connector(provider) != nil
-}
-
-// IsProviderConfigured reports whether app composition registered the provider.
-func (r *Registry) IsProviderConfigured(provider string) bool {
-	return r.HasProvider(provider)
 }
 
 // Catalog returns the registry's shared catalog control plane.

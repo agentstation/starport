@@ -253,9 +253,8 @@ func projectResolvedProvider(
 	result := ProviderConfig{
 		Material: material, CredentialSource: source,
 		Timeout: 30 * time.Second, MaxConnections: 100, Enabled: true,
-		EndpointBindings: material.EndpointBindings(),
 	}
-	for variable, value := range result.EndpointBindings {
+	for variable, value := range material.EndpointBindings() {
 		if provider.Inference != nil &&
 			strings.TrimSpace(provider.Inference.BaseURL) == "{"+variable+"}" {
 			result.BaseURL = value

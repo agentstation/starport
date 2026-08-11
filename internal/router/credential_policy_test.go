@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUserOnlyCredentialPolicyDoesNotProbeOperatorMaterial(t *testing.T) {
+func TestUserOnlySkipsOperatorResolution(t *testing.T) {
 	route := routing.Route{ProviderID: "acme", ProviderModelID: "opaque/model", ModelID: "author/model"}
 	messages := make([]string, 0, 2)
 	for _, operatorErr := range []error{nil, errors.New("operator material exists")} {

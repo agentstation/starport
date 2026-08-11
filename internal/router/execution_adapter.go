@@ -9,9 +9,11 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
 )
@@ -55,12 +57,16 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 				nil,
 			), execution.AttemptActionDefault
 		}
-		material, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
+		selected, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
 		if materialFailure != nil {
 			return nil, materialFailure, action
 		}
-		request := prepareChatAttempt(req, planned.Route, true)
-		request.Credential = material
+		boundRoute, bindFailure := bindSelectedEndpoint(runtime, planned.Route, selected)
+		if bindFailure != nil {
+			return nil, bindFailure, execution.AttemptActionStop
+		}
+		request := prepareChatAttempt(req, boundRoute, true)
+		request.Credential = selected.material
 		request.Stream = true
 		stream, streamErr := connector.ChatStream(attemptCtx, request)
 		if streamErr != nil {
@@ -129,6 +135,78 @@ func prepareChatAttempt(req *Request, route routing.Route, streaming bool) *conn
 		}
 	}
 	return &request
+}
+
+func bindSelectedEndpoint(
+	runtime connectors.RuntimeLease,
+	route routing.Route,
+	selected credentialSelection,
+) (routing.Route, *failure.Failure) {
+	if route.Operation == "" {
+		return route, nil
+	}
+	binder, ok := runtime.(connectors.EndpointBinder)
+	if !ok {
+		snapshot := runtime.Snapshot()
+		if snapshot == nil || snapshot.Catalog() == nil {
+			return routing.Route{}, failure.New(
+				failure.Internal,
+				"The provider runtime cannot bind the selected endpoint.",
+				false,
+				failure.ProviderDetails{Provider: route.ProviderID},
+				nil,
+			)
+		}
+		provider, err := snapshot.Catalog().Provider(catalogs.ProviderID(route.ProviderID))
+		if err != nil || provider.Inference == nil {
+			return routing.Route{}, failure.New(
+				failure.Internal,
+				"The provider runtime cannot bind the selected endpoint.",
+				false,
+				failure.ProviderDetails{Provider: route.ProviderID},
+				err,
+			)
+		}
+		binder = snapshotEndpointBinder{inference: provider.Inference}
+	}
+	endpoint, err := binder.BindEndpoint(
+		route.ProviderID,
+		catalogs.ProviderOfferingEndpoint{
+			Operation: catalogs.ProviderOperation(route.Operation),
+			Type:      catalogs.EndpointType(route.Endpoint.Protocol),
+			URL:       route.Endpoint.URL,
+			StreamURL: route.Endpoint.StreamURL,
+		},
+		selected.material,
+		selected.source == byok.CredentialSourceOperator,
+	)
+	if err != nil {
+		return routing.Route{}, failure.New(
+			failure.Validation,
+			"Provider endpoint configuration is invalid.",
+			false,
+			failure.ProviderDetails{Provider: route.ProviderID},
+			err,
+		)
+	}
+	bound := route
+	bound.Endpoint = routing.Endpoint{
+		Protocol: string(endpoint.Type), URL: endpoint.URL, StreamURL: endpoint.StreamURL,
+	}
+	return bound, nil
+}
+
+type snapshotEndpointBinder struct {
+	inference *catalogs.ProviderInference
+}
+
+func (b snapshotEndpointBinder) BindEndpoint(
+	_ string,
+	endpoint catalogs.ProviderOfferingEndpoint,
+	material credentials.Material,
+	_ bool,
+) (catalogs.ProviderOfferingEndpoint, error) {
+	return b.inference.BindOfferingEndpoint(endpoint, "", material.EndpointBindings())
 }
 
 func executionEvidence(err error) []execution.AttemptEvidence {

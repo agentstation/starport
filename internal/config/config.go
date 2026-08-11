@@ -105,7 +105,6 @@ type ProviderConfig struct {
 	Timeout              time.Duration                                              `json:"timeout"`
 	MaxConnections       int                                                        `json:"max_connections"`
 	Enabled              bool                                                       `json:"enabled"`
-	EndpointBindings     map[string]string                                          `json:"endpoint_bindings,omitempty"`
 }
 
 // CredentialReference selects one explicit source for a catalog credential
@@ -130,19 +129,7 @@ func CloneProvidersConfig(source ProvidersConfig) ProvidersConfig {
 	result := make(ProvidersConfig, len(source))
 	for providerID, provider := range source {
 		provider.CredentialReferences = cloneCredentialReferences(provider.CredentialReferences)
-		provider.EndpointBindings = cloneProviderStrings(provider.EndpointBindings)
 		result[providerID] = provider
-	}
-	return result
-}
-
-func cloneProviderStrings(source map[string]string) map[string]string {
-	if source == nil {
-		return nil
-	}
-	result := make(map[string]string, len(source))
-	for key, value := range source {
-		result[key] = value
 	}
 	return result
 }
@@ -162,8 +149,8 @@ func (c ProvidersConfig) Entries() []ProviderEntry {
 	return entries
 }
 
-// EnableProvider marks one exact catalog provider for activation. Catalog
-// resolution supplies its defaults and endpoint bindings later.
+// EnableProvider marks one exact catalog provider for operator credential
+// resolution. Catalog membership and adapter activation remain independent.
 func (c *Config) EnableProvider(providerID catalogs.ProviderID) {
 	if c.Providers == nil {
 		c.Providers = make(ProvidersConfig)

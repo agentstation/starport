@@ -17,6 +17,7 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/server"
@@ -76,13 +77,6 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 			},
 			cause: ErrIdentityRequired,
 		},
-		{
-			name: "missing providers",
-			mutate: func(cfg *config.Config, _ *runtimeFactories) {
-				cfg.Providers = config.ProvidersConfig{}
-			},
-			cause: ErrProvidersRequired,
-		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -96,6 +90,17 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 			require.ErrorIs(t, err, test.cause)
 		})
 	}
+}
+
+func TestRuntimeStartsWithoutOperatorCredentials(t *testing.T) {
+	cfg := validProductionConfig(t)
+	cfg.Providers = config.ProvidersConfig{}
+	application, err := New(cfg, withRuntimeFactories(explicitTestFactories()))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
+	require.NotEmpty(t, application.registry.ListProviders())
+	_, err = application.registry.ResolveMaterial(t.Context(), string(catalogs.ProviderIDOpenAI))
+	require.ErrorIs(t, err, credentials.ErrProviderNotConfigured)
 }
 
 func TestStartupCatalogRefreshIsExplicitAndResilient(t *testing.T) {
@@ -192,7 +197,8 @@ func TestNewBuildsReadyProductionDependencies(t *testing.T) {
 	require.NotNil(t, application.catalog)
 	require.NotNil(t, application.registry)
 	require.NotNil(t, application.httpServer)
-	require.Equal(t, []string{"openai"}, application.registry.ListProviders())
+	require.Contains(t, application.registry.ListProviders(), "openai")
+	require.Greater(t, len(application.registry.ListProviders()), 1)
 	require.NoError(t, application.Close(context.Background()))
 }
 

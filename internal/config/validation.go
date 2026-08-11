@@ -196,8 +196,7 @@ func (c *ProvidersConfig) Validate() error {
 	for _, entry := range c.Entries() {
 		provider := entry.Config
 		active := !provider.Material.Empty() || provider.CredentialSource != nil ||
-			provider.BaseURL != "" || len(provider.CredentialReferences) > 0 ||
-			len(provider.EndpointBindings) > 0 || provider.Enabled
+			provider.BaseURL != "" || len(provider.CredentialReferences) > 0 || provider.Enabled
 		if !active {
 			continue
 		}

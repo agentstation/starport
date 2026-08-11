@@ -46,8 +46,8 @@ func TestLoaderDerivesCloudAuthenticationFromCatalogProfiles(t *testing.T) {
 		t.Fatalf("selected primitive = %q", resolved.Material.Profile().Primitive)
 	}
 	assertProviderMaterialValue(t, cfg, provider.ID, "access-token", "cloud-token")
-	if resolved.EndpointBindings["project"] != "project" {
-		t.Fatalf("endpoint bindings = %#v", resolved.EndpointBindings)
+	if bindings := resolved.Material.EndpointBindings(); bindings["project"] != "project" {
+		t.Fatalf("endpoint bindings = %#v", bindings)
 	}
 }
 

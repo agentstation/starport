@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -49,6 +51,27 @@ func (l *legacyRuntimeLease) ResolveMaterial(
 		return credentials.Material{}, errors.New("provider runtime registry is required")
 	}
 	return l.registry.ResolveMaterial(ctx, provider)
+}
+
+func (*legacyRuntimeLease) AnonymousMaterial(string) (credentials.Material, bool) {
+	return credentials.Material{}, false
+}
+
+func (l *legacyRuntimeLease) BindEndpoint(
+	provider string,
+	endpoint catalogs.ProviderOfferingEndpoint,
+	material credentials.Material,
+	_ bool,
+) (catalogs.ProviderOfferingEndpoint, error) {
+	snapshot := l.Snapshot()
+	if snapshot == nil || snapshot.Catalog() == nil {
+		return catalogs.ProviderOfferingEndpoint{}, errors.New("provider runtime catalog is required")
+	}
+	providerRecord, err := snapshot.Catalog().Provider(catalogs.ProviderID(provider))
+	if err != nil || providerRecord.Inference == nil {
+		return catalogs.ProviderOfferingEndpoint{}, errors.New("provider inference service is required")
+	}
+	return providerRecord.Inference.BindOfferingEndpoint(endpoint, "", material.EndpointBindings())
 }
 
 func (l *legacyRuntimeLease) Release() {}
