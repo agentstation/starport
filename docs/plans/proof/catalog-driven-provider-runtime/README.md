@@ -2,7 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP9 is the current task.
+The plan status is `active`. CDP9.1 is the current task.
 
 ## Pinned source state
 
@@ -109,3 +109,7 @@ package deltas are mandatory evidence, but they are not admission limits.
   `acme` generation activated without a rebuild. Independent remote and accepted
   pointers preserve the last complete runtime across invalid updates and
   restarts. The campaign verifier passed all 19 conditions.
+- [CDP9 conformance, documentation, and review](cdp9.md): both repositories
+  passed their final local gates. The campaign passed all 19 conditions. All
+  14 shared source vectors matched. Protected pre-PR reviews found no
+  actionable issue. Both ready pull requests now exist.
