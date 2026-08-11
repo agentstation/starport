@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP6.1 builds complete runtime generations, publishes each valid generation atomically, and drains replaced connectors after request leases end. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP7 implements request credential policy, exact BYOK strategy behavior, and catalog-driven setup and diagnosis surfaces. |
 
 ### Proposed Work
 
@@ -57,7 +57,7 @@ No proposed durable plan exists.
 - Authentication uses hash-based identity lookup and fails closed.
 - Response caching uses tenant-safe canonical semantic keys.
 - HTTP middleware enforces rate limits through the concept repository.
-- Starmap v0.3.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
+- Starmap v0.4.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
 - Starport owns inference credentials, request policy, route planning, execution, and protocol adaptation.
 - OpenAI and OpenRouter raw protocol smoke tests pass.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.

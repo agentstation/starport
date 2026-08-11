@@ -2,7 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP5.1 is the current task.
+The plan status is `active`. CDP7 is the current task.
 
 ## Pinned source state
 
@@ -91,4 +91,12 @@ package deltas are mandatory evidence, but they are not admission limits.
   snapshot now drives provider environment resolution. Conventional and
   product aliases, collision rejection, Fireworks discovery, configuration
   inspection, and the uncapped focused race gate passed.
+- [CDP5.1 Starport credential sources](cdp5.1.md): the source and cache
+  lifecycle contract passed. Shared conformance, file rotation, and the
+  warmed-cache contract also passed.
+- [CDP6 credential-free runtime primitives](cdp6.md): catalog facts activate
+  compiled transport and authentication primitives without a provider roster.
+- [CDP6.1 atomic runtime generations](cdp6.1.md): complete candidates, request
+  leases, and cache leases passed. Rollback, connector draining, and credential
+  rotation also passed.
 - Per-adapter dependency and binary measurements from CDP7.1.
