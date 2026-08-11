@@ -25,7 +25,7 @@ require_text() {
   local id=$1
   local pattern=$2
   local path=$3
-  if [[ -f "$root/$path" ]] && rg -q -- "$pattern" "$root/$path"; then
+  if [[ -f "$root/$path" ]] && grep -Eq -- "$pattern" "$root/$path"; then
     pass "$id"
   else
     fail "$id"
@@ -36,7 +36,7 @@ forbid_text() {
   local id=$1
   local pattern=$2
   shift 2
-  if rg -q -- "$pattern" "$@"; then fail "$id"; else pass "$id"; fi
+  if grep -EqR -- "$pattern" "$@"; then fail "$id"; else pass "$id"; fi
 }
 
 require_text DX-MAIN-1 'branches: \[main\]' .github/workflows/ci.yml

@@ -10,7 +10,7 @@ if [[ ! -f "$readme" ]]; then
 	exit 1
 fi
 
-if rg -q 'STARPORT_BIN|init --provider' "$readme"; then
+if grep -Eq 'STARPORT_BIN|init --provider' "$readme"; then
 	printf 'README contains an obsolete binary variable or provider-specific init command\n' >&2
 	exit 1
 fi
@@ -54,7 +54,7 @@ for required_text in 'in-memory state' 'creates no configuration files' \
 	fi
 done
 
-if rg -q 'ghcr\.io/agentstation/starport:[0-9]+\.[0-9]+\.[0-9]+' "$readme"; then
+if grep -Eq 'ghcr\.io/agentstation/starport:[0-9]+\.[0-9]+\.[0-9]+' "$readme"; then
 	printf 'README contains a container version that can become stale\n' >&2
 	exit 1
 fi
@@ -64,7 +64,7 @@ for release_text in \
 	'--json tagName' \
 	"--jq '.tagName | ltrimstr(\"v\")')\"" \
 	'ghcr.io/agentstation/starport:$STARPORT_VERSION'; do
-	if ! rg -Fq -- "$release_text" "$readme"; then
+	if ! grep -Fq -- "$release_text" "$readme"; then
 		printf 'README is missing dynamic stable-release selection: %s\n' "$release_text" >&2
 		exit 1
 	fi
