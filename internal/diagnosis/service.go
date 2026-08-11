@@ -174,6 +174,10 @@ func (s service) checkAdapters(
 	source *catalogs.Catalog,
 	report *Report,
 ) {
+	if err := cfg.ResolveProviders(source.Providers()); err != nil {
+		report.addFailure("adapters", "provider configuration could not be resolved")
+		return
+	}
 	adapterRegistry, err := s.dependencies.adapters()
 	if err != nil {
 		report.addFailure("adapters", "provider adapter registry could not be created")

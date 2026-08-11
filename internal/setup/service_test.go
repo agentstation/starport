@@ -50,7 +50,7 @@ func TestInitializeCreatesNamedIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read configuration: %v", err)
 	}
-	if values["STARPORT_PROVIDERS_OPENAI_API_KEY"] != "provider-secret" {
+	if values["OPENAI_API_KEY"] != "provider-secret" {
 		t.Errorf("provider credential was not preserved")
 	}
 	if len(values["STARPORT_SECURITY_MASTER_KEY"]) < 32 {
@@ -96,10 +96,10 @@ func TestInitializeOllamaProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if values["STARPORT_PROVIDERS_OLLAMA_ENABLED"] != "true" {
-		t.Errorf("Ollama setting = %q", values["STARPORT_PROVIDERS_OLLAMA_ENABLED"])
+	if values["OLLAMA_BASE_URL"] != "http://localhost:11434" {
+		t.Errorf("Ollama setting = %q", values["OLLAMA_BASE_URL"])
 	}
-	if _, ok := values["STARPORT_PROVIDERS_OPENAI_API_KEY"]; ok {
+	if _, ok := values["OPENAI_API_KEY"]; ok {
 		t.Fatal("Ollama profile wrote an OpenAI credential")
 	}
 	if result.Provider != catalogs.ProviderIDOllama {

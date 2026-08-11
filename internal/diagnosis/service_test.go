@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -34,7 +36,7 @@ func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{cfg.Security.MasterKey, cfg.Providers.OpenAI.APIKey} {
+	for _, secret := range []string{cfg.Security.MasterKey, cfg.Providers[catalogs.ProviderIDOpenAI].APIKey} {
 		if strings.Contains(string(encoded), secret) {
 			t.Errorf("diagnosis output contains secret %q", secret)
 		}
@@ -116,13 +118,16 @@ func TestProbeReportsExactEmptyIdentityCheck(t *testing.T) {
 func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")
 	cfg := loadTestConfig(t, root)
-	cfg.Providers.OpenAI.BaseURL = "https://" + "url-user:url-password" + "@provider.example?token=" +
-		cfg.Providers.OpenAI.APIKey + "#base-url-secret"
+	resolveEmbeddedProviders(t, cfg)
+	openAI := cfg.Providers[catalogs.ProviderIDOpenAI]
+	openAI.BaseURL = "https://" + "url-user:url-password" + "@provider.example?token=" +
+		openAI.APIKey + "#base-url-secret"
+	cfg.Providers[catalogs.ProviderIDOpenAI] = openAI
 	service := testService(cfg)
 	service.dependencies.adapters = func() (*connectors.AdapterRegistry, error) {
 		return nil, errors.New(
-			"failure " + cfg.Providers.OpenAI.APIKey + " " +
-				cfg.Providers.OpenAI.BaseURL + " " + cfg.Security.MasterKey +
+			"failure " + openAI.APIKey + " " +
+				openAI.BaseURL + " " + cfg.Security.MasterKey +
 				" url-password base-url-secret",
 		)
 	}
@@ -132,8 +137,8 @@ func TestDiagnosisRedactsSecretsFromDependencyFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, secret := range []string{
-		cfg.Providers.OpenAI.APIKey,
-		cfg.Providers.OpenAI.BaseURL,
+		openAI.APIKey,
+		openAI.BaseURL,
 		cfg.Security.MasterKey,
 		"url-password",
 		"base-url-secret",
@@ -204,14 +209,29 @@ func loadTestConfig(t *testing.T, root string) *config.Config {
 	cfg, err := config.NewLoader().
 		WithPaths(config.PathsForConfigDir(root)).
 		WithEnvironment(map[string]string{
-			"STARPORT_SECURITY_MASTER_KEY":      strings.Repeat("master-secret-", 3),
-			"STARPORT_PROVIDERS_OPENAI_API_KEY": "provider-secret-value",
+			"STARPORT_SECURITY_MASTER_KEY": strings.Repeat("master-secret-", 3),
+			"OPENAI_API_KEY":               "provider-secret-value",
 		}).
 		Load(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	return cfg
+}
+
+func resolveEmbeddedProviders(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	builder, err := catalogs.NewEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.ResolveProviders(catalog.Providers()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func testService(cfg *config.Config) service {

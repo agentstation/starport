@@ -18,7 +18,7 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 			URL:      "rediss://user:userinfo-password-value@example.com:6379/0?token=query-token-value#fragment-secret-value",
 			Password: secrets[0],
 		}},
-		Providers: ProvidersConfig{OpenAI: ProviderConfig{
+		Providers: ProvidersConfig{"openai": {
 			APIKey: secrets[1], BaseURL: "https://example.com/v1?api_key=query-token-value",
 		}},
 		Security: SecurityConfig{MasterKey: secrets[2], JWTSecret: secrets[3]},

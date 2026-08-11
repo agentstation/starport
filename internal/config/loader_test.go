@@ -8,49 +8,56 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
-func TestLoaderUsesExactProviderEnvironmentNamespaces(t *testing.T) {
+func TestLoaderDefersProviderEnvironmentUntilCatalogResolution(t *testing.T) {
 	environment := map[string]string{
-		"STARPORT_PROVIDERS_GOOGLE_AI_STUDIO_API_KEY": "studio-key",
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_API_KEY":    "vertex-token",
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE":  "static",
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_PROJECT_ID": "vertex-project",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY":     "azure-key",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE":   "static",
+		"GOOGLE_API_KEY":          "studio-key",
+		"GOOGLE_CLOUD_PROJECT":    "vertex-project",
+		"AZURE_OPENAI_ENDPOINT":   "https://azure.example",
+		"AZURE_OPENAI_API_KEY":    "azure-key",
+		"FIREWORKS_API_KEY":       "fireworks-key",
+		"STARPORT_OPENAI_API_KEY": "openai-product-key",
 	}
 	cfg := loadTestConfig(t, environment)
+	if len(cfg.Providers) != 0 {
+		t.Fatalf("provider values were read before catalog resolution: %#v", cfg.Providers)
+	}
+	resolveTestProviders(t, cfg)
 
-	if cfg.Providers.GoogleAIStudio.APIKey != "studio-key" {
-		t.Fatalf("Google AI Studio API key = %q", cfg.Providers.GoogleAIStudio.APIKey)
+	if cfg.Providers[catalogs.ProviderIDGoogleAIStudio].APIKey != "studio-key" {
+		t.Fatalf("Google AI Studio API key = %q", cfg.Providers[catalogs.ProviderIDGoogleAIStudio].APIKey)
 	}
-	if cfg.Providers.GoogleVertexAI.APIKey != "vertex-token" {
-		t.Fatalf("Google Vertex token = %q", cfg.Providers.GoogleVertexAI.APIKey)
+	if cfg.Providers[catalogs.ProviderIDGoogleVertex].AuthMode != "default" {
+		t.Fatalf("Google Vertex auth mode = %q", cfg.Providers[catalogs.ProviderIDGoogleVertex].AuthMode)
 	}
-	if cfg.Providers.GoogleVertexAI.ProjectID != "vertex-project" {
-		t.Fatalf("Google Vertex project = %q", cfg.Providers.GoogleVertexAI.ProjectID)
+	if cfg.Providers[catalogs.ProviderIDGoogleVertex].EndpointBindings["project"] != "vertex-project" {
+		t.Fatalf("Google Vertex bindings = %#v", cfg.Providers[catalogs.ProviderIDGoogleVertex].EndpointBindings)
 	}
-	if cfg.Providers.Azure.APIKey != "azure-key" {
-		t.Fatalf("Azure OpenAI API key = %q", cfg.Providers.Azure.APIKey)
+	if cfg.Providers[catalogs.ProviderIDAzureOpenAI].APIKey != "azure-key" {
+		t.Fatalf("Azure OpenAI API key = %q", cfg.Providers[catalogs.ProviderIDAzureOpenAI].APIKey)
+	}
+	if cfg.Providers["fireworks-ai"].APIKey != "fireworks-key" {
+		t.Fatalf("Fireworks API key = %q", cfg.Providers["fireworks-ai"].APIKey)
+	}
+	if cfg.Providers[catalogs.ProviderIDOpenAI].APIKey != "openai-product-key" {
+		t.Fatalf("OpenAI product alias = %q", cfg.Providers[catalogs.ProviderIDOpenAI].APIKey)
 	}
 }
 
-func TestLoaderIgnoresOldProviderEnvironmentNamespaces(t *testing.T) {
+func TestLoaderIgnoresRemovedProviderEnvironmentNamespaces(t *testing.T) {
 	environment := map[string]string{
 		"STARPORT_PROVIDERS_GOOGLE_AISTUDIO_API_KEY": "old-studio-key",
 		"STARPORT_PROVIDERS_GOOGLE_VERTEXAI_API_KEY": "old-vertex-token",
 		"STARPORT_PROVIDERS_AZURE_API_KEY":           "old-azure-key",
 	}
 	cfg := loadTestConfig(t, environment)
+	resolveTestProviders(t, cfg)
 
-	if cfg.Providers.GoogleAIStudio.APIKey != "" {
-		t.Fatal("old Google AI Studio namespace was accepted")
-	}
-	if cfg.Providers.GoogleVertexAI.APIKey != "" {
-		t.Fatal("old Google Vertex namespace was accepted")
-	}
-	if cfg.Providers.Azure.APIKey != "" {
-		t.Fatal("old Azure OpenAI namespace was accepted")
+	if len(cfg.Providers) != 0 {
+		t.Fatalf("removed provider namespaces were accepted: %#v", cfg.Providers)
 	}
 }
 
@@ -161,7 +168,7 @@ func TestLoaderErrorsDoNotExposeConfigurationValues(t *testing.T) {
 		t,
 		dir,
 		"invalid.env",
-		"STARPORT_PROVIDERS_OPENAI_API_KEY='"+secret,
+		"OPENAI_API_KEY='"+secret,
 	)
 	_, err := NewLoader().
 		WithPaths(PathsForConfigDir(dir)).
@@ -201,7 +208,7 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 		"STARPORT_LOGGING_OUTPUT":                  "file",
 		"STARPORT_LOGGING_FILE_PATH":               "logs/starport.log",
 		"STARPORT_SECURITY_MASTER_KEY":             strings.Repeat("m", 32),
-		"STARPORT_PROVIDERS_OPENAI_API_KEY":        "provider-key",
+		"OPENAI_API_KEY":                           "provider-key",
 		"STARPORT_RATE_LIMITING_ENABLE_HOT_RELOAD": "false",
 	}
 	cfg, err := NewLoader().
@@ -233,6 +240,21 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 		if got[name] != want {
 			t.Errorf("%s path = %q, want %q", name, got[name], want)
 		}
+	}
+}
+
+func resolveTestProviders(t *testing.T, cfg *Config) {
+	t.Helper()
+	builder, err := catalogs.NewEmbedded()
+	if err != nil {
+		t.Fatalf("open embedded catalog: %v", err)
+	}
+	catalog, err := builder.Build()
+	if err != nil {
+		t.Fatalf("build embedded catalog: %v", err)
+	}
+	if err := cfg.ResolveProviders(catalog.Providers()); err != nil {
+		t.Fatalf("resolve providers: %v", err)
 	}
 }
 

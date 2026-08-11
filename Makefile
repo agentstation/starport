@@ -116,7 +116,7 @@ test-integration: ## Run Valkey integration tests with Docker Compose
 	@set -eu; \
 		export COMPOSE_PROJECT_NAME=starport-integration-test-$$$$; \
 		export STARPORT_SECURITY_MASTER_KEY=integration-test-master-key-0001; \
-		export STARPORT_PROVIDERS_OPENAI_API_KEY=integration-test-provider-key; \
+		export OPENAI_API_KEY=integration-test-provider-key; \
 		export STARPORT_VALKEY_PORT=$(VALKEY_INTEGRATION_PORT); \
 		trap '$(INTEGRATION_COMPOSE) down --volumes --remove-orphans' EXIT INT TERM; \
 		$(INTEGRATION_COMPOSE) up -d --wait valkey; \

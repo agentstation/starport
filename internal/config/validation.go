@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/agentstation/starmap/pkg/catalogs"
-
 	"github.com/agentstation/starport/internal/providerauth"
 )
 
@@ -174,17 +172,9 @@ func (c *ProvidersConfig) Validate() error {
 	for _, entry := range c.Entries() {
 		provider := entry.Config
 		active := provider.APIKey != "" || provider.AuthMode != "" || provider.BaseURL != "" ||
-			provider.ProjectID != "" || provider.Location != "" || provider.Enabled
+			len(provider.EndpointBindings) > 0 || provider.Enabled
 		if !active {
 			continue
-		}
-		cloudAdapter := entry.ProviderID == catalogs.ProviderIDGoogleVertex ||
-			entry.ProviderID == catalogs.ProviderIDAzureOpenAI
-		if provider.AuthMode != "" && !cloudAdapter {
-			return fmt.Errorf("invalid %s provider config: auth mode is not supported", entry.ProviderID)
-		}
-		if cloudAdapter && provider.AuthMode == "" {
-			return fmt.Errorf("invalid %s provider config: auth mode is required", entry.ProviderID)
 		}
 		if err := provider.Validate(); err != nil {
 			return fmt.Errorf("invalid %s provider config: %w", entry.ProviderID, err)

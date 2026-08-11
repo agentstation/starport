@@ -17,16 +17,7 @@ func Configurations(configs config.ProvidersConfig) map[catalogs.ProviderID]conn
 		providerConfig := connectors.ProviderConfig{
 			BaseURL: entry.Config.BaseURL, APIKey: entry.Config.APIKey, AuthMode: entry.Config.AuthMode,
 			Timeout: entry.Config.Timeout, MaxConnections: entry.Config.MaxConnections,
-			Enabled: entry.Config.Enabled,
-		}
-		if entry.Config.ProjectID != "" || entry.Config.Location != "" {
-			providerConfig.EndpointBindings = make(map[string]string, 2)
-			if entry.Config.ProjectID != "" {
-				providerConfig.EndpointBindings["project"] = entry.Config.ProjectID
-			}
-			if entry.Config.Location != "" {
-				providerConfig.EndpointBindings["location"] = entry.Config.Location
-			}
+			Enabled: entry.Config.Enabled, EndpointBindings: cloneStrings(entry.Config.EndpointBindings),
 		}
 		result[entry.ProviderID] = providerConfig
 	}

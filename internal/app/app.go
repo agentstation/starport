@@ -178,6 +178,9 @@ func (b *runtimeBuilder) openConcepts() error {
 			log.Warn().Err(err).Msg("startup Starmap catalog refresh failed; retaining current generation")
 		}
 	}
+	if err := b.config.ResolveProviders(b.application.catalog.Current().Catalog().Providers()); err != nil {
+		return fmt.Errorf("resolve provider configuration: %w", err)
+	}
 
 	b.identities, err = identity.Open(b.application.store)
 	if err != nil {

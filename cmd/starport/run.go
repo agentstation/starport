@@ -154,7 +154,7 @@ func runServer(ctx context.Context, options starportcli.ServeOptions) error {
 		return fmt.Errorf("load configuration: %w", err)
 	}
 	if options.EnableOllama {
-		cfg.Providers.Ollama.Enabled = true
+		cfg.EnableProvider("ollama")
 	}
 
 	application, err := app.New(cfg)

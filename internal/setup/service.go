@@ -26,7 +26,10 @@ const (
 	privateDirMode = 0o700
 
 	// OpenAIProviderCredentialEnvironment supplies the local OpenAI inference credential.
-	OpenAIProviderCredentialEnvironment = "STARPORT_PROVIDERS_OPENAI_API_KEY"
+	// #nosec G101 -- This constant is an environment name, not credential material.
+	OpenAIProviderCredentialEnvironment = "OPENAI_API_KEY"
+	ollamaBaseURLEnvironment            = "OLLAMA_BASE_URL"
+	ollamaDefaultBaseURL                = "http://localhost:11434"
 )
 
 var (
@@ -430,7 +433,7 @@ func localConfig(request Request, masterKey string) ([]byte, error) {
 	case catalogs.ProviderIDOpenAI:
 		values[OpenAIProviderCredentialEnvironment] = request.ProviderCredential
 	case catalogs.ProviderIDOllama:
-		values["STARPORT_PROVIDERS_OLLAMA_ENABLED"] = "true"
+		values[ollamaBaseURLEnvironment] = ollamaDefaultBaseURL
 	default:
 		return nil, ErrUnsupportedProvider
 	}

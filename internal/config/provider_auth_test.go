@@ -5,20 +5,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
+
 	"github.com/agentstation/starport/internal/providerauth"
 )
 
-func TestLoaderUsesExplicitCloudAuthModes(t *testing.T) {
+func TestLoaderDerivesCloudAuthModesFromCatalogProfiles(t *testing.T) {
 	cfg := loadTestConfig(t, map[string]string{
-		"STARPORT_PROVIDERS_GOOGLE_VERTEX_AUTH_MODE": "default",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_AUTH_MODE":  "static",
-		"STARPORT_PROVIDERS_AZURE_OPENAI_API_KEY":    "azure-key",
+		"GOOGLE_CLOUD_PROJECT":  "vertex-project",
+		"AZURE_OPENAI_ENDPOINT": "https://azure.example",
+		"AZURE_OPENAI_API_KEY":  "azure-key",
 	})
-	if cfg.Providers.GoogleVertexAI.AuthMode != providerauth.ModeDefault {
-		t.Errorf("Vertex auth mode = %q", cfg.Providers.GoogleVertexAI.AuthMode)
+	resolveTestProviders(t, cfg)
+	if cfg.Providers[catalogs.ProviderIDGoogleVertex].AuthMode != providerauth.ModeDefault {
+		t.Errorf("Vertex auth mode = %q", cfg.Providers[catalogs.ProviderIDGoogleVertex].AuthMode)
 	}
-	if cfg.Providers.Azure.AuthMode != providerauth.ModeStatic {
-		t.Errorf("Azure auth mode = %q", cfg.Providers.Azure.AuthMode)
+	if cfg.Providers[catalogs.ProviderIDAzureOpenAI].AuthMode != providerauth.ModeStatic {
+		t.Errorf("Azure auth mode = %q", cfg.Providers[catalogs.ProviderIDAzureOpenAI].AuthMode)
 	}
 }
 
@@ -61,20 +64,20 @@ func TestProviderConfigRejectsAmbiguousCloudCredentials(t *testing.T) {
 	}
 }
 
-func TestProvidersConfigLimitsDefaultCredentialsToCloudAdapters(t *testing.T) {
-	providers := ProvidersConfig{OpenAI: ProviderConfig{
+func TestProvidersConfigDoesNotOwnProviderAuthenticationRoster(t *testing.T) {
+	providers := ProvidersConfig{"yaml-only": {
 		AuthMode: providerauth.ModeDefault, Timeout: time.Second, MaxConnections: 1,
 	}}
-	if err := providers.Validate(); err == nil || !strings.Contains(err.Error(), "not supported") {
+	if err := providers.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
-func TestProvidersConfigRequiresExplicitCloudAuthMode(t *testing.T) {
-	providers := ProvidersConfig{GoogleVertexAI: ProviderConfig{
+func TestProvidersConfigRequiresStaticModeForStaticMaterial(t *testing.T) {
+	providers := ProvidersConfig{"yaml-only": {
 		APIKey: "token", Timeout: time.Second, MaxConnections: 1,
 	}}
-	if err := providers.Validate(); err == nil || !strings.Contains(err.Error(), "auth mode is required") {
+	if err := providers.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }

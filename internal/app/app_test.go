@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/stretchr/testify/require"
 
@@ -253,7 +254,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 			},
 		},
 		Providers: config.ProvidersConfig{
-			OpenAI: config.ProviderConfig{
+			catalogs.ProviderIDOpenAI: {
 				BaseURL: "https://api.openai.com/v1", APIKey: "test-key",
 				Timeout: time.Second, MaxConnections: 10,
 			},

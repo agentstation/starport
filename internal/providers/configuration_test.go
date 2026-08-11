@@ -11,10 +11,10 @@ import (
 )
 
 func TestConfigurationsPreservesExactProviderSettings(t *testing.T) {
-	settings := config.ProvidersConfig{GoogleVertexAI: config.ProviderConfig{
+	settings := config.ProvidersConfig{catalogs.ProviderIDGoogleVertex: {
 		APIKey: "token", BaseURL: "https://vertex.example", Timeout: time.Minute,
 		AuthMode: providerauth.ModeStatic, MaxConnections: 12, Enabled: true,
-		ProjectID: "project", Location: "location",
+		EndpointBindings: map[string]string{"project": "project", "location": "location"},
 	}}
 	projected := Configurations(settings)
 	vertex := projected[catalogs.ProviderIDGoogleVertex]
@@ -27,7 +27,7 @@ func TestConfigurationsPreservesExactProviderSettings(t *testing.T) {
 		t.Errorf("endpoint bindings = %#v", vertex.EndpointBindings)
 	}
 	vertex.EndpointBindings["project"] = "changed"
-	if settings.GoogleVertexAI.ProjectID != "project" {
+	if settings[catalogs.ProviderIDGoogleVertex].EndpointBindings["project"] != "project" {
 		t.Fatal("projection changed the source configuration")
 	}
 }

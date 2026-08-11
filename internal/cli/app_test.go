@@ -323,7 +323,7 @@ func TestConfigShowJSONRedactsSecrets(t *testing.T) {
 	secret := "secret-that-must-not-appear"
 	deps.LoadConfig = func(context.Context) (*config.Config, error) {
 		return &config.Config{
-			Providers: config.ProvidersConfig{OpenAI: config.ProviderConfig{APIKey: secret}},
+			Providers: config.ProvidersConfig{"openai": {APIKey: secret}},
 			Security:  config.SecurityConfig{MasterKey: secret},
 		}, nil
 	}

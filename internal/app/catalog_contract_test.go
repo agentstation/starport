@@ -54,20 +54,23 @@ func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 
 func TestAuthPlanesAreIsolated(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-acquisition-secret")
-	t.Setenv("STARPORT_PROVIDERS_OPENAI_API_KEY", "sk-inference-secret")
-	cfg, err := config.NewLoader().WithEnvFiles().Load(context.Background())
+	cfg, err := config.NewLoader().
+		WithEnvironment(map[string]string{"STARPORT_OPENAI_API_KEY": "sk-inference-secret"}).
+		WithEnvFiles().
+		Load(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "sk-inference-secret", cfg.Providers.OpenAI.APIKey)
 
 	runtime, err := runtimecatalog.OpenRuntime(context.Background(), storage.NewMockStore(), "")
 	require.NoError(t, err)
+	require.NoError(t, cfg.ResolveProviders(runtime.ControlPlane().Current().Catalog().Providers()))
+	require.Equal(t, "sk-inference-secret", cfg.Providers[catalogs.ProviderIDOpenAI].APIKey)
 	provider, err := runtime.ControlPlane().Current().Catalog().Provider(catalogs.ProviderIDOpenAI)
 	require.NoError(t, err)
 	acquisitionField, found := credentialFieldForEnvironment(provider.Credentials, "OPENAI_API_KEY")
 	require.True(t, found)
 	require.Equal(t, catalogs.ProviderCredentialFieldSecret, acquisitionField.Kind)
 	require.NotContains(t, fmt.Sprintf("%#v", provider), "sk-acquisition-secret")
-	require.NotEqual(t, cfg.Providers.OpenAI.APIKey, "sk-acquisition-secret")
+	require.NotEqual(t, cfg.Providers[catalogs.ProviderIDOpenAI].APIKey, "sk-acquisition-secret")
 }
 
 func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {

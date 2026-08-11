@@ -110,6 +110,7 @@ func (l *Loader) Load(ctx context.Context) (*Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, newLoadFailure("configuration values are invalid", err)
 	}
+	cfg.providerEnvironment = lookuper
 
 	return cfg, nil
 }
