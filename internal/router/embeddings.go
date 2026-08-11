@@ -41,7 +41,9 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 	if req.APIKeyConfig != nil {
 		strategy = req.APIKeyConfig.CredentialStrategy
 	}
-	credentialPolicy, err := newCredentialPolicy(strategy, req.TenantID, runtime, r.userKeys)
+	credentialPolicy, err := newCredentialPolicy(
+		strategy, req.TenantID, runtime, r.userKeys, r.credentialGate,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +82,7 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
 		}
+		execution.RecordCredentialAccepted(attemptCtx)
 		canonical, conversionErr := connectors.EmbeddingResponseToInference(response)
 		if conversionErr != nil {
 			return nil, failure.New(

@@ -35,8 +35,17 @@ func TestBYOKStrategyOrderAndUserOnlyNoninterference(t *testing.T) {
 			require.False(t, CanAdvance(providerFailure))
 		})
 	}
-	for _, eligible := range []failure.Kind{failure.Authentication, failure.RateLimit} {
-		require.True(t, CanAdvance(failure.New(eligible, "eligible", false, failure.ProviderDetails{}, nil)))
+	for _, eligible := range []failure.Kind{
+		failure.Authentication, failure.Permission, failure.Quota,
+		failure.Billing, failure.RateLimit,
+	} {
+		require.True(t, CanAdvance(failure.New(
+			eligible,
+			"eligible",
+			false,
+			failure.ProviderDetails{StateScope: failure.ScopeCredential},
+			nil,
+		)))
 	}
 }
 

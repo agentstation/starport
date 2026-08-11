@@ -65,6 +65,7 @@ type Publisher interface {
 type Record struct {
 	Offering           Offering
 	State              State
+	FailureKind        failure.Kind
 	ConsecutiveFailure int
 	OpenUntil          time.Time
 }
@@ -92,6 +93,7 @@ type Tracker struct {
 
 type entry struct {
 	state              State
+	failureKind        failure.Kind
 	consecutiveFailure int
 	openUntil          time.Time
 	probeInFlight      bool
@@ -222,7 +224,7 @@ func (t *Tracker) RecordSuccess(route routing.Route, _ time.Duration) {
 
 // RecordFailure applies one normalized failure to the offering state machine.
 func (t *Tracker) RecordFailure(route routing.Route, providerFailure *failure.Failure, _ time.Duration) {
-	if t == nil || providerFailure == nil {
+	if t == nil || providerFailure == nil || providerFailure.StateScope() != failure.ScopeOffering {
 		return
 	}
 	offering := OfferingFromRoute(route)
@@ -233,7 +235,8 @@ func (t *Tracker) RecordFailure(route routing.Route, providerFailure *failure.Fa
 	t.mu.Lock()
 	entry := t.records[offering]
 	switch providerFailure.Kind() {
-	case failure.NotFound, failure.RateLimit, failure.ProviderUnavailable, failure.Timeout:
+	case failure.NotFound, failure.RateLimit, failure.Quota,
+		failure.ProviderUnavailable, failure.Timeout:
 		if entry == nil {
 			value := entryValue(StateHealthy)
 			entry = &value
@@ -251,8 +254,10 @@ func (t *Tracker) RecordFailure(route routing.Route, providerFailure *failure.Fa
 	switch providerFailure.Kind() {
 	case failure.NotFound:
 		*entry = entryValue(StateUnavailable)
+		entry.failureKind = failure.NotFound
 		changed = true
-	case failure.RateLimit, failure.ProviderUnavailable, failure.Timeout:
+	case failure.RateLimit, failure.Quota, failure.ProviderUnavailable, failure.Timeout:
+		entry.failureKind = providerFailure.Kind()
 		entry.consecutiveFailure++
 		entry.probeInFlight = false
 		changed = true
@@ -332,6 +337,7 @@ func (t *Tracker) snapshotLocked() Snapshot {
 		records = append(records, Record{
 			Offering:           offering,
 			State:              entry.state,
+			FailureKind:        entry.failureKind,
 			ConsecutiveFailure: entry.consecutiveFailure,
 			OpenUntil:          entry.openUntil,
 		})

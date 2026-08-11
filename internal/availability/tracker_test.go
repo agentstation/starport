@@ -17,7 +17,13 @@ func TestOfferingAvailabilityStateMachine(t *testing.T) {
 	tracker, err := New(Config{FailureThreshold: 2, OpenDuration: time.Minute}, clock, publisher)
 	require.NoError(t, err)
 	route := routing.Route{CatalogGenerationID: "g1", ModelID: "model", ProviderID: "provider", ProviderModelID: "model-v1"}
-	retryable := failure.New(failure.ProviderUnavailable, "failed", true, failure.ProviderDetails{}, nil)
+	retryable := failure.New(
+		failure.ProviderUnavailable,
+		"failed",
+		true,
+		failure.ProviderDetails{StateScope: failure.ScopeOffering},
+		nil,
+	)
 
 	require.True(t, tracker.Acquire(route))
 	tracker.RecordFailure(route, retryable, time.Second)
@@ -44,7 +50,13 @@ func TestNotFoundRequiresExplicitReset(t *testing.T) {
 	tracker, err := New(DefaultConfig(), nil, nil)
 	require.NoError(t, err)
 	route := routing.Route{CatalogGenerationID: "g1", ModelID: "model", ProviderID: "provider", ProviderModelID: "missing"}
-	notFound := failure.New(failure.NotFound, "not found", false, failure.ProviderDetails{}, nil)
+	notFound := failure.New(
+		failure.NotFound,
+		"not found",
+		false,
+		failure.ProviderDetails{StateScope: failure.ScopeOffering},
+		nil,
+	)
 
 	tracker.RecordFailure(route, notFound, 0)
 	require.False(t, tracker.Acquire(route))

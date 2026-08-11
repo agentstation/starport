@@ -81,6 +81,39 @@ type AttemptEvidence struct {
 	Transitions []Transition
 }
 
+// CredentialOwner identifies the request credential plane used for one
+// provider attempt. It contains no tenant identity or credential material.
+type CredentialOwner string
+
+const (
+	// CredentialOwnerOperator identifies deployment-owned inference material.
+	CredentialOwnerOperator CredentialOwner = "operator"
+	// CredentialOwnerTenant identifies request-scoped tenant BYOK material.
+	CredentialOwnerTenant CredentialOwner = "tenant"
+)
+
+// CredentialEvidence identifies one selected credential version without
+// exposing its values or source reference.
+type CredentialEvidence struct {
+	Owner           CredentialOwner
+	MaterialVersion string
+	Accepted        bool
+}
+
+// AttemptOutcome is the safe state-transition evidence from one provider
+// invocation.
+type AttemptOutcome struct {
+	Route      routing.Route
+	Credential CredentialEvidence
+	Failure    *failure.Failure
+}
+
+// OutcomePublisher receives completed provider invocation outcomes. It must
+// not block on external I/O.
+type OutcomePublisher interface {
+	PublishOutcome(AttemptOutcome)
+}
+
 // Config defines the one total execution budget.
 type Config struct {
 	MaxAttempts        int

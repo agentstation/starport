@@ -22,16 +22,21 @@ func NormalizeFailure(provider string, err error) *failure.Failure {
 	var apiError *APIError
 	if errors.As(err, &apiError) {
 		kind := failureKindFromAPIError(apiError)
+		retryable := apiError.IsRetryable()
+		if kind == failure.Quota || kind == failure.Billing {
+			retryable = false
+		}
 		return failure.New(
 			kind,
 			safeProviderMessage(kind),
-			apiError.IsRetryable(),
+			retryable,
 			failure.ProviderDetails{
 				Provider:   firstNonEmpty(apiError.Provider, provider),
 				StatusCode: apiError.StatusCode,
 				Type:       apiError.Type,
 				Code:       apiError.Code,
 				Message:    apiError.Message,
+				StateScope: stateScopeForAPIError(apiError, kind),
 			},
 			err,
 		)
@@ -41,17 +46,30 @@ func NormalizeFailure(provider string, err error) *failure.Failure {
 	case errors.Is(err, context.Canceled), errors.Is(err, ErrContextCanceled):
 		return failure.New(failure.Canceled, "The request was canceled.", false, failure.ProviderDetails{Provider: provider}, err)
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, ErrTimeout):
-		return failure.New(failure.Timeout, "The provider request timed out.", true, failure.ProviderDetails{Provider: provider}, err)
+		return failure.New(failure.Timeout, "The provider request timed out.", true, failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeOffering}, err)
 	case errors.Is(err, ErrRateLimited):
-		return failure.New(failure.RateLimit, "The provider rate limit was reached.", true, failure.ProviderDetails{Provider: provider}, err)
+		return failure.New(failure.RateLimit, "The provider rate limit was reached.", true, failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeOffering}, err)
 	case errors.Is(err, ErrInvalidAPIKey):
-		return failure.New(failure.Authentication, "Provider authentication failed.", false, failure.ProviderDetails{Provider: provider}, err)
+		return failure.New(failure.Authentication, "Provider authentication failed.", false, failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeCredential}, err)
 	default:
-		return failure.New(failure.ProviderUnavailable, "The provider request failed.", true, failure.ProviderDetails{Provider: provider}, err)
+		return failure.New(failure.ProviderUnavailable, "The provider request failed.", true, failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeOffering}, err)
 	}
 }
 
 func failureKindFromAPIError(apiError *APIError) failure.Kind {
+	if apiError == nil {
+		return failure.ProviderUnavailable
+	}
+	typeCode := strings.ToLower(strings.TrimSpace(apiError.Type))
+	errorCode := strings.ToLower(strings.TrimSpace(apiError.Code))
+	if apiError.StatusCode == 402 || typeCode == "billing_error" ||
+		errorCode == "billing_error" || errorCode == "credit_balance_exhausted" {
+		return failure.Billing
+	}
+	if typeCode == "insufficient_quota" || errorCode == "insufficient_quota" ||
+		typeCode == "quota_exceeded" || errorCode == "quota_exceeded" {
+		return failure.Quota
+	}
 	if apiError != nil && (apiError.StatusCode == 400 || apiError.StatusCode == 422) {
 		message := strings.ToLower(apiError.Message)
 		for _, marker := range []string{"context length", "context_length_exceeded", "max_tokens", "token limit", "maximum context"} {
@@ -74,6 +92,8 @@ func failureKindFromStatus(status int) failure.Kind {
 		return failure.Validation
 	case 401:
 		return failure.Authentication
+	case 402:
+		return failure.Billing
 	case 403:
 		return failure.Permission
 	case 404:
@@ -95,6 +115,10 @@ func safeProviderMessage(kind failure.Kind) string {
 		return "Provider authentication failed."
 	case failure.Permission:
 		return "The provider denied the request."
+	case failure.Quota:
+		return "The provider allocation is exhausted."
+	case failure.Billing:
+		return "The provider account cannot accept billed requests."
 	case failure.NotFound:
 		return "The provider model was not found."
 	case failure.ContextLimit:
@@ -107,6 +131,26 @@ func safeProviderMessage(kind failure.Kind) string {
 		return "The provider rate limit was reached."
 	default:
 		return "The provider request failed."
+	}
+}
+
+func stateScopeForAPIError(apiError *APIError, kind failure.Kind) failure.StateScope {
+	switch kind {
+	case failure.Authentication, failure.Billing:
+		return failure.ScopeCredential
+	case failure.Permission:
+		typeCode := strings.ToLower(strings.TrimSpace(apiError.Type))
+		errorCode := strings.ToLower(strings.TrimSpace(apiError.Code))
+		if typeCode == "permission_error" || typeCode == "permission_denied" ||
+			errorCode == "permission_error" || errorCode == "permission_denied" {
+			return failure.ScopeCredential
+		}
+		return failure.ScopeNone
+	case failure.Quota, failure.RateLimit, failure.NotFound,
+		failure.ProviderUnavailable, failure.Timeout:
+		return failure.ScopeOffering
+	default:
+		return failure.ScopeNone
 	}
 }
 

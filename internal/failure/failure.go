@@ -13,6 +13,10 @@ const (
 	Authentication Kind = "authentication"
 	// Permission identifies an unauthorized action.
 	Permission Kind = "permission"
+	// Quota identifies an exhausted non-burst provider allocation.
+	Quota Kind = "quota"
+	// Billing identifies an account payment or credit failure.
+	Billing Kind = "billing"
 	// RateLimit identifies provider or gateway throttling.
 	RateLimit Kind = "rate_limit"
 	// NotFound identifies an absent model or provider resource.
@@ -31,6 +35,19 @@ const (
 	Internal Kind = "internal"
 )
 
+// StateScope identifies the durable runtime state that provider evidence can
+// change. ScopeNone keeps request-local failures out of durable state.
+type StateScope string
+
+const (
+	// ScopeNone makes no durable provider-state change.
+	ScopeNone StateScope = ""
+	// ScopeCredential changes only the selected credential material version.
+	ScopeCredential StateScope = "credential"
+	// ScopeOffering changes only the exact provider model offering.
+	ScopeOffering StateScope = "offering"
+)
+
 // ProviderDetails retains provider evidence for internal policy and diagnostics.
 type ProviderDetails struct {
 	Provider   string
@@ -38,6 +55,7 @@ type ProviderDetails struct {
 	Type       string
 	Code       string
 	Message    string
+	StateScope StateScope
 }
 
 // Failure separates a client-safe message from provider and cause details.
@@ -106,4 +124,13 @@ func (f *Failure) ProviderDetails() ProviderDetails {
 		return ProviderDetails{}
 	}
 	return f.provider
+}
+
+// StateScope returns the durable scope proved by normalized provider
+// evidence. An empty scope is deliberately non-mutating.
+func (f *Failure) StateScope() StateScope {
+	if f == nil {
+		return ScopeNone
+	}
+	return f.provider.StateScope
 }

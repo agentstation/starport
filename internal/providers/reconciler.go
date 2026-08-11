@@ -11,6 +11,8 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/providerstate"
 )
 
 var (
@@ -73,6 +75,7 @@ type Reconciler struct {
 	resolver CredentialRuntimeResolver
 	settings config.ProvidersConfig
 	publish  RuntimePublisher
+	states   providerstate.CredentialPublisher
 	timeout  time.Duration
 
 	stateMu  sync.RWMutex
@@ -102,6 +105,7 @@ func NewReconciler(
 	settings config.ProvidersConfig,
 	publish RuntimePublisher,
 	timeout time.Duration,
+	states providerstate.CredentialPublisher,
 ) (*Reconciler, error) {
 	if source == nil || resolver == nil || publish == nil {
 		return nil, ErrReconcilerRequired
@@ -115,7 +119,7 @@ func NewReconciler(
 	return &Reconciler{
 		source: source, resolver: resolver,
 		settings: config.CloneProvidersConfig(settings),
-		publish:  publish, timeout: timeout,
+		publish:  publish, states: states, timeout: timeout,
 	}, nil
 }
 
@@ -129,13 +133,14 @@ func (r *Reconciler) Adopt(view CatalogView, current config.ProvidersConfig) err
 		return err
 	}
 	r.stateMu.Lock()
-	defer r.stateMu.Unlock()
 	if r.revision == 0 || !sameCatalogView(r.view, view) ||
 		!equivalentProviderConfigs(r.current, current) {
 		r.revision++
 	}
 	r.view = cloneCatalogView(view)
 	r.current = config.CloneProvidersConfig(current)
+	r.stateMu.Unlock()
+	r.publishCredentialState(view, current, nil, false)
 	return nil
 }
 
@@ -218,6 +223,7 @@ func (r *Reconciler) reconcile(
 	priorRevision := r.revision
 	r.stateMu.RUnlock()
 	retainPrior := sameCatalogView(priorView, view)
+	r.publishCredentialState(view, prior, nil, true)
 
 	type providerResult struct {
 		providerID catalogs.ProviderID
@@ -249,6 +255,7 @@ func (r *Reconciler) reconcile(
 	}
 	wait.Wait()
 	if err := ctx.Err(); err != nil {
+		r.publishCredentialState(view, prior, nil, false)
 		return ReconcileReport{}, err
 	}
 
@@ -272,14 +279,17 @@ func (r *Reconciler) reconcile(
 		}
 	}
 	if err := next.Validate(); err != nil {
+		r.publishCredentialState(view, prior, nil, false)
 		return ReconcileReport{}, err
 	}
 	changed := !sameCatalogView(priorView, view) ||
 		!equivalentProviderConfigs(prior, next)
 	if !changed {
+		r.publishCredentialState(view, next, failures, false)
 		return reportFor(priorRevision, false, next, failures), nil
 	}
 	if err := r.publish(ctx, view, next); err != nil {
+		r.publishCredentialState(view, prior, nil, false)
 		return ReconcileReport{}, err
 	}
 
@@ -289,7 +299,96 @@ func (r *Reconciler) reconcile(
 	r.revision++
 	revision := r.revision
 	r.stateMu.Unlock()
+	r.publishCredentialState(view, next, failures, false)
 	return reportFor(revision, true, next, failures), nil
+}
+
+func (r *Reconciler) publishCredentialState(
+	view CatalogView,
+	configs config.ProvidersConfig,
+	failures []ReconcileFailure,
+	refreshing bool,
+) {
+	if r.states == nil {
+		return
+	}
+	failuresByProvider := make(map[catalogs.ProviderID]error, len(failures))
+	for _, item := range failures {
+		failuresByProvider[item.ProviderID] = item.Err
+	}
+	observations := make([]providerstate.CredentialObservation, 0, len(view.Providers))
+	for _, provider := range view.Providers {
+		configured, hasConfigured := configs[provider.ID]
+		version := configured.Material.Version()
+		if hasAnonymousInferenceProfile(provider) {
+			observations = append(observations, providerstate.CredentialObservation{
+				ProviderID: provider.ID,
+				State:      providerstate.CredentialReady,
+				Reason:     providerstate.ReasonOperatorNotRequired,
+				Usable:     true,
+			})
+			continue
+		}
+		if refreshing {
+			observations = append(observations, providerstate.CredentialObservation{
+				ProviderID:      provider.ID,
+				State:           providerstate.CredentialRefreshing,
+				Reason:          providerstate.ReasonOperatorRefreshing,
+				Usable:          hasConfigured,
+				MaterialVersion: version,
+			})
+			continue
+		}
+		if resolveErr, failed := failuresByProvider[provider.ID]; failed {
+			if hasConfigured {
+				observations = append(observations, providerstate.CredentialObservation{
+					ProviderID:      provider.ID,
+					State:           providerstate.CredentialReady,
+					Reason:          providerstate.ReasonOperatorRefreshRetained,
+					Usable:          true,
+					MaterialVersion: version,
+				})
+				continue
+			}
+			state, reason := credentialSourceFailureState(resolveErr)
+			observations = append(observations, providerstate.CredentialObservation{
+				ProviderID: provider.ID, State: state, Reason: reason,
+			})
+			continue
+		}
+		if hasConfigured {
+			observations = append(observations, providerstate.CredentialObservation{
+				ProviderID:      provider.ID,
+				State:           providerstate.CredentialReady,
+				Usable:          true,
+				MaterialVersion: version,
+			})
+			continue
+		}
+		observations = append(observations, providerstate.CredentialObservation{
+			ProviderID: provider.ID,
+			State:      providerstate.CredentialNotConfigured,
+			Reason:     providerstate.ReasonOperatorNotConfigured,
+		})
+	}
+	r.states.PublishCredentials(providerstate.CredentialGeneration{
+		CatalogGenerationID: view.GenerationID,
+		Observations:        observations,
+	})
+}
+
+func credentialSourceFailureState(err error) (providerstate.CredentialState, providerstate.ReasonCode) {
+	switch {
+	case credentials.IsSourceError(err, credentials.SourceErrorNotConfigured),
+		errors.Is(err, credentials.ErrProviderNotConfigured):
+		return providerstate.CredentialNotConfigured, providerstate.ReasonOperatorNotConfigured
+	case credentials.IsSourceError(err, credentials.SourceErrorDenied):
+		return providerstate.CredentialDenied, providerstate.ReasonOperatorSourceDenied
+	case credentials.IsSourceError(err, credentials.SourceErrorInvalid):
+		return providerstate.CredentialInvalid, providerstate.ReasonOperatorSourceInvalid
+	default:
+		return providerstate.CredentialUnavailable, providerstate.ReasonOperatorSourceUnavailable
+	}
 }
 
 func equivalentProviderConfigs(left, right config.ProvidersConfig) bool {

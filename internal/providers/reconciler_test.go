@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/providerstate"
 )
 
 func TestProviderReconcilerDiscoversAmbientKey(t *testing.T) {
@@ -107,9 +109,88 @@ func TestProviderReconcilerCancellationStops(t *testing.T) {
 	require.Equal(t, int32(0), published.Load())
 }
 
+func TestProviderReconcilerPublishesCredentialLifecycle(t *testing.T) {
+	provider := reconcilerTestProvider("lifecycle")
+	states := &credentialStateCapture{}
+	resolver := &reconcilerTestResolver{resolve: func(
+		context.Context,
+		catalogs.Provider,
+	) (config.ProviderConfig, bool, error) {
+		return reconcilerProviderConfig(provider), true, nil
+	}}
+	view := reconcilerTestView(provider)
+	reconciler, err := NewReconciler(
+		func() (CatalogView, error) { return view, nil },
+		resolver,
+		nil,
+		func(context.Context, CatalogView, config.ProvidersConfig) error { return nil },
+		time.Second,
+		states,
+	)
+	require.NoError(t, err)
+	_, err = reconciler.Reconcile(t.Context(), false)
+	require.NoError(t, err)
+	generations := states.snapshot()
+	require.GreaterOrEqual(t, len(generations), 2)
+	require.Equal(t, providerstate.CredentialRefreshing, generations[0].Observations[0].State)
+	last := generations[len(generations)-1].Observations[0]
+	require.Equal(t, providerstate.CredentialReady, last.State)
+	require.True(t, last.Usable)
+	require.Equal(t, "test-version", last.MaterialVersion)
+
+	deniedStates := &credentialStateCapture{}
+	deniedResolver := &reconcilerTestResolver{resolve: func(
+		context.Context,
+		catalogs.Provider,
+	) (config.ProviderConfig, bool, error) {
+		return config.ProviderConfig{}, false, credentials.NewSourceError(
+			credentials.SourceErrorDenied,
+			credentials.ReferenceBackendEnvironment,
+		)
+	}}
+	denied, err := NewReconciler(
+		func() (CatalogView, error) { return view, nil },
+		deniedResolver,
+		nil,
+		func(context.Context, CatalogView, config.ProvidersConfig) error { return nil },
+		time.Second,
+		deniedStates,
+	)
+	require.NoError(t, err)
+	_, err = denied.Reconcile(t.Context(), true)
+	require.NoError(t, err)
+	deniedGenerations := deniedStates.snapshot()
+	deniedLast := deniedGenerations[len(deniedGenerations)-1].Observations[0]
+	require.Equal(t, providerstate.CredentialDenied, deniedLast.State)
+	require.Equal(t, providerstate.ReasonOperatorSourceDenied, deniedLast.Reason)
+}
+
 type reconcilerTestResolver struct {
 	calls   atomic.Int32
 	resolve func(context.Context, catalogs.Provider) (config.ProviderConfig, bool, error)
+}
+
+type credentialStateCapture struct {
+	mu          sync.Mutex
+	generations []providerstate.CredentialGeneration
+}
+
+func (c *credentialStateCapture) PublishCredentials(generation providerstate.CredentialGeneration) {
+	c.mu.Lock()
+	generation.Observations = append(
+		[]providerstate.CredentialObservation(nil),
+		generation.Observations...,
+	)
+	c.generations = append(c.generations, generation)
+	c.mu.Unlock()
+}
+
+func (c *credentialStateCapture) snapshot() []providerstate.CredentialGeneration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := make([]providerstate.CredentialGeneration, len(c.generations))
+	copy(result, c.generations)
+	return result
 }
 
 func (*reconcilerTestResolver) ValidateProviderCredentialContracts([]catalogs.Provider) error {
@@ -146,6 +227,7 @@ func newTestReconciler(
 			return nil
 		},
 		time.Second,
+		nil,
 	)
 	require.NoError(t, err)
 	return reconciler, published
