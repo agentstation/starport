@@ -52,17 +52,24 @@ type Config struct {
 
 // modelRouter implements the ModelRouter interface
 type modelRouter struct {
-	registry     connectors.Registry
-	catalog      *runtimecatalog.ControlPlane
-	routePlanner routing.Planner
-	availability *availability.Tracker
-	executor     *execution.Executor
-	userKeys     UserCredentialResolver
+	registry       connectors.Registry
+	catalog        *runtimecatalog.ControlPlane
+	routePlanner   routing.Planner
+	availability   *availability.Tracker
+	executor       *execution.Executor
+	outcomes       execution.OutcomePublisher
+	credentialGate OperatorCredentialGate
+	userKeys       UserCredentialResolver
 
 	// Advanced routing features
 	config                       Config
 	latencyTracker               LatencyTracker
 	stickyProviderSessionManager StickyProviderSessionManager
+}
+
+// OperatorCredentialGate admits one exact resolved operator material version.
+type OperatorCredentialGate interface {
+	OperatorMaterialReady(providerID string, materialVersion string) bool
 }
 
 // Option configures the transitional router composition.
@@ -96,6 +103,21 @@ func WithUserCredentials(resolver UserCredentialResolver) Option {
 	}
 }
 
+// WithOutcomePublisher supplies the safe provider invocation outcome sink.
+func WithOutcomePublisher(publisher execution.OutcomePublisher) Option {
+	return func(r *modelRouter) {
+		r.outcomes = publisher
+	}
+}
+
+// WithOperatorCredentialGate prevents a provider-proved bad material version
+// from being retried before its lifecycle owner supplies a replacement.
+func WithOperatorCredentialGate(gate OperatorCredentialGate) Option {
+	return func(r *modelRouter) {
+		r.credentialGate = gate
+	}
+}
+
 // New creates a new model router with all features enabled by default
 func New(registry connectors.Registry, opts ...Option) ModelRouter {
 	config := Config{
@@ -126,7 +148,12 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 		}
 		router.availability = tracker
 	}
-	executor, err := execution.New(router.config.Execution, nil, router.availability)
+	executor, err := execution.New(
+		router.config.Execution,
+		nil,
+		router.availability,
+		router.outcomes,
+	)
 	if err != nil {
 		panic(fmt.Sprintf("router: create attempt executor: %v", err))
 	}
@@ -183,7 +210,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		return nil, fmt.Errorf("plan fallback route: %w", err)
 	}
 	strategy, tenantID := credentialRequestPolicy(req)
-	credentialPolicy, err := newCredentialPolicy(strategy, tenantID, runtime, r.userKeys)
+	credentialPolicy, err := newCredentialPolicy(
+		strategy, tenantID, runtime, r.userKeys, r.credentialGate,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +243,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
 		}
+		execution.RecordCredentialAccepted(attemptCtx)
 		canonical, conversionErr := connectors.ChatResponseToInference(response, planned.Route.ID())
 		if conversionErr != nil {
 			return nil, failure.New(

@@ -61,7 +61,7 @@ func (e *APIError) IsRetryable() bool {
 	switch e.StatusCode {
 	case 429: // Rate limited
 		return true
-	case 500, 502, 503, 504: // Server errors
+	case 500, 502, 503, 504, 529: // Server errors and documented overload
 		return true
 	default:
 		return false

@@ -61,3 +61,55 @@ func TestNormalizeFailurePreservesCanonicalFailure(t *testing.T) {
 		t.Fatal("canonical failure identity changed")
 	}
 }
+
+func TestNormalizeFailureUsesDocumentedAccountAndOfferingScopes(t *testing.T) {
+	tests := []struct {
+		name      string
+		apiError  *APIError
+		wantKind  failure.Kind
+		wantScope failure.StateScope
+	}{
+		{
+			name:     "anthropic billing",
+			apiError: &APIError{StatusCode: 402, Type: "billing_error", Message: "billing"},
+			wantKind: failure.Billing, wantScope: failure.ScopeCredential,
+		},
+		{
+			name:     "openai credits",
+			apiError: &APIError{StatusCode: 429, Code: "credit_balance_exhausted", Message: "credits"},
+			wantKind: failure.Billing, wantScope: failure.ScopeCredential,
+		},
+		{
+			name:     "explicit quota",
+			apiError: &APIError{StatusCode: 429, Code: "insufficient_quota", Message: "quota"},
+			wantKind: failure.Quota, wantScope: failure.ScopeOffering,
+		},
+		{
+			name:     "generic rate limit",
+			apiError: &APIError{StatusCode: 429, Type: "rate_limit_error", Message: "rate"},
+			wantKind: failure.RateLimit, wantScope: failure.ScopeOffering,
+		},
+		{
+			name:     "documented permission",
+			apiError: &APIError{StatusCode: 403, Type: "permission_error", Message: "permission"},
+			wantKind: failure.Permission, wantScope: failure.ScopeCredential,
+		},
+		{
+			name:     "ambiguous permission",
+			apiError: &APIError{StatusCode: 403, Message: "permission"},
+			wantKind: failure.Permission, wantScope: failure.ScopeNone,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			providerFailure := NormalizeFailure("provider", test.apiError)
+			if providerFailure.Kind() != test.wantKind || providerFailure.StateScope() != test.wantScope {
+				t.Fatalf(
+					"got kind %q scope %q, want kind %q scope %q",
+					providerFailure.Kind(), providerFailure.StateScope(),
+					test.wantKind, test.wantScope,
+				)
+			}
+		})
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providerstate"
 )
 
 var (
@@ -33,6 +34,13 @@ type Activation struct {
 	OperatorBaseURL string
 }
 
+// Assessment reports compiled adapter support for every catalog provider and
+// carries an activation only when the provider is executable.
+type Assessment struct {
+	Observation providerstate.AdapterObservation
+	Activation  *Activation
+}
+
 // Activate derives every executable runtime provider from catalog facts. A
 // provider ID labels the activation but never selects compiled behavior.
 func Activate(
@@ -41,6 +49,27 @@ func Activate(
 	authentication *providerauth.Registry,
 	configurations map[catalogs.ProviderID]Configuration,
 ) ([]Activation, error) {
+	assessments, err := Assess(catalog, transports, authentication, configurations)
+	if err != nil {
+		return nil, err
+	}
+	activations := make([]Activation, 0, len(assessments))
+	for _, assessment := range assessments {
+		if assessment.Activation != nil {
+			activations = append(activations, *assessment.Activation)
+		}
+	}
+	return activations, nil
+}
+
+// Assess derives adapter support without using a provider ID to select
+// compiled behavior.
+func Assess(
+	catalog *catalogs.Catalog,
+	transports *connectors.TransportRegistry,
+	authentication *providerauth.Registry,
+	configurations map[catalogs.ProviderID]Configuration,
+) ([]Assessment, error) {
 	if catalog == nil {
 		return nil, errors.New("catalog is required")
 	}
@@ -66,14 +95,13 @@ func Activate(
 	}
 	sort.Slice(providerIDs, func(left, right int) bool { return providerIDs[left] < providerIDs[right] })
 
-	activations := make([]Activation, 0, len(providerIDs))
+	assessments := make([]Assessment, 0, len(providerIDs))
 	for _, providerID := range providerIDs {
 		provider := providersByID[providerID]
 		if provider.Inference == nil {
-			continue
-		}
-		requiresAuth, anonymous, supported := supportedAuthentication(provider, authentication)
-		if !supported {
+			assessments = append(assessments, unsupportedAssessment(
+				providerID, providerstate.AdapterNoOfferings, providerstate.ReasonNoOfferings,
+			))
 			continue
 		}
 
@@ -84,6 +112,9 @@ func Activate(
 			baseURL = strings.TrimSpace(provider.Inference.BaseURL)
 		}
 		if baseURL == "" {
+			assessments = append(assessments, unsupportedAssessment(
+				providerID, providerstate.AdapterNoOfferings, providerstate.ReasonNoOfferings,
+			))
 			continue
 		}
 		configured.Connector.BaseURL = strings.TrimRight(baseURL, "/")
@@ -101,6 +132,7 @@ func Activate(
 		}
 		operations := make(map[catalogs.ProviderOperation]struct{})
 		endpointTypes := make(map[catalogs.EndpointType]struct{})
+		viableEndpoints := 0
 		for _, offering := range offerings {
 			if offering.Availability == catalogs.OfferingAvailabilityUnavailable ||
 				offering.Lifecycle == catalogs.OfferingLifecycleRetired {
@@ -111,6 +143,7 @@ func Activate(
 				if !found {
 					continue
 				}
+				viableEndpoints++
 				if !transports.Supports(endpoint.Type, operation) {
 					continue
 				}
@@ -118,7 +151,27 @@ func Activate(
 				endpointTypes[endpoint.Type] = struct{}{}
 			}
 		}
+		if viableEndpoints == 0 {
+			assessments = append(assessments, unsupportedAssessment(
+				providerID, providerstate.AdapterNoOfferings, providerstate.ReasonNoOfferings,
+			))
+			continue
+		}
 		if len(endpointTypes) == 0 {
+			assessments = append(assessments, unsupportedAssessment(
+				providerID,
+				providerstate.AdapterUnsupportedTransport,
+				providerstate.ReasonTransportUnsupported,
+			))
+			continue
+		}
+		requiresAuth, anonymous, supported := supportedAuthentication(provider, authentication)
+		if !supported {
+			assessments = append(assessments, unsupportedAssessment(
+				providerID,
+				providerstate.AdapterUnsupportedAuthentication,
+				providerstate.ReasonAuthenticationUnsupported,
+			))
 			continue
 		}
 
@@ -141,9 +194,25 @@ func Activate(
 		sort.Slice(activation.EndpointTypes, func(left, right int) bool {
 			return activation.EndpointTypes[left] < activation.EndpointTypes[right]
 		})
-		activations = append(activations, activation)
+		activationCopy := activation
+		assessments = append(assessments, Assessment{
+			Observation: providerstate.AdapterObservation{
+				ProviderID: providerID, State: providerstate.AdapterReady,
+			},
+			Activation: &activationCopy,
+		})
 	}
-	return activations, nil
+	return assessments, nil
+}
+
+func unsupportedAssessment(
+	providerID catalogs.ProviderID,
+	state providerstate.AdapterState,
+	reason providerstate.ReasonCode,
+) Assessment {
+	return Assessment{Observation: providerstate.AdapterObservation{
+		ProviderID: providerID, State: state, Reason: reason,
+	}}
 }
 
 func supportedAuthentication(
@@ -161,7 +230,7 @@ func supportedAuthentication(
 	for _, field := range provider.Credentials.Fields {
 		fields[field.ID] = field
 	}
-	requiresAuth := true
+	requiresAuth := !hasAnonymousInferenceProfile(provider)
 	var anonymous credentials.Material
 	var supported bool
 	for _, profileID := range provider.Credentials.Inference.Alternatives {
@@ -173,12 +242,28 @@ func supportedAuthentication(
 		if profile.Primitive != catalogs.ProviderAuthenticationNone {
 			continue
 		}
-		requiresAuth = false
 		if anonymous.Empty() {
 			anonymous = defaultAnonymousMaterial(profile, fields)
 		}
 	}
 	return requiresAuth, anonymous, supported
+}
+
+func hasAnonymousInferenceProfile(provider catalogs.Provider) bool {
+	if provider.Credentials == nil {
+		return false
+	}
+	profiles := make(map[catalogs.ProviderCredentialProfileID]catalogs.ProviderCredentialProfile)
+	for _, profile := range provider.Credentials.Profiles {
+		profiles[profile.ID] = profile
+	}
+	for _, profileID := range provider.Credentials.Inference.Alternatives {
+		if profile, exists := profiles[profileID]; exists &&
+			profile.Primitive == catalogs.ProviderAuthenticationNone {
+			return true
+		}
+	}
+	return false
 }
 
 func defaultAnonymousMaterial(

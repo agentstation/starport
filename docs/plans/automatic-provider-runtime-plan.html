@@ -109,7 +109,7 @@
     Created: 2026-08-11 ·
     Baseline: main @ b52cd7e286a9a870293155638392ed514b630a47 ·
     Proof root: <code>docs/plans/proof/automatic-provider-runtime/</code> ·
-    Next action: execute APR4 provider state and failure scope
+    Next action: execute APR5 provider operations API
   </p>
 
   <section id="outcome">
@@ -386,8 +386,8 @@
         <tr id="APR1" data-status="done"><td>APR1</td><td>Separate provider-neutral bootstrap and explicit local development bootstrap.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR1.md</code>; <code>0a31858</code>; PR <code>#96</code>; merge <code>1c1f2c0</code>; APR-V01 and APR-V02 pass</td></tr>
         <tr id="APR2" data-status="done"><td>APR2</td><td>Register every executable catalog provider and separate operator credential eligibility from tenant BYOK.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR2.md</code>; <code>fe3748a</code>; APR-V03, APR-V04, and APR-V10 pass</td></tr>
         <tr id="APR3" data-status="done"><td>APR3</td><td>Add credential-driven runtime refresh with interval and manual triggers.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR3.md</code>; <code>3379a96</code>; APR-V06 and APR-V07 pass</td></tr>
-        <tr id="APR4" data-status="in_progress"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="APR5" data-status="todo"><td>APR5</td><td>Add authenticated provider status and runtime refresh controls.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR4" data-status="done"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR4.md</code>; <code>2e894c4</code>; APR-V08 passes</td></tr>
+        <tr id="APR5" data-status="in_progress"><td>APR5</td><td>Add authenticated provider status and runtime refresh controls.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="APR6" data-status="todo"><td>APR6</td><td>Rewrite and verify the first-run documentation and release examples.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR7" data-status="todo"><td>APR7</td><td>Merge, release, and verify public binary, cask, container, and protocol artifacts.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR8" data-status="todo"><td>APR8</td><td>Delete this completed plan, its proof root, and its index entries after the final pull request merges.</td><td><code>todo</code></td><td></td></tr>
@@ -492,6 +492,8 @@
         <tr><td>2026-08-11</td><td>APR3</td><td>started</td><td>Credential-driven startup, interval, and manual reconciliation are now active.</td></tr>
         <tr><td>2026-08-11</td><td>APR3</td><td>done</td><td>Implemented isolated credential reconciliation, typed cloud field supply, cache-only request material, and atomic same-catalog runtime publication in <code>3379a96</code>. APR-V06 and APR-V07 pass. Sol autoreview reported no actionable findings.</td></tr>
         <tr><td>2026-08-11</td><td>APR4</td><td>started</td><td>Typed provider state and evidence-scoped failure transitions are now active.</td></tr>
+        <tr><td>2026-08-11</td><td>APR4</td><td>done</td><td>Implemented safe provider projection, exact operator material-version recovery, and tenant BYOK noninterference in <code>2e894c4</code>. APR-V08 passes. Sol autoreview reported no actionable findings.</td></tr>
+        <tr><td>2026-08-11</td><td>APR5</td><td>started</td><td>Authenticated provider status and bounded manual reconciliation are now active.</td></tr>
       </tbody>
     </table>
   </section>

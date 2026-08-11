@@ -17,6 +17,7 @@ func TestFailureSeparatesSafeAndProviderDetails(t *testing.T) {
 			StatusCode: 429,
 			Code:       "capacity_exhausted",
 			Message:    "provider-only diagnostic token",
+			StateScope: ScopeOffering,
 		},
 		cause,
 	)
@@ -29,5 +30,21 @@ func TestFailureSeparatesSafeAndProviderDetails(t *testing.T) {
 	}
 	if failure.Kind() != RateLimit || !failure.Retryable() || !errors.Is(failure, cause) {
 		t.Fatal("normalized failure semantics changed")
+	}
+	if failure.StateScope() != ScopeOffering {
+		t.Fatal("provider state scope was lost")
+	}
+}
+
+func TestFailureWithoutScopeCannotChangeDurableState(t *testing.T) {
+	providerFailure := New(
+		Permission,
+		"The provider denied the request.",
+		false,
+		ProviderDetails{Provider: "example"},
+		nil,
+	)
+	if providerFailure.StateScope() != ScopeNone {
+		t.Fatal("unscoped provider evidence became durable")
 	}
 }

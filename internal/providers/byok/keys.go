@@ -90,8 +90,16 @@ func (s Strategy) Sources() []CredentialSource {
 // the current failure. Not-configured resolution is represented separately by
 // the caller and always permits an available next source.
 func CanAdvance(providerFailure *failure.Failure) bool {
-	return providerFailure != nil &&
-		(providerFailure.Kind() == failure.Authentication || providerFailure.Kind() == failure.RateLimit)
+	if providerFailure == nil || providerFailure.StateScope() != failure.ScopeCredential {
+		return false
+	}
+	switch providerFailure.Kind() {
+	case failure.Authentication, failure.Permission, failure.Quota,
+		failure.Billing, failure.RateLimit:
+		return true
+	default:
+		return false
+	}
 }
 
 // UnavailableFailure returns the one external credential-availability shape.

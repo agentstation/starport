@@ -12,6 +12,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/providers"
+	"github.com/agentstation/starport/internal/providerstate"
 )
 
 // RefreshProviders forces one shared provider credential reconciliation. The
@@ -21,6 +22,43 @@ func (a *App) RefreshProviders(ctx context.Context) (providers.ReconcileReport, 
 		return providers.ReconcileReport{}, providers.ErrReconcilerRequired
 	}
 	return a.providerReconciler.Reconcile(ctx, true)
+}
+
+// ProviderStates returns one secret-free provider runtime projection.
+func (a *App) ProviderStates() providerstate.Snapshot {
+	if a == nil || a.providerStates == nil {
+		return providerstate.Snapshot{}
+	}
+	return a.providerStates.Snapshot()
+}
+
+func (a *App) publishProviderCatalogState() error {
+	if a == nil || a.catalog == nil {
+		return ErrCatalogRequired
+	}
+	if a.providerStates == nil {
+		return nil
+	}
+	snapshot := a.catalog.Current()
+	if snapshot == nil || snapshot.Catalog() == nil {
+		return ErrCatalogRequired
+	}
+	assessments, err := providers.Assess(
+		snapshot.Catalog(),
+		a.transports,
+		a.authentication,
+		providers.Configurations(a.providerSettings),
+	)
+	if err != nil {
+		return err
+	}
+	observations := make([]providerstate.AdapterObservation, 0, len(assessments))
+	for _, assessment := range assessments {
+		observations = append(observations, assessment.Observation)
+	}
+	return a.providerStates.PublishCatalog(
+		snapshot.GenerationID(), snapshot.Catalog(), observations,
+	)
 }
 
 func (a *App) providerReconcileLoop(ctx context.Context) {

@@ -50,6 +50,7 @@ type managedStream struct {
 	start         StreamAttempt
 	current       Stream
 	currentRoute  routing.Attempt
+	credential    CredentialEvidence
 	evidenceIndex int
 	committed     bool
 	terminal      bool
@@ -100,7 +101,7 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 				s.mu.Unlock()
 				return nil, io.EOF
 			}
-			s.session.succeed(s.evidenceIndex)
+			s.session.succeed(s.evidenceIndex, s.credential)
 			s.terminal = true
 			s.cancel()
 			s.mu.Unlock()
@@ -114,7 +115,7 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 			s.mu.Unlock()
 			return nil, io.EOF
 		}
-		decision := s.session.fail(s.evidenceIndex, providerFailure, action)
+		decision := s.session.fail(s.evidenceIndex, providerFailure, action, s.credential)
 		if s.committed || decision == decisionStop {
 			s.terminal = true
 			s.cancel()
@@ -154,7 +155,12 @@ func (s *managedStream) Close() error {
 	if s.evidenceIndex >= 0 && s.evidenceIndex < len(s.session.evidence) {
 		evidence := &s.session.evidence[s.evidenceIndex]
 		if evidence.State == StateRunning {
-			s.session.fail(s.evidenceIndex, contextFailure(context.Canceled), AttemptActionDefault)
+			s.session.fail(
+				s.evidenceIndex,
+				contextFailure(context.Canceled),
+				AttemptActionDefault,
+				s.credential,
+			)
 		}
 	}
 	current := s.current
@@ -202,18 +208,26 @@ func (s *managedStream) startNext() error {
 		}
 		s.mu.Unlock()
 
-		stream, providerFailure, action := s.start(s.ctx, planned)
+		credential := &credentialRecorder{}
+		attemptCtx := context.WithValue(s.ctx, credentialContextKey{}, credential)
+		stream, providerFailure, action := s.start(attemptCtx, planned)
 
 		s.mu.Lock()
 		providerFailure = s.session.normalizeOutcome(s.ctx, stream != nil, providerFailure)
 		if providerFailure == nil {
 			s.current = stream
 			s.currentRoute = planned
+			s.credential = credential.snapshot()
 			s.evidenceIndex = evidenceIndex
 			s.mu.Unlock()
 			return nil
 		}
-		decision := s.session.fail(evidenceIndex, providerFailure, action)
+		decision := s.session.fail(
+			evidenceIndex,
+			providerFailure,
+			action,
+			credential.snapshot(),
+		)
 		if decision == decisionStop {
 			terminalError := s.session.terminalError(ErrAllAttemptsFailed)
 			s.mu.Unlock()
@@ -255,7 +269,7 @@ func failureFromError(provider string, err error) (*failure.Failure, AttemptActi
 		failure.ProviderUnavailable,
 		"The provider stream failed.",
 		true,
-		failure.ProviderDetails{Provider: provider},
+		failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeOffering},
 		err,
 	), action
 }

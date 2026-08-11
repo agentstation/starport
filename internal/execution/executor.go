@@ -17,6 +17,7 @@ type Executor struct {
 	config       Config
 	clock        Clock
 	availability Availability
+	outcomes     OutcomePublisher
 }
 
 type systemClock struct{}
@@ -38,14 +39,21 @@ func (systemClock) Sleep(ctx context.Context, duration time.Duration) error {
 }
 
 // New creates an executor with explicit total-budget policy.
-func New(config Config, clock Clock, availability Availability) (*Executor, error) {
+func New(
+	config Config,
+	clock Clock,
+	availability Availability,
+	outcomes OutcomePublisher,
+) (*Executor, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
 	if clock == nil {
 		clock = systemClock{}
 	}
-	return &Executor{config: config, clock: clock, availability: availability}, nil
+	return &Executor{
+		config: config, clock: clock, availability: availability, outcomes: outcomes,
+	}, nil
 }
 
 // ExecuteChat executes one immutable plan for a non-streaming request.
@@ -131,12 +139,12 @@ func executeInference[T any](
 			return nil, err
 		}
 
-		attemptCtx, cancel := session.attemptContext(ctx)
+		attemptCtx, cancel, credential := session.attemptContext(ctx)
 		response, providerFailure, action := attempt(attemptCtx, planned)
 		providerFailure = session.normalizeOutcome(attemptCtx, response != nil, providerFailure)
 		cancel()
 		if providerFailure == nil {
-			session.succeed(evidenceIndex)
+			session.succeed(evidenceIndex, credential.snapshot())
 			return &inferenceResult[T]{
 				response:   clone(*response),
 				route:      planned.Route,
@@ -146,7 +154,7 @@ func executeInference[T any](
 			}, nil
 		}
 
-		decision := session.fail(evidenceIndex, providerFailure, action)
+		decision := session.fail(evidenceIndex, providerFailure, action, credential.snapshot())
 		if decision == decisionStop {
 			return nil, session.terminalError(ErrAllAttemptsFailed)
 		}
@@ -249,23 +257,27 @@ func (s *session) begin(ctx context.Context) (routing.Attempt, int, error) {
 	}
 }
 
-func (s *session) succeed(evidenceIndex int) {
+func (s *session) succeed(evidenceIndex int, credential CredentialEvidence) {
 	now := s.executor.clock.Now()
 	evidence := &s.evidence[evidenceIndex]
 	evidence.State = StateSucceeded
 	evidence.FinishedAt = now
 	evidence.Duration = nonNegativeDuration(evidence.StartedAt, now)
 	evidence.Transitions = append(evidence.Transitions, Transition{From: StateRunning, To: StateSucceeded, At: now})
-	if s.executor.availability != nil {
+	if s.executor.availability != nil && credential.Owner != CredentialOwnerTenant {
 		s.executor.availability.RecordSuccess(evidence.Route, evidence.Duration)
 		s.availabilityHeld = false
+	} else if credential.Owner == CredentialOwnerTenant {
+		s.releaseAvailability()
 	}
+	s.publishOutcome(evidence.Route, credential, nil)
 }
 
 func (s *session) fail(
 	evidenceIndex int,
 	providerFailure *failure.Failure,
 	action AttemptAction,
+	credential CredentialEvidence,
 ) decision {
 	now := s.executor.clock.Now()
 	evidence := &s.evidence[evidenceIndex]
@@ -279,12 +291,13 @@ func (s *session) fail(
 	evidence.Failure = providerFailure
 	evidence.Transitions = append(evidence.Transitions, Transition{From: StateRunning, To: state, At: now})
 	s.lastFailure = providerFailure
+	s.publishOutcome(evidence.Route, credential, providerFailure)
 	if state == StateCanceled {
 		if action == AttemptActionStop {
 			s.releaseAvailability()
 			return decisionStop
 		}
-		s.recordFailure(evidence, providerFailure)
+		s.recordFailure(evidence, providerFailure, credential)
 		return decisionStop
 	}
 	if action == AttemptActionContinueRoute && s.actualAttempts < s.executor.config.MaxAttempts {
@@ -308,7 +321,7 @@ func (s *session) fail(
 		s.releaseAvailability()
 		return decisionStop
 	}
-	s.recordFailure(evidence, providerFailure)
+	s.recordFailure(evidence, providerFailure, credential)
 	if canRetry(providerFailure) && s.routeRetry < s.executor.config.MaxRetriesPerRoute && s.actualAttempts < s.executor.config.MaxAttempts {
 		s.routeRetry++
 		return decisionRetry
@@ -321,8 +334,16 @@ func (s *session) fail(
 	return decisionStop
 }
 
-func (s *session) recordFailure(evidence *AttemptEvidence, providerFailure *failure.Failure) {
+func (s *session) recordFailure(
+	evidence *AttemptEvidence,
+	providerFailure *failure.Failure,
+	credential CredentialEvidence,
+) {
 	if s.executor.availability == nil {
+		return
+	}
+	if credential.Owner == CredentialOwnerTenant {
+		s.releaseAvailability()
 		return
 	}
 	s.executor.availability.RecordFailure(evidence.Route, providerFailure, evidence.Duration)
@@ -361,15 +382,33 @@ func (s *session) retryDelay() time.Duration {
 	return delay
 }
 
-func (s *session) attemptContext(ctx context.Context) (context.Context, context.CancelFunc) {
+func (s *session) attemptContext(
+	ctx context.Context,
+) (context.Context, context.CancelFunc, *credentialRecorder) {
+	recorder := &credentialRecorder{}
 	if s.executor.config.MaxElapsed <= 0 {
-		return context.WithCancel(ctx)
+		attemptCtx, cancel := context.WithCancel(ctx)
+		return context.WithValue(attemptCtx, credentialContextKey{}, recorder), cancel, recorder
 	}
 	remaining := s.executor.config.MaxElapsed - nonNegativeDuration(s.startedAt, s.executor.clock.Now())
 	if remaining <= 0 {
 		remaining = time.Nanosecond
 	}
-	return context.WithTimeout(ctx, remaining)
+	attemptCtx, cancel := context.WithTimeout(ctx, remaining)
+	return context.WithValue(attemptCtx, credentialContextKey{}, recorder), cancel, recorder
+}
+
+func (s *session) publishOutcome(
+	route routing.Route,
+	credential CredentialEvidence,
+	providerFailure *failure.Failure,
+) {
+	if s.executor.outcomes == nil {
+		return
+	}
+	s.executor.outcomes.PublishOutcome(AttemptOutcome{
+		Route: route, Credential: credential, Failure: providerFailure,
+	})
 }
 
 func (s *session) normalizeOutcome(ctx context.Context, hasResult bool, providerFailure *failure.Failure) *failure.Failure {
@@ -428,7 +467,8 @@ func CanFallback(providerFailure *failure.Failure) bool {
 		return false
 	}
 	switch providerFailure.Kind() {
-	case failure.RateLimit, failure.NotFound, failure.ContextLimit, failure.ContentBlocked, failure.ProviderUnavailable, failure.Timeout:
+	case failure.RateLimit, failure.Quota, failure.NotFound, failure.ContextLimit,
+		failure.ContentBlocked, failure.ProviderUnavailable, failure.Timeout:
 		return true
 	default:
 		return false

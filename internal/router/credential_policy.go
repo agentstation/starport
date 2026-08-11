@@ -23,6 +23,7 @@ type UserCredentialResolver interface {
 type credentialPolicy struct {
 	runtime  connectors.RuntimeLease
 	userKeys UserCredentialResolver
+	gate     OperatorCredentialGate
 	tenantID string
 	sources  []byok.CredentialSource
 	states   map[string]credentialRouteState
@@ -43,6 +44,7 @@ func newCredentialPolicy(
 	tenantID string,
 	runtime connectors.RuntimeLease,
 	userKeys UserCredentialResolver,
+	gate OperatorCredentialGate,
 ) (*credentialPolicy, error) {
 	parsedStrategy, err := byok.ParseStrategy(string(strategy))
 	if err != nil {
@@ -53,7 +55,7 @@ func newCredentialPolicy(
 		sources = []byok.CredentialSource{byok.CredentialSourceOperator}
 	}
 	return &credentialPolicy{
-		runtime: runtime, userKeys: userKeys, tenantID: tenantID,
+		runtime: runtime, userKeys: userKeys, gate: gate, tenantID: tenantID,
 		sources: sources, states: make(map[string]credentialRouteState),
 	}, nil
 }
@@ -104,8 +106,24 @@ func (p *credentialPolicy) resolve(
 		err = errors.New("unsupported credential source")
 	}
 	if err == nil {
+		if source == byok.CredentialSourceOperator && p.gate != nil &&
+			!p.gate.OperatorMaterialReady(route.ProviderID, material.Version()) {
+			providerFailure := failure.New(
+				failure.Authentication,
+				"Provider credentials are unavailable.",
+				false,
+				failure.ProviderDetails{Provider: route.ProviderID},
+				nil,
+			)
+			if p.advance(route, providerFailure) {
+				return credentialSelection{}, providerFailure, execution.AttemptActionContinueRoute
+			}
+			return credentialSelection{}, providerFailure, execution.AttemptActionFallbackRoute
+		}
+		execution.RecordCredential(ctx, credentialEvidence(source, material))
 		return credentialSelection{material: material, source: source}, nil, execution.AttemptActionDefault
 	}
+	execution.RecordCredential(ctx, credentialEvidence(source, material))
 	providerFailure, notConfigured := credentialResolutionFailure(route.ProviderID, err)
 	if notConfigured && p.advance(route, nil) {
 		return credentialSelection{}, providerFailure, execution.AttemptActionContinueRoute
@@ -124,8 +142,25 @@ func (p *credentialPolicy) resolve(
 	return credentialSelection{}, providerFailure, execution.AttemptActionStop
 }
 
+func credentialEvidence(
+	source byok.CredentialSource,
+	material credentials.Material,
+) execution.CredentialEvidence {
+	owner := execution.CredentialOwner("")
+	switch source {
+	case byok.CredentialSourceOperator:
+		owner = execution.CredentialOwnerOperator
+	case byok.CredentialSourceUser:
+		owner = execution.CredentialOwnerTenant
+	}
+	return execution.CredentialEvidence{
+		Owner: owner, MaterialVersion: material.Version(),
+	}
+}
+
 func (p *credentialPolicy) afterFailure(route routing.Route, providerFailure *failure.Failure) execution.AttemptAction {
-	if !byok.CanAdvance(providerFailure) {
+	if providerFailure == nil || providerFailure.StateScope() != failure.ScopeCredential ||
+		!byok.CanAdvance(providerFailure) {
 		return execution.AttemptActionDefault
 	}
 	if p.advance(route, providerFailure) {

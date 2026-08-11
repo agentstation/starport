@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providerstate"
 )
 
 func TestCatalogProviderRegistersWithoutOperatorMaterial(t *testing.T) {
@@ -113,6 +114,21 @@ func TestActivationSkipsUnsupportedAuthenticationPrimitive(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotContains(t, activationProviderIDs(activations), catalogs.ProviderIDOpenAI)
+	assessments, err := Assess(catalog, transports, authentication, nil)
+	require.NoError(t, err)
+	for _, assessment := range assessments {
+		if assessment.Observation.ProviderID != catalogs.ProviderIDOpenAI {
+			continue
+		}
+		require.Nil(t, assessment.Activation)
+		require.Equal(
+			t,
+			providerstate.AdapterUnsupportedAuthentication,
+			assessment.Observation.State,
+		)
+		return
+	}
+	t.Fatal("OpenAI assessment was not projected")
 }
 
 func activationProviderIDs(activations []Activation) []catalogs.ProviderID {

@@ -53,6 +53,7 @@ func TestProviderReconcilerIntervalPublishesChangedGeneration(t *testing.T) {
 		nil,
 		application.publishProviderRuntime,
 		time.Second,
+		nil,
 	)
 	require.NoError(t, err)
 	require.NoError(t, reconciler.Adopt(view, nil))

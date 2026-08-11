@@ -22,3 +22,7 @@ No implementation evidence exists at plan authorship.
   local development runtime.
 - [`APR2.md`](APR2.md): catalog-wide provider registration, request-bound
   endpoint binding, and credential-independent readiness.
+- [`APR3.md`](APR3.md): credential-driven startup, interval, and manual
+  reconciliation with atomic runtime publication.
+- [`APR4.md`](APR4.md): secret-free provider state, evidence-scoped failures,
+  and exact material-version recovery.

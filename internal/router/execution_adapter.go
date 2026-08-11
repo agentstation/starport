@@ -39,7 +39,9 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		return nil, err
 	}
 	strategy, tenantID := credentialRequestPolicy(req)
-	credentialPolicy, err := newCredentialPolicy(strategy, tenantID, runtime, r.userKeys)
+	credentialPolicy, err := newCredentialPolicy(
+		strategy, tenantID, runtime, r.userKeys, r.credentialGate,
+	)
 	if err != nil {
 		if owned {
 			runtime.Release()
@@ -73,6 +75,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, streamErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
 		}
+		execution.RecordCredentialAccepted(attemptCtx)
 		return &connectorEventStream{
 			stream:   stream,
 			provider: planned.Route.ProviderID,

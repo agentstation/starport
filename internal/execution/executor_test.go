@@ -105,7 +105,7 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 			nil,
 		)
 		require.NoError(t, err)
-		executor, err := New(testConfig(), newFakeClock(), tracker)
+		executor, err := New(testConfig(), newFakeClock(), tracker, nil)
 		require.NoError(t, err)
 		calls := 0
 		_, err = executor.ExecuteChat(context.Background(), testPlan(t, "provider-a/model"), func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
@@ -128,7 +128,7 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 		require.NoError(t, err)
 		config := testConfig()
 		config.MaxRetriesPerRoute = 2
-		executor, err := New(config, newFakeClock(), tracker)
+		executor, err := New(config, newFakeClock(), tracker, nil)
 		require.NoError(t, err)
 		calls := map[string]int{}
 		result, err := executor.ExecuteChat(
@@ -161,7 +161,7 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 		require.NoError(t, err)
 		config := testConfig()
 		config.MaxAttempts = 2
-		executor, err := New(config, clock, tracker)
+		executor, err := New(config, clock, tracker, nil)
 		require.NoError(t, err)
 		plan := testPlan(t, "provider-a/model")
 		_, err = executor.ExecuteChat(context.Background(), plan, func(_ context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
@@ -333,7 +333,7 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 		config := testConfig()
 		config.MaxAttempts = 2
 		config.MaxRetriesPerRoute = 1
-		executor, err := New(config, clock, tracker)
+		executor, err := New(config, clock, tracker, nil)
 		require.NoError(t, err)
 		plan := testPlan(t, "provider-a/model")
 
@@ -354,6 +354,67 @@ func TestAttemptStateAndRetryBudgetContract(t *testing.T) {
 	})
 }
 
+func TestExecutionPublishesCredentialOutcome(t *testing.T) {
+	outcomes := &captureOutcomePublisher{}
+	executor, err := New(testConfig(), newFakeClock(), nil, outcomes)
+	require.NoError(t, err)
+	plan := testPlan(t, "provider-a/model")
+
+	_, err = executor.ExecuteChat(
+		context.Background(),
+		plan,
+		func(ctx context.Context, attempt routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			RecordCredential(ctx, CredentialEvidence{
+				Owner: CredentialOwnerOperator, MaterialVersion: "opaque-v1",
+			})
+			return nil, failure.New(
+				failure.Authentication,
+				"authentication failed",
+				false,
+				failure.ProviderDetails{
+					Provider:   attempt.Route.ProviderID,
+					StateScope: failure.ScopeCredential,
+				},
+				nil,
+			), AttemptActionStop
+		},
+	)
+	require.Error(t, err)
+	require.Len(t, outcomes.outcomes, 1)
+	require.Equal(t, CredentialOwnerOperator, outcomes.outcomes[0].Credential.Owner)
+	require.Equal(t, "opaque-v1", outcomes.outcomes[0].Credential.MaterialVersion)
+	require.Equal(t, failure.Authentication, outcomes.outcomes[0].Failure.Kind())
+}
+
+func TestTenantCredentialOutcomeDoesNotChangeOfferingAvailability(t *testing.T) {
+	tracker, err := availability.New(
+		availability.Config{FailureThreshold: 1, OpenDuration: time.Minute}, nil, nil,
+	)
+	require.NoError(t, err)
+	executor, err := New(testConfig(), newFakeClock(), tracker, nil)
+	require.NoError(t, err)
+	plan := testPlan(t, "provider-a/model")
+
+	_, err = executor.ExecuteChat(
+		context.Background(),
+		plan,
+		func(ctx context.Context, _ routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
+			RecordCredential(ctx, CredentialEvidence{
+				Owner: CredentialOwnerTenant, MaterialVersion: "tenant-v1",
+			})
+			return nil, failure.New(
+				failure.RateLimit,
+				"rate limited",
+				true,
+				failure.ProviderDetails{StateScope: failure.ScopeOffering},
+				nil,
+			), AttemptActionDefault
+		},
+	)
+	require.Error(t, err)
+	require.Empty(t, tracker.Snapshot().Records)
+}
+
 func testConfig() Config {
 	return Config{
 		MaxAttempts: 3, MaxRetriesPerRoute: 0, MaxElapsed: time.Minute,
@@ -361,9 +422,17 @@ func testConfig() Config {
 	}
 }
 
+type captureOutcomePublisher struct {
+	outcomes []AttemptOutcome
+}
+
+func (p *captureOutcomePublisher) PublishOutcome(outcome AttemptOutcome) {
+	p.outcomes = append(p.outcomes, outcome)
+}
+
 func newTestExecutor(t *testing.T, clock Clock, config Config) *Executor {
 	t.Helper()
-	executor, err := New(config, clock, nil)
+	executor, err := New(config, clock, nil, nil)
 	require.NoError(t, err)
 	return executor
 }
@@ -399,7 +468,7 @@ func retryableFailure(provider string) *failure.Failure {
 		failure.ProviderUnavailable,
 		"provider failed",
 		true,
-		failure.ProviderDetails{Provider: provider},
+		failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeOffering},
 		errors.New("provider failed"),
 	)
 }

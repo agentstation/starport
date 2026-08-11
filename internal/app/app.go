@@ -15,6 +15,7 @@ import (
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/availability"
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/chatui"
@@ -25,6 +26,7 @@ import (
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providerstate"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/registry"
@@ -69,6 +71,8 @@ type App struct {
 	transports         *connectors.TransportRegistry
 	authentication     *providerauth.Registry
 	providerReconciler *providers.Reconciler
+	providerStates     *providerstate.Store
+	availability       *availability.Tracker
 	newConnector       func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	lifecycle          []lifecycleEntry
 	runtimeWG          sync.WaitGroup
@@ -204,12 +208,17 @@ func (b *runtimeBuilder) openConcepts() error {
 			log.Warn().Err(err).Msg("startup Starmap catalog refresh failed; retaining current generation")
 		}
 	}
+	b.application.providerStates = providerstate.New()
+	if err := b.application.publishProviderCatalogState(); err != nil {
+		return fmt.Errorf("project provider catalog state: %w", err)
+	}
 	providerReconciler, err := providers.NewReconciler(
 		b.application.currentProviderCatalogView,
 		b.config,
 		b.application.providerSettings,
 		b.application.publishProviderRuntime,
 		b.config.CredentialSources.ReconcileTimeout,
+		b.application.providerStates,
 	)
 	if err != nil {
 		return fmt.Errorf("open provider reconciler: %w", err)
@@ -322,9 +331,23 @@ func (b *runtimeBuilder) openCache() error {
 
 func (b *runtimeBuilder) buildGateway() error {
 	registryAdapter := connectorRegistryAdapter{registry: b.application.registry}
+	availabilityOwner, err := availability.New(
+		availability.DefaultConfig(),
+		nil,
+		providerAvailabilityPublisher{
+			catalog: b.application.catalog, states: b.application.providerStates,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("open provider availability owner: %w", err)
+	}
+	b.application.availability = availabilityOwner
 	modelRouter := router.New(
 		registryAdapter,
 		router.WithCatalog(b.application.catalog),
+		router.WithAvailability(availabilityOwner),
+		router.WithOutcomePublisher(b.application.providerStates),
+		router.WithOperatorCredentialGate(b.application.providerStates),
 		router.WithUserCredentials(b.providerKeys),
 	)
 	proxyOptions := make([]proxy.Option, 0, 1)
@@ -654,6 +677,9 @@ func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogSta
 	}
 	if err := a.registry.Publish(candidate, snapshot); err != nil {
 		return errors.Join(err, candidate.Close())
+	}
+	if err := a.publishProviderCatalogState(); err != nil {
+		return err
 	}
 	a.config.Providers = config.CloneProvidersConfig(resolved)
 	if a.providerReconciler != nil {
