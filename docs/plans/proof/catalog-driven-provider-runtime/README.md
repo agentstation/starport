@@ -102,5 +102,6 @@ package deltas are mandatory evidence, but they are not admission limits.
 - [CDP7 request credential policy and operator surfaces](cdp7.md): exact BYOK
   order, tenant isolation, and neutral availability handling passed.
   Catalog-driven surfaces passed for chat, streaming, and embeddings.
-- Per-adapter dependency, binary, lifecycle, and conformance evidence from
-  CDP7.1.
+- [CDP7.1 Starport direct secret sources](cdp7.1.md): all five sources passed
+  dependency and security checks. Lifecycle, cancellation, and warmed-cache
+  checks also passed.

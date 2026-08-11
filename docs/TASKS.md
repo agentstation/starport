@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP7.1 measures and implements accepted direct secret-source adapters in Starport. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP8 activates verified remote Starmap generations in Starport. |
 
 ### Proposed Work
 
