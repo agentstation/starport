@@ -6,4 +6,7 @@ No active durable plan exists.
 
 ## Proposed
 
-No proposed durable plan exists.
+- [Automatic provider runtime](automatic-provider-runtime-plan.html): derive
+  provider support and the inference authentication contract from Starmap,
+  then resolve deployment-owned credential material. Separate bootstrap,
+  provider eligibility, tenant BYOK, and observed provider state.
