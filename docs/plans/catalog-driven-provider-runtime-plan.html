@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-10.<br>
 Baseline: Starport main @ <code>101c32d</code>. Starmap main @ <code>7f53767</code>.<br>
 Proof root: <code>docs/plans/proof/catalog-driven-provider-runtime/</code>.<br>
-Next action: CDP9.1 replaces the unsupported release-size gate with exact measurement evidence, then completes merge and public readback.</p>
+Next action: CDP10 merges the terminal evidence, then deletes this completed control plane and its proof root.</p>
 
 <section id="outcome">
 <h2>Outcome</h2>
@@ -80,8 +80,8 @@ Next action: CDP9.1 replaces the unsupported release-size gate with exact measur
 <tr id="CDP7.1" data-status="done"><td>CDP7.1</td><td>Starport direct secret-source measurements and accepted adapters.</td><td><code>done</code></td><td>Starport commit <code>b66d415</code>. All five direct sources passed dependency, license, vulnerability, provenance, lifecycle, cancellation, warmed-cache, and uncapped race checks. The implementation adds 61,440 bytes, or 0.1102 percent, and no new linked module or source owner. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp7.1.md</code>.</td></tr>
 <tr id="CDP8" data-status="done"><td>CDP8</td><td>Verified remote catalog activation and recovery.</td><td><code>done</code></td><td>Starport commit <code>5e50d70</code>. Authenticated remote <code>acme</code> activation, independent remote and accepted pointers, restart recovery, failure retention, bounded fetches, uncapped race tests, both 12/12 architecture verifiers, all 19 campaign checks, and all SDK smokes passed. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp8.md</code>.</td></tr>
 <tr id="CDP9" data-status="done"><td>CDP9</td><td>Cross-repository conformance, documentation, and review.</td><td><code>done</code></td><td>Both ready pull requests were published after all local gates and protected pre-PR reviews passed.</td></tr>
-<tr id="CDP9.1" data-status="in_progress"><td>CDP9.1</td><td>Merge, release, installation, and public readback.</td><td><code>in_progress</code></td><td>Verify hosted checks, merge Starmap before Starport, then verify both public releases.</td></tr>
-<tr id="CDP10" data-status="todo"><td>CDP10</td><td>Cleanup after the final pull request merges.</td><td><code>todo</code></td><td></td></tr>
+<tr id="CDP9.1" data-status="done"><td>CDP9.1</td><td>Merge, release, installation, and public readback.</td><td><code>done</code></td><td>Starmap v0.4.1, catalog generation <code>81d1cebe-53e3-4dc0-9ce6-f4f8f0e65b3f</code>, Starport v1.0.2, both Homebrew installations, the GHCR image, rollback, and independent public readback passed. Release size is measured evidence and does not change concept ownership. See <code>docs/plans/proof/catalog-driven-provider-runtime/cdp9.1.md</code>.</td></tr>
+<tr id="CDP10" data-status="in_progress"><td>CDP10</td><td>Cleanup after the final pull request merges.</td><td><code>in_progress</code></td><td>Pull request #92 merged the exact dependency update from #86, and #86 closed with supersession evidence. Merge the terminal proof, then delete the completed control plane.</td></tr>
 </tbody></table>
 
 </section>
@@ -520,9 +520,9 @@ Next action: CDP9.1 replaces the unsupported release-size gate with exact measur
 
 <li><strong>Steps:</strong> Replace the unsupported fixed release-size gate with exact measurement and an optional approved-budget input. Preserve Starmap-owned in-process acquisition, startup refresh, and scheduled refresh. Record exact release-size evidence and its review disposition. Merge the exact green heads. Publish Starmap before Starport. Verify assets, checksums, attestations, catalog generation, casks, images, and rollback.</li>
 
-<li><strong>Acceptance:</strong> The exact release build reports every executable size and records the review disposition without applying an unsupported numeric gate. An explicitly approved future hard budget can be supplied to the verifier. Local startup and scheduled acquisition still use Starmap and preserve acquisition/inference credential-plane isolation. Exact-version installs pass on macOS and Linux. OpenRouter SDK smoke checks pass. Public release readback passes for both products.</li>
+<li><strong>Acceptance:</strong> The exact release build reports every executable size and records the review disposition without applying an unsupported numeric gate. The verifier accepts an explicitly approved future hard budget. Local startup and scheduled acquisition still use Starmap and preserve acquisition/inference credential-plane isolation. Exact-version installs pass on macOS and Linux. OpenRouter SDK smoke checks pass. Public release readback passes for both products.</li>
 
-<li><strong>Fail-before:</strong> Hosted release checks measured a 56,086,793-byte Linux executable and a 57,234,720-byte Darwin x86_64 executable against a 52,428,800-byte threshold that repository history does not tie to an approved product or operational requirement. The revised public releases do not exist.</li>
+<li><strong>Fail-before:</strong> Hosted release checks measured Linux at 56,086,793 bytes and Darwin x86_64 at 57,234,720 bytes. Repository history does not tie the 52,428,800-byte threshold to an approved product or operational requirement. The revised public releases do not exist.</li>
 
 <li><strong>Verification:</strong> Run exact release builds, both release checks, public readback, exact-version install tests, Homebrew audits, SDK smoke tests, and hosted required checks.</li></ul>
 
@@ -538,7 +538,7 @@ Next action: CDP9.1 replaces the unsupported release-size gate with exact measur
 
 <li><strong>Fail-before:</strong> Not applicable because the merge triggers cleanup.</li>
 
-<li><strong>Verification:</strong> Read pull request #86 after the final Starport merge. If it remains necessary, require its hosted checks before merge. If it is superseded, compare its two workflow changes with <code>main</code> before close. Search both repositories for the plan slug. Confirm clean primary worktrees and protected <code>main</code> branches.</li></ul>
+<li><strong>Verification:</strong> Read pull request #86 after the final Starport merge. If it remains necessary, require its hosted checks before merge. If <code>main</code> supersedes it, compare its two workflow changes before close. Search both repositories for the plan slug. Confirm clean primary worktrees and protected <code>main</code> branches.</li></ul>
 
 </section>
 
@@ -581,6 +581,8 @@ Next action: CDP9.1 replaces the unsupported release-size gate with exact measur
 <tr><td>2026-08-11</td><td>CDP10</td><td>closeout obligation added</td><td>Starport pull request <a href="https://github.com/agentstation/starport/pull/86">#86</a> is open, green on its prior head, mergeable, and behind <code>main</code>. CDP10 will compare it with final <code>main</code>, then merge a still-needed green update or close an exact supersession before plan cleanup.</td></tr>
 <tr><td>2026-08-11</td><td>CDP9.1</td><td>release-size investigation</td><td>Starport hosted security first found one public-header false positive. Commit <code>d7744d1</code> added the exact G101 suppression, and the rerun passed security. The same run measured Linux and Darwin release binaries above the fixed 52,428,800-byte threshold. Import tracing identified the Starmap acquisition closure, which started a boundary review.</td></tr>
 <tr><td>2026-08-11</td><td>CDP9.1</td><td>size-policy audit</td><td>Commit history proved that 52,428,800 bytes was introduced only to make dependency growth visible and replaced an unsupported 10 MiB value. No product or operational requirement supports the number. In-process acquisition was an accepted Starmap-owned feature with startup, scheduled-refresh, workspace, and single-binary DX contracts, so the review preserved it. CDP9.1 restores size to a review measurement and keeps optional enforcement only for a future explicitly approved hard budget.</td></tr>
+<tr><td>2026-08-11</td><td>CDP9.1</td><td>done; CDP10 started</td><td>Starmap pull request #73 merged as <code>91319bc</code>, immutable v0.4.1 and Homebrew passed public readback, and catalog generation <code>81d1cebe-53e3-4dc0-9ce6-f4f8f0e65b3f</code> passed provenance and rollback verification. Starport pull request #91 merged as <code>a13e47d</code>; immutable v1.0.2, the attested container, exact cask installs, all 19 campaign checks, and public readback passed. The exact size report kept acquisition intact and applied no unsupported hard limit.</td></tr>
+<tr><td>2026-08-11</td><td>CDP10</td><td>in progress</td><td>Starport pull request #92 merged as <code>7a2c666</code> after all hosted gates passed. It contains the exact Homebrew action update from pull request #86 and the linked-artifact metadata hardening. Pull request #86 closed with exact supersession evidence. Terminal proof must merge before plan deletion.</td></tr>
 </tbody></table>
 
 </section>

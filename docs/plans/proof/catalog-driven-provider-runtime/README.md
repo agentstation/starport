@@ -2,7 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP9.1 is the current task.
+The plan status is `active`. CDP10 is the current task.
 
 ## Pinned source state
 
@@ -113,3 +113,7 @@ package deltas are mandatory evidence, but they are not admission limits.
   passed their final local gates. The campaign passed all 19 conditions. All
   14 shared source vectors matched. Protected pre-PR reviews found no
   actionable issue. Both ready pull requests now exist.
+- [CDP9.1 merge, release, and public readback](cdp9.1.md): Starmap v0.4.1,
+  the post-release catalog generation, Starport v1.0.2, both casks, the GHCR
+  image, checksums, attestations, rollback, and independent public readback
+  passed. Binary size remains review evidence, not an unsupported hard gate.
