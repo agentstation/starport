@@ -78,6 +78,7 @@ func routerAdapterAvailability(
 		Configured:    true,
 		Operations:    append([]catalogs.ProviderOperation(nil), offering.Service.Operations...),
 		EndpointTypes: types,
+		BaseURL:       "https://provider.test",
 	}
 }
 

@@ -189,5 +189,6 @@ func testAdapterAvailability(
 		Configured:    configured,
 		Operations:    append([]catalogs.ProviderOperation(nil), offering.Service.Operations...),
 		EndpointTypes: types,
+		BaseURL:       "https://provider.test",
 	}
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 
@@ -62,10 +63,11 @@ func TestAuthPlanesAreIsolated(t *testing.T) {
 	require.NoError(t, err)
 	provider, err := runtime.ControlPlane().Current().Catalog().Provider(catalogs.ProviderIDOpenAI)
 	require.NoError(t, err)
-	acquisitionSecret, err := provider.APIKeyValue()
-	require.NoError(t, err)
-	require.Equal(t, "sk-acquisition-secret", acquisitionSecret)
-	require.NotEqual(t, cfg.Providers.OpenAI.APIKey, acquisitionSecret)
+	acquisitionField, found := credentialFieldForEnvironment(provider.Credentials, "OPENAI_API_KEY")
+	require.True(t, found)
+	require.Equal(t, catalogs.ProviderCredentialFieldSecret, acquisitionField.Kind)
+	require.NotContains(t, fmt.Sprintf("%#v", provider), "sk-acquisition-secret")
+	require.NotEqual(t, cfg.Providers.OpenAI.APIKey, "sk-acquisition-secret")
 }
 
 func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
@@ -78,10 +80,12 @@ func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
 		acquisition.WithProviderClientFactory(func(
 			provider *catalogs.Provider,
 		) (sources.ProviderClient, error) {
-			var credentialErr error
-			capturedSecret, credentialErr = provider.APIKeyValue()
-			if credentialErr != nil {
-				return nil, credentialErr
+			credentialField, found := credentialFieldForEnvironment(
+				provider.Credentials,
+				"OPENAI_API_KEY",
+			)
+			if !found {
+				return nil, fmt.Errorf("OPENAI_API_KEY credential field is required")
 			}
 			modelIDs := make([]string, 0, len(provider.Models))
 			for modelID, model := range provider.Models {
@@ -97,7 +101,17 @@ func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
 			if len(models) > 0 {
 				models[0].Name += " observed"
 			}
-			return staticProviderCatalogClient{models: models}, nil
+			return staticProviderCatalogClient{
+				models: models,
+				capture: func(material sources.ProviderCredentialMaterial) error {
+					value, exists := material.Value(credentialField.ID)
+					if !exists {
+						return fmt.Errorf("resolved %s credential is required", credentialField.ID)
+					}
+					capturedSecret = value
+					return nil
+				},
+			}, nil
 		}),
 	)
 	require.NoError(t, err)
@@ -116,14 +130,37 @@ func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
 }
 
 type staticProviderCatalogClient struct {
-	models []catalogs.Model
+	models  []catalogs.Model
+	capture func(sources.ProviderCredentialMaterial) error
 }
 
-func (c staticProviderCatalogClient) ListModels(context.Context) ([]catalogs.Model, error) {
+func (c staticProviderCatalogClient) ListModels(
+	_ context.Context,
+	material sources.ProviderCredentialMaterial,
+) ([]catalogs.Model, error) {
+	if c.capture != nil {
+		if err := c.capture(material); err != nil {
+			return nil, err
+		}
+	}
 	return append([]catalogs.Model(nil), c.models...), nil
 }
 
-func (staticProviderCatalogClient) IsAPIKeyRequired() bool { return true }
-func (staticProviderCatalogClient) HasAPIKey() bool        { return true }
-
 var _ sources.ProviderClient = staticProviderCatalogClient{}
+
+func credentialFieldForEnvironment(
+	credentials *catalogs.ProviderCredentials,
+	environment string,
+) (catalogs.ProviderCredentialField, bool) {
+	if credentials == nil {
+		return catalogs.ProviderCredentialField{}, false
+	}
+	for _, field := range credentials.Fields {
+		for _, name := range field.Environment {
+			if name == environment {
+				return field, true
+			}
+		}
+	}
+	return catalogs.ProviderCredentialField{}, false
+}
