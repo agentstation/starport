@@ -28,10 +28,8 @@ func TestOfferingCacheCapability(t *testing.T) {
 	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{
 		ProviderID:    providerID,
 		Registered:    true,
-		Configured:    true,
 		Operations:    append([]catalogs.ProviderOperation(nil), offering.Service.Operations...),
 		EndpointTypes: types,
-		BaseURL:       "https://provider.test",
 	}))
 
 	routeID := string(providerID) + "/" + string(offering.ProviderModelID)
@@ -64,9 +62,8 @@ func TestOfferingPriceHasNoFallback(t *testing.T) {
 		types = append(types, endpoint.Type)
 	}
 	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{
-		ProviderID: providerID, Registered: true, Configured: true,
+		ProviderID: providerID, Registered: true,
 		Operations: offering.Service.Operations, EndpointTypes: types,
-		BaseURL: "https://provider.test",
 	}))
 	_, found := plane.Current().ResolveRoute(string(providerID) + "/" + string(offering.ProviderModelID))
 	require.True(t, found)

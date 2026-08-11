@@ -97,8 +97,11 @@ func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
 		transports,
 		authentication,
 		providers.Configurations(resolved),
-		func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error) {
-			return oldConnector, nil
+		func(provider string, _ []catalogs.EndpointType, _ connectors.ProviderConfig) (connectors.Connector, error) {
+			if provider == string(catalogs.ProviderIDOpenAI) {
+				return oldConnector, nil
+			}
+			return connectors.NewMockConnector(connectors.ProviderConfig{}), nil
 		},
 	)
 	require.NoError(t, err)
@@ -112,11 +115,14 @@ func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
 		catalogRuntime: runtime, catalog: plane, registry: runtimeRegistry,
 		transports: transports, authentication: authentication,
 		newConnector: func(
-			string,
-			[]catalogs.EndpointType,
-			connectors.ProviderConfig,
+			provider string,
+			_ []catalogs.EndpointType,
+			_ connectors.ProviderConfig,
 		) (connectors.Connector, error) {
-			return newConnector, nil
+			if provider == string(catalogs.ProviderIDOpenAI) {
+				return newConnector, nil
+			}
+			return connectors.NewMockConnector(connectors.ProviderConfig{}), nil
 		},
 	}
 	return runtimeRefreshFixture{

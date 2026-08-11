@@ -205,7 +205,7 @@ func (s service) checkAdapters(
 		return
 	}
 	if len(activations) == 0 {
-		report.addFailure("adapters", "no inference provider is configured")
+		report.addFailure("adapters", "no catalog provider has executable inference primitives")
 		return
 	}
 	if err := plane.ReplaceAdapters(providers.Availability(activations)); err != nil {
@@ -214,12 +214,12 @@ func (s service) checkAdapters(
 	}
 	routes := plane.Current().Routes()
 	if len(routes) == 0 {
-		report.addFailure("adapters", "configured adapters expose no routable Starmap offering")
+		report.addFailure("adapters", "executable adapters expose no routable Starmap offering")
 		return
 	}
 	report.addPass(
 		"adapters",
-		fmt.Sprintf("%d configured provider adapters expose %d routable offerings", len(activations), len(routes)),
+		fmt.Sprintf("%d executable provider adapters expose %d routable offerings", len(activations), len(routes)),
 	)
 }
 

@@ -63,7 +63,7 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 	testService(cfg).checkAdapters(t.Context(), cfg, plane, catalog, &report)
 	require.True(t, report.OK, "%#v", report)
 	check := assertCheck(t, report, "adapters", StatusPass)
-	require.Contains(t, check.Message, "configured provider adapters")
+	require.Contains(t, check.Message, "executable provider adapters")
 }
 
 func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {

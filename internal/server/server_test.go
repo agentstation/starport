@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -107,6 +108,27 @@ func TestMiddleware(t *testing.T) {
 
 	if w2.Header().Get("Access-Control-Allow-Origin") == "" {
 		t.Error("expected CORS headers to be set when Origin is present")
+	}
+}
+
+func TestReadinessIgnoresProviderCredentialAvailability(t *testing.T) {
+	server := newTestServer(t, &Config{Port: 8080})
+	request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	recorder := httptest.NewRecorder()
+
+	server.Router().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("readiness status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	var response struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode readiness response: %v", err)
+	}
+	if response.Status != "ok" {
+		t.Fatalf("readiness = %q, want ok", response.Status)
 	}
 }
 

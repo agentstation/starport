@@ -33,6 +33,11 @@ type credentialRouteState struct {
 	previous *failure.Failure
 }
 
+type credentialSelection struct {
+	material credentials.Material
+	source   byok.CredentialSource
+}
+
 func newCredentialPolicy(
 	strategy byok.Strategy,
 	tenantID string,
@@ -67,11 +72,11 @@ func credentialRequestPolicy(request *Request) (byok.Strategy, string) {
 func (p *credentialPolicy) resolve(
 	ctx context.Context,
 	route routing.Route,
-) (credentials.Material, *failure.Failure, execution.AttemptAction) {
+) (credentialSelection, *failure.Failure, execution.AttemptAction) {
 	state := p.states[route.ID()]
 	index := state.index
 	if index >= len(p.sources) {
-		return credentials.Material{}, credentialUnavailable(route.ProviderID, nil), execution.AttemptActionFallbackRoute
+		return credentialSelection{}, credentialUnavailable(route.ProviderID, nil), execution.AttemptActionFallbackRoute
 	}
 	source := p.sources[index]
 	var material credentials.Material
@@ -99,19 +104,24 @@ func (p *credentialPolicy) resolve(
 		err = errors.New("unsupported credential source")
 	}
 	if err == nil {
-		return material, nil, execution.AttemptActionDefault
+		return credentialSelection{material: material, source: source}, nil, execution.AttemptActionDefault
 	}
 	providerFailure, notConfigured := credentialResolutionFailure(route.ProviderID, err)
 	if notConfigured && p.advance(route, nil) {
-		return credentials.Material{}, providerFailure, execution.AttemptActionContinueRoute
+		return credentialSelection{}, providerFailure, execution.AttemptActionContinueRoute
 	}
 	if notConfigured && state.previous != nil {
-		return credentials.Material{}, state.previous, execution.AttemptActionFallbackRoute
+		return credentialSelection{}, state.previous, execution.AttemptActionFallbackRoute
 	}
 	if notConfigured {
-		return credentials.Material{}, providerFailure, execution.AttemptActionFallbackRoute
+		if source, ok := p.runtime.(connectors.AnonymousMaterialSource); ok {
+			if material, exists := source.AnonymousMaterial(route.ProviderID); exists {
+				return credentialSelection{material: material}, nil, execution.AttemptActionDefault
+			}
+		}
+		return credentialSelection{}, providerFailure, execution.AttemptActionFallbackRoute
 	}
-	return credentials.Material{}, providerFailure, execution.AttemptActionStop
+	return credentialSelection{}, providerFailure, execution.AttemptActionStop
 }
 
 func (p *credentialPolicy) afterFailure(route routing.Route, providerFailure *failure.Failure) execution.AttemptAction {

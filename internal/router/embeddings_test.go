@@ -124,10 +124,9 @@ func embeddingTestCatalogPlane(t *testing.T) *runtimecatalog.ControlPlane {
 	}})
 	require.NoError(t, err)
 	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{
-		ProviderID: "acme", Registered: true, Configured: true,
+		ProviderID: "acme", Registered: true,
 		Operations:    []catalogs.ProviderOperation{catalogs.ProviderOperationEmbeddings},
 		EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI},
-		BaseURL:       "https://provider.test/v1",
 	}))
 	require.Len(t, plane.Current().RoutesForProvider("acme"), 1)
 	return plane

@@ -93,7 +93,7 @@ starport/
 ├── internal/execution/        # attempt state, budgets, fallback, and stream commitment
 ├── internal/availability/     # offering-level runtime availability state
 ├── internal/catalog/          # Starmap facts and derived routable generations
-├── internal/registry/         # configured connector registry and adapter availability
+├── internal/registry/         # catalog-derived connector generations and adapter availability
 ├── internal/providers/        # BYOK provider keys and concrete LLM connectors
 ├── internal/providerauth/     # renewable cloud inference credentials
 ├── internal/httpclient/       # shared provider HTTP transport policy
@@ -126,8 +126,8 @@ default checks are passive. An explicit probe opens storage through a
 write-blocking adapter. The diagnostic report uses stable check IDs and never
 contains a configured secret.
 
-Production needs storage, a catalog, a credential master key, and one explicit
-provider. It also needs one named identity in storage. The
+Production needs storage, a catalog, and a credential master key. Operator
+provider credentials are optional. Production also needs one named identity in storage. The
 `starport init --configured-storage` command creates that identity before the
 first process starts. Production composition never selects mock dependencies.
 Tests can replace factories through an explicit test-only builder.
@@ -154,9 +154,13 @@ catalog-generation contract into the same atomic Starport activation transaction
 
 `internal/server.Server` receives ready use-case and repository ports. It owns
 only the HTTP listener and route tree. `Server.Shutdown` drains HTTP requests
-and does not close the registry, storage, or cache. `internal/registry`
-receives explicit connector registrations. It does not read environment
-values, select fallback mocks, discover models, or probe provider health.
+and does not close the registry, storage, or cache.
+
+`internal/registry` receives one complete catalog-derived connector generation.
+It does not read
+environment values, select fallback mocks, discover models, or probe provider
+health. A registration can contain an optional deployment-owned material
+source. Adapter availability does not contain credential availability.
 `Registry.Start` prevents later registrations. `Registry.Close` closes each
 registered inference adapter.
 
@@ -237,10 +241,15 @@ Provider constructors use one shared HTTP-client construction seam. It maps
 operator timeout and connection settings into the provider transport. One
 connector call makes one outbound request attempt.
 
-Each inference request carries an exact provider model ID and a bound Starmap
-endpoint. A connector does not discover models, select a catalog endpoint, or
-probe provider health. Starmap acquisition is the only dynamic catalog-update
-path. The attempt executor reports inference results to the Starport runtime
+The routable snapshot retains Starmap endpoint templates. Request policy first
+selects tenant or deployment-owned inference material. The retained runtime
+generation then binds that material to the selected template. Deployment-owned
+base URL overrides apply only to deployment-owned material.
+
+Each connector receives the exact provider model ID and the request-bound endpoint. A
+connector does not discover models, select a catalog endpoint, or probe
+provider health. Starmap acquisition is the only dynamic catalog-update path.
+The attempt executor reports inference results to the Starport runtime
 availability tracker.
 
 Starmap uses its catalog-acquisition API keys, cloud credential chains, and

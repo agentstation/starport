@@ -1,19 +1,75 @@
 package providers
 
 import (
-	"context"
-	"errors"
 	"testing"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 )
 
-func TestActivationRejectsUnsupportedAuthenticationPrimitive(t *testing.T) {
+func TestCatalogProviderRegistersWithoutOperatorMaterial(t *testing.T) {
+	embedded, err := catalogs.NewEmbedded()
+	require.NoError(t, err)
+	catalog, err := embedded.Build()
+	require.NoError(t, err)
+	transports, err := connectors.ProductionTransportRegistry()
+	require.NoError(t, err)
+	authentication, err := providerauth.ProductionRegistry()
+	require.NoError(t, err)
+
+	activations, err := Activate(catalog, transports, authentication, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, activations)
+	require.Contains(t, activationProviderIDs(activations), catalogs.ProviderIDOpenAI)
+	for _, activation := range activations {
+		require.Nil(t, activation.Configuration.CredentialSource)
+	}
+}
+
+func TestNoAuthProviderRegistersWithoutMaterial(t *testing.T) {
+	embedded, err := catalogs.NewEmbedded()
+	require.NoError(t, err)
+	catalog, err := embedded.Build()
+	require.NoError(t, err)
+	provider, err := catalog.Provider(catalogs.ProviderIDOpenAI)
+	require.NoError(t, err)
+	provider.Credentials.Profiles = []catalogs.ProviderCredentialProfile{{
+		ID: "public", Primitive: catalogs.ProviderAuthenticationNone,
+	}}
+	provider.Credentials.Inference = catalogs.ProviderCredentialPlane{
+		Alternatives: []catalogs.ProviderCredentialProfileID{"public"},
+	}
+	provider.Credentials.CatalogAcquisition = catalogs.ProviderCredentialPlane{
+		Alternatives: []catalogs.ProviderCredentialProfileID{"public"},
+	}
+	builder, err := catalogs.NewBuilderFrom(catalog)
+	require.NoError(t, err)
+	require.NoError(t, builder.SetProvider(provider))
+	catalog, err = builder.Build()
+	require.NoError(t, err)
+	transports, err := connectors.ProductionTransportRegistry()
+	require.NoError(t, err)
+	authentication, err := providerauth.ProductionRegistry()
+	require.NoError(t, err)
+
+	activations, err := Activate(catalog, transports, authentication, nil)
+	require.NoError(t, err)
+	var found bool
+	for _, activation := range activations {
+		if activation.ProviderID != catalogs.ProviderIDOpenAI {
+			continue
+		}
+		found = true
+		require.False(t, activation.RequiresAuth)
+		require.False(t, activation.Anonymous.Empty())
+	}
+	require.True(t, found)
+}
+
+func TestActivationSkipsUnsupportedAuthenticationPrimitive(t *testing.T) {
 	embedded, err := catalogs.NewEmbedded()
 	require.NoError(t, err)
 	catalog, err := embedded.Build()
@@ -24,7 +80,6 @@ func TestActivationRejectsUnsupportedAuthenticationPrimitive(t *testing.T) {
 	provider.Credentials.Fields = append(provider.Credentials.Fields, catalogs.ProviderCredentialField{
 		ID: "region", Kind: catalogs.ProviderCredentialFieldParameter, Required: true,
 	})
-	var profile catalogs.ProviderCredentialProfile
 	for index := range provider.Credentials.Profiles {
 		if provider.Credentials.Profiles[index].ID != "api-key" {
 			continue
@@ -38,9 +93,7 @@ func TestActivationRejectsUnsupportedAuthenticationPrimitive(t *testing.T) {
 				},
 			},
 		}
-		profile = provider.Credentials.Profiles[index]
 	}
-	require.NotEmpty(t, profile.ID)
 
 	builder, err := catalogs.NewBuilderFrom(catalog)
 	require.NoError(t, err)
@@ -52,27 +105,20 @@ func TestActivationRejectsUnsupportedAuthenticationPrimitive(t *testing.T) {
 	require.NoError(t, err)
 	authentication, err := providerauth.ProductionRegistry()
 	require.NoError(t, err)
-	_, err = Activate(
+	activations, err := Activate(
 		catalog,
 		transports,
 		authentication,
-		map[catalogs.ProviderID]Configuration{
-			catalogs.ProviderIDOpenAI: {
-				Connector: connectors.ProviderConfig{Enabled: true},
-				CredentialSource: activationMaterialSource{material: credentials.NewMaterial(
-					profile,
-					map[catalogs.ProviderCredentialFieldID]string{"region": "us-east-1"},
-					credentials.MaterialMetadata{Version: "test"},
-				)},
-				Profile: profile,
-			},
-		},
+		nil,
 	)
-	require.True(t, errors.Is(err, providerauth.ErrPrimitiveUnsupported), "%v", err)
+	require.NoError(t, err)
+	require.NotContains(t, activationProviderIDs(activations), catalogs.ProviderIDOpenAI)
 }
 
-type activationMaterialSource struct{ material credentials.Material }
-
-func (s activationMaterialSource) ResolveMaterial(context.Context) (credentials.Material, error) {
-	return s.material, nil
+func activationProviderIDs(activations []Activation) []catalogs.ProviderID {
+	result := make([]catalogs.ProviderID, len(activations))
+	for index, activation := range activations {
+		result[index] = activation.ProviderID
+	}
+	return result
 }

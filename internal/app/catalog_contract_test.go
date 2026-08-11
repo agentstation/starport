@@ -22,11 +22,12 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-func TestActiveProviderIntersection(t *testing.T) {
+func TestCatalogWideProviderActivation(t *testing.T) {
 	application, err := New(validProductionConfig(t), withRuntimeFactories(explicitTestFactories()))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, application.Close(context.Background())) })
-	require.Equal(t, []string{"openai"}, application.registry.ListProviders())
+	require.Contains(t, application.registry.ListProviders(), "openai")
+	require.Greater(t, len(application.registry.ListProviders()), 1)
 }
 
 func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
@@ -56,8 +57,8 @@ func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 		authentication,
 		map[catalogs.ProviderID]providers.Configuration{
 			"synthetic-provider": {
-				Connector: connectors.ProviderConfig{BaseURL: "https://provider.test"},
-				Profile:   profile, CredentialSource: appStaticMaterialSource{material: material},
+				Connector:        connectors.ProviderConfig{BaseURL: "https://provider.test"},
+				CredentialSource: appStaticMaterialSource{material: material},
 			},
 		},
 		func(
@@ -71,7 +72,7 @@ func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 	require.ErrorIs(t, err, providers.ErrProviderMissingCatalog)
 }
 
-func TestUnsupportedCatalogPrimitivesFailClosed(t *testing.T) {
+func TestUnsupportedCatalogPrimitivesRemainUnavailable(t *testing.T) {
 	t.Run("transport", func(t *testing.T) {
 		transports, err := connectors.ProductionTransportRegistry()
 		require.NoError(t, err)
@@ -117,7 +118,7 @@ func TestUnsupportedCatalogPrimitivesFailClosed(t *testing.T) {
 		require.NoError(t, err)
 		authentication, err := providerauth.ProductionRegistry()
 		require.NoError(t, err)
-		_, err = providers.Activate(
+		activations, err := providers.Activate(
 			catalog,
 			transports,
 			authentication,
@@ -129,11 +130,13 @@ func TestUnsupportedCatalogPrimitivesFailClosed(t *testing.T) {
 						map[catalogs.ProviderCredentialFieldID]string{"region": "test-region"},
 						credentials.MaterialMetadata{Version: "test"},
 					)},
-					Profile: profile,
 				},
 			},
 		)
-		require.ErrorIs(t, err, providerauth.ErrPrimitiveUnsupported)
+		require.NoError(t, err)
+		for _, activation := range activations {
+			require.NotEqual(t, catalogs.ProviderIDOpenAI, activation.ProviderID)
+		}
 	})
 }
 

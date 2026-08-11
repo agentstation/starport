@@ -163,11 +163,11 @@ func runtimeRegistration(
 	source credentials.MaterialSource,
 ) Registration {
 	return Registration{
-		Provider: provider, Connector: connector, CredentialSource: source,
-		Operations:    []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions},
-		EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI},
-		BaseURL:       "https://provider.example/v1",
-		RequiresAuth:  true,
+		Provider: provider, Connector: connector, OperatorSource: source,
+		Operations:      []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions},
+		EndpointTypes:   []catalogs.EndpointType{catalogs.EndpointTypeOpenAI},
+		OperatorBaseURL: "https://provider.example/v1",
+		RequiresAuth:    true,
 	}
 }
 

@@ -26,7 +26,7 @@ func TestStarmapFactMutationContract(t *testing.T) {
 	plane, err := Open(source)
 	require.NoError(t, err)
 	require.NoError(t, plane.SetAdapter(AdapterAvailability{
-		ProviderID: "provider", Registered: true, Configured: true,
+		ProviderID: "provider", Registered: true,
 		Operations: []catalogs.ProviderOperation{
 			catalogs.ProviderOperationChatCompletions,
 			catalogs.ProviderOperationEmbeddings,
@@ -90,7 +90,7 @@ func TestStarmapFactMutationContract(t *testing.T) {
 	require.Equal(t, "generation-2", second.GenerationID())
 }
 
-func TestEndpointBindingsAndStreamURLComeFromStarmap(t *testing.T) {
+func TestEndpointTemplatesRemainUnboundUntilRequestMaterial(t *testing.T) {
 	catalog := mutationCatalog(t, mutationFacts{
 		definitionName: "Bound definition",
 		operation:      catalogs.ProviderOperationChatCompletions,
@@ -106,24 +106,19 @@ func TestEndpointBindingsAndStreamURLComeFromStarmap(t *testing.T) {
 	}})
 	require.NoError(t, err)
 	require.NoError(t, plane.SetAdapter(AdapterAvailability{
-		ProviderID: "provider", Registered: true, Configured: true,
+		ProviderID: "provider", Registered: true,
 		Operations:    []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions},
 		EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeGoogleCloud},
-		BaseURL:       "https://private.provider.test",
-		EndpointBindings: map[string]string{
-			"location": "us-test1",
-			"project":  "tenant-project",
-		},
 	}))
 	route, found := plane.Current().ResolveRoute("provider/opaque/model@001")
 	require.True(t, found)
 	endpoint, found := route.Endpoint(catalogs.ProviderOperationChatCompletions)
 	require.True(t, found)
-	require.Equal(t, "https://private.provider.test/projects/tenant-project/models/opaque/model@001:invoke", endpoint.URL)
-	require.Equal(t, "https://private.provider.test/projects/tenant-project/models/opaque/model@001:streamInvoke", endpoint.StreamURL)
+	require.Equal(t, "https://{location}.provider.test/projects/{project}/models/opaque/model@001:invoke", endpoint.URL)
+	require.Equal(t, "https://{location}.provider.test/projects/{project}/models/opaque/model@001:streamInvoke", endpoint.StreamURL)
 }
 
-func TestUnbindableOfferingOperationIsNotRoutable(t *testing.T) {
+func TestEndpointTemplateDoesNotRequireOperatorBindings(t *testing.T) {
 	catalog := mutationCatalog(t, mutationFacts{
 		definitionName: "Bound definition",
 		operation:      catalogs.ProviderOperationChatCompletions,
@@ -137,14 +132,11 @@ func TestUnbindableOfferingOperationIsNotRoutable(t *testing.T) {
 	}})
 	require.NoError(t, err)
 	require.NoError(t, plane.SetAdapter(AdapterAvailability{
-		ProviderID: "provider", Registered: true, Configured: true,
+		ProviderID: "provider", Registered: true,
 		Operations:    []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions},
 		EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeGoogleCloud},
-		EndpointBindings: map[string]string{
-			"location": "us-test1",
-		},
 	}))
-	require.Empty(t, plane.Current().Routes())
+	require.Len(t, plane.Current().Routes(), 1)
 }
 
 type mutationSource struct {

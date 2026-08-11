@@ -199,12 +199,16 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 				nil,
 			), execution.AttemptActionDefault
 		}
-		material, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
+		selected, materialFailure, action := credentialPolicy.resolve(attemptCtx, planned.Route)
 		if materialFailure != nil {
 			return nil, materialFailure, action
 		}
-		request := prepareChatAttempt(req, planned.Route, false)
-		request.Credential = material
+		boundRoute, bindFailure := bindSelectedEndpoint(runtime, planned.Route, selected)
+		if bindFailure != nil {
+			return nil, bindFailure, execution.AttemptActionStop
+		}
+		request := prepareChatAttempt(req, boundRoute, false)
+		request.Credential = selected.material
 		response, requestErr := connector.Chat(attemptCtx, request)
 		if requestErr != nil {
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)

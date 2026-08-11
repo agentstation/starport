@@ -604,7 +604,7 @@ func supportedModelParameters(definition starmapcatalogs.ModelDefinition) []stri
 func (p *proxy) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	runtime, owned, err := p.acquireRuntime(ctx)
 	if err != nil {
-		return nil, registry.ErrProvidersRequired
+		return nil, registry.ErrRuntimeUnavailable
 	}
 	if owned {
 		defer runtime.Release()
@@ -709,7 +709,7 @@ func (p *proxy) acquireRuntime(
 		return lease, false, nil
 	}
 	if p == nil || p.registry == nil {
-		return nil, false, registry.ErrProvidersRequired
+		return nil, false, registry.ErrRuntimeUnavailable
 	}
 	lease, err := p.registry.AcquireRuntime()
 	return lease, true, err

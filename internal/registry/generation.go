@@ -49,13 +49,10 @@ func (r *Registry) Prepare(registrations []Registration) (*Candidate, error) {
 	if closed {
 		return nil, ErrRegistryClosed
 	}
-	return prepareCandidate(registrations, true)
+	return prepareCandidate(registrations)
 }
 
-func prepareCandidate(registrations []Registration, requireSources bool) (*Candidate, error) {
-	if len(registrations) == 0 {
-		return nil, ErrProvidersRequired
-	}
+func prepareCandidate(registrations []Registration) (*Candidate, error) {
 	providers := make(map[string]runtimeProvider, len(registrations))
 	for index, registration := range registrations {
 		if registration.Provider == "" {
@@ -64,13 +61,6 @@ func prepareCandidate(registrations []Registration, requireSources bool) (*Candi
 		if registration.Connector == nil {
 			return nil, closeUnownedRegistrations(
 				fmt.Errorf("%s: %w", registration.Provider, ErrConnectorRequired),
-				registrations,
-				index,
-			)
-		}
-		if requireSources && registration.CredentialSource == nil {
-			return nil, closeUnownedRegistrations(
-				fmt.Errorf("%s: %w", registration.Provider, ErrCredentialSourceRequired),
 				registrations,
 				index,
 			)
@@ -84,7 +74,6 @@ func prepareCandidate(registrations []Registration, requireSources bool) (*Candi
 		}
 		registration.Operations = append([]starmapcatalogs.ProviderOperation(nil), registration.Operations...)
 		registration.EndpointTypes = append([]starmapcatalogs.EndpointType(nil), registration.EndpointTypes...)
-		registration.EndpointBindings = cloneStringMap(registration.EndpointBindings)
 		providers[registration.Provider] = runtimeProvider{registration: registration}
 	}
 	return &Candidate{generation: &runtimeGeneration{providers: providers}}, nil
@@ -124,11 +113,9 @@ func (c *Candidate) Availability() []runtimecatalog.AdapterAvailability {
 	for _, providerID := range providerIDs {
 		registration := c.generation.providers[providerID].registration
 		result = append(result, runtimecatalog.AdapterAvailability{
-			ProviderID: starmapcatalogs.ProviderID(providerID), Registered: true, Configured: true,
-			Operations:       append([]starmapcatalogs.ProviderOperation(nil), registration.Operations...),
-			EndpointTypes:    append([]starmapcatalogs.EndpointType(nil), registration.EndpointTypes...),
-			BaseURL:          registration.BaseURL,
-			EndpointBindings: cloneStringMap(registration.EndpointBindings),
+			ProviderID: starmapcatalogs.ProviderID(providerID), Registered: true,
+			Operations:    append([]starmapcatalogs.ProviderOperation(nil), registration.Operations...),
+			EndpointTypes: append([]starmapcatalogs.EndpointType(nil), registration.EndpointTypes...),
 		})
 	}
 	return result
@@ -202,7 +189,7 @@ func (r *Registry) AcquireRuntime() (connectors.RuntimeLease, error) {
 	for {
 		generation := r.current.Load()
 		if generation == nil {
-			return nil, ErrProvidersRequired
+			return nil, ErrRuntimeUnavailable
 		}
 		if generation.acquire() {
 			return &Lease{generation: generation}, nil
@@ -246,9 +233,32 @@ func (l *Lease) ResolveMaterial(
 	provider string,
 ) (credentials.Material, error) {
 	if l == nil || l.generation == nil {
-		return credentials.Material{}, ErrProvidersRequired
+		return credentials.Material{}, ErrRuntimeUnavailable
 	}
 	return l.generation.resolveMaterial(ctx, provider)
+}
+
+// AnonymousMaterial returns the catalog-default no-auth material, if one is
+// executable in this generation.
+func (l *Lease) AnonymousMaterial(provider string) (credentials.Material, bool) {
+	if l == nil || l.generation == nil {
+		return credentials.Material{}, false
+	}
+	return l.generation.anonymousMaterial(provider)
+}
+
+// BindEndpoint applies only the selected request material. Operator endpoint
+// overrides are available only when the caller selected operator material.
+func (l *Lease) BindEndpoint(
+	provider string,
+	endpoint starmapcatalogs.ProviderOfferingEndpoint,
+	material credentials.Material,
+	useOperatorOverride bool,
+) (starmapcatalogs.ProviderOfferingEndpoint, error) {
+	if l == nil || l.generation == nil {
+		return starmapcatalogs.ProviderOfferingEndpoint{}, ErrRuntimeUnavailable
+	}
+	return l.generation.bindEndpoint(provider, endpoint, material, useOperatorOverride)
 }
 
 // Release ends the request lease. The last old-generation lease closes its
@@ -336,14 +346,49 @@ func (g *runtimeGeneration) resolveMaterial(
 	provider string,
 ) (credentials.Material, error) {
 	entry, exists := g.providers[provider]
-	if !exists || entry.registration.CredentialSource == nil {
-		return credentials.Material{}, fmt.Errorf("%s: %w", provider, ErrCredentialSourceRequired)
+	if !exists {
+		return credentials.Material{}, fmt.Errorf("%s: %w", provider, credentials.ErrProviderNotConfigured)
 	}
-	material, err := entry.registration.CredentialSource.ResolveMaterial(ctx)
+	if entry.registration.OperatorSource == nil {
+		if !entry.registration.Anonymous.Empty() {
+			return entry.registration.Anonymous, nil
+		}
+		return credentials.Material{}, fmt.Errorf("%s: %w", provider, credentials.ErrProviderNotConfigured)
+	}
+	material, err := entry.registration.OperatorSource.ResolveMaterial(ctx)
 	if err != nil {
 		return credentials.Material{}, fmt.Errorf("resolve provider %s credential material: %w", provider, err)
 	}
 	return material, nil
+}
+
+func (g *runtimeGeneration) anonymousMaterial(provider string) (credentials.Material, bool) {
+	entry, exists := g.providers[provider]
+	if !exists || entry.registration.Anonymous.Empty() {
+		return credentials.Material{}, false
+	}
+	return entry.registration.Anonymous, true
+}
+
+func (g *runtimeGeneration) bindEndpoint(
+	provider string,
+	endpoint starmapcatalogs.ProviderOfferingEndpoint,
+	material credentials.Material,
+	useOperatorOverride bool,
+) (starmapcatalogs.ProviderOfferingEndpoint, error) {
+	entry, exists := g.providers[provider]
+	if !exists || g.snapshot == nil || g.snapshot.Catalog() == nil {
+		return starmapcatalogs.ProviderOfferingEndpoint{}, fmt.Errorf("%s: provider runtime is unavailable", provider)
+	}
+	providerRecord, err := g.snapshot.Catalog().Provider(starmapcatalogs.ProviderID(provider))
+	if err != nil || providerRecord.Inference == nil {
+		return starmapcatalogs.ProviderOfferingEndpoint{}, fmt.Errorf("%s: provider inference service is unavailable", provider)
+	}
+	baseURL := ""
+	if useOperatorOverride {
+		baseURL = entry.registration.OperatorBaseURL
+	}
+	return providerRecord.Inference.BindOfferingEndpoint(endpoint, baseURL, material.EndpointBindings())
 }
 
 func (g *runtimeGeneration) registrations() []Registration {

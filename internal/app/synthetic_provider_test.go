@@ -51,7 +51,6 @@ func TestSyntheticCatalogProviderInferenceContract(t *testing.T) {
 				BaseURL: server.URL, Timeout: 5 * time.Second, MaxConnections: 8, Enabled: true,
 			},
 			CredentialSource: source,
-			Profile:          profile,
 		},
 	}
 	registrations, err := buildRegistrations(
@@ -68,9 +67,15 @@ func TestSyntheticCatalogProviderInferenceContract(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	require.Len(t, registrations, 1)
-	require.Equal(t, "acme", registrations[0].Provider)
-	require.Equal(t, []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, registrations[0].EndpointTypes)
+	var acmeRegistration *registry.Registration
+	for index := range registrations {
+		if registrations[index].Provider == "acme" {
+			acmeRegistration = &registrations[index]
+			break
+		}
+	}
+	require.NotNil(t, acmeRegistration)
+	require.Equal(t, []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, acmeRegistration.EndpointTypes)
 
 	runtimeRegistry, err := registry.Open(plane, registrations)
 	require.NoError(t, err)

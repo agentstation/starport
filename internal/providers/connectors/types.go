@@ -273,9 +273,6 @@ type ProviderConfig struct {
 	Timeout        time.Duration `json:"timeout"`
 	MaxConnections int           `json:"max_connections"`
 
-	// EndpointBindings supplies tenant-specific values for Starmap URL templates.
-	EndpointBindings map[string]string `json:"endpoint_bindings,omitempty"`
-
 	// Enable flag for optional providers (e.g., Ollama)
 	Enabled bool `json:"enabled"`
 }
