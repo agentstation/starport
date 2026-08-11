@@ -109,7 +109,7 @@
     Created: 2026-08-11 ·
     Baseline: main @ b52cd7e286a9a870293155638392ed514b630a47 ·
     Proof root: <code>docs/plans/proof/automatic-provider-runtime/</code> ·
-    Next action: execute APR0 baseline and verifier work
+    Next action: execute APR1 provider-neutral bootstrap
   </p>
 
   <section id="outcome">
@@ -382,8 +382,8 @@
     <table>
       <thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead>
       <tbody>
-        <tr id="APR0" data-status="in_progress"><td>APR0</td><td>Pin the baseline, author the red verifier, and record fail-before behavior.</td><td><code>in_progress</code></td><td><code>proof/automatic-provider-runtime/audit.md</code></td></tr>
-        <tr id="APR1" data-status="todo"><td>APR1</td><td>Separate provider-neutral bootstrap and explicit local development bootstrap.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR0" data-status="done"><td>APR0</td><td>Pin the baseline, author the red verifier, and record fail-before behavior.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR0.md</code>; <code>21d2579</code></td></tr>
+        <tr id="APR1" data-status="in_progress"><td>APR1</td><td>Separate provider-neutral bootstrap and explicit local development bootstrap.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="APR2" data-status="todo"><td>APR2</td><td>Register every executable catalog provider and separate operator credential eligibility from tenant BYOK.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR3" data-status="todo"><td>APR3</td><td>Add credential-driven runtime refresh with interval and manual triggers.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR4" data-status="todo"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>todo</code></td><td></td></tr>
@@ -484,6 +484,8 @@
         <tr><td>2026-08-11</td><td>meta</td><td>authored</td><td>Proposed plan created at baseline <code>b52cd7e286a9a870293155638392ed514b630a47</code>. No production behavior changed.</td></tr>
         <tr><td>2026-08-11</td><td>meta</td><td>audited</td><td>Verified current source behavior, dependency currency, cloud-chain contracts, in-memory storage, failure scope, and the request-bound endpoint gap. See <code>proof/automatic-provider-runtime/audit.md</code>.</td></tr>
         <tr><td>2026-08-11</td><td>APR0</td><td>started</td><td>Plan PR <code>#95</code> merged after all 10 hosted checks passed. APR0 is the only active task.</td></tr>
+        <tr><td>2026-08-11</td><td>APR0</td><td>done</td><td>Added APR-V01 through APR-V12 in <code>21d2579</code>. Baseline result: 1 passed and 11 failed. Preserved green controls passed without a scheduler cap.</td></tr>
+        <tr><td>2026-08-11</td><td>APR1</td><td>started</td><td>Provider-neutral production bootstrap and in-memory loopback development mode are now active.</td></tr>
       </tbody>
     </table>
   </section>

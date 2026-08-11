@@ -16,3 +16,5 @@ No implementation evidence exists at plan authorship.
   completed before activation.
 - [`dependencies.txt`](dependencies.txt): complete direct-module currency output
   and local Go toolchain evidence.
+- [`APR0.md`](APR0.md): named red verifier, fail-before output, and preserved
+  green baseline controls.
