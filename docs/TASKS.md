@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP9.1 replaces the unsupported release-size gate with exact measurement evidence, then completes merge and public readback. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP10 merges terminal evidence, then deletes the completed plan and proof root. |
 
 ### Proposed Work
 
@@ -57,15 +57,15 @@ No proposed durable plan exists.
 - Authentication uses hash-based identity lookup and fails closed.
 - Response caching uses tenant-safe canonical semantic keys.
 - HTTP middleware enforces rate limits through the concept repository.
-- Starmap v0.4.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
+- Starmap v0.4.1 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
 - Starport owns inference credentials, request policy, route planning, execution, and protocol adaptation.
 - OpenAI and OpenRouter raw protocol smoke tests pass.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
 - Release archives, SBOMs, checksums, attestations, and GHCR publication are
   fail-closed release requirements.
-- Independent checks verify public immutable release `v1.0.1` and its public,
+- Independent checks verify public immutable release `v1.0.2` and its public,
   attested GHCR image at
-  `sha256:9dd90f8eb4d7918548075c7043eb93a8801efa0fd0fa5465a21f4e08b039f92f`.
+  `sha256:818d6e189d144143fbe57f2e09ffd9bb356770670ca3221344ff26d4da5d30bc`.
 
 This file keeps task status and the Phase 1 completion history. The canonical
 v1 design is in `docs/ARCHITECTURE.md`.
