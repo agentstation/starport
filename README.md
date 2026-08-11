@@ -26,53 +26,50 @@ To build from source, install the Go version from `go.mod`, then run:
 git clone https://github.com/agentstation/starport.git
 cd starport
 make build
-export STARPORT_BIN="$PWD/starport"
-"$STARPORT_BIN" --version
+./starport --version
 ```
 
 ## Quick start
 
-Set the executable once. The default uses a release installation from
-`PATH`. Source builders keep the value from the preceding build commands.
+Starport checks every provider in the active Starmap catalog. It registers each
+provider whose transport and authentication primitive it supports. It
+separately discovers deployment-owned inference credentials from the ordered
+profiles in that catalog. You do not select a provider with `starport init` or
+a provider-specific flag.
 
-```bash
-export STARPORT_BIN="${STARPORT_BIN:-starport}"
-```
+### Terminal 1: start Starport
 
-For this example, set the conventional OpenAI inference key and initialize one
-local Starport instance:
+Set one conventional provider credential. This example uses OpenAI:
 
 ```bash
 export OPENAI_API_KEY="replace-with-provider-inference-key"
-"$STARPORT_BIN" init
+starport dev
 ```
 
-Initialization reads the selected provider's credential contract from
-Starmap. It checks each conventional environment name before the derived
-`STARPORT_<PROVIDER>_<FIELD>` name. It writes the selected values, a new
-provider-credential master key, and local state under the owner-only platform
-configuration directory. It also creates one gateway identity and prints its
-new API key once. Save that key, then set it for the client examples:
+The command starts an isolated gateway at `http://127.0.0.1:8080`. It uses
+in-memory state, creates no configuration files, and prints one temporary
+Starport gateway API key:
+
+```text
+Starport development gateway
+URL: http://127.0.0.1:8080
+Gateway API key (shown once): replace-with-generated-gateway-key
+```
+
+Keep this terminal open.
+
+### Terminal 2: call Starport
+
+Copy the printed gateway key into a second terminal. This key authenticates the
+client to Starport. It is not the provider inference key.
 
 ```bash
-export STARPORT_API_KEY="replace-with-gateway-api-key-from-init"
+export STARPORT_API_KEY="replace-with-generated-gateway-key"
 ```
 
-Inspect the effective paths and startup state:
-
-```bash
-"$STARPORT_BIN" config paths
-"$STARPORT_BIN" config validate
-"$STARPORT_BIN" doctor --probe
-```
-
-Start the gateway in this terminal. Use another terminal for the requests:
-
-```bash
-"$STARPORT_BIN" serve
-```
-
-Check readiness and the authenticated model catalog:
+Readiness is independent of provider credentials. A ready response means that
+the gateway can accept requests. The authenticated model response contains the
+current Starmap catalog view.
 
 ```bash
 curl --fail http://127.0.0.1:8080/health/ready
@@ -91,9 +88,19 @@ curl --fail-with-body \
   http://127.0.0.1:8080/api/v1/chat/completions
 ```
 
-Local Ollama inference uses the same provider-neutral `starport init` step.
-Add each installed model to a reviewed Starmap workspace before startup. Then
-set `STARPORT_CATALOG_WORKSPACE_PATH` to that workspace.
+The first provider request proves whether the provider accepts the resolved
+credential and whether the account can use the selected offering. Starport
+records authentication, permission, quota, billing, rate-limit, and service
+failures in its scoped provider state.
+
+For persistent local or production state, run `starport init` once. The command
+creates a Starport master key and initial gateway identity. It does not select a
+provider or persist provider inference credentials. Then use `starport serve`.
+See the [operator guide](docs/OPERATOR-GUIDE.md#initialize-persistent-state).
+
+Local Ollama inference needs no credential. Add each installed model to a
+reviewed Starmap workspace, and set `STARPORT_CATALOG_WORKSPACE_PATH` before
+startup.
 
 ## Replace an existing gateway URL
 
@@ -144,6 +151,21 @@ authentication profiles, and endpoints come from the active Starmap catalog.
 For example, Starport checks `OPENAI_API_KEY` before
 `STARPORT_OPENAI_API_KEY`. A provider that uses an already compiled transport
 and authentication primitive needs no Starport provider switch.
+
+Starport resolves all catalog providers at startup and, by default, reconciles
+them every minute. Set `STARPORT_CREDENTIAL_SOURCES_RECONCILE_INTERVAL` to
+change that interval. An administrator can also trigger the same shared work:
+
+```bash
+curl --fail-with-body \
+  -X POST \
+  -H "Authorization: Bearer $STARPORT_API_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/providers/refresh
+```
+
+Another process cannot change Starport's process environment. Restart Starport
+after you change an environment value. File and remote secret sources can
+return new material during interval or manual reconciliation.
 
 Add `_REFERENCE` to the catalog-derived Starport name to select a direct secret
 source. Starport supports Google Cloud Secret Manager, Azure Key Vault, AWS
@@ -197,18 +219,24 @@ inference credentials.
 Pull a versioned image and verify its GitHub attestation:
 
 ```bash
-docker pull ghcr.io/agentstation/starport:1.0.0
-gh attestation verify oci://ghcr.io/agentstation/starport:1.0.0 \
+STARPORT_VERSION="$(gh release view \
+  --repo agentstation/starport \
+  --json tagName \
+  --jq '.tagName | ltrimstr("v")')"
+docker pull "ghcr.io/agentstation/starport:$STARPORT_VERSION"
+gh attestation verify "oci://ghcr.io/agentstation/starport:$STARPORT_VERSION" \
   --repo agentstation/starport \
   --signer-workflow agentstation/starport/.github/workflows/release.yaml
-docker run --rm ghcr.io/agentstation/starport:1.0.0 --version
+docker run --rm "ghcr.io/agentstation/starport:$STARPORT_VERSION" --version
 ```
 
-The Compose file builds Starport locally and uses Valkey for shared state:
+The Compose file builds Starport locally and uses Valkey for shared state. Put
+the master key and any catalog-declared provider values in the ignored `.env`
+file. This example uses OpenAI:
 
 ```bash
-export STARPORT_SECURITY_MASTER_KEY="replace-with-random-secret-at-least-32-bytes"
-export OPENAI_API_KEY="replace-with-provider-inference-key"
+cp .env.example .env
+# Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
 docker compose up -d starport

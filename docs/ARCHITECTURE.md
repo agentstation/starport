@@ -16,6 +16,10 @@ Implemented:
 - Tenant-safe response caching with canonical chat and embedding records, catalog-generation invalidation, and stream reconstruction.
 - Catalog-driven provider activation over the compiled OpenAI-compatible,
   Anthropic, Google AI, Google Cloud, and Ollama transport primitives.
+- Catalog-driven inference credential discovery, interval reconciliation, and
+  authenticated manual refresh without a local provider roster.
+- Secret-free provider state that separates adapter support, operator
+  credentials, and offering availability.
 - Shared provider HTTP-client construction for timeout and connection-pool semantics.
 - Separate OpenAI `/v1` and OpenRouter `/api/v1` protocol adapters for chat, embeddings, models, errors, and streaming events.
 - Routing uses provider preferences, fallback chains, one attempt budget, and offering-level availability. It supports cost, latency, affinity, and restrictions.
@@ -45,6 +49,7 @@ graph TD
   Server --> Auth["API key auth"]
   Auth --> RateLimit["Rate limit middleware"]
   RateLimit --> Controllers["HTTP controllers"]
+  Controllers --> ProviderOperations["provider status and refresh"]
   Controllers --> Proxy["internal/proxy gateway use cases"]
   Proxy --> Router["internal/router model router"]
   Router --> Planner["internal/routing pure route planner"]
@@ -56,6 +61,12 @@ graph TD
   Subscriber --> RemoteHead["durable verified remote head"]
   RemoteHead --> RuntimeTransaction["complete Starport runtime candidate"]
   RuntimeTransaction --> AcceptedCatalog
+  ProviderReconciler["catalog-driven provider reconciler"] --> RuntimeTransaction
+  ProviderReconciler --> CredentialSources["environment, cloud, and secret sources"]
+  ProviderOperations --> ProviderReconciler
+  ProviderOperations --> ProviderState["internal/providerstate safe projection"]
+  Executor --> ProviderState
+  Availability --> ProviderState
   EmbeddedCatalog["embedded or local Starmap source"] --> AcceptedCatalog
   Router --> Registry["internal/registry connector registry"]
   Registry --> Connectors["compiled transport primitives"]
@@ -92,6 +103,7 @@ starport/
 ├── internal/routing/          # pure route policy and immutable plans
 ├── internal/execution/        # attempt state, budgets, fallback, and stream commitment
 ├── internal/availability/     # offering-level runtime availability state
+├── internal/providerstate/    # safe adapter, credential, and offering state
 ├── internal/catalog/          # Starmap facts and derived routable generations
 ├── internal/registry/         # catalog-derived connector generations and adapter availability
 ├── internal/providers/        # BYOK provider keys and concrete LLM connectors
@@ -140,10 +152,9 @@ Tests can replace factories through an explicit test-only builder.
 - Local acquisition or verified remote-catalog worker.
 - HTTP server.
 
-`App.Run` seals provider registration, starts optional catalog refresh and hot
-reload work, and starts the HTTP listener. `App.Close` closes owned resources
-once in reverse construction order. Constructor rollback uses the same
-ownership ledger.
+`App.Run` starts provider reconciliation, optional catalog refresh, hot reload
+work, and the HTTP listener. `App.Close` closes owned resources once in reverse
+construction order. Constructor rollback uses the same ownership ledger.
 
 Concept ownership does not depend on process topology. In local mode, Starport
 composes the Starmap acquisition package for single-binary startup and scheduled
@@ -156,13 +167,14 @@ catalog-generation contract into the same atomic Starport activation transaction
 only the HTTP listener and route tree. `Server.Shutdown` drains HTTP requests
 and does not close the registry, storage, or cache.
 
-`internal/registry` receives one complete catalog-derived connector generation.
-It does not read
-environment values, select fallback mocks, discover models, or probe provider
-health. A registration can contain an optional deployment-owned material
-source. Adapter availability does not contain credential availability.
-`Registry.Start` prevents later registrations. `Registry.Close` closes each
-registered inference adapter.
+`internal/registry` receives complete catalog-derived connector generations.
+It does not read environment values, select fallback mocks, discover models, or
+probe provider health. A registration can contain an optional deployment-owned
+material source. Adapter availability does not contain credential availability.
+`Registry.Start` closes its construction-only registration API. The runtime can
+still publish a complete prepared generation through its atomic publication
+seam. Replaced generations drain their connectors after active users release
+them. `Registry.Close` closes the current inference adapters.
 
 Remote catalog activation uses two durable current pointers over one set of
 immutable generation records. The Starmap subscriber advances the verified
@@ -271,10 +283,25 @@ scope. A synchronized source caches each token and refreshes it two minutes
 before expiry. Waiting requests can stop through their own contexts. The HTTP
 transport gets credentials with the inference request context.
 
-The operator must select a cloud auth mode. Ambient cloud credentials do not
-activate an adapter. Static credentials remain in Starport provider
-configuration. Starport rejects an empty mode or a static secret combined with
-default mode.
+Starmap declares the ordered inference authentication profiles for each
+provider. Starport attempts only the compiled profiles in that order. A
+catalog-declared default cloud profile can discover ambient workload identity
+or local developer credentials without a provider-specific Starport setting.
+A static profile uses only its declared fields. Starport does not combine
+static and default-cloud material into one profile.
+
+`internal/providers` owns one reconciler for all catalog providers. It resolves
+credentials during startup and through shared scheduled or manual work. It
+publishes a complete runtime generation only after connector and catalog
+validation. One provider-local failure does not block other providers. Process
+environment changes require a restart because another process cannot mutate a
+running process environment. Renewable cloud and direct secret sources can
+change material through their lifecycle without a restart.
+
+`internal/providerstate` projects adapter support, operator credential state,
+and exact offering availability as separate values. It stores an opaque
+material version only for stale-result rejection and never returns that value
+through HTTP. Tenant BYOK outcomes cannot change shared operator state.
 
 `internal/credentials` also owns direct inference secret-source adapters.
 It supports Google Cloud Secret Manager, Azure Key Vault, AWS Secrets Manager,
@@ -391,6 +418,8 @@ PUT    /api/v1/admin/keys/{key_id}
 DELETE /api/v1/admin/keys/{key_id}
 GET    /api/v1/admin/info
 GET    /api/v1/admin/metrics
+GET    /api/v1/admin/providers
+POST   /api/v1/admin/providers/refresh
 ```
 
 Health and optional UI:

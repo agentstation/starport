@@ -25,7 +25,7 @@ require_text() {
   local id=$1
   local pattern=$2
   local path=$3
-  if [[ -f "$root/$path" ]] && rg -q -- "$pattern" "$root/$path"; then
+  if [[ -f "$root/$path" ]] && grep -Eq -- "$pattern" "$root/$path"; then
     pass "$id"
   else
     fail "$id"
@@ -36,7 +36,7 @@ forbid_text() {
   local id=$1
   local pattern=$2
   shift 2
-  if rg -q -- "$pattern" "$@"; then fail "$id"; else pass "$id"; fi
+  if grep -EqR -- "$pattern" "$@"; then fail "$id"; else pass "$id"; fi
 }
 
 require_text DX-MAIN-1 'branches: \[main\]' .github/workflows/ci.yml
@@ -104,6 +104,19 @@ require_text DX-DEV-6 '127\.0\.0\.1:\$\{STARPORT_VALKEY_PORT:-6379\}:6379' docke
 require_text DX-DOC-1 'brew install agentstation/tap/starport' README.md
 forbid_text DX-DOC-2 'Coming Soon' "$root/docs/README.md"
 require_file DX-DOC-3 scripts/smoke-first-run.sh
+if "$root/scripts/verify-readme-quickstart.sh" >/dev/null; then
+  pass DX-DOC-4
+else
+  fail DX-DOC-4
+fi
+if "$root/scripts/test-readme-quickstart-verifier.sh" >/dev/null; then
+  pass DX-DOC-5
+else
+  fail DX-DOC-5
+fi
+require_text DX-DOC-6 '^    env_file:$' docker-compose.yml
+require_text DX-DOC-7 '^        required: false$' docker-compose.yml
+forbid_text DX-DOC-8 '^      [A-Z0-9_]+_API_KEY:' "$root/docker-compose.yml"
 
 printf 'Summary: %d passed, %d failed\n' "$passed" "$failed"
 test "$failed" -eq 0
