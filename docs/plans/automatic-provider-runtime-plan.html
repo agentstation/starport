@@ -109,7 +109,7 @@
     Created: 2026-08-11 ·
     Baseline: main @ b52cd7e286a9a870293155638392ed514b630a47 ·
     Proof root: <code>docs/plans/proof/automatic-provider-runtime/</code> ·
-    Next action: execute APR3 credential-driven runtime refresh
+    Next action: execute APR4 provider state and failure scope
   </p>
 
   <section id="outcome">
@@ -385,8 +385,8 @@
         <tr id="APR0" data-status="done"><td>APR0</td><td>Pin the baseline, author the red verifier, and record fail-before behavior.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR0.md</code>; <code>21d2579</code></td></tr>
         <tr id="APR1" data-status="done"><td>APR1</td><td>Separate provider-neutral bootstrap and explicit local development bootstrap.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR1.md</code>; <code>0a31858</code>; PR <code>#96</code>; merge <code>1c1f2c0</code>; APR-V01 and APR-V02 pass</td></tr>
         <tr id="APR2" data-status="done"><td>APR2</td><td>Register every executable catalog provider and separate operator credential eligibility from tenant BYOK.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR2.md</code>; <code>fe3748a</code>; APR-V03, APR-V04, and APR-V10 pass</td></tr>
-        <tr id="APR3" data-status="in_progress"><td>APR3</td><td>Add credential-driven runtime refresh with interval and manual triggers.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="APR4" data-status="todo"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="APR3" data-status="done"><td>APR3</td><td>Add credential-driven runtime refresh with interval and manual triggers.</td><td><code>done</code></td><td><code>proof/automatic-provider-runtime/APR3.md</code>; <code>3379a96</code>; APR-V06 and APR-V07 pass</td></tr>
+        <tr id="APR4" data-status="in_progress"><td>APR4</td><td>Add typed provider state and scoped failure transitions.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="APR5" data-status="todo"><td>APR5</td><td>Add authenticated provider status and runtime refresh controls.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR6" data-status="todo"><td>APR6</td><td>Rewrite and verify the first-run documentation and release examples.</td><td><code>todo</code></td><td></td></tr>
         <tr id="APR7" data-status="todo"><td>APR7</td><td>Merge, release, and verify public binary, cask, container, and protocol artifacts.</td><td><code>todo</code></td><td></td></tr>
@@ -425,7 +425,7 @@
     <h3 id="task-APR3">APR3 Credential-driven runtime refresh</h3>
       <p><strong>Problem:</strong> a source can appear or change while the catalog generation stays constant.</p>
       <p><strong>Owning seam and paths:</strong> <code>internal/credentials</code>, <code>internal/providers/reconciler.go</code>, <code>internal/registry</code>, and thin <code>internal/app</code> composition.</p>
-      <p><strong>Steps:</strong> Add startup, configurable interval, and authenticated manual triggers while sharing work, preserving source-owned renewal, and publishing only changed generations.</p>
+      <p><strong>Steps:</strong> Add shared startup, interval, and manual application reconciliation that preserves source-owned renewal and publishes only changed generations.</p>
       <p><strong>Acceptance:</strong> Named tests prove API-key and Google-default discovery, project projection, declared-profile-only access, per-provider failure isolation, revocation, retention, single-flight, cancellation, and request-lease drain.</p>
       <p><strong>Fail-before:</strong> <code>TestProviderReconcilerDiscoversAmbientKey</code>, <code>TestProviderReconcilerDiscoversGoogleDefault</code>, <code>TestGoogleDefaultProjectsCatalogProjectField</code>, <code>TestProviderFailureDoesNotBlockOthers</code>, <code>TestProviderReconcilerManualRefreshSharesInflight</code>, and lifecycle tests fail before implementation.</p>
       <p><strong>Verification:</strong> Focused tests, <code>go test -race ./internal/credentials ./internal/registry ./internal/app</code>, lifecycle benchmarks, and the campaign verifier.</p>
@@ -490,6 +490,8 @@
         <tr><td>2026-08-11</td><td>APR2</td><td>started</td><td>Catalog-wide provider registration and request-bound credential selection are now active.</td></tr>
         <tr><td>2026-08-11</td><td>APR2</td><td>done</td><td>Implemented catalog-wide adapter activation and selected-material endpoint binding in <code>fe3748a</code>. APR-V03, APR-V04, and APR-V10 pass. Sol autoreview reported no actionable findings.</td></tr>
         <tr><td>2026-08-11</td><td>APR3</td><td>started</td><td>Credential-driven startup, interval, and manual reconciliation are now active.</td></tr>
+        <tr><td>2026-08-11</td><td>APR3</td><td>done</td><td>Implemented isolated credential reconciliation, typed cloud field supply, cache-only request material, and atomic same-catalog runtime publication in <code>3379a96</code>. APR-V06 and APR-V07 pass. Sol autoreview reported no actionable findings.</td></tr>
+        <tr><td>2026-08-11</td><td>APR4</td><td>started</td><td>Typed provider state and evidence-scoped failure transitions are now active.</td></tr>
       </tbody>
     </table>
   </section>
