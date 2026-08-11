@@ -4,6 +4,7 @@ import (
 	"context"
 	"hash/crc32"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -248,11 +249,17 @@ func TestAWSSecretsManagerSourcePreservesBinaryAndClassifiesErrors(t *testing.T)
 		t.Fatal("credential-bearing URL opened a client")
 		return nil, nil, nil
 	}}
+	credentialURL := (&url.URL{
+		Scheme: "https",
+		Host:   "example.test",
+		Path:   "/key",
+		User:   url.UserPassword("fixture-user", "fixture-value"),
+	}).String()
 	_, err = unsafeSource.Resolve(
 		t.Context(),
-		mustCredentialReference(t, "aws-secrets-manager:https://user:password@example.test/key"),
+		mustCredentialReference(t, "aws-secrets-manager:"+credentialURL),
 	)
-	if !IsSourceError(err, SourceErrorInvalid) || strings.Contains(err.Error(), "password") {
+	if !IsSourceError(err, SourceErrorInvalid) || strings.Contains(err.Error(), "fixture-value") {
 		t.Fatalf("credential-bearing URL error = %v", err)
 	}
 }
