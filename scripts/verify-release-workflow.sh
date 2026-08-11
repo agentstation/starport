@@ -31,6 +31,10 @@ fi
 
 require_text '^permissions:$' 'a default permission boundary'
 require_text '^[[:space:]]+contents: read$' 'read-only default contents permission'
+if [ "$(grep -Ec '^[[:space:]]+artifact-metadata: write$' "$workflow")" -ne 2 ]; then
+	printf 'release and recovery jobs must each permit linked-artifact metadata writes\n' >&2
+	exit 1
+fi
 require_text 'git merge-base --is-ancestor .* origin/main' 'a main ancestry check'
 require_text 'test .*origin/main' 'an exact main-head check'
 require_text 'smoke-openrouter-sdks\.sh' 'the required official SDK gate'
