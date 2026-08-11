@@ -7,9 +7,7 @@ Last Updated: 2026-08-11
 
 ### Active Work
 
-| Task | Plan | Status | Next action |
-|------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP10 merges terminal evidence, then deletes the completed plan and proof root. |
+No active durable plan exists.
 
 ### Proposed Work
 

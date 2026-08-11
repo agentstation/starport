@@ -1,3 +1,0 @@
-go1.26.5
-darwin
-arm64
