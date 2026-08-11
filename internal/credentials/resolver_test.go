@@ -395,6 +395,115 @@ func TestCredentialLifecycleRefreshFailureRevocationAndLeaderCancellation(t *tes
 	})
 }
 
+func TestCachedProviderSourceNeverReadsBackend(t *testing.T) {
+	values := map[string]string{"OPENAI_API_KEY": "valid-first"}
+	var reads atomic.Int32
+	resolver := NewResolver(WithEnvironmentLookup(func(name string) (string, bool) {
+		reads.Add(1)
+		value, found := values[name]
+		return value, found
+	}))
+	handle, err := resolver.Provider(staticCredentialProvider(), nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, configured, err := handle.Resolve(t.Context()); err != nil || !configured {
+		t.Fatalf("prime material = %t, %v", configured, err)
+	}
+	readsAfterPrime := reads.Load()
+	values["OPENAI_API_KEY"] = "valid-second"
+	for range 10_000 {
+		material, err := handle.CachedSource().ResolveMaterial(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		value, _ := material.Value("api-key")
+		if value != "valid-first" {
+			t.Fatalf("cached value = %q", value)
+		}
+	}
+	if reads.Load() != readsAfterPrime {
+		t.Fatalf("cached request reads = %d, want %d", reads.Load(), readsAfterPrime)
+	}
+	if err := handle.Revoke(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := handle.CachedSource().ResolveMaterial(t.Context()); !errors.Is(err, ErrProviderNotConfigured) {
+		t.Fatalf("revoked cached source error = %v", err)
+	}
+}
+
+func TestLocalProviderResolutionSkipsRemoteSource(t *testing.T) {
+	var calls atomic.Int32
+	source := &testReferenceSource{
+		backend: "test",
+		resolve: func(context.Context, Reference) (SourceMaterial, error) {
+			calls.Add(1)
+			return NewSourceMaterial(
+				map[string]string{"value": "valid-remote"},
+				"remote-version",
+				time.Time{},
+				nil,
+			), nil
+		},
+	}
+	_, handle := testReferenceResolver(t, source)
+	if _, configured, err := handle.ResolveLocal(t.Context()); err != nil || configured {
+		t.Fatalf("local resolution = %t, %v", configured, err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("local resolution remote calls = %d", calls.Load())
+	}
+	if _, configured, err := handle.Resolve(t.Context()); err != nil || !configured {
+		t.Fatalf("background resolution = %t, %v", configured, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("background resolution remote calls = %d", calls.Load())
+	}
+}
+
+func TestCredentialRefreshRevokesDisappearedMaterial(t *testing.T) {
+	values := map[string]string{"OPENAI_API_KEY": "valid-first"}
+	handle, err := NewResolver(WithEnvironmentLookup(mapLookup(values))).Provider(
+		staticCredentialProvider(),
+		nil,
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, configured, err := handle.Resolve(t.Context()); err != nil || !configured {
+		t.Fatalf("prime material = %t, %v", configured, err)
+	}
+	delete(values, "OPENAI_API_KEY")
+	if _, configured, err := handle.Refresh(t.Context()); err != nil || configured {
+		t.Fatalf("refresh disappeared material = %t, %v", configured, err)
+	}
+	if _, err := handle.CachedMaterial(t.Context()); !errors.Is(err, ErrProviderNotConfigured) {
+		t.Fatalf("disappeared cached material error = %v", err)
+	}
+}
+
+func BenchmarkProviderCachedMaterial(b *testing.B) {
+	resolver := NewResolver(WithEnvironmentLookup(mapLookup(map[string]string{
+		"OPENAI_API_KEY": "valid-benchmark",
+	})))
+	handle, err := resolver.Provider(staticCredentialProvider(), nil, false)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if _, configured, err := handle.Resolve(context.Background()); err != nil || !configured {
+		b.Fatalf("prime material = %t, %v", configured, err)
+	}
+	source := handle.CachedSource()
+	b.ResetTimer()
+	for range b.N {
+		if _, err := source.ResolveMaterial(context.Background()); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestCredentialResolverRefreshesExpiredAndLeasedMaterial(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -532,17 +641,25 @@ func conformanceDefaultChain(t *testing.T) {
 	provider := defaultChainCredentialProvider()
 	resolver := NewResolver(WithCloudChain(
 		catalogs.ProviderAuthenticationGoogleDefault,
-		CloudChainFunc(func(
-			context.Context,
-			catalogs.ProviderCredentialProfile,
-			map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
-		) (SourceMaterial, error) {
-			return NewSourceMaterial(
-				map[string]string{"access-token": "token"}, "chain", time.Time{}, nil,
-			), nil
-		}),
+		CloudChainFunc{
+			Fields: func(
+				catalogs.ProviderCredentialProfile,
+				map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+			) ([]catalogs.ProviderCredentialFieldID, error) {
+				return []catalogs.ProviderCredentialFieldID{"access-token"}, nil
+			},
+			ResolveFunc: func(
+				context.Context,
+				catalogs.ProviderCredentialProfile,
+				map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+			) (SourceMaterial, error) {
+				return NewSourceMaterial(
+					map[string]string{"access-token": "token"}, "chain", time.Time{}, nil,
+				), nil
+			},
+		},
 	))
-	handle, err := resolver.Provider(provider, nil, true)
+	handle, err := resolver.Provider(provider, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,6 +669,94 @@ func conformanceDefaultChain(t *testing.T) {
 	}
 	if value, _ := material.Value("access-token"); value != "token" {
 		t.Fatalf("access-token = %q", value)
+	}
+}
+
+func TestProviderReconcilerDiscoversGoogleDefault(t *testing.T) {
+	conformanceDefaultChain(t)
+}
+
+func TestProviderReconcilerSkipsUndeclaredCloudChain(t *testing.T) {
+	var calls atomic.Int32
+	resolver := NewResolver(
+		WithEnvironmentLookup(mapLookup(nil)),
+		WithCloudChain(
+			catalogs.ProviderAuthenticationGoogleDefault,
+			CloudChainFunc{
+				Fields: func(
+					catalogs.ProviderCredentialProfile,
+					map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+				) ([]catalogs.ProviderCredentialFieldID, error) {
+					return []catalogs.ProviderCredentialFieldID{"api-key"}, nil
+				},
+				ResolveFunc: func(
+					context.Context,
+					catalogs.ProviderCredentialProfile,
+					map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+				) (SourceMaterial, error) {
+					calls.Add(1)
+					return NewSourceMaterial(
+						map[string]string{"api-key": "must-not-run"},
+						"must-not-run",
+						time.Time{},
+						nil,
+					), nil
+				},
+			},
+		),
+	)
+	handle, err := resolver.Provider(staticCredentialProvider(), nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, configured, err := handle.Resolve(t.Context())
+	if err != nil || configured {
+		t.Fatalf("resolve undeclared default chain = %t, %v", configured, err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("undeclared cloud chain calls = %d", calls.Load())
+	}
+}
+
+func TestDefaultChainWaitsForRequiredNonChainField(t *testing.T) {
+	provider := defaultChainCredentialProvider()
+	provider.Credentials.Fields = append(provider.Credentials.Fields, catalogs.ProviderCredentialField{
+		ID: "project", Kind: catalogs.ProviderCredentialFieldParameter, Required: true,
+	})
+	provider.Credentials.Profiles[0].Fields = append(
+		provider.Credentials.Profiles[0].Fields,
+		"project",
+	)
+	var calls atomic.Int32
+	resolver := NewResolver(WithCloudChain(
+		catalogs.ProviderAuthenticationGoogleDefault,
+		CloudChainFunc{
+			Fields: func(
+				catalogs.ProviderCredentialProfile,
+				map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+			) ([]catalogs.ProviderCredentialFieldID, error) {
+				return []catalogs.ProviderCredentialFieldID{"access-token"}, nil
+			},
+			ResolveFunc: func(
+				context.Context,
+				catalogs.ProviderCredentialProfile,
+				map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+			) (SourceMaterial, error) {
+				calls.Add(1)
+				return SourceMaterial{}, nil
+			},
+		},
+	))
+	handle, err := resolver.Provider(provider, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, configured, err := handle.Resolve(t.Context())
+	if err != nil || configured {
+		t.Fatalf("resolve incomplete cloud profile = %t, %v", configured, err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("incomplete cloud profile calls = %d", calls.Load())
 	}
 }
 

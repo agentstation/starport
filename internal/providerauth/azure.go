@@ -19,6 +19,13 @@ type azureDefaultChain struct {
 	credential azcore.TokenCredential
 }
 
+func (azureDefaultChain) SuppliedFields(
+	profile catalogs.ProviderCredentialProfile,
+	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+) ([]catalogs.ProviderCredentialFieldID, error) {
+	return bearerSuppliedFields(profile, fields)
+}
+
 func (chain azureDefaultChain) Resolve(
 	ctx context.Context,
 	profile catalogs.ProviderCredentialProfile,

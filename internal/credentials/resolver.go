@@ -33,11 +33,29 @@ var (
 	ErrMaterialRevoked = errors.New("provider inference credential material was revoked")
 )
 
+// CloudChainError reports a provider-local default-identity failure without
+// exposing credential material.
+type CloudChainError struct {
+	Primitive catalogs.ProviderAuthenticationPrimitive
+	Err       error
+}
+
+func (e *CloudChainError) Error() string {
+	return fmt.Sprintf("%s cloud credential resolution failed", e.Primitive)
+}
+
+// Unwrap preserves the primitive client error for internal classification.
+func (e *CloudChainError) Unwrap() error { return e.Err }
+
 // EnvironmentLookup reads one environment name without changing process state.
 type EnvironmentLookup func(string) (string, bool)
 
 // CloudChain resolves one compiled default-identity primitive.
 type CloudChain interface {
+	SuppliedFields(
+		catalogs.ProviderCredentialProfile,
+		map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+	) ([]catalogs.ProviderCredentialFieldID, error)
 	Resolve(
 		context.Context,
 		catalogs.ProviderCredentialProfile,
@@ -45,16 +63,39 @@ type CloudChain interface {
 	) (SourceMaterial, error)
 }
 
-// CloudChainFunc adapts a function to one default-identity primitive.
-type CloudChainFunc func(
-	context.Context,
-	catalogs.ProviderCredentialProfile,
-	map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
-) (SourceMaterial, error)
+// CloudChainFunc adapts functions to one default-identity primitive.
+type CloudChainFunc struct {
+	Fields func(
+		catalogs.ProviderCredentialProfile,
+		map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+	) ([]catalogs.ProviderCredentialFieldID, error)
+	ResolveFunc func(
+		context.Context,
+		catalogs.ProviderCredentialProfile,
+		map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+	) (SourceMaterial, error)
+}
 
 // MaterialSource resolves one configured provider's inference material.
 type MaterialSource interface {
 	ResolveMaterial(context.Context) (Material, error)
+}
+
+type cachedProviderSource struct{ handle *ProviderHandle }
+
+func (s cachedProviderSource) ResolveMaterial(ctx context.Context) (Material, error) {
+	return s.handle.CachedMaterial(ctx)
+}
+
+// SuppliedFields implements CloudChain.
+func (f CloudChainFunc) SuppliedFields(
+	profile catalogs.ProviderCredentialProfile,
+	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+) ([]catalogs.ProviderCredentialFieldID, error) {
+	if f.Fields == nil {
+		return nil, errors.New("cloud chain supplied-field contract is required")
+	}
+	return f.Fields(profile, fields)
 }
 
 // Resolve implements CloudChain.
@@ -63,7 +104,10 @@ func (f CloudChainFunc) Resolve(
 	profile catalogs.ProviderCredentialProfile,
 	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
 ) (SourceMaterial, error) {
-	return f(ctx, profile, fields)
+	if f.ResolveFunc == nil {
+		return SourceMaterial{}, errors.New("cloud chain resolver is required")
+	}
+	return f.ResolveFunc(ctx, profile, fields)
 }
 
 // ResolverOption configures inference credential resolution.
@@ -222,25 +266,66 @@ func (r *Resolver) Provider(
 
 // ResolveMaterial returns cached material when its lifecycle is fresh.
 func (h *ProviderHandle) ResolveMaterial(ctx context.Context) (Material, error) {
-	material, configured, err := h.resolve(ctx, false)
+	material, configured, err := h.resolve(ctx, false, true, true)
 	if err != nil {
 		return Material{}, err
 	}
 	if !configured {
-		return Material{}, fmt.Errorf("%s: %w", h.provider.ID, ErrProviderNotConfigured)
+		return Material{}, errors.Join(
+			fmt.Errorf("%s: %w", h.provider.ID, ErrProviderNotConfigured),
+			NewSourceError(SourceErrorNotConfigured, "inference"),
+		)
 	}
 	return material, nil
 }
 
 // Resolve reports whether the provider has a configured inference profile.
 func (h *ProviderHandle) Resolve(ctx context.Context) (Material, bool, error) {
-	return h.resolve(ctx, false)
+	return h.resolve(ctx, false, true, true)
+}
+
+// ResolveLocal resolves environment references and catalog-declared ambient
+// fields without contacting a remote secret source or cloud default chain.
+func (h *ProviderHandle) ResolveLocal(ctx context.Context) (Material, bool, error) {
+	return h.resolve(ctx, false, false, false)
+}
+
+// CachedSource returns a request-time source that performs no external I/O.
+// Background reconciliation owns source refresh.
+func (h *ProviderHandle) CachedSource() MaterialSource {
+	return cachedProviderSource{handle: h}
+}
+
+// CachedMaterial returns usable cached material without reading any external
+// source. Material remains usable during its refresh window until its actual
+// expiry.
+func (h *ProviderHandle) CachedMaterial(ctx context.Context) (Material, error) {
+	if h == nil || h.resolver == nil {
+		return Material{}, ErrResolverRequired
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return Material{}, err
+	}
+	h.resolver.mu.Lock()
+	material, exists := h.resolver.cache[h.identity]
+	now := h.resolver.now()
+	h.resolver.mu.Unlock()
+	if !exists || !materialUsable(material, now) {
+		return Material{}, errors.Join(
+			fmt.Errorf("%s: %w", h.provider.ID, ErrProviderNotConfigured),
+			NewSourceError(SourceErrorNotConfigured, "inference"),
+		)
+	}
+	return material, nil
 }
 
 // Refresh forces one source resolution and atomically replaces cached
 // material only after success.
 func (h *ProviderHandle) Refresh(ctx context.Context) (Material, bool, error) {
-	return h.resolve(ctx, true)
+	return h.resolve(ctx, true, true, true)
 }
 
 // Revoke invalidates cached material. A resolution that was already in flight
@@ -257,7 +342,12 @@ func (h *ProviderHandle) Revoke() error {
 	return nil
 }
 
-func (h *ProviderHandle) resolve(ctx context.Context, force bool) (Material, bool, error) {
+func (h *ProviderHandle) resolve(
+	ctx context.Context,
+	force bool,
+	allowCloudChain bool,
+	allowRemoteReferences bool,
+) (Material, bool, error) {
 	if h == nil || h.resolver == nil {
 		return Material{}, false, ErrResolverRequired
 	}
@@ -267,13 +357,15 @@ func (h *ProviderHandle) resolve(ctx context.Context, force bool) (Material, boo
 	if err := ctx.Err(); err != nil {
 		return Material{}, false, err
 	}
-	return h.resolver.resolve(ctx, h, force)
+	return h.resolver.resolve(ctx, h, force, allowCloudChain, allowRemoteReferences)
 }
 
 func (r *Resolver) resolve(
 	ctx context.Context,
 	handle *ProviderHandle,
 	force bool,
+	allowCloudChain bool,
+	allowRemoteReferences bool,
 ) (Material, bool, error) {
 	for {
 		r.mu.Lock()
@@ -302,7 +394,12 @@ func (r *Resolver) resolve(
 		r.inflight[handle.identity] = call
 		r.mu.Unlock()
 
-		material, configured, resolveErr := r.resolveUncached(ctx, handle)
+		material, configured, resolveErr := r.resolveUncached(
+			ctx,
+			handle,
+			allowCloudChain,
+			allowRemoteReferences,
+		)
 		retryForWaiters := resolveErr != nil && ctx.Err() != nil && errors.Is(resolveErr, ctx.Err())
 
 		r.mu.Lock()
@@ -316,8 +413,12 @@ func (r *Resolver) resolve(
 		call.configured = configured
 		call.err = resolveErr
 		call.retryForWaiters = retryForWaiters
-		if call.err == nil && call.configured {
-			r.cache[handle.identity] = call.material
+		if call.err == nil {
+			if call.configured {
+				r.cache[handle.identity] = call.material
+			} else {
+				delete(r.cache, handle.identity)
+			}
 		}
 		delete(r.inflight, handle.identity)
 		close(call.done)
@@ -329,11 +430,12 @@ func (r *Resolver) resolve(
 func (r *Resolver) resolveUncached(
 	ctx context.Context,
 	handle *ProviderHandle,
+	allowCloudChain bool,
+	allowRemoteReferences bool,
 ) (Material, bool, error) {
 	credentials := handle.provider.Credentials
 	fields := indexCredentialFields(credentials.Fields)
 	profiles := indexCredentialProfiles(credentials.Profiles)
-	observedProvider := handle.forced
 	for _, profileID := range credentials.Inference.Alternatives {
 		profile := profiles[profileID]
 		builder := newMaterialBuilder()
@@ -345,12 +447,19 @@ func (r *Resolver) resolveUncached(
 				handle.provider.ID,
 				fields[fieldID],
 				handle.policies[fieldID],
+				allowRemoteReferences,
 			)
 			if err != nil {
+				if IsSourceError(err, SourceErrorNotConfigured) {
+					observedProfile = true
+					if fields[fieldID].Required {
+						missing[fieldID] = struct{}{}
+					}
+					continue
+				}
 				return Material{}, false, err
 			}
 			observedProfile = observedProfile || observed
-			observedProvider = observedProvider || observed
 			if selected {
 				builder.add(fieldID, resolved)
 				continue
@@ -359,31 +468,21 @@ func (r *Resolver) resolveUncached(
 				missing[fieldID] = struct{}{}
 			}
 		}
-		if len(missing) > 0 && defaultChainPrimitive(profile.Primitive) && observedProfile {
-			chain := r.cloudChains[profile.Primitive]
-			if chain == nil {
-				continue
-			}
-			chainMaterial, err := chain.Resolve(ctx, profile, fields)
+		if allowCloudChain && len(missing) > 0 && defaultChainPrimitive(profile.Primitive) {
+			resolved, err := r.resolveCloudProfile(
+				ctx,
+				profile,
+				fields,
+				missing,
+				builder,
+			)
 			if err != nil {
-				if IsSourceError(err, SourceErrorNotConfigured) {
-					continue
-				}
 				return Material{}, false, err
 			}
-			for _, fieldID := range profile.Fields {
-				if _, exists := builder.values[fieldID]; exists {
-					continue
-				}
-				value, exists := chainMaterial.Value(string(fieldID))
-				if !exists || value == "" {
-					continue
-				}
-				if err := validateResolvedField(fields[fieldID], value); err != nil {
-					return Material{}, false, err
-				}
-				builder.add(fieldID, resolvedFieldFromSource(value, chainMaterial))
+			if !resolved {
+				continue
 			}
+			observedProfile = true
 		}
 		complete := true
 		for _, fieldID := range profile.Fields {
@@ -399,10 +498,57 @@ func (r *Resolver) resolveUncached(
 		}
 		return builder.build(r, profile), true, nil
 	}
-	if observedProvider {
-		return Material{}, false, fmt.Errorf("%s: %w", handle.provider.ID, ErrProviderNotConfigured)
-	}
 	return Material{}, false, nil
+}
+
+func (r *Resolver) resolveCloudProfile(
+	ctx context.Context,
+	profile catalogs.ProviderCredentialProfile,
+	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+	missing map[catalogs.ProviderCredentialFieldID]struct{},
+	builder *materialBuilder,
+) (bool, error) {
+	chain := r.cloudChains[profile.Primitive]
+	if chain == nil {
+		return false, nil
+	}
+	suppliedFields, err := chain.SuppliedFields(profile, fields)
+	if err != nil {
+		return false, err
+	}
+	supplied := make(map[catalogs.ProviderCredentialFieldID]struct{}, len(suppliedFields))
+	for _, fieldID := range suppliedFields {
+		supplied[fieldID] = struct{}{}
+	}
+	for fieldID := range missing {
+		if _, exists := supplied[fieldID]; !exists {
+			return false, nil
+		}
+	}
+	chainMaterial, err := chain.Resolve(ctx, profile, fields)
+	if err != nil {
+		if IsSourceError(err, SourceErrorNotConfigured) {
+			return false, nil
+		}
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		return false, &CloudChainError{Primitive: profile.Primitive, Err: err}
+	}
+	for _, fieldID := range profile.Fields {
+		if _, exists := builder.values[fieldID]; exists {
+			continue
+		}
+		value, exists := chainMaterial.Value(string(fieldID))
+		if !exists || value == "" {
+			continue
+		}
+		if err := validateResolvedField(fields[fieldID], value); err != nil {
+			return false, err
+		}
+		builder.add(fieldID, resolvedFieldFromSource(value, chainMaterial))
+	}
+	return true, nil
 }
 
 type resolvedField struct {
@@ -417,8 +563,12 @@ func (r *Resolver) resolveField(
 	providerID catalogs.ProviderID,
 	field catalogs.ProviderCredentialField,
 	policy ReferencePolicy,
+	allowRemoteReferences bool,
 ) (resolvedField, bool, bool, error) {
 	if policy.Reference.backend != "" {
+		if !allowRemoteReferences && policy.Reference.backend != ReferenceBackendEnvironment {
+			return resolvedField{}, false, true, nil
+		}
 		source := r.sources[policy.Reference.backend]
 		material, err := source.Resolve(ctx, policy.Reference)
 		if err == nil {
@@ -606,14 +756,21 @@ func (b *materialBuilder) build(resolver *Resolver, profile catalogs.ProviderCre
 }
 
 func materialFresh(material Material, now time.Time) bool {
-	if material.Empty() {
-		return false
-	}
-	if expiresAt, exists := material.ExpiresAt(); exists && !now.Before(expiresAt) {
+	if !materialUsable(material, now) {
 		return false
 	}
 	if lease, exists := material.Lease(); exists && !lease.RefreshAfter.IsZero() &&
 		!now.Before(lease.RefreshAfter) {
+		return false
+	}
+	return true
+}
+
+func materialUsable(material Material, now time.Time) bool {
+	if material.Empty() {
+		return false
+	}
+	if expiresAt, exists := material.ExpiresAt(); exists && !now.Before(expiresAt) {
 		return false
 	}
 	return true

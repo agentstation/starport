@@ -16,7 +16,32 @@ import (
 const defaultRefreshBefore = 2 * time.Minute
 
 type googleDefaultChain struct {
-	provider auth.TokenProvider
+	provider       auth.TokenProvider
+	projectID      func(context.Context) (string, error)
+	quotaProjectID func(context.Context) (string, error)
+}
+
+func (googleDefaultChain) SuppliedFields(
+	profile catalogs.ProviderCredentialProfile,
+	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+) ([]catalogs.ProviderCredentialFieldID, error) {
+	supplied, err := bearerSuppliedFields(profile, fields)
+	if err != nil {
+		return nil, err
+	}
+	options := profile.ProtocolOptions.GoogleDefault
+	if options == nil {
+		return supplied, nil
+	}
+	for _, fieldID := range []catalogs.ProviderCredentialFieldID{
+		options.ProjectField,
+		options.QuotaProjectField,
+	} {
+		if fieldID != "" {
+			supplied = append(supplied, fieldID)
+		}
+	}
+	return supplied, nil
 }
 
 func (chain googleDefaultChain) Resolve(
@@ -25,6 +50,8 @@ func (chain googleDefaultChain) Resolve(
 	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
 ) (credentials.SourceMaterial, error) {
 	provider := chain.provider
+	projectID := chain.projectID
+	quotaProjectID := chain.quotaProjectID
 	if provider == nil {
 		credential, err := googlecredentials.DetectDefault(&googlecredentials.DetectOptions{
 			Scopes:              append([]string(nil), profile.Scopes...),
@@ -38,6 +65,8 @@ func (chain googleDefaultChain) Resolve(
 			)
 		}
 		provider = credential.TokenProvider
+		projectID = credential.ProjectID
+		quotaProjectID = credential.QuotaProjectID
 	}
 	if provider == nil {
 		return credentials.SourceMaterial{}, errors.New("google token provider is required")
@@ -59,5 +88,38 @@ func (chain googleDefaultChain) Resolve(
 			"google-default",
 		)
 	}
-	return renewableBearerMaterial(fieldID, token.Value, token.Expiry), nil
+	values := map[string]string{string(fieldID): token.Value}
+	if options := profile.ProtocolOptions.GoogleDefault; options != nil {
+		if err := resolveGoogleProperty(ctx, values, options.ProjectField, projectID); err != nil {
+			return credentials.SourceMaterial{}, err
+		}
+		if err := resolveGoogleProperty(
+			ctx,
+			values,
+			options.QuotaProjectField,
+			quotaProjectID,
+		); err != nil {
+			return credentials.SourceMaterial{}, err
+		}
+	}
+	return renewableCloudMaterial(values, token.Expiry), nil
+}
+
+func resolveGoogleProperty(
+	ctx context.Context,
+	values map[string]string,
+	fieldID catalogs.ProviderCredentialFieldID,
+	resolve func(context.Context) (string, error),
+) error {
+	if fieldID == "" || resolve == nil {
+		return nil
+	}
+	value, err := resolve(ctx)
+	if err != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err == nil && value != "" {
+		values[string(fieldID)] = value
+	}
+	return nil
 }

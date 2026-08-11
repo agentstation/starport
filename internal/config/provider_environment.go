@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -28,6 +29,13 @@ type credentialFieldOwner struct {
 	providerID catalogs.ProviderID
 	fieldID    catalogs.ProviderCredentialFieldID
 	role       string
+}
+
+// ProviderResolutionFailure identifies one provider whose inference material
+// could not be resolved. It contains no credential material.
+type ProviderResolutionFailure struct {
+	ProviderID catalogs.ProviderID
+	Err        error
 }
 
 // ResolveProviders resolves named inference material from the active Starmap
@@ -56,52 +64,175 @@ func (c *Config) ResolveProviderSet(
 		return nil, errors.New("catalog providers are required")
 	}
 	providerRecords := providers.List()
-	if err := validateCredentialAliases(providerRecords); err != nil {
+	if err := c.ValidateProviderCredentialContracts(providerRecords); err != nil {
 		return nil, err
-	}
-	resolver := c.credentialResolver
-	if resolver == nil {
-		options := []credentials.ResolverOption{}
-		if c.providerEnvironment != nil {
-			options = append(options, credentials.WithEnvironmentLookup(c.providerEnvironment.Lookup))
-		}
-		resolver = credentials.NewResolver(options...)
-		c.credentialResolver = resolver
 	}
 
 	resolved := make(ProvidersConfig)
 	for _, provider := range providerRecords {
-		explicit := settings[provider.ID]
-		references, err := providerCredentialReferences(
+		providerConfig, configured, err := c.ResolveProviderRuntime(
+			ctx,
 			provider,
-			explicit.CredentialReferences,
-			c.providerEnvironment,
+			settings[provider.ID],
+			false,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("provider %s credential reference: %w", provider.ID, err)
-		}
-		policies, err := credentialReferencePolicies(references)
-		if err != nil {
-			return nil, fmt.Errorf("provider %s credential reference: %w", provider.ID, err)
-		}
-		handle, err := resolver.Provider(provider, policies, providerConfigurationPresent(explicit))
-		if err != nil {
-			return nil, err
-		}
-		material, configured, err := handle.Resolve(ctx)
-		if err != nil {
+			var cloudErr *credentials.CloudChainError
+			if errors.As(err, &cloudErr) {
+				continue
+			}
 			return nil, err
 		}
 		if !configured {
 			continue
 		}
-		catalogConfig := projectResolvedProvider(provider, material, handle)
-		resolved[provider.ID] = mergeProviderConfig(catalogConfig, explicit, references)
+		resolved[provider.ID] = providerConfig
 	}
 	if err := resolved.Validate(); err != nil {
 		return nil, err
 	}
 	return resolved, nil
+}
+
+// ValidateProviderCredentialContracts validates the catalog-wide inference
+// credential namespace before any source access.
+func (c *Config) ValidateProviderCredentialContracts(
+	providers []catalogs.Provider,
+) error {
+	if c == nil {
+		return errors.New("configuration is required")
+	}
+	return validateCredentialAliases(providers)
+}
+
+// ResolveProviderRuntime resolves one catalog provider. Refresh bypasses a
+// fresh cache entry but preserves valid cached material after a transient
+// source failure.
+func (c *Config) ResolveProviderRuntime(
+	ctx context.Context,
+	provider catalogs.Provider,
+	explicit ProviderConfig,
+	refresh bool,
+) (ProviderConfig, bool, error) {
+	return c.resolveProviderRuntime(ctx, provider, explicit, refresh, true)
+}
+
+func (c *Config) resolveProviderRuntime(
+	ctx context.Context,
+	provider catalogs.Provider,
+	explicit ProviderConfig,
+	refresh bool,
+	allowCloudChain bool,
+) (ProviderConfig, bool, error) {
+	if c == nil {
+		return ProviderConfig{}, false, errors.New("configuration is required")
+	}
+	resolver := c.providerCredentialResolver()
+	references, err := providerCredentialReferences(
+		provider,
+		explicit.CredentialReferences,
+		c.providerEnvironment,
+	)
+	if err != nil {
+		return ProviderConfig{}, false, fmt.Errorf(
+			"provider %s credential reference: %w",
+			provider.ID,
+			err,
+		)
+	}
+	policies, err := credentialReferencePolicies(references)
+	if err != nil {
+		return ProviderConfig{}, false, fmt.Errorf(
+			"provider %s credential reference: %w",
+			provider.ID,
+			err,
+		)
+	}
+	handle, err := resolver.Provider(provider, policies, providerConfigurationPresent(explicit))
+	if err != nil {
+		return ProviderConfig{}, false, err
+	}
+	var material credentials.Material
+	var configured bool
+	if refresh {
+		material, configured, err = handle.Refresh(ctx)
+	} else if !allowCloudChain {
+		material, configured, err = handle.ResolveLocal(ctx)
+	} else {
+		material, configured, err = handle.Resolve(ctx)
+	}
+	if err != nil || !configured {
+		return ProviderConfig{}, false, err
+	}
+	catalogConfig := projectResolvedProvider(provider, material, handle.CachedSource())
+	return mergeProviderConfig(catalogConfig, explicit, references), true, nil
+}
+
+// ResolveProviderSetLocalIsolated resolves startup-local environment fields
+// without contacting a remote secret source or cloud identity endpoint. The
+// background reconciler owns external source discovery.
+func (c *Config) ResolveProviderSetLocalIsolated(
+	ctx context.Context,
+	providers catalogs.ProvidersReader,
+	settings ProvidersConfig,
+) (ProvidersConfig, []ProviderResolutionFailure, error) {
+	if c == nil {
+		return nil, nil, errors.New("configuration is required")
+	}
+	if providers == nil {
+		return nil, nil, errors.New("catalog providers are required")
+	}
+	providerRecords := providers.List()
+	if err := c.ValidateProviderCredentialContracts(providerRecords); err != nil {
+		return nil, nil, err
+	}
+	resolved := make(ProvidersConfig)
+	failures := make([]ProviderResolutionFailure, 0)
+	for _, provider := range providerRecords {
+		providerConfig, configured, err := c.resolveProviderRuntime(
+			ctx,
+			provider,
+			settings[provider.ID],
+			false,
+			false,
+		)
+		if err != nil {
+			failures = append(failures, ProviderResolutionFailure{
+				ProviderID: provider.ID,
+				Err:        err,
+			})
+			continue
+		}
+		if configured {
+			resolved[provider.ID] = providerConfig
+		}
+	}
+	if err := resolved.Validate(); err != nil {
+		return nil, nil, err
+	}
+	return resolved, failures, nil
+}
+
+func (c *Config) providerCredentialResolver() *credentials.Resolver {
+	resolverMu := c.prepareCredentialResolver()
+	resolverMu.Lock()
+	defer resolverMu.Unlock()
+	if c.credentialResolver != nil {
+		return c.credentialResolver
+	}
+	options := []credentials.ResolverOption{}
+	if c.providerEnvironment != nil {
+		options = append(options, credentials.WithEnvironmentLookup(c.providerEnvironment.Lookup))
+	}
+	c.credentialResolver = credentials.NewResolver(options...)
+	return c.credentialResolver
+}
+
+func (c *Config) prepareCredentialResolver() *sync.Mutex {
+	if c.credentialResolverMu == nil {
+		c.credentialResolverMu = &sync.Mutex{}
+	}
+	return c.credentialResolverMu
 }
 
 func providerCredentialReferences(

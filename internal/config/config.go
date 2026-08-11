@@ -5,6 +5,7 @@ package config
 
 import (
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -25,13 +26,16 @@ type Config struct {
 	Cache             CacheConfig        `env:",prefix=CACHE_"`
 	ChatUI            ChatUIConfig       `env:",prefix=CHATUI_"`
 
-	providerEnvironment environmentLookup
-	credentialResolver  *credentials.Resolver
+	providerEnvironment  environmentLookup
+	credentialResolver   *credentials.Resolver
+	credentialResolverMu *sync.Mutex
 }
 
 // CredentialSourcesConfig defines direct inference secret-source lifecycle.
 type CredentialSourcesConfig struct {
 	RemoteRefreshInterval time.Duration `env:"REMOTE_REFRESH_INTERVAL,default=5m"`
+	ReconcileInterval     time.Duration `env:"RECONCILE_INTERVAL,default=1m"`
+	ReconcileTimeout      time.Duration `env:"RECONCILE_TIMEOUT,default=10s"`
 }
 
 // CatalogConfig selects local Starmap acquisition or one verified remote
@@ -223,6 +227,7 @@ type ChatUIConfig struct {
 
 // Validate performs validation on the configuration
 func (c *Config) Validate() error {
+	c.prepareCredentialResolver()
 	// Validate server config
 	if err := c.Server.Validate(); err != nil {
 		return err

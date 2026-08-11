@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -37,6 +39,39 @@ func TestAppRefreshPublishesCompleteRuntimeGeneration(t *testing.T) {
 
 	oldLease.Release()
 	require.Equal(t, int32(1), fixture.oldConnector.closed.Load())
+}
+
+func TestProviderReconcilerIntervalPublishesChangedGeneration(t *testing.T) {
+	fixture := newRuntimeRefreshFixture(t)
+	application := fixture.application
+	view, err := application.currentProviderCatalogView()
+	require.NoError(t, err)
+	resolver := &appReconcileResolver{}
+	reconciler, err := providers.NewReconciler(
+		application.currentProviderCatalogView,
+		resolver,
+		nil,
+		application.publishProviderRuntime,
+		time.Second,
+	)
+	require.NoError(t, err)
+	require.NoError(t, reconciler.Adopt(view, nil))
+	application.providerReconciler = reconciler
+	application.config.CredentialSources.ReconcileInterval = 5 * time.Millisecond
+	before := application.registry.Snapshot().AvailabilityRevision()
+
+	resolver.configured.Store(true)
+	ctx, cancel := context.WithCancel(t.Context())
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		application.providerReconcileLoop(ctx)
+	}()
+	require.Eventually(t, func() bool {
+		return application.registry.Snapshot().AvailabilityRevision() > before
+	}, time.Second, time.Millisecond)
+	cancel()
+	<-stopped
 }
 
 func TestAppRefreshFailureRetainsPriorRuntimeGeneration(t *testing.T) {
@@ -148,6 +183,55 @@ func (r *runtimeSyncFixture) Sync(
 type runtimeRefreshConnector struct {
 	connectors.Connector
 	closed atomic.Int32
+}
+
+type appReconcileResolver struct {
+	configured atomic.Bool
+	mu         sync.Mutex
+}
+
+func (*appReconcileResolver) ValidateProviderCredentialContracts([]catalogs.Provider) error {
+	return nil
+}
+
+func (r *appReconcileResolver) ResolveProviderRuntime(
+	_ context.Context,
+	provider catalogs.Provider,
+	_ config.ProviderConfig,
+	_ bool,
+) (config.ProviderConfig, bool, error) {
+	if provider.ID != catalogs.ProviderIDOpenAI || !r.configured.Load() {
+		return config.ProviderConfig{}, false, nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	profileID := provider.Credentials.Inference.Alternatives[0]
+	var profile catalogs.ProviderCredentialProfile
+	for _, candidate := range provider.Credentials.Profiles {
+		if candidate.ID == profileID {
+			profile = candidate
+			break
+		}
+	}
+	values := make(map[catalogs.ProviderCredentialFieldID]string, len(profile.Fields))
+	for _, fieldID := range profile.Fields {
+		values[fieldID] = "interval-value"
+	}
+	material := credentials.NewMaterial(
+		profile,
+		values,
+		credentials.MaterialMetadata{Version: "interval-version"},
+	)
+	return config.ProviderConfig{
+		Material: material, CredentialSource: intervalMaterialSource{material: material},
+		Timeout: time.Second, MaxConnections: 1, Enabled: true,
+	}, true, nil
+}
+
+type intervalMaterialSource struct{ material credentials.Material }
+
+func (s intervalMaterialSource) ResolveMaterial(context.Context) (credentials.Material, error) {
+	return s.material, nil
 }
 
 func (c *runtimeRefreshConnector) Close() error {

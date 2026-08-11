@@ -44,6 +44,9 @@ var (
 	ErrCredentialsRequired = errors.New("provider credential master key is required")
 	// ErrIdentityRequired reports empty gateway identity storage.
 	ErrIdentityRequired = errors.New("gateway identity is required; run \"starport init\"")
+	// ErrProviderCatalogChanged reports a credential result that was resolved
+	// from a catalog generation that is no longer current.
+	ErrProviderCatalogChanged = errors.New("provider catalog changed during reconciliation")
 )
 
 type lifecycleEntry struct {
@@ -53,23 +56,25 @@ type lifecycleEntry struct {
 
 // App owns all constructed runtime dependencies.
 type App struct {
-	config           *config.Config
-	providerSettings config.ProvidersConfig
-	httpServer       httpRuntime
-	hotReloader      hotReloadRuntime
-	registry         *registry.Registry
-	catalogRuntime   catalogRuntime
-	catalogUpdates   catalogUpdateRuntime
-	catalog          *runtimecatalog.ControlPlane
-	store            storage.KVStore
-	cacheManager     *cache.Manager
-	transports       *connectors.TransportRegistry
-	authentication   *providerauth.Registry
-	newConnector     func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
-	lifecycle        []lifecycleEntry
-	catalogRefreshWG sync.WaitGroup
-	closeOnce        sync.Once
-	closeErr         error
+	config             *config.Config
+	providerSettings   config.ProvidersConfig
+	httpServer         httpRuntime
+	hotReloader        hotReloadRuntime
+	registry           *registry.Registry
+	catalogRuntime     catalogRuntime
+	catalogUpdates     catalogUpdateRuntime
+	catalog            *runtimecatalog.ControlPlane
+	store              storage.KVStore
+	cacheManager       *cache.Manager
+	transports         *connectors.TransportRegistry
+	authentication     *providerauth.Registry
+	providerReconciler *providers.Reconciler
+	newConnector       func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
+	lifecycle          []lifecycleEntry
+	runtimeWG          sync.WaitGroup
+	runtimeMu          sync.Mutex
+	closeOnce          sync.Once
+	closeErr           error
 }
 
 // New creates the complete production runtime without starting background work.
@@ -199,15 +204,37 @@ func (b *runtimeBuilder) openConcepts() error {
 			log.Warn().Err(err).Msg("startup Starmap catalog refresh failed; retaining current generation")
 		}
 	}
-	resolvedProviders, err := b.config.ResolveProviderSet(
+	providerReconciler, err := providers.NewReconciler(
+		b.application.currentProviderCatalogView,
+		b.config,
+		b.application.providerSettings,
+		b.application.publishProviderRuntime,
+		b.config.CredentialSources.ReconcileTimeout,
+	)
+	if err != nil {
+		return fmt.Errorf("open provider reconciler: %w", err)
+	}
+	b.application.providerReconciler = providerReconciler
+	startupProviders, startupFailures, err := b.config.ResolveProviderSetLocalIsolated(
 		context.Background(),
 		b.application.catalog.Current().Catalog().Providers(),
 		b.application.providerSettings,
 	)
 	if err != nil {
-		return fmt.Errorf("resolve provider configuration: %w", err)
+		return fmt.Errorf("reconcile startup provider configuration: %w", err)
 	}
-	b.config.Providers = resolvedProviders
+	b.config.Providers = startupProviders
+	startupView, err := b.application.currentProviderCatalogView()
+	if err != nil {
+		return err
+	}
+	if err := providerReconciler.Adopt(startupView, startupProviders); err != nil {
+		return fmt.Errorf("adopt startup provider configuration: %w", err)
+	}
+	logProviderFailureIDs(
+		"startup provider reconciliation",
+		resolutionFailureIDs(startupFailures),
+	)
 
 	b.identities, err = identity.Open(b.application.store)
 	if err != nil {
@@ -391,6 +418,13 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.registry.Start(runCtx); err != nil {
 		return errors.Join(fmt.Errorf("start registry: %w", err), a.closeWithTimeout())
 	}
+	if a.providerReconciler != nil {
+		a.runtimeWG.Add(1)
+		go func() {
+			defer a.runtimeWG.Done()
+			a.providerReconcileLoop(runCtx)
+		}()
+	}
 	if a.catalogUpdates != nil {
 		if err := a.catalogUpdates.Start(runCtx); err != nil {
 			return errors.Join(
@@ -406,9 +440,9 @@ func (a *App) Run(ctx context.Context) error {
 				"remote catalog candidate failed; serving the current complete runtime",
 			)
 		}
-		a.catalogRefreshWG.Add(1)
+		a.runtimeWG.Add(1)
 		go func() {
-			defer a.catalogRefreshWG.Done()
+			defer a.runtimeWG.Done()
 			a.remoteCatalogLoop(runCtx)
 		}()
 	}
@@ -418,9 +452,9 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 	if a.catalogUpdates == nil && a.config.Catalog.RefreshInterval > 0 {
-		a.catalogRefreshWG.Add(1)
+		a.runtimeWG.Add(1)
 		go func() {
-			defer a.catalogRefreshWG.Done()
+			defer a.runtimeWG.Done()
 			a.refreshCatalogLoop(runCtx)
 		}()
 	}
@@ -439,7 +473,7 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 	cancelRun()
-	a.catalogRefreshWG.Wait()
+	a.runtimeWG.Wait()
 	return errors.Join(runErr, a.closeWithTimeout())
 }
 
@@ -569,6 +603,8 @@ func (a *App) refreshRuntime(ctx context.Context) error {
 }
 
 func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogState) error {
+	a.runtimeMu.Lock()
+	defer a.runtimeMu.Unlock()
 	if state.Catalog == nil || strings.TrimSpace(state.GenerationID) == "" {
 		return ErrCatalogRequired
 	}
@@ -578,7 +614,7 @@ func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogSta
 		current.PayloadChecksum() == state.PayloadChecksum {
 		return nil
 	}
-	resolved, err := a.config.ResolveProviderSet(
+	resolved, failures, err := a.config.ResolveProviderSetLocalIsolated(
 		ctx,
 		state.Catalog.Providers(),
 		a.providerSettings,
@@ -619,6 +655,16 @@ func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogSta
 	if err := a.registry.Publish(candidate, snapshot); err != nil {
 		return errors.Join(err, candidate.Close())
 	}
+	a.config.Providers = config.CloneProvidersConfig(resolved)
+	if a.providerReconciler != nil {
+		if err := a.providerReconciler.Adopt(providerCatalogView(state), resolved); err != nil {
+			return err
+		}
+	}
+	logProviderFailureIDs(
+		"catalog provider reconciliation",
+		resolutionFailureIDs(failures),
+	)
 	return nil
 }
 
