@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `active` | Execute APR4 provider state and failure scope. |
+| Automatic provider runtime | [`docs/plans/automatic-provider-runtime-plan.html`](plans/automatic-provider-runtime-plan.html) | `active` | Execute APR5 provider operations API. |
 
 ### Proposed Work
 
