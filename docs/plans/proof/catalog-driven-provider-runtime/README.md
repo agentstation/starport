@@ -2,7 +2,7 @@
 
 This proof root belongs to
 [`catalog-driven-provider-runtime-plan.html`](../../catalog-driven-provider-runtime-plan.html).
-The plan status is `active`. CDP7 is the current task.
+The plan status is `active`. CDP7.1 is the current task.
 
 ## Pinned source state
 
@@ -99,4 +99,8 @@ package deltas are mandatory evidence, but they are not admission limits.
 - [CDP6.1 atomic runtime generations](cdp6.1.md): complete candidates, request
   leases, and cache leases passed. Rollback, connector draining, and credential
   rotation also passed.
-- Per-adapter dependency and binary measurements from CDP7.1.
+- [CDP7 request credential policy and operator surfaces](cdp7.md): exact BYOK
+  order, tenant isolation, and neutral availability handling passed.
+  Catalog-driven surfaces passed for chat, streaming, and embeddings.
+- Per-adapter dependency, binary, lifecycle, and conformance evidence from
+  CDP7.1.

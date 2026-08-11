@@ -9,7 +9,7 @@ Last Updated: 2026-08-11
 
 | Task | Plan | Status | Next action |
 |------|------|--------|-------------|
-| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP7 implements request credential policy, exact BYOK strategy behavior, and catalog-driven setup and diagnosis surfaces. |
+| Catalog-driven provider runtime | [`docs/plans/catalog-driven-provider-runtime-plan.html`](plans/catalog-driven-provider-runtime-plan.html) | `active` | CDP7.1 measures and implements accepted direct secret-source adapters in Starport. |
 
 ### Proposed Work
 
