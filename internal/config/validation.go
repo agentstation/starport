@@ -112,6 +112,15 @@ func (c *CredentialSourcesConfig) Validate() error {
 	if c.RemoteRefreshInterval < 0 {
 		return fmt.Errorf("credential source remote refresh interval cannot be negative")
 	}
+	if c.ReconcileInterval < 0 {
+		return fmt.Errorf("credential source reconcile interval cannot be negative")
+	}
+	if c.ReconcileTimeout < 0 {
+		return fmt.Errorf("credential source reconcile timeout cannot be negative")
+	}
+	if c.ReconcileInterval > 0 && c.ReconcileTimeout == 0 {
+		return fmt.Errorf("credential source reconcile timeout must be positive when reconciliation is enabled")
+	}
 	return nil
 }
 

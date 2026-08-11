@@ -79,6 +79,18 @@ func TestLoaderSecurePlatformDefaults(t *testing.T) {
 			cfg.CredentialSources.RemoteRefreshInterval,
 		)
 	}
+	if cfg.CredentialSources.ReconcileInterval != time.Minute {
+		t.Errorf(
+			"credential reconcile interval = %s, want 1m",
+			cfg.CredentialSources.ReconcileInterval,
+		)
+	}
+	if cfg.CredentialSources.ReconcileTimeout != 10*time.Second {
+		t.Errorf(
+			"credential reconcile timeout = %s, want 10s",
+			cfg.CredentialSources.ReconcileTimeout,
+		)
+	}
 	if cfg.RateLimiting.ConfigPath != paths.RateLimitsFile {
 		t.Errorf("default rate-limit path = %q, want %q", cfg.RateLimiting.ConfigPath, paths.RateLimitsFile)
 	}
@@ -182,6 +194,24 @@ func TestLoaderAppliesDirectSecretRefreshInterval(t *testing.T) {
 			"direct secret refresh interval = %s, want 9m",
 			cfg.CredentialSources.RemoteRefreshInterval,
 		)
+	}
+}
+
+func TestLoaderAppliesProviderReconcileLifecycle(t *testing.T) {
+	cfg, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CREDENTIAL_SOURCES_RECONCILE_INTERVAL": "2m",
+			"STARPORT_CREDENTIAL_SOURCES_RECONCILE_TIMEOUT":  "15s",
+		}).
+		WithEnvFiles().
+		Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.CredentialSources.ReconcileInterval != 2*time.Minute ||
+		cfg.CredentialSources.ReconcileTimeout != 15*time.Second {
+		t.Fatalf("provider reconcile lifecycle = %#v", cfg.CredentialSources)
 	}
 }
 

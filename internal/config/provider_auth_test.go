@@ -23,18 +23,26 @@ func TestLoaderDerivesCloudAuthenticationFromCatalogProfiles(t *testing.T) {
 		credentials.WithEnvironmentLookup(lookup.Lookup),
 		credentials.WithCloudChain(
 			catalogs.ProviderAuthenticationGoogleDefault,
-			credentials.CloudChainFunc(func(
-				context.Context,
-				catalogs.ProviderCredentialProfile,
-				map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
-			) (credentials.SourceMaterial, error) {
-				return credentials.NewSourceMaterial(
-					map[string]string{"access-token": "cloud-token"},
-					"renewable-version",
-					time.Now().Add(time.Hour),
-					&credentials.Lease{Renewable: true},
-				), nil
-			}),
+			credentials.CloudChainFunc{
+				Fields: func(
+					catalogs.ProviderCredentialProfile,
+					map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+				) ([]catalogs.ProviderCredentialFieldID, error) {
+					return []catalogs.ProviderCredentialFieldID{"access-token"}, nil
+				},
+				ResolveFunc: func(
+					context.Context,
+					catalogs.ProviderCredentialProfile,
+					map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+				) (credentials.SourceMaterial, error) {
+					return credentials.NewSourceMaterial(
+						map[string]string{"access-token": "cloud-token"},
+						"renewable-version",
+						time.Now().Add(time.Hour),
+						&credentials.Lease{Renewable: true},
+					), nil
+				},
+			},
 		),
 	)
 

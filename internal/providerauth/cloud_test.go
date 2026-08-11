@@ -55,6 +55,43 @@ func TestGoogleDefaultChainUsesCatalogScopeAndBearerField(t *testing.T) {
 	}
 }
 
+func TestGoogleDefaultProjectsCatalogProjectField(t *testing.T) {
+	profile := cloudTestProfile(
+		catalogs.ProviderAuthenticationGoogleDefault,
+		nil,
+	)
+	profile.Fields = append(profile.Fields, "project")
+	profile.ProtocolOptions.GoogleDefault = &catalogs.ProviderGoogleDefaultProtocolOptions{
+		ProjectField: "project",
+	}
+	fields := cloudTestFields()
+	fields["project"] = catalogs.ProviderCredentialField{
+		ID: "project", Kind: catalogs.ProviderCredentialFieldParameter, Required: true,
+	}
+	chain := googleDefaultChain{
+		provider: googleTokenProviderFunc(func(context.Context) (*auth.Token, error) {
+			return &auth.Token{Value: "token", Expiry: time.Now().Add(time.Hour)}, nil
+		}),
+		projectID: func(context.Context) (string, error) {
+			return "catalog-project", nil
+		},
+	}
+	material, err := chain.Resolve(t.Context(), profile, fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project, exists := material.Value("project"); !exists || project != "catalog-project" {
+		t.Fatalf("project = %q, %t", project, exists)
+	}
+	supplied, err := chain.SuppliedFields(profile, fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(supplied, catalogs.ProviderCredentialFieldID("project")) {
+		t.Fatalf("supplied fields = %v", supplied)
+	}
+}
+
 func TestGoogleDefaultChainForwardsCancellation(t *testing.T) {
 	chain := googleDefaultChain{provider: googleTokenProviderFunc(
 		func(ctx context.Context) (*auth.Token, error) {

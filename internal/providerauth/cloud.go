@@ -2,6 +2,8 @@ package providerauth
 
 import (
 	"errors"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
@@ -40,18 +42,49 @@ func bearerField(
 	return selected, nil
 }
 
+func bearerSuppliedFields(
+	profile catalogs.ProviderCredentialProfile,
+	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
+) ([]catalogs.ProviderCredentialFieldID, error) {
+	fieldID, err := bearerField(profile, fields)
+	if err != nil {
+		return nil, err
+	}
+	return []catalogs.ProviderCredentialFieldID{fieldID}, nil
+}
+
 func renewableBearerMaterial(
 	fieldID catalogs.ProviderCredentialFieldID,
 	value string,
+	expiresAt time.Time,
+) credentials.SourceMaterial {
+	return renewableCloudMaterial(map[string]string{string(fieldID): value}, expiresAt)
+}
+
+func renewableCloudMaterial(
+	values map[string]string,
 	expiresAt time.Time,
 ) credentials.SourceMaterial {
 	refreshAfter := time.Time{}
 	if !expiresAt.IsZero() {
 		refreshAfter = expiresAt.Add(-defaultRefreshBefore)
 	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var version strings.Builder
+	for _, key := range keys {
+		version.WriteString(key)
+		version.WriteByte(0)
+		version.WriteString(values[key])
+		version.WriteByte(0)
+	}
+	version.WriteString(expiresAt.UTC().Format(time.RFC3339Nano))
 	return credentials.NewSourceMaterial(
-		map[string]string{string(fieldID): value},
-		string(fieldID)+"\x00"+value+"\x00"+expiresAt.UTC().Format(time.RFC3339Nano),
+		values,
+		version.String(),
 		expiresAt,
 		&credentials.Lease{Renewable: true, RefreshAfter: refreshAfter},
 	)
