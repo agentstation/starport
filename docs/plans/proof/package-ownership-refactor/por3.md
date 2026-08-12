@@ -102,3 +102,10 @@ from `codex/por3-starmap-provider-fixtures`. GitHub reports it as mergeable at
 the exact reviewed head `c599ba363c0161a7c8e0fd13361edfcf9ca4cdc7`.
 GitHub queued Verification Gate, Security & Reliability, and Action Pin
 Provenance.
+
+All three exact-head checks passed. Verification Gate took 22 minutes 18
+seconds, Security & Reliability took 2 minutes 4 seconds, and Action Pin
+Provenance took 9 seconds. PR #76 merged with merge commit
+`3a029796f223db224e6147003c044f99a2f3f2bf`. Clean protected `main` points to
+that commit and repeats POR-V01 through POR-V04 passing, for a campaign result
+of 4 passed and 5 failed.
