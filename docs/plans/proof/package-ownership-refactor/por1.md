@@ -88,5 +88,7 @@ accepted or actionable finding and stored a clean attestation for the exact
 substantive diff at commit `6a09e6c2`.
 
 Starmap pull request [#74](https://github.com/agentstation/starmap/pull/74)
-publishes that exact commit to `main`. It is ready for review. Hosted checks
-must pass on the same head before merge.
+published that exact commit to `main` with merge commit `8e661df5`. Verification
+Gate, Security & Reliability, and Action Pin Provenance passed on the exact
+reviewed head. A clean protected-main checkout repeated the campaign result:
+`Summary: 2 passed, 7 failed`.

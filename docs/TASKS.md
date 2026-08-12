@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 is complete. Starmap PR #74 has the reviewed POR1 commit; hosted checks and merge remain. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 and POR1 are complete. POR2 is classifying Starmap catalog limits and enforcement policy. |
 
 ### Proposed Work
 
