@@ -86,3 +86,7 @@ It produced no code finding. The isolated Sol profile then reviewed the same
 68,028-byte branch bundle with GPT-5.6-sol at high effort. It reported no
 accepted or actionable finding and stored a clean attestation for the exact
 substantive diff at commit `6a09e6c2`.
+
+Starmap pull request [#74](https://github.com/agentstation/starmap/pull/74)
+publishes that exact commit to `main`. It is ready for review. Hosted checks
+must pass on the same head before merge.
