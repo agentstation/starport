@@ -6,7 +6,9 @@ Status: historical. [Architecture](ARCHITECTURE.md) defines the canonical v1
 design. Do not use this ledger's goal prompt or target architecture to resume
 current work.
 
-This document is the durable control plane for the Starport architecture hardening effort. It is written so a future agent can continue after context compaction without relying on chat history.
+This document is the durable control plane for the Starport architecture
+hardening effort. It lets a future agent continue after context compaction
+without chat history.
 
 ## Goal Prompt
 
@@ -19,38 +21,44 @@ Use this exact goal when resuming the work:
 ## Operating Rules
 
 - Treat this file as the working ledger for this architecture hardening program.
-- Do not use `docs/TASKS.md` unless a formal Starport task ID is assigned.
+- Do not use `docs/TASKS.md` unless the program has a formal Starport task ID.
 - Preserve unrelated dirty work. Inspect before editing any file that is already modified.
 - Prefer small, verifiable slices over broad rewrites.
-- Update the ledger before switching phases, after each verification run, and when a blocker is discovered.
+- Update the ledger before each phase change and after each verification run.
+- Update the ledger when you discover a blocker.
 - Every completed item must cite verification evidence in the execution log.
-- Architecture changes should increase module depth, interface leverage, locality, and testability.
-- Public `pkg/` packages must either be intentional stable interfaces or be moved/hidden behind `internal/` seams.
+- Architecture changes should increase module depth, clear interfaces,
+  locality, and testability.
+- Keep an intentional stable interface in each public `pkg/` package. Move all
+  other packages behind `internal/` seams.
 
 ## Current Work Snapshot
 
-- Branch recorded by this historical plan: `master`
+- Branch recorded by this historical plan: `main`
 - Active work: architecture hardening after a full architecture review.
 - Current verification: final `go test ./...` and selected race suite pass after P7 documentation closeout.
-- Original baseline failure is preserved in P0-E3 for historical context.
+- P0-E3 preserves the original baseline failure for historical context.
 - Known remaining architectural themes:
   - Future product work remains for content filtering, preset endpoints, observability, analytics, webhooks, and enterprise SSO/RBAC.
 - Important existing remediation already present in the worktree:
   - `CLAUDE.md` is a symlink to `AGENTS.md`.
-  - Runtime storage injection was improved so production startup can use configured Badger storage.
-  - Provider-key management no longer silently requires a mock-only setup; it is disabled when the master key is absent.
+  - The work improved runtime storage injection. Production startup can use
+    configured Badger storage.
+  - Provider-key management no longer silently requires a mock-only setup.
+    Starport disables it when the master key is absent.
   - Google provider slug normalization and proxy provider-preference forwarding were partially remediated.
 - Dirty worktree warning:
-  - Some dirty files existed before this control plane was created.
+  - The worktree already contained some dirty files before this program.
   - Do not revert unrelated changes unless explicitly requested.
 
 ## Architecture Target
 
-Starport should be structured as a high-reliability Go gateway with these module seams:
+Use these module seams for the high-reliability Go gateway:
 
 1. `cmd/starport`: CLI and composition root only.
 2. `internal/app`: lifecycle owner for storage, cache, registry, background workers, and HTTP server.
-3. `internal/server` or future `internal/httpapi`: HTTP transport, parsing, middleware, and response mapping only.
+3. `internal/server` or `internal/protocol`: HTTP transport, parsing,
+   middleware, and response mapping only.
 4. `internal/proxy` or future `internal/gateway`: application use cases for chat, streaming chat, embeddings, model listing, and provider listing.
 5. `internal/router`: routing policy and fallback decisions behind injected selector, health, cost, and affinity interfaces.
 6. `internal/providers`: concrete provider adapters behind one connector contract and one shared HTTP transport policy.
@@ -77,26 +85,27 @@ Status values: `todo`, `in_progress`, `blocked`, `done`.
 ### P0: Control Plane and Baseline
 
 - `docs/ARCHITECTURE_CONTROL_PLANE.md` exists and contains:
-  - active goal prompt;
-  - operating rules;
-  - current work snapshot;
-  - phase ledger;
-  - execution log;
+  - active goal prompt.
+  - operating rules.
+  - current work snapshot.
+  - phase ledger.
+  - execution log.
   - per-phase acceptance criteria.
-- A baseline test run is recorded exactly, including failing packages and failure themes.
-- The plan is reviewed before implementation proceeds.
+- The log records an exact baseline test run, failing packages, and failure
+  themes.
+- Review the plan before implementation starts.
 
 ### P1: Connector Transport Reliability
 
 - Every provider connector has a clear transport path:
-  - shared retry/timeout/pooling policy is used where HTTP calls happen;
-  - providers that intentionally return static model lists are documented and tested that way;
+  - HTTP calls use the shared retry, timeout, and pooling policy.
+  - Documentation and tests identify providers that return static model lists.
   - health checks target endpoints that test servers and real providers can satisfy predictably.
 - Tests must distinguish:
-  - "static list, no request expected";
-  - "dynamic list, request expected";
-  - "request path uses shared client";
-  - "timeout is enforced";
+  - "static list, no request expected".
+  - "dynamic list, request expected".
+  - "request path uses shared client".
+  - "timeout is enforced".
   - "pooling or concurrency limit is enforced at the right layer."
 - No connector should hide network failures behind silent static fallbacks unless that is explicit in the connector contract.
 
@@ -104,24 +113,25 @@ Status values: `todo`, `in_progress`, `blocked`, `done`.
 
 - `App` owns shared dependency lifecycle.
 - `Server` owns only the HTTP listener and route tree.
-- `Registry` should not perform network I/O while holding its main map lock.
+- Keep network I/O outside the `Registry` main map lock.
 - Background tasks must have:
-  - a parent context;
-  - a bounded lifetime;
-  - shutdown coordination;
+  - a parent context.
+  - a bounded lifetime.
+  - shutdown coordination.
   - test coverage for cancellation or close.
 - Constructors should not start hidden long-lived work unless their names and docs make that explicit.
 
 ### P3: HTTP Middleware, Security, and Rate Limiting
 
-- Unsafe goroutine-per-request timeout wrapper is removed or constrained to non-streaming routes with safe semantics.
+- Remove the unsafe goroutine-per-request timeout wrapper. If required, limit
+  it to nonstreaming routes with safe semantics.
 - Streaming requests use provider/request contexts and server-level read/write/idle timeouts rather than racing writes.
 - API-key extraction rejects query parameters.
 - Rate limiting:
-  - keys by API key ID or tenant-ready identity, not raw secret;
-  - uses atomic storage operations;
-  - returns 429 with compatible JSON error;
-  - includes useful rate-limit headers when available;
+  - keys by API key ID or tenant-ready identity, not raw secret.
+  - uses atomic storage operations.
+  - returns 429 with compatible JSON error.
+  - includes useful rate-limit headers when available.
   - has deterministic allow/deny tests.
 
 ### P4: Routing Contracts and Streaming Fallback
@@ -130,16 +140,17 @@ Status values: `todo`, `in_progress`, `blocked`, `done`.
 - Provider preferences, API-key restrictions, request metadata, and route mode are consistently represented.
 - Route modes are not accepted unless implemented.
 - Streaming fallback policy is explicit:
-  - fallback before the first chunk is allowed;
-  - fallback after bytes are sent is not transparent and must surface a stream error or terminate according to documented API semantics.
+  - Allow fallback before the first chunk.
+  - Do not hide fallback after Starport sends bytes. Surface a stream error or
+    end the stream as the API contract specifies.
 
 ### P5: Package Seams and Domain Model
 
 - Transport DTO parsing should convert into application request types at a clear seam.
-- Model ID handling should be centralized and tested:
-  - provider extraction;
-  - canonical provider slug normalization;
-  - legacy alias support;
+- Centralize and test model ID handling:
+  - provider extraction.
+  - canonical provider slug normalization.
+  - legacy alias support.
   - provider-specific stripped model names.
 - Global mutable model/catalog state must be resettable or injectable in tests.
 - Public `pkg/` packages must have a short README or doc comment stating whether they are stable external API.
@@ -147,24 +158,24 @@ Status values: `todo`, `in_progress`, `blocked`, `done`.
 ### P6: Testability and Contract Tests
 
 - Add shared test harnesses where repeated behavior matters:
-  - connector HTTP contract;
-  - storage KV contract;
-  - router selection/fallback contract;
+  - connector HTTP contract.
+  - storage KV contract.
+  - router selection/fallback contract.
   - lifecycle close/cancel contract.
 - Run at minimum:
-  - `go test ./...`;
-  - focused package tests for each changed module;
+  - `go test ./...`.
+  - focused package tests for each changed module.
   - selected `go test -race` for concurrency-heavy packages after P2/P3.
 
 ### P7: Final Verification and Documentation
 
 - Update stale architecture claims in `docs/ARCHITECTURE.md`.
-- Ensure `docs/README.md` links this control plane if it remains useful.
+- Keep a link to this control plane in `docs/README.md` if it remains useful.
 - Close every ledger item as `done` or `blocked` with evidence.
 - Final summary must separate:
-  - implementation completed;
-  - tests passed;
-  - tests blocked or intentionally skipped;
+  - implementation completed.
+  - tests passed.
+  - tests blocked or intentionally skipped.
   - residual architectural risks.
 
 ## Execution Log
@@ -208,10 +219,10 @@ Status values: `todo`, `in_progress`, `blocked`, `done`.
 
 This plan is executable because each phase has:
 
-- a concrete module seam or reliability target;
-- acceptance criteria stated as observable behavior;
-- verification commands;
-- ledger status;
+- a concrete module seam or reliability target.
+- acceptance criteria stated as observable behavior.
+- verification commands.
+- ledger status.
 - a next phase that depends on the previous one only where necessary.
 
 The order is intentional:

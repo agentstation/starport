@@ -32,8 +32,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../ratelimit",
 		"../presets",
 		"../responsecache",
-		"../httpapi/openai",
-		"../httpapi/openrouter",
+		"../protocol/openai",
+		"../protocol/openrouter",
 	)
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/routing",
@@ -47,8 +47,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
 		"github.com/agentstation/starport/internal/responsecache",
-		"github.com/agentstation/starport/internal/httpapi/openai",
-		"github.com/agentstation/starport/internal/httpapi/openrouter",
+		"github.com/agentstation/starport/internal/protocol/openai",
+		"github.com/agentstation/starport/internal/protocol/openrouter",
 	} {
 		require.Containsf(t, packages, packagePath, "required package %s is absent from the import graph", packagePath)
 	}
@@ -102,8 +102,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 		)
 	}
 	for _, packagePath := range []string{
-		"github.com/agentstation/starport/internal/httpapi/openai",
-		"github.com/agentstation/starport/internal/httpapi/openrouter",
+		"github.com/agentstation/starport/internal/protocol/openai",
+		"github.com/agentstation/starport/internal/protocol/openrouter",
 	} {
 		assertOnlyInternalImports(t, packages[packagePath],
 			"github.com/agentstation/starport/internal/inference",

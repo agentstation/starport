@@ -99,19 +99,22 @@ check V09 'public package boundary contract' sh -c '
 '
 
 check V10 'OpenAI and OpenRouter protocol contracts' sh -c '
-    grep -R -q -E --include="*_test.go" "^func TestOpenAIProtocolContract" internal/httpapi/openai &&
-    grep -R -q -E --include="*_test.go" "^func TestOpenRouterProtocolContract" internal/httpapi/openrouter &&
+    grep -R -q -E --include="*_test.go" "^func TestOpenAIProtocolContract" internal/protocol/openai &&
+    grep -R -q -E --include="*_test.go" "^func TestOpenRouterProtocolContract" internal/protocol/openrouter &&
     grep -R -q -E --include="*_test.go" "^func TestProtocolRoutesUseSelectedCodec" internal/server &&
 	grep -R -q -E --include="*_test.go" "^func TestClientIPIgnoresUntrustedForwardingHeaders" internal/server &&
 	scripts/require-no-match.sh grep -R -q -E --include="*.go" "middleware\.RealIP" internal/server &&
-    go test ./internal/httpapi/openai -run "^TestOpenAIProtocolContract$" &&
-    go test ./internal/httpapi/openrouter -run "^TestOpenRouterProtocolContract$" &&
+    go test ./internal/protocol/openai -run "^TestOpenAIProtocolContract$" &&
+    go test ./internal/protocol/openrouter -run "^TestOpenRouterProtocolContract$" &&
     go test ./internal/server -run "^Test(ProtocolRoutesUseSelectedCodec|ClientIPIgnoresUntrustedForwardingHeaders)$"
 '
 
 check V11 'import graph architecture fitness' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestImportGraphArchitecture" internal/architecture &&
-    go test ./internal/architecture -run "^TestImportGraphArchitecture$"
+    grep -R -q -E --include="*_test.go" "^func TestApprovedInternalPackageLayout" internal/architecture &&
+    go test ./internal/architecture -run "^Test(ImportGraphArchitecture|ApprovedInternalPackageLayout)$" &&
+    bash scripts/verify-package-layout.sh &&
+    bash scripts/test-package-layout-verifier.sh
 '
 
 check V12 'full Go test suite' go test ./...

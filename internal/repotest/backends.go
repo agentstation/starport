@@ -1,5 +1,5 @@
-// Package repositorytest supplies storage backends for repository contract tests.
-package repositorytest
+// Package repotest supplies storage backends for repository contract tests.
+package repotest
 
 import (
 	"context"
@@ -56,7 +56,7 @@ type namespacedStore struct {
 
 func newNamespacedStore(t *testing.T, store storage.KVStore) *namespacedStore {
 	t.Helper()
-	scoped := &namespacedStore{KVStore: store, prefix: "repositorytest:" + uuid.NewString() + ":"}
+	scoped := &namespacedStore{KVStore: store, prefix: "repotest:" + uuid.NewString() + ":"}
 	t.Cleanup(func() {
 		keys, err := store.ScanWithPrefix(context.Background(), scoped.prefix, 0)
 		if err == nil && len(keys) > 0 {

@@ -94,8 +94,8 @@ starport/
 ├── cmd/starport/              # CLI and composition root
 ├── internal/app/              # application lifecycle and dependency ownership
 ├── internal/server/           # HTTP server, middleware, routes, controllers, DTO helpers
-├── internal/httpapi/openai/   # OpenAI wire DTOs and codecs
-├── internal/httpapi/openrouter/ # OpenRouter wire DTOs and codecs
+├── internal/protocol/openai/  # OpenAI wire DTOs and codecs
+├── internal/protocol/openrouter/ # OpenRouter wire DTOs and codecs
 ├── internal/proxy/            # chat, streaming, embeddings, model/provider use cases
 ├── internal/inference/        # canonical chat, embedding, and stream values
 ├── internal/failure/          # canonical safe failures and provider evidence
