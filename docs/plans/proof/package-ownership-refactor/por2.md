@@ -74,3 +74,14 @@ Summary: 3 passed, 6 failed
 ```
 
 POR-V04 through POR-V09 remain red because their owning tasks have not run.
+
+## Review
+
+Commit `c313b19a` passed the isolated pre-PR autoreview with GPT-5.6-sol at
+high reasoning. The reviewer reported no accepted or actionable finding and
+assigned 0.98 confidence that the patch is correct. Its secret scan passed.
+
+The automatic Claude selection failed before it read the patch because its
+client rejected a local self-signed certificate. This is a reviewer transport
+failure, not product evidence. The isolated Sol fallback completed the required
+review gate.
