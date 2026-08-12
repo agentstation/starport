@@ -88,6 +88,11 @@ review gate.
 
 ## Pull request
 
-Starmap PR [#75](https://github.com/agentstation/starmap/pull/75) contains
-exact head `c313b19ae0914e549f9176ddde13fe33f35732f5`. Merge it only after
-Verification Gate, Security & Reliability, and Action Pin Provenance pass.
+Starmap PR [#75](https://github.com/agentstation/starmap/pull/75) contained
+exact reviewed head `c313b19ae0914e549f9176ddde13fe33f35732f5`.
+Verification Gate passed in 24 minutes 31 seconds, Security & Reliability
+passed in 2 minutes 4 seconds, and Action Pin Provenance passed in 9 seconds.
+
+The PR merged with merge commit
+`13779dcffe99cbabc6e8b6257c4ff20796eeeb59`. Clean protected `main` repeated
+the campaign result: 3 passed and 6 failed.
