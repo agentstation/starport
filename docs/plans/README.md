@@ -2,9 +2,7 @@
 
 ## Active
 
-- [Package Ownership Refactor](package-ownership-refactor-plan.html) owns the
-  coordinated Starmap and Starport package restructure, cleanup, verification,
-  and documentation polish.
+No active durable plan exists.
 
 ## Proposed
 
