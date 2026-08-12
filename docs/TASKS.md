@@ -1,13 +1,15 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-11
+Last Updated: 2026-08-12
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-No active durable work exists.
+| Task | Team | Plan | Status |
+|------|------|------|--------|
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. The plan-only pull request must merge before POR0 starts. |
 
 ### Proposed Work
 
