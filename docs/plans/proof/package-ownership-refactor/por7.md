@@ -26,7 +26,14 @@ stream body. Its monitored transport measures elapsed time again and adds
 `X-HTTP-Client-Provider` and `X-HTTP-Client-Duration-Ms` to provider response
 headers.
 
-The unused rate-limit wrapper is the only source that imports
-`golang.org/x/time/rate`. The module therefore keeps the direct
-`golang.org/x/time v0.15.0` dependency only for unused production surface. None
-of the four required POR7 contract tests exists at the baseline.
+The unused rate-limit wrapper is the only Starport source that imports
+`golang.org/x/time/rate`. The baseline lists `golang.org/x/time v0.15.0` as a
+direct requirement for that source. None of the four required POR7 contract
+tests exists at the baseline.
+
+After source removal, `go mod tidy` keeps `golang.org/x/time v0.15.0` as an
+indirect requirement. `go mod why -m` proves that the Vault client imports
+`golang.org/x/time/rate`. The module graph also names OpenBao, Google auth,
+Starmap, and Google API modules as consumers. POR7 therefore rejects a direct
+Starport requirement or connector import. It preserves the valid transitive
+module requirement.

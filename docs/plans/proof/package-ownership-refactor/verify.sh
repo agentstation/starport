@@ -116,9 +116,14 @@ verify_starport_http_transport() (
     set -e
     cd "$STARPORT_ROOT" || exit 1
     test ! -e internal/httpclient
-    if grep -q '^[[:space:]]*golang.org/x/time' go.mod; then
+    if grep -R -q '"golang.org/x/time/' internal/providers/connectors --include='*.go'; then
         exit 1
     fi
+    awk '
+        $0 == "require (" { block++; next }
+        block == 1 && $1 == "golang.org/x/time" { exit 1 }
+        block == 1 && $0 == ")" { exit 0 }
+    ' go.mod
     grep -R -q '^func TestProviderHTTPTransportContract' internal/providers/connectors
     grep -R -q '^func TestProviderHTTPClientHasNoTotalTimeout' internal/providers/connectors
     grep -R -q '^func TestProviderTransportDoesNotMutateResponseHeaders' internal/providers/connectors
