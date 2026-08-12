@@ -79,3 +79,18 @@ and zero allocations per operation.
 SHA-256 comparison proves that each of the five payloads and five metadata
 files is byte-identical before and after its move. `git diff --check` is clean.
 The final campaign run repeats 4 passed and 5 failed.
+
+## Pre-PR review
+
+The product commit is `c599ba363c0161a7c8e0fd13361edfcf9ca4cdc7`.
+The default autoreview preflight passed TruffleHog, then stopped before model
+invocation. Its deletion scanner classified public authorization-header and
+API-key environment names in four deleted tests as secret-like. Redaction left
+the deleted `Credentials:` field label, which the scanner also rejects.
+
+The isolated fallback omitted only those four deleted file bodies from its
+synthetic base. Its target tree was byte-identical to the product commit at
+`550be250486aa20d862f8b0a4bcffe3d2e62d33b`. GPT-5.6-sol with high reasoning
+reviewed the 68,981-byte safe bundle. It found no actionable P0 defect and
+rated the patch correct at 0.98 confidence. The review covered fixture identity,
+mapping coverage, refresh failures, filesystem safety, and exact model IDs.
