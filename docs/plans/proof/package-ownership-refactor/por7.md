@@ -37,3 +37,25 @@ indirect requirement. `go mod why -m` proves that the Vault client imports
 Starmap, and Google API modules as consumers. POR7 therefore rejects a direct
 Starport requirement or connector import. It preserves the valid transitive
 module requirement.
+
+## Focused implementation evidence
+
+The private connector builder now owns pool limits, dialing, TLS handshakes,
+idle connections, redirects, HTTP/2, and the response-header timeout. It does
+not set `http.Client.Timeout`. It does not measure elapsed request time or
+change provider response headers. Execution contexts remain the one owner of
+the total retry and fallback deadline.
+
+The old package and its eight files are gone. The direct `golang.org/x/time`
+requirement is gone. `go mod tidy` retains the verified indirect requirement.
+Package-layout guards reject both the old import path and package declaration.
+
+The four named acceptance contracts pass. A behavior test also proves that an
+OpenAI-compatible production connector preserves its caller's exact deadline.
+The focused ordinary and uncapped race tests pass for connectors, execution,
+router, and architecture. Package-layout checks and regression tests pass.
+Architecture and Starmap ownership each report 12 passed and 0 failed.
+Documentation links and strict technical-writing checks pass.
+
+The campaign verifier passes POR-V01 through POR-V08 and reports 8 passed and
+1 failed. POR-V09 remains red for cross-repository closeout.
