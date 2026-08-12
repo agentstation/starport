@@ -10,7 +10,8 @@
 | adapter registry | The Starport registry that owns compiled provider adapter behavior. | | approved | `internal/providers/connectors/adapter_registry.go` |
 | route plan | A deterministic ordered set of provider offering attempts for one request. | | approved | `internal/routing/types.go` |
 | attempt budget | The total attempt and elapsed-time limit for one inference request. | | approved | `internal/execution/executor.go` |
-| provider authentication | The Starport process that gets and applies an inference credential. | | approved | `internal/providers/connectors/adapter_registry.go` |
+| provider authentication | The Starport process that applies inference credential material to a provider request. | | approved | `internal/providers/auth/request.go` |
+| cloud credential chain | The Starport process that gets renewable inference credential material from a cloud identity. | | approved | `internal/credentials/cloudchain/cloud.go` |
 | Homebrew cask | A Homebrew package that installs a released Starport binary. | | approved | `https://docs.brew.sh/Cask-Cookbook` |
 | OpenAI-compatible API | The Starport HTTP contract under `/v1`. | | approved | `docs/ARCHITECTURE.md` |
 | OpenRouter-compatible API | The Starport HTTP contract under `/api/v1`. | | approved | `docs/ARCHITECTURE.md` |

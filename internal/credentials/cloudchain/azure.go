@@ -1,6 +1,6 @@
-// Package providerauth applies catalog-declared authentication primitives to
-// provider inference requests.
-package providerauth
+// Package cloudchain resolves renewable cloud credential material for
+// inference.
+package cloudchain
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package providerauth
+package cloudchain
 
 import (
 	"errors"

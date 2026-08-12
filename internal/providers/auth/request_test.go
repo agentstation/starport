@@ -1,4 +1,4 @@
-package providerauth
+package auth
 
 import (
 	"net/http"

@@ -6,7 +6,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/providerauth"
+	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
 )

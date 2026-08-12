@@ -1,4 +1,6 @@
-package providerauth
+// Package auth applies catalog-declared authentication primitives to provider
+// inference requests.
+package auth
 
 import (
 	"encoding/base64"

@@ -168,7 +168,8 @@ Starport uses concept-owned seams:
 - `internal/routing` owns deterministic route planning.
 - `internal/execution` owns attempts and retry budgets.
 - `internal/failure` normalizes provider failures.
-- `internal/providerauth` owns renewable inference credentials.
+- `internal/providers/auth` owns request credential placement.
+- `internal/credentials/cloudchain` owns renewable cloud credential acquisition.
 - `internal/protocol/openai` owns OpenAI protocol codecs.
 - `internal/protocol/openrouter` owns OpenRouter protocol codecs.
 - `internal/app` composes the concepts.
@@ -190,9 +191,10 @@ In Starport:
 
 1. Add the transport adapter under `internal/providers`.
 2. Project required configuration from the Starmap adapter descriptor.
-3. Put renewable authentication in `internal/providerauth` when needed.
-4. Add contract tests for requests, responses, streaming, and failures.
-5. Prove that the Starmap ownership verifier still passes.
+3. Put request authentication in `internal/providers/auth` when needed.
+4. Put renewable cloud credential acquisition in `internal/credentials/cloudchain`.
+5. Add contract tests for requests, responses, streaming, and failures.
+6. Prove that the Starmap ownership verifier still passes.
 
 Keep provider model IDs exact and opaque.
 

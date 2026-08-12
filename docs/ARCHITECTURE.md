@@ -103,13 +103,14 @@ starport/
 ├── internal/routing/          # pure route policy and immutable plans
 ├── internal/execution/        # attempt state, budgets, fallback, and stream commitment
 ├── internal/availability/     # offering-level runtime availability state
-├── internal/providers/state/ # safe adapter, credential, and offering state
+├── internal/providers/state/  # safe adapter, credential, and offering state
 ├── internal/catalog/          # Starmap facts and derived routable generations
 ├── internal/registry/         # catalog-derived connector generations and adapter availability
 ├── internal/providers/        # BYOK provider keys and concrete LLM connectors
-├── internal/providerauth/     # renewable cloud inference credentials
+├── internal/providers/auth/   # request credential placement by catalog primitive
+├── internal/credentials/cloudchain/ # renewable cloud credential acquisition
 ├── internal/httpclient/       # shared provider HTTP transport policy
-├── internal/response/cache/  # eligibility, semantic keys, canonical records, stream replay
+├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
 ├── internal/identity/         # gateway identity model and versioned repository
 ├── internal/credentials/      # provider credentials, encryption, and repository
@@ -271,12 +272,13 @@ reuses secret values from the other plane. Remote catalog authentication proves
 access to a publisher. It is a third, separate protocol credential and never
 becomes provider material.
 
-`internal/providerauth` owns renewable inference bearer tokens. Vertex AI uses
-Google Application Default Credentials with the Google Cloud platform scope.
-The Google source preserves the Application Default Credentials quota project.
-The bearer transport sends it as `X-Goog-User-Project` without replacing an
-explicit request header. It rejects HTTP redirects before it reuses a renewable
-credential.
+`internal/credentials/cloudchain` owns renewable inference bearer tokens.
+`internal/providers/auth` applies resolved material through catalog-declared
+request placements. Vertex AI uses Google Application Default Credentials with
+the Google Cloud platform scope. The Google source preserves the Application
+Default Credentials quota project. Request authentication sends it as
+`X-Goog-User-Project` without replacing an explicit request header. The
+transport rejects HTTP redirects before it reuses a renewable credential.
 
 Azure OpenAI uses `DefaultAzureCredential` with the Azure Cognitive Services
 scope. A synchronized source caches each token and refreshes it two minutes

@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. POR0 through POR4 are complete. POR5 moves provider state and response cache to concept-owned paths. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. POR0 through POR5 are complete. POR6 separates request authentication from cloud credential acquisition. |
 
 ### Proposed Work
 

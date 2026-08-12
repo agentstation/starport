@@ -30,6 +30,7 @@ forbidden_paths=(
 	"internal/test""util"
 	"internal/provider""state"
 	"internal/response""cache"
+	"internal/provider""auth"
 )
 forbidden_packages=(
 	"http""api"
@@ -37,6 +38,7 @@ forbidden_packages=(
 	"test""util"
 	"provider""state"
 	"response""cache"
+	"provider""auth"
 )
 
 files=()

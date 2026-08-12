@@ -33,6 +33,8 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Put deterministic route planning in `internal/routing`.
 - Put attempt state and retry budgets in `internal/execution`.
 - Put provider failure normalization in `internal/failure`.
+- Put request credential placement in `internal/providers/auth`.
+- Put cloud credential acquisition in `internal/credentials/cloudchain`.
 - Put safe provider runtime projections in `internal/providers/state`.
 - Put canonical response cache records in `internal/response/cache`.
 - Put protocol codecs in `internal/protocol/openai` and
