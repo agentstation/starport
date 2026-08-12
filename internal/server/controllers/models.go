@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/agentstation/starport/internal/httpapi/openai"
-	"github.com/agentstation/starport/internal/httpapi/openrouter"
+	"github.com/agentstation/starport/internal/protocol/openai"
+	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/dto"
 )

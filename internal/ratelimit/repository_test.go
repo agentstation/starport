@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentstation/starport/internal/repositorytest"
+	"github.com/agentstation/starport/internal/repotest"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRateLimitRepositoryContract(t *testing.T) {
-	repositorytest.Run(t, func(t *testing.T, store storage.KVStore) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
 		clock := &fakeClock{now: time.Unix(100, 0).UTC()}
 		repository, err := Open(store, clock)

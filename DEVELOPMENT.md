@@ -169,8 +169,8 @@ Starport uses concept-owned seams:
 - `internal/execution` owns attempts and retry budgets.
 - `internal/failure` normalizes provider failures.
 - `internal/providerauth` owns renewable inference credentials.
-- `internal/httpapi/openai` owns OpenAI protocol codecs.
-- `internal/httpapi/openrouter` owns OpenRouter protocol codecs.
+- `internal/protocol/openai` owns OpenAI protocol codecs.
+- `internal/protocol/openrouter` owns OpenRouter protocol codecs.
 - `internal/app` composes the concepts.
 - `internal/server` wires HTTP routes.
 

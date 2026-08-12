@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/agentstation/starport/internal/httpapi/openai"
-	"github.com/agentstation/starport/internal/httpapi/openrouter"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/protocol/openai"
+	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/proxy"
 )
 

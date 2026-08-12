@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. The plan-only pull request must merge before POR0 starts. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. POR0 through POR3 are complete. POR4 moves Starport protocol and test-support packages. |
 
 ### Proposed Work
 

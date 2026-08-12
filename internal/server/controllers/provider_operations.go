@@ -8,7 +8,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starport/internal/httpapi/openrouter"
+	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providerstate"
 	"github.com/agentstation/starport/internal/server/dto"

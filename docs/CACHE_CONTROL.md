@@ -77,6 +77,6 @@ describe provider prompt-cache state.
 ## Related Contracts
 
 The OpenRouter protocol contract is in
-[`internal/httpapi/openrouter/contract_test.go`](../internal/httpapi/openrouter/contract_test.go).
+[`internal/protocol/openrouter/contract_test.go`](../internal/protocol/openrouter/contract_test.go).
 The route-specific behavior is in
 [`internal/proxy/proxy_routing_test.go`](../internal/proxy/proxy_routing_test.go).

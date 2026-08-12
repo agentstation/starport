@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/agentstation/starport/internal/httpapi/openai"
-	"github.com/agentstation/starport/internal/httpapi/openrouter"
+	"github.com/agentstation/starport/internal/protocol/openai"
+	"github.com/agentstation/starport/internal/protocol/openrouter"
 )
 
 type protocolContextKey struct{}
