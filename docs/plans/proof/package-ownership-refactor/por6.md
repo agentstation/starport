@@ -73,3 +73,6 @@ Starport commit `5a3737c` contains the verified POR6 diff. The automatic review
 selected Claude Opus 5, but its connection stopped on a local self-signed
 certificate. The fallback GPT-5.6-sol review completed in isolation and found
 no actionable defect. TruffleHog also reported a clean changed-content scan.
+
+Starport PR [#108](https://github.com/agentstation/starport/pull/108) publishes
+exact reviewed head `5a3737c` for the hosted gates.
