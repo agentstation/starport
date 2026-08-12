@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 is in progress: pin baselines, capture fail-before evidence, and author the red campaign verifier. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 is complete. POR1 is moving Starmap bootstrap, source-payload, and shared test-support packages. |
 
 ### Proposed Work
 
