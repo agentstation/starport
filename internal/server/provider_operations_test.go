@@ -18,7 +18,7 @@ import (
 
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers"
-	"github.com/agentstation/starport/internal/providerstate"
+	providerstate "github.com/agentstation/starport/internal/providers/state"
 )
 
 func TestAdminProviderStatusContract(t *testing.T) {

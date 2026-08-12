@@ -10,7 +10,7 @@ import (
 
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/providers"
-	"github.com/agentstation/starport/internal/providerstate"
+	providerstate "github.com/agentstation/starport/internal/providers/state"
 	"github.com/agentstation/starport/internal/server/dto"
 )
 

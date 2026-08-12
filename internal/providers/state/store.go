@@ -1,7 +1,7 @@
-// Package providerstate projects safe provider runtime state from its concept
+// Package state projects safe provider runtime state from its concept
 // owners. It does not own adapter activation, credential resolution, or
 // offering circuit transitions.
-package providerstate
+package state
 
 import (
 	"errors"

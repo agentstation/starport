@@ -1,4 +1,4 @@
-package responsecache
+package cache
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package providerstate
+package state
 
 import (
 	"encoding/json"

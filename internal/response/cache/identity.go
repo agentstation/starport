@@ -1,6 +1,6 @@
-// Package responsecache owns response-cache eligibility, semantic identity,
+// Package cache owns response-cache eligibility, semantic identity,
 // versioned canonical records, and stream replay.
-package responsecache
+package cache
 
 import (
 	"crypto/sha256"
