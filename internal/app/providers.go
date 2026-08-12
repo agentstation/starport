@@ -7,8 +7,8 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/providerauth"
 	"github.com/agentstation/starport/internal/providers"
+	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/registry"
 )

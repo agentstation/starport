@@ -116,6 +116,34 @@ func TestImportGraphArchitecture(t *testing.T) {
 	}
 }
 
+func TestProviderAuthenticationPackageHasNoCloudSDKImports(t *testing.T) {
+	packages := listPackages(t, "../providers/auth")
+	imports, exists := packages["github.com/agentstation/starport/internal/providers/auth"]
+	require.True(t, exists, "provider authentication package is absent from the import graph")
+	assertNoImports(t, imports,
+		"cloud.google.com/go/",
+		"github.com/Azure/azure-sdk-for-go/",
+		"github.com/aws/aws-sdk-go-v2/",
+	)
+	assertOnlyInternalImports(t, imports,
+		"github.com/agentstation/starport/internal/credentials",
+	)
+}
+
+func TestCloudChainPackageDoesNotMutateHTTPRequests(t *testing.T) {
+	packages := listPackages(t, "../credentials/cloudchain")
+	imports, exists := packages["github.com/agentstation/starport/internal/credentials/cloudchain"]
+	require.True(t, exists, "cloud credential chain package is absent from the import graph")
+	assertNoImports(t, imports,
+		"net/http",
+		"github.com/agentstation/starport/internal/providers/auth",
+		"github.com/agentstation/starport/internal/providers/connectors",
+	)
+	assertOnlyInternalImports(t, imports,
+		"github.com/agentstation/starport/internal/credentials",
+	)
+}
+
 func TestPublicPackageBoundary(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join("..", ".."))
 	_, err := os.Stat(filepath.Join(repositoryRoot, "pkg"))

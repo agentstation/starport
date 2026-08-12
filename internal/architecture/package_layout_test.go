@@ -20,8 +20,10 @@ func TestApprovedInternalPackageLayout(t *testing.T) {
 
 	root := repositoryRoot(t)
 	approved := []approvedPackage{
+		{path: "internal/credentials/cloudchain", name: "cloudchain"},
 		{path: "internal/protocol/openai", name: "openai"},
 		{path: "internal/protocol/openrouter", name: "openrouter"},
+		{path: "internal/providers/auth", name: "auth"},
 		{path: "internal/providers/state", name: "state"},
 		{path: "internal/repotest", name: "repotest"},
 		{path: "internal/response/cache", name: "cache"},
@@ -32,6 +34,7 @@ func TestApprovedInternalPackageLayout(t *testing.T) {
 		filepath.Join("internal", "test"+"util"),
 		filepath.Join("internal", "provider"+"state"),
 		filepath.Join("internal", "response"+"cache"),
+		filepath.Join("internal", "provider"+"auth"),
 	}
 
 	for _, path := range removed {

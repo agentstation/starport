@@ -28,6 +28,7 @@ Starmap catalog-acquisition credentials are a separate credential plane. They
 must not enter an inference adapter.
 
 Vertex AI and Azure OpenAI can use a static Starport secret or a renewable
-source from `internal/providerauth`. Credential discovery and refresh occur
-outside the inference hot path. Ambient cloud credentials do not determine
+source from `internal/credentials/cloudchain`. Credential discovery and refresh
+occur outside the inference hot path. `internal/providers/auth` applies the
+resolved material to each request. Ambient cloud credentials do not determine
 adapter activation.

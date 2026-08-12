@@ -112,7 +112,9 @@ check V10 'OpenAI and OpenRouter protocol contracts' sh -c '
 check V11 'import graph architecture fitness' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestImportGraphArchitecture" internal/architecture &&
     grep -R -q -E --include="*_test.go" "^func TestApprovedInternalPackageLayout" internal/architecture &&
-    go test ./internal/architecture -run "^Test(ImportGraphArchitecture|ApprovedInternalPackageLayout)$" &&
+    grep -R -q -E --include="*_test.go" "^func TestProviderAuthenticationPackageHasNoCloudSDKImports" internal/architecture &&
+    grep -R -q -E --include="*_test.go" "^func TestCloudChainPackageDoesNotMutateHTTPRequests" internal/architecture &&
+    go test ./internal/architecture -run "^Test(ImportGraphArchitecture|ApprovedInternalPackageLayout|ProviderAuthenticationPackageHasNoCloudSDKImports|CloudChainPackageDoesNotMutateHTTPRequests)$" &&
     bash scripts/verify-package-layout.sh &&
     bash scripts/test-package-layout-verifier.sh
 '

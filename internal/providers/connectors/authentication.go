@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providerauth"
+	providerauth "github.com/agentstation/starport/internal/providers/auth"
 )
 
 var productionAuthentication, productionAuthenticationErr = providerauth.ProductionRegistry()
