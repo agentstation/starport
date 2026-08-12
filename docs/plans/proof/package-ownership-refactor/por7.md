@@ -59,3 +59,22 @@ Documentation links and strict technical-writing checks pass.
 
 The campaign verifier passes POR-V01 through POR-V08 and reports 8 passed and
 1 failed. POR-V09 remains red for cross-repository closeout.
+
+## Full local verification
+
+The complete repository checks pass with normal, uncapped Go scheduling:
+
+```text
+make verify
+go test ./...
+go vet ./...
+make lint
+make build
+bash scripts/smoke-openrouter-sdks.sh
+```
+
+`make verify` reports Starmap ownership 12/12, architecture 12/12, release
+15/15, release workflow success, developer experience 47/47, documentation
+link success, and documentation-link regression success. All 41 Go packages
+pass. Vet reports no diagnostics. Lint reports zero issues. The build completes.
+All seven SDK smoke cases pass.
