@@ -34,3 +34,34 @@ fixture refresh.
 
 POR-V04 is red because the shared catalog contract and refresh harness do not
 exist. The complete campaign reports 3 passed and 6 failed.
+
+## Focused implementation evidence
+
+The implementation moves OpenAI, Cerebras, DeepSeek, Groq, and Moonshot AI
+captures below `internal/providers/openai/testdata/providers/{provider}`. One
+discovered transport contract loads the real embedded provider record. It
+proves endpoint type and URL, catalog credential metadata, every configured
+field mapping, every configured author mapping, and exact opaque response IDs.
+
+The shared fixture package now accepts explicit provider identity. It proves
+deterministic discovery, metadata integrity, freshness, tamper rejection,
+canonical capture, and temporary-file cleanup. The opt-in refresh command uses
+the catalog-driven acquisition composition. Its shell contract proves help,
+input validation, missing providers, fetch failure, no-op failure, successful
+update, and sibling isolation.
+
+These focused gates pass:
+
+```text
+go test -count=1 ./internal/providers/openai ./internal/test/providerfixture -run '^(TestOpenAICompatibleProviderCatalogContracts|TestProviderFixture)'
+go test -race -count=1 ./internal/providers/openai ./internal/test/providerfixture -run '^(TestOpenAICompatibleProviderCatalogContracts|TestProviderFixture)'
+bash scripts/test-provider-testdata-refresh.sh
+bash scripts/verify-package-layout.sh
+go test -count=1 ./internal/providers/... ./internal/embedded
+go test -race -count=1 ./internal/providers/... ./internal/embedded
+make docs-check
+```
+
+The campaign verifier now passes POR-V01 through POR-V04 and reports 4 passed
+and 5 failed. POR-V05 through POR-V09 remain red because their owning tasks have
+not run.

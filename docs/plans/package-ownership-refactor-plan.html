@@ -65,7 +65,6 @@
     <p><strong>Does not own:</strong> model aliases, routing policy, release publication, or unrelated repository cleanup.</p>
 
     <p><strong>Does not own:</strong> rewrites of historical reviews, archived proof, or generated local coverage files.</p>
-
     <p><strong>Non-goals:</strong> a general ban on compound package names, compatibility packages, forwarding paths, and new dependencies.</p>
 
   </section>
@@ -78,7 +77,7 @@
         <tr id="POR0" data-status="done"><td>POR0</td><td>Pin both baselines, create the proof root, record package graphs, and capture fail-before evidence.</td><td><code>done</code></td><td><a href="proof/package-ownership-refactor/por0.md">POR0 proof</a>: 42 Starport and 85 Starmap package suites passed ordinary and race tests. The corrected verifier reported <code>Summary: 0 passed, 9 failed</code>.</td></tr>
         <tr id="POR1" data-status="done"><td>POR1</td><td>Move Starmap bootstrap, source payload, and shared test-support packages to concept-owned paths.</td><td><code>done</code></td><td><a href="proof/package-ownership-refactor/por1.md">POR1 proof</a>: Starmap PR <a href="https://github.com/agentstation/starmap/pull/74">#74</a> merged as <code>8e661df5</code> after all local, review, and exact-head hosted gates passed. Protected <code>main</code> reports <code>2 passed, 7 failed</code>.</td></tr>
         <tr id="POR2" data-status="done"><td>POR2</td><td>Classify Starmap embedded catalog limits and repair enforcement policy.</td><td><code>done</code></td><td><a href="proof/package-ownership-refactor/por2.md">POR2 proof</a>: Starmap PR <a href="https://github.com/agentstation/starmap/pull/75">#75</a> passed all local, review, and exact-head hosted gates and merged as <code>13779dcf</code>. Protected <code>main</code> reports <code>3 passed, 6 failed</code>.</td></tr>
-        <tr id="POR3" data-status="in_progress"><td>POR3</td><td>Replace Starmap provider-named test packages with YAML-backed shared transport contracts.</td><td><code>in_progress</code></td><td><a href="proof/package-ownership-refactor/por3.md">POR3 proof</a>: fail-before evidence confirms four provider-named packages, duplicated YAML facts, and a refresh path that cannot produce a successful update.</td></tr>
+        <tr id="POR3" data-status="in_progress"><td>POR3</td><td>Replace Starmap provider-named test packages with YAML-backed shared transport contracts.</td><td><code>in_progress</code></td><td><a href="proof/package-ownership-refactor/por3.md">POR3 proof</a>: focused ordinary, race, refresh, layout, provider, embedded, and docs gates pass. The campaign reports <code>4 passed, 5 failed</code>. Full repository and PR gates remain.</td></tr>
         <tr id="POR4" data-status="todo"><td>POR4</td><td>Move Starport protocol adapters and test support to approved paths.</td><td><code>todo</code></td><td></td></tr>
         <tr id="POR5" data-status="todo"><td>POR5</td><td>Move Starport provider state and response cache to concept-owned paths.</td><td><code>todo</code></td><td></td></tr>
         <tr id="POR6" data-status="todo"><td>POR6</td><td>Separate Starport request authentication from cloud credential acquisition.</td><td><code>todo</code></td><td></td></tr>
@@ -493,6 +492,7 @@ control plane.</code></pre>
         <tr><td>2026-08-12</td><td>POR1</td><td>done</td><td>PR #74 passed Verification Gate, Security &amp; Reliability, and Action Pin Provenance on exact head <code>6a09e6c2</code>. It merged as <code>8e661df5</code>. Protected <code>main</code> is clean and repeats <code>2 passed, 7 failed</code>. POR2 started.</td></tr>
         <tr><td>2026-08-12</td><td>POR2</td><td>verified locally</td><td>The versioned policy keeps future chronology as a hard gate, changes three arbitrary numeric limits to review thresholds, and removes two ungrounded coverage gates. Focused ordinary and race tests and the complete repository verifier passed. The campaign reports <code>3 passed, 6 failed</code>.</td></tr>
         <tr><td>2026-08-12</td><td>POR2</td><td>done</td><td>Commit <code>c313b19a</code> passed its isolated review. PR #75 passed Verification Gate in 24m31s, Security &amp; Reliability in 2m4s, and Action Pin Provenance in 9s, then merged as <code>13779dcf</code>. Clean protected <code>main</code> repeats <code>3 passed, 6 failed</code>. POR3 started.</td></tr>
+        <tr><td>2026-08-12</td><td>POR3</td><td>focused gates pass</td><td>One transport-owned fixture store now discovers five providers and loads real embedded YAML. Four duplicate provider test packages are gone. Ordinary and race contracts, selective refresh, layout, all provider packages, embedded catalog, and docs reproduction pass. The campaign reports <code>4 passed, 5 failed</code>.</td></tr>
       </tbody>
     </table>
   </section></main>
