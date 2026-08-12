@@ -54,3 +54,10 @@ link success, and documentation-link regression success. All 41 Go packages
 pass. Vet reports no diagnostics. Lint reports zero issues. The build completes.
 All seven SDK smoke cases pass: raw HTTP chat, stream, models, embeddings,
 Python, TypeScript, and Go.
+
+## Commit and review
+
+Starport commit `13e407f` contains the verified POR4 diff. The automatic review
+selected Claude Opus 5, but its connection stopped on a local self-signed
+certificate. The fallback GPT-5.6-sol review completed in isolation and found
+no actionable defect. TruffleHog also reported a clean changed-content scan.
