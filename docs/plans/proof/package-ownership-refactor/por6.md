@@ -76,3 +76,16 @@ no actionable defect. TruffleHog also reported a clean changed-content scan.
 
 Starport PR [#108](https://github.com/agentstation/starport/pull/108) publishes
 exact reviewed head `5a3737c` for the hosted gates.
+
+## Hosted and merge evidence
+
+All 10 hosted checks passed on exact head
+`5a3737c6c70a15c42b36373c1737d70e10dc39e5`. The checks covered lint and Linux,
+macOS, and Windows tests. They also covered security, release contracts, the
+release snapshot, SDK compatibility, action provenance, and the build.
+
+PR #108 squash-merged as
+`03651443b8d71884615a635c6f4b4a52acad57aa`. The local Starport `main`
+branch is clean and matches `origin/main` at that commit. The campaign verifier
+on protected `main` passes POR-V01 through POR-V07 and reports 7 passed and 2
+failed. POR-V08 and POR-V09 remain red for POR7 and cross-repository closeout.
