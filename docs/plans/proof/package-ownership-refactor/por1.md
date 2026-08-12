@@ -77,3 +77,12 @@ Summary: 2 passed, 7 failed
 
 POR-V03 through POR-V09 remain red because their owning tasks have not run.
 This is the expected pre-merge campaign state for POR1.
+
+## Review
+
+The first automatic pre-PR selection passed the secret scan but could not
+connect to Claude because the local client rejected a self-signed certificate.
+It produced no code finding. The isolated Sol profile then reviewed the same
+68,028-byte branch bundle with GPT-5.6-sol at high effort. It reported no
+accepted or actionable finding and stored a clean attestation for the exact
+substantive diff at commit `6a09e6c2`.

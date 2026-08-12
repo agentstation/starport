@@ -17,7 +17,7 @@
 
 <header id="overview">
   <h1>Package Ownership Refactor Plan</h1>
-  <p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-12. Baselines: Starport <code>main@1243849111f5814d0e3418ac7920900fc4a0ea98</code> and Starmap <code>main@91319bc91422685b5e2937646f7efa5dea2fe371</code>. Proof root: <code>docs/plans/proof/package-ownership-refactor/</code>. Next action: commit the verified POR1 Starmap implementation, run the required pre-PR autoreview, and publish the product pull request.</p>
+  <p id="status-line">Status: <code data-plan-status="active">active</code>. Owner: this plan. Created: 2026-08-12. Baselines: Starport <code>main@1243849111f5814d0e3418ac7920900fc4a0ea98</code> and Starmap <code>main@91319bc91422685b5e2937646f7efa5dea2fe371</code>. Proof root: <code>docs/plans/proof/package-ownership-refactor/</code>. Next action: push verified Starmap commit <code>6a09e6c2</code>, publish the POR1 pull request, and require exact-head hosted checks before merge.</p>
 
   <section id="outcome">
     <h2>Outcome</h2>
@@ -77,7 +77,7 @@
       <thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead>
       <tbody>
         <tr id="POR0" data-status="done"><td>POR0</td><td>Pin both baselines, create the proof root, record package graphs, and capture fail-before evidence.</td><td><code>done</code></td><td><a href="proof/package-ownership-refactor/por0.md">POR0 proof</a>: 42 Starport and 85 Starmap package suites passed ordinary and race tests. The corrected verifier reported <code>Summary: 0 passed, 9 failed</code>.</td></tr>
-        <tr id="POR1" data-status="in_progress"><td>POR1</td><td>Move Starmap bootstrap, source payload, and shared test-support packages to concept-owned paths.</td><td><code>in_progress</code></td><td><a href="proof/package-ownership-refactor/por1.md">POR1 proof</a>: implementation and all local gates pass; campaign state is <code>2 passed, 7 failed</code>. Commit, autoreview, and product PR are pending.</td></tr>
+        <tr id="POR1" data-status="in_progress"><td>POR1</td><td>Move Starmap bootstrap, source payload, and shared test-support packages to concept-owned paths.</td><td><code>in_progress</code></td><td><a href="proof/package-ownership-refactor/por1.md">POR1 proof</a>: commit <code>6a09e6c2</code>, all local gates, and isolated Sol review pass; campaign state is <code>2 passed, 7 failed</code>. Product PR and hosted checks remain.</td></tr>
         <tr id="POR2" data-status="todo"><td>POR2</td><td>Classify Starmap embedded catalog limits and repair enforcement policy.</td><td><code>todo</code></td><td></td></tr>
         <tr id="POR3" data-status="todo"><td>POR3</td><td>Replace Starmap provider-named test packages with YAML-backed shared transport contracts.</td><td><code>todo</code></td><td></td></tr>
         <tr id="POR4" data-status="todo"><td>POR4</td><td>Move Starport protocol adapters and test support to approved paths.</td><td><code>todo</code></td><td></td></tr>
@@ -490,7 +490,7 @@ control plane.</code></pre>
         <tr><td>2026-08-12</td><td>meta</td><td>activated</td><td>The owner approved the whole-plan goal. Product implementation remains gated on the merge of this plan-only pull request.</td></tr>
         <tr><td>2026-08-12</td><td>POR0</td><td>in_progress</td><td>Plan PR #105 merged as <code>1243849</code> after 10 hosted checks passed. The control worktree started from that exact merge.</td></tr>
         <tr><td>2026-08-12</td><td>POR0</td><td>done</td><td>Commit <code>306cced</code> records both baseline graphs, 1,563 tests, 10 fuzz tests, full ordinary and race passes, raw budget data, stale paths, and the red nine-assertion verifier. POR1 started.</td></tr>
-        <tr><td>2026-08-12</td><td>POR1</td><td>verified locally</td><td>Six support packages now have concept-owned paths and base package names. Focused ordinary and race gates, generation and docs checks, both layout verifiers, all pure-Go consumers, the full repository race suite, vet, lint, coverage, catalog validation, and CLI smoke passed. The campaign verifier reports <code>2 passed, 7 failed</code>; commit and review remain.</td></tr>
+        <tr><td>2026-08-12</td><td>POR1</td><td>reviewed</td><td>Six support packages now have concept-owned paths and base package names. All local gates passed. Commit <code>6a09e6c2</code> has a clean isolated GPT-5.6-sol pre-PR review after the first Claude selection failed on its local self-signed-certificate connection. The campaign verifier reports <code>2 passed, 7 failed</code>; the PR remains.</td></tr>
       </tbody>
     </table>
   </section>
