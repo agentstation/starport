@@ -46,3 +46,23 @@ The developer-experience verifier reports 47 passed and 0 failed. Architecture
 and Starmap ownership each report 12 passed and 0 failed. Strict writing reports
 zero diagnostics in all seven touched durable documents. The campaign verifier
 passes POR-V01 through POR-V07 and reports 7 passed and 2 failed.
+
+## Full local verification
+
+The complete repository checks pass with normal, uncapped Go scheduling:
+
+```text
+make verify
+go test ./...
+go vet ./...
+make lint
+make build
+bash scripts/smoke-openrouter-sdks.sh
+```
+
+`make verify` reports Starmap ownership 12/12, architecture 12/12, release
+15/15, release workflow success, developer experience 47/47, documentation
+link success, and documentation-link regression success. All 42 Go packages
+pass. Vet reports no diagnostics. Lint reports zero issues. The build completes.
+All seven SDK smoke cases pass: raw HTTP chat, stream, models, embeddings,
+Python, TypeScript, and Go.
