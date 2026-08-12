@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. The plan-only pull request must merge before POR0 starts. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 is in progress: pin baselines, capture fail-before evidence, and author the red campaign verifier. |
 
 ### Proposed Work
 
