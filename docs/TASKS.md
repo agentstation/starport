@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 and POR1 are complete. POR2 commit, local verification, and pre-PR review pass; PR and hosted checks remain. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 and POR1 are complete. POR2 is Starmap PR #75; hosted checks and merge remain. |
 
 ### Proposed Work
 

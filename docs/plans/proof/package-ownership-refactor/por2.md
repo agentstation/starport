@@ -85,3 +85,9 @@ The automatic Claude selection failed before it read the patch because its
 client rejected a local self-signed certificate. This is a reviewer transport
 failure, not product evidence. The isolated Sol fallback completed the required
 review gate.
+
+## Pull request
+
+Starmap PR [#75](https://github.com/agentstation/starmap/pull/75) contains
+exact head `c313b19ae0914e549f9176ddde13fe33f35732f5`. Merge it only after
+Verification Gate, Security & Reliability, and Action Pin Provenance pass.
