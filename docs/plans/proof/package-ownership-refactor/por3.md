@@ -65,3 +65,17 @@ make docs-check
 The campaign verifier now passes POR-V01 through POR-V04 and reports 4 passed
 and 5 failed. POR-V05 through POR-V09 remain red because their owning tasks have
 not run.
+
+## Complete local verification
+
+The final-state `make verify` run passes without a scheduler cap. It includes
+ordinary tests, pure-Go consumer tests, package-layout checks, the full race
+suite, vet, lint, coverage, generated documentation, build, catalog validation,
+and CLI smoke checks. The root race package passed in 492.711 seconds. Catalog
+validation passed for 14 providers, 104 authors, and 611 models. The catalog
+benchmark passed three times at 8.744, 8.966, and 9.061 ns/op with zero bytes
+and zero allocations per operation.
+
+SHA-256 comparison proves that each of the five payloads and five metadata
+files is byte-identical before and after its move. `git diff --check` is clean.
+The final campaign run repeats 4 passed and 5 failed.
