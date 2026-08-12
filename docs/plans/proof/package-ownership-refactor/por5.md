@@ -69,3 +69,7 @@ no actionable defect. TruffleHog also reported a clean changed-content scan.
 
 Starport PR [#107](https://github.com/agentstation/starport/pull/107) publishes
 exact reviewed head `a26f825` for the hosted gates.
+
+All 10 hosted checks passed on that exact head. PR #107 squash-merged as
+`9bbeccefadce3c2afac41f6dc60135fba8b71e74`. Protected `main` is clean and
+matches `origin/main`. The campaign verifier reports 6 passed and 3 failed.
