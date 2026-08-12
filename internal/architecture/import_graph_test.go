@@ -144,6 +144,30 @@ func TestCloudChainPackageDoesNotMutateHTTPRequests(t *testing.T) {
 	)
 }
 
+func TestProductionConnectorCallsUseExecutionDeadline(t *testing.T) {
+	root := repositoryRoot(t)
+	connectorFiles, err := filepath.Glob(filepath.Join(root, "internal", "providers", "connectors", "*.go"))
+	require.NoError(t, err)
+	for _, path := range connectorFiles {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		source, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		require.NotContainsf(t, string(source), "context.WithTimeout(",
+			"connector %s must use its caller's execution deadline", path)
+		require.NotContainsf(t, string(source), "context.WithDeadline(",
+			"connector %s must use its caller's execution deadline", path)
+	}
+
+	executorSource, err := os.ReadFile(filepath.Join(root, "internal", "execution", "executor.go"))
+	require.NoError(t, err)
+	require.Contains(t, string(executorSource), "context.WithTimeout(")
+	streamSource, err := os.ReadFile(filepath.Join(root, "internal", "execution", "stream.go"))
+	require.NoError(t, err)
+	require.Contains(t, string(streamSource), "context.WithTimeout(")
+}
+
 func TestPublicPackageBoundary(t *testing.T) {
 	repositoryRoot := filepath.Clean(filepath.Join("..", ".."))
 	_, err := os.Stat(filepath.Join(repositoryRoot, "pkg"))

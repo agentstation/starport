@@ -26,6 +26,7 @@ fi
 
 forbidden_paths=(
 	"internal/http""api"
+	"internal/http""client"
 	"internal/repository""test"
 	"internal/test""util"
 	"internal/provider""state"
@@ -34,6 +35,7 @@ forbidden_paths=(
 )
 forbidden_packages=(
 	"http""api"
+	"http""client"
 	"repository""test"
 	"test""util"
 	"provider""state"

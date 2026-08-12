@@ -32,10 +32,7 @@ func newOllamaConnector(provider string, config ProviderConfig) (*OllamaConnecto
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient(provider, config)
-	if err != nil {
-		return nil, err
-	}
+	httpClient := newProviderHTTPClient(config)
 
 	return &OllamaConnector{
 		config:     config,

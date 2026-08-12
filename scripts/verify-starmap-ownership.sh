@@ -85,7 +85,7 @@ connector_facts_are_catalog_derived() {
     no_starport_match 'Model:[[:space:]]*"[a-z0-9-]+/"[[:space:]]*\+' \
       "$STARPORT_ROOT/internal/providers/connectors" &&
     no_starport_match '(resolveOperationBase|DefaultProviderConfig|streamGenerateContentAction|apiVersion|api_version)' \
-      "$STARPORT_ROOT/internal/providers/connectors" "$STARPORT_ROOT/internal/httpclient" &&
+      "$STARPORT_ROOT/internal/providers/connectors" &&
     test ! -e "$STARPORT_ROOT/starport.example.yaml" &&
     test ! -e "$STARPORT_ROOT/starport.example.simple.yaml"
 }

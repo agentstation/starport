@@ -57,4 +57,18 @@ if STARPORT_ROOT="$FIXTURE" bash "$VERIFIER" --scan-only >/dev/null 2>&1; then
 	exit 1
 fi
 
+old_path="internal/http""client"
+printf 'import _ %q\n' "example.com/project/$old_path" >"$FIXTURE/current/stale.go"
+if STARPORT_ROOT="$FIXTURE" bash "$VERIFIER" --scan-only >/dev/null 2>&1; then
+	printf 'package-layout verifier accepted a stale HTTP-client path\n' >&2
+	exit 1
+fi
+
+old_package="http""client"
+printf 'package %s\n' "$old_package" >"$FIXTURE/current/stale.go"
+if STARPORT_ROOT="$FIXTURE" bash "$VERIFIER" --scan-only >/dev/null 2>&1; then
+	printf 'package-layout verifier accepted a stale HTTP-client package name\n' >&2
+	exit 1
+fi
+
 printf 'package-layout verifier regression tests passed\n'

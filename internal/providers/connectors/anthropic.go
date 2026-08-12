@@ -32,10 +32,7 @@ func newAnthropicConnector(provider string, config ProviderConfig) (*AnthropicCo
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient(provider, config)
-	if err != nil {
-		return nil, err
-	}
+	httpClient := newProviderHTTPClient(config)
 
 	return &AnthropicConnector{
 		config:     config,

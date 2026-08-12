@@ -30,6 +30,7 @@ func TestApprovedInternalPackageLayout(t *testing.T) {
 	}
 	removed := []string{
 		filepath.Join("internal", "http"+"api"),
+		filepath.Join("internal", "http"+"client"),
 		filepath.Join("internal", "repository"+"test"),
 		filepath.Join("internal", "test"+"util"),
 		filepath.Join("internal", "provider"+"state"),
