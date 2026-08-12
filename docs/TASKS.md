@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 is complete. POR1 is moving Starmap bootstrap, source-payload, and shared test-support packages. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0 is complete. POR1 implementation and local verification pass; commit, autoreview, and the Starmap pull request remain. |
 
 ### Proposed Work
 
