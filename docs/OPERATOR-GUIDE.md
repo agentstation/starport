@@ -548,7 +548,7 @@ Run these checks before you promote a production image:
 ```bash
 bash scripts/verify-v1-architecture.sh
 go test ./...
-go test -race ./internal/inference ./internal/catalog ./internal/routing ./internal/execution ./internal/availability ./internal/responsecache ./internal/app ./internal/server
+go test -race ./internal/inference ./internal/catalog ./internal/routing ./internal/execution ./internal/availability ./internal/response/cache ./internal/app ./internal/server
 go vet ./...
 make lint
 make build

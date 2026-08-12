@@ -64,7 +64,7 @@ graph TD
   ProviderReconciler["catalog-driven provider reconciler"] --> RuntimeTransaction
   ProviderReconciler --> CredentialSources["environment, cloud, and secret sources"]
   ProviderOperations --> ProviderReconciler
-  ProviderOperations --> ProviderState["internal/providerstate safe projection"]
+  ProviderOperations --> ProviderState["internal/providers/state safe projection"]
   Executor --> ProviderState
   Availability --> ProviderState
   EmbeddedCatalog["embedded or local Starmap source"] --> AcceptedCatalog
@@ -75,7 +75,7 @@ graph TD
   Connectors --> GoogleTransport["Google AI"]
   Connectors --> GoogleCloudTransport["Google Cloud"]
   Connectors --> OllamaTransport["Ollama"]
-  Proxy --> ResponseCache["internal/responsecache semantic records"]
+  Proxy --> ResponseCache["internal/response/cache semantic records"]
   ResponseCache --> Cache["internal/cache byte storage"]
   Auth --> IdentityRepo["internal/identity repository"]
   RateLimit --> RateLimitRepo["internal/ratelimit repository"]
@@ -103,13 +103,13 @@ starport/
 ├── internal/routing/          # pure route policy and immutable plans
 ├── internal/execution/        # attempt state, budgets, fallback, and stream commitment
 ├── internal/availability/     # offering-level runtime availability state
-├── internal/providerstate/    # safe adapter, credential, and offering state
+├── internal/providers/state/ # safe adapter, credential, and offering state
 ├── internal/catalog/          # Starmap facts and derived routable generations
 ├── internal/registry/         # catalog-derived connector generations and adapter availability
 ├── internal/providers/        # BYOK provider keys and concrete LLM connectors
 ├── internal/providerauth/     # renewable cloud inference credentials
 ├── internal/httpclient/       # shared provider HTTP transport policy
-├── internal/responsecache/    # eligibility, semantic keys, canonical records, stream replay
+├── internal/response/cache/  # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
 ├── internal/identity/         # gateway identity model and versioned repository
 ├── internal/credentials/      # provider credentials, encryption, and repository
@@ -225,7 +225,7 @@ Starport has no released durable-data contract. Therefore, the version 1 reposit
 
 ## Response Cache
 
-`internal/responsecache` owns response-cache eligibility, semantic identity, versioned records, and canonical stream reconstruction. `internal/cache` owns only byte storage, TTL, and local/distributed layering. The proxy converts current request and response types at this seam.
+`internal/response/cache` owns response-cache eligibility, semantic identity, versioned records, and canonical stream reconstruction. `internal/cache` owns only byte storage, TTL, and local/distributed layering. The proxy converts current request and response types at this seam.
 
 Chat and embedding keys use the full SHA-256 digest in the `responsecache:v1:<kind>:` namespace. Identity includes the authenticated API key ID as tenant, the immutable catalog generation, canonical inference input, provider policy, model chains and overrides, and API-key restrictions. Ordered inputs keep their order. Set-like restrictions use sorted copies. Stream delivery options do not change the completed-result identity, so streaming and non-streaming requests can use one canonical record.
 
@@ -298,7 +298,7 @@ environment changes require a restart because another process cannot mutate a
 running process environment. Renewable cloud and direct secret sources can
 change material through their lifecycle without a restart.
 
-`internal/providerstate` projects adapter support, operator credential state,
+`internal/providers/state` projects adapter support, operator credential state,
 and exact offering availability as separate values. It stores an opaque
 material version only for stale-result rejection and never returns that value
 through HTTP. Tenant BYOK outcomes cannot change shared operator state.

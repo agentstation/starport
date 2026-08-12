@@ -69,14 +69,14 @@ check V06 'versioned concept repository contracts' sh -c '
 '
 
 check V07 'response cache semantic identity contract' sh -c '
-    grep -R -q -E --include="*_test.go" "^func TestSemanticKeyAndTenantIsolationContract" internal/responsecache &&
+    grep -R -q -E --include="*_test.go" "^func TestSemanticKeyAndTenantIsolationContract" internal/response/cache &&
     grep -R -q -E --include="*_test.go" "^func TestCachedService_TenantAndGenerationIsolation" internal/proxy &&
-    grep -q -E "RecordSchemaVersion = 1" internal/responsecache/repository.go &&
+    grep -q -E "RecordSchemaVersion = 1" internal/response/cache/repository.go &&
     test ! -e internal/cache/keys.go &&
     scripts/require-no-match.sh grep -R -q -E --include="*.go" "KeyGenerator|ChatCompletionKey|GetChatCompletion|SetChatCompletion|GetEmbedding|SetEmbedding" internal/cache &&
-    scripts/require-no-match.sh grep -R -q -E --include="*.go" "internal/(cache|providers|proxy|server)" internal/responsecache &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" "internal/(cache|providers|proxy|server)" internal/response/cache &&
     scripts/require-no-match.sh grep -q -E "sha256|sha\.Sum|hex\.Encode" internal/proxy/cache.go &&
-    go test ./internal/responsecache -run "^(TestSemanticKeyAndTenantIsolationContract|TestCanonicalRecordAndStreamReconstruction|TestRepositoryRejectsInvalidRecords)$" &&
+    go test ./internal/response/cache -run "^(TestSemanticKeyAndTenantIsolationContract|TestCanonicalRecordAndStreamReconstruction|TestRepositoryRejectsInvalidRecords)$" &&
     go test ./internal/proxy -run "^(TestCachedService_TenantAndGenerationIsolation|TestCachingStreamWrapper_DoesNotCachePartialStream)$"
 '
 

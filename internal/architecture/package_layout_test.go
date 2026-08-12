@@ -22,12 +22,16 @@ func TestApprovedInternalPackageLayout(t *testing.T) {
 	approved := []approvedPackage{
 		{path: "internal/protocol/openai", name: "openai"},
 		{path: "internal/protocol/openrouter", name: "openrouter"},
+		{path: "internal/providers/state", name: "state"},
 		{path: "internal/repotest", name: "repotest"},
+		{path: "internal/response/cache", name: "cache"},
 	}
 	removed := []string{
 		filepath.Join("internal", "http"+"api"),
 		filepath.Join("internal", "repository"+"test"),
 		filepath.Join("internal", "test"+"util"),
+		filepath.Join("internal", "provider"+"state"),
+		filepath.Join("internal", "response"+"cache"),
 	}
 
 	for _, path := range removed {

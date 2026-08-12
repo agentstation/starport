@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. POR0 through POR3 are complete. POR4 moves Starport protocol and test-support packages. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. POR0 through POR4 are complete. POR5 moves provider state and response cache to concept-owned paths. |
 
 ### Proposed Work
 

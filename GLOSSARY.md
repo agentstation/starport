@@ -19,7 +19,7 @@
 | credential source | A Starport or Starmap concept that resolves credential material from one configured source. | | approved | `internal/credentials/source.go` |
 | secret reference | Operator configuration that identifies one external credential without containing credential or backend authentication values. | | approved | `internal/credentials/reference.go` |
 | provider reconciler | The Starport concept that resolves inference credentials for all catalog providers and publishes one complete runtime generation. | | approved | `internal/providers/reconciler.go` |
-| provider state | A secret-free Starport projection that keeps adapter, operator credential, and offering state separate. | | approved | `internal/providerstate/store.go` |
+| provider state | A secret-free Starport projection that keeps adapter, operator credential, and offering state separate. | | approved | `internal/providers/state/store.go` |
 | runtime generation | One immutable Starport runtime value that binds catalog state, configuration, source handles, connectors, operations, and availability. | | approved | `internal/registry/generation.go` |
 | Badger | The embedded storage backend for one Starport process. | | approved | `docs/ARCHITECTURE.md` |
 | Valkey | The shared storage backend for a multi-process Starport deployment. | | approved | `docs/ARCHITECTURE.md` |

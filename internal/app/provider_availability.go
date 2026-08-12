@@ -5,7 +5,7 @@ import (
 
 	"github.com/agentstation/starport/internal/availability"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/providerstate"
+	providerstate "github.com/agentstation/starport/internal/providers/state"
 )
 
 type providerAvailabilityPublisher struct {

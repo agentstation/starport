@@ -28,11 +28,15 @@ forbidden_paths=(
 	"internal/http""api"
 	"internal/repository""test"
 	"internal/test""util"
+	"internal/provider""state"
+	"internal/response""cache"
 )
 forbidden_packages=(
 	"http""api"
 	"repository""test"
 	"test""util"
+	"provider""state"
+	"response""cache"
 )
 
 files=()
