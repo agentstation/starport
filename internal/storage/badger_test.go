@@ -10,8 +10,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/agentstation/starport/internal/testutil"
 )
 
 // TestBadgerStore runs all BadgerStore tests
@@ -207,7 +205,7 @@ func testBadgerTTLOperations(t *testing.T) {
 		}
 
 		// Wait for expiration (with buffer)
-		testutil.WaitForExpiration(t, store, key, ttl+500*time.Millisecond)
+		waitForExpiration(t, store, key, ttl+500*time.Millisecond)
 
 		// Key should be expired - Badger marks it as expired even if not yet garbage collected
 		_, err = store.Get(ctx, key)
@@ -272,7 +270,7 @@ func testBadgerTTLOperations(t *testing.T) {
 		}
 
 		// Wait a moment to ensure operation completes
-		testutil.WaitFor(t, func() bool {
+		waitFor(t, func() bool {
 			// The key should still exist since we set a future expiration
 			exists, _ := store.Exists(ctx, key)
 			return exists
@@ -288,7 +286,7 @@ func testBadgerTTLOperations(t *testing.T) {
 		}
 
 		// Wait for expiration
-		testutil.WaitForKeyNotExists(t, store, key, 3*time.Second)
+		waitForKeyNotExists(t, store, key, 3*time.Second)
 
 		// Key should be expired
 		exists, err = store.Exists(ctx, key)

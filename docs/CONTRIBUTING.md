@@ -39,9 +39,10 @@ Put behavior with the concept that owns its invariants:
 | Route planning | `internal/routing` |
 | Attempts and retry budgets | `internal/execution` |
 | Provider failure mapping | `internal/failure` |
-| Renewable inference credentials | `internal/providerauth` |
-| OpenAI protocol codecs | `internal/httpapi/openai` |
-| OpenRouter protocol codecs | `internal/httpapi/openrouter` |
+| Request credential placement | `internal/providers/auth` |
+| Cloud credential acquisition | `internal/credentials/cloudchain` |
+| OpenAI protocol codecs | `internal/protocol/openai` |
+| OpenRouter protocol codecs | `internal/protocol/openrouter` |
 | Application composition | `internal/app` |
 | HTTP wiring | `internal/server` |
 

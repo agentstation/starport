@@ -50,7 +50,7 @@ check V04 'deterministic route planner contract' sh -c '
 check V05 'attempt state and retry budget contract' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestAttemptStateAndRetryBudgetContract" internal/execution &&
     grep -R -q -E --include="*_test.go" "^func TestProviderHTTPRequestIsOneLogicalAttempt" internal/providers/connectors &&
-    scripts/require-no-match.sh grep -R -q -E --include="*.go" "doRequestWithRetry|WithRetry|CircuitBreaker|fallbackLocations|fallback_locations" internal/providers/connectors internal/router internal/httpclient &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" "doRequestWithRetry|WithRetry|CircuitBreaker|fallbackLocations|fallback_locations" internal/providers/connectors internal/router &&
     go test ./internal/execution ./internal/availability -run "^(TestAttemptStateAndRetryBudgetContract|TestOfferingAvailabilityStateMachine)$"
 '
 
@@ -69,14 +69,14 @@ check V06 'versioned concept repository contracts' sh -c '
 '
 
 check V07 'response cache semantic identity contract' sh -c '
-    grep -R -q -E --include="*_test.go" "^func TestSemanticKeyAndTenantIsolationContract" internal/responsecache &&
+    grep -R -q -E --include="*_test.go" "^func TestSemanticKeyAndTenantIsolationContract" internal/response/cache &&
     grep -R -q -E --include="*_test.go" "^func TestCachedService_TenantAndGenerationIsolation" internal/proxy &&
-    grep -q -E "RecordSchemaVersion = 1" internal/responsecache/repository.go &&
+    grep -q -E "RecordSchemaVersion = 1" internal/response/cache/repository.go &&
     test ! -e internal/cache/keys.go &&
     scripts/require-no-match.sh grep -R -q -E --include="*.go" "KeyGenerator|ChatCompletionKey|GetChatCompletion|SetChatCompletion|GetEmbedding|SetEmbedding" internal/cache &&
-    scripts/require-no-match.sh grep -R -q -E --include="*.go" "internal/(cache|providers|proxy|server)" internal/responsecache &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" "internal/(cache|providers|proxy|server)" internal/response/cache &&
     scripts/require-no-match.sh grep -q -E "sha256|sha\.Sum|hex\.Encode" internal/proxy/cache.go &&
-    go test ./internal/responsecache -run "^(TestSemanticKeyAndTenantIsolationContract|TestCanonicalRecordAndStreamReconstruction|TestRepositoryRejectsInvalidRecords)$" &&
+    go test ./internal/response/cache -run "^(TestSemanticKeyAndTenantIsolationContract|TestCanonicalRecordAndStreamReconstruction|TestRepositoryRejectsInvalidRecords)$" &&
     go test ./internal/proxy -run "^(TestCachedService_TenantAndGenerationIsolation|TestCachingStreamWrapper_DoesNotCachePartialStream)$"
 '
 
@@ -99,19 +99,25 @@ check V09 'public package boundary contract' sh -c '
 '
 
 check V10 'OpenAI and OpenRouter protocol contracts' sh -c '
-    grep -R -q -E --include="*_test.go" "^func TestOpenAIProtocolContract" internal/httpapi/openai &&
-    grep -R -q -E --include="*_test.go" "^func TestOpenRouterProtocolContract" internal/httpapi/openrouter &&
+    grep -R -q -E --include="*_test.go" "^func TestOpenAIProtocolContract" internal/protocol/openai &&
+    grep -R -q -E --include="*_test.go" "^func TestOpenRouterProtocolContract" internal/protocol/openrouter &&
     grep -R -q -E --include="*_test.go" "^func TestProtocolRoutesUseSelectedCodec" internal/server &&
 	grep -R -q -E --include="*_test.go" "^func TestClientIPIgnoresUntrustedForwardingHeaders" internal/server &&
 	scripts/require-no-match.sh grep -R -q -E --include="*.go" "middleware\.RealIP" internal/server &&
-    go test ./internal/httpapi/openai -run "^TestOpenAIProtocolContract$" &&
-    go test ./internal/httpapi/openrouter -run "^TestOpenRouterProtocolContract$" &&
+    go test ./internal/protocol/openai -run "^TestOpenAIProtocolContract$" &&
+    go test ./internal/protocol/openrouter -run "^TestOpenRouterProtocolContract$" &&
     go test ./internal/server -run "^Test(ProtocolRoutesUseSelectedCodec|ClientIPIgnoresUntrustedForwardingHeaders)$"
 '
 
 check V11 'import graph architecture fitness' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestImportGraphArchitecture" internal/architecture &&
-    go test ./internal/architecture -run "^TestImportGraphArchitecture$"
+    grep -R -q -E --include="*_test.go" "^func TestApprovedInternalPackageLayout" internal/architecture &&
+    grep -R -q -E --include="*_test.go" "^func TestProviderAuthenticationPackageHasNoCloudSDKImports" internal/architecture &&
+    grep -R -q -E --include="*_test.go" "^func TestCloudChainPackageDoesNotMutateHTTPRequests" internal/architecture &&
+    grep -R -q -E --include="*_test.go" "^func TestProductionConnectorCallsUseExecutionDeadline" internal/architecture &&
+    go test ./internal/architecture -run "^Test(ImportGraphArchitecture|ApprovedInternalPackageLayout|ProviderAuthenticationPackageHasNoCloudSDKImports|CloudChainPackageDoesNotMutateHTTPRequests|ProductionConnectorCallsUseExecutionDeadline)$" &&
+    bash scripts/verify-package-layout.sh &&
+    bash scripts/test-package-layout-verifier.sh
 '
 
 check V12 'full Go test suite' go test ./...

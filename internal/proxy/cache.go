@@ -12,7 +12,7 @@ import (
 
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
-	"github.com/agentstation/starport/internal/responsecache"
+	responsecache "github.com/agentstation/starport/internal/response/cache"
 	"github.com/rs/zerolog/log"
 )
 

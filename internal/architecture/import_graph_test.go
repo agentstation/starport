@@ -31,9 +31,9 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../credentials",
 		"../ratelimit",
 		"../presets",
-		"../responsecache",
-		"../httpapi/openai",
-		"../httpapi/openrouter",
+		"../response/cache",
+		"../protocol/openai",
+		"../protocol/openrouter",
 	)
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/routing",
@@ -46,9 +46,9 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
-		"github.com/agentstation/starport/internal/responsecache",
-		"github.com/agentstation/starport/internal/httpapi/openai",
-		"github.com/agentstation/starport/internal/httpapi/openrouter",
+		"github.com/agentstation/starport/internal/response/cache",
+		"github.com/agentstation/starport/internal/protocol/openai",
+		"github.com/agentstation/starport/internal/protocol/openrouter",
 	} {
 		require.Containsf(t, packages, packagePath, "required package %s is absent from the import graph", packagePath)
 	}
@@ -77,7 +77,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 			"net/http",
 		)
 	}
-	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/responsecache"],
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/response/cache"],
 		"github.com/agentstation/starport/internal/inference",
 	)
 	for _, packagePath := range []string{
@@ -102,8 +102,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 		)
 	}
 	for _, packagePath := range []string{
-		"github.com/agentstation/starport/internal/httpapi/openai",
-		"github.com/agentstation/starport/internal/httpapi/openrouter",
+		"github.com/agentstation/starport/internal/protocol/openai",
+		"github.com/agentstation/starport/internal/protocol/openrouter",
 	} {
 		assertOnlyInternalImports(t, packages[packagePath],
 			"github.com/agentstation/starport/internal/inference",
@@ -114,6 +114,58 @@ func TestImportGraphArchitecture(t *testing.T) {
 			"github.com/agentstation/starport/internal/server",
 		)
 	}
+}
+
+func TestProviderAuthenticationPackageHasNoCloudSDKImports(t *testing.T) {
+	packages := listPackages(t, "../providers/auth")
+	imports, exists := packages["github.com/agentstation/starport/internal/providers/auth"]
+	require.True(t, exists, "provider authentication package is absent from the import graph")
+	assertNoImports(t, imports,
+		"cloud.google.com/go/",
+		"github.com/Azure/azure-sdk-for-go/",
+		"github.com/aws/aws-sdk-go-v2/",
+	)
+	assertOnlyInternalImports(t, imports,
+		"github.com/agentstation/starport/internal/credentials",
+	)
+}
+
+func TestCloudChainPackageDoesNotMutateHTTPRequests(t *testing.T) {
+	packages := listPackages(t, "../credentials/cloudchain")
+	imports, exists := packages["github.com/agentstation/starport/internal/credentials/cloudchain"]
+	require.True(t, exists, "cloud credential chain package is absent from the import graph")
+	assertNoImports(t, imports,
+		"net/http",
+		"github.com/agentstation/starport/internal/providers/auth",
+		"github.com/agentstation/starport/internal/providers/connectors",
+	)
+	assertOnlyInternalImports(t, imports,
+		"github.com/agentstation/starport/internal/credentials",
+	)
+}
+
+func TestProductionConnectorCallsUseExecutionDeadline(t *testing.T) {
+	root := repositoryRoot(t)
+	connectorFiles, err := filepath.Glob(filepath.Join(root, "internal", "providers", "connectors", "*.go"))
+	require.NoError(t, err)
+	for _, path := range connectorFiles {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		source, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		require.NotContainsf(t, string(source), "context.WithTimeout(",
+			"connector %s must use its caller's execution deadline", path)
+		require.NotContainsf(t, string(source), "context.WithDeadline(",
+			"connector %s must use its caller's execution deadline", path)
+	}
+
+	executorSource, err := os.ReadFile(filepath.Join(root, "internal", "execution", "executor.go"))
+	require.NoError(t, err)
+	require.Contains(t, string(executorSource), "context.WithTimeout(")
+	streamSource, err := os.ReadFile(filepath.Join(root, "internal", "execution", "stream.go"))
+	require.NoError(t, err)
+	require.Contains(t, string(streamSource), "context.WithTimeout(")
 }
 
 func TestPublicPackageBoundary(t *testing.T) {

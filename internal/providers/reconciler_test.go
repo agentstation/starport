@@ -13,7 +13,7 @@ import (
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providerstate"
+	providerstate "github.com/agentstation/starport/internal/providers/state"
 )
 
 func TestProviderReconcilerDiscoversAmbientKey(t *testing.T) {

@@ -10,7 +10,8 @@
 | adapter registry | The Starport registry that owns compiled provider adapter behavior. | | approved | `internal/providers/connectors/adapter_registry.go` |
 | route plan | A deterministic ordered set of provider offering attempts for one request. | | approved | `internal/routing/types.go` |
 | attempt budget | The total attempt and elapsed-time limit for one inference request. | | approved | `internal/execution/executor.go` |
-| provider authentication | The Starport process that gets and applies an inference credential. | | approved | `internal/providers/connectors/adapter_registry.go` |
+| provider authentication | The Starport process that applies inference credential material to a provider request. | | approved | `internal/providers/auth/request.go` |
+| cloud credential chain | The Starport process that gets renewable inference credential material from a cloud identity. | | approved | `internal/credentials/cloudchain/cloud.go` |
 | Homebrew cask | A Homebrew package that installs a released Starport binary. | | approved | `https://docs.brew.sh/Cask-Cookbook` |
 | OpenAI-compatible API | The Starport HTTP contract under `/v1`. | | approved | `docs/ARCHITECTURE.md` |
 | OpenRouter-compatible API | The Starport HTTP contract under `/api/v1`. | | approved | `docs/ARCHITECTURE.md` |
@@ -19,7 +20,7 @@
 | credential source | A Starport or Starmap concept that resolves credential material from one configured source. | | approved | `internal/credentials/source.go` |
 | secret reference | Operator configuration that identifies one external credential without containing credential or backend authentication values. | | approved | `internal/credentials/reference.go` |
 | provider reconciler | The Starport concept that resolves inference credentials for all catalog providers and publishes one complete runtime generation. | | approved | `internal/providers/reconciler.go` |
-| provider state | A secret-free Starport projection that keeps adapter, operator credential, and offering state separate. | | approved | `internal/providerstate/store.go` |
+| provider state | A secret-free Starport projection that keeps adapter, operator credential, and offering state separate. | | approved | `internal/providers/state/store.go` |
 | runtime generation | One immutable Starport runtime value that binds catalog state, configuration, source handles, connectors, operations, and availability. | | approved | `internal/registry/generation.go` |
 | Badger | The embedded storage backend for one Starport process. | | approved | `docs/ARCHITECTURE.md` |
 | Valkey | The shared storage backend for a multi-process Starport deployment. | | approved | `docs/ARCHITECTURE.md` |

@@ -10,9 +10,9 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providerauth"
+	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/connectors"
-	"github.com/agentstation/starport/internal/providerstate"
+	providerstate "github.com/agentstation/starport/internal/providers/state"
 )
 
 var (

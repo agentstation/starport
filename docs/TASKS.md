@@ -7,9 +7,7 @@ Last Updated: 2026-08-12
 
 ### Active Work
 
-| Task | Team | Plan | Status |
-|------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | POR0–POR2 are complete. POR3 YAML-backed provider fixture work is in progress. |
+No active durable plan exists.
 
 ### Proposed Work
 
@@ -19,6 +17,7 @@ No proposed durable plan exists.
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| Package ownership refactor | POR | Starport #105–#110 and Starmap #74–#76 | 2026-08-12 | Moved packages to concept-owned paths in both repositories. Deleted unused HTTP transport code. All nine campaign assertions pass. |
 | Automatic provider runtime | APR | #96–#103 | 2026-08-11 | Published immutable `v1.0.3`. Starport now derives executable providers and inference authentication profiles from one Starmap generation. It supports credential refresh, safe provider state, authenticated provider operations, and provider-neutral local development. |
 | Starport developer experience | DX | #88 | 2026-08-10 | Published immutable `v1.0.1` and the Homebrew cask. Verified exact-version installation on macOS and Linux, then merged release-readback hardening after all 10 CI jobs passed. |
 | SPR3 | Release | #75 | 2026-08-09 | Stored compact terminal proof and removed the completed release control plane |

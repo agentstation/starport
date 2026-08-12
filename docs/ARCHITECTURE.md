@@ -20,7 +20,7 @@ Implemented:
   authenticated manual refresh without a local provider roster.
 - Secret-free provider state that separates adapter support, operator
   credentials, and offering availability.
-- Shared provider HTTP-client construction for timeout and connection-pool semantics.
+- Connector-owned HTTP-client construction for first-response-byte and connection-pool semantics.
 - Separate OpenAI `/v1` and OpenRouter `/api/v1` protocol adapters for chat, embeddings, models, errors, and streaming events.
 - Routing uses provider preferences, fallback chains, one attempt budget, and offering-level availability. It supports cost, latency, affinity, and restrictions.
 - BYOK provider-key management with encrypted credential storage, provider validation, fallback strategies, usage tracking, and admin/provider-key HTTP endpoints.
@@ -64,7 +64,7 @@ graph TD
   ProviderReconciler["catalog-driven provider reconciler"] --> RuntimeTransaction
   ProviderReconciler --> CredentialSources["environment, cloud, and secret sources"]
   ProviderOperations --> ProviderReconciler
-  ProviderOperations --> ProviderState["internal/providerstate safe projection"]
+  ProviderOperations --> ProviderState["internal/providers/state safe projection"]
   Executor --> ProviderState
   Availability --> ProviderState
   EmbeddedCatalog["embedded or local Starmap source"] --> AcceptedCatalog
@@ -75,7 +75,7 @@ graph TD
   Connectors --> GoogleTransport["Google AI"]
   Connectors --> GoogleCloudTransport["Google Cloud"]
   Connectors --> OllamaTransport["Ollama"]
-  Proxy --> ResponseCache["internal/responsecache semantic records"]
+  Proxy --> ResponseCache["internal/response/cache semantic records"]
   ResponseCache --> Cache["internal/cache byte storage"]
   Auth --> IdentityRepo["internal/identity repository"]
   RateLimit --> RateLimitRepo["internal/ratelimit repository"]
@@ -94,8 +94,8 @@ starport/
 ├── cmd/starport/              # CLI and composition root
 ├── internal/app/              # application lifecycle and dependency ownership
 ├── internal/server/           # HTTP server, middleware, routes, controllers, DTO helpers
-├── internal/httpapi/openai/   # OpenAI wire DTOs and codecs
-├── internal/httpapi/openrouter/ # OpenRouter wire DTOs and codecs
+├── internal/protocol/openai/  # OpenAI wire DTOs and codecs
+├── internal/protocol/openrouter/ # OpenRouter wire DTOs and codecs
 ├── internal/proxy/            # chat, streaming, embeddings, model/provider use cases
 ├── internal/inference/        # canonical chat, embedding, and stream values
 ├── internal/failure/          # canonical safe failures and provider evidence
@@ -103,13 +103,14 @@ starport/
 ├── internal/routing/          # pure route policy and immutable plans
 ├── internal/execution/        # attempt state, budgets, fallback, and stream commitment
 ├── internal/availability/     # offering-level runtime availability state
-├── internal/providerstate/    # safe adapter, credential, and offering state
+├── internal/providers/state/  # safe adapter, credential, and offering state
 ├── internal/catalog/          # Starmap facts and derived routable generations
 ├── internal/registry/         # catalog-derived connector generations and adapter availability
-├── internal/providers/        # BYOK provider keys and concrete LLM connectors
-├── internal/providerauth/     # renewable cloud inference credentials
-├── internal/httpclient/       # shared provider HTTP transport policy
-├── internal/responsecache/    # eligibility, semantic keys, canonical records, stream replay
+├── internal/providers/        # provider runtime composition and BYOK
+├── internal/providers/connectors/ # wire adapters and provider HTTP transport policy
+├── internal/providers/auth/   # request credential placement by catalog primitive
+├── internal/credentials/cloudchain/ # renewable cloud credential acquisition
+├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
 ├── internal/identity/         # gateway identity model and versioned repository
 ├── internal/credentials/      # provider credentials, encryption, and repository
@@ -225,7 +226,7 @@ Starport has no released durable-data contract. Therefore, the version 1 reposit
 
 ## Response Cache
 
-`internal/responsecache` owns response-cache eligibility, semantic identity, versioned records, and canonical stream reconstruction. `internal/cache` owns only byte storage, TTL, and local/distributed layering. The proxy converts current request and response types at this seam.
+`internal/response/cache` owns response-cache eligibility, semantic identity, versioned records, and canonical stream reconstruction. `internal/cache` owns only byte storage, TTL, and local/distributed layering. The proxy converts current request and response types at this seam.
 
 Chat and embedding keys use the full SHA-256 digest in the `responsecache:v1:<kind>:` namespace. Identity includes the authenticated API key ID as tenant, the immutable catalog generation, canonical inference input, provider policy, model chains and overrides, and API-key restrictions. Ordered inputs keep their order. Set-like restrictions use sorted copies. Stream delivery options do not change the completed-result identity, so streaming and non-streaming requests can use one canonical record.
 
@@ -271,12 +272,13 @@ reuses secret values from the other plane. Remote catalog authentication proves
 access to a publisher. It is a third, separate protocol credential and never
 becomes provider material.
 
-`internal/providerauth` owns renewable inference bearer tokens. Vertex AI uses
-Google Application Default Credentials with the Google Cloud platform scope.
-The Google source preserves the Application Default Credentials quota project.
-The bearer transport sends it as `X-Goog-User-Project` without replacing an
-explicit request header. It rejects HTTP redirects before it reuses a renewable
-credential.
+`internal/credentials/cloudchain` owns renewable inference bearer tokens.
+`internal/providers/auth` applies resolved material through catalog-declared
+request placements. Vertex AI uses Google Application Default Credentials with
+the Google Cloud platform scope. The Google source preserves the Application
+Default Credentials quota project. Request authentication sends it as
+`X-Goog-User-Project` without replacing an explicit request header. The
+transport rejects HTTP redirects before it reuses a renewable credential.
 
 Azure OpenAI uses `DefaultAzureCredential` with the Azure Cognitive Services
 scope. A synchronized source caches each token and refreshes it two minutes
@@ -298,7 +300,7 @@ environment changes require a restart because another process cannot mutate a
 running process environment. Renewable cloud and direct secret sources can
 change material through their lifecycle without a restart.
 
-`internal/providerstate` projects adapter support, operator credential state,
+`internal/providers/state` projects adapter support, operator credential state,
 and exact offering availability as separate values. It stores an opaque
 material version only for stale-result rejection and never returns that value
 through HTTP. Tenant BYOK outcomes cannot change shared operator state.
@@ -334,7 +336,12 @@ until Starport implements their semantics. A stream can use fallback only
 before HTTP receives it. Starport does not use fallback after it can send
 bytes.
 
-The pure planner returns one immutable route plan. The executor applies one total attempt limit. It also applies one total elapsed-time limit. Same-route retries and fallback routes consume the same attempt budget. Provider adapters make one request. The HTTP transport has no circuit breaker.
+The pure planner returns one immutable route plan. The executor applies one
+total attempt limit and one total elapsed-time limit. Same-route retries and
+fallback routes consume the same attempt budget. Provider adapters make one
+request. Their private HTTP builder owns connection pools, dialing, handshakes,
+redirects, and the first-response-byte timeout. It does not add a total client
+timeout, mutate provider responses, retry, or implement a circuit breaker.
 
 Streaming and non-streaming requests use the same planner and executor. A stream can change routes only before Starport returns the first canonical event. A stream failure after this commitment point is terminal.
 

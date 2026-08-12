@@ -75,7 +75,8 @@ err = tx.Commit(ctx)
 
 ## Testing
 
-The package includes a comprehensive mock implementation (`MockStore`) that implements the full `KVStore` interface with in-memory storage. This is perfect for unit testing without external dependencies.
+`MockStore` implements the full `KVStore` interface in memory. Use it for unit
+tests without external dependencies.
 
 ```go
 // Create mock store for testing
@@ -110,7 +111,7 @@ The package defines specific error types:
 - `ErrNotFound`: Key does not exist
 - `ErrConflict`: Write conflict (e.g., CAS mismatch)
 - `ErrInvalidKey`: Invalid key format
-- `ErrStorageClosed`: Storage instance is closed
+- `ErrStorageClosed`: An operation used a closed storage instance
 - `ErrTimeout`: Operation timed out
 
 Always check for `ErrNotFound` when a key might not exist:

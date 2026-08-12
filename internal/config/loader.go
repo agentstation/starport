@@ -11,7 +11,7 @@ import (
 	"github.com/sethvargo/go-envconfig"
 
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providerauth"
+	"github.com/agentstation/starport/internal/credentials/cloudchain"
 )
 
 // Loader reads configuration without changing process state.
@@ -134,7 +134,7 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config)) (*Config, erro
 		credentials.WithEnvironmentLookup(lookuper.Lookup),
 		credentials.WithDirectSecretRefreshInterval(cfg.CredentialSources.RemoteRefreshInterval),
 	}
-	for primitive, chain := range providerauth.DefaultCloudChains() {
+	for primitive, chain := range cloudchain.DefaultCloudChains() {
 		resolverOptions = append(resolverOptions, credentials.WithCloudChain(primitive, chain))
 	}
 	cfg.credentialResolver = credentials.NewResolver(resolverOptions...)

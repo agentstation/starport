@@ -16,8 +16,9 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 ## Ownership boundaries
 
 - Starmap owns provider IDs, model IDs, provider services, model offerings,
-  capabilities, prices, catalog-acquisition authentication, status sources,
-  and the immutable catalog generation.
+  capabilities, and prices.
+- Starmap also owns catalog-acquisition authentication, status sources, and the
+  immutable catalog generation.
 - Starport owns inference credentials, tenant identity, routing policy,
   availability state, execution, caching, rate limits, and HTTP protocols.
 - Derive provider and model facts from one Starmap snapshot. Do not add local
@@ -32,8 +33,12 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Put deterministic route planning in `internal/routing`.
 - Put attempt state and retry budgets in `internal/execution`.
 - Put provider failure normalization in `internal/failure`.
-- Put protocol codecs in `internal/httpapi/openai` and
-  `internal/httpapi/openrouter`.
+- Put request credential placement in `internal/providers/auth`.
+- Put cloud credential acquisition in `internal/credentials/cloudchain`.
+- Put safe provider runtime projections in `internal/providers/state`.
+- Put canonical response cache records in `internal/response/cache`.
+- Put protocol codecs in `internal/protocol/openai` and
+  `internal/protocol/openrouter`.
 - Keep composition in `internal/app` and HTTP wiring in `internal/server`.
 - Access persisted identity, provider credentials, rate limits, presets, and
   response cache records through their concept-owned repositories.

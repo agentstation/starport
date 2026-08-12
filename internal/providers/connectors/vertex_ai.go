@@ -28,10 +28,7 @@ func newGoogleCloudConnector(provider string, config ProviderConfig) (*VertexAIC
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	httpClient, err := newProviderHTTPClient(provider, config)
-	if err != nil {
-		return nil, err
-	}
+	httpClient := newProviderHTTPClient(config)
 
 	return &VertexAIConnector{
 		googleBaseConnector: googleBaseConnector{
