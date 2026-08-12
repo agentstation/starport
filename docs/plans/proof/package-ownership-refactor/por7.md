@@ -78,3 +78,11 @@ bash scripts/smoke-openrouter-sdks.sh
 link success, and documentation-link regression success. All 41 Go packages
 pass. Vet reports no diagnostics. Lint reports zero issues. The build completes.
 All seven SDK smoke cases pass.
+
+## Commit and review
+
+Starport commit `15d0acc` contains the verified POR7 diff. The automatic review
+selected Claude Opus 5, but its connection stopped on a local self-signed
+certificate before it read any tokens. The fallback GPT-5.6-sol review ran in
+isolation and found no actionable defect. TruffleHog reported a clean
+changed-content scan.
