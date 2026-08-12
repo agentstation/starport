@@ -89,3 +89,16 @@ changed-content scan.
 
 Starport PR [#109](https://github.com/agentstation/starport/pull/109)
 publishes exact reviewed head `15d0acc` for the hosted gates.
+
+## Hosted and merge evidence
+
+All 10 hosted checks passed on exact head
+`15d0acc6133119b5d7e32ada26724187ac569e7d`. They covered lint and Linux,
+macOS, and Windows tests. They also covered security, release contracts, the
+release snapshot, SDK compatibility, action provenance, and the build.
+
+PR #109 squash-merged as
+`924855c9d6cda6c12060cad91cd99bf3d21094a8`. The local Starport `main`
+branch is clean and matches `origin/main` at that commit. The campaign verifier
+on protected `main` passes POR-V01 through POR-V08 and reports 8 passed and 1
+failed. POR-V09 remains red for cross-repository closeout.
