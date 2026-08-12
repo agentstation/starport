@@ -94,3 +94,11 @@ synthetic base. Its target tree was byte-identical to the product commit at
 reviewed the 68,981-byte safe bundle. It found no actionable P0 defect and
 rated the patch correct at 0.98 confidence. The review covered fixture identity,
 mapping coverage, refresh failures, filesystem safety, and exact model IDs.
+
+## Pull request
+
+Starmap PR [#76](https://github.com/agentstation/starmap/pull/76) targets `main`
+from `codex/por3-starmap-provider-fixtures`. GitHub reports it as mergeable at
+the exact reviewed head `c599ba363c0161a7c8e0fd13361edfcf9ca4cdc7`.
+GitHub queued Verification Gate, Security & Reliability, and Action Pin
+Provenance.
