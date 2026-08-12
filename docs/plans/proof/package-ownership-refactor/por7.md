@@ -86,3 +86,6 @@ selected Claude Opus 5, but its connection stopped on a local self-signed
 certificate before it read any tokens. The fallback GPT-5.6-sol review ran in
 isolation and found no actionable defect. TruffleHog reported a clean
 changed-content scan.
+
+Starport PR [#109](https://github.com/agentstation/starport/pull/109)
+publishes exact reviewed head `15d0acc` for the hosted gates.
