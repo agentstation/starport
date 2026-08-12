@@ -70,4 +70,10 @@ because the branch contains no substantive code change.
 
 ## Final gate
 
-Starport pull request #110 hosted checks and exact-head merge remain.
+All 10 hosted checks passed on exact head `c72e490`. Pull request #110
+squash-merged as `c318ca8030ac14d8b3c848ee58de0a6c7022c28e`. Both product
+worktrees are clean on protected `main` and match their remotes.
+
+The terminal campaign verifier reported `Summary: 9 passed, 0 failed`.
+
+POR8_TERMINAL: PASS
