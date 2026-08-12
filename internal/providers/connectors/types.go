@@ -270,7 +270,7 @@ type Embedding struct {
 type ProviderConfig struct {
 	// Common settings from internal/config/config.go
 	BaseURL        string        `json:"base_url"`
-	Timeout        time.Duration `json:"timeout"`
+	Timeout        time.Duration `json:"timeout"` // Maximum wait for response headers.
 	MaxConnections int           `json:"max_connections"`
 
 	// Enable flag for optional providers (e.g., Ollama)

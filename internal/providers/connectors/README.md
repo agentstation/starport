@@ -32,3 +32,8 @@ source from `internal/credentials/cloudchain`. Credential discovery and refresh
 occur outside the inference hot path. `internal/providers/auth` applies the
 resolved material to each request. Ambient cloud credentials do not determine
 adapter activation.
+
+The private connector HTTP builder owns connection pools, dialing, TLS
+handshakes, redirects, and the first-response-byte timeout. It does not set a
+total client timeout or mutate provider responses. The execution context owns
+the total elapsed budget. Each connector closes its idle HTTP connections.

@@ -50,7 +50,7 @@ check V04 'deterministic route planner contract' sh -c '
 check V05 'attempt state and retry budget contract' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestAttemptStateAndRetryBudgetContract" internal/execution &&
     grep -R -q -E --include="*_test.go" "^func TestProviderHTTPRequestIsOneLogicalAttempt" internal/providers/connectors &&
-    scripts/require-no-match.sh grep -R -q -E --include="*.go" "doRequestWithRetry|WithRetry|CircuitBreaker|fallbackLocations|fallback_locations" internal/providers/connectors internal/router internal/httpclient &&
+    scripts/require-no-match.sh grep -R -q -E --include="*.go" "doRequestWithRetry|WithRetry|CircuitBreaker|fallbackLocations|fallback_locations" internal/providers/connectors internal/router &&
     go test ./internal/execution ./internal/availability -run "^(TestAttemptStateAndRetryBudgetContract|TestOfferingAvailabilityStateMachine)$"
 '
 
@@ -114,7 +114,8 @@ check V11 'import graph architecture fitness' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestApprovedInternalPackageLayout" internal/architecture &&
     grep -R -q -E --include="*_test.go" "^func TestProviderAuthenticationPackageHasNoCloudSDKImports" internal/architecture &&
     grep -R -q -E --include="*_test.go" "^func TestCloudChainPackageDoesNotMutateHTTPRequests" internal/architecture &&
-    go test ./internal/architecture -run "^Test(ImportGraphArchitecture|ApprovedInternalPackageLayout|ProviderAuthenticationPackageHasNoCloudSDKImports|CloudChainPackageDoesNotMutateHTTPRequests)$" &&
+    grep -R -q -E --include="*_test.go" "^func TestProductionConnectorCallsUseExecutionDeadline" internal/architecture &&
+    go test ./internal/architecture -run "^Test(ImportGraphArchitecture|ApprovedInternalPackageLayout|ProviderAuthenticationPackageHasNoCloudSDKImports|CloudChainPackageDoesNotMutateHTTPRequests|ProductionConnectorCallsUseExecutionDeadline)$" &&
     bash scripts/verify-package-layout.sh &&
     bash scripts/test-package-layout-verifier.sh
 '

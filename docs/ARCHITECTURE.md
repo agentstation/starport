@@ -20,7 +20,7 @@ Implemented:
   authenticated manual refresh without a local provider roster.
 - Secret-free provider state that separates adapter support, operator
   credentials, and offering availability.
-- Shared provider HTTP-client construction for timeout and connection-pool semantics.
+- Connector-owned HTTP-client construction for first-response-byte and connection-pool semantics.
 - Separate OpenAI `/v1` and OpenRouter `/api/v1` protocol adapters for chat, embeddings, models, errors, and streaming events.
 - Routing uses provider preferences, fallback chains, one attempt budget, and offering-level availability. It supports cost, latency, affinity, and restrictions.
 - BYOK provider-key management with encrypted credential storage, provider validation, fallback strategies, usage tracking, and admin/provider-key HTTP endpoints.
@@ -106,10 +106,10 @@ starport/
 ├── internal/providers/state/  # safe adapter, credential, and offering state
 ├── internal/catalog/          # Starmap facts and derived routable generations
 ├── internal/registry/         # catalog-derived connector generations and adapter availability
-├── internal/providers/        # BYOK provider keys and concrete LLM connectors
+├── internal/providers/        # provider runtime composition and BYOK
+├── internal/providers/connectors/ # wire adapters and provider HTTP transport policy
 ├── internal/providers/auth/   # request credential placement by catalog primitive
 ├── internal/credentials/cloudchain/ # renewable cloud credential acquisition
-├── internal/httpclient/       # shared provider HTTP transport policy
 ├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
 ├── internal/identity/         # gateway identity model and versioned repository
@@ -336,7 +336,12 @@ until Starport implements their semantics. A stream can use fallback only
 before HTTP receives it. Starport does not use fallback after it can send
 bytes.
 
-The pure planner returns one immutable route plan. The executor applies one total attempt limit. It also applies one total elapsed-time limit. Same-route retries and fallback routes consume the same attempt budget. Provider adapters make one request. The HTTP transport has no circuit breaker.
+The pure planner returns one immutable route plan. The executor applies one
+total attempt limit and one total elapsed-time limit. Same-route retries and
+fallback routes consume the same attempt budget. Provider adapters make one
+request. Their private HTTP builder owns connection pools, dialing, handshakes,
+redirects, and the first-response-byte timeout. It does not add a total client
+timeout, mutate provider responses, retry, or implement a circuit breaker.
 
 Streaming and non-streaming requests use the same planner and executor. A stream can change routes only before Starport returns the first canonical event. A stream failure after this commitment point is terminal.
 

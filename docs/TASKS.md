@@ -9,7 +9,7 @@ Last Updated: 2026-08-12
 
 | Task | Team | Plan | Status |
 |------|------|------|--------|
-| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. POR0 through POR5 are complete. POR6 separates request authentication from cloud credential acquisition. |
+| Package ownership refactor | POR | [Plan](plans/package-ownership-refactor-plan.html) | Active. POR0 through POR6 are complete. POR7 moves provider HTTP transport policy to its connector owner and removes unused generic surfaces. |
 
 ### Proposed Work
 

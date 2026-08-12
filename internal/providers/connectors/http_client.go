@@ -1,34 +1,40 @@
 package connectors
 
 import (
-	"fmt"
+	"net"
 	"net/http"
-
-	"github.com/agentstation/starport/internal/httpclient"
+	"time"
 )
 
-func newProviderHTTPClient(
-	provider string,
-	config ProviderConfig,
-) (*http.Client, error) {
-	clientConfig := httpclient.DefaultConfig()
-	// ProviderConfig.Timeout is treated as a first-byte/header timeout. Do not
-	// map it directly to http.Client.Timeout because that deadline also covers
-	// response-body reads and cuts off healthy long-running streams.
-	clientConfig.ResponseHeaderTimeout = config.Timeout
-	if config.Timeout > clientConfig.RequestTimeout {
-		clientConfig.RequestTimeout = config.Timeout
-	}
+const (
+	providerDialTimeout           = 30 * time.Second
+	providerDialKeepAlive         = 30 * time.Second
+	providerIdleConnectionTimeout = 90 * time.Second
+	providerTLSHandshakeTimeout   = 10 * time.Second
+	providerExpectContinueTimeout = time.Second
+)
 
-	if config.MaxConnections > 0 {
-		clientConfig.MaxConnsPerHost = config.MaxConnections
-		clientConfig.MaxIdleConnsPerHost = config.MaxConnections
-		clientConfig.MaxIdleConns = config.MaxConnections
-	}
-	client, err := httpclient.New(provider, clientConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
-	}
+// newProviderHTTPClient owns connection and first-response-byte policy for
+// provider connectors. Execution contexts own the total request deadline.
+func newProviderHTTPClient(config ProviderConfig) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = config.MaxConnections
+	transport.MaxIdleConnsPerHost = config.MaxConnections
+	transport.MaxConnsPerHost = config.MaxConnections
+	transport.IdleConnTimeout = providerIdleConnectionTimeout
+	transport.TLSHandshakeTimeout = providerTLSHandshakeTimeout
+	transport.ResponseHeaderTimeout = config.Timeout
+	transport.ExpectContinueTimeout = providerExpectContinueTimeout
+	transport.ForceAttemptHTTP2 = true
+	transport.DialContext = (&net.Dialer{
+		Timeout:   providerDialTimeout,
+		KeepAlive: providerDialKeepAlive,
+	}).DialContext
 
-	return client.GetHTTPClient(), nil
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
