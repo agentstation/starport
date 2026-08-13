@@ -9,7 +9,6 @@ import (
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
-	"github.com/agentstation/starmap/pkg/catalogstore"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -236,7 +235,7 @@ func loadCatalogState(
 		generation, currentErr := generationStore.Current(ctx)
 		switch {
 		case currentErr == nil:
-			catalog, decodeErr := catalogstore.DecodeCatalogPayload(generation.Payload)
+			catalog, decodeErr := catalogs.DecodeCatalogPayload(generation.Payload)
 			if decodeErr != nil {
 				return starmap.CatalogState{}, fmt.Errorf("decode current catalog generation: %w", decodeErr)
 			}

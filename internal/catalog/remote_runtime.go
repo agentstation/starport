@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap"
-	"github.com/agentstation/starmap/pkg/catalogstore"
+	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/agentstation/starmap/remote"
@@ -94,7 +94,7 @@ func OpenRemoteRuntime(
 		return nil, err
 	}
 
-	var pinned *catalogstore.Generation
+	var pinned *catalogs.Generation
 	acceptedGeneration, currentErr := acceptedStore.Current(ctx)
 	switch {
 	case currentErr == nil:

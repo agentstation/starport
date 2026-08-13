@@ -24,11 +24,12 @@ check() {
 
 # Go templates and awk programs must remain literal inside the nested shell.
 # shellcheck disable=SC2016
-check V01 'Starmap module and Go floor' sh -c '
+check V01 'published Starmap module boundary and Go floor' sh -c '
     awk '\''$1 == "go" { split($2, version, "."); exit !(version[1] > 1 || version[2] >= 25) }'\'' go.mod &&
 	module_version=$(go list -m -f '\''{{if .Replace}}replace{{else}}{{.Version}}{{end}}'\'' github.com/agentstation/starmap) &&
 	printf "%s\n" "$module_version" | grep -Eq '\''^v[0-9]+\.[0-9]+\.[0-9]+$'\'' &&
-	scripts/require-no-match.sh grep -Eq '\''^[[:space:]]*replace[[:space:]]+github.com/agentstation/starmap([[:space:]]|$)'\'' go.mod
+	scripts/require-no-match.sh grep -Eq '\''^[[:space:]]*replace[[:space:]]+github.com/agentstation/starmap([[:space:]]|$)'\'' go.mod &&
+	scripts/require-no-match.sh grep -R -q -E --include="*.go" '\''"github.com/agentstation/starmap/pkg/(catalogartifact|catalogmeta|catalogremote|catalogstore)"'\'' .
 '
 
 check V02 'canonical inference contract' sh -c '
