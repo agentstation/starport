@@ -7,7 +7,8 @@ import (
 	stderrors "errors"
 	"fmt"
 
-	"github.com/agentstation/starmap/pkg/catalogstore"
+	"github.com/agentstation/starmap/pkg/catalogs"
+	starmapstorage "github.com/agentstation/starmap/pkg/catalogs/storage"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 
 	"github.com/agentstation/starport/internal/storage"
@@ -50,39 +51,39 @@ func newGenerationStore(store storage.KVStore, currentKey string) (*GenerationSt
 }
 
 // Current returns the atomically selected generation.
-func (s *GenerationStore) Current(ctx context.Context) (catalogstore.Generation, error) {
+func (s *GenerationStore) Current(ctx context.Context) (catalogs.Generation, error) {
 	currentID, err := s.store.Get(ctx, s.currentKey)
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
-			return catalogstore.Generation{}, &starmaperrors.NotFoundError{
+			return catalogs.Generation{}, &starmaperrors.NotFoundError{
 				Resource: catalogGenerationResource, ID: "current",
 			}
 		}
-		return catalogstore.Generation{}, fmt.Errorf("read current catalog generation: %w", err)
+		return catalogs.Generation{}, fmt.Errorf("read current catalog generation: %w", err)
 	}
 	return s.Get(ctx, string(currentID))
 }
 
 // Get returns one immutable generation by ID.
-func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalogstore.Generation, error) {
+func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalogs.Generation, error) {
 	encoded, err := s.store.Get(ctx, catalogGenerationKey(generationID))
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
-			return catalogstore.Generation{}, &starmaperrors.NotFoundError{
+			return catalogs.Generation{}, &starmaperrors.NotFoundError{
 				Resource: catalogGenerationResource, ID: generationID,
 			}
 		}
-		return catalogstore.Generation{}, fmt.Errorf("read catalog generation %q: %w", generationID, err)
+		return catalogs.Generation{}, fmt.Errorf("read catalog generation %q: %w", generationID, err)
 	}
-	var generation catalogstore.Generation
+	var generation catalogs.Generation
 	if err := json.Unmarshal(encoded, &generation); err != nil {
-		return catalogstore.Generation{}, fmt.Errorf("decode catalog generation %q: %w", generationID, err)
+		return catalogs.Generation{}, fmt.Errorf("decode catalog generation %q: %w", generationID, err)
 	}
 	if err := generation.Validate(); err != nil {
-		return catalogstore.Generation{}, fmt.Errorf("validate catalog generation %q: %w", generationID, err)
+		return catalogs.Generation{}, fmt.Errorf("validate catalog generation %q: %w", generationID, err)
 	}
 	if generation.Manifest.GenerationID != generationID {
-		return catalogstore.Generation{}, fmt.Errorf(
+		return catalogs.Generation{}, fmt.Errorf(
 			"catalog generation key %q contains generation %q",
 			generationID,
 			generation.Manifest.GenerationID,
@@ -94,7 +95,7 @@ func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalog
 // Commit stores one immutable generation, then selects it with compare-and-swap.
 func (s *GenerationStore) Commit(
 	ctx context.Context,
-	generation catalogstore.Generation,
+	generation catalogs.Generation,
 	expectedGenerationID string,
 ) error {
 	if err := generation.Validate(); err != nil {
@@ -152,4 +153,4 @@ func catalogGenerationKey(generationID string) string {
 	return catalogGenerationKeyPrefix + generationID
 }
 
-var _ catalogstore.Store = (*GenerationStore)(nil)
+var _ starmapstorage.Store = (*GenerationStore)(nil)

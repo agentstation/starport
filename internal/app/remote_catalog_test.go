@@ -11,10 +11,9 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap"
-	"github.com/agentstation/starmap/pkg/catalogmeta"
-	"github.com/agentstation/starmap/pkg/catalogremote"
 	"github.com/agentstation/starmap/pkg/catalogs"
-	"github.com/agentstation/starmap/pkg/catalogstore"
+	"github.com/agentstation/starmap/pkg/catalogs/evidence"
+	protocol "github.com/agentstation/starmap/pkg/catalogs/remote"
 	"github.com/stretchr/testify/require"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -230,11 +229,11 @@ func (*recordingCatalogUpdates) Close(context.Context) error { return nil }
 
 func newRemoteCatalogServer(
 	t testing.TB,
-	generation catalogstore.Generation,
+	generation catalogs.Generation,
 	apiKey string,
 ) *httptest.Server {
 	t.Helper()
-	manifest, err := catalogremote.MarshalManifest(generation.Manifest)
+	manifest, err := protocol.MarshalManifest(generation.Manifest)
 	require.NoError(t, err)
 	return httptest.NewServer(http.HandlerFunc(func(
 		writer http.ResponseWriter,
@@ -246,14 +245,14 @@ func newRemoteCatalogServer(
 		}
 		resourcePath := strings.TrimPrefix(request.URL.Path, "/api/v1")
 		switch resourcePath {
-		case catalogremote.ManifestPath,
-			catalogremote.GenerationManifestPath(generation.Manifest.GenerationID):
-			writer.Header().Set("Content-Type", catalogremote.ManifestMediaType)
+		case protocol.ManifestPath,
+			protocol.GenerationManifestPath(generation.Manifest.GenerationID):
+			writer.Header().Set("Content-Type", protocol.ManifestMediaType)
 			_, _ = writer.Write(manifest)
-		case catalogremote.PayloadPath(generation.Manifest.GenerationID):
+		case protocol.PayloadPath(generation.Manifest.GenerationID):
 			writer.Header().Set("Content-Type", catalogs.CatalogPayloadMediaType)
 			_, _ = writer.Write(generation.Payload)
-		case catalogremote.EventStreamPath:
+		case protocol.EventStreamPath:
 			writer.Header().Set("Content-Type", "text/event-stream")
 			writer.WriteHeader(http.StatusOK)
 			writer.(http.Flusher).Flush()
@@ -269,12 +268,12 @@ func remoteAppTestGeneration(
 	generationID string,
 	catalog *catalogs.Catalog,
 	generatedAt time.Time,
-) catalogstore.Generation {
+) catalogs.Generation {
 	t.Helper()
-	payload, err := catalogstore.EncodeCatalogPayload(catalog)
+	payload, err := catalogs.EncodeCatalogPayload(catalog)
 	require.NoError(t, err)
 	descriptor := catalogs.DescribeCatalogPayload(payload)
-	generation := catalogstore.Generation{
+	generation := catalogs.Generation{
 		Manifest: catalogs.GenerationManifest{
 			ManifestVersion: catalogs.CurrentGenerationManifestVersion,
 			SchemaVersion:   catalogs.CurrentCatalogSchemaVersion,
@@ -291,18 +290,18 @@ func remoteAppTestGeneration(
 			},
 			SyncRunID: "sync-" + generationID,
 			SourceObservations: []catalogs.SourceObservationLink{{
-				Source:        catalogmeta.LocalCatalogID,
+				Source:        evidence.LocalCatalogID,
 				ObservationID: "observation-" + generationID,
 				ObservedAt:    generatedAt,
-				Revision: catalogmeta.ObservationRevision{
-					Kind:  catalogmeta.ObservationRevisionKindContentDigest,
+				Revision: evidence.ObservationRevision{
+					Kind:  evidence.ObservationRevisionKindContentDigest,
 					Value: descriptor.Checksum,
 				},
-				Completeness:     catalogmeta.ObservationCompletenessComplete,
-				Status:           catalogmeta.ObservationStatusSucceeded,
+				Completeness:     evidence.ObservationCompletenessComplete,
+				Status:           evidence.ObservationStatusSucceeded,
 				EvidenceChecksum: descriptor.Checksum,
 			}},
-			ReviewCandidates: []catalogmeta.ReviewCandidate{},
+			ReviewCandidates: []evidence.ReviewCandidate{},
 			Completeness:     catalogs.GenerationCompletenessComplete,
 			ConsumerCompatibility: catalogs.ConsumerCompatibility{
 				MinSchemaVersion: catalogs.CurrentCatalogSchemaVersion,

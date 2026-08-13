@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap"
-	"github.com/agentstation/starmap/pkg/catalogmeta"
 	"github.com/agentstation/starmap/pkg/catalogs"
-	"github.com/agentstation/starmap/pkg/catalogstore"
+	"github.com/agentstation/starmap/pkg/catalogs/evidence"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/stretchr/testify/require"
 
@@ -239,12 +238,12 @@ func runtimeTestGeneration(
 	generationID string,
 	catalog *catalogs.Catalog,
 	generatedAt time.Time,
-) catalogstore.Generation {
+) catalogs.Generation {
 	t.Helper()
-	payload, err := catalogstore.EncodeCatalogPayload(catalog)
+	payload, err := catalogs.EncodeCatalogPayload(catalog)
 	require.NoError(t, err)
 	descriptor := catalogs.DescribeCatalogPayload(payload)
-	generation := catalogstore.Generation{
+	generation := catalogs.Generation{
 		Manifest: catalogs.GenerationManifest{
 			ManifestVersion: catalogs.CurrentGenerationManifestVersion,
 			SchemaVersion:   catalogs.CurrentCatalogSchemaVersion,
@@ -261,18 +260,18 @@ func runtimeTestGeneration(
 			},
 			SyncRunID: "sync-" + generationID,
 			SourceObservations: []catalogs.SourceObservationLink{{
-				Source:        catalogmeta.LocalCatalogID,
+				Source:        evidence.LocalCatalogID,
 				ObservationID: "observation-" + generationID,
 				ObservedAt:    generatedAt,
-				Revision: catalogmeta.ObservationRevision{
-					Kind:  catalogmeta.ObservationRevisionKindContentDigest,
+				Revision: evidence.ObservationRevision{
+					Kind:  evidence.ObservationRevisionKindContentDigest,
 					Value: descriptor.Checksum,
 				},
-				Completeness:     catalogmeta.ObservationCompletenessComplete,
-				Status:           catalogmeta.ObservationStatusSucceeded,
+				Completeness:     evidence.ObservationCompletenessComplete,
+				Status:           evidence.ObservationStatusSucceeded,
 				EvidenceChecksum: descriptor.Checksum,
 			}},
-			ReviewCandidates: []catalogmeta.ReviewCandidate{},
+			ReviewCandidates: []evidence.ReviewCandidate{},
 			Completeness:     catalogs.GenerationCompletenessComplete,
 			ConsumerCompatibility: catalogs.ConsumerCompatibility{
 				MinSchemaVersion: catalogs.CurrentCatalogSchemaVersion,
@@ -285,9 +284,9 @@ func runtimeTestGeneration(
 	return generation
 }
 
-func runtimeTestState(t testing.TB, generation catalogstore.Generation) starmap.CatalogState {
+func runtimeTestState(t testing.TB, generation catalogs.Generation) starmap.CatalogState {
 	t.Helper()
-	catalog, err := catalogstore.DecodeCatalogPayload(generation.Payload)
+	catalog, err := catalogs.DecodeCatalogPayload(generation.Payload)
 	require.NoError(t, err)
 	return starmap.CatalogState{
 		Catalog: catalog, GenerationID: generation.Manifest.GenerationID,
