@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-12
+Last Updated: 2026-08-17
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -19,6 +19,7 @@ No proposed durable plan exists.
 |------|------|-----|-----------------|-------|
 | Package ownership refactor | POR | Starport #105–#110 and Starmap #74–#76 | 2026-08-12 | Moved packages to concept-owned paths in both repositories. Deleted unused HTTP transport code. All nine campaign assertions pass. |
 | Automatic provider runtime | APR | #96–#103 | 2026-08-11 | Published immutable `v1.0.3`. Starport now derives executable providers and inference authentication profiles from one Starmap generation. It supports credential refresh, safe provider state, authenticated provider operations, and provider-neutral local development. |
+| Catalog-driven provider runtime | CDP | #91, #93, #94 | 2026-08-11 | Published immutable `v1.0.2`. Provider YAML now drives the Starport runtime. Connectors hold no credential value. `scripts/verify-catalog-driven-providers.sh` keeps conditions `CDP-V01` through `CDP-V19`. The pull requests hold the CDP3.1 and CDP7.1 secret-source measurements. |
 | Starport developer experience | DX | #88 | 2026-08-10 | Published immutable `v1.0.1` and the Homebrew cask. Verified exact-version installation on macOS and Linux, then merged release-readback hardening after all 10 CI jobs passed. |
 | SPR3 | Release | #75 | 2026-08-09 | Stored compact terminal proof and removed the completed release control plane |
 | SPR2 | Release | Release workflow | 2026-08-09 | Published immutable `v1.0.0` with 13 verified assets and a public, attested, two-platform GHCR image at `sha256:f4230687fdf664022e4be80031c4145ff2eb795ff200489216ea76ba4b64bc24` |

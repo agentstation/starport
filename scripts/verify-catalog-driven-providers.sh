@@ -195,7 +195,7 @@ synthetic_provider_operator_surfaces_work() {
 
 unsupported_catalog_primitives_fail_closed() {
   starport_tests "./internal/catalog ./internal/app ./internal/failure" \
-    TestUnsupportedCatalogPrimitivesFailClosed
+    TestUnsupportedCatalogPrimitivesRemainUnavailable
 }
 
 verified_remote_provider_activates() {
