@@ -50,6 +50,9 @@ Run the checks that match the changed behavior. Before a pull request, run:
 ```bash
 bash scripts/verify-starmap-ownership.sh
 bash scripts/verify-v1-architecture.sh
+bash scripts/verify-catalog-driven-providers.sh
+bash scripts/verify-package-layout.sh
+bash scripts/verify-readme-quickstart.sh
 go test ./...
 go vet ./...
 make lint
@@ -57,8 +60,14 @@ make build
 bash scripts/smoke-openrouter-sdks.sh
 ```
 
+`verify-catalog-driven-providers.sh` needs a Starmap source tree. It reads
+`../starmap` by default. Set `CATALOG_DRIVEN_STARMAP_ROOT` to select another
+tree, such as the published module that CI resolves.
+
 Add contract tests at each changed seam. Do not weaken tests or verification
 guards to hide a defect. Report skipped optional SDK checks as `UNVERIFIED`.
+Every `scripts/verify-*.sh` gate belongs to CI, this list, or both. A gate that
+no workflow runs cannot report a regression.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.
