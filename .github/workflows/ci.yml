@@ -153,9 +153,13 @@ jobs:
       - name: Verify release contracts
         env:
           STARMAP_OWNERSHIP_STARMAP_ROOT: ${{ steps.starmap.outputs.root }}
+          CATALOG_DRIVEN_STARMAP_ROOT: ${{ steps.starmap.outputs.root }}
         run: |
           bash scripts/verify-starmap-ownership.sh
           bash scripts/verify-v1-architecture.sh
+          bash scripts/verify-catalog-driven-providers.sh
+          bash scripts/verify-package-layout.sh
+          bash scripts/verify-readme-quickstart.sh
           bash scripts/verify-v1-release.sh
           bash scripts/verify-release-workflow.sh
           bash scripts/verify-developer-experience.sh
