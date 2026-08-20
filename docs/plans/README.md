@@ -2,8 +2,8 @@
 
 ## Active
 
-No active durable plan exists.
+- [Dependency direction hardening](dependency-direction-hardening-plan.html): active. DDH0 is in progress.
 
 ## Proposed
 
-- [Dependency direction hardening](dependency-direction-hardening-plan.html): proposed
+No proposed durable plan exists.
