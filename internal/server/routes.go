@@ -84,6 +84,16 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
 		})
 
+		// Preset management: any authenticated key reads, writes need the
+		// presets:write scope (the admin wildcard scope satisfies it).
+		r.Route("/presets", func(r chi.Router) {
+			r.Get("/", s.controllers.Presets.List)
+			r.Get("/{name}", s.controllers.Presets.Get)
+			r.With(s.requireAnyScope("presets:write")).Post("/", s.controllers.Presets.Create)
+			r.With(s.requireAnyScope("presets:write")).Put("/{name}", s.controllers.Presets.Update)
+			r.With(s.requireAnyScope("presets:write")).Delete("/{name}", s.controllers.Presets.Delete)
+		})
+
 		// Request activity for the authenticated key
 		r.With(s.requireAnyScope("activity:read")).Get("/activity", s.controllers.Activity.List)
 
@@ -161,6 +171,13 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   GET  /api/v1/models/{model}/endpoints   - List provider endpoints for model
 //   GET  /api/v1/providers                  - List available providers
 //   GET  /api/v1/activity                   - List request activity for the authenticated key
+//
+// Preset Management:
+//   GET    /api/v1/presets          - List presets
+//   POST   /api/v1/presets          - Create preset (presets:write)
+//   GET    /api/v1/presets/{name}   - Get preset
+//   PUT    /api/v1/presets/{name}   - Update preset, revision-checked (presets:write)
+//   DELETE /api/v1/presets/{name}   - Delete preset (presets:write)
 //
 // Provider Key Management:
 //   GET    /api/v1/keys/{key_id}/provider-keys           - List provider keys

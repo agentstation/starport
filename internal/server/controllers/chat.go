@@ -68,7 +68,7 @@ func (h *ChatController) decodeRequest(r *http.Request) (*proxy.ChatCompletionRe
 		if err != nil {
 			return nil, err
 		}
-		request := &proxy.ChatCompletionRequest{Request: decoded.Inference, Route: decoded.Route}
+		request := &proxy.ChatCompletionRequest{Request: decoded.Inference, Route: decoded.Route, Preset: decoded.Preset}
 		if decoded.Provider != nil {
 			allowFallback := true
 			if decoded.Provider.AllowFallbacks != nil {

@@ -43,6 +43,10 @@ type ChatCompletionRequest struct {
 	Request  inference.ChatRequest
 	Route    string
 	Provider *ProviderPreferences
+	// Preset names a stored preset selected by the request body. A
+	// "@preset/<name>" model reference selects one the same way and wins
+	// over this field.
+	Preset string
 
 	// Internal fields
 	APIKey       string               `json:"-"`
