@@ -107,6 +107,13 @@ else
 	fail 'release binaries omit Go VCS provenance'
 fi
 
+if grep -Eq 'GOCACHE="\$\$release_cache"[[:space:]]+goreleaser release' \
+	"$repository_root/Makefile"; then
+	pass 'release snapshots isolate mutation-test build cache state'
+else
+	fail 'release snapshots can reuse mutation-test build cache state'
+fi
+
 if [ -f "$repository_root/.github/workflows/release.yaml" ] &&
 	grep -q 'Verify draft release assets before publication' "$repository_root/.github/workflows/release.yaml" &&
 	grep -q 'attest-build-provenance' "$repository_root/.github/workflows/release.yaml" &&

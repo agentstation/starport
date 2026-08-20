@@ -157,7 +157,9 @@ release-snapshot: release-check ## Build and verify the complete local release s
 	@command -v syft >/dev/null 2>&1 || (echo "syft $(SYFT_VERSION) is required"; exit 1)
 	@test "$$(syft version | awk '/^Version:/ {print $$2}')" = "$(SYFT_VERSION)" || \
 		(echo "syft $(SYFT_VERSION) is required"; exit 1)
-	goreleaser release --snapshot --clean --skip=notarize
+	@release_cache="$$(mktemp -d "$${TMPDIR:-/tmp}/starport-release-cache.XXXXXX")"; \
+		trap 'rm -rf "$$release_cache"' EXIT; \
+		GOCACHE="$$release_cache" goreleaser release --snapshot --clean --skip=notarize
 	scripts/verify-release-binaries.sh dist
 	scripts/verify-release-archives.sh dist
 	scripts/verify-homebrew-cask.sh dist/homebrew/Casks/starport.rb
