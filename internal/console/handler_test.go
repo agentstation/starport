@@ -184,6 +184,24 @@ func TestKeyLimitsAndBudgetsShip(t *testing.T) {
 	assert.Contains(t, string(chatPage), "Rate limited", "the chat page names a rate-limit rejection")
 }
 
+// The chat page ships a comparison mode: one prompt fanned out to up to four
+// models in parallel streamed columns, each priced from the catalog snapshot
+// with an explicit reason when pricing is absent. Single-model chat stays.
+func TestChatComparisonShips(t *testing.T) {
+	chatPage, err := fs.ReadFile(staticFiles, "static/js/pages/chat.js")
+	require.NoError(t, err)
+	page := string(chatPage)
+	assert.Contains(t, page, "compareSend", "the chat page fans one prompt out to the compared models")
+	assert.Contains(t, page, "compare-grid", "comparison runs render as parallel columns")
+	assert.Contains(t, page, "compareCost", "columns price runs from the catalog snapshot")
+	assert.Contains(t, page, "no pricing", "a model without catalog pricing says so instead of a blank")
+	assert.Contains(t, page, "at most four models", "the comparison is capped at four models")
+
+	chatCSS, err := fs.ReadFile(staticFiles, "static/css/chat.css")
+	require.NoError(t, err)
+	assert.Contains(t, string(chatCSS), ".compare-col", "comparison columns are styled")
+}
+
 func TestStaticServesAssetsWithETag(t *testing.T) {
 	handler := newTestHandler(t)
 	router := chi.NewRouter()

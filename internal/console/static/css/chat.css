@@ -375,6 +375,70 @@
 .token.important, .token.bold { font-weight: 600; }
 .token.italic { font-style: italic; }
 
+/* ---------- Compare mode ---------- */
+.compare-host {
+    max-width: 88rem;
+    margin: 0 auto;
+    padding: var(--sp-5) var(--sp-4) var(--sp-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-5);
+    min-height: 100%;
+}
+.compare-chips { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+.compare-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px var(--sp-1) 1px var(--sp-2);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-full, 999px);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--ink-dim);
+}
+.compare-chip .icon-btn svg { width: 12px; height: 12px; }
+.chat-topbar .btn.is-active { color: var(--accent); border-color: var(--accent-dim); }
+.compare-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--compare-cols, 2), minmax(0, 1fr));
+    gap: var(--sp-3);
+    align-items: stretch;
+}
+.compare-col {
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-raised, transparent);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.compare-col-head {
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--line-strong);
+    font-size: var(--text-xs);
+    color: var(--ink-dim);
+    overflow-wrap: anywhere;
+}
+.compare-col-body { padding: var(--sp-3); flex: 1; font-size: var(--text-sm); }
+.compare-col-foot {
+    padding: var(--sp-2) var(--sp-3);
+    border-top: 1px solid var(--line-strong);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--ink-dim);
+}
+@media (max-width: 1100px) {
+    .compare-grid { grid-template-columns: repeat(min(var(--compare-cols, 2), 2), minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+    .compare-grid { grid-template-columns: 1fr; }
+    .compare-chips { display: none; }
+}
+
 .chat-side-toggle { display: none; }
 
 /* ---------- Responsive chat ---------- */
