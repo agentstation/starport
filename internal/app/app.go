@@ -61,7 +61,6 @@ type App struct {
 	config             *config.Config
 	providerSettings   config.ProvidersConfig
 	httpServer         httpRuntime
-	hotReloader        hotReloadRuntime
 	registry           *registry.Registry
 	catalogRuntime     catalogRuntime
 	catalogUpdates     catalogUpdateRuntime
@@ -155,7 +154,6 @@ func (b *runtimeBuilder) compose() error {
 		b.openCache,
 		b.buildGateway,
 		b.openConsole,
-		b.openHotReload,
 		b.openHTTPServer,
 	}
 	for _, step := range steps {
@@ -402,26 +400,6 @@ func (b *runtimeBuilder) openConsole() error {
 	return nil
 }
 
-func (b *runtimeBuilder) openHotReload() error {
-	if b.config.RateLimiting.EnableHotReload {
-		var err error
-		b.application.hotReloader, err = b.factories.newHotReload(
-			b.config.RateLimiting.ConfigPath, b.config.RateLimiting.ReloadCheckInterval,
-		)
-		if err != nil {
-			return fmt.Errorf("open rate-limit hot reload: %w", err)
-		}
-		if b.application.hotReloader == nil {
-			return errors.New("hot-reload factory returned no runtime")
-		}
-		b.application.own("hot reload", func(context.Context) error {
-			b.application.hotReloader.Stop()
-			return nil
-		})
-	}
-	return nil
-}
-
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, ProviderKeys: b.providerKeys,
@@ -448,7 +426,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 }
 
 func requireIdentity(ctx context.Context, identities identity.Repository) error {
-	records, err := identities.List(ctx, 1)
+	records, err := identities.List(ctx, 1, 0)
 	if err != nil {
 		return fmt.Errorf("list gateway identities: %w", err)
 	}
@@ -495,11 +473,6 @@ func (a *App) Run(ctx context.Context) error {
 			defer a.runtimeWG.Done()
 			a.remoteCatalogLoop(runCtx)
 		}()
-	}
-	if a.hotReloader != nil {
-		if err := a.hotReloader.Start(runCtx); err != nil {
-			return errors.Join(fmt.Errorf("start hot reload: %w", err), a.closeWithTimeout())
-		}
 	}
 	if a.catalogUpdates == nil && a.config.Catalog.RefreshInterval > 0 {
 		a.runtimeWG.Add(1)
@@ -609,13 +582,6 @@ func defaultRuntimeFactories() runtimeFactories {
 			)
 		},
 		newCache: cache.NewCacheManager,
-		newHotReload: func(path string, interval time.Duration) (hotReloadRuntime, error) {
-			reloader, err := config.NewHotReloader(path, interval)
-			if err != nil {
-				return nil, err
-			}
-			return reloader, nil
-		},
 		newServer: func(cfg *server.Config, dependencies server.Dependencies) (httpRuntime, error) {
 			httpServer, err := server.New(cfg, dependencies)
 			if err != nil {
@@ -745,7 +711,7 @@ func (a *App) remoteCatalogLoop(ctx context.Context) {
 
 func validateFactories(factories runtimeFactories) error {
 	if factories.openStorage == nil || factories.openCatalog == nil || factories.newConnector == nil ||
-		factories.newCache == nil || factories.newHotReload == nil || factories.newServer == nil {
+		factories.newCache == nil || factories.newServer == nil {
 		return errors.New("application runtime factories are incomplete")
 	}
 	return nil

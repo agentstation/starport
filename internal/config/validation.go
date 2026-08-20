@@ -218,42 +218,12 @@ func (c *ProvidersConfig) Validate() error {
 
 // Validate validates RateLimitingConfig
 func (c *RateLimitingConfig) Validate() error {
-	if c.GlobalRequestsPerSecond <= 0 {
-		return fmt.Errorf("global requests per second must be positive")
-	}
-
-	if c.GlobalBurstMultiplier <= 0 {
-		return fmt.Errorf("global burst multiplier must be positive")
-	}
-
 	if c.DefaultRequestsPerMinute <= 0 {
 		return fmt.Errorf("default requests per minute must be positive")
 	}
 
-	if c.DefaultRequestsPerHour <= 0 {
-		return fmt.Errorf("default requests per hour must be positive")
-	}
-
-	if c.DefaultTokensPerMinute <= 0 {
-		return fmt.Errorf("default tokens per minute must be positive")
-	}
-
-	if c.DefaultTokensPerHour <= 0 {
-		return fmt.Errorf("default tokens per hour must be positive")
-	}
-
 	if c.WindowSize <= 0 {
 		return fmt.Errorf("window size must be positive")
-	}
-
-	if c.EnableHotReload && c.ConfigPath != "" {
-		// Check if config path directory exists
-		dir := c.ConfigPath[:strings.LastIndex(c.ConfigPath, "/")]
-		if dir != "" && dir != "." {
-			// Note: Directory might not exist during startup, which is okay
-			// The hot reloader will handle this gracefully
-			_, _ = os.Stat(dir)
-		}
 	}
 
 	return nil

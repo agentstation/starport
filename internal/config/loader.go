@@ -147,7 +147,6 @@ func defaultConfig(paths Paths) *Config {
 		Storage: StorageConfig{
 			Badger: BadgerConfig{Path: paths.BadgerDir},
 		},
-		RateLimiting: RateLimitingConfig{ConfigPath: paths.RateLimitsFile},
 	}
 }
 
@@ -182,10 +181,6 @@ func resolveConfiguredPaths(cfg *Config, paths Paths) error {
 	cfg.Catalog.WorkspacePath, err = resolvePath(paths.ConfigDir, cfg.Catalog.WorkspacePath)
 	if err != nil {
 		return fmt.Errorf("catalog workspace path: %w", err)
-	}
-	cfg.RateLimiting.ConfigPath, err = resolvePath(paths.ConfigDir, cfg.RateLimiting.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("rate-limit configuration path: %w", err)
 	}
 	cfg.Security.TLSCertPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSCertPath)
 	if err != nil {

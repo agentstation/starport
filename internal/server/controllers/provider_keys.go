@@ -192,12 +192,12 @@ func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Don't expose actual credentials in response
 	response := map[string]any{
-		providerField: key.Provider,
-		"config":      key.Config,
-		"is_fallback": key.IsFallback,
-		"priority":    key.Priority,
-		"created_at":  key.CreatedAt.UTC().Format(time.RFC3339),
-		"usage_count": key.UsageCount,
+		providerField:  key.Provider,
+		"config":       key.Config,
+		"is_fallback":  key.IsFallback,
+		"priority":     key.Priority,
+		fieldCreatedAt: key.CreatedAt.UTC().Format(time.RFC3339),
+		"usage_count":  key.UsageCount,
 	}
 
 	if key.LastUsed != nil {

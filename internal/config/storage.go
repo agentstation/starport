@@ -51,5 +51,4 @@ func (c *Config) ConfigureDevelopmentRuntime() {
 	c.Security.JWTSecret = ""
 	c.Logging.Output = "stdout"
 	c.Logging.FilePath = ""
-	c.RateLimiting.EnableHotReload = false
 }

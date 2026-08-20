@@ -26,6 +26,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Apply authentication middleware for API routes
 		r.Use(s.requireAPIKey)
 		r.Use(s.rateLimit)
+		r.Use(s.enforceBudgets)
 
 		// Chat completions
 		r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.Chat.Create)
@@ -45,6 +46,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Apply authentication middleware
 		r.Use(s.requireAPIKey)
 		r.Use(s.rateLimit)
+		r.Use(s.enforceBudgets)
 
 		// Chat completions with routing
 		r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.OpenRouterChat.Create)
