@@ -1,8 +1,8 @@
 // Chat — the playground. Conversations live in this browser's localStorage;
 // the gateway only ever sees the completion requests.
 
-import { getApiKey, listModels, listPresets, streamChat } from "../api.js";
-import { el, icon, toast, confirmDialog, copyText, formatModelPrice, formatContext, formatCount, formatNanoUSD, debounce } from "../ui.js";
+import { getApiKey, listModels, listPresets, streamChat, completeChat } from "../api.js";
+import { el, icon, toast, confirmDialog, promptDialog, modal, copyText, formatModelPrice, formatContext, formatCount, formatNanoUSD, formatMs, debounce } from "../ui.js";
 import { renderMarkdown } from "../markdown.js";
 import { navigate } from "../router.js";
 
@@ -12,7 +12,9 @@ const CHAT_STORAGE = "starport.chats";
 const LEGACY_CHAT_STORAGE = "starport_chats";
 const FAV_STORAGE = "starport.favModels";
 const LAST_MODEL_STORAGE = "starport.lastModel";
+const SIDEBAR_STORAGE = "starport.chatSidebar";
 const MAX_CONVERSATIONS = 100;
+const BASE_DOC_TITLE = "Chat · Starport Console";
 
 // Per-conversation request parameters: sampling plus provider routing
 // preferences (order/only/ignore are comma-separated provider lists).
@@ -34,6 +36,7 @@ function loadConversations() {
                 id: c.id || crypto.randomUUID(),
                 title: c.title || "Conversation",
                 model: c.model || "",
+                pinned: Boolean(c.pinned),
                 params: {},
                 messages: (c.messages || []).filter((m) => m?.role && typeof m.content === "string"),
                 updatedAt: c.updatedAt || Date.now(),
@@ -59,6 +62,31 @@ function loadFavorites() {
     catch { return new Set(); }
 }
 
+// groupLabel buckets a conversation for the sidebar, newest bucket first.
+function groupLabel(convo) {
+    if (convo.pinned) return "pinned";
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const day = 86_400_000;
+    const t = convo.updatedAt || 0;
+    if (t >= today) return "today";
+    if (t >= today - day) return "yesterday";
+    if (t >= today - 7 * day) return "previous 7 days";
+    if (t >= today - 30 * day) return "previous 30 days";
+    return "older";
+}
+const GROUP_ORDER = ["pinned", "today", "yesterday", "previous 7 days", "previous 30 days", "older"];
+
+// formatAge renders the X-Cache-Age header (seconds) compactly.
+function formatAge(seconds) {
+    const s = Number.parseInt(seconds, 10);
+    if (!Number.isFinite(s)) return "";
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.round(s / 60)}m`;
+    if (s < 86_400) return `${Math.round(s / 3600)}h`;
+    return `${Math.round(s / 86_400)}d`;
+}
+
 // --- Page ---
 
 export async function render(container) {
@@ -77,6 +105,8 @@ export async function render(container) {
         presets: [],
         params: { ...DEFAULT_PARAMS },
         streaming: false,
+        generating: null,
+        listQuery: "",
         abort: null,
         // Compare mode: one prompt fanned out to 2–4 models in parallel
         // streamed columns. Runs are ephemeral — never persisted.
@@ -87,6 +117,7 @@ export async function render(container) {
         state.disposed = true;
         if (state.abort) state.abort.abort();
         abortCompare();
+        document.title = BASE_DOC_TITLE;
     }];
 
     // A model requested via /chat?model=… (from the Models page drawer).
@@ -97,11 +128,12 @@ export async function render(container) {
     }
 
     // --- Skeleton ---
-    const sideToggle = el("button", { class: "icon-btn chat-side-toggle", type: "button", "aria-label": "Conversations" }, icon("menu"));
+    const sideToggle = el("button", { class: "icon-btn chat-side-toggle", type: "button", "aria-label": "Toggle conversations" }, icon("menu"));
     const newBtn = el("button", { class: "btn btn-sm", type: "button" }, icon("plus"), "new chat");
+    const searchInput = el("input", { class: "input chat-side-search", type: "search", placeholder: "Search chats…  ⌘K" });
     const listHost = el("div", { class: "chat-list" });
     const side = el("aside", { class: "chat-side" },
-        el("div", { class: "chat-side-head" }, newBtn),
+        el("div", { class: "chat-side-head" }, newBtn, searchInput),
         listHost,
     );
 
@@ -125,7 +157,9 @@ export async function render(container) {
     const routingBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("providers"), "routing");
     const routingAnchor = el("span", { class: "params-anchor" }, routingBtn);
     const statsHost = el("span", { class: "stats" });
+    const scrollBtn = el("button", { class: "scroll-btn", type: "button", "aria-label": "Scroll to bottom" }, icon("chevron-d"));
     const composer = el("div", { class: "composer-wrap" },
+        scrollBtn,
         el("div", { class: "composer" },
             el("div", { class: "composer-box" }, textarea, sendBtn),
             el("div", { class: "composer-foot" }, paramsAnchor, routingAnchor, statsHost),
@@ -133,7 +167,9 @@ export async function render(container) {
     );
 
     const main = el("div", { class: "chat-main" }, topbar, scroll, composer);
-    container.append(el("div", { class: "chat-layout" }, side, main));
+    const layout = el("div", { class: "chat-layout" }, side, main);
+    if (localStorage.getItem(SIDEBAR_STORAGE) === "closed") layout.classList.add("side-collapsed");
+    container.append(layout);
 
     // --- Wiring ---
     // Popover state must initialize before render returns; the statements
@@ -142,7 +178,16 @@ export async function render(container) {
     let modelPop = null;
     let paramsPop = null;
     let routingPop = null;
-    sideToggle.addEventListener("click", () => side.classList.toggle("is-open"));
+    sideToggle.addEventListener("click", () => {
+        // Mobile gets the overlay drawer; desktop collapses in place and
+        // the choice persists across visits.
+        if (window.matchMedia("(max-width: 860px)").matches) {
+            side.classList.toggle("is-open");
+            return;
+        }
+        const closed = layout.classList.toggle("side-collapsed");
+        try { localStorage.setItem(SIDEBAR_STORAGE, closed ? "closed" : "open"); } catch { /* private mode */ }
+    });
     const outsideSide = (event) => {
         if (!side.classList.contains("is-open")) return;
         if (side.contains(event.target) || sideToggle.contains(event.target)) return;
@@ -151,11 +196,34 @@ export async function render(container) {
     document.addEventListener("click", outsideSide);
     disposers.push(() => document.removeEventListener("click", outsideSide));
 
+    // ⌘K / Ctrl+K opens full-text conversation search.
+    const onGlobalKey = (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+            event.preventDefault();
+            openSearch();
+        }
+    };
+    document.addEventListener("keydown", onGlobalKey);
+    disposers.push(() => document.removeEventListener("keydown", onGlobalKey));
+
     newBtn.addEventListener("click", () => { setCompareMode(false); selectConversation(null); });
     pickerBtn.addEventListener("click", () => toggleModelPop());
     paramsBtn.addEventListener("click", () => toggleParamsPop());
     routingBtn.addEventListener("click", () => toggleRoutingPop());
     compareBtn.addEventListener("click", () => setCompareMode(!state.compare.active));
+
+    searchInput.addEventListener("input", debounce(() => {
+        state.listQuery = searchInput.value.trim().toLowerCase();
+        drawList();
+    }, 150));
+    searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && searchInput.value) {
+            event.stopPropagation();
+            searchInput.value = "";
+            state.listQuery = "";
+            drawList();
+        }
+    });
 
     textarea.addEventListener("input", autosize);
     textarea.addEventListener("keydown", (event) => {
@@ -167,6 +235,22 @@ export async function render(container) {
     sendBtn.addEventListener("click", () => {
         if (state.compare.active) { state.compare.streaming ? abortCompare() : send(); return; }
         state.streaming ? state.abort?.abort() : send();
+    });
+
+    scrollBtn.addEventListener("click", () => {
+        scroll.scrollTo({ top: scroll.scrollHeight, behavior: "smooth" });
+        // Some engines ignore smooth scrollTo on overflow containers; make
+        // sure the jump lands either way.
+        setTimeout(() => {
+            if (scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight > 160) {
+                scroll.scrollTop = scroll.scrollHeight;
+            }
+            scrollBtn.classList.remove("is-visible");
+        }, 350);
+    });
+    scroll.addEventListener("scroll", () => {
+        const away = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+        scrollBtn.classList.toggle("is-visible", away > 160);
     });
 
     drawList();
@@ -200,6 +284,11 @@ export async function render(container) {
         return state.conversations.find((c) => c.id === state.current) || null;
     }
 
+    function updateDocTitle() {
+        const convo = currentConversation();
+        document.title = convo ? `${convo.title} · Starport Console` : BASE_DOC_TITLE;
+    }
+
     function selectConversation(id) {
         if (state.compare.active) setCompareMode(false);
         if (state.streaming) state.abort?.abort();
@@ -211,6 +300,7 @@ export async function render(container) {
         drawThread();
         updatePicker();
         updateStats();
+        updateDocTitle();
         side.classList.remove("is-open");
         textarea.focus();
     }
@@ -222,6 +312,7 @@ export async function render(container) {
             id: crypto.randomUUID(),
             title: "New conversation",
             model: state.model,
+            pinned: false,
             params: { ...state.params },
             messages: [],
             updatedAt: Date.now(),
@@ -242,34 +333,164 @@ export async function render(container) {
 
     function drawList() {
         listHost.replaceChildren();
-        if (!state.conversations.length) {
-            listHost.append(el("div", { class: "chat-list-section" }, "no conversations"));
+        const q = state.listQuery;
+        const match = (c) => !q || c.title.toLowerCase().includes(q)
+            || c.messages.some((m) => (m.content || "").toLowerCase().includes(q));
+        const visible = state.conversations.filter(match);
+        if (!visible.length) {
+            listHost.append(el("div", { class: "chat-list-section" }, q ? "no matches" : "no conversations"));
             return;
         }
-        listHost.append(el("div", { class: "chat-list-section" }, "conversations"));
-        for (const convo of state.conversations) {
-            const delBtn = el("button", { class: "icon-btn danger", type: "button", "aria-label": `Delete ${convo.title}` }, icon("trash"));
-            delBtn.addEventListener("click", async (event) => {
-                event.stopPropagation();
-                const ok = await confirmDialog({
-                    title: "Delete conversation",
-                    message: `Delete "${convo.title}"?`,
-                    confirmLabel: "Delete",
-                    danger: true,
-                });
-                if (!ok) return;
-                state.conversations = state.conversations.filter((c) => c.id !== convo.id);
-                saveConversations(state.conversations);
-                if (state.current === convo.id) selectConversation(null);
-                else drawList();
-            });
-            const item = el("div", { class: `chat-item${convo.id === state.current ? " is-active" : ""}` },
-                el("span", { class: "title" }, convo.title),
-                delBtn,
-            );
-            item.addEventListener("click", () => selectConversation(convo.id));
-            listHost.append(item);
+        const groups = new Map();
+        for (const convo of visible) {
+            const label = groupLabel(convo);
+            if (!groups.has(label)) groups.set(label, []);
+            groups.get(label).push(convo);
         }
+        for (const label of GROUP_ORDER) {
+            const rows = groups.get(label);
+            if (!rows?.length) continue;
+            listHost.append(el("div", { class: `chat-list-section${label === "pinned" ? " is-pinned" : ""}` }, label));
+            for (const convo of rows) listHost.append(itemNode(convo));
+        }
+    }
+
+    function itemNode(convo) {
+        const pinBtn = el("button", {
+            class: `icon-btn pin-btn${convo.pinned ? " is-pinned" : ""}`,
+            type: "button",
+            "aria-label": convo.pinned ? `Unpin ${convo.title}` : `Pin ${convo.title}`,
+        }, icon("pin"));
+        pinBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            convo.pinned = !convo.pinned;
+            saveConversations(state.conversations);
+            drawList();
+        });
+        const renameBtn = el("button", { class: "icon-btn", type: "button", "aria-label": `Rename ${convo.title}` }, icon("edit"));
+        renameBtn.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            const name = await promptDialog({ title: "Rename conversation", value: convo.title });
+            if (!name || name === convo.title) return;
+            convo.title = name;
+            saveConversations(state.conversations);
+            drawList();
+            if (state.current === convo.id) updateDocTitle();
+        });
+        const delBtn = el("button", { class: "icon-btn danger", type: "button", "aria-label": `Delete ${convo.title}` }, icon("trash"));
+        delBtn.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            const ok = await confirmDialog({
+                title: "Delete conversation",
+                message: `Delete "${convo.title}"?`,
+                confirmLabel: "Delete",
+                danger: true,
+            });
+            if (!ok) return;
+            state.conversations = state.conversations.filter((c) => c.id !== convo.id);
+            saveConversations(state.conversations);
+            if (state.current === convo.id) selectConversation(null);
+            else drawList();
+        });
+        const trailing = state.generating === convo.id
+            ? el("span", { class: "chat-item-spin" }, icon("refresh"))
+            : el("span", { class: "actions" }, pinBtn, renameBtn, delBtn);
+        const item = el("div", { class: `chat-item${convo.id === state.current ? " is-active" : ""}${convo.pinned ? " is-pinned" : ""}` },
+            el("span", { class: "title" }, convo.title),
+            trailing,
+        );
+        item.addEventListener("click", () => selectConversation(convo.id));
+        return item;
+    }
+
+    // --- Conversation search (⌘K) ---
+
+    function openSearch() {
+        const input = el("input", { class: "input", type: "search", placeholder: "Search all conversations…" });
+        const results = el("div", { class: "search-results" });
+        let hits = [];
+        let hilite = -1;
+
+        const highlightText = (text, q) => {
+            const out = [];
+            let rest = text;
+            for (;;) {
+                const at = rest.toLowerCase().indexOf(q);
+                if (at === -1 || !q) break;
+                out.push(rest.slice(0, at), el("mark", {}, rest.slice(at, at + q.length)));
+                rest = rest.slice(at + q.length);
+            }
+            out.push(rest);
+            return out;
+        };
+
+        const paintHilite = () => {
+            [...results.children].forEach((node, i) => node.classList.toggle("is-hilite", i === hilite));
+            results.children[hilite]?.scrollIntoView({ block: "nearest" });
+        };
+
+        const jump = (hit) => {
+            close();
+            selectConversation(hit.convo.id);
+            if (hit.msgIndex < 0) return;
+            requestAnimationFrame(() => {
+                const node = thread.children[hit.msgIndex];
+                if (!node) return;
+                node.scrollIntoView({ behavior: "smooth", block: "center" });
+                node.classList.add("is-flash");
+                setTimeout(() => node.classList.remove("is-flash"), 2000);
+            });
+        };
+
+        const runSearch = () => {
+            const q = input.value.trim().toLowerCase();
+            results.replaceChildren();
+            hits = [];
+            hilite = -1;
+            if (!q) return;
+            for (const convo of state.conversations) {
+                const titleHit = convo.title.toLowerCase().includes(q);
+                let msgIndex = -1;
+                let snippet = "";
+                for (let i = 0; i < convo.messages.length; i++) {
+                    const content = convo.messages[i].content || "";
+                    const at = content.toLowerCase().indexOf(q);
+                    if (at !== -1) {
+                        msgIndex = i;
+                        snippet = (at > 32 ? "…" : "") + content.slice(Math.max(0, at - 32), at + q.length + 56);
+                        break;
+                    }
+                }
+                if (!titleHit && msgIndex === -1) continue;
+                hits.push({ convo, msgIndex, snippet });
+            }
+            hits.sort((a, b) => (b.convo.updatedAt || 0) - (a.convo.updatedAt || 0));
+            if (!hits.length) {
+                results.append(el("div", { class: "search-empty" }, "no matches"));
+                return;
+            }
+            for (const hit of hits) {
+                const node = el("div", { class: "search-hit" },
+                    el("div", { class: "t" }, highlightText(hit.convo.title, q)),
+                    hit.snippet ? el("div", { class: "s" }, highlightText(hit.snippet, q)) : null,
+                );
+                node.addEventListener("click", () => jump(hit));
+                results.append(node);
+            }
+        };
+
+        input.addEventListener("input", debounce(runSearch, 200));
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowDown") { event.preventDefault(); hilite = Math.min(hilite + 1, hits.length - 1); paintHilite(); }
+            else if (event.key === "ArrowUp") { event.preventDefault(); hilite = Math.max(hilite - 1, 0); paintHilite(); }
+            else if (event.key === "Enter" && hilite >= 0 && hits[hilite]) { event.preventDefault(); jump(hits[hilite]); }
+        });
+
+        const close = modal({
+            title: "Search conversations",
+            body: el("div", { class: "search-box" }, input, results),
+        });
+        input.focus();
     }
 
     // --- Thread rendering ---
@@ -298,7 +519,7 @@ export async function render(container) {
         }
         const body = el("div", { class: "msg-body" });
         const md = el("div", { class: "md" });
-        if (message.reasoning) body.append(reasoningFold(message.reasoning));
+        if (message.reasoning) body.append(reasoningFold(message.reasoning, false, message.reasoningMs));
         body.append(md);
         if (message.error) {
             body.append(el("div", { class: "msg-error" }, message.error));
@@ -315,24 +536,42 @@ export async function render(container) {
         return node;
     }
 
-    function reasoningFold(text, open = false) {
+    function reasoningFold(text, open = false, thoughtMs = null) {
         const bodyEl = el("div", { class: "reasoning-body" }, text);
-        const details = el("details", { class: "reasoning" },
-            el("summary", {}, icon("reasoning"), "reasoning"),
-            bodyEl,
-        );
+        const labelEl = el("span", {}, thoughtMs ? `thought for ${(thoughtMs / 1000).toFixed(1)}s` : "reasoning");
+        const spin = el("span", { class: "reasoning-spin" }, icon("refresh"));
+        spin.hidden = true;
+        const summary = el("summary", {}, icon("reasoning"), labelEl, spin);
+        const details = el("details", { class: "reasoning" }, summary, bodyEl);
         if (open) details.setAttribute("open", "");
-        details.update = (value) => { bodyEl.textContent = value; };
+        // The user's own toggle wins over streaming auto-collapse.
+        summary.addEventListener("click", () => { details.userToggled = true; });
+        details.update = (value) => {
+            bodyEl.textContent = value;
+            bodyEl.scrollTop = bodyEl.scrollHeight;
+        };
+        details.setThinking = (on) => { spin.hidden = !on; };
+        details.setLabel = (value) => { labelEl.textContent = value; };
         return details;
     }
 
     function messageFoot(message) {
         const meta = el("span", { class: "meta" });
         const stats = message.stats || {};
-        if (stats.ttft) meta.append(el("span", {}, `ttft ${stats.ttft}`));
-        if (stats.tps) meta.append(el("span", {}, `${stats.tps} tok/s`));
-        if (stats.tokens) meta.append(el("span", {}, `${formatCount(stats.tokens)} tokens`));
-        if (stats.cache === "HIT") meta.append(el("span", {}, "cache hit"));
+        const badge = (text, tip, cls) => meta.append(el("span", { title: tip || null, class: cls || null }, text));
+        if (stats.ttftMs) badge(`ttft ${formatMs(stats.ttftMs)}`, "Time to first token");
+        else if (stats.ttft) badge(`ttft ${stats.ttft}`, "Time to first token");
+        if (stats.latencyMs) badge(`${formatMs(stats.latencyMs)} total`, "Total generation time");
+        if (stats.tps) badge(`${stats.tps} tok/s`, "Completion tokens per second");
+        if (stats.promptTokens) badge(`↓${formatCount(stats.promptTokens)}`, "Prompt tokens");
+        if (stats.completionTokens) badge(`↑${formatCount(stats.completionTokens)}`, "Completion tokens");
+        else if (stats.tokens) badge(`${formatCount(stats.tokens)} tokens`, "Total tokens");
+        if (stats.reasoningTokens) badge(`${formatCount(stats.reasoningTokens)} reasoning`, "Reasoning tokens");
+        if (stats.cache) {
+            const age = stats.cacheAge ? ` · ${formatAge(stats.cacheAge)}` : "";
+            badge(`cache ${stats.cache.toLowerCase()}${age}`, stats.cache === "HIT" ? "Served from the response cache" : "Response cache miss", stats.cache === "HIT" ? "cache-hit" : null);
+        }
+        if (message.stopped) badge("stopped", "Generation stopped by you");
         if (stats.unenforced) {
             meta.append(el("span", {
                 class: "unenforced",
@@ -363,6 +602,7 @@ export async function render(container) {
         convo.messages.push({ role: "user", content: text });
         if (convo.messages.length === 1) {
             convo.title = text.length > 44 ? `${text.slice(0, 44).trimEnd()}…` : text;
+            updateDocTitle();
         }
         textarea.value = "";
         autosize();
@@ -392,7 +632,10 @@ export async function render(container) {
         // Live message scaffold.
         const md = el("div", { class: "md" });
         const cursor = el("span", { class: "stream-cursor" });
-        const body = el("div", { class: "msg-body" }, md, cursor);
+        const thinking = el("div", { class: "thinking" },
+            el("span", { class: "dots" }, el("i"), el("i"), el("i")),
+            "thinking");
+        const body = el("div", { class: "msg-body" }, thinking, md, cursor);
         let fold = null;
         const liveNode = el("div", { class: "msg msg-assistant" },
             el("div", { class: "msg-head" }, el("span", { class: "who" }, "assistant"), el("span", {}, state.model)),
@@ -403,6 +646,8 @@ export async function render(container) {
         scrollToEnd(true);
 
         state.streaming = true;
+        state.generating = convo.id;
+        drawList();
         state.abort = new AbortController();
         sendBtn.classList.add("is-stop");
         sendBtn.setAttribute("aria-label", "Stop");
@@ -410,7 +655,15 @@ export async function render(container) {
 
         const started = performance.now();
         let firstDelta = 0;
+        let reasoningStart = 0;
+        let reasoningMs = 0;
         let lastPaint = 0;
+        const arrived = () => {
+            if (!firstDelta) {
+                firstDelta = performance.now() - started;
+                thinking.remove();
+            }
+        };
         const paint = (final = false) => {
             const now = performance.now();
             if (!final && now - lastPaint < 120) return;
@@ -437,15 +690,25 @@ export async function render(container) {
             const meta = await streamChat(body_, {
                 signal: state.abort.signal,
                 onDelta: (delta) => {
-                    if (!firstDelta) firstDelta = performance.now() - started;
+                    arrived();
+                    // Content ends the visible reasoning phase: record the
+                    // duration and fold the panel unless the user opened it.
+                    if (fold && !reasoningMs) {
+                        reasoningMs = performance.now() - started - reasoningStart;
+                        fold.setThinking(false);
+                        fold.setLabel(`thought for ${(reasoningMs / 1000).toFixed(1)}s`);
+                        if (!fold.userToggled) fold.removeAttribute("open");
+                    }
                     message.content += delta;
                     paint();
                 },
                 onReasoning: (delta) => {
-                    if (!firstDelta) firstDelta = performance.now() - started;
+                    arrived();
                     message.reasoning += delta;
                     if (!fold) {
+                        reasoningStart = performance.now() - started;
                         fold = reasoningFold(message.reasoning, true);
+                        fold.setThinking(true);
                         body.prepend(fold);
                     } else fold.update(message.reasoning);
                     scrollToEnd();
@@ -454,16 +717,22 @@ export async function render(container) {
             const elapsed = (performance.now() - started) / 1000;
             const completionTokens = meta.usage?.completion_tokens;
             message.stats = {
-                ttft: firstDelta ? `${(firstDelta / 1000).toFixed(2)}s` : null,
-                tps: completionTokens && elapsed > 0 ? (completionTokens / elapsed).toFixed(1) : null,
+                ttftMs: firstDelta || null,
+                latencyMs: elapsed > 0 ? elapsed * 1000 : null,
+                tps: completionTokens && elapsed > 0 ? Number((completionTokens / elapsed).toFixed(1)) : null,
+                promptTokens: meta.usage?.prompt_tokens || null,
+                completionTokens: completionTokens || null,
+                reasoningTokens: meta.usage?.completion_tokens_details?.reasoning_tokens || null,
                 tokens: meta.usage?.total_tokens || null,
                 cache: meta.cache || null,
+                cacheAge: meta.cacheAge || null,
                 unenforced: meta.unenforced || null,
             };
             if (meta.model) message.model = meta.model;
         } catch (error) {
             if (error.name === "AbortError") {
-                message.stats = { tokens: null };
+                message.stopped = true;
+                message.stats = {};
                 if (!message.content && !message.reasoning) {
                     convo.messages.pop();
                 }
@@ -477,7 +746,12 @@ export async function render(container) {
                             : error.message;
             }
         } finally {
+            if (fold && message.reasoning && !message.reasoningMs) {
+                if (!reasoningMs) reasoningMs = performance.now() - started - reasoningStart;
+                message.reasoningMs = reasoningMs;
+            }
             state.streaming = false;
+            state.generating = null;
             state.abort = null;
             sendBtn.classList.remove("is-stop");
             sendBtn.setAttribute("aria-label", "Send");
@@ -486,8 +760,38 @@ export async function render(container) {
             touch(convo);
             drawThread();
             updateStats();
+            // First successful exchange: replace the truncated title with a
+            // model-written one. Fire-and-forget; failure keeps the fallback.
+            if (!message.error && !message.stopped && message.content && convo.messages.length === 2) {
+                generateTitle(convo);
+            }
             if (!state.disposed) textarea.focus();
         }
+    }
+
+    // generateTitle asks the conversation's own model for a short title.
+    async function generateTitle(convo) {
+        const userText = convo.messages.find((m) => m.role === "user")?.content;
+        if (!userText) return;
+        try {
+            const response = await completeChat({
+                model: convo.model || state.model,
+                max_tokens: 24,
+                temperature: 0.2,
+                messages: [{
+                    role: "user",
+                    content: `Write a title of at most six words for a conversation that starts with:\n\n${userText.slice(0, 500)}\n\nReply with the title only — no quotes, no punctuation at the end.`,
+                }],
+            });
+            if (state.disposed) return;
+            let generated = response?.choices?.[0]?.message?.content?.trim().replace(/^["'\s]+|["'\s.]+$/g, "");
+            if (!generated || generated.includes("\n")) return;
+            if (generated.length > 60) generated = `${generated.slice(0, 60).trimEnd()}…`;
+            convo.title = generated;
+            saveConversations(state.conversations);
+            drawList();
+            if (state.current === convo.id) updateDocTitle();
+        } catch { /* keep the truncated title */ }
     }
 
     // --- Model picker ---
@@ -540,6 +844,7 @@ export async function render(container) {
             });
             const opt = el("div", { class: "model-opt", role: "option" },
                 el("span", { class: "name" }, m.name || m.id, el("small", {}, m.id)),
+                m.context_length ? el("span", { class: "ctx" }, `ctx ${formatContext(m.context_length)}`) : null,
                 el("span", { class: "price" }, formatModelPrice(m.pricing) || "—"),
                 fav,
             );
@@ -905,9 +1210,37 @@ export async function render(container) {
         const m = state.modelIndex.get(state.model);
         if (m?.context_length) statsHost.append(el("span", {}, `ctx ${formatContext(m.context_length)}`));
         const convo = currentConversation();
-        if (convo?.messages.length) statsHost.append(el("span", {}, `${convo.messages.length} msgs`));
-        const lastStats = convo?.messages.findLast?.((msg) => msg.stats?.tokens)?.stats;
-        if (lastStats?.tokens) statsHost.append(el("span", {}, `${formatCount(lastStats.tokens)} tok last`));
+        if (!convo?.messages.length) return;
+        statsHost.append(el("span", {}, `${convo.messages.length} msgs`));
+        // Conversation totals from reported usage; "*" marks turns where the
+        // provider stream reported no usage, so the totals are partial.
+        let down = 0;
+        let up = 0;
+        let cost = 0;
+        let priced = true;
+        let missing = false;
+        for (const msg of convo.messages) {
+            if (msg.role !== "assistant" || msg.error) continue;
+            const s = msg.stats || {};
+            const prompt = s.promptTokens || 0;
+            const completion = s.completionTokens || 0;
+            if (!prompt && !completion && !s.tokens) { missing = true; continue; }
+            down += prompt;
+            up += completion;
+            const pricing = state.modelIndex.get(msg.model)?.pricing;
+            const promptRate = Number.parseFloat(pricing?.prompt);
+            const completionRate = Number.parseFloat(pricing?.completion);
+            if (Number.isFinite(promptRate) && Number.isFinite(completionRate)) {
+                cost += prompt * promptRate + completion * completionRate;
+            } else priced = false;
+        }
+        const note = missing ? "*" : "";
+        if (down || up) {
+            statsHost.append(el("span", { title: "Prompt ↓ / completion ↑ tokens this conversation" }, `↓${formatCount(down)} ↑${formatCount(up)} tok${note}`));
+            statsHost.append(el("span", { title: missing ? "Partial — some responses reported no usage" : "Priced from the catalog snapshot" }, `cost ${priced ? formatNanoUSD(cost * 1_000_000_000) : "—"}${note}`));
+        } else if (missing) {
+            statsHost.append(el("span", { title: "The provider stream reported no usage for this conversation" }, "no usage*"));
+        }
     }
 }
 
