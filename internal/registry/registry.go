@@ -20,9 +20,6 @@ import (
 var (
 	// ErrCatalogRequired reports an absent Starmap control plane.
 	ErrCatalogRequired = errors.New("registry catalog is required")
-	// ErrRuntimeUnavailable reports an absent published provider runtime
-	// generation.
-	ErrRuntimeUnavailable = errors.New("provider runtime generation is unavailable")
 	// ErrProviderRequired reports a registration without a provider ID.
 	ErrProviderRequired = errors.New("provider registration name is required")
 	// ErrConnectorRequired reports a registration without a connector.
@@ -44,16 +41,6 @@ type Registration struct {
 	RequiresAuth    bool
 	OperatorSource  credentials.MaterialSource
 	Anonymous       credentials.Material
-}
-
-// ProviderMetadata contains catalog facts needed by gateway provider discovery.
-type ProviderMetadata struct {
-	ID           string
-	Name         string
-	URL          string
-	Models       []string
-	Capabilities []string
-	RequiresAuth bool
 }
 
 // Registry manages provider connectors and their lifecycle
@@ -236,7 +223,7 @@ func (r *Registry) Get(provider string) (connectors.Connector, error) {
 func (r *Registry) ResolveMaterial(ctx context.Context, provider string) (credentials.Material, error) {
 	generation := r.current.Load()
 	if generation == nil {
-		return credentials.Material{}, ErrRuntimeUnavailable
+		return credentials.Material{}, connectors.ErrRuntimeUnavailable
 	}
 	return generation.resolveMaterial(ctx, provider)
 }
@@ -308,66 +295,6 @@ func (r *Registry) Close() error {
 	errs = append(errs, r.drainErrors...)
 	r.drainMu.Unlock()
 	return errors.Join(errs...)
-}
-
-// GetProviderMetadata returns Starmap metadata for registered providers.
-func (r *Registry) GetProviderMetadata() []ProviderMetadata {
-	lease, err := r.AcquireRuntime()
-	if err != nil {
-		return nil
-	}
-	defer lease.Release()
-	return r.GetProviderMetadataForRuntime(lease)
-}
-
-// GetProviderMetadataForRuntime returns provider facts from one retained
-// request generation. The caller owns the lease lifecycle.
-func (r *Registry) GetProviderMetadataForRuntime(
-	lease connectors.RuntimeLease,
-) []ProviderMetadata {
-	if lease == nil {
-		return nil
-	}
-	snapshot := lease.Snapshot()
-	if snapshot == nil {
-		return nil
-	}
-	seen := make(map[starmapcatalogs.ProviderID]struct{})
-	metadata := make([]ProviderMetadata, 0)
-	for _, route := range snapshot.Routes() {
-		if _, exists := seen[route.ProviderID]; exists {
-			continue
-		}
-		provider, err := snapshot.Catalog().Provider(route.ProviderID)
-		if err != nil {
-			continue
-		}
-		item := ProviderMetadata{
-			ID:   string(provider.ID),
-			Name: provider.Name,
-		}
-		if provider.StatusPageURL != nil {
-			item.URL = *provider.StatusPageURL
-		}
-		capabilities := make(map[string]struct{})
-		for _, providerRoute := range snapshot.RoutesForProvider(route.ProviderID) {
-			item.Models = append(item.Models, providerRoute.ID())
-			for _, operation := range providerRoute.Operations {
-				capabilities[string(operation)] = struct{}{}
-			}
-		}
-		for capability := range capabilities {
-			item.Capabilities = append(item.Capabilities, capability)
-		}
-		sort.Strings(item.Capabilities)
-		if generationLease, ok := lease.(*Lease); ok {
-			entry := generationLease.generation.providers[string(route.ProviderID)]
-			item.RequiresAuth = entry.registration.RequiresAuth
-		}
-		seen[route.ProviderID] = struct{}{}
-		metadata = append(metadata, item)
-	}
-	return metadata
 }
 
 // Snapshot returns one complete current runtime snapshot.

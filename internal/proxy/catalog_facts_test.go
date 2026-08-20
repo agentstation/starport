@@ -90,6 +90,14 @@ func TestSnapshotOnlyDiscovery(t *testing.T) {
 	endpoints, err := service.GetModelEndpoints(context.Background(), models.Data[0].ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, endpoints.Endpoints)
+	providers, err := service.ListProviders(context.Background())
+	require.NoError(t, err)
+	require.Len(t, providers.Providers, 1)
+	require.Equal(t, string(catalogs.ProviderIDOpenAI), providers.Providers[0].ID)
+	require.NotEmpty(t, providers.Providers[0].Name)
+	require.NotEmpty(t, providers.Providers[0].Models)
+	require.NotEmpty(t, providers.Providers[0].Capabilities)
+	require.True(t, providers.Providers[0].RequiresAuth)
 	require.EqualValues(t, 0, atomic.LoadInt32(&guard.calls))
 }
 

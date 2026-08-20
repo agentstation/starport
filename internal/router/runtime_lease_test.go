@@ -121,6 +121,8 @@ func (l *leaseTestRuntime) Get(provider string) connectors.Connector {
 	return l.registry.Get(provider)
 }
 
+func (*leaseTestRuntime) RequiresAuthentication(string) bool { return false }
+
 func (l *leaseTestRuntime) ResolveMaterial(
 	ctx context.Context,
 	provider string,

@@ -154,6 +154,8 @@ func TestCredentialRotationDoesNotReplaceRuntimeGeneration(t *testing.T) {
 	require.Equal(t, "second", secondValue)
 	require.Same(t, before, lease.Snapshot())
 	require.Same(t, connector, lease.Get("openai"))
+	require.True(t, lease.RequiresAuthentication("openai"))
+	require.False(t, lease.RequiresAuthentication("missing"))
 	require.Equal(t, int32(0), connector.closeCount.Load())
 }
 

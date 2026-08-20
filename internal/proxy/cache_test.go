@@ -467,6 +467,7 @@ type cacheRuntimeLease struct {
 
 func (l *cacheRuntimeLease) Snapshot() *runtimecatalog.RoutableSnapshot { return l.snapshot }
 func (l *cacheRuntimeLease) Get(string) connectors.Connector            { return nil }
+func (l *cacheRuntimeLease) RequiresAuthentication(string) bool         { return false }
 func (l *cacheRuntimeLease) ResolveMaterial(context.Context, string) (credentials.Material, error) {
 	return credentials.Material{}, nil
 }

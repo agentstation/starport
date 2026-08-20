@@ -159,6 +159,7 @@ func (r *embeddingTestRuntime) Get(provider string) connectors.Connector {
 	}
 	return nil
 }
+func (*embeddingTestRuntime) RequiresAuthentication(string) bool { return false }
 func (r *embeddingTestRuntime) ResolveMaterial(context.Context, string) (credentials.Material, error) {
 	r.operatorCalls.Add(1)
 	return r.operator, nil

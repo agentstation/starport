@@ -120,6 +120,7 @@ func (g rejectingCredentialGate) OperatorMaterialReady(providerID string, versio
 
 func (*credentialPolicyRuntime) Snapshot() *runtimecatalog.RoutableSnapshot { return nil }
 func (*credentialPolicyRuntime) Get(string) connectors.Connector            { return nil }
+func (*credentialPolicyRuntime) RequiresAuthentication(string) bool         { return false }
 func (r *credentialPolicyRuntime) ResolveMaterial(context.Context, string) (credentials.Material, error) {
 	r.operatorCalls.Add(1)
 	return routerTestMaterial(), r.operatorErr

@@ -5,15 +5,14 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
-	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
-	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/routing"
 )
@@ -21,13 +20,13 @@ import (
 // Config holds the configuration for creating a new proxy service.
 type Config struct {
 	// Registry provides access to LLM provider connectors
-	Registry *registry.Registry
+	Registry connectors.LeasingRegistry
 
 	// Router handles intelligent model selection and failover
 	Router router.ModelRouter
 
 	// CacheManager handles response caching (optional)
-	CacheManager *cache.Manager
+	CacheManager CacheManager
 
 	// CacheConfig configures caching behavior (optional)
 	CacheConfig *CacheConfig
@@ -40,7 +39,7 @@ type Config struct {
 type Option func(*Config)
 
 // WithCache enables caching with the specified cache manager and configuration.
-func WithCache(manager *cache.Manager, config *CacheConfig) Option {
+func WithCache(manager CacheManager, config *CacheConfig) Option {
 	return func(c *Config) {
 		c.CacheManager = manager
 		c.CacheConfig = config
@@ -81,7 +80,7 @@ func WithMiddleware(m Middleware) Option {
 //	    proxy.WithMiddleware(loggingMiddleware),
 //	    proxy.WithMiddleware(metricsMiddleware),
 //	)
-func New(registry *registry.Registry, router router.ModelRouter, opts ...Option) Proxy {
+func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ...Option) Proxy {
 	// Initialize config with required dependencies
 	cfg := &Config{
 		Registry: registry,
@@ -243,7 +242,7 @@ func requestHasVision(messages []inference.Message) bool {
 
 // proxy implements the Proxy interface
 type proxy struct {
-	registry *registry.Registry
+	registry connectors.LeasingRegistry
 	router   router.ModelRouter
 }
 
@@ -430,18 +429,18 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 // ListModels returns models from one retained routable catalog generation.
 func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	if p == nil || p.registry == nil {
-		return nil, registry.ErrCatalogRequired
+		return nil, runtimecatalog.ErrCatalogRequired
 	}
 	runtime, owned, err := p.acquireRuntime(ctx)
 	if err != nil {
-		return nil, registry.ErrCatalogRequired
+		return nil, runtimecatalog.ErrCatalogRequired
 	}
 	if owned {
 		defer runtime.Release()
 	}
 	snapshot := runtime.Snapshot()
 	if snapshot == nil {
-		return nil, registry.ErrCatalogRequired
+		return nil, runtimecatalog.ErrCatalogRequired
 	}
 	return modelsResponseFromSnapshot(snapshot), nil
 }
@@ -604,29 +603,54 @@ func supportedModelParameters(definition starmapcatalogs.ModelDefinition) []stri
 func (p *proxy) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	runtime, owned, err := p.acquireRuntime(ctx)
 	if err != nil {
-		return nil, registry.ErrRuntimeUnavailable
+		return nil, connectors.ErrRuntimeUnavailable
 	}
 	if owned {
 		defer runtime.Release()
 	}
-	metadata := p.registry.GetProviderMetadataForRuntime(runtime)
+	return &ProvidersResponse{Providers: providerInfosFromRuntime(runtime)}, nil
+}
 
-	// Transform to response
-	providerInfos := make([]ProviderInfo, len(metadata))
-	for i, m := range metadata {
-		providerInfos[i] = ProviderInfo{
-			ID:           m.ID,
-			Name:         m.Name,
-			URL:          m.URL,
-			Models:       append([]string(nil), m.Models...),
-			Capabilities: append([]string(nil), m.Capabilities...),
-			RequiresAuth: m.RequiresAuth,
-		}
+func providerInfosFromRuntime(runtime connectors.RuntimeLease) []ProviderInfo {
+	if runtime == nil {
+		return nil
 	}
-
-	return &ProvidersResponse{
-		Providers: providerInfos,
-	}, nil
+	snapshot := runtime.Snapshot()
+	if snapshot == nil {
+		return nil
+	}
+	seen := make(map[starmapcatalogs.ProviderID]struct{})
+	providers := make([]ProviderInfo, 0)
+	for _, route := range snapshot.Routes() {
+		if _, exists := seen[route.ProviderID]; exists {
+			continue
+		}
+		provider, err := snapshot.Catalog().Provider(route.ProviderID)
+		if err != nil {
+			continue
+		}
+		info := ProviderInfo{
+			ID: string(provider.ID), Name: provider.Name,
+			RequiresAuth: runtime.RequiresAuthentication(string(provider.ID)),
+		}
+		if provider.StatusPageURL != nil {
+			info.URL = *provider.StatusPageURL
+		}
+		capabilities := make(map[string]struct{})
+		for _, providerRoute := range snapshot.RoutesForProvider(route.ProviderID) {
+			info.Models = append(info.Models, providerRoute.ID())
+			for _, operation := range providerRoute.Operations {
+				capabilities[string(operation)] = struct{}{}
+			}
+		}
+		for capability := range capabilities {
+			info.Capabilities = append(info.Capabilities, capability)
+		}
+		sort.Strings(info.Capabilities)
+		seen[route.ProviderID] = struct{}{}
+		providers = append(providers, info)
+	}
+	return providers
 }
 
 func cacheTokenPrices(snapshot *runtimecatalog.RoutableSnapshot, modelID string) (float64, float64, bool) {
@@ -709,7 +733,7 @@ func (p *proxy) acquireRuntime(
 		return lease, false, nil
 	}
 	if p == nil || p.registry == nil {
-		return nil, false, registry.ErrRuntimeUnavailable
+		return nil, false, connectors.ErrRuntimeUnavailable
 	}
 	lease, err := p.registry.AcquireRuntime()
 	return lease, true, err
