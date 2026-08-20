@@ -178,7 +178,7 @@ func (h *Handler) Static(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	//nolint:gosec // content is from the read-only embedded FS; traversal is rejected above
+	// #nosec G705 -- content is from the read-only embedded FS; traversal is rejected above
 	if _, err := w.Write(content); err != nil {
 		h.logger.Error().Err(err).Str("path", path).Msg("failed to write console asset")
 	}
