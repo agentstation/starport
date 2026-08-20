@@ -35,7 +35,9 @@ Put behavior with the concept that owns its invariants:
 | Concept | Path |
 | --- | --- |
 | Canonical inference types | `internal/inference` |
-| Starmap projection | `internal/catalog` |
+| Starmap projection and acquisition policy | `internal/catalog` |
+| Gateway use cases and cache behavior contract | `internal/proxy` |
+| Provider runtime lease contract | `internal/providers/connectors` |
 | Route planning | `internal/routing` |
 | Attempts and retry budgets | `internal/execution` |
 | Provider failure mapping | `internal/failure` |

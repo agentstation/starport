@@ -1,6 +1,6 @@
 # Starport Architecture
 
-Last updated: 2026-08-11
+Last updated: 2026-08-19
 
 Starport is a single-binary Go LLM gateway. It exposes OpenAI-compatible and OpenRouter-compatible APIs over one provider-neutral inference core. `cmd/starport` loads configuration and starts the application. `internal/app` owns production composition and lifecycle. The OpenAI and OpenRouter HTTP adapters own their wire formats. `internal/proxy` owns gateway use cases. `internal/router` adapts requests to the pure planner and attempt executor. Starmap owns catalog facts. Concept repositories own durable schemas. `internal/storage` owns KV adapters only.
 
@@ -51,6 +51,8 @@ graph TD
   RateLimit --> Controllers["HTTP controllers"]
   Controllers --> ProviderOperations["provider status and refresh"]
   Controllers --> Proxy["internal/proxy gateway use cases"]
+  Proxy --> LeasingRegistry["connectors.LeasingRegistry contract"]
+  LeasingRegistry --> Registry
   Proxy --> Router["internal/router model router"]
   Router --> Planner["internal/routing pure route planner"]
   Router --> Executor["internal/execution attempt executor"]
@@ -76,7 +78,9 @@ graph TD
   Connectors --> GoogleCloudTransport["Google Cloud"]
   Connectors --> OllamaTransport["Ollama"]
   Proxy --> ResponseCache["internal/response/cache semantic records"]
-  ResponseCache --> Cache["internal/cache byte storage"]
+  Proxy --> CacheManager["proxy.CacheManager contract"]
+  CacheManager --> Cache["internal/cache byte storage"]
+  ResponseCache --> CacheManager
   Auth --> IdentityRepo["internal/identity repository"]
   RateLimit --> RateLimitRepo["internal/ratelimit repository"]
   Cache --> Storage
@@ -96,7 +100,7 @@ starport/
 ├── internal/server/           # HTTP server, middleware, routes, controllers, DTO helpers
 ├── internal/protocol/openai/  # OpenAI wire DTOs and codecs
 ├── internal/protocol/openrouter/ # OpenRouter wire DTOs and codecs
-├── internal/proxy/            # chat, streaming, embeddings, model/provider use cases
+├── internal/proxy/            # gateway use cases and cache behavior contract
 ├── internal/inference/        # canonical chat, embedding, and stream values
 ├── internal/failure/          # canonical safe failures and provider evidence
 ├── internal/router/           # use-case adapter for planning and execution
@@ -104,10 +108,10 @@ starport/
 ├── internal/execution/        # attempt state, budgets, fallback, and stream commitment
 ├── internal/availability/     # offering-level runtime availability state
 ├── internal/providers/state/  # safe adapter, credential, and offering state
-├── internal/catalog/          # Starmap facts and derived routable generations
+├── internal/catalog/          # Starmap acquisition policy and derived routable generations
 ├── internal/registry/         # catalog-derived connector generations and adapter availability
 ├── internal/providers/        # provider runtime composition and BYOK
-├── internal/providers/connectors/ # wire adapters and provider HTTP transport policy
+├── internal/providers/connectors/ # runtime leases, wire adapters, and provider HTTP policy
 ├── internal/providers/auth/   # request credential placement by catalog primitive
 ├── internal/credentials/cloudchain/ # renewable cloud credential acquisition
 ├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
@@ -126,6 +130,26 @@ starport/
 The repository has no public Go package. Starport v1 is a binary-first product. `TestPublicPackageBoundary` rejects a repository `pkg` directory and protocol imports outside approved adapter seams. A public SDK requires a named consumer, version owner, and separate plan.
 
 The protocol packages can repeat wire fields. Each package converts once through `internal/inference` and `internal/failure`. They do not own routing, storage, provider, retry, or cache policy.
+
+## Dependency Direction
+
+Stable use-case packages depend on behavior contracts. The composition root
+selects concrete adapters.
+
+- `internal/proxy` accepts `CacheManager` and
+  `connectors.LeasingRegistry`. It does not import `internal/cache` or
+  `internal/registry`.
+- `internal/app` coordinates catalog refresh and complete runtime activation.
+  It does not select Starmap sources or expose Starmap sync options.
+- `internal/catalog` owns local acquisition source selection, sync options,
+  timeout policy, and the verified remote candidate contract.
+- A retained provider runtime lease supplies the matching Starmap snapshot,
+  connector generation, credential source, and authentication-required fact.
+
+`scripts/verify-dependency-direction.sh` enforces conditions `SP-D01` through
+`SP-D06` across production and test imports. Its mutation suite proves that
+each condition fails independently. The standard v1 architecture gate runs
+both scripts.
 
 ## Lifecycle Ownership
 
@@ -157,12 +181,14 @@ Tests can replace factories through an explicit test-only builder.
 work, and the HTTP listener. `App.Close` closes owned resources once in reverse
 construction order. Constructor rollback uses the same ownership ledger.
 
-Concept ownership does not depend on process topology. In local mode, Starport
-composes the Starmap acquisition package for single-binary startup and scheduled
-refresh. Starmap still owns acquisition protocols, credentials, mapping,
-reconciliation, and publication. In remote mode, a separately operated Starmap
-publisher provides operational isolation. Both modes publish the same immutable
-catalog-generation contract into the same atomic Starport activation transaction.
+Concept ownership does not depend on process topology. In local mode,
+`internal/catalog` composes the Starmap acquisition package and owns source and
+sync option selection. The app requests one complete refresh candidate for
+single-binary startup and scheduled refresh. Starmap still owns acquisition
+protocols, credentials, mapping, reconciliation, and publication. In remote
+mode, a separately operated Starmap publisher provides operational isolation.
+Both modes publish the same immutable catalog-generation contract into the same
+atomic Starport activation transaction.
 
 `internal/server.Server` receives ready use-case and repository ports. It owns
 only the HTTP listener and route tree. `Server.Shutdown` drains HTTP requests
@@ -176,6 +202,10 @@ material source. Adapter availability does not contain credential availability.
 still publish a complete prepared generation through its atomic publication
 seam. Replaced generations drain their connectors after active users release
 them. `Registry.Close` closes the current inference adapters.
+
+The registry returns runtime leases through the connector-owned contract. The
+gateway derives model and provider discovery from the lease's retained Starmap
+snapshot. It does not ask the registry for a second catalog projection.
 
 Remote catalog activation uses two durable current pointers over one set of
 immutable generation records. The Starmap subscriber advances the verified

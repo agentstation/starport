@@ -60,7 +60,7 @@ No proposed durable plan exists.
 - Authentication uses hash-based identity lookup and fails closed.
 - Response caching uses tenant-safe canonical semantic keys.
 - HTTP middleware enforces rate limits through the concept repository.
-- Starmap v0.4.1 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
+- Starmap v0.6.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
 - Starport owns inference credentials, request policy, route planning, execution, and protocol adaptation.
 - OpenAI and OpenRouter raw protocol smoke tests pass.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
