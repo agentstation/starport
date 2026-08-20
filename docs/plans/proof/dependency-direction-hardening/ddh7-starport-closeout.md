@@ -53,8 +53,9 @@ SP-D06 PASS: app does not import Starmap sync options
 Summary: 6 passed, 0 failed
 ```
 
-## Pending acceptance
+## Acceptance
 
-DDH7 stays in progress until the pre-PR autoreview passes, the Starport
-implementation pull request passes every hosted check, and the pull request
-merges.
+The pre-PR autoreview returned no actionable findings, and the secret scan was
+clean. Starport pull request
+[#122](https://github.com/agentstation/starport/pull/122) passed all 10 hosted
+jobs and merged as `3d06a7233bc3de5288a5924b5e5eb9c269d3fbb9`.
