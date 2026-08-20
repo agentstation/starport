@@ -16,7 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/availability"
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/chatui"
+	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
@@ -139,7 +139,7 @@ type runtimeBuilder struct {
 	providerKeys byok.ProviderKeys
 	rateLimits   ratelimit.Repository
 	gateway      proxy.Proxy
-	chatUI       *chatui.Handler
+	console      *console.Handler
 }
 
 func (b *runtimeBuilder) compose() error {
@@ -149,7 +149,7 @@ func (b *runtimeBuilder) compose() error {
 		b.openRegistry,
 		b.openCache,
 		b.buildGateway,
-		b.openChatUI,
+		b.openConsole,
 		b.openHotReload,
 		b.openHTTPServer,
 	}
@@ -360,15 +360,14 @@ func (b *runtimeBuilder) buildGateway() error {
 	return nil
 }
 
-func (b *runtimeBuilder) openChatUI() error {
-	if b.config.ChatUI.Enabled {
+func (b *runtimeBuilder) openConsole() error {
+	if b.config.Console.Enabled {
 		var err error
-		b.chatUI, err = chatui.NewHandler(&log.Logger, chatui.Config{
-			Title: b.config.ChatUI.Title, Theme: b.config.ChatUI.Theme,
-			APIBaseURL: fmt.Sprintf("http://localhost:%d", b.config.Server.Port),
+		b.console, err = console.NewHandler(&log.Logger, console.Config{
+			Title: b.config.Console.Title, Theme: b.config.Console.Theme,
 		})
 		if err != nil {
-			return fmt.Errorf("open ChatUI: %w", err)
+			return fmt.Errorf("open console: %w", err)
 		}
 	}
 	return nil
@@ -397,7 +396,7 @@ func (b *runtimeBuilder) openHotReload() error {
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, ProviderKeys: b.providerKeys,
-		RateLimits: b.rateLimits, ProviderOperations: b.application, ChatUI: b.chatUI,
+		RateLimits: b.rateLimits, ProviderOperations: b.application, Console: b.console,
 	})
 	if err != nil {
 		if httpServer != nil {

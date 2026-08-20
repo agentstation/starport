@@ -341,8 +341,8 @@ func (c *LoggingConfig) Validate() error {
 	return nil
 }
 
-// Validate validates ChatUIConfig
-func (c *ChatUIConfig) Validate() error {
+// Validate validates ConsoleConfig
+func (c *ConsoleConfig) Validate() error {
 	// Validate theme
 	if c.Theme != "light" && c.Theme != "dark" {
 		return fmt.Errorf("invalid theme: %s (must be 'light' or 'dark')", c.Theme)
@@ -350,7 +350,7 @@ func (c *ChatUIConfig) Validate() error {
 
 	// Title cannot be empty
 	if c.Title == "" {
-		return fmt.Errorf("ChatUI title cannot be empty")
+		return fmt.Errorf("console title cannot be empty")
 	}
 
 	return nil

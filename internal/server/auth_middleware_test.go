@@ -342,18 +342,18 @@ func TestAuthMiddleware_RequireAnyScope(t *testing.T) {
 	}
 }
 
-// TestAuthIntegrationWithChatUI tests the full flow of generating a key via ChatUI
+// TestAuthIntegrationWithConsole tests the full flow of generating a key via the console
 // and then using it for authentication
-func TestAuthIntegrationWithChatUI(t *testing.T) {
+func TestAuthIntegrationWithConsole(t *testing.T) {
 	// This test simulates the full flow:
-	// 1. ChatUI generates a key
+	// 1. The console generates a key
 	// 2. The key is stored with proper hash mapping
 	// 3. The key can be used for authentication
 
 	identities, err := identity.Open(storage.NewMockStore())
 	require.NoError(t, err)
 
-	// Simulate what ChatUI does when generating a key
+	// Simulate what the console does when generating a key
 	keyValue := "sk-starport-integrationtest123"
 	keyID := "STARPORT_integration123"
 
@@ -364,17 +364,17 @@ func TestAuthIntegrationWithChatUI(t *testing.T) {
 	// Create API key model
 	apiKey := &identity.APIKey{
 		ID:        keyID,
-		Name:      "ChatUI-Integration-Test-Key",
+		Name:      "Console-Integration-Test-Key",
 		Hash:      hashStr,
 		Scopes:    []string{"chat:write", "models:read"},
 		Active:    true,
 		CreatedAt: time.Now(),
 		Metadata: map[string]any{
-			"source": "chatui",
+			"source": "console",
 		},
 	}
 
-	// Store the key (what ChatUI handler does)
+	// Store the key (what the console handler does)
 	ctx := context.Background()
 	_, err = identities.Create(ctx, *apiKey)
 	require.NoError(t, err)

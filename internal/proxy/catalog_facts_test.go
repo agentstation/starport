@@ -103,6 +103,15 @@ func TestSnapshotOnlyDiscovery(t *testing.T) {
 	require.NotEmpty(t, providers.Providers[0].Models)
 	require.NotEmpty(t, providers.Providers[0].Capabilities)
 	require.True(t, providers.Providers[0].RequiresAuth)
+	catalogProvider, err := client.Catalog().Provider(providerID)
+	require.NoError(t, err)
+	if contract := catalogProvider.Credentials; contract != nil && len(contract.Inference.Alternatives) > 0 {
+		require.NotEmpty(t, providers.Providers[0].CredentialFields)
+		for _, field := range providers.Providers[0].CredentialFields {
+			require.NotEmpty(t, field.ID)
+			require.Contains(t, []string{"secret", "parameter"}, field.Kind)
+		}
+	}
 	require.EqualValues(t, 0, runtime.getCalls.Load())
 }
 

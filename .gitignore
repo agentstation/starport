@@ -23,8 +23,9 @@ coverage.html
 go.work
 go.work.sum
 
-# Dependency directories
-vendor/
+# Dependency directories (root Go vendor only; embedded console vendor files
+# under internal/console/static/vendor are tracked)
+/vendor/
 
 # IDE specific files
 .idea/

@@ -71,8 +71,8 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 			catalog["remote_url"],
 		)
 	}
-	if _, found := view["chat_ui"]; !found {
-		t.Fatal("chat_ui key is missing")
+	if _, found := view["console"]; !found {
+		t.Fatal("console key is missing")
 	}
 }
 
@@ -83,7 +83,7 @@ func TestConfigurationSecretFieldsDeclareRedaction(t *testing.T) {
 func TestRedactedUsesReadableDurationAndAcronymKeys(t *testing.T) {
 	cfg := &Config{
 		Server:   ServerConfig{ReadTimeout: 30},
-		ChatUI:   ChatUIConfig{Enabled: true},
+		Console:   ConsoleConfig{Enabled: true},
 		Security: SecurityConfig{TLSCertPath: "/cert.pem"},
 	}
 	view := Redacted(cfg)
@@ -91,8 +91,8 @@ func TestRedactedUsesReadableDurationAndAcronymKeys(t *testing.T) {
 	if server["read_timeout"] != "30ns" {
 		t.Errorf("read timeout = %#v", server["read_timeout"])
 	}
-	if _, found := view["chat_ui"]; !found {
-		t.Fatal("chat_ui key is missing")
+	if _, found := view["console"]; !found {
+		t.Fatal("console key is missing")
 	}
 	security := view["security"].(map[string]any)
 	if security["tls_cert_path"] != "/cert.pem" {

@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// validChatUIConfig returns a valid ChatUIConfig for testing
-func validChatUIConfig() ChatUIConfig {
-	return ChatUIConfig{
+// validConsoleConfig returns a valid ConsoleConfig for testing
+func validConsoleConfig() ConsoleConfig {
+	return ConsoleConfig{
 		Enabled: false,
 		Title:   "Test Chat",
 		Theme:   "light",
@@ -62,7 +62,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
-				ChatUI: validChatUIConfig(),
+				Console: validConsoleConfig(),
 			},
 			wantErr: false,
 		},
@@ -107,7 +107,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
-				ChatUI: validChatUIConfig(),
+				Console: validConsoleConfig(),
 			},
 			wantErr: true,
 			errMsg:  "invalid port number",
@@ -147,7 +147,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
-				ChatUI: validChatUIConfig(),
+				Console: validConsoleConfig(),
 			},
 			wantErr: true,
 			errMsg:  "unsupported storage mode",
@@ -193,7 +193,7 @@ func TestConfig_Validate(t *testing.T) {
 					MaxBackups: 3,
 					MaxAge:     7,
 				},
-				ChatUI: validChatUIConfig(),
+				Console: validConsoleConfig(),
 			},
 			wantErr: true,
 			errMsg:  "invalid log level",
