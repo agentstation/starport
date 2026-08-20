@@ -11,7 +11,9 @@ No active durable plan exists.
 
 ### Proposed Work
 
-No proposed durable plan exists.
+- [Dependency direction hardening](plans/dependency-direction-hardening-plan.html):
+  proposed campaign for the Starmap catalog tree and Starport gateway seams.
+  It removes reversed implementation dependencies across both repositories.
 
 ### Recently Completed
 
