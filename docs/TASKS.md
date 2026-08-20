@@ -7,9 +7,7 @@ Last Updated: 2026-08-19
 
 ### Active Work
 
-- [Dependency direction hardening](plans/dependency-direction-hardening-plan.html):
-  active campaign for the Starmap catalog tree and Starport gateway seams.
-  DDH0 through DDH7 are complete. DDH8 cleanup is in progress.
+No active durable plan exists.
 
 ### Proposed Work
 
@@ -19,6 +17,7 @@ No proposed durable plan exists.
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| Dependency direction hardening | DDH | Starmap #94; Starport #117–#123 | 2026-08-20 | Established 14 executable dependency rules, moved provider and resource ownership into Starmap, isolated Starport proxy and catalog contracts, corrected release VCS provenance, and passed all hosted checks for both implementation pull requests. |
 | Package ownership refactor | POR | Starport #105–#110 and Starmap #74–#76 | 2026-08-12 | Moved packages to concept-owned paths in both repositories. Deleted unused HTTP transport code. All nine campaign assertions pass. |
 | Automatic provider runtime | APR | #96–#103 | 2026-08-11 | Published immutable `v1.0.3`. Starport now derives executable providers and inference authentication profiles from one Starmap generation. It supports credential refresh, safe provider state, authenticated provider operations, and provider-neutral local development. |
 | Catalog-driven provider runtime | CDP | #91, #93, #94 | 2026-08-11 | Published immutable `v1.0.2`. Provider YAML now drives the Starport runtime. Connectors hold no credential value. `scripts/verify-catalog-driven-providers.sh` keeps conditions `CDP-V01` through `CDP-V19`. The pull requests hold the CDP3.1 and CDP7.1 secret-source measurements. |
