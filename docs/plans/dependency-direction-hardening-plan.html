@@ -26,10 +26,12 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
 <header id="overview">
   <h1>Starport and Starmap dependency direction hardening</h1>
   <div id="status-line">
-    <div>Status: <code data-plan-status="active">active</code> · Owner: this plan · Created: 2026-08-19</div>
-    <div>Starport baseline: <code>main@60f26a6d748b7667a2ed586e38d8a70cf9c161a0</code> · Starmap baseline: <code>main@ff5e6cf9beb4cc9047e554659d817d7c21384d6a</code></div>
+    <div>Status: <code data-plan-status="active">active</code>.</div>
+    <div>Owner: this plan. Created: 2026-08-19.</div>
+    <div>Starport baseline: <code>main@60f26a6d748b7667a2ed586e38d8a70cf9c161a0</code>.</div>
+    <div>Starmap baseline: <code>main@ff5e6cf9beb4cc9047e554659d817d7c21384d6a</code>.</div>
     <div>Proof root: <code>docs/plans/proof/dependency-direction-hardening/</code></div>
-    <div>Next action: update Starmap architecture records and run all gates. Review and open the Starmap implementation PR.</div>
+    <div>Next action: create the Starport implementation worktree, add conditions <code>SP-D01</code> through <code>SP-D06</code> with mutation coverage, and record the red DDH4 baseline.</div>
   </div>
   <section id="outcome"><h2>Outcome</h2>
     <blockquote>Stable domain and use-case packages depend only on owned contracts. Starmap's public catalog tree has no dependency on repository-private implementation packages. Starport's gateway use cases depend on cache and provider-runtime contracts, and Starmap acquisition policy stays inside Starport's catalog seam. Executable import rules prevent each reversed dependency from returning.</blockquote>
@@ -145,8 +147,8 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
       <tr id="DDH0" data-status="done"><td>DDH0</td><td>Starmap baseline: add the red dependency verifier and capture all eight current relationships.</td><td><code>done</code></td><td>Starmap work commit <code>30874a34ad869919ba09054985127b88ea1864b9</code>. Eight isolated mutations passed. The baseline reported <code>Summary: 0 passed, 8 failed</code>. See <code>proof/dependency-direction-hardening/ddh0-starmap-baseline.md</code>.</td></tr>
       <tr id="DDH1" data-status="done"><td>DDH1</td><td>Move authority and bounded payload contracts to catalog-owned public seams.</td><td><code>done</code></td><td>Starmap work commit <code>99f2ce0d09bbd0b05db296b1d7ede48bcbb02542</code>. Sixteen focused packages and all six external consumer fixtures passed. The verifier improved to <code>2 passed, 6 failed</code>. See <code>proof/dependency-direction-hardening/ddh1-starmap-contracts.md</code>.</td></tr>
       <tr id="DDH2" data-status="done"><td>DDH2</td><td>Remove embedded and shared-constant reverse dependencies from the public catalog tree.</td><td><code>done</code></td><td>Starmap work commit <code>1736653bdb719266f368c95606fb5613360ae374</code>. Focused tests and vet passed. The verifier reported <code>Summary: 8 passed, 0 failed</code>. See <code>proof/dependency-direction-hardening/ddh2-starmap-resources.md</code>.</td></tr>
-      <tr id="DDH3" data-status="in_progress"><td>DDH3</td><td>Update Starmap authority, run all gates and review, then merge the Starmap pull request.</td><td><code>in_progress</code></td><td>DDH1 and DDH2 removed all eight reversed edges.</td></tr>
-      <tr id="DDH4" data-status="todo"><td>DDH4</td><td>Starport baseline: add six dependency conditions and capture the four reversed relationships.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH3" data-status="done"><td>DDH3</td><td>Update Starmap authority, run all gates and review, then merge the Starmap pull request.</td><td><code>done</code></td><td><a href="https://github.com/agentstation/starmap/pull/94">Starmap #94</a> merged as <code>c36cf0dc5c651fb88e17af7d12c674fab3b9584f</code> after all three hosted jobs passed. The final verifier reported <code>Summary: 8 passed, 0 failed</code>. See <code>proof/dependency-direction-hardening/ddh3-starmap-closeout.md</code>.</td></tr>
+      <tr id="DDH4" data-status="in_progress"><td>DDH4</td><td>Starport baseline: add six dependency conditions and capture the four reversed relationships.</td><td><code>in_progress</code></td><td>DDH3 merged with full local, review, release-snapshot, and hosted evidence.</td></tr>
       <tr id="DDH5" data-status="todo"><td>DDH5</td><td>Make proxy construction depend on cache and provider-runtime contracts.</td><td><code>todo</code></td><td></td></tr>
       <tr id="DDH6" data-status="todo"><td>DDH6</td><td>Keep Starmap acquisition option selection inside Starport's catalog seam.</td><td><code>todo</code></td><td></td></tr>
       <tr id="DDH7" data-status="todo"><td>DDH7</td><td>Update Starport authority, run all gates and review, then merge the Starport pull request.</td><td><code>todo</code></td><td></td></tr>
@@ -267,6 +269,7 @@ $AUTOREVIEW --gate pre-pr --mode auto</code></pre>Then run hosted checks.</li>
       <tr><td>2026-08-19</td><td>DDH0</td><td>completed; DDH1 started</td><td>Starmap work commit <code>30874a34ad869919ba09054985127b88ea1864b9</code>. Mutation tests passed. The fail-before verifier reported <code>Summary: 0 passed, 8 failed</code>. See <code>proof/dependency-direction-hardening/ddh0-starmap-baseline.md</code>.</td></tr>
       <tr><td>2026-08-19</td><td>DDH1</td><td>completed; DDH2 started</td><td>Starmap work commit <code>99f2ce0d09bbd0b05db296b1d7ede48bcbb02542</code>. Sixteen focused packages and six external consumers passed. The verifier reported <code>Summary: 2 passed, 6 failed</code>.</td></tr>
       <tr><td>2026-08-19</td><td>DDH2</td><td>completed; DDH3 started</td><td>Starmap work commit <code>1736653bdb719266f368c95606fb5613360ae374</code>. Focused tests and vet passed. All eight dependency conditions passed.</td></tr>
+      <tr><td>2026-08-19</td><td>DDH3</td><td>completed; DDH4 started</td><td><a href="https://github.com/agentstation/starmap/pull/94">Starmap #94</a> merged as <code>c36cf0dc5c651fb88e17af7d12c674fab3b9584f</code>. Full verification, release checks, release snapshot, secret scan, pre-PR autoreview, and all three hosted jobs passed. See <code>proof/dependency-direction-hardening/ddh3-starmap-closeout.md</code>.</td></tr>
     </tbody></table>
   </section>
 </main>
