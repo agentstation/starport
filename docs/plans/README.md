@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Dependency direction hardening](dependency-direction-hardening-plan.html): active. DDH0 is in progress.
+- [Dependency direction hardening](dependency-direction-hardening-plan.html): active. DDH1 is in progress.
 
 ## Proposed
 
