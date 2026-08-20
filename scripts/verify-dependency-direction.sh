@@ -33,7 +33,7 @@ check_import_absent() {
 	local forbidden="$2"
 	local imports
 
-	imports="$(cd "$ROOT" && go list -e -f '{{range .Imports}}{{println .}}{{end}}' "./$importer")" || return 1
+	imports="$(cd "$ROOT" && go list -e -f '{{range .Imports}}{{println .}}{{end}}{{range .TestImports}}{{println .}}{{end}}{{range .XTestImports}}{{println .}}{{end}}' "./$importer")" || return 1
 	if grep -Fxq "$forbidden" <<<"$imports"; then
 		printf '%s imports forbidden package %s\n' "$importer" "$forbidden"
 		return 1

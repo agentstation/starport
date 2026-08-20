@@ -49,6 +49,14 @@ func TestGenerationStoresKeepRemoteAndAcceptedPointersIndependent(t *testing.T) 
 	require.Equal(t, second.Manifest.Payload.Checksum, shared.Manifest.Payload.Checksum)
 }
 
+func TestRemoteRuntimeRefreshCandidateReturnsSubscriberState(t *testing.T) {
+	want := starmap.CatalogState{GenerationID: "verified-remote"}
+	runtime := &RemoteRuntime{subscriber: &runtimeTestSubscriber{state: want}}
+	got, err := runtime.RefreshCandidate(t.Context(), time.Second)
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+}
+
 func TestRemoteRuntimeAcceptsOnlyMatchingForwardState(t *testing.T) {
 	store := storage.NewMockStore()
 	accepted, err := NewGenerationStore(store)

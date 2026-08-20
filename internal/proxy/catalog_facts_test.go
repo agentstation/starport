@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/connectors"
-	"github.com/agentstation/starport/internal/registry"
 )
 
 func TestOfferingCacheCapability(t *testing.T) {
@@ -77,12 +77,17 @@ func TestSnapshotOnlyDiscovery(t *testing.T) {
 	plane, err := runtimecatalog.Open(client)
 	require.NoError(t, err)
 
-	guard := &catalogIOGuardConnector{Connector: connectors.NewMockConnector(connectors.ProviderConfig{})}
-	providerRegistry := registry.NewEmptyWithCatalog(plane)
-	require.NoError(t, providerRegistry.Register(string(catalogs.ProviderIDOpenAI), guard))
-	require.NoError(t, providerRegistry.Start(context.Background()))
-	t.Cleanup(func() { require.NoError(t, providerRegistry.Close()) })
-	service := &proxy{registry: providerRegistry}
+	providerID, offering := firstDiscoveryOffering(t, client.Catalog())
+	endpointTypes := make([]catalogs.EndpointType, 0, len(offering.Endpoints))
+	for _, endpoint := range offering.Endpoints {
+		endpointTypes = append(endpointTypes, endpoint.Type)
+	}
+	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{
+		ProviderID: providerID, Registered: true,
+		Operations: offering.Service.Operations, EndpointTypes: endpointTypes,
+	}))
+	runtime := &catalogDiscoveryRuntime{snapshot: plane.Current()}
+	service := &proxy{registry: catalogDiscoveryRegistry{runtime: runtime}}
 
 	models, err := service.ListModels(context.Background())
 	require.NoError(t, err)
@@ -93,12 +98,12 @@ func TestSnapshotOnlyDiscovery(t *testing.T) {
 	providers, err := service.ListProviders(context.Background())
 	require.NoError(t, err)
 	require.Len(t, providers.Providers, 1)
-	require.Equal(t, string(catalogs.ProviderIDOpenAI), providers.Providers[0].ID)
+	require.Equal(t, string(providerID), providers.Providers[0].ID)
 	require.NotEmpty(t, providers.Providers[0].Name)
 	require.NotEmpty(t, providers.Providers[0].Models)
 	require.NotEmpty(t, providers.Providers[0].Capabilities)
 	require.True(t, providers.Providers[0].RequiresAuth)
-	require.EqualValues(t, 0, atomic.LoadInt32(&guard.calls))
+	require.EqualValues(t, 0, runtime.getCalls.Load())
 }
 
 func TestModelDiscoveryRetainsOneCatalogGeneration(t *testing.T) {
@@ -107,50 +112,66 @@ func TestModelDiscoveryRetainsOneCatalogGeneration(t *testing.T) {
 	plane, err := runtimecatalog.Open(client)
 	require.NoError(t, err)
 
-	providerRegistry := registry.NewEmptyWithCatalog(plane)
-	require.NoError(t, providerRegistry.Register(
-		string(catalogs.ProviderIDOpenAI),
-		connectors.NewMockConnector(connectors.ProviderConfig{}),
-	))
-	require.NoError(t, providerRegistry.Start(context.Background()))
-	t.Cleanup(func() { require.NoError(t, providerRegistry.Close()) })
+	providerID, offering := firstDiscoveryOffering(t, client.Catalog())
+	endpointTypes := make([]catalogs.EndpointType, 0, len(offering.Endpoints))
+	for _, endpoint := range offering.Endpoints {
+		endpointTypes = append(endpointTypes, endpoint.Type)
+	}
+	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{
+		ProviderID: providerID, Registered: true,
+		Operations: offering.Service.Operations, EndpointTypes: endpointTypes,
+	}))
 
 	retained := plane.Current()
 	beforeRefresh := modelsResponseFromSnapshot(retained)
 	require.NotEmpty(t, beforeRefresh.Data)
 
-	require.NoError(t, plane.RemoveAdapter(catalogs.ProviderIDOpenAI))
+	require.NoError(t, plane.RemoveAdapter(providerID))
 	require.Empty(t, modelsResponseFromSnapshot(plane.Current()).Data)
 	require.Equal(t, beforeRefresh, modelsResponseFromSnapshot(retained))
 }
 
-type catalogIOGuardConnector struct {
-	connectors.Connector
-	calls int32
+type catalogDiscoveryRegistry struct{ runtime *catalogDiscoveryRuntime }
+
+func (r catalogDiscoveryRegistry) AcquireRuntime() (connectors.RuntimeLease, error) {
+	return r.runtime, nil
 }
 
-func (c *catalogIOGuardConnector) Chat(
-	ctx context.Context,
-	req *connectors.ChatRequest,
-) (*connectors.ChatResponse, error) {
-	atomic.AddInt32(&c.calls, 1)
-	return c.Connector.Chat(ctx, req)
+type catalogDiscoveryRuntime struct {
+	snapshot *runtimecatalog.RoutableSnapshot
+	getCalls atomic.Int32
 }
 
-func (c *catalogIOGuardConnector) ChatStream(
-	ctx context.Context,
-	req *connectors.ChatRequest,
-) (connectors.ChatStream, error) {
-	atomic.AddInt32(&c.calls, 1)
-	return c.Connector.ChatStream(ctx, req)
+func (r *catalogDiscoveryRuntime) Snapshot() *runtimecatalog.RoutableSnapshot { return r.snapshot }
+func (r *catalogDiscoveryRuntime) Get(string) connectors.Connector {
+	r.getCalls.Add(1)
+	return nil
 }
+func (*catalogDiscoveryRuntime) RequiresAuthentication(string) bool { return true }
+func (*catalogDiscoveryRuntime) ResolveMaterial(
+	context.Context,
+	string,
+) (credentials.Material, error) {
+	return credentials.Material{}, nil
+}
+func (*catalogDiscoveryRuntime) Release() {}
 
-func (c *catalogIOGuardConnector) Embeddings(
-	ctx context.Context,
-	req *connectors.EmbeddingsRequest,
-) (*connectors.EmbeddingsResponse, error) {
-	atomic.AddInt32(&c.calls, 1)
-	return c.Connector.Embeddings(ctx, req)
+func firstDiscoveryOffering(
+	t *testing.T,
+	source *catalogs.Catalog,
+) (catalogs.ProviderID, catalogs.ProviderOffering) {
+	t.Helper()
+	for _, provider := range source.Providers().List() {
+		offerings, err := source.ProviderOfferings(provider.ID)
+		require.NoError(t, err)
+		for _, offering := range offerings {
+			if len(offering.Endpoints) > 0 && len(offering.Service.Operations) > 0 {
+				return provider.ID, offering
+			}
+		}
+	}
+	t.Fatal("Starmap embedded catalog has no routable offering")
+	return "", catalogs.ProviderOffering{}
 }
 
 func firstCachePricedOffering(
