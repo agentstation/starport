@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -114,7 +115,7 @@ func (m *mockKeyManager) RotateEncryptionKey(ctx context.Context) error {
 }
 
 func TestProviderKeysHandler_List(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -136,7 +137,7 @@ func TestProviderKeysHandler_List(t *testing.T) {
 }
 
 func TestProviderKeysHandler_Disabled(t *testing.T) {
-	handler := NewProviderKeysController(nil)
+	handler := NewProviderKeysController(nil, nil)
 
 	r := chi.NewRouter()
 	r.Get("/api/v1/keys/{key_id}/provider-keys", handler.List)
@@ -150,7 +151,7 @@ func TestProviderKeysHandler_Disabled(t *testing.T) {
 }
 
 func TestProviderKeysHandler_Create(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -181,7 +182,7 @@ func TestProviderKeysHandler_Create(t *testing.T) {
 }
 
 func TestProviderKeysHandler_Get(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -203,7 +204,7 @@ func TestProviderKeysHandler_Get(t *testing.T) {
 }
 
 func TestProviderKeysHandler_Update(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -233,7 +234,7 @@ func TestProviderKeysHandler_Update(t *testing.T) {
 }
 
 func TestProviderKeysHandler_Delete(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -255,7 +256,7 @@ func TestProviderKeysHandler_Delete(t *testing.T) {
 }
 
 func TestProviderKeysHandler_GetUsage(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -266,18 +267,18 @@ func TestProviderKeysHandler_GetUsage(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	// Check status code - should return not implemented
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
+	// Without a usage repository the endpoint degrades loudly
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 
 	// Check response
-	var resp map[string]any
+	var resp dto.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.Contains(t, resp["message"], "Provider key usage analytics not yet implemented")
+	assert.Contains(t, resp.Error.Message, "Usage accounting is not configured")
 }
 
 func TestProviderKeysHandler_GetUsageComparison(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -288,18 +289,18 @@ func TestProviderKeysHandler_GetUsageComparison(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	// Check status code - should return not implemented
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
+	// The comparison endpoint is retired
+	assert.Equal(t, http.StatusGone, w.Code)
 
 	// Check response
-	var resp map[string]any
+	var resp dto.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.Contains(t, resp["message"], "Usage comparison not yet implemented")
+	assert.Contains(t, resp.Error.Message, "retired")
 }
 
 func TestProviderKeysHandler_ContentType(t *testing.T) {
-	handler := NewProviderKeysController(&mockKeyManager{})
+	handler := NewProviderKeysController(&mockKeyManager{}, nil)
 
 	tests := []struct {
 		name    string

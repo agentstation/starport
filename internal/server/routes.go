@@ -80,6 +80,9 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
 		})
 
+		// Request activity for the authenticated key
+		r.With(s.requireAnyScope("activity:read")).Get("/activity", s.controllers.Activity.List)
+
 		// Admin endpoints (requires admin privileges)
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(s.requireAdmin)
@@ -96,6 +99,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			// System information
 			r.Get("/info", s.controllers.Admin.SystemInfo)
 			r.Get("/metrics", s.controllers.Admin.Metrics)
+			r.Get("/activity", s.controllers.Activity.AdminList)
 			r.Get("/providers", s.controllers.ProviderOperations.Status)
 			r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
 		})
@@ -151,6 +155,7 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   GET  /api/v1/models/{model}             - Get model details with metadata
 //   GET  /api/v1/models/{model}/endpoints   - List provider endpoints for model
 //   GET  /api/v1/providers                  - List available providers
+//   GET  /api/v1/activity                   - List request activity for the authenticated key
 //
 // Provider Key Management:
 //   GET    /api/v1/keys/{key_id}/provider-keys           - List provider keys
@@ -167,5 +172,6 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   DELETE /api/v1/admin/keys/{key_id}     - Delete API key
 //   GET    /api/v1/admin/info              - System information
 //   GET    /api/v1/admin/metrics           - System metrics
+//   GET    /api/v1/admin/activity          - List request activity across keys
 //   GET    /api/v1/admin/providers         - Provider runtime status
 //   POST   /api/v1/admin/providers/refresh - Reconcile provider credentials

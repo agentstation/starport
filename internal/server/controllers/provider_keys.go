@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,17 +13,20 @@ import (
 
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 // ProviderKeysController handles provider key management endpoints
 type ProviderKeysController struct {
 	providerKeys byok.ProviderKeys
+	usageRecords usage.Repository
 }
 
 // NewProviderKeysController creates a new provider keys controller
-func NewProviderKeysController(providerKeys byok.ProviderKeys) *ProviderKeysController {
+func NewProviderKeysController(providerKeys byok.ProviderKeys, usageRecords usage.Repository) *ProviderKeysController {
 	return &ProviderKeysController{
 		providerKeys: providerKeys,
+		usageRecords: usageRecords,
 	}
 }
 
@@ -347,26 +351,112 @@ func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// providerUsageWindow bounds the per-provider usage aggregation.
+const providerUsageWindow = 30 * 24 * time.Hour
+
+// providerUsageMaxPages bounds the record walk behind one aggregation.
+const providerUsageMaxPages = 30
+
+// providerUsageSummary aggregates one provider's recorded usage for one
+// gateway key. Records carry the provider that served each request, not
+// the credential that authenticated it, so the grouping is per provider.
+type providerUsageSummary struct {
+	Provider            string       `json:"provider"`
+	Requests            int64        `json:"requests"`
+	Errors              int64        `json:"errors"`
+	Tokens              usage.Tokens `json:"tokens"`
+	SpendNanoUSD        int64        `json:"spend_nano_usd"`
+	RequestsWithoutCost int64        `json:"requests_without_cost"`
+}
+
 // GetUsage handles GET /api/v1/keys/{key_id}/usage/provider-keys
-func (h *ProviderKeysController) GetUsage(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder implementation
-	response := map[string]any{
-		responseMessageField: "Provider key usage analytics not yet implemented",
+func (h *ProviderKeysController) GetUsage(w http.ResponseWriter, r *http.Request) {
+	if h.usageRecords == nil {
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, "Usage accounting is not configured")
+		return
 	}
 
-	if err := dto.WriteJSON(w, http.StatusNotImplemented, response); err != nil {
+	ctx := r.Context()
+	apiKeyID := chi.URLParam(r, "key_id")
+	until := time.Now().UTC()
+	since := until.Add(-providerUsageWindow)
+
+	summaries := map[string]*providerUsageSummary{}
+	truncated := false
+	cursor := ""
+	for page := 0; page < providerUsageMaxPages; page++ {
+		result, err := h.usageRecords.List(ctx, usage.Query{
+			KeyID:  apiKeyID,
+			Since:  since,
+			Limit:  usage.MaxListLimit,
+			Cursor: cursor,
+		})
+		if err != nil {
+			log.Error().Err(err).Str("api_key_id", apiKeyID).Msg("Failed to aggregate provider usage")
+			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to aggregate provider usage")
+			return
+		}
+		for _, record := range result.Records {
+			provider := record.Provider
+			if provider == "" {
+				provider = "unrouted"
+			}
+			summary := summaries[provider]
+			if summary == nil {
+				summary = &providerUsageSummary{Provider: provider}
+				summaries[provider] = summary
+			}
+			summary.Requests++
+			if record.Status == usage.StatusError {
+				summary.Errors++
+			}
+			summary.Tokens.Input += record.Tokens.Input
+			summary.Tokens.Output += record.Tokens.Output
+			summary.Tokens.Total += record.Tokens.Total
+			summary.Tokens.Reasoning += record.Tokens.Reasoning
+			summary.Tokens.CacheRead += record.Tokens.CacheRead
+			summary.Tokens.CacheWrite += record.Tokens.CacheWrite
+			if record.Cost != nil {
+				summary.SpendNanoUSD += record.Cost.NanoUSD
+			} else {
+				summary.RequestsWithoutCost++
+			}
+		}
+		cursor = result.NextCursor
+		if cursor == "" {
+			break
+		}
+		if page == providerUsageMaxPages-1 {
+			truncated = true
+		}
+	}
+
+	data := make([]providerUsageSummary, 0, len(summaries))
+	for _, summary := range summaries {
+		data = append(data, *summary)
+	}
+	sort.Slice(data, func(i, j int) bool { return data[i].Provider < data[j].Provider })
+
+	response := map[string]any{
+		"data": data,
+		"window": map[string]any{
+			"since": since.Format(time.RFC3339),
+			"until": until.Format(time.RFC3339),
+		},
+	}
+	if truncated {
+		response["truncated"] = true
+	}
+
+	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write response")
 	}
 }
 
-// GetUsageComparison handles GET /api/v1/keys/{key_id}/usage/comparison
+// GetUsageComparison handles GET /api/v1/keys/{key_id}/usage/comparison.
+// The endpoint is retired: activity listing and per-provider usage
+// replaced it before the first release.
 func (h *ProviderKeysController) GetUsageComparison(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder implementation
-	response := map[string]any{
-		responseMessageField: "Usage comparison not yet implemented",
-	}
-
-	if err := dto.WriteJSON(w, http.StatusNotImplemented, response); err != nil {
-		log.Error().Err(err).Msg("Failed to write response")
-	}
+	dto.WriteError(w, http.StatusGone, dto.ErrorTypeInvalidRequest,
+		"Usage comparison is retired; use /api/v1/activity and /api/v1/keys/{key_id}/usage/provider-keys")
 }
