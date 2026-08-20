@@ -91,6 +91,33 @@ func TestChatControllerOpenRouterRoutingContract(t *testing.T) {
 	require.Equal(t, "fallback", service.lastChat.Route)
 }
 
+func TestUnenforcedProviderFieldsHeader(t *testing.T) {
+	service := &mockProxy{chat: chatFixture()}
+	controller := controllers.NewOpenRouterChatController(service)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
+		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],`+
+			`"provider":{"quantizations":["fp8"],"zdr":true,"sort":"price","max_price":{"prompt":2,"request":0.01}}}`,
+	))
+	recorder := httptest.NewRecorder()
+
+	controller.Create(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "max_price.request,quantizations,zdr",
+		recorder.Header().Get("X-Starport-Unenforced-Provider-Fields"))
+	require.Equal(t, "price", service.lastChat.Provider.Sort)
+	require.InDelta(t, 2.0, service.lastChat.Provider.MaxPromptPricePer1M, 1e-9)
+
+	// Enforced-only requests carry no unenforced-fields header.
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
+		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],"provider":{"only":["openai"]}}`,
+	))
+	recorder = httptest.NewRecorder()
+	controller.Create(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Empty(t, recorder.Header().Get("X-Starport-Unenforced-Provider-Fields"))
+}
+
 func TestChatControllerOpenRouterStreamErrorContract(t *testing.T) {
 	service := &mockProxy{stream: &eventStream{
 		events: []inference.StreamEvent{{

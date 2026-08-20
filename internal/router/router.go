@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/agentstation/starport/internal/availability"
@@ -307,76 +309,71 @@ func (r *modelRouter) getCandidateModels(req *Request) []string {
 	return nil
 }
 
-// filterByProviderPreferences applies provider routing preferences
+// filterByProviderPreferences applies request provider policy with the same
+// semantics as the catalog planner: "only" and "ignore" always compose, and
+// "order" without fallbacks keeps only the ordered providers. A model
+// survives when its provider passes every constraint; ordered providers
+// come first in rank order.
 func (r *modelRouter) filterByProviderPreferences(models []string, prefs *ProviderPreferences) []string {
 	if prefs == nil {
 		return models
 	}
-
-	var filtered []string
-	providersSeen := make(map[string]bool)
-
-	// If "only" is specified, only use those providers
-	if len(prefs.Only) > 0 {
-		onlyMap := make(map[string]bool)
-		for _, p := range prefs.Only {
-			onlyMap[p] = true
+	only := providerNameSet(prefs.Only)
+	ignore := providerNameSet(prefs.Ignore)
+	orderRanks := make(map[string]int, len(prefs.Order))
+	for index, provider := range prefs.Order {
+		name := normalizeProviderName(provider)
+		if _, exists := orderRanks[name]; !exists {
+			orderRanks[name] = index
 		}
-
-		for _, model := range models {
-			provider := r.extractProvider(model)
-			if onlyMap[provider] {
-				filtered = append(filtered, model)
-				providersSeen[provider] = true
-			}
-		}
-		return filtered
 	}
 
-	// Build ignore map
-	ignoreMap := make(map[string]bool)
-	for _, p := range prefs.Ignore {
-		ignoreMap[p] = true
+	type rankedModel struct {
+		model string
+		rank  int
 	}
-
-	// If "order" is specified, sort by that order
-	if len(prefs.Order) > 0 {
-		// First add models from ordered providers
-		for _, preferredProvider := range prefs.Order {
-			if ignoreMap[preferredProvider] {
+	ordered := make([]rankedModel, 0, len(models))
+	remaining := make([]string, 0, len(models))
+	for _, model := range models {
+		provider := normalizeProviderName(r.extractProvider(model))
+		if len(only) > 0 {
+			if _, allowed := only[provider]; !allowed {
 				continue
 			}
-
-			for _, model := range models {
-				provider := r.extractProvider(model)
-				if provider == preferredProvider && !providersSeen[provider] {
-					filtered = append(filtered, model)
-					providersSeen[provider] = true
-				}
-			}
 		}
-
-		// Then add remaining models if fallbacks are allowed
-		if prefs.AllowFallbacks {
-			for _, model := range models {
-				provider := r.extractProvider(model)
-				if !providersSeen[provider] && !ignoreMap[provider] {
-					filtered = append(filtered, model)
-					providersSeen[provider] = true
-				}
-			}
+		if _, ignored := ignore[provider]; ignored {
+			continue
 		}
-	} else {
-		// No order specified, just apply ignore list
-		for _, model := range models {
-			provider := r.extractProvider(model)
-			if !ignoreMap[provider] {
-				filtered = append(filtered, model)
-			}
+		if rank, exists := orderRanks[provider]; exists {
+			ordered = append(ordered, rankedModel{model: model, rank: rank})
+			continue
+		}
+		if len(orderRanks) == 0 || prefs.AllowFallbacks {
+			remaining = append(remaining, model)
 		}
 	}
+	sort.SliceStable(ordered, func(a, b int) bool { return ordered[a].rank < ordered[b].rank })
 
-	return filtered
+	filtered := make([]string, 0, len(ordered)+len(remaining))
+	for _, ranked := range ordered {
+		filtered = append(filtered, ranked.model)
+	}
+	return append(filtered, remaining...)
+}
+
+func providerNameSet(providers []string) map[string]struct{} {
+	if len(providers) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(providers))
+	for _, provider := range providers {
+		set[normalizeProviderName(provider)] = struct{}{}
+	}
+	return set
+}
+
+func normalizeProviderName(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
 }
 
 // filterByAPIKeyRestrictions applies API key restrictions

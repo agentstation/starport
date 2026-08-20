@@ -40,6 +40,12 @@ type ProviderPolicy struct {
 	AllowFallbacks bool              `json:"allow_fallbacks"`
 	Route          string            `json:"route,omitempty"`
 	ModelOverrides map[string]string `json:"model_overrides,omitempty"`
+
+	// Sort and the price caps change which route serves the response, so
+	// they are part of the cache identity.
+	Sort                    string  `json:"sort,omitempty"`
+	MaxPromptPricePer1M     float64 `json:"max_prompt_price_per_1m,omitempty"`
+	MaxCompletionPricePer1M float64 `json:"max_completion_price_per_1m,omitempty"`
 }
 
 // TenantPolicy contains tenant-scoped route restrictions.
