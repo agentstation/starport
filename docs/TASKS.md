@@ -9,7 +9,7 @@ Last Updated: 2026-08-19
 
 - [Dependency direction hardening](plans/dependency-direction-hardening-plan.html):
   active campaign for the Starmap catalog tree and Starport gateway seams.
-  DDH0 through DDH6 are complete. DDH7 is in progress.
+  DDH0 through DDH7 are complete. DDH8 cleanup is in progress.
 
 ### Proposed Work
 
