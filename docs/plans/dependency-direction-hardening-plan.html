@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
     <div>Starport baseline: <code>main@60f26a6d748b7667a2ed586e38d8a70cf9c161a0</code>.</div>
     <div>Starmap baseline: <code>main@ff5e6cf9beb4cc9047e554659d817d7c21384d6a</code>.</div>
     <div>Proof root: <code>docs/plans/proof/dependency-direction-hardening/</code></div>
-    <div>Next action: update Starport architecture records and run every DDH7 gate and release snapshot. Review the committed branch, then open the implementation pull request.</div>
+    <div>Next action: review the committed Starport branch, open the implementation pull request, wait for every hosted check, and merge it.</div>
   </div>
   <section id="outcome"><h2>Outcome</h2>
     <blockquote>Stable domain and use-case packages depend only on owned contracts. Starmap's public catalog tree has no dependency on repository-private implementation packages. Starport's gateway use cases depend on cache and provider-runtime contracts, and Starmap acquisition policy stays inside Starport's catalog seam. Executable import rules prevent each reversed dependency from returning.</blockquote>
@@ -273,6 +273,7 @@ $AUTOREVIEW --gate pre-pr --mode auto</code></pre>Then run hosted checks.</li>
       <tr><td>2026-08-19</td><td>DDH4</td><td>completed; DDH5 started</td><td>Starport work commit <code>ec1376aba6a8fcc2dd1b6db6e4be8f5c70766f74</code>. Six isolated mutation tests passed. The fail-before verifier reported <code>Summary: 0 passed, 6 failed</code>. See <code>proof/dependency-direction-hardening/ddh4-starport-baseline.md</code>.</td></tr>
       <tr><td>2026-08-19</td><td>DDH5</td><td>completed; DDH6 started</td><td>Starport work commit <code>9d5181220728a06310a37cbfd9c794d5dffa4f45</code>. Eight focused package suites and vet passed. The dependency verifier reported <code>Summary: 4 passed, 2 failed</code>. See <code>proof/dependency-direction-hardening/ddh5-proxy-contracts.md</code>.</td></tr>
       <tr><td>2026-08-19</td><td>DDH6</td><td>completed; DDH7 started</td><td>Starport work commit <code>572482d51a9d656bd08331ae0150c7ca00442cea</code>. Focused tests and vet passed. The dependency verifier reported <code>Summary: 6 passed, 0 failed</code>, and the v1 architecture verifier reported <code>Summary: 12 passed, 0 failed</code>. See <code>proof/dependency-direction-hardening/ddh6-catalog-acquisition.md</code>.</td></tr>
+      <tr><td>2026-08-20</td><td>DDH7</td><td>local closeout completed; review and pull request pending</td><td>Starport branch head <code>20fcbe70e9c23a912827b48049f0dcba5f183771</code>. All required local gates passed, including the race suite, all official OpenRouter SDKs, release checks, and the complete release snapshot. See <code>proof/dependency-direction-hardening/ddh7-starport-closeout.md</code>.</td></tr>
     </tbody></table>
   </section>
 </main>
