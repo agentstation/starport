@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
     <div>Owner: this plan. Created: 2026-08-20. Activation: owner mandate of 2026-08-20 ("we need to be an enterprise LLM gateway that is a drop-in replacement for OpenRouter - take all this on").</div>
     <div>Baseline: <code>main@ca10f5e</code>. Feature base: <code>codex/console-revamp@67a800a</code> (PR #125, open).</div>
     <div>Proof root: <code>docs/plans/proof/openrouter-parity/</code></div>
-    <div>Next action: ORP13 — closeout (add scripts/verify-openrouter-parity.sh to CI per D7, update ARCHITECTURE.md / TASKS.md / README.md, run the verifier green, refresh the roadmap artifact) on <code>codex/orp-13-closeout</code> from <code>codex/orp-12-chat-compare</code>.</div>
+    <div>Next action: ORP14 — cleanup. It triggers when the final pull request of the train merges (merge order: #125, then #127–#139 bottom-up, then #126). ORP0–ORP13 are done. No implementation work remains.</div>
   </div>
   <section id="outcome"><h2>Outcome</h2>
     <blockquote>Starport records every inference request with tokens, provider, latency, and Starmap-derived cost, and serves that history through an activity API and a console usage page. The console shows what each catalog refresh changed and how fresh the catalog is. A request can name a stored preset, order providers by price or latency, and cap price. An operator can give a key model limits, an expiry, and spend and token budgets that the gateway enforces. Every surface degrades loudly: a missing price, a stale catalog, or an exhausted budget is visible, never silent.</blockquote>
@@ -136,7 +136,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
       <tr id="ORP10" data-status="done"><td>ORP10</td><td>Per-key limits and budgets</td><td><code>done</code></td><td>PR #136. Typed <code>identity.Limits</code>; 402 budget enforcement with <code>X-Starport-Budget-*</code> headers, fail-open on read error (D6); per-key request limit beats and outlives the global window; admin key API sets allowed_models/expires_at/limits + paginated list; dead shapes deleted (TokenBucket, hot-reload, inert config fields). 10 acceptance tests; 402 tests red then green; gates green; autoreview clean (0.97). Proof: <code>proof/openrouter-parity/ORP10.md</code></td></tr>
       <tr id="ORP11" data-status="done"><td>ORP11</td><td>Console key limits and budgets UI</td><td><code>done</code></td><td>PR #137; commit 6aa4527; walkthrough + gates in proof/openrouter-parity/ORP11.md</td></tr>
       <tr id="ORP12" data-status="done"><td>ORP12</td><td>Chat comparison mode</td><td><code>done</code></td><td>PR #138; commit c0ed352; walkthrough + gates in proof/openrouter-parity/ORP12.md</td></tr>
-      <tr id="ORP13" data-status="in_progress"><td>ORP13</td><td>Closeout: docs, CI gate, green verifier</td><td><code>in_progress</code></td><td></td></tr>
+      <tr id="ORP13" data-status="done"><td>ORP13</td><td>Closeout: docs, CI gate, green verifier</td><td><code>done</code></td><td>PR #139; commit e2fbcb0; verifier 16 passed, 0 failed; proof/openrouter-parity/ORP13.md</td></tr>
       <tr id="ORP14" data-status="todo"><td>ORP14</td><td>Cleanup after final merge</td><td><code>todo</code></td><td></td></tr>
     </tbody></table>
   </section>
