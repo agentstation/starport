@@ -91,6 +91,10 @@ export function listProviders() {
     return request("/api/v1/providers");
 }
 
+export function catalogMetadata() { return request("/api/v1/catalog"); }
+export function catalogChanges() { return request("/api/v1/catalog/changes"); }
+export function refreshCatalog() { return request("/api/v1/admin/catalog/refresh", { method: "POST" }); }
+
 // --- Admin ---
 
 export function systemInfo() { return request("/api/v1/admin/info"); }

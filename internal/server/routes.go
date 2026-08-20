@@ -60,6 +60,10 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Providers metadata
 		r.With(s.requireAnyScope("models:read")).Get("/providers", s.controllers.Providers.List)
 
+		// Catalog freshness and changes
+		r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Metadata)
+		r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
+
 		// Key management endpoints
 		r.Route("/keys/{key_id}/provider-keys", func(r chi.Router) {
 			r.Use(s.requireKeyOwnership) // Additional middleware to verify key ownership
@@ -102,6 +106,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.Get("/activity", s.controllers.Activity.AdminList)
 			r.Get("/providers", s.controllers.ProviderOperations.Status)
 			r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
+			r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
 		})
 	})
 
