@@ -3,22 +3,9 @@
 // console works on localhost, 127.0.0.1, or any host the gateway binds.
 
 const KEY_STORAGE = "starport.apiKey";
-const LEGACY_KEYS = ["starport_api_key"];
 
 export function getApiKey() {
-    let key = localStorage.getItem(KEY_STORAGE);
-    if (!key) {
-        for (const legacy of LEGACY_KEYS) {
-            const value = localStorage.getItem(legacy);
-            if (value) {
-                key = value;
-                localStorage.setItem(KEY_STORAGE, value);
-                localStorage.removeItem(legacy);
-                break;
-            }
-        }
-    }
-    return key || "";
+    return localStorage.getItem(KEY_STORAGE) || "";
 }
 
 export function setApiKey(key) {
