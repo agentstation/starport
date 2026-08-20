@@ -2,7 +2,7 @@
 
 ## Active
 
-- [Dependency direction hardening](dependency-direction-hardening-plan.html): active. DDH8 cleanup is in progress.
+No active durable plan exists.
 
 ## Proposed
 
