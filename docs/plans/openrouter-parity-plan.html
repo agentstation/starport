@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
     <div>Owner: this plan. Created: 2026-08-20. Activation: owner mandate of 2026-08-20 ("we need to be an enterprise LLM gateway that is a drop-in replacement for OpenRouter - take all this on").</div>
     <div>Baseline: <code>main@ca10f5e</code>. Feature base: <code>codex/console-revamp@67a800a</code> (PR #125, open).</div>
     <div>Proof root: <code>docs/plans/proof/openrouter-parity/</code></div>
-    <div>Next action: ORP2 — wire the capture pipeline (proxy completion hook, stream usage latch, connector cache-token parsing, cost from the request snapshot) on <code>codex/orp-2-usage-capture</code> from <code>codex/orp-1-usage-repo</code>.</div>
+    <div>Next action: ORP3 — activity and metrics API (activity endpoints, real admin metrics, provider-key usage) on <code>codex/orp-3-activity</code> from <code>codex/orp-2-usage-capture</code>.</div>
   </div>
   <section id="outcome"><h2>Outcome</h2>
     <blockquote>Starport records every inference request with tokens, provider, latency, and Starmap-derived cost, and serves that history through an activity API and a console usage page. The console shows what each catalog refresh changed and how fresh the catalog is. A request can name a stored preset, order providers by price or latency, and cap price. An operator can give a key model limits, an expiry, and spend and token budgets that the gateway enforces. Every surface degrades loudly: a missing price, a stale catalog, or an exhausted budget is visible, never silent.</blockquote>
@@ -124,8 +124,8 @@ document.addEventListener("DOMContentLoaded",function(){var rows=document.queryS
     <table id="ledger"><thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
       <tr id="ORP0" data-status="done"><td>ORP0</td><td>Baseline, proof root, red verifier</td><td><code>done</code></td><td>Verifier red: <code>Summary: 0 passed, 16 failed</code>. Proof: <code>proof/openrouter-parity/ORP0.md</code>. Research preserved under <code>proof/openrouter-parity/research/</code>. Docs-only diff.</td></tr>
       <tr id="ORP1" data-status="done"><td>ORP1</td><td>Usage record model and repository</td><td><code>done</code></td><td>PR #127. 8 contract tests pass on memory and badger (valkey UNVERIFIED); import graph registered; all required gates green. Proof: <code>proof/openrouter-parity/ORP1.md</code>.</td></tr>
-      <tr id="ORP2" data-status="in_progress"><td>ORP2</td><td>Request capture pipeline and cost computation</td><td><code>in_progress</code></td><td></td></tr>
-      <tr id="ORP3" data-status="todo"><td>ORP3</td><td>Activity and metrics API</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP2" data-status="done"><td>ORP2</td><td>Request capture pipeline and cost computation</td><td><code>done</code></td><td>PR #128. All 6 acceptance tests plus <code>TestAnthropicStreamReportsPromptTokens</code> pass; fail-before red run recorded; all required gates green; autoreview clean (0.97). Live check UNVERIFIED (recorded for ORP3). Proof: <code>proof/openrouter-parity/ORP2.md</code>.</td></tr>
+      <tr id="ORP3" data-status="in_progress"><td>ORP3</td><td>Activity and metrics API</td><td><code>in_progress</code></td><td></td></tr>
       <tr id="ORP4" data-status="todo"><td>ORP4</td><td>Console usage page</td><td><code>todo</code></td><td></td></tr>
       <tr id="ORP5" data-status="todo"><td>ORP5</td><td>Catalog freshness service and API</td><td><code>todo</code></td><td></td></tr>
       <tr id="ORP6" data-status="todo"><td>ORP6</td><td>Console catalog freshness surface</td><td><code>todo</code></td><td></td></tr>
