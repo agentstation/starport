@@ -251,11 +251,18 @@ Version 1 includes:
 
 - Chat completions, streaming chat, embeddings, and model discovery.
 - Exact provider and model routing with fallback and `openrouter/auto`.
+- Provider routing preferences: order, sort, price caps, and model variants.
+- Presets with `@preset/` model references.
 - Catalog-driven providers over the compiled OpenAI, Anthropic, Google Cloud,
   Google AI Studio, and Ollama transport primitives.
 - Encrypted provider credentials, renewable cloud credentials, and direct
   secret-source references.
-- Header-only gateway authentication and per-key rate limits.
+- Header-only gateway authentication, per-key rate limits, per-key budgets,
+  and allowed-model limits.
+- Request logs and usage accounting with catalog-priced costs at
+  `/api/v1/activity`.
+- An embedded web console with overview, chat with model comparison, models,
+  providers, usage, presets, keys, and settings pages.
 - Tenant-safe response caching.
 - Badger storage for one process and Valkey storage for multiple processes.
 
