@@ -354,7 +354,7 @@ func TestAuthIntegrationWithConsole(t *testing.T) {
 	require.NoError(t, err)
 
 	// Simulate what the console does when generating a key
-	keyValue := "sk-starport-integrationtest123"
+	keyValue := "test-starport-integration-key"
 	keyID := "STARPORT_integration123"
 
 	// Hash the key
