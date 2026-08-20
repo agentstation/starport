@@ -100,6 +100,13 @@ else
 	fail 'release binaries use per-run or missing build-time metadata'
 fi
 
+if grep -Eq '^[[:space:]]*-[[:space:]]+-buildvcs=true$' \
+	"$repository_root/.goreleaser.yaml"; then
+	pass 'release binaries preserve Go VCS provenance'
+else
+	fail 'release binaries omit Go VCS provenance'
+fi
+
 if [ -f "$repository_root/.github/workflows/release.yaml" ] &&
 	grep -q 'Verify draft release assets before publication' "$repository_root/.github/workflows/release.yaml" &&
 	grep -q 'attest-build-provenance' "$repository_root/.github/workflows/release.yaml" &&
