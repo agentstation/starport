@@ -1,19 +1,19 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-17
+Last Updated: 2026-08-19
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-No active durable plan exists.
+- [Dependency direction hardening](plans/dependency-direction-hardening-plan.html):
+  active campaign for the Starmap catalog tree and Starport gateway seams.
+  DDH0 is in progress.
 
 ### Proposed Work
 
-- [Dependency direction hardening](plans/dependency-direction-hardening-plan.html):
-  proposed campaign for the Starmap catalog tree and Starport gateway seams.
-  It removes reversed implementation dependencies across both repositories.
+No proposed durable plan exists.
 
 ### Recently Completed
 
