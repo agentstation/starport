@@ -1,7 +1,7 @@
 // Chat — the playground. Conversations live in this browser's localStorage;
 // the gateway only ever sees the completion requests.
 
-import { getApiKey, listModels, streamChat } from "../api.js";
+import { getApiKey, listModels, listPresets, streamChat } from "../api.js";
 import { el, icon, toast, confirmDialog, copyText, formatModelPrice, formatContext, formatCount, debounce } from "../ui.js";
 import { renderMarkdown } from "../markdown.js";
 import { navigate } from "../router.js";
@@ -13,6 +13,13 @@ const LEGACY_CHAT_STORAGE = "starport_chats";
 const FAV_STORAGE = "starport.favModels";
 const LAST_MODEL_STORAGE = "starport.lastModel";
 const MAX_CONVERSATIONS = 100;
+
+// Per-conversation request parameters: sampling plus provider routing
+// preferences (order/only/ignore are comma-separated provider lists).
+const DEFAULT_PARAMS = {
+    system: "", temperature: null, maxTokens: null,
+    order: "", only: "", ignore: "", sort: "",
+};
 
 // --- Local persistence ---
 
@@ -67,7 +74,8 @@ export async function render(container) {
         modelIndex: new Map(),
         favorites: loadFavorites(),
         model: localStorage.getItem(LAST_MODEL_STORAGE) || "",
-        params: { system: "", temperature: null, maxTokens: null },
+        presets: [],
+        params: { ...DEFAULT_PARAMS },
         streaming: false,
         abort: null,
         disposed: false,
@@ -103,11 +111,13 @@ export async function render(container) {
     const sendBtn = el("button", { class: "composer-send", type: "button", "aria-label": "Send" }, icon("send"));
     const paramsBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("settings"), "params");
     const paramsAnchor = el("span", { class: "params-anchor" }, paramsBtn);
+    const routingBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("providers"), "routing");
+    const routingAnchor = el("span", { class: "params-anchor" }, routingBtn);
     const statsHost = el("span", { class: "stats" });
     const composer = el("div", { class: "composer-wrap" },
         el("div", { class: "composer" },
             el("div", { class: "composer-box" }, textarea, sendBtn),
-            el("div", { class: "composer-foot" }, paramsAnchor, statsHost),
+            el("div", { class: "composer-foot" }, paramsAnchor, routingAnchor, statsHost),
         ),
     );
 
@@ -115,6 +125,12 @@ export async function render(container) {
     container.append(el("div", { class: "chat-layout" }, side, main));
 
     // --- Wiring ---
+    // Popover state must initialize before render returns; the statements
+    // after the cleanup return never run, so a declaration there stays in
+    // the temporal dead zone and the toggle handlers throw.
+    let modelPop = null;
+    let paramsPop = null;
+    let routingPop = null;
     sideToggle.addEventListener("click", () => side.classList.toggle("is-open"));
     const outsideSide = (event) => {
         if (!side.classList.contains("is-open")) return;
@@ -127,6 +143,7 @@ export async function render(container) {
     newBtn.addEventListener("click", () => selectConversation(null));
     pickerBtn.addEventListener("click", () => toggleModelPop());
     paramsBtn.addEventListener("click", () => toggleParamsPop());
+    routingBtn.addEventListener("click", () => toggleRoutingPop());
 
     textarea.addEventListener("input", autosize);
     textarea.addEventListener("keydown", (event) => {
@@ -155,6 +172,11 @@ export async function render(container) {
         toast(`Failed to load models: ${error.message}`, "err");
     });
 
+    listPresets().then((body) => {
+        if (state.disposed) return;
+        state.presets = body?.data || [];
+    }).catch(() => { /* presets need storage and scope; the picker just omits them */ });
+
     return () => { for (const dispose of disposers) dispose(); };
 
     // --- Conversations ---
@@ -168,7 +190,7 @@ export async function render(container) {
         state.current = id;
         const convo = currentConversation();
         if (convo?.model && state.modelIndex.has(convo.model)) state.model = convo.model;
-        if (convo?.params) state.params = { system: "", temperature: null, maxTokens: null, ...convo.params };
+        if (convo?.params) state.params = { ...DEFAULT_PARAMS, ...convo.params };
         drawList();
         drawThread();
         updatePicker();
@@ -295,6 +317,12 @@ export async function render(container) {
         if (stats.tps) meta.append(el("span", {}, `${stats.tps} tok/s`));
         if (stats.tokens) meta.append(el("span", {}, `${formatCount(stats.tokens)} tokens`));
         if (stats.cache === "HIT") meta.append(el("span", {}, "cache hit"));
+        if (stats.unenforced) {
+            meta.append(el("span", {
+                class: "unenforced",
+                title: "Provider preference fields the gateway accepted but cannot enforce yet",
+            }, `unenforced: ${stats.unenforced.split(",").join(", ")}`));
+        }
         const copyBtn = el("button", { class: "icon-btn", type: "button", "aria-label": "Copy response" }, icon("copy"));
         copyBtn.addEventListener("click", () => copyText(message.content, copyBtn));
         const retryBtn = el("button", { class: "icon-btn", type: "button", "aria-label": "Retry" }, icon("refresh"));
@@ -385,6 +413,8 @@ export async function render(container) {
         };
         if (state.params.temperature !== null) body_.temperature = state.params.temperature;
         if (state.params.maxTokens !== null) body_.max_tokens = state.params.maxTokens;
+        const provider = providerPreferences();
+        if (provider) body_.provider = provider;
 
         try {
             const meta = await streamChat(body_, {
@@ -411,6 +441,7 @@ export async function render(container) {
                 tps: completionTokens && elapsed > 0 ? (completionTokens / elapsed).toFixed(1) : null,
                 tokens: meta.usage?.total_tokens || null,
                 cache: meta.cache || null,
+                unenforced: meta.unenforced || null,
             };
             if (meta.model) message.model = meta.model;
         } catch (error) {
@@ -440,7 +471,6 @@ export async function render(container) {
 
     // --- Model picker ---
 
-    let modelPop = null;
     function toggleModelPop() {
         if (modelPop) { closeModelPop(); return; }
         const search = el("input", { class: "input", type: "search", placeholder: "Search models…" });
@@ -456,6 +486,13 @@ export async function render(container) {
             const query = search.value.trim().toLowerCase();
             list.replaceChildren();
             const match = (m) => !query || m.id.toLowerCase().includes(query) || (m.name || "").toLowerCase().includes(query);
+            const presetHit = (p) => !query || `@preset/${p.name}`.toLowerCase().includes(query)
+                || (p.description || "").toLowerCase().includes(query);
+            const presetRows = state.presets.filter(presetHit);
+            if (presetRows.length) {
+                list.append(el("div", { class: "model-pop-section" }, "presets"));
+                for (const p of presetRows) list.append(presetOption(p));
+            }
             const favs = state.models.filter((m) => state.favorites.has(m.id) && match(m));
             const rest = state.models.filter((m) => !state.favorites.has(m.id) && match(m));
             if (favs.length) {
@@ -495,6 +532,22 @@ export async function render(container) {
             return opt;
         };
 
+        const presetOption = (p) => {
+            const reference = `@preset/${p.name}`;
+            const opt = el("div", { class: "model-opt", role: "option" },
+                el("span", { class: "name" }, reference, el("small", {}, p.description || p.config?.model || "stored preset")),
+                el("span", { class: "price" }, p.config?.provider?.sort || ""),
+            );
+            opt.addEventListener("click", () => {
+                state.model = reference;
+                try { localStorage.setItem(LAST_MODEL_STORAGE, reference); } catch { /* full */ }
+                updatePicker();
+                updateStats();
+                closeModelPop();
+            });
+            return opt;
+        };
+
         search.addEventListener("input", debounce(fill, 100));
         fill();
 
@@ -524,7 +577,6 @@ export async function render(container) {
 
     // --- Params popover ---
 
-    let paramsPop = null;
     function toggleParamsPop() {
         if (paramsPop) { closeParamsPop(); return; }
         const systemInput = el("textarea", { class: "input", rows: "3", placeholder: "You are a helpful assistant…" });
@@ -568,6 +620,75 @@ export async function render(container) {
         paramsPop.dispose?.();
         paramsPop.remove();
         paramsPop = null;
+    }
+
+    // --- Provider routing popover ---
+
+    // providerPreferences builds the request's provider object from the
+    // conversation's routing params; null when nothing is set.
+    function providerPreferences() {
+        const list = (value) => (value || "").split(",").map((s) => s.trim()).filter(Boolean);
+        const prefs = {};
+        const order = list(state.params.order);
+        const only = list(state.params.only);
+        const ignore = list(state.params.ignore);
+        if (order.length) prefs.order = order;
+        if (only.length) prefs.only = only;
+        if (ignore.length) prefs.ignore = ignore;
+        if (state.params.sort) prefs.sort = state.params.sort;
+        return Object.keys(prefs).length ? prefs : null;
+    }
+
+    function toggleRoutingPop() {
+        if (routingPop) { closeRoutingPop(); return; }
+        const sortSelect = el("select", { class: "select" },
+            el("option", { value: "" }, "server default"),
+            el("option", { value: "price" }, "price — cheapest first"),
+            el("option", { value: "latency" }, "latency — fastest first"),
+            el("option", { value: "throughput" }, "throughput — routed by latency"),
+        );
+        sortSelect.value = state.params.sort || "";
+        const orderInput = el("input", { class: "input mono", type: "text", placeholder: "e.g. groq, openai" });
+        orderInput.value = state.params.order || "";
+        const onlyInput = el("input", { class: "input mono", type: "text", placeholder: "allowlist, comma-separated" });
+        onlyInput.value = state.params.only || "";
+        const ignoreInput = el("input", { class: "input mono", type: "text", placeholder: "denylist, comma-separated" });
+        ignoreInput.value = state.params.ignore || "";
+
+        const apply = () => {
+            state.params.sort = sortSelect.value;
+            state.params.order = orderInput.value.trim();
+            state.params.only = onlyInput.value.trim();
+            state.params.ignore = ignoreInput.value.trim();
+            const convo = currentConversation();
+            if (convo) { convo.params = { ...state.params }; saveConversations(state.conversations); }
+        };
+        for (const input of [sortSelect, orderInput, onlyInput, ignoreInput]) input.addEventListener("change", apply);
+
+        routingPop = el("div", { class: "params-pop" },
+            el("div", { class: "field" }, el("label", {}, "Sort"), sortSelect),
+            el("div", { class: "field" }, el("label", {}, "Provider order"), orderInput),
+            el("div", { class: "field" }, el("label", {}, "Only providers"), onlyInput),
+            el("div", { class: "field" }, el("label", {}, "Ignore providers"), ignoreInput),
+        );
+        routingAnchor.append(routingPop);
+        const onKey = (event) => { if (event.key === "Escape") closeRoutingPop(); };
+        const onOutside = (event) => { if (!routingAnchor.contains(event.target)) closeRoutingPop(); };
+        document.addEventListener("keydown", onKey);
+        document.addEventListener("mousedown", onOutside);
+        routingPop.dispose = () => {
+            apply();
+            document.removeEventListener("keydown", onKey);
+            document.removeEventListener("mousedown", onOutside);
+        };
+        disposers.push(closeRoutingPop);
+    }
+
+    function closeRoutingPop() {
+        if (!routingPop) return;
+        routingPop.dispose?.();
+        routingPop.remove();
+        routingPop = null;
     }
 
     // --- Composer helpers ---

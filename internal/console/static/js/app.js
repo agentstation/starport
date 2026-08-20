@@ -6,6 +6,7 @@ import { healthReady } from "./api.js";
 import { onNavigate } from "./router.js";
 import * as overview from "./pages/overview.js";
 import * as chat from "./pages/chat.js";
+import * as presets from "./pages/presets.js";
 import * as models from "./pages/models.js";
 import * as providers from "./pages/providers.js";
 import * as keys from "./pages/keys.js";
@@ -15,6 +16,7 @@ import * as settings from "./pages/settings.js";
 const ROUTES = {
     "/": { page: overview, id: "overview" },
     "/chat": { page: chat, id: "chat" },
+    "/presets": { page: presets, id: "presets" },
     "/models": { page: models, id: "models" },
     "/providers": { page: providers, id: "providers" },
     "/keys": { page: keys, id: "keys" },

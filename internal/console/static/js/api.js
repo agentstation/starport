@@ -107,6 +107,14 @@ export function createKey(body) { return request("/api/v1/admin/keys", { method:
 export function updateKey(id, body) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "PUT", body }); }
 export function deleteKey(id) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "DELETE" }); }
 
+// --- Presets ---
+
+export function listPresets() { return request("/api/v1/presets"); }
+export function getPreset(name) { return request(`/api/v1/presets/${encodeURIComponent(name)}`); }
+export function createPreset(body) { return request("/api/v1/presets", { method: "POST", body }); }
+export function updatePreset(name, body) { return request(`/api/v1/presets/${encodeURIComponent(name)}`, { method: "PUT", body }); }
+export function deletePreset(name) { return request(`/api/v1/presets/${encodeURIComponent(name)}`, { method: "DELETE" }); }
+
 // --- Activity ---
 
 function activityQuery(filters = {}) {
@@ -173,6 +181,9 @@ export async function streamChat(body, { signal, onDelta, onReasoning }) {
     const meta = {
         cache: response.headers.get("X-Cache") || "",
         cacheAge: response.headers.get("X-Cache-Age") || "",
+        // Provider preference fields the gateway accepted but cannot yet
+        // enforce (comma-joined), reported per request.
+        unenforced: response.headers.get("X-Starport-Unenforced-Provider-Fields") || "",
         usage: null,
         model: "",
     };

@@ -107,10 +107,21 @@ func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) (*proxy.APIKey
 
 // logError logs an error with context
 func (h *BaseHandler) logError(ctx context.Context, err error, msg string) {
-	log.Error().
+	event := log.Error().
 		Err(err).
-		Str("request_id", h.getRequestID(ctx)).
-		Msg(msg)
+		Str("request_id", h.getRequestID(ctx))
+	var providerFailure *failure.Failure
+	if errors.As(err, &providerFailure) {
+		details := providerFailure.ProviderDetails()
+		event = event.
+			Str("provider", details.Provider).
+			Int("provider_status", details.StatusCode).
+			Str("provider_message", details.Message)
+		if cause := providerFailure.Unwrap(); cause != nil {
+			event = event.Str("cause", cause.Error())
+		}
+	}
+	event.Msg(msg)
 }
 
 // writeError writes an error response based on the error type
