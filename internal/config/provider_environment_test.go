@@ -226,6 +226,32 @@ func TestCatalogOnlyProviderEnvironmentResolvesWithoutSourceRoster(t *testing.T)
 	}
 }
 
+func TestHetznerInferenceEnvironmentComesFromCatalog(t *testing.T) {
+	builder, err := catalogs.NewEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := builder.Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &Config{providerEnvironment: mapEnvironmentLookup(map[string]string{
+		"STARPORT_HETZNER_API_KEY": "hetzner-inference-key",
+	})}
+	if err := cfg.ResolveProviders(t.Context(), catalog.Providers()); err != nil {
+		t.Fatal(err)
+	}
+	resolved, found := cfg.Providers[catalogs.ProviderIDHetzner]
+	if !found {
+		t.Fatal("Hetzner inference configuration is missing")
+	}
+	value, exists := resolved.Material.Value("api-key")
+	if !exists || value != "hetzner-inference-key" ||
+		resolved.Material.Profile().Primitive != catalogs.ProviderAuthenticationAPIKey {
+		t.Fatalf("Hetzner configuration = %#v", resolved)
+	}
+}
+
 func TestCredentialAliasCollisionsFailBeforeConnectorConstruction(t *testing.T) {
 	first := testCredentialProvider("one", "STARPORT_TWO_API_KEY", "")
 	second := testCredentialProvider("two", "TWO_API_KEY", "")
