@@ -25,6 +25,9 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
   provider switches, endpoint tables, model lists, or price defaults.
 - Keep provider model IDs exact and opaque.
 - Keep catalog-acquisition credentials separate from inference credentials.
+- Keep Starmap acquisition, source, and sync option imports in
+  `internal/catalog`. Application composition uses the catalog-owned refresh
+  contract.
 
 ## Concept seams
 
@@ -37,6 +40,8 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Put cloud credential acquisition in `internal/credentials/cloudchain`.
 - Put safe provider runtime projections in `internal/providers/state`.
 - Put canonical response cache records in `internal/response/cache`.
+- Make `internal/proxy` depend on `CacheManager` and
+  `connectors.LeasingRegistry`, not concrete cache or registry adapters.
 - Put protocol codecs in `internal/protocol/openai` and
   `internal/protocol/openrouter`.
 - Keep composition in `internal/app` and HTTP wiring in `internal/server`.
@@ -50,6 +55,8 @@ Run the checks that match the changed behavior. Before a pull request, run:
 ```bash
 bash scripts/verify-starmap-ownership.sh
 bash scripts/verify-v1-architecture.sh
+bash scripts/test-dependency-direction-verifier.sh
+bash scripts/verify-dependency-direction.sh
 bash scripts/verify-catalog-driven-providers.sh
 bash scripts/verify-package-layout.sh
 bash scripts/verify-readme-quickstart.sh

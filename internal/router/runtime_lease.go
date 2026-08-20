@@ -43,6 +43,8 @@ func (l *legacyRuntimeLease) Get(provider string) connectors.Connector {
 	return l.registry.Get(provider)
 }
 
+func (*legacyRuntimeLease) RequiresAuthentication(string) bool { return false }
+
 func (l *legacyRuntimeLease) ResolveMaterial(
 	ctx context.Context,
 	provider string,

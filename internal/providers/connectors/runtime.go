@@ -13,6 +13,7 @@ import (
 type RuntimeLease interface {
 	Snapshot() *runtimecatalog.RoutableSnapshot
 	Get(string) Connector
+	RequiresAuthentication(string) bool
 	ResolveMaterial(context.Context, string) (credentials.Material, error)
 	Release()
 }

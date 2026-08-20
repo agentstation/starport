@@ -10,7 +10,6 @@ import (
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
-	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/stretchr/testify/require"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -174,11 +173,11 @@ type runtimeSyncFixture struct {
 
 func (r *runtimeSyncFixture) ControlPlane() *runtimecatalog.ControlPlane { return r.plane }
 
-func (r *runtimeSyncFixture) Sync(
+func (r *runtimeSyncFixture) RefreshCandidate(
 	context.Context,
-	...pkgsync.Option,
-) (*pkgsync.Result, starmap.CatalogState, error) {
-	return &pkgsync.Result{GenerationID: r.state.GenerationID}, r.state, nil
+	time.Duration,
+) (starmap.CatalogState, error) {
+	return r.state, nil
 }
 
 type runtimeRefreshConnector struct {

@@ -189,7 +189,7 @@ func (r *Registry) AcquireRuntime() (connectors.RuntimeLease, error) {
 	for {
 		generation := r.current.Load()
 		if generation == nil {
-			return nil, ErrRuntimeUnavailable
+			return nil, connectors.ErrRuntimeUnavailable
 		}
 		if generation.acquire() {
 			return &Lease{generation: generation}, nil
@@ -227,13 +227,22 @@ func (l *Lease) Get(provider string) connectors.Connector {
 	return l.generation.connector(provider)
 }
 
+// RequiresAuthentication reports the retained runtime registration policy.
+func (l *Lease) RequiresAuthentication(provider string) bool {
+	if l == nil || l.generation == nil {
+		return false
+	}
+	entry, exists := l.generation.providers[provider]
+	return exists && entry.registration.RequiresAuth
+}
+
 // ResolveMaterial resolves material from the leased generation.
 func (l *Lease) ResolveMaterial(
 	ctx context.Context,
 	provider string,
 ) (credentials.Material, error) {
 	if l == nil || l.generation == nil {
-		return credentials.Material{}, ErrRuntimeUnavailable
+		return credentials.Material{}, connectors.ErrRuntimeUnavailable
 	}
 	return l.generation.resolveMaterial(ctx, provider)
 }
@@ -256,7 +265,7 @@ func (l *Lease) BindEndpoint(
 	useOperatorOverride bool,
 ) (starmapcatalogs.ProviderOfferingEndpoint, error) {
 	if l == nil || l.generation == nil {
-		return starmapcatalogs.ProviderOfferingEndpoint{}, ErrRuntimeUnavailable
+		return starmapcatalogs.ProviderOfferingEndpoint{}, connectors.ErrRuntimeUnavailable
 	}
 	return l.generation.bindEndpoint(provider, endpoint, material, useOperatorOverride)
 }

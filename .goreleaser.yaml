@@ -13,6 +13,7 @@ builds:
       - CGO_ENABLED=0
     mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
+      - -buildvcs=true
       - -trimpath
     ldflags:
       - -s -w

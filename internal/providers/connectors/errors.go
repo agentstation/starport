@@ -37,6 +37,9 @@ var (
 
 	// ErrConnectorClosed indicates operations attempted on a closed connector
 	ErrConnectorClosed = errors.New("connector closed")
+
+	// ErrRuntimeUnavailable reports an absent provider runtime generation.
+	ErrRuntimeUnavailable = errors.New("provider runtime generation is unavailable")
 )
 
 // APIError represents an error from the provider's API

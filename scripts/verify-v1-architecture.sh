@@ -116,6 +116,8 @@ check V11 'import graph architecture fitness' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestProviderAuthenticationPackageHasNoCloudSDKImports" internal/architecture &&
     grep -R -q -E --include="*_test.go" "^func TestCloudChainPackageDoesNotMutateHTTPRequests" internal/architecture &&
     grep -R -q -E --include="*_test.go" "^func TestProductionConnectorCallsUseExecutionDeadline" internal/architecture &&
+    bash scripts/test-dependency-direction-verifier.sh &&
+    bash scripts/verify-dependency-direction.sh &&
     go test ./internal/architecture -run "^Test(ImportGraphArchitecture|ApprovedInternalPackageLayout|ProviderAuthenticationPackageHasNoCloudSDKImports|CloudChainPackageDoesNotMutateHTTPRequests|ProductionConnectorCallsUseExecutionDeadline)$" &&
     bash scripts/verify-package-layout.sh &&
     bash scripts/test-package-layout-verifier.sh

@@ -161,6 +161,21 @@ func (r *RemoteRuntime) ControlPlane() *ControlPlane {
 	return r.control
 }
 
+// RefreshCandidate returns the verified subscriber state without network I/O.
+// Remote publication and retry work belongs to Start.
+func (r *RemoteRuntime) RefreshCandidate(
+	ctx context.Context,
+	timeout time.Duration,
+) (starmap.CatalogState, error) {
+	refreshCtx, cancel, _, err := refreshContext(ctx, timeout)
+	if err != nil {
+		return starmap.CatalogState{}, err
+	}
+	defer cancel()
+	_, state, err := r.Sync(refreshCtx)
+	return state, err
+}
+
 // Sync returns the current verified subscriber state without network I/O.
 // Remote publication and retry work belongs to Start.
 func (r *RemoteRuntime) Sync(

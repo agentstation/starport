@@ -2,8 +2,10 @@ package catalog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/acquisition"
@@ -17,6 +19,10 @@ type acquisitionSyncer interface {
 	Sync(context.Context, ...pkgsync.Option) (*pkgsync.Result, error)
 	PublishObservations(context.Context, ...sources.Observation) (starmap.Publication, error)
 }
+
+// DefaultRefreshTimeout bounds local catalog acquisition when the application
+// does not configure a positive timeout.
+const DefaultRefreshTimeout = 2 * time.Minute
 
 // Runtime owns one Starmap client, its acquisition path, and Starport's
 // derived immutable routable control plane.
@@ -73,6 +79,39 @@ func (r *Runtime) ControlPlane() *ControlPlane {
 		return nil
 	}
 	return r.control
+}
+
+// RefreshCandidate acquires the standard provider and local catalog sources.
+// It returns the complete unpublished state for runtime-candidate construction.
+func (r *Runtime) RefreshCandidate(
+	ctx context.Context,
+	timeout time.Duration,
+) (starmap.CatalogState, error) {
+	refreshCtx, cancel, timeout, err := refreshContext(ctx, timeout)
+	if err != nil {
+		return starmap.CatalogState{}, err
+	}
+	defer cancel()
+	_, state, err := r.Sync(
+		refreshCtx,
+		pkgsync.WithSources(sources.ProvidersID, sources.LocalCatalogID),
+		pkgsync.WithTimeout(timeout),
+	)
+	return state, err
+}
+
+func refreshContext(
+	ctx context.Context,
+	timeout time.Duration,
+) (context.Context, context.CancelFunc, time.Duration, error) {
+	if ctx == nil {
+		return nil, nil, 0, errors.New("catalog refresh context is required")
+	}
+	if timeout <= 0 {
+		timeout = DefaultRefreshTimeout
+	}
+	refreshCtx, cancel := context.WithTimeout(ctx, timeout)
+	return refreshCtx, cancel, timeout, nil
 }
 
 // Refresh runs Starmap acquisition and publishes any new generation into the

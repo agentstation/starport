@@ -11,8 +11,6 @@ import (
 
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
-	"github.com/agentstation/starmap/pkg/sources"
-	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/availability"
@@ -603,18 +601,7 @@ func (a *App) syncCatalog(ctx context.Context) (starmap.CatalogState, error) {
 	if a == nil || a.catalogRuntime == nil {
 		return starmap.CatalogState{}, ErrCatalogRequired
 	}
-	timeout := a.config.Catalog.RefreshTimeout
-	if timeout <= 0 {
-		timeout = 2 * time.Minute
-	}
-	refreshCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	_, state, err := a.catalogRuntime.Sync(
-		refreshCtx,
-		pkgsync.WithSources(sources.ProvidersID, sources.LocalCatalogID),
-		pkgsync.WithTimeout(timeout),
-	)
-	return state, err
+	return a.catalogRuntime.RefreshCandidate(ctx, a.config.Catalog.RefreshTimeout)
 }
 
 func (a *App) refreshRuntime(ctx context.Context) error {

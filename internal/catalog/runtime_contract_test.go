@@ -5,12 +5,60 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starmap/pkg/sources"
+	pkgsync "github.com/agentstation/starmap/pkg/sync"
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/storage"
 )
+
+func TestRefreshCandidateOwnsSourceAndTimeoutPolicy(t *testing.T) {
+	client, err := starmap.New()
+	require.NoError(t, err)
+	syncer := &capturingAcquisitionSyncer{}
+	runtime, err := newRuntime(client, syncer)
+	require.NoError(t, err)
+
+	timeout := 17 * time.Second
+	state, err := runtime.RefreshCandidate(t.Context(), timeout)
+	require.NoError(t, err)
+	require.Equal(t, client.CurrentCatalogState().GenerationID, state.GenerationID)
+	require.Equal(t, []sources.ID{sources.ProvidersID, sources.LocalCatalogID}, syncer.options.Sources)
+	require.Equal(t, timeout, syncer.options.Timeout)
+	require.True(t, syncer.hasDeadline)
+
+	defaultSyncer := &capturingAcquisitionSyncer{}
+	defaultRuntime, err := newRuntime(client, defaultSyncer)
+	require.NoError(t, err)
+	_, err = defaultRuntime.RefreshCandidate(t.Context(), 0)
+	require.NoError(t, err)
+	require.Equal(t, DefaultRefreshTimeout, defaultSyncer.options.Timeout)
+}
+
+type capturingAcquisitionSyncer struct {
+	options     pkgsync.Options
+	hasDeadline bool
+}
+
+func (s *capturingAcquisitionSyncer) Sync(
+	ctx context.Context,
+	options ...pkgsync.Option,
+) (*pkgsync.Result, error) {
+	for _, option := range options {
+		option(&s.options)
+	}
+	_, s.hasDeadline = ctx.Deadline()
+	return &pkgsync.Result{}, nil
+}
+
+func (*capturingAcquisitionSyncer) PublishObservations(
+	context.Context,
+	...sources.Observation,
+) (starmap.Publication, error) {
+	return starmap.Publication{}, nil
+}
 
 func TestTenantOfferingsEnterCatalogGeneration(t *testing.T) {
 	ctx := context.Background()
