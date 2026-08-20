@@ -579,6 +579,17 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--text-sm);
     margin-bottom: var(--sp-3);
 }
 .snapshot-bar .snapshot-id { color: var(--cyan); }
+.snapshot-right { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.freshness-badges { display: inline-flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.card .freshness-badges { margin-bottom: var(--sp-2); }
+.kv-inline { margin-bottom: var(--sp-3); }
+.change-list { list-style: none; padding: 0; margin: 0 0 var(--sp-2); font-size: var(--text-xs); }
+.change-list li { padding: 2px 0; }
+.change-list.is-add li { color: var(--ok); }
+.change-list.is-remove li { color: var(--err); }
+.change-offering { font-size: var(--text-xs); padding: 1px 0 1px var(--sp-3); }
+.change-offering.is-add { color: var(--ok); }
+.change-offering.is-remove { color: var(--err); }
 .mod-icons { display: inline-flex; gap: 4px; color: var(--ink-faint); }
 .mod-icons svg { width: 13px; height: 13px; }
 .mod-icons .has { color: var(--cyan); }
