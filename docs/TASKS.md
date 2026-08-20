@@ -1,13 +1,16 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-19
+Last Updated: 2026-08-20
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-No active durable plan exists.
+- [Starport OpenRouter parity](plans/openrouter-parity-plan.html) (ORP) —
+  request log and usage accounting, catalog freshness surface, presets and
+  routing preferences, per-key budgets and limits, and side-by-side chat
+  comparison. The plan's status ledger is the task-level source of truth.
 
 ### Proposed Work
 

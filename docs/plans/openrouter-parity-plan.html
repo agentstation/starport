@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starport OpenRouter parity</title>
+<style>
+  :root { --ink:#1a1e24; --muted:#5c6570; --line:#d8dde3; --soft:#f4f6f8; --page:#fff; --accent:#2563eb; --todo:#6b7280; --active:#2563eb; --blocked:#dc2626; --done:#16a34a; --rejected:#b45309; }
+  @media (prefers-color-scheme:dark) { :root { --ink:#e5e9ee; --muted:#9aa4af; --line:#333a43; --soft:#1b2027; --page:#11151a; --accent:#60a5fa; --todo:#9aa4af; --active:#60a5fa; --blocked:#f87171; --done:#4ade80; --rejected:#fbbf24; } }
+  * { box-sizing:border-box; } body { margin:0 auto; padding:2rem 1.25rem 4rem; max-width:1120px; background:var(--page); color:var(--ink); font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  h1 { font-size:1.6rem; margin:0 0 .25rem; } h2 { font-size:1.15rem; margin:2rem 0 .5rem; border-bottom:1px solid var(--line); padding-bottom:.25rem; }
+  h3 { font-size:1rem; margin:1.25rem 0 .4rem; } code { background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:.05rem .35rem; font-size:.85em; }
+  pre { background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:.9rem 1rem; overflow-x:auto; line-height:1.45; white-space:pre-wrap; } pre code { background:none; border:0; padding:0; }
+  blockquote { margin:.75rem 0; padding:.6rem 1rem; border-left:3px solid var(--accent); background:var(--soft); }
+  table { border-collapse:collapse; width:100%; margin:.75rem 0; font-size:.9rem; } th,td { border:1px solid var(--line); padding:.35rem .5rem; text-align:left; vertical-align:top; } th { background:var(--soft); }
+  #status-line,.counts,.legend { color:var(--muted); font-size:.92rem; } .bar { height:.75rem; border:1px solid var(--line); border-radius:999px; overflow:hidden; background:var(--soft); } .bar .fill { height:100%; width:0; background:var(--done); }
+  .pair { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:1rem; } figure { margin:0; border:1px solid var(--line); border-radius:8px; padding:.75rem; background:var(--soft); } figcaption { font-weight:600; margin-bottom:.5rem; } figure svg { max-width:100%; height:auto; }
+  tr[data-status="todo"] td:nth-child(3) code { color:var(--todo); } tr[data-status="in_progress"] td:nth-child(3) code { color:var(--active); } tr[data-status="blocked"] td:nth-child(3) code { color:var(--blocked); } tr[data-status="done"] td:nth-child(3) code { color:var(--done); } tr[data-status="rejected"] td:nth-child(3) code { color:var(--rejected); }
+  @media print { body { max-width:none; padding:0; } }
+</style>
+<script>
+document.addEventListener("DOMContentLoaded",function(){var rows=document.querySelectorAll("#ledger tbody tr"),terminal={"done":1,"no-action":1,"rejected":1},closed=0,current="";rows.forEach(function(row){var status=(row.getAttribute("data-status")||"").split("(")[0].trim();if(terminal[status]){closed+=1;}if(status==="in_progress"&&!current){current=row.id+" "+row.cells[1].textContent.trim();}});var pct=rows.length?Math.round(closed/rows.length*100):0;document.querySelector("#progress .fill").style.width=pct+"%";document.querySelector("#progress .counts").textContent=closed+" of "+rows.length+" tasks terminal ("+pct+"%)."+(current?" In progress: "+current:"");});
+</script>
+</head>
+<body>
+<header id="overview">
+  <h1>Starport OpenRouter parity</h1>
+  <div id="status-line">
+    <div>Status: <code data-plan-status="active">active</code>.</div>
+    <div>Owner: this plan. Created: 2026-08-20. Activation: owner mandate of 2026-08-20 ("we need to be an enterprise LLM gateway that is a drop-in replacement for OpenRouter - take all this on").</div>
+    <div>Baseline: <code>main@ca10f5e</code>. Feature base: <code>codex/console-revamp@67a800a</code> (PR #125, open).</div>
+    <div>Proof root: <code>docs/plans/proof/openrouter-parity/</code></div>
+    <div>Next action: ORP1 — build <code>internal/usage</code> (record model, time-keyed repository, aggregate counters, contract tests) on <code>codex/orp-1-usage-repo</code> from <code>codex/console-revamp</code>.</div>
+  </div>
+  <section id="outcome"><h2>Outcome</h2>
+    <blockquote>Starport records every inference request with tokens, provider, latency, and Starmap-derived cost, and serves that history through an activity API and a console usage page. The console shows what each catalog refresh changed and how fresh the catalog is. A request can name a stored preset, order providers by price or latency, and cap price. An operator can give a key model limits, an expiry, and spend and token budgets that the gateway enforces. Every surface degrades loudly: a missing price, a stale catalog, or an exhausted budget is visible, never silent.</blockquote>
+  </section>
+  <section id="progress"><h2>Progress</h2><div class="bar"><div class="fill"></div></div><p class="counts">The status ledger is the progress source of truth.</p></section>
+  <section id="architecture"><h2>Architecture</h2>
+    <p class="legend"><code>A → B</code> means A feeds B. Dashed boxes are new concept seams this plan adds.</p>
+    <div class="pair">
+      <figure><figcaption>Before: usage and catalog facts die at the proxy boundary</figcaption>
+        <svg viewBox="0 0 520 250" role="img" aria-label="Current data flow">
+          <defs><marker id="before-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+          <g fill="none" stroke="currentColor"><rect x="10" y="18" width="220" height="50" rx="6"/><rect x="290" y="18" width="220" height="50" rx="6"/><rect x="10" y="170" width="220" height="50" rx="6"/><rect x="290" y="170" width="220" height="50" rx="6"/></g>
+          <g fill="currentColor" text-anchor="middle">
+            <text x="120" y="39">router: usage + attempts</text>
+            <text x="120" y="57" font-size="11">ModelUsed, Metadata, snapshot</text>
+            <text x="400" y="39">proxy: drops metadata</text>
+            <text x="400" y="57" font-size="11">response body only survives</text>
+            <text x="120" y="191">catalog generations on disk</text>
+            <text x="120" y="209" font-size="11">manifest + provenance unread</text>
+            <text x="400" y="191">console: hardcoded zeros</text>
+            <text x="400" y="209" font-size="11">metrics stub, no usage view</text>
+          </g>
+          <g stroke="currentColor" marker-end="url(#before-arrow)"><line x1="230" y1="43" x2="286" y2="43"/><line x1="400" y1="68" x2="400" y2="166"/></g>
+        </svg>
+      </figure>
+      <figure><figcaption>After: concept-owned records feed API and console</figcaption>
+        <svg viewBox="0 0 520 250" role="img" aria-label="Target data flow">
+          <defs><marker id="after-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+          <g fill="none" stroke="currentColor"><rect x="10" y="18" width="220" height="50" rx="6"/><rect x="290" y="18" width="220" height="50" rx="6" stroke-dasharray="5 4"/><rect x="10" y="170" width="220" height="50" rx="6" stroke-dasharray="5 4"/><rect x="290" y="170" width="220" height="50" rx="6"/></g>
+          <g fill="currentColor" text-anchor="middle">
+            <text x="120" y="39">proxy completion hook</text>
+            <text x="120" y="57" font-size="11">usage + provider + cost per request</text>
+            <text x="400" y="39">internal/usage repository</text>
+            <text x="400" y="57" font-size="11">usage:v1: records + budget counters</text>
+            <text x="120" y="191">internal/catalog freshness</text>
+            <text x="120" y="209" font-size="11">generation diff + manifest surface</text>
+            <text x="400" y="191">activity API + console</text>
+            <text x="400" y="209" font-size="11">usage page, freshness, budgets</text>
+          </g>
+          <g stroke="currentColor" marker-end="url(#after-arrow)"><line x1="230" y1="43" x2="286" y2="43"/><line x1="400" y1="68" x2="400" y2="166"/><line x1="230" y1="195" x2="286" y2="195"/></g>
+        </svg>
+      </figure>
+    </div>
+  </section>
+</header>
+<main>
+  <section id="scope"><h2>Scope</h2>
+    <p><strong>Owns:</strong> per-request usage recording and cost computation, the activity and metrics API, catalog freshness and generation-diff surfaces, preset management and request-side preset references, completion of the OpenRouter <code>provider</code> preference object, per-key limits and budgets, and the console pages for usage, freshness, presets, routing preferences, budgets, and side-by-side chat comparison.</p>
+    <p><strong>Does not own:</strong> provider, model, price, or quantization facts (Starmap owns facts; a Starmap plan owns adding data-policy or quantization facts); SSO, RBAC, orgs, or any tenancy above the API key (a future enterprise-identity plan); OpenTelemetry export and webhooks (a future observability plan); billing, invoicing, or a credits ledger (a future commercial plan); PR #125 merge (owner decision).</p>
+    <p><strong>Non-goals:</strong> SQL storage, WebSocket log streaming, moderation, compatibility paths or legacy storage prefixes, and provider connector additions.</p>
+  </section>
+  <section id="findings"><h2>Findings ledger</h2>
+    <table><thead><tr><th>ID</th><th>Classification</th><th>Evidence</th><th>Owning task</th></tr></thead><tbody>
+      <tr><td>F1</td><td>P0, high</td><td>Nothing records per-request usage. <code>router.Metadata</code>, <code>ModelUsed</code>/<code>ProviderUsed</code>, and the catalog snapshot are dropped at <code>internal/proxy/proxy.go:303-322</code>; streaming exposes neither usage nor route to the gateway.</td><td>ORP1, ORP2</td></tr>
+      <tr><td>F2</td><td>P0, high</td><td><code>/api/v1/admin/metrics</code> returns a hardcoded all-zeros literal (<code>admin.go:274-295</code>) and the console renders it as truth; both <code>/usage/*</code> endpoints return 501.</td><td>ORP3</td></tr>
+      <tr><td>F3</td><td>P1, high</td><td><code>internal/presets</code> is complete but has zero non-test importers; no controller, route, or request-side reference; <code>Validate</code> requires an ID while storage keys on name.</td><td>ORP7</td></tr>
+      <tr><td>F4</td><td>P1, high</td><td><code>provider.sort</code>, <code>max_price</code>, <code>data_collection</code>, <code>zdr</code>, <code>require_parameters</code> parsed then dropped at <code>chat.go:71-82</code>; <code>provider.quantizations</code> is a hard 400 via strict decode — breaks drop-in SDK compatibility.</td><td>ORP8</td></tr>
+      <tr><td>F5</td><td>P1, high</td><td>Model variants <code>:free</code>/<code>:nitro</code>/<code>:floor</code> unimplemented; a suffixed ID reaches the planner as a literal and fails with a zero-rejection <code>ErrNoCandidate</code>.</td><td>ORP8</td></tr>
+      <tr><td>F6</td><td>P1, high</td><td>The console models page "refresh catalog" button calls the credential-reconcile endpoint and toasts "Catalog refresh triggered" (<code>models.js:63-78</code>); no genuine catalog refresh endpoint exists.</td><td>ORP5</td></tr>
+      <tr><td>F7</td><td>P2, high</td><td>Every catalog generation is retained with full payload, manifest (degraded flag, per-source observations, validation), and field-level provenance incl. <code>PreviousValue</code> — none of it read or exposed; three distinct counters get conflated in the console.</td><td>ORP5, ORP6</td></tr>
+      <tr><td>F8</td><td>P1, high</td><td>Anthropic streaming reports prompt tokens as 0 (<code>message_start</code> unmodeled); cache read/write token counts dropped at every connector; Google's cached count parsed then unread.</td><td>ORP2</td></tr>
+      <tr><td>F9</td><td>P1, high</td><td>Admin key API cannot set <code>AllowedModels</code>, <code>ExpiresAt</code>, or any limit; <code>APIKey.RateLimitConfig</code> persisted but never read; rate limiting is one global fixed window; no budget concept; 402 path wired but unreachable.</td><td>ORP10</td></tr>
+      <tr><td>F10</td><td>P2, high</td><td><code>BaseHandler.getRequestID</code> always returns "" (untyped context key, <code>base.go:61</code>).</td><td>ORP2</td></tr>
+      <tr><td>F11</td><td>P2, medium</td><td>Catalog refresh failure is a lone Warn log; <code>/health/ready</code> unconditionally ok; no staleness threshold; Starmap readiness and subscriber-health APIs unwired.</td><td>ORP5</td></tr>
+      <tr><td>F12</td><td>P3, medium</td><td>Dead shapes: <code>ratelimit.TokenBucket</code>, hot-reload <code>RateLimitRules</code> (loaded, watched, never consumed), inert <code>RateLimitingConfig</code> token fields.</td><td>ORP10</td></tr>
+    </tbody></table>
+  </section>
+  <section id="decisions"><h2>Decisions</h2>
+    <table><thead><tr><th>ID</th><th>Decision</th><th>Re-open condition</th></tr></thead><tbody>
+      <tr><td>D1</td><td>Usage records live in the KV store under <code>usage:v1:</code> with time-encoded keys (<code>usage:v1:key:&lt;b64 keyID&gt;:ts:&lt;20-digit zero-padded unix-nanos&gt;:&lt;requestID&gt;</code>) plus atomic aggregate counters for budgets. No SQL. Retention via TTL, default 30 days, configurable.</td><td>A released deployment needs cross-key time-range queries the scan cannot serve.</td></tr>
+      <tr><td>D2</td><td>Cost is computed at request completion from the request-scoped <code>RoutableSnapshot.Offering</code> pricing (input, output, reasoning, cache read/write). A missing price yields an absent cost plus a recorded reason — never zero.</td><td>Starmap changes the pricing schema.</td></tr>
+      <tr><td>D3</td><td>Documented OpenRouter <code>provider</code> fields Starport cannot yet enforce (<code>quantizations</code>, <code>data_collection</code>, <code>zdr</code>, <code>require_parameters</code>, <code>experimental</code>) are accepted and recorded as unenforced in the response metadata rather than rejected — a drop-in replacement must not 400 on documented fields. Enforcement arrives when Starmap owns the backing facts.</td><td>Starmap publishes data-policy or quantization facts.</td></tr>
+      <tr><td>D4</td><td>Variants map to routing policy: <code>:floor</code> → price sort, <code>:nitro</code> → latency sort (Starport measures latency, not throughput; deviation documented), <code>:free</code> → only zero-price offerings.</td><td>Starport gains a throughput measurement.</td></tr>
+      <tr><td>D5</td><td>Preset config is a typed subset — <code>model</code>, <code>models</code>, <code>provider</code> preferences, <code>system</code> prompt, and sampling parameter overrides — referenced by <code>"model": "@preset/&lt;name&gt;"</code> or a <code>preset</code> body field, matching OpenRouter semantics. Request-supplied fields win over preset fields.</td><td>OpenRouter changes preset semantics.</td></tr>
+      <tr><td>D6</td><td>Budgets enforce from local aggregates in fixed UTC windows (daily, weekly, monthly). Spend counts in integer nano-USD. Exceeded budget → 402 <code>ErrInsufficientQuota</code>. A storage read error allows the request and logs an error: local-first availability wins over enforcement.</td><td>An operator asks for fail-closed enforcement.</td></tr>
+      <tr><td>D7</td><td>The plan verifier <code>scripts/verify-openrouter-parity.sh</code> joins the required evidence list in CLAUDE.md at ORP0 and CI at ORP13, honoring the repository rule that every verify gate belongs to CI, the list, or both.</td><td>—</td></tr>
+    </tbody></table>
+  </section>
+  <section id="invariants"><h2>Invariants</h2>
+    <ol>
+      <li>Starmap remains the only source of provider, model, and price facts. No local price tables, provider switches, or model lists.</li>
+      <li>Usage recording never blocks, delays, or fails an inference request. Capture is best-effort; a capture failure logs and drops.</li>
+      <li>Costs and freshness degrade loudly. A missing price, an unpriced route, or a stale catalog is surfaced with a reason, never rendered as zero or fresh.</li>
+      <li>Tenant isolation holds: a non-admin key reads only its own activity; the response cache and BYOK scoping rules do not weaken.</li>
+      <li>New storage namespaces are versioned (<code>usage:v1:</code>); no legacy prefixes or compatibility paths.</li>
+      <li>OpenRouter wire compatibility does not regress: the pinned Python, TypeScript, and Go SDK gates stay green, and documented OpenRouter request fields never 400.</li>
+      <li>All changes reach <code>main</code> through pull requests with the required evidence checks green.</li>
+    </ol>
+  </section>
+  <section id="ledger-section"><h2>Status ledger</h2>
+    <table id="ledger"><thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
+      <tr id="ORP0" data-status="done"><td>ORP0</td><td>Baseline, proof root, red verifier</td><td><code>done</code></td><td>Verifier red: <code>Summary: 0 passed, 16 failed</code>. Proof: <code>proof/openrouter-parity/ORP0.md</code>. Research preserved under <code>proof/openrouter-parity/research/</code>. Docs-only diff.</td></tr>
+      <tr id="ORP1" data-status="in_progress"><td>ORP1</td><td>Usage record model and repository</td><td><code>in_progress</code></td><td></td></tr>
+      <tr id="ORP2" data-status="todo"><td>ORP2</td><td>Request capture pipeline and cost computation</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP3" data-status="todo"><td>ORP3</td><td>Activity and metrics API</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP4" data-status="todo"><td>ORP4</td><td>Console usage page</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP5" data-status="todo"><td>ORP5</td><td>Catalog freshness service and API</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP6" data-status="todo"><td>ORP6</td><td>Console catalog freshness surface</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP7" data-status="todo"><td>ORP7</td><td>Preset management and request references</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP8" data-status="todo"><td>ORP8</td><td>Provider preference completion and variants</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP9" data-status="todo"><td>ORP9</td><td>Console preset and routing controls</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP10" data-status="todo"><td>ORP10</td><td>Per-key limits and budgets</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP11" data-status="todo"><td>ORP11</td><td>Console key limits and budgets UI</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP12" data-status="todo"><td>ORP12</td><td>Chat comparison mode</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP13" data-status="todo"><td>ORP13</td><td>Closeout: docs, CI gate, green verifier</td><td><code>todo</code></td><td></td></tr>
+      <tr id="ORP14" data-status="todo"><td>ORP14</td><td>Cleanup after final merge</td><td><code>todo</code></td><td></td></tr>
+    </tbody></table>
+  </section>
+  <section id="tasks"><h2>Tasks</h2>
+    <p>Every task runs the repository's required evidence checks before its pull request (the seven <code>scripts/verify-*.sh</code> gates, <code>go test ./...</code>, <code>go vet ./...</code>, <code>make lint</code>, <code>make build</code>, <code>bash scripts/smoke-openrouter-sdks.sh</code>) plus <code>autoreview --gate pre-pr --mode auto</code>. Task verification lists only what is additional. Branches use the <code>codex/orp-&lt;n&gt;-&lt;slug&gt;</code> pattern, based on <code>codex/console-revamp</code> until PR #125 merges, then rebased onto <code>main</code>.</p>
+
+    <h3>ORP0 Baseline, proof root, red verifier</h3>
+    <ul>
+      <li>Problem: no durable baseline, proof root, or executable definition of done exists for this campaign.</li>
+      <li>Owning seam and paths: <code>docs/plans/</code>, <code>scripts/verify-openrouter-parity.sh</code>, <code>CLAUDE.md</code>.</li>
+      <li>Steps: 1. Create <code>docs/plans/proof/openrouter-parity/</code> and copy the four research reports (usage, presets, routing, catalog) into <code>research/</code>. 2. Author <code>scripts/verify-openrouter-parity.sh</code> with conditions ORP-V01–V16 and output <code>Summary: N passed, M failed</code>. 3. Run it and record the red result as fail-before evidence. 4. Register the script in the CLAUDE.md required evidence list with a note that it stays red until ORP13. 5. Update <code>docs/plans/README.md</code> and <code>docs/TASKS.md</code> Active Work.</li>
+      <li>Acceptance: the verifier exists, runs, and reports 16 conditions with ≥14 failed at baseline; no production behavior changes.</li>
+      <li>Fail-before: <code>bash scripts/verify-openrouter-parity.sh</code> is red by construction.</li>
+      <li>Verification: <code>bash scripts/verify-openrouter-parity.sh; git diff --stat</code> shows docs, scripts, and CLAUDE.md only.</li>
+    </ul>
+
+    <h3>ORP1 Usage record model and repository</h3>
+    <ul>
+      <li>Problem: no concept owns per-request usage records (F1).</li>
+      <li>Owning seam and paths: new <code>internal/usage</code> (model.go, repository.go, repository_test.go); <code>internal/architecture/import_graph_test.go</code>.</li>
+      <li>Steps: 1. Define <code>Record</code>: request ID, key ID, timestamp, protocol, model requested, model used, provider, operation, status (ok, error class, cancelled), streaming flag, tokens (input, output, total, reasoning, cache read, cache write), latency, attempts, cache status, cost in nano-USD with currency and a <code>CostUnavailableReason</code>. 2. Build the repository on <code>storage.KVStore</code> per the credentials-repository convention: D1 key layout, <code>Put</code>, <code>ListByKey</code> (time-descending, limit + before-cursor), <code>ListAll</code> (admin), TTL retention from config. 3. Add atomic aggregate counters per key and UTC window (requests, tokens, nano-USD spend) via <code>Increment</code>, TTL'd to window end + retention. 4. Register the package in the import-graph architecture test. 5. Contract tests via <code>repotest.Run</code> across memory, badger, valkey.</li>
+      <li>Acceptance: <code>TestRepositoryPutAndListByKey</code>, <code>TestListByKeyOrdersNewestFirstAcrossBackends</code>, <code>TestAggregateCountersAccumulate</code>, <code>TestRetentionTTLApplied</code> pass on memory and badger (valkey UNVERIFIED without <code>TEST_VALKEY_URL</code>).</li>
+      <li>Fail-before: package absent — <code>go test ./internal/usage/</code> fails to resolve.</li>
+      <li>Verification: <code>go test ./internal/usage/ ./internal/architecture/ -run 'Usage|ImportGraph' -count=1</code>.</li>
+    </ul>
+
+    <h3>ORP2 Request capture pipeline and cost computation</h3>
+    <ul>
+      <li>Problem: usage, provider identity, and attempt metadata die at the proxy boundary; streaming reports nothing; token parsing has accuracy defects (F1, F8, F10).</li>
+      <li>Owning seam and paths: <code>internal/proxy</code> (completion hook), <code>internal/providers/connectors</code> (usage fields), <code>internal/inference/types.go</code>, <code>internal/server/controllers/base.go</code>, <code>internal/app</code> (wiring).</li>
+      <li>Steps: 1. Extend <code>inference.Usage</code> and <code>connectors.Usage</code> with cache read/write tokens; parse OpenAI <code>prompt_tokens_details</code>, Anthropic cache fields and <code>message_start</code> input tokens (fixes the zero-prompt-token stream), and read Google's cached count. 2. Stop dropping metadata: carry <code>ModelUsed</code>, <code>ProviderUsed</code>, attempts, and routing duration on <code>proxy.ChatCompletionResponse</code>, and give the stream path a completion callback that latches usage, model, and provider. 3. Compute cost per D2 at completion from the request-scoped snapshot offering. 4. Write the usage record best-effort (goroutine, bounded, never blocking the response) for chat and embeddings, streaming and not, including error outcomes. 5. Fix <code>getRequestID</code> to use <code>middleware.GetReqID</code> so records carry the real request ID.</li>
+      <li>Acceptance: <code>TestChatCompletionWritesUsageRecord</code>, <code>TestStreamingChatWritesUsageRecordWithProvider</code>, <code>TestUsageRecordCostFromSnapshotPricing</code>, <code>TestUsageRecordCostUnavailableReason</code>, <code>TestUsageCaptureFailureDoesNotFailRequest</code>, <code>TestAnthropicStreamReportsPromptTokens</code> pass.</li>
+      <li>Fail-before: <code>TestChatCompletionWritesUsageRecord</code> red before the hook lands.</li>
+      <li>Verification: <code>go test ./internal/proxy/ ./internal/providers/connectors/ ./internal/server/... -count=1</code>; live check: one chat request against a dev gateway produces one listed record with nonzero tokens and a cost.</li>
+    </ul>
+
+    <h3>ORP3 Activity and metrics API</h3>
+    <ul>
+      <li>Problem: no HTTP surface serves request history; admin metrics are a zero literal; the two usage endpoints 501 (F2).</li>
+      <li>Owning seam and paths: <code>internal/server/controllers</code> (new activity controller), <code>internal/server/routes.go</code>, <code>internal/server/dto</code> (list envelope), <code>internal/console/static/js/api.js</code>.</li>
+      <li>Steps: 1. Add <code>GET /api/v1/activity</code> — the authenticated key's records, filters <code>model</code>, <code>provider</code>, <code>status</code>, <code>since</code>/<code>until</code>, cursor pagination via a shared dto list envelope. 2. Add <code>GET /api/v1/admin/activity</code> with an additional <code>key_id</code> filter. 3. Replace the admin metrics literal with real aggregates from usage counters (requests, errors, tokens, spend, latency percentiles from records). 4. Implement <code>GET /api/v1/keys/{key_id}/usage/provider-keys</code> from records grouped by credential owner; retire the comparison 501 with an explicit 410 decision or implement it from the same aggregates. 5. Scope rules: <code>activity:read</code> added to defaults; admin surface behind <code>requireAdmin</code>.</li>
+      <li>Acceptance: <code>TestActivityListsOwnKeyOnly</code>, <code>TestActivityFiltersAndPagination</code>, <code>TestAdminActivityFiltersByKey</code>, <code>TestAdminMetricsReflectRecordedUsage</code>, <code>TestProviderKeyUsageAggregates</code> pass; no 501 remains under <code>/usage/</code>.</li>
+      <li>Fail-before: <code>curl /api/v1/activity</code> → 404 recorded in proof.</li>
+      <li>Verification: <code>go test ./internal/server/... -count=1</code>; live curl transcript in proof file.</li>
+    </ul>
+
+    <h3>ORP4 Console usage page</h3>
+    <ul>
+      <li>Problem: the console has no usage view and renders hardcoded zeros (F2).</li>
+      <li>Owning seam and paths: <code>internal/console</code> (PagePaths + new <code>static/js/pages/usage.js</code>), <code>overview.js</code>, <code>api.js</code>.</li>
+      <li>Steps: 1. Add <code>/usage</code> to PagePaths and the nav. 2. Request-log table: time, model, provider, status, tokens, latency, cost, cache badge; filters for model, provider, status, time range; cursor paging; per-row detail drawer with attempts. 3. Summary strip: requests, tokens, spend for the filtered window, from real aggregates. 4. Point the overview metrics card at real metrics; show absent cost per invariant 3 with the recorded reason.</li>
+      <li>Acceptance: with a dev gateway and recorded traffic, the usage page lists real requests with costs; the overview no longer shows constant zeros; empty and error states render.</li>
+      <li>Fail-before: no <code>/usage</code> route (404) recorded in proof.</li>
+      <li>Verification: <code>go test ./internal/console/ -count=1</code>; browser walkthrough with screenshots in the proof file.</li>
+    </ul>
+
+    <h3>ORP5 Catalog freshness service and API</h3>
+    <ul>
+      <li>Problem: freshness, diff, manifest, and provenance data is durable but unread; no catalog refresh endpoint; console mislabels credential reconcile (F6, F7, F11).</li>
+      <li>Owning seam and paths: <code>internal/catalog</code> (freshness/diff service, generation index), <code>internal/server/controllers</code> + <code>routes.go</code>, <code>internal/app</code>.</li>
+      <li>Steps: 1. In <code>internal/catalog</code>, read the accepted generation's manifest (degraded, reasons, completeness, per-source observations, validation) and expose it with generation ID, generated-at, age, sequence, and availability revision as a snapshot-metadata value. 2. Add a diff service: previous accepted generation vs current — models added/removed, offerings added/removed, price deltas (using semantic checksum to skip provenance-only churn); maintain a small ordered generation index record on commit to avoid full scans. 3. New routes: <code>GET /api/v1/catalog</code> (metadata, <code>models:read</code> scope), <code>GET /api/v1/catalog/changes</code> (latest diff), <code>POST /api/v1/admin/catalog/refresh</code> invoking the real acquisition path with a summary result. 4. Fix <code>models.js</code>/<code>providers.js</code> so the catalog button hits the catalog endpoint and the credential button stays labeled correctly. 5. Log successful refresh at Info with the generation delta.</li>
+      <li>Acceptance: <code>TestCatalogMetadataExposesManifest</code>, <code>TestCatalogDiffModelsAndPrices</code>, <code>TestCatalogRefreshEndpointActivatesGeneration</code>, <code>TestCatalogDiffSkipsProvenanceOnlyChange</code> pass; metadata visible with a <code>models:read</code> key.</li>
+      <li>Fail-before: <code>curl /api/v1/catalog</code> → 404 recorded in proof.</li>
+      <li>Verification: <code>go test ./internal/catalog/ ./internal/server/... -count=1</code>.</li>
+    </ul>
+
+    <h3>ORP6 Console catalog freshness surface</h3>
+    <ul>
+      <li>Problem: the console shows a bare generation ID with a conflated revision number and no freshness, coverage, or change information (F7).</li>
+      <li>Owning seam and paths: <code>internal/console</code> (<code>models.js</code>, <code>overview.js</code>, new changes view).</li>
+      <li>Steps: 1. Freshness bar on models and overview: generated-at, age, degraded badge with reasons, completeness — loud when stale or degraded per invariant 3. 2. Changes view: models added/removed and price deltas from <code>/api/v1/catalog/changes</code>, with per-provider coverage. 3. Name the counters distinctly (sequence vs availability revision) and drop the conflated display.</li>
+      <li>Acceptance: with a refreshed dev gateway the console shows age and the last diff; a degraded generation renders its badge (fixture-driven test or recorded walkthrough).</li>
+      <li>Fail-before: current console shows only <code>snapshot &lt;id&gt; · rev &lt;n&gt;</code> — screenshot in proof.</li>
+      <li>Verification: <code>go test ./internal/console/ -count=1</code>; browser walkthrough in proof.</li>
+    </ul>
+
+    <h3>ORP7 Preset management and request references</h3>
+    <ul>
+      <li>Problem: presets are built but unwired, unreachable, and unreferencable (F3).</li>
+      <li>Owning seam and paths: <code>internal/presets</code> (typed config, ID/name reconciliation), <code>internal/server/controllers</code> + <code>routes.go</code>, <code>internal/protocol/openrouter</code> + <code>internal/proxy</code> (reference resolution), <code>internal/app</code>.</li>
+      <li>Steps: 1. Type the preset config per D5; reconcile ID vs name keying (name is the reference; drop or derive ID). 2. REST: CRUD under <code>/api/v1/presets</code> (read for authenticated keys, write behind admin or a <code>presets:write</code> scope), revision-checked updates. 3. Resolve <code>"model": "@preset/&lt;name&gt;"</code> and a <code>preset</code> body field at the proxy boundary; merge per D5 (request wins); unknown preset → 404-equivalent protocol error. 4. Wire the repository in <code>internal/app</code>. 5. Correct the stale prefix note in <code>internal/storage/README.md</code>.</li>
+      <li>Acceptance: <code>TestPresetCRUDEndpoints</code>, <code>TestChatResolvesPresetReference</code>, <code>TestPresetRequestFieldsWin</code>, <code>TestUnknownPresetRejected</code> pass.</li>
+      <li>Fail-before: <code>@preset/</code> reference returns a model-not-found error — recorded in proof.</li>
+      <li>Verification: <code>go test ./internal/presets/ ./internal/proxy/ ./internal/server/... -count=1</code>.</li>
+    </ul>
+
+    <h3>ORP8 Provider preference completion and variants</h3>
+    <ul>
+      <li>Problem: five parsed provider fields are silently dropped, <code>quantizations</code> 400s, variants are absent (F4, F5).</li>
+      <li>Owning seam and paths: <code>internal/protocol/openrouter</code>, <code>internal/server/controllers/chat.go</code>, <code>internal/proxy</code>, <code>internal/router</code>, <code>internal/routing</code>.</li>
+      <li>Steps: 1. Thread <code>sort</code> ("price", "latency", "throughput"→latency per D4) into a per-request <code>OptimizationPolicy</code>, defined precedence over the server default. 2. Implement <code>max_price</code> as a planner constraint with a new <code>price_exceeded</code> rejection code. 3. Add <code>quantizations</code> to the wire struct; accept <code>data_collection</code>, <code>zdr</code>, <code>require_parameters</code>, <code>experimental</code>, <code>quantizations</code> per D3 with unenforced-field reporting. 4. Parse model variants per D4 before planning; strip the suffix for catalog matching. 5. Fix the zero-rejection <code>ErrNoCandidate</code> shape so unmatched models report a model-level rejection. 6. Unify order/only/ignore semantics between the catalog planner and the registry fallback (fix the legacy only-ignores-ignore quirk).</li>
+      <li>Acceptance: <code>TestProviderSortPrice</code>, <code>TestProviderSortLatency</code>, <code>TestMaxPriceRejectsExpensiveRoutes</code>, <code>TestQuantizationsAccepted</code>, <code>TestVariantFloorSortsByPrice</code>, <code>TestVariantFreeFiltersZeroPrice</code>, <code>TestUnmatchedModelReportsRejection</code>, <code>TestOnlyAndIgnoreCompose</code> pass; SDK smoke gates stay green.</li>
+      <li>Fail-before: <code>provider.quantizations</code> → 400 and <code>:floor</code> → zero-rejection ErrNoCandidate, both recorded in proof.</li>
+      <li>Verification: <code>go test ./internal/routing/ ./internal/router/ ./internal/proxy/ ./internal/protocol/... -count=1; bash scripts/smoke-openrouter-sdks.sh</code>.</li>
+    </ul>
+
+    <h3>ORP9 Console preset and routing controls</h3>
+    <ul>
+      <li>Problem: no UI manages presets or expresses routing preferences.</li>
+      <li>Owning seam and paths: <code>internal/console</code> (new <code>presets.js</code> page, chat page controls, PagePaths).</li>
+      <li>Steps: 1. Presets page: list, create, edit, delete with the typed config form. 2. Chat page: provider order/only/ignore, sort, and preset picker feeding the request. 3. Show which preference fields were unenforced per D3 in the response metadata drawer.</li>
+      <li>Acceptance: browser walkthrough — create a preset, use it from chat via <code>@preset/</code>, see provider preferences applied in the response metadata.</li>
+      <li>Fail-before: no <code>/presets</code> route (404) in proof.</li>
+      <li>Verification: <code>go test ./internal/console/ -count=1</code>; walkthrough in proof.</li>
+    </ul>
+
+    <h3>ORP10 Per-key limits and budgets</h3>
+    <ul>
+      <li>Problem: keys cannot carry limits; budgets do not exist; the 402 path is unreachable (F9, F12).</li>
+      <li>Owning seam and paths: <code>internal/identity</code> (typed limits), <code>internal/server/controllers/admin.go</code>, <code>internal/server/rate_limit.go</code>, <code>internal/ratelimit</code>, <code>internal/usage</code> (budget reads), <code>internal/server/middleware.go</code>.</li>
+      <li>Steps: 1. Replace untyped <code>RateLimitConfig</code> with a typed <code>Limits</code> struct: requests/window override, budgets (nano-USD spend, tokens) with interval per D6. 2. Admin key API: set and update <code>allowed_models</code>, <code>expires_at</code>, and <code>limits</code> on create and update; real pagination on list. 3. Enforce per-key request limits (key override beats the global window). 4. Enforce budgets pre-request from ORP1 aggregates per D6 → 402 with an OpenRouter-shaped error body; expose remaining budget headers. 5. Delete dead shapes: <code>TokenBucket</code>, hot-reload rate rules, inert config fields — or wire them; decide in-task and record. 6. Key detail response includes current-window consumption.</li>
+      <li>Acceptance: <code>TestAdminKeySetsLimitsAndExpiry</code>, <code>TestPerKeyRequestLimitOverridesGlobal</code>, <code>TestSpendBudgetExhaustionReturns402</code>, <code>TestTokenBudgetExhaustionReturns402</code>, <code>TestBudgetStorageErrorFailsOpen</code>, <code>TestKeyListPagination</code> pass.</li>
+      <li>Fail-before: <code>TestSpendBudgetExhaustionReturns402</code> red before enforcement.</li>
+      <li>Verification: <code>go test ./internal/identity/ ./internal/ratelimit/ ./internal/server/... ./internal/usage/ -count=1</code>.</li>
+    </ul>
+
+    <h3>ORP11 Console key limits and budgets UI</h3>
+    <ul>
+      <li>Problem: the key form collects only a name and an admin checkbox.</li>
+      <li>Owning seam and paths: <code>internal/console/static/js/pages/keys.js</code>, <code>api.js</code>.</li>
+      <li>Steps: 1. Key create/edit: allowed models, expiry, request limit, spend and token budgets with interval. 2. Key rows: remaining budget and current-window consumption with an exhausted badge. 3. Surface 402 and 429 states clearly in chat and usage views.</li>
+      <li>Acceptance: browser walkthrough — set a small budget, exhaust it, see the 402 and the exhausted badge.</li>
+      <li>Fail-before: current form screenshot (name-only) in proof.</li>
+      <li>Verification: <code>go test ./internal/console/ -count=1</code>; walkthrough in proof.</li>
+    </ul>
+
+    <h3>ORP12 Chat comparison mode</h3>
+    <ul>
+      <li>Problem: no side-by-side model comparison exists (roadmap item 3).</li>
+      <li>Owning seam and paths: <code>internal/console/static/js/pages/chat.js</code> (+ helpers).</li>
+      <li>Steps: 1. Compare toggle: 2–4 models answer one prompt in parallel streamed columns. 2. Per-column model, provider, latency, tokens, and cost computed from catalog pricing (absent → reason, per invariant 3). 3. Preserve single-model chat behavior unchanged.</li>
+      <li>Acceptance: browser walkthrough — one prompt, three models, streaming columns with per-model cost and latency; single-model mode regression-checked.</li>
+      <li>Fail-before: no compare control in current chat page (screenshot).</li>
+      <li>Verification: <code>go test ./internal/console/ -count=1</code>; walkthrough in proof.</li>
+    </ul>
+
+    <h3>ORP13 Closeout: docs, CI gate, green verifier</h3>
+    <ul>
+      <li>Problem: the campaign needs a durable record and its verifier needs a permanent home.</li>
+      <li>Owning seam and paths: <code>docs/ARCHITECTURE.md</code>, <code>docs/TASKS.md</code>, <code>README.md</code>, <code>.github/workflows/ci.yml</code>, the design-review artifact.</li>
+      <li>Steps: 1. Update ARCHITECTURE.md: usage seam, catalog freshness, presets, preference completion, budgets; move shipped items out of "Not implemented". 2. TASKS.md completed rows per PR. 3. Add the verifier to CI per D7. 4. Update the published design-review artifact roadmap section to shipped. 5. Record the closeout proof: branch, PRs, check roster, verifier output.</li>
+      <li>Acceptance: <code>bash scripts/verify-openrouter-parity.sh</code> reports <code>Summary: 16 passed, 0 failed</code>; CI runs it; docs match shipped behavior.</li>
+      <li>Fail-before: verifier red at ORP0 (recorded).</li>
+      <li>Verification: full required evidence list plus the verifier, all green, recorded in proof.</li>
+    </ul>
+
+    <h3>ORP14 Cleanup after final merge</h3>
+    <ul>
+      <li>Trigger: the merge of this plan's final pull request.</li>
+      <li>Steps: delete this plan file, its proof root, and its index entry; remove the Active Work pointer from TASKS.md; delete merged <code>codex/orp-*</code> branches.</li>
+      <li>Verification: <code>git log</code> shows the cleanup commit; <code>docs/plans/README.md</code> lists no active plan.</li>
+    </ul>
+  </section>
+  <section id="goal"><h2>Goal</h2>
+<pre><code>Execute docs/plans/openrouter-parity-plan.html to completion. This is a
+whole-plan goal, not a single-task goal. Read the plan fully, then read:
+docs/ARCHITECTURE.md, docs/TASKS.md, CLAUDE.md, and
+docs/plans/proof/openrouter-parity/research/ (four seam-mapping reports).
+Work in /Users/jack/src/github.com/agentstation/starport on per-task
+branches codex/orp-&lt;n&gt;-&lt;slug&gt;, based on codex/console-revamp until PR #125
+merges and on main afterward. Chat history is not progress state. Resume
+from the status ledger, the execution log, and git state. If compaction
+happens, continue from the plan and git state rather than restarting.
+Loop: keep one task in_progress, implement at the owning seam, capture
+fail-before evidence, run the verification commands, commit the work per
+the commit policy, write the proof file, append the execution log with the
+work commit, mark the task terminal with evidence, commit the plan update
+the same way, then advance to the next task. Decide rather than ask. Mark
+a wrong or already-satisfied task no-action with a one-line reason. Record
+a blocker and continue with the next eligible task. Binding constraints:
+the seven invariants and the scope non-goals in this plan. Commit policy:
+work commits land on codex/orp-* branches and merge to main through pull
+requests with the required evidence checks and autoreview pre-pr green;
+plan and ledger updates land on main through plan pull requests, batched
+per task transition. Stop only at a valid stop state from the plans skill.
+Before you stop, update the ledger and the log, and record the next action
+in the status line. The goal is met when ORP0 through ORP13 are terminal,
+scripts/verify-openrouter-parity.sh reports 16 passed in CI, and ORP14
+waits only on the final merge.</code></pre>
+  </section>
+  <section id="log"><h2>Execution log</h2>
+    <table><thead><tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr></thead><tbody>
+      <tr><td>2026-08-20</td><td>plan</td><td>Created from four seam-mapping research reports (usage, presets, routing, catalog); activated on the owner mandate of 2026-08-20.</td><td>Reports preserved under <code>docs/plans/proof/openrouter-parity/research/</code> at ORP0.</td></tr>
+      <tr><td>2026-08-20</td><td>ORP0</td><td>Pinned the baseline, created the proof root, copied the four research reports, authored the 16-condition verifier, ran it red, and registered it in CLAUDE.md and the plan index.</td><td><code>Summary: 0 passed, 16 failed</code>; proof in <code>ORP0.md</code>; branch <code>codex/orp-0-plan</code>.</td></tr>
+    </tbody></table>
+  </section>
+</main>
+</body>
+</html>
