@@ -6,4 +6,4 @@ No active durable plan exists.
 
 ## Proposed
 
-No proposed durable plan exists.
+- [Dependency direction hardening](dependency-direction-hardening-plan.html): proposed

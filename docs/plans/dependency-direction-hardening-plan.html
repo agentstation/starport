@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starport and Starmap dependency direction hardening</title>
+<style>
+  :root { --ink:#1a1e24; --muted:#5c6570; --line:#d8dde3; --soft:#f4f6f8; --page:#fff; --accent:#2563eb; --todo:#6b7280; --active:#2563eb; --blocked:#dc2626; --done:#16a34a; --rejected:#b45309; }
+  @media (prefers-color-scheme:dark) { :root { --ink:#e5e9ee; --muted:#9aa4af; --line:#333a43; --soft:#1b2027; --page:#11151a; --accent:#60a5fa; --todo:#9aa4af; --active:#60a5fa; --blocked:#f87171; --done:#4ade80; --rejected:#fbbf24; } }
+  * { box-sizing:border-box; } body { margin:0 auto; padding:2rem 1.25rem 4rem; max-width:1120px; background:var(--page); color:var(--ink); font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  h1 { font-size:1.6rem; margin:0 0 .25rem; } h2 { font-size:1.15rem; margin:2rem 0 .5rem; border-bottom:1px solid var(--line); padding-bottom:.25rem; }
+  h3 { font-size:1rem; margin:1.25rem 0 .4rem; } code { background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:.05rem .35rem; font-size:.85em; }
+  pre { background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:.9rem 1rem; overflow-x:auto; line-height:1.45; white-space:pre-wrap; } pre code { background:none; border:0; padding:0; }
+  blockquote { margin:.75rem 0; padding:.6rem 1rem; border-left:3px solid var(--accent); background:var(--soft); }
+  table { border-collapse:collapse; width:100%; margin:.75rem 0; font-size:.9rem; } th,td { border:1px solid var(--line); padding:.35rem .5rem; text-align:left; vertical-align:top; } th { background:var(--soft); }
+  #status-line,.counts,.legend { color:var(--muted); font-size:.92rem; } .bar { height:.75rem; border:1px solid var(--line); border-radius:999px; overflow:hidden; background:var(--soft); } .bar .fill { height:100%; width:0; background:var(--done); }
+  .pair { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:1rem; } figure { margin:0; border:1px solid var(--line); border-radius:8px; padding:.75rem; background:var(--soft); } figcaption { font-weight:600; margin-bottom:.5rem; } figure svg { max-width:100%; height:auto; }
+  tr[data-status="todo"] td:nth-child(3) code { color:var(--todo); } tr[data-status="in_progress"] td:nth-child(3) code { color:var(--active); } tr[data-status="blocked"] td:nth-child(3) code { color:var(--blocked); } tr[data-status="done"] td:nth-child(3) code { color:var(--done); } tr[data-status="rejected"] td:nth-child(3) code { color:var(--rejected); }
+  @media print { body { max-width:none; padding:0; } }
+</style>
+<script>
+document.addEventListener("DOMContentLoaded",function(){var rows=document.querySelectorAll("#ledger tbody tr"),terminal={"done":1,"no-action":1,"rejected":1},closed=0,current="";rows.forEach(function(row){var status=(row.getAttribute("data-status")||"").split("(")[0].trim();if(terminal[status]){closed+=1;}if(status==="in_progress"&&!current){current=row.id+" "+row.cells[1].textContent.trim();}});var pct=rows.length?Math.round(closed/rows.length*100):0;document.querySelector("#progress .fill").style.width=pct+"%";document.querySelector("#progress .counts").textContent=closed+" of "+rows.length+" tasks terminal ("+pct+"%)."+(current?" In progress: "+current:"");});
+</script>
+</head>
+<body>
+<header id="overview">
+  <h1>Starport and Starmap dependency direction hardening</h1>
+  <div id="status-line">
+    <div>Status: <code data-plan-status="proposed">proposed</code> · Owner: this plan · Created: 2026-08-19</div>
+    <div>Starport baseline: <code>main@60f26a6d748b7667a2ed586e38d8a70cf9c161a0</code> · Starmap baseline: <code>main@ff5e6cf9beb4cc9047e554659d817d7c21384d6a</code></div>
+    <div>Proof root: <code>docs/plans/proof/dependency-direction-hardening/</code></div>
+    <div>Next action: complete the independent plan review and promotion audit.</div>
+  </div>
+  <section id="outcome"><h2>Outcome</h2>
+    <blockquote>Stable domain and use-case packages depend only on owned contracts. Starmap's public catalog tree has no dependency on repository-private implementation packages. Starport's gateway use cases depend on cache and provider-runtime contracts, and Starmap acquisition policy stays inside Starport's catalog seam. Executable import rules prevent each reversed dependency from returning.</blockquote>
+  </section>
+  <section id="progress"><h2>Progress</h2><div class="bar"><div class="fill"></div></div><p class="counts">The status ledger is the progress source of truth.</p></section>
+  <section id="architecture"><h2>Architecture</h2>
+    <p class="legend"><code>A → B</code> means package A imports package B. Dashed boxes are implementation details.</p>
+    <div class="pair">
+      <figure><figcaption>Before: stable seams import implementations</figcaption>
+        <svg viewBox="0 0 520 250" role="img" aria-label="Current dependency direction">
+          <defs><marker id="before-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+          <g fill="none" stroke="currentColor"><rect x="10" y="18" width="220" height="50" rx="6"/><rect x="290" y="18" width="220" height="50" rx="6"/><rect x="10" y="170" width="220" height="50" rx="6" stroke-dasharray="5 4"/><rect x="290" y="170" width="220" height="50" rx="6" stroke-dasharray="5 4"/></g>
+          <g fill="currentColor" text-anchor="middle">
+            <text x="120" y="39">Starmap public catalog tree</text>
+            <text x="120" y="57" font-size="11">pkg/catalogs/...</text>
+            <text x="400" y="39">Starport gateway use cases</text>
+            <text x="400" y="57" font-size="11">internal/proxy + internal/app</text>
+            <text x="120" y="191">private policy and resources</text>
+            <text x="120" y="209" font-size="11">authority, payload, embedded, constants</text>
+            <text x="400" y="191">concrete adapters and options</text>
+            <text x="400" y="209" font-size="11">registry, cache, sync, sources</text>
+          </g>
+          <g stroke="currentColor" marker-end="url(#before-arrow)"><line x1="120" y1="68" x2="120" y2="166"/><line x1="400" y1="68" x2="400" y2="166"/></g>
+        </svg>
+      </figure>
+      <figure><figcaption>After: implementations depend on stable contracts</figcaption>
+        <svg viewBox="0 0 520 250" role="img" aria-label="Target dependency direction">
+          <defs><marker id="after-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+          <g fill="none" stroke="currentColor"><rect x="10" y="18" width="220" height="50" rx="6"/><rect x="290" y="18" width="220" height="50" rx="6"/><rect x="10" y="170" width="220" height="50" rx="6" stroke-dasharray="5 4"/><rect x="290" y="170" width="220" height="50" rx="6" stroke-dasharray="5 4"/></g>
+          <g fill="currentColor" text-anchor="middle">
+            <text x="120" y="39">Starmap catalog contracts</text>
+            <text x="120" y="57" font-size="11">catalogs, authority, sources/payload</text>
+            <text x="400" y="39">Starport gateway contracts</text>
+            <text x="400" y="57" font-size="11">cache manager + runtime lease</text>
+            <text x="120" y="191">Starmap implementations</text>
+            <text x="120" y="209" font-size="11">reconciler, bootstrap, storage, remote</text>
+            <text x="400" y="191">Starport implementations</text>
+            <text x="400" y="209" font-size="11">app, registry, cache, catalog</text>
+          </g>
+          <g stroke="currentColor" marker-end="url(#after-arrow)"><line x1="120" y1="170" x2="120" y2="72"/><line x1="400" y1="170" x2="400" y2="72"/></g>
+        </svg>
+      </figure>
+    </div>
+  </section>
+</header>
+<main>
+  <section id="scope"><h2>Scope</h2>
+    <p><strong>Owns:</strong> Starmap catalog authority, bounded payload decoding,
+      catalog resource policy, and explicit embedded composition. It also owns
+      Starport proxy contracts, catalog refresh composition, architecture guards,
+      affected documents, and two implementation pull requests.</p>
+    <p><strong>Does not own:</strong> provider or model facts, schemas, release tags, storage backends, routing policy, protocol behavior, credential behavior, or an external catalog service. Separate future plans own those changes.</p>
+    <p><strong>Non-goals:</strong> compatibility wrappers, a broad catalog type split, Starport local-acquisition removal, runtime-lease replacement, package renames without ownership change, new dependencies, and release publication.</p>
+  </section>
+  <section id="findings"><h2>Findings ledger</h2>
+    <table><thead><tr><th>ID</th><th>Classification</th><th>Evidence</th><th>Owning task</th></tr></thead><tbody>
+      <tr><td>A1</td><td>P1, high</td><td>Eight imports from five <code>pkg/catalogs</code> packages to four repository-private packages.</td><td>DDH0-DDH3</td></tr>
+      <tr><td>A2</td><td>P1, high</td><td><code>internal/proxy</code> imports concrete <code>internal/cache</code> and <code>internal/registry</code> despite existing narrow contracts.</td><td>DDH4-DDH5</td></tr>
+      <tr><td>A3</td><td>P1, high</td><td><code>internal/app</code> imports Starmap source and sync packages and exposes their option types.</td><td>DDH4, DDH6</td></tr>
+      <tr><td>A4</td><td>P2, high</td><td>Current architecture records predate Starmap v0.6.0 and the latest package moves.</td><td>DDH3, DDH7</td></tr>
+    </tbody></table>
+  </section>
+  <section id="promotion-gate"><h2>Promotion gate</h2>
+    <p>Promote this plan to <code>active</code> only when every condition holds:</p>
+    <ol>
+      <li>The plan-only pull request merges to Starport <code>main</code>.</li>
+      <li>An independent architecture review checks the complete branch diff through P1.</li>
+      <li>The deterministic audit checks sections, task IDs, verifier counts, paths, commands, and balanced HTML.</li>
+      <li>The plan resolves or routes each accepted review finding.</li>
+      <li>GitHub has no overlapping pull request in either repository.</li>
+      <li>The owner request remains the activation decision.</li>
+    </ol>
+  </section>
+  <section id="invariants"><h2>Invariants</h2>
+    <ol>
+      <li>Starmap keeps one authority table for immutable definition derivation and reconciliation.</li>
+      <li>Fixed catalog inputs keep identical catalog, payload, manifest, artifact, and remote bytes.</li>
+      <li>Starmap acquisition remains explicit and keeps its current credential plane.</li>
+      <li>Starport request leases retain one matching catalog snapshot and connector generation.</li>
+    </ol>
+    <ol start="5">
+      <li>Starport keeps inference credentials separate from Starmap acquisition credentials.</li>
+      <li>Gateway HTTP, protocol, routing, cache, and provider behavior do not change.</li>
+      <li>No task adds a module dependency, wrapper, schema, protocol, provider fact, or model fact.</li>
+      <li>All changes target <code>main</code> only through pull requests.</li>
+    </ol>
+  </section>
+  <section id="decisions"><h2>Decisions</h2>
+    <table><thead><tr><th>ID</th><th>Decision and evidence</th><th>Consequence</th><th>Reopen condition</th></tr></thead><tbody>
+      <tr><td>D1</td><td>Keep <code>pkg/catalogs</code> as one public domain tree. Recent ownership work and file sizes support coherent ownership.</td><td>The campaign repairs dependency direction without a broad type split.</td><td>A measured consumer or change cluster cannot state a catalog-tree contract.</td></tr>
+      <tr><td>D2</td><td>Expose authority as <code>pkg/catalogs/authority</code>. It has two real consumers and one policy invariant.</td><td>Read-view derivation and reconciliation share one catalog-owned policy.</td><td>One consumer becomes the sole policy owner.</td></tr>
+      <tr><td>D3</td><td>Expose bounded JSON decoding as <code>pkg/sources/payload</code>. Catalog and acquisition code both consume its typed partial result.</td><td>No public package imports the old private payload package.</td><td>The wire decoder becomes catalog-only or provider-only.</td></tr>
+      <tr><td>D4</td><td>Remove <code>catalogs.WithEmbedded()</code>. Explicit filesystem injection keeps bootstrap composition outside the domain package.</td><td>Starmap pre-v1 callers migrate directly with no wrapper.</td><td>A stable public bootstrap package owns an explicit second consumer.</td></tr>
+      <tr><td>D5</td><td>Use existing Starport cache and runtime lease contracts.</td><td><code>internal/proxy</code> no longer imports concrete implementations.</td><td>The use case requires behavior absent from both contracts.</td></tr>
+      <tr><td>D6</td><td>Keep complete runtime activation in <code>internal/app</code>, but move acquisition option selection into <code>internal/catalog</code>.</td><td>Composition coordinates lifecycle without owning Starmap acquisition policy.</td><td>Catalog refresh needs a second non-catalog consumer.</td></tr>
+      <tr><td>D7</td><td>Use two implementation pull requests: one per repository.</td><td>Each repository can merge only after its full gates and review pass.</td><td>A cross-repository contract change requires an ordered release.</td></tr>
+    </tbody></table>
+  </section>
+  <section id="rejected-designs"><h2>Rejected designs</h2>
+    <ul>
+      <li><strong>Split every Starmap catalog type:</strong> the evidence shows reverse imports, not incoherent type ownership.</li>
+      <li><strong>Remove local acquisition from Starport:</strong> the evidence supports an import boundary, not a product behavior break.</li>
+      <li><strong>Replace request runtime leases:</strong> current contract tests prove generation retention and connector draining.</li>
+      <li><strong>Keep old package aliases:</strong> pre-v1 aliases would retain two authorities.</li>
+      <li><strong>Rename composition roots:</strong> their expected high fanout is not the measured defect.</li>
+    </ul>
+  </section>
+  <section id="verifier"><h2>Verifier contract</h2>
+    <p>DDH0 creates a Starmap dependency verifier with conditions <code>SM-D01</code> through <code>SM-D08</code>. DDH4 extends Starport architecture verification with conditions <code>SP-D01</code> through <code>SP-D06</code>. Each verifier reports every condition and ends with <code>Summary: N passed, M failed</code>. Phase 0 records the red baseline. The closeout tasks require <code>Summary: 8 passed, 0 failed</code> and <code>Summary: 6 passed, 0 failed</code>.</p>
+  </section>
+  <section id="ledger"><h2>Status ledger</h2>
+    <table><thead><tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
+      <tr id="DDH0" data-status="todo"><td>DDH0</td><td>Starmap baseline: add the red dependency verifier and capture all eight current relationships.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH1" data-status="todo"><td>DDH1</td><td>Move authority and bounded payload contracts to catalog-owned public seams.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH2" data-status="todo"><td>DDH2</td><td>Remove embedded and shared-constant reverse dependencies from the public catalog tree.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH3" data-status="todo"><td>DDH3</td><td>Update Starmap authority, run all gates and review, then merge the Starmap pull request.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH4" data-status="todo"><td>DDH4</td><td>Starport baseline: add six dependency conditions and capture the four reversed relationships.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH5" data-status="todo"><td>DDH5</td><td>Make proxy construction depend on cache and provider-runtime contracts.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH6" data-status="todo"><td>DDH6</td><td>Keep Starmap acquisition option selection inside Starport's catalog seam.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH7" data-status="todo"><td>DDH7</td><td>Update Starport authority, run all gates and review, then merge the Starport pull request.</td><td><code>todo</code></td><td></td></tr>
+      <tr id="DDH8" data-status="todo"><td>DDH8</td><td>Cleanup after DDH3 and DDH7 merge: remove this plan, proof root, and index entry through a pull request.</td><td><code>todo</code></td><td></td></tr>
+    </tbody></table>
+  </section>
+  <section id="tasks"><h2>Tasks</h2>
+    <h3 id="task-DDH0">DDH0 Starmap baseline</h3>
+    <ul>
+      <li><strong>Problem:</strong> no executable rule rejects public-to-private catalog imports.</li>
+      <li><strong>Owning seam and paths:</strong> Starmap dependency verifier, its test, standard gate, and DDH0 proof.</li>
+      <li><strong>Steps:</strong> create eight conditions, add mutation tests, wire the gate, and capture red output.</li>
+      <li><strong>Acceptance:</strong> the test proves each condition can fail, and the baseline names all eight relationships.</li>
+      <li><strong>Fail-before:</strong> five public packages import four private targets through eight relationships.</li>
+      <li><strong>Verification:</strong>
+        <ol><li><code>bash scripts/test-catalog-dependency-direction-verifier.sh</code></li><li><code>bash scripts/verify-catalog-dependency-direction.sh</code></li></ol>
+      </li>
+    </ul>
+    <h3 id="task-DDH1">DDH1 Catalog policy contracts</h3>
+    <ul>
+      <li><strong>Problem:</strong> two public catalog behaviors depend on private authority and payload packages.</li>
+      <li><strong>Owning seam and paths:</strong> Starmap catalog authority, source payload, read views, reconciler, providers, sources, tests, and documents.</li>
+      <li><strong>Steps:</strong> move each contract, update callers, preserve behavior, and delete old paths.</li>
+      <li><strong>Acceptance:</strong> one authority table drives both consumers while payload tests preserve every typed partial-result contract.</li>
+      <li><strong>Fail-before:</strong> DDH0 reports the authority and payload reverse imports.</li>
+      <li><strong>Verification:</strong> run focused tests for both seams and the DDH verifier.</li>
+    </ul>
+    <h3 id="task-DDH2">DDH2 Catalog resource ownership</h3>
+    <ul>
+      <li><strong>Problem:</strong> public catalog behavior imports private embedded data and shared constants.</li>
+      <li><strong>Owning seam and paths:</strong> Starmap catalog options, bootstrap callers, catalog resource policy, child behaviors, tests, and documents.</li>
+      <li><strong>Steps:</strong> inject the filesystem, move resource policy, update callers, and remove the old option.</li>
+      <li><strong>Acceptance:</strong> <code>go list</code> finds no catalog-tree import to repository-wide <code>internal/</code> while fixed inputs preserve behavior.</li>
+      <li><strong>Fail-before:</strong> DDH0 reports six embedded or constant reverse relationships.</li>
+      <li><strong>Verification:</strong> run catalog-tree, bootstrap, consumer, and DDH verifier tests.</li>
+    </ul>
+    <h3 id="task-DDH3">DDH3 Starmap closeout</h3>
+    <ul>
+      <li><strong>Problem:</strong> the repair needs current authority records and full repository evidence.</li>
+      <li><strong>Owning seam and paths:</strong> Starmap instructions, architecture, generated documents, CI, and implementation pull request.</li>
+      <li><strong>Steps:</strong> update documents, run all checks, review, open the PR, wait for checks, and merge.</li>
+      <li><strong>Acceptance:</strong> SM-D01 through SM-D08 pass with no alias, behavior change, or dependency.</li>
+      <li><strong>Fail-before:</strong> current authority documents name private paths.</li>
+      <li><strong>Verification:</strong><pre><code>make verify
+make release-check
+make release-snapshot
+make catalog-generation-check
+make embedded-catalog-budget-check
+$AUTOREVIEW --gate pre-pr --mode auto</code></pre>Then run hosted checks.</li>
+    </ul>
+    <h3 id="task-DDH4">DDH4 Starport baseline</h3>
+    <ul>
+      <li><strong>Problem:</strong> architecture checks permit concrete imports and acquisition-option leakage.</li>
+      <li><strong>Owning seam and paths:</strong> Starport architecture tests, v1 verifier, CI, and DDH4 proof.</li>
+      <li><strong>Steps:</strong> add six conditions, add mutation coverage, and capture four current relationships.</li>
+      <li><strong>Acceptance:</strong> the baseline reports cache, registry, source, and sync relationships as red.</li>
+      <li><strong>Fail-before:</strong> proxy has two concrete imports while app has two acquisition-option imports.</li>
+      <li><strong>Verification:</strong> run focused architecture tests and the v1 architecture verifier.</li>
+    </ul>
+    <h3 id="task-DDH5">DDH5 Proxy contracts</h3>
+    <ul>
+      <li><strong>Problem:</strong> gateway use cases select concrete cache and runtime implementations.</li>
+      <li><strong>Owning seam and paths:</strong> Starport proxy, connector runtime contracts, app composition, tests, and architecture rules.</li>
+      <li><strong>Steps:</strong> accept existing interfaces, keep construction in app, remove changed no-op surface, and add contract tests.</li>
+      <li><strong>Acceptance:</strong> proxy imports neither concrete package while all gateway and runtime-lease behavior stays unchanged.</li>
+      <li><strong>Fail-before:</strong> DDH4 reports both concrete imports.</li>
+      <li><strong>Verification:</strong> run proxy, app, router, registry, cache, architecture, and verifier tests.</li>
+    </ul>
+    <h3 id="task-DDH6">DDH6 Catalog acquisition boundary</h3>
+    <ul>
+      <li><strong>Problem:</strong> app composition selects Starmap source and sync options.</li>
+      <li><strong>Owning seam and paths:</strong> Starport catalog, app runtime contract, refresh lifecycle, remote runtime, tests, and architecture rules.</li>
+      <li><strong>Steps:</strong> define a refresh method, move source selection, adapt runtimes, and remove option types from app.</li>
+      <li><strong>Acceptance:</strong> app imports no Starmap acquisition package while all refresh and failure behavior stays unchanged.</li>
+      <li><strong>Fail-before:</strong> DDH4 reports the source and sync imports.</li>
+      <li><strong>Verification:</strong> run catalog, app, provider runtime, diagnosis, config, architecture, and verifier tests.</li>
+    </ul>
+    <h3 id="task-DDH7">DDH7 Starport closeout</h3>
+    <ul>
+      <li><strong>Problem:</strong> the repair needs current authority records and full gateway evidence.</li>
+      <li><strong>Owning seam and paths:</strong> Starport instructions, architecture, task ledger, CI, and implementation pull request.</li>
+      <li><strong>Steps:</strong> update documents, run required checks, review, open the PR, wait for checks, and merge.</li>
+      <li><strong>Acceptance:</strong> SP-D01 through SP-D06 and all gateway contracts pass.</li>
+      <li><strong>Fail-before:</strong> current documents describe older versions and omit the new rules.</li>
+      <li><strong>Verification:</strong><pre><code>bash scripts/verify-starmap-ownership.sh
+bash scripts/verify-v1-architecture.sh
+bash scripts/verify-catalog-driven-providers.sh
+bash scripts/verify-package-layout.sh
+bash scripts/verify-readme-quickstart.sh
+go test ./...
+go test -race ./...
+go vet ./...
+make lint
+make build
+bash scripts/smoke-openrouter-sdks.sh
+make release-check
+make release-snapshot
+$AUTOREVIEW --gate pre-pr --mode auto</code></pre>Then run hosted checks.</li>
+    </ul>
+    <h3 id="task-DDH8">DDH8 Cleanup</h3>
+    <ul>
+      <li><strong>Problem:</strong> a merged campaign must not remain active authority.</li>
+      <li><strong>Owning seam and paths:</strong> this plan, its proof root, plans index, and task ledger.</li>
+      <li><strong>Steps:</strong> confirm both merges, preserve architecture documents, delete the control plane, and open a cleanup PR.</li>
+      <li><strong>Acceptance:</strong> no current plan reference remains after the cleanup PR merges.</li>
+      <li><strong>Fail-before:</strong> not applicable because implementation merges trigger cleanup.</li>
+      <li><strong>Verification:</strong> search for the slug, run <code>git diff --check</code>, and inspect the PR files.</li>
+    </ul>
+  </section>
+  <section id="goal"><h2>Goal</h2>
+    <pre><code>Execute docs/plans/dependency-direction-hardening-plan.html to completion. This is a whole-plan goal, not a single-task goal. Read the plan fully, then read both repositories' AGENTS.md files, Starport docs/TASKS.md and docs/ARCHITECTURE.md, Starmap docs/ARCHITECTURE.md, docs/plans/proof/dependency-direction-hardening/architecture-analysis.md, and the plans skill. Use /Users/jack/src/github.com/agentstation/starmap-dependency-direction-hardening on branch codex/dependency-direction-hardening for DDH0 through DDH3. Use /Users/jack/src/github.com/agentstation/starport-dependency-direction-hardening on branch codex/dependency-direction-hardening for DDH4 through DDH7. Use a fresh codex/dependency-direction-hardening-control branch from current Starport main for plan transitions and DDH8. Chat history is not progress state. Resume from the status ledger, the execution log, proof files, and git state. If compaction happens, continue from those records. Loop: keep exactly one task in_progress, capture fail-before evidence, implement at the owning seam, run the exact verification commands, commit the work, write the proof file, append the execution log with the work commit and exact counts, mark the task terminal with evidence, commit the plan transition through a pull request when it changes main, then advance. DDH0 through DDH3 form one Starmap implementation pull request with task commits. DDH4 through DDH7 form one Starport implementation pull request with task commits. Target main and deliver changes only through pull requests. Decide rather than ask. Mark a wrong or already-satisfied task no-action with evidence. Record a blocker and continue only with an eligible task. Binding constraints: preserve all eight invariants and all non-goals. Commit policy: signed commits, no AI attribution, no direct main push, and one plan transition commit after each work commit when the repository permits it. Run each pre-PR autoreview only after final checks and the complete intended change are committed. Stop only at a valid plans-skill stop state. Before a stop, update the ledger, log, and next action. The goal is met when SM-D01 through SM-D08 and SP-D01 through SP-D06 pass, both implementation pull requests merge with all hosted checks green, no reversed dependency remains, and the DDH8 cleanup pull request removes this control plane.</code></pre>
+  </section>
+  <section id="execution-log"><h2>Execution log</h2>
+    <table><thead><tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr></thead><tbody>
+      <tr><td>2026-08-19</td><td>meta</td><td>analyzed and authored</td><td>Inspected both package graphs, architecture records, task ledgers, recent ownership work, focused source paths, tests, and GitHub state. Recorded four routed findings and four rejected broad changes. No production code changed.</td></tr>
+    </tbody></table>
+  </section>
+</main>
+</body>
+</html>
