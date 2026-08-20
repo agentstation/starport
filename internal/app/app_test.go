@@ -307,7 +307,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 			Level: "info", Format: "json", Output: "stdout",
 			MaxSize: 100, MaxBackups: 3, MaxAge: 7,
 		},
-		Cache:  config.CacheConfig{Enabled: false},
+		Cache:   config.CacheConfig{Enabled: false},
 		Console: config.ConsoleConfig{Title: "Starport", Theme: "light"},
 	}
 }

@@ -16,8 +16,8 @@ import (
 	"github.com/agentstation/starport/internal/availability"
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
-	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers"
@@ -31,6 +31,7 @@ import (
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 var (
@@ -138,6 +139,7 @@ type runtimeBuilder struct {
 	identities   identity.Repository
 	providerKeys byok.ProviderKeys
 	rateLimits   ratelimit.Repository
+	usageRecords usage.Repository
 	gateway      proxy.Proxy
 	console      *console.Handler
 }
@@ -258,6 +260,10 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open rate-limit repository: %w", err)
 	}
+	b.usageRecords, err = usage.Open(b.application.store, usage.Options{})
+	if err != nil {
+		return fmt.Errorf("open usage repository: %w", err)
+	}
 	masterKey := []byte(b.config.Security.MasterKey)
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
@@ -357,6 +363,14 @@ func (b *runtimeBuilder) buildGateway() error {
 		}))
 	}
 	b.gateway = proxy.New(b.application.registry, modelRouter, proxyOptions...)
+	// Usage capture wraps outside the proxy middleware chain so cache hits
+	// and every terminal outcome produce a record.
+	usageCapture := proxy.NewUsageCapture(b.usageRecords)
+	b.gateway = usageCapture.Wrap(b.gateway)
+	b.application.own("usage capture", func(context.Context) error {
+		usageCapture.Flush()
+		return nil
+	})
 	return nil
 }
 

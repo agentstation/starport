@@ -194,12 +194,22 @@ type TopLogProb struct {
 	Bytes   []int   `json:"bytes,omitempty"`
 }
 
-// Usage represents token usage information
+// Usage represents token usage information. PromptTokens uses OpenAI
+// semantics: it includes cached prompt tokens. CacheWriteTokens has no
+// OpenAI wire field; connectors whose providers report cache writes set it
+// for internal accounting.
 type Usage struct {
 	PromptTokens            int                      `json:"prompt_tokens"`
 	CompletionTokens        int                      `json:"completion_tokens"`
 	TotalTokens             int                      `json:"total_tokens"`
+	PromptTokensDetails     *PromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
 	CompletionTokensDetails *CompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+	CacheWriteTokens        int                      `json:"-"`
+}
+
+// PromptTokensDetails provides detailed prompt token counts
+type PromptTokensDetails struct {
+	CachedTokens int `json:"cached_tokens,omitempty"`
 }
 
 // CompletionTokensDetails provides detailed token counts

@@ -53,6 +53,7 @@ func (h *EmbeddingsController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.RequestID = h.getRequestID(ctx)
+	req.Protocol = string(h.protocol)
 
 	// Process the request
 	resp, err := h.service.ProcessEmbeddings(ctx, req)

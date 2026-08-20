@@ -290,20 +290,25 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 				FinishReason: c.mapFinishReason(candidate.FinishReason),
 			},
 		},
-		Usage: Usage{
-			PromptTokens:     resp.UsageMetadata.PromptTokenCount,
-			CompletionTokens: resp.UsageMetadata.CandidatesTokenCount,
-			TotalTokens:      resp.UsageMetadata.TotalTokenCount,
-			CompletionTokensDetails: func() *CompletionTokensDetails {
-				if resp.UsageMetadata.ThoughtsTokenCount > 0 {
-					return &CompletionTokensDetails{
-						ReasoningTokens: resp.UsageMetadata.ThoughtsTokenCount,
-					}
-				}
-				return nil
-			}(),
-		},
+		Usage: convertGeminiUsage(resp.UsageMetadata),
 	}
+}
+
+// convertGeminiUsage normalizes Gemini usage metadata. promptTokenCount
+// already includes cachedContentTokenCount, matching OpenAI semantics.
+func convertGeminiUsage(m geminiUsageMetadata) Usage {
+	usage := Usage{
+		PromptTokens:     m.PromptTokenCount,
+		CompletionTokens: m.CandidatesTokenCount,
+		TotalTokens:      m.TotalTokenCount,
+	}
+	if m.ThoughtsTokenCount > 0 {
+		usage.CompletionTokensDetails = &CompletionTokensDetails{ReasoningTokens: m.ThoughtsTokenCount}
+	}
+	if m.CachedContentTokenCount > 0 {
+		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: m.CachedContentTokenCount}
+	}
+	return usage
 }
 
 // googleStream implements ChatStream for Google responses
@@ -435,19 +440,8 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 
 			// Include usage metadata if available (typically in the final chunk)
 			if geminiResp.UsageMetadata.TotalTokenCount > 0 {
-				chunk.Usage = &Usage{
-					PromptTokens:     geminiResp.UsageMetadata.PromptTokenCount,
-					CompletionTokens: geminiResp.UsageMetadata.CandidatesTokenCount,
-					TotalTokens:      geminiResp.UsageMetadata.TotalTokenCount,
-					CompletionTokensDetails: func() *CompletionTokensDetails {
-						if geminiResp.UsageMetadata.ThoughtsTokenCount > 0 {
-							return &CompletionTokensDetails{
-								ReasoningTokens: geminiResp.UsageMetadata.ThoughtsTokenCount,
-							}
-						}
-						return nil
-					}(),
-				}
+				usage := convertGeminiUsage(geminiResp.UsageMetadata)
+				chunk.Usage = &usage
 			}
 
 			return chunk, nil

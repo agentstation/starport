@@ -52,6 +52,7 @@ func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.RequestID = h.getRequestID(ctx)
+	req.Protocol = string(h.protocol)
 
 	// Handle streaming vs non-streaming
 	if req.Request.Stream {

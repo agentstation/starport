@@ -447,18 +447,27 @@ func usageToInference(usage Usage) inference.Usage {
 	if usage.CompletionTokensDetails != nil {
 		reasoningTokens = usage.CompletionTokensDetails.ReasoningTokens
 	}
+	cacheReadTokens := 0
+	if usage.PromptTokensDetails != nil {
+		cacheReadTokens = usage.PromptTokensDetails.CachedTokens
+	}
 	return inference.Usage{
 		InputTokens: usage.PromptTokens, OutputTokens: usage.CompletionTokens,
 		TotalTokens: usage.TotalTokens, ReasoningTokens: reasoningTokens,
+		CacheReadTokens: cacheReadTokens, CacheWriteTokens: usage.CacheWriteTokens,
 	}
 }
 
 func usageFromInference(usage inference.Usage) Usage {
 	converted := Usage{
 		PromptTokens: usage.InputTokens, CompletionTokens: usage.OutputTokens, TotalTokens: usage.TotalTokens,
+		CacheWriteTokens: usage.CacheWriteTokens,
 	}
 	if usage.ReasoningTokens != 0 {
 		converted.CompletionTokensDetails = &CompletionTokensDetails{ReasoningTokens: usage.ReasoningTokens}
+	}
+	if usage.CacheReadTokens != 0 {
+		converted.PromptTokensDetails = &PromptTokensDetails{CachedTokens: usage.CacheReadTokens}
 	}
 	return converted
 }
