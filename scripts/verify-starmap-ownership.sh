@@ -120,7 +120,7 @@ run_check O02 "primitive registries own inference transport and authentication d
   TestTransportAuthenticationRegistriesUsePrimitives \
   TestValidateKeyUsesCatalogCredentialContracts
 run_check O03 "catalog-acquisition and inference credential planes are isolated" \
-  starport_tests "./internal/app" \
+  starport_tests "./internal/app ./internal/catalog" \
   TestAuthPlanesAreIsolated TestStarmapAcquisitionPublishesRefresh
 run_check O04 "Google inference credentials never enter a URL" \
   no_starport_match '(\?key=|query\.Set\("key")' \
