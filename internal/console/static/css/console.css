@@ -584,6 +584,21 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--text-sm);
 .mod-icons .has { color: var(--cyan); }
 .price-na { color: var(--ink-faint); }
 
+/* ---------- Usage page ---------- */
+.usage-toolbar {
+    display: flex;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: var(--sp-3);
+}
+.usage-toolbar .search-wrap { flex: 1; min-width: 14rem; }
+.usage-toolbar > .input { width: 11rem; }
+.usage-toolbar .select { width: auto; }
+.usage-summary { margin-bottom: var(--sp-4); }
+.stats-foot { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
+.load-more { display: flex; justify-content: center; margin-top: var(--sp-3); }
+
 /* Detail drawer */
 .drawer-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 50; animation: fade-in var(--dur-fast) var(--ease); }
 .drawer {

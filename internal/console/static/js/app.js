@@ -9,6 +9,7 @@ import * as chat from "./pages/chat.js";
 import * as models from "./pages/models.js";
 import * as providers from "./pages/providers.js";
 import * as keys from "./pages/keys.js";
+import * as usage from "./pages/usage.js";
 import * as settings from "./pages/settings.js";
 
 const ROUTES = {
@@ -17,6 +18,7 @@ const ROUTES = {
     "/models": { page: models, id: "models" },
     "/providers": { page: providers, id: "providers" },
     "/keys": { page: keys, id: "keys" },
+    "/usage": { page: usage, id: "usage" },
     "/settings": { page: settings, id: "settings" },
 };
 

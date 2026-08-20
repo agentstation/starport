@@ -2,7 +2,7 @@
 // catalog refresh, and a per-model detail drawer with endpoint health.
 
 import { getApiKey, listModels, invalidateModels, getModelEndpoints, providerStatus, refreshProviders } from "../api.js";
-import { el, icon, toast, copyButton, formatModelPrice, formatPricePerM, formatContext, debounce } from "../ui.js";
+import { el, icon, toast, copyButton, formatModelPrice, formatPricePerM, formatContext, debounce, sidePanel } from "../ui.js";
 import { navigate } from "../router.js";
 
 export const title = "Models";
@@ -234,7 +234,7 @@ export async function render(container) {
             close();
             navigate(`/chat?model=${encodeURIComponent(model.id)}`);
         });
-        const close = openSidePanel(model.name || model.id, body, tryBtn);
+        const close = sidePanel(model.name || model.id, body, tryBtn);
 
         getModelEndpoints(model.id).then((data) => {
             const endpoints = data?.endpoints || data?.data?.endpoints || [];
@@ -258,27 +258,6 @@ export async function render(container) {
     }
 
     return () => { state.disposed = true; };
-}
-
-// openSidePanel slides in a right-hand drawer with a title, body, and action.
-function openSidePanel(titleText, body, action) {
-    const closeBtn = el("button", { class: "icon-btn", type: "button", "aria-label": "Close" }, icon("close"));
-    const panel = el("aside", { class: "drawer", role: "dialog", "aria-modal": "true" },
-        el("div", { class: "drawer-head" }, el("h2", {}, titleText), closeBtn),
-        body,
-        action ? el("div", { class: "drawer-foot" }, action) : null,
-    );
-    const scrim = el("div", { class: "drawer-scrim" }, panel);
-    const close = () => {
-        scrim.remove();
-        document.removeEventListener("keydown", onKey);
-    };
-    const onKey = (event) => { if (event.key === "Escape") close(); };
-    scrim.addEventListener("mousedown", (event) => { if (event.target === scrim) close(); });
-    closeBtn.addEventListener("click", close);
-    document.addEventListener("keydown", onKey);
-    document.body.append(scrim);
-    return close;
 }
 
 function truncate(text, max) {

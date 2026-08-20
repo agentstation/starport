@@ -82,6 +82,18 @@ func TestRegisterServesEveryPagePath(t *testing.T) {
 	}
 }
 
+func TestUsagePageIsRouted(t *testing.T) {
+	assert.Contains(t, PagePaths, "/usage", "the usage page is a console route")
+	assert.Contains(t, indexHTML, `data-page="usage"`, "the shell nav links to the usage page")
+
+	handler := newTestHandler(t)
+	router := chi.NewRouter()
+	handler.Register(router)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/js/pages/usage.js", nil))
+	assert.Equal(t, http.StatusOK, rec.Code, "the usage page module ships in the binary")
+}
+
 func TestStaticServesAssetsWithETag(t *testing.T) {
 	handler := newTestHandler(t)
 	router := chi.NewRouter()
