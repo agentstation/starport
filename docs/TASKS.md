@@ -7,7 +7,16 @@ Last Updated: 2026-08-21
 
 ### Active Work
 
-No active durable plan exists.
+- **Console modernization (CM)** —
+  [durable plan](plans/console-modernization-plan.html). Rebuild the
+  embedded console as a React SPA on the modern verified stack (Vite 8,
+  React 19, Tailwind 4, shadcn/ui on Base UI, TanStack
+  Router/Query/Table/Virtual, Streamdown), governed by the repository
+  design system in `DESIGN.md`. The chat composer carries the model
+  picker in the bottom input bar. CM14 cuts over, deletes the legacy
+  static console, and re-points the parity verifier conditions. Status
+  lives in the plan ledger; CM0 (baseline, design system, red verifier)
+  is done.
 
 ### Proposed Work
 
