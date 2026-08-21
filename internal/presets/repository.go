@@ -81,7 +81,7 @@ func (r *repository) Create(ctx context.Context, preset Preset) (Record, error) 
 
 func (r *repository) Get(ctx context.Context, name string) (Record, error) {
 	if strings.TrimSpace(name) == "" {
-		return Record{}, fmt.Errorf("invalid preset name")
+		return Record{}, fmt.Errorf("%w: invalid name", ErrInvalidPreset)
 	}
 	data, err := r.store.Get(ctx, storageKey(name))
 	if err != nil {
@@ -152,7 +152,7 @@ func (r *repository) Update(ctx context.Context, preset Preset, expectedRevision
 
 func (r *repository) Delete(ctx context.Context, name string, expectedRevision uint64) error {
 	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("invalid preset name")
+		return fmt.Errorf("%w: invalid name", ErrInvalidPreset)
 	}
 	key := storageKey(name)
 	data, err := r.store.Get(ctx, key)
@@ -195,13 +195,7 @@ func recordFromPreset(stored presetRecord) Record {
 }
 
 func clonePreset(preset Preset) Preset {
-	if preset.Config != nil {
-		config := make(map[string]any, len(preset.Config))
-		for key, value := range preset.Config {
-			config[key] = value
-		}
-		preset.Config = config
-	}
+	preset.Config = preset.Config.Clone()
 	return preset
 }
 

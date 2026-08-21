@@ -26,6 +26,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
 	"github.com/agentstation/starport/internal/proxy"
+	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/router"
@@ -141,6 +142,7 @@ type runtimeBuilder struct {
 	providerKeys byok.ProviderKeys
 	rateLimits   ratelimit.Repository
 	usageRecords usage.Repository
+	presets      presets.Repository
 	gateway      proxy.Proxy
 	console      *console.Handler
 }
@@ -270,6 +272,10 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open usage repository: %w", err)
 	}
+	b.presets, err = presets.Open(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open preset repository: %w", err)
+	}
 	masterKey := []byte(b.config.Security.MasterKey)
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
@@ -369,6 +375,9 @@ func (b *runtimeBuilder) buildGateway() error {
 		}))
 	}
 	b.gateway = proxy.New(b.application.registry, modelRouter, proxyOptions...)
+	// Preset references resolve before caching and routing so cache keys and
+	// routes see the resolved request.
+	b.gateway = proxy.NewPresetResolver(b.presets).Wrap(b.gateway)
 	// Usage capture wraps outside the proxy middleware chain so cache hits
 	// and every terminal outcome produce a record.
 	usageCapture := proxy.NewUsageCapture(b.usageRecords)
@@ -417,7 +426,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, ProviderKeys: b.providerKeys,
 		RateLimits: b.rateLimits, ProviderOperations: b.application, Console: b.console,
-		Usage: b.usageRecords, Catalog: b.application,
+		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
 	})
 	if err != nil {
 		if httpServer != nil {

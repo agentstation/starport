@@ -32,6 +32,7 @@ const (
 	errorTypePermission         = "permission_error"
 	errorTypeServiceUnavailable = "service_unavailable"
 	errorTypeProvider           = "provider_error"
+	errorTypeNotFound           = "not_found_error"
 	openRouterErrorTypeField    = "error_type"
 	providerField               = "provider"
 	responseCountField          = "count"
@@ -133,6 +134,12 @@ func errorShape(err error) (status int, errorType, message string, param *string
 		return status, errorType, normalized.SafeMessage(), nil
 	}
 
+	// An unknown preset reference is a caller error against a named gateway
+	// resource, so the message keeps the reference it could not resolve.
+	if errors.Is(err, proxy.ErrPresetNotFound) {
+		return http.StatusNotFound, errorTypeNotFound, err.Error(), nil
+	}
+
 	switch e := err.(type) {
 	case *proxy.ValidationError:
 		return http.StatusBadRequest, errorTypeInvalidRequest, e.Message, &e.Field
@@ -154,7 +161,7 @@ func errorShape(err error) (status int, errorType, message string, param *string
 			errType = errorTypePermission
 		case "not_found":
 			status = http.StatusNotFound
-			errType = "not_found_error"
+			errType = errorTypeNotFound
 		}
 		return status, errType, e.Message, nil
 
@@ -193,7 +200,7 @@ func normalizedFailureShape(kind failure.Kind) (int, string) {
 	case failure.RateLimit:
 		return http.StatusTooManyRequests, errorTypeRateLimit
 	case failure.NotFound:
-		return http.StatusNotFound, "not_found_error"
+		return http.StatusNotFound, errorTypeNotFound
 	case failure.Timeout:
 		return http.StatusGatewayTimeout, errorTypeServiceUnavailable
 	case failure.Canceled:

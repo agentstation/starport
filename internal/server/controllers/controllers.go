@@ -3,6 +3,7 @@ package controllers
 import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/usage"
@@ -23,6 +24,7 @@ type Controllers struct {
 	Admin                *AdminController
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
+	Presets              *PresetsController
 	Console              *console.Handler
 }
 
@@ -34,6 +36,7 @@ type Config struct {
 	Usage              usage.Repository
 	ProviderOperations ProviderOperations
 	Catalog            CatalogOperations
+	Presets            presets.Repository
 	ServiceName        string
 	Version            string
 	Console            *console.Handler
@@ -55,6 +58,7 @@ func NewControllers(cfg Config) *Controllers {
 		Admin:                NewAdminController(cfg.Identities, cfg.Usage),
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:              NewCatalogController(cfg.Catalog),
+		Presets:              NewPresetsController(cfg.Presets),
 		Console:              cfg.Console,
 	}
 

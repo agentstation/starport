@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
@@ -67,6 +68,9 @@ type Dependencies struct {
 	// Catalog serves snapshot freshness, diffs, and forced acquisition. A
 	// nil port degrades the catalog endpoints to 503, loudly.
 	Catalog controllers.CatalogOperations
+	// Presets serves stored preset management. A nil repository degrades
+	// the preset endpoints to 503, loudly.
+	Presets presets.Repository
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -108,6 +112,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Usage:              dependencies.Usage,
 		ProviderOperations: s.providerOperations,
 		Catalog:            dependencies.Catalog,
+		Presets:            dependencies.Presets,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
 		Console:            dependencies.Console,
