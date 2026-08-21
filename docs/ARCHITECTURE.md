@@ -26,13 +26,25 @@ Implemented:
 - BYOK provider-key management with encrypted credential storage, provider validation, fallback strategies, usage tracking, and admin/provider-key HTTP endpoints.
 - Starmap-backed model, provider, capability, context, and price discovery from one immutable generation.
 - Raw HTTP compatibility smoke checks and optional official OpenRouter SDK runners.
+- Usage accounting in `internal/usage`: the proxy writes one request record
+  per completion under the versioned `usage:v1:` namespace, and
+  `/api/v1/activity` serves per-key and admin-wide request logs.
+- Catalog freshness surface: snapshot generation metadata over HTTP and an
+  authenticated catalog refresh path.
+- Preset management REST endpoints with `@preset/` request resolution.
+- OpenRouter routing-preference completion: `provider.sort` and `max_price`
+  reach the routing policy.
+- Per-key spend and token budgets with 402 exhaustion responses,
+  `X-Starport-Budget-*` headers, and per-key `allowed_models` restrictions.
+- Embedded web console (`internal/console`) for chat, model comparison,
+  presets, models, providers, keys, usage, and settings against the local
+  gateway.
 
 Not implemented or still planned:
 
 - Content filtering and moderation pipeline.
-- Preset management REST endpoints.
 - OpenTelemetry metrics and distributed tracing.
-- Full usage analytics, billing, and admin dashboard UI.
+- Billing integration.
 - Webhook notifications.
 - Enterprise SSO/RBAC and relational audit-log features.
 
@@ -120,6 +132,8 @@ starport/
 ├── internal/credentials/      # provider credentials, encryption, and repository
 ├── internal/ratelimit/        # atomic rate-limit policy state and repository
 ├── internal/presets/          # preset model and versioned repository
+├── internal/usage/            # request records, usage aggregation, and repository
+├── internal/console/          # embedded web console (static assets and handler)
 ├── internal/storage/          # KVStore adapter interface and implementations
 ├── internal/config/           # environment/.env config loading and validation
 ├── internal/setup/            # safe first-run configuration and identity creation
@@ -247,6 +261,7 @@ Concept repositories own these version 1 namespaces:
 - `internal/credentials`: `credentials:v1:`
 - `internal/ratelimit`: `ratelimit:v1:subject:`
 - `internal/presets`: `presets:v1:name:`
+- `internal/usage`: `usage:v1:`
 - `internal/catalog`: `catalog_generation:v1:` for accepted state and
   `catalog_remote_generation:v1:` for the independently verified remote head
 

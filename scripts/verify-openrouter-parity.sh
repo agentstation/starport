@@ -56,7 +56,7 @@ check ORP-V14 "admin key API accepts allowed_models" \
 check ORP-V15 "budget exhaustion has a 402 regression test" \
   grep_q 'TestSpendBudgetExhaustionReturns402' internal/server
 check ORP-V16 "chat page has a comparison mode" \
-  grep_q 'compareMode' internal/console/static/js
+  grep_q 'setCompareMode' internal/console/static/js
 
 printf 'Summary: %d passed, %d failed\n' "$pass" "$fail"
 test "$fail" -eq 0

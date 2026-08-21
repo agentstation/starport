@@ -60,6 +60,7 @@ bash scripts/verify-dependency-direction.sh
 bash scripts/verify-catalog-driven-providers.sh
 bash scripts/verify-package-layout.sh
 bash scripts/verify-readme-quickstart.sh
+bash scripts/verify-openrouter-parity.sh
 go test ./...
 go vet ./...
 make lint
