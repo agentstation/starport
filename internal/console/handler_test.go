@@ -95,6 +95,41 @@ func TestUsagePageIsRouted(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code, "the usage page module ships in the binary")
 }
 
+// TestPresetsPageIsRouted guards the ORP9 console surface: the presets page
+// route, its nav link, and its page module ship in the binary.
+func TestPresetsPageIsRouted(t *testing.T) {
+	assert.Contains(t, PagePaths, "/presets", "the presets page is a console route")
+	assert.Contains(t, indexHTML, `data-page="presets"`, "the shell nav links to the presets page")
+
+	handler := newTestHandler(t)
+	router := chi.NewRouter()
+	handler.Register(router)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/presets", nil))
+	assert.Equal(t, http.StatusOK, rec.Code, "GET /presets serves the console shell")
+
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/js/pages/presets.js", nil))
+	assert.Equal(t, http.StatusOK, rec.Code, "the presets page module ships in the binary")
+}
+
+// TestChatRoutingControlsShip guards the ORP9 chat surface: provider routing
+// controls, the preset reference picker, and the unenforced-fields display.
+func TestChatRoutingControlsShip(t *testing.T) {
+	chatPage, err := fs.ReadFile(staticFiles, "static/js/pages/chat.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(chatPage), "provider", "the chat page sends provider preferences")
+	assert.Contains(t, string(chatPage), "@preset/", "the chat page offers preset references")
+	assert.Contains(t, string(chatPage), "unenforced", "the chat page surfaces unenforced provider fields")
+
+	apiModule, err := fs.ReadFile(staticFiles, "static/js/api.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(apiModule), "X-Starport-Unenforced-Provider-Fields",
+		"the API client reads the unenforced-fields header")
+	assert.Contains(t, string(apiModule), "/api/v1/presets", "the API client exposes preset CRUD")
+}
+
 // TestCatalogFreshnessSurfaceShips guards the F7 repair: the console renders
 // catalog freshness (age, completeness, degradation, generation diff) from the
 // catalog endpoints, names the two counters distinctly, and no longer conflates

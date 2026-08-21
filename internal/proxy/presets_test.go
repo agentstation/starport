@@ -54,8 +54,11 @@ func presetTestRecord() presets.Record {
 				Temperature: floatPointer(0.2),
 				MaxTokens:   intPointer(256),
 				Provider: &presets.ProviderPreferences{
-					Order:          []string{"groq", "openai"},
-					AllowFallbacks: &falseValue,
+					Order:                   []string{"groq", "openai"},
+					AllowFallbacks:          &falseValue,
+					Sort:                    presets.SortPrice,
+					MaxPromptPricePer1M:     2.5,
+					MaxCompletionPricePer1M: 10,
 				},
 			},
 		},
@@ -90,6 +93,9 @@ func TestChatReferenceMergesPresetConfig(t *testing.T) {
 	require.NotNil(t, inner.lastChat.Provider)
 	require.Equal(t, []string{"groq", "openai"}, inner.lastChat.Provider.Order)
 	require.False(t, inner.lastChat.Provider.AllowFallback)
+	require.Equal(t, presets.SortPrice, inner.lastChat.Provider.Sort)
+	require.InDelta(t, 2.5, inner.lastChat.Provider.MaxPromptPricePer1M, 1e-9)
+	require.InDelta(t, 10.0, inner.lastChat.Provider.MaxCompletionPricePer1M, 1e-9)
 }
 
 func TestPresetRequestFieldsWin(t *testing.T) {

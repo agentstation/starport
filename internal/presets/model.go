@@ -40,12 +40,27 @@ type Config struct {
 	Stop             []string             `json:"stop,omitempty"`
 }
 
+// Provider sort orders a preset may store. They mirror the OpenRouter wire
+// values; "throughput" routes by measured latency, Starport's closest signal.
+const (
+	SortPrice      = "price"
+	SortLatency    = "latency"
+	SortThroughput = "throughput"
+)
+
 // ProviderPreferences is the preset-owned provider routing policy.
 type ProviderPreferences struct {
 	Order          []string `json:"order,omitempty"`
 	Only           []string `json:"only,omitempty"`
 	Ignore         []string `json:"ignore,omitempty"`
 	AllowFallbacks *bool    `json:"allow_fallbacks,omitempty"`
+
+	// Sort selects the route ordering; empty keeps the server default.
+	Sort string `json:"sort,omitempty"`
+	// Price caps are USD per million tokens, matching the wire shape.
+	// Zero means no cap.
+	MaxPromptPricePer1M     float64 `json:"max_prompt_price_per_1m,omitempty"`
+	MaxCompletionPricePer1M float64 `json:"max_completion_price_per_1m,omitempty"`
 }
 
 // IsZero reports whether the config carries no settings at all.
@@ -68,10 +83,13 @@ func (c Config) Clone() Config {
 	clone.Seed = clonePointer(c.Seed)
 	if c.Provider != nil {
 		provider := ProviderPreferences{
-			Order:          append([]string(nil), c.Provider.Order...),
-			Only:           append([]string(nil), c.Provider.Only...),
-			Ignore:         append([]string(nil), c.Provider.Ignore...),
-			AllowFallbacks: clonePointer(c.Provider.AllowFallbacks),
+			Order:                   append([]string(nil), c.Provider.Order...),
+			Only:                    append([]string(nil), c.Provider.Only...),
+			Ignore:                  append([]string(nil), c.Provider.Ignore...),
+			AllowFallbacks:          clonePointer(c.Provider.AllowFallbacks),
+			Sort:                    c.Provider.Sort,
+			MaxPromptPricePer1M:     c.Provider.MaxPromptPricePer1M,
+			MaxCompletionPricePer1M: c.Provider.MaxCompletionPricePer1M,
 		}
 		clone.Provider = &provider
 	}
@@ -96,6 +114,16 @@ func (p Preset) Validate() error {
 	}
 	if p.UpdatedAt.Before(p.CreatedAt) {
 		return fmt.Errorf("%w: updated_at must be after or equal to created_at", ErrInvalidPreset)
+	}
+	if provider := p.Config.Provider; provider != nil {
+		switch provider.Sort {
+		case "", SortPrice, SortLatency, SortThroughput:
+		default:
+			return fmt.Errorf("%w: provider.sort %q is not supported", ErrInvalidPreset, provider.Sort)
+		}
+		if provider.MaxPromptPricePer1M < 0 || provider.MaxCompletionPricePer1M < 0 {
+			return fmt.Errorf("%w: provider price caps must not be negative", ErrInvalidPreset)
+		}
 	}
 	return nil
 }
