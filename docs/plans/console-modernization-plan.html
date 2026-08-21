@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM10 (chat shell and composer)
+    Next action: execute CM11 (streaming and messages)
   </p>
 
   <section id="outcome">
@@ -333,7 +333,7 @@
         <tr id="CM7" data-status="done"><td>CM7</td><td>Usage page with charts.</td><td><code>done</code></td><td>CM-V11 passes (verifier: 13 passed). Four neutral-series charts, URL-persisted filters, virtualized table, request detail panel live-verified against seeded traffic; dark and light screenshots. proof/console-modernization/cm7.md</td></tr>
         <tr id="CM8" data-status="done"><td>CM8</td><td>Presets page.</td><td><code>done</code></td><td>CM-V12 passes (verifier: 14 passed). Full CRUD over /api/v1/presets with catalog-backed ModelPicker, revision-checked saves, and a live @preset request resolving through the gateway; dark and light screenshots. proof/console-modernization/cm8.md</td></tr>
         <tr id="CM9" data-status="done"><td>CM9</td><td>Settings page.</td><td><code>done</code></td><td>CM-V13 passes (verifier: 15 passed). Calm-density sections: save-and-test connection flow with key restore on rejection, three-way theme radio synced to the shell toggle, chat-data export and confirmed delete, about with admin info; dark and light screenshots. proof/console-modernization/cm9.md</td></tr>
-        <tr id="CM10" data-status="todo"><td>CM10</td><td>Chat: thread shell, composer with bottom-bar model picker.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM10" data-status="done"><td>CM10</td><td>Chat: thread shell, composer with bottom-bar model picker.</td><td><code>done</code></td><td>CM-V14 and CM-V15 pass (verifier: 17 passed). Legacy localStorage contract carried over (8 real threads load, per-thread models persist); live streamed reply with stats, stop-mid-stream keeps partial output, reasoning effort gated per model, gateway error messages surfaced once; dark and light screenshots. proof/console-modernization/cm10.md</td></tr>
         <tr id="CM11" data-status="todo"><td>CM11</td><td>Chat: streaming messages, metadata line, reasoning, code blocks.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM12" data-status="todo"><td>CM12</td><td>Chat: comparison mode.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM13" data-status="todo"><td>CM13</td><td>Command palette and keyboard-first polish.</td><td><code>todo</code></td><td></td></tr>
@@ -841,6 +841,29 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           Live-verified: invalid-key restore, valid-key test (422
           models), theme sync, export download, both themes.
           Verifier: 15 passed, 6 failed (cm9.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM9</td><td>merged</td><td>PR #154
+          squash-merged to main (1365e6b) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM10</td><td>done</td><td>Chat
+          shell and composer: chatStore carries the legacy
+          localStorage contract (starport.chats migration, 100-cap,
+          debounced saves, favorites, lastModel, sidebar state);
+          streamChat/completeChat SSE client with usage stats and
+          cache headers; ModelPicker popover (search, pinned,
+          presets, provider groups, capability badges, catalog
+          facts, keyboard nav); Composer bottom bar in the
+          ChatGPT/Claude style with ⌘K picker, model-gated
+          reasoning-effort menu, params popover, presets menu, and
+          send/stop flip; ThreadList with legacy recency grouping,
+          rename, pin, and confirmed delete; chat route with
+          full-height layout, starter empty state, per-thread
+          model/params, abort keeping partial output, title
+          generation, and ?model= seeding. Live-verified: 8 legacy
+          threads, streamed groq reply with persisted stats,
+          stop-mid-stream (1–31 kept), stale-effort 400 reproduced
+          and fixed, gateway 401 message surfaced once. Rendering
+          depth (markdown, reasoning disclosure, metadata line) is
+          CM11. Verifier: 17 passed, 4 failed (cm10.md).</td></tr>
     </table>
   </section>
 </main>

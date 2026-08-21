@@ -21,7 +21,7 @@ import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 // Nav entries flip to implemented as their page tasks land (CM3–CM10).
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, implemented: true },
-  { to: "/chat", label: "Chat", icon: MessageSquare, implemented: false },
+  { to: "/chat", label: "Chat", icon: MessageSquare, implemented: true },
   { to: "/models", label: "Models", icon: Sparkles, implemented: true },
   { to: "/providers", label: "Providers", icon: Server, implemented: true },
   { to: "/keys", label: "Keys", icon: Key, implemented: true },
@@ -215,7 +215,12 @@ export function Shell({ children }: { children: ReactNode }) {
           collapsed ? "ml-16" : "ml-60"
         }`}
       >
-        <div className="mx-auto max-w-[1280px] px-8 py-8">{children}</div>
+        {pathname === "/chat" ? (
+          // Chat owns its full-height layout (thread sidebar + column).
+          children
+        ) : (
+          <div className="mx-auto max-w-[1280px] px-8 py-8">{children}</div>
+        )}
       </main>
     </div>
   );
