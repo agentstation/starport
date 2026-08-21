@@ -112,9 +112,60 @@ export type CatalogMetadata = {
   generated_at?: string;
   catalog_sequence?: number;
   availability_revision?: number;
+  completeness?: string;
+  degraded?: boolean;
+  degradation_reasons?: string[];
+  age_seconds?: number;
+  manifest_available?: boolean;
+  manifest_unavailable_reason?: string;
 };
 
-export type Model = { id: string };
+export type Model = {
+  id: string;
+  name?: string;
+  description?: string;
+  context_length?: number;
+  pricing?: { prompt?: string; completion?: string };
+  architecture?: {
+    input_modalities?: string[];
+    output_modalities?: string[];
+  };
+  top_provider?: { max_completion_tokens?: number };
+  supported_parameters?: string[];
+};
+
+export type OfferingChange = {
+  provider: string;
+  provider_model_id: string;
+  definition_id?: string;
+};
+
+export type PriceChange = {
+  provider: string;
+  provider_model_id: string;
+  field: string;
+  previous_per_1m?: number;
+  current_per_1m?: number;
+};
+
+export type CatalogChanges = {
+  available?: boolean;
+  reason?: string;
+  semantically_equal?: boolean;
+  from_generation_id?: string;
+  to_generation_id?: string;
+  to_generated_at?: string;
+  models_added?: string[];
+  models_removed?: string[];
+  offerings_added?: OfferingChange[];
+  offerings_removed?: OfferingChange[];
+  price_changes?: PriceChange[];
+};
+
+export type CatalogRefreshReport = {
+  changed?: boolean;
+  generation_id?: string;
+};
 
 export type ActivityRecord = {
   timestamp: string;
@@ -152,6 +203,16 @@ export function providerStatus(): Promise<ProviderStatus> {
 
 export function catalogMetadata(): Promise<CatalogMetadata> {
   return request<CatalogMetadata>("/api/v1/catalog");
+}
+
+export function catalogChanges(): Promise<CatalogChanges> {
+  return request<CatalogChanges>("/api/v1/catalog/changes");
+}
+
+export function refreshCatalog(): Promise<CatalogRefreshReport> {
+  return request<CatalogRefreshReport>("/api/v1/admin/catalog/refresh", {
+    method: "POST",
+  });
 }
 
 export function listAdminActivity(filters: {

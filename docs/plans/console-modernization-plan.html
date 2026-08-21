@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM4 (models catalog page)
+    Next action: execute CM5 (providers page)
   </p>
 
   <section id="outcome">
@@ -327,7 +327,7 @@
         <tr id="CM1" data-status="done"><td>CM1</td><td>Frontend workspace scaffold, go:embed contract, Makefile and CI wiring.</td><td><code>done</code></td><td>CM-V01/V02/V04/V18 pass (verifier: 5 passed). 5 Go SPA tests pass. Flag-on and flag-off smoke verified. proof/console-modernization/cm1.md</td></tr>
         <tr id="CM2" data-status="done"><td>CM2</td><td>Design tokens, fonts, app shell (sidebar, page header, themes).</td><td><code>done</code></td><td>CM-V03/V05/V06 pass (verifier: 8 passed). Both-theme and rail screenshots. Reload persistence verified. proof/console-modernization/cm2.md</td></tr>
         <tr id="CM3" data-status="done"><td>CM3</td><td>Overview page.</td><td><code>done</code></td><td>CM-V07 passes (verifier: 9 passed). Live render with real gateway data verified; dark and light screenshots. proof/console-modernization/cm3.md</td></tr>
-        <tr id="CM4" data-status="todo"><td>CM4</td><td>Models catalog page.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM4" data-status="done"><td>CM4</td><td>Models catalog page.</td><td><code>done</code></td><td>CM-V08 passes (verifier: 10 passed). URL filter persistence, virtualization (36 of 422 rows), and "/" focus live-verified; dark and light screenshots. proof/console-modernization/cm4.md</td></tr>
         <tr id="CM5" data-status="todo"><td>CM5</td><td>Providers page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM6" data-status="todo"><td>CM6</td><td>Keys page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM7" data-status="todo"><td>CM7</td><td>Usage page with charts.</td><td><code>todo</code></td><td></td></tr>
@@ -750,6 +750,22 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           CatalogCard, ConnectCard. Admin cards render locked messages
           on 401/403. Live-verified against real gateway state.
           Verifier: 9 passed, 12 failed (cm3.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM3</td><td>merged</td><td>PR #148
+          squash-merged to main (f934320) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM4</td><td>done</td><td>Models
+          catalog page: TanStack Table v9 + window virtualizer (dense
+          40px rows, sticky header, ARIA table, mono ID chips with
+          hover-copy, labeled capability badges, "—" for unknown
+          prices, sortUndefined:"last" keeps unknowns at the bottom
+          both directions), typed URL search params for all filters,
+          "/" focuses search, and the freshness surface (generation
+          chip, age, degradation badges, counters, refresh with
+          inline notice, generation diff side panel). Availability
+          dot omitted — the models list carries no per-model
+          availability; detail drawer and open-in-chat deferred to
+          CM10. Live-verified against 422 real models. Verifier: 10
+          passed, 11 failed (cm4.md).</td></tr>
     </table>
   </section>
 </main>

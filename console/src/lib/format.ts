@@ -48,3 +48,26 @@ export function shortGenerationID(id: string | undefined): string {
   if (!id) return "—";
   return id.length > 22 ? `${id.slice(0, 20)}…` : id;
 }
+
+// formatPricePerM converts a per-token price string into a per-million
+// display value. Returns null when the price is absent or unparseable so
+// callers can render "—" per DESIGN.md (unknown price is never $0).
+export function formatPricePerM(perTokenString: string | undefined): string | null {
+  if (perTokenString === undefined) return null;
+  const perToken = Number.parseFloat(perTokenString);
+  if (!Number.isFinite(perToken)) return null;
+  const perMillion = perToken * 1_000_000;
+  if (perMillion === 0) return "$0";
+  if (perMillion >= 100) return `$${perMillion.toFixed(0)}`;
+  if (perMillion >= 1) return `$${perMillion.toFixed(2).replace(/\.?0+$/, "")}`;
+  return `$${perMillion.toPrecision(2).replace(/\.?0+$/, "")}`;
+}
+
+export function formatContext(tokens: number | null | undefined): string {
+  if (!tokens) return "—";
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 ? 1 : 0)}M`;
+  }
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
+  return String(tokens);
+}

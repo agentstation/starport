@@ -1,0 +1,160 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+import { ChangesPanel } from "@/components/models/ChangesPanel";
+import { ApiError, catalogMetadata, refreshCatalog } from "@/lib/api";
+import { formatRelativeTime, shortGenerationID } from "@/lib/format";
+
+// A catalog older than a week is worth flagging: an embedded bootstrap
+// snapshot ships with the binary and can predate the install by releases.
+const STALE_AFTER_SECONDS = 7 * 24 * 3600;
+
+function Badge({
+  tone,
+  title,
+  children,
+}: {
+  tone: "warn" | "err" | "neutral";
+  title?: string;
+  children: ReactNode;
+}) {
+  const tones = {
+    warn: "bg-warning-tint text-warning",
+    err: "bg-error-tint text-error",
+    neutral: "bg-bg-raised text-text-3",
+  };
+  return (
+    <span
+      title={title}
+      className={`inline-flex h-5 items-center rounded-xs px-1.5 text-xs font-medium ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+// FreshnessBar renders the Starmap snapshot identity loudly: generation,
+// age, degradation, and the two catalog counters, plus refresh and the
+// generation-to-generation diff. Staleness is never hidden.
+export function FreshnessBar() {
+  const queryClient = useQueryClient();
+  const metadata = useQuery({
+    queryKey: ["catalog-metadata"],
+    queryFn: catalogMetadata,
+    retry: false,
+  });
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
+    null,
+  );
+  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(noticeTimer.current), []);
+
+  const say = (text: string, error = false) => {
+    setNotice({ text, error });
+    clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 6000);
+  };
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const report = await refreshCatalog();
+      if (report?.changed) {
+        say(`Catalog updated to generation ${shortGenerationID(report.generation_id)}`);
+      } else {
+        say("Catalog is already current");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["models"] });
+      await queryClient.invalidateQueries({ queryKey: ["catalog-metadata"] });
+    } catch (error) {
+      if (error instanceof ApiError && error.needsKey) {
+        say("Catalog refresh needs an admin-scoped key", true);
+      } else {
+        say(`Refresh failed: ${error instanceof Error ? error.message : error}`, true);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const data = metadata.data;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border border-border-1 bg-bg-panel px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className="rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2"
+          title={data?.generation_id}
+        >
+          {metadata.isPending
+            ? "generation …"
+            : data?.generation_id
+              ? `generation ${shortGenerationID(data.generation_id)}`
+              : "generation — (metadata unavailable)"}
+        </span>
+        {data?.generated_at && (
+          <span className="text-xs text-text-3" title={data.generated_at}>
+            generated {formatRelativeTime(data.generated_at)}
+          </span>
+        )}
+        {data?.completeness && data.completeness !== "complete" && (
+          <Badge tone="warn" title="This generation does not cover every source.">
+            {data.completeness}
+          </Badge>
+        )}
+        {data?.degraded && (
+          <Badge
+            tone="err"
+            title={data.degradation_reasons?.join("; ") || "no reason recorded"}
+          >
+            degraded
+          </Badge>
+        )}
+        {(data?.age_seconds ?? 0) > STALE_AFTER_SECONDS && (
+          <Badge tone="warn" title="Refresh the catalog to pick up a newer generation.">
+            stale
+          </Badge>
+        )}
+        {data && !data.manifest_available && (
+          <Badge tone="neutral" title={data.manifest_unavailable_reason ?? ""}>
+            no manifest
+          </Badge>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        {notice && (
+          <span className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
+            {notice.text}
+          </span>
+        )}
+        {data && (
+          <span className="text-xs text-text-4">
+            catalog sequence {data.catalog_sequence ?? "—"} · availability revision{" "}
+            {data.availability_revision ?? "—"}
+          </span>
+        )}
+        {data?.generation_id && (
+          <button
+            type="button"
+            onClick={() => setChangesOpen(true)}
+            className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
+          >
+            what changed
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={refreshing}
+          className="flex h-7 items-center gap-1.5 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 disabled:opacity-50"
+        >
+          <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          refresh catalog
+        </button>
+      </div>
+      {changesOpen && <ChangesPanel onClose={() => setChangesOpen(false)} />}
+    </div>
+  );
+}
