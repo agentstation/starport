@@ -2,7 +2,7 @@
 // the gateway only ever sees the completion requests.
 
 import { getApiKey, listModels, listPresets, streamChat } from "../api.js";
-import { el, icon, toast, confirmDialog, copyText, formatModelPrice, formatContext, formatCount, debounce } from "../ui.js";
+import { el, icon, toast, confirmDialog, copyText, formatModelPrice, formatContext, formatCount, formatNanoUSD, debounce } from "../ui.js";
 import { renderMarkdown } from "../markdown.js";
 import { navigate } from "../router.js";
 
@@ -78,9 +78,16 @@ export async function render(container) {
         params: { ...DEFAULT_PARAMS },
         streaming: false,
         abort: null,
+        // Compare mode: one prompt fanned out to 2–4 models in parallel
+        // streamed columns. Runs are ephemeral — never persisted.
+        compare: { active: false, models: [], streaming: false, aborts: [] },
         disposed: false,
     };
-    const disposers = [() => { state.disposed = true; if (state.abort) state.abort.abort(); }];
+    const disposers = [() => {
+        state.disposed = true;
+        if (state.abort) state.abort.abort();
+        abortCompare();
+    }];
 
     // A model requested via /chat?model=… (from the Models page drawer).
     const requested = new URLSearchParams(location.search).get("model");
@@ -102,10 +109,14 @@ export async function render(container) {
         el("span", { class: "model-name" }, "select model"), icon("chevron-d"));
     const picker = el("div", { class: "model-picker" }, pickerBtn);
     const priceHint = el("span", { class: "model-price-hint" });
-    const topbar = el("div", { class: "chat-topbar" }, sideToggle, picker, priceHint, el("span", { class: "spacer" }));
+    const compareChips = el("span", { class: "compare-chips" });
+    const compareBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-pressed": "false" }, icon("usage"), "compare");
+    const topbar = el("div", { class: "chat-topbar" }, sideToggle, picker, priceHint, compareChips, el("span", { class: "spacer" }), compareBtn);
 
     const thread = el("div", { class: "chat-thread" });
-    const scroll = el("div", { class: "chat-scroll" }, thread);
+    const compareHost = el("div", { class: "compare-host" });
+    compareHost.hidden = true;
+    const scroll = el("div", { class: "chat-scroll" }, thread, compareHost);
 
     const textarea = el("textarea", { placeholder: "Message the gateway…  (Enter to send, Shift+Enter for newline)", rows: "1" });
     const sendBtn = el("button", { class: "composer-send", type: "button", "aria-label": "Send" }, icon("send"));
@@ -140,10 +151,11 @@ export async function render(container) {
     document.addEventListener("click", outsideSide);
     disposers.push(() => document.removeEventListener("click", outsideSide));
 
-    newBtn.addEventListener("click", () => selectConversation(null));
+    newBtn.addEventListener("click", () => { setCompareMode(false); selectConversation(null); });
     pickerBtn.addEventListener("click", () => toggleModelPop());
     paramsBtn.addEventListener("click", () => toggleParamsPop());
     routingBtn.addEventListener("click", () => toggleRoutingPop());
+    compareBtn.addEventListener("click", () => setCompareMode(!state.compare.active));
 
     textarea.addEventListener("input", autosize);
     textarea.addEventListener("keydown", (event) => {
@@ -152,7 +164,10 @@ export async function render(container) {
             send();
         }
     });
-    sendBtn.addEventListener("click", () => { state.streaming ? state.abort?.abort() : send(); });
+    sendBtn.addEventListener("click", () => {
+        if (state.compare.active) { state.compare.streaming ? abortCompare() : send(); return; }
+        state.streaming ? state.abort?.abort() : send();
+    });
 
     drawList();
     drawThread();
@@ -186,6 +201,7 @@ export async function render(container) {
     }
 
     function selectConversation(id) {
+        if (state.compare.active) setCompareMode(false);
         if (state.streaming) state.abort?.abort();
         state.current = id;
         const convo = currentConversation();
@@ -338,6 +354,7 @@ export async function render(container) {
     // --- Sending ---
 
     async function send() {
+        if (state.compare.active) { await compareSend(); return; }
         const text = textarea.value.trim();
         if (!text || state.streaming) return;
         if (!state.model) { toast("Pick a model first", "err"); return; }
@@ -527,6 +544,7 @@ export async function render(container) {
                 fav,
             );
             opt.addEventListener("click", () => {
+                if (state.compare.active) { addCompareModel(m.id); return; }
                 state.model = m.id;
                 try { localStorage.setItem(LAST_MODEL_STORAGE, m.id); } catch { /* full */ }
                 updatePicker();
@@ -543,6 +561,7 @@ export async function render(container) {
                 el("span", { class: "price" }, p.config?.provider?.sort || ""),
             );
             opt.addEventListener("click", () => {
+                if (state.compare.active) { addCompareModel(reference); return; }
                 state.model = reference;
                 try { localStorage.setItem(LAST_MODEL_STORAGE, reference); } catch { /* full */ }
                 updatePicker();
@@ -574,6 +593,11 @@ export async function render(container) {
     }
 
     function updatePicker() {
+        if (state.compare.active) {
+            pickerBtn.querySelector(".model-name").textContent = `add model (${state.compare.models.length}/4)`;
+            priceHint.textContent = "";
+            return;
+        }
         const m = state.modelIndex.get(state.model);
         pickerBtn.querySelector(".model-name").textContent = m ? (m.name || m.id) : (state.model || "select model");
         priceHint.textContent = m ? (formatModelPrice(m.pricing) || "") : "";
@@ -693,6 +717,180 @@ export async function render(container) {
         routingPop.dispose?.();
         routingPop.remove();
         routingPop = null;
+    }
+
+    // --- Compare mode ---
+
+    // setCompareMode swaps the single-model thread for the ephemeral
+    // comparison view. Single-model conversations are untouched.
+    function setCompareMode(active) {
+        if (state.compare.active === active) return;
+        if (!active) abortCompare();
+        state.compare.active = active;
+        compareBtn.classList.toggle("is-active", active);
+        compareBtn.setAttribute("aria-pressed", String(active));
+        thread.hidden = active;
+        compareHost.hidden = !active;
+        if (active && !state.compare.models.length && state.model) {
+            state.compare.models = [state.model];
+        }
+        drawCompareChips();
+        if (active && !compareHost.childElementCount) {
+            compareHost.append(el("div", { class: "chat-welcome" },
+                el("span", { class: "glyph" }, icon("usage")),
+                el("h2", {}, "COMPARE MODELS"),
+                el("p", {}, "Pick two to four models, then send one prompt to race them side by side. Comparisons stay on this page and are not saved."),
+            ));
+        }
+        updatePicker();
+        textarea.focus();
+    }
+
+    function addCompareModel(id) {
+        if (state.compare.models.includes(id)) { toast("Model already in the comparison", "err"); return; }
+        if (state.compare.models.length >= 4) { toast("Compare holds at most four models", "err"); return; }
+        state.compare.models.push(id);
+        drawCompareChips();
+        updatePicker();
+    }
+
+    function drawCompareChips() {
+        compareChips.replaceChildren();
+        if (!state.compare.active) return;
+        for (const id of state.compare.models) {
+            const remove = el("button", { class: "icon-btn", type: "button", "aria-label": `Remove ${id}` }, icon("close"));
+            remove.addEventListener("click", () => {
+                state.compare.models = state.compare.models.filter((m) => m !== id);
+                drawCompareChips();
+                updatePicker();
+            });
+            const m = state.modelIndex.get(id);
+            compareChips.append(el("span", { class: "compare-chip" }, m?.name || id, remove));
+        }
+    }
+
+    function abortCompare() {
+        for (const controller of state.compare.aborts) controller.abort();
+        state.compare.aborts = [];
+    }
+
+    // compareCost prices a run from the catalog snapshot; null means the
+    // catalog has no pricing for this model, which the column must say.
+    function compareCost(modelId, usage) {
+        const pricing = state.modelIndex.get(modelId)?.pricing;
+        const promptRate = Number.parseFloat(pricing?.prompt);
+        const completionRate = Number.parseFloat(pricing?.completion);
+        if (!usage || !Number.isFinite(promptRate) || !Number.isFinite(completionRate)) return null;
+        return (usage.prompt_tokens || 0) * promptRate + (usage.completion_tokens || 0) * completionRate;
+    }
+
+    async function compareSend() {
+        const text = textarea.value.trim();
+        if (!text || state.compare.streaming) return;
+        const models = [...state.compare.models];
+        if (models.length < 2) { toast("Pick at least two models to compare", "err"); return; }
+        textarea.value = "";
+        autosize();
+
+        compareHost.querySelector(".chat-welcome")?.remove();
+        const grid = el("div", { class: "compare-grid" });
+        // Set through the CSSOM: some environments drop style attributes,
+        // which would silently collapse the grid to the two-column fallback.
+        grid.style.setProperty("--compare-cols", String(models.length));
+        compareHost.append(
+            el("div", { class: "msg msg-user" },
+                el("div", { class: "msg-head" }, el("span", { class: "who" }, "you")),
+                el("div", { class: "msg-body" }, text),
+            ),
+            grid,
+        );
+        scroll.scrollTop = scroll.scrollHeight;
+
+        state.compare.streaming = true;
+        state.compare.aborts = models.map(() => new AbortController());
+        sendBtn.classList.add("is-stop");
+        sendBtn.setAttribute("aria-label", "Stop");
+        sendBtn.replaceChildren(icon("stop"));
+
+        const baseBody = {
+            messages: [
+                ...(state.params.system ? [{ role: "system", content: state.params.system }] : []),
+                { role: "user", content: text },
+            ],
+        };
+        if (state.params.temperature !== null) baseBody.temperature = state.params.temperature;
+        if (state.params.maxTokens !== null) baseBody.max_tokens = state.params.maxTokens;
+        const provider = providerPreferences();
+        if (provider) baseBody.provider = provider;
+
+        await Promise.allSettled(models.map((id, i) => compareColumn(grid, id, { ...baseBody, model: id }, state.compare.aborts[i])));
+
+        state.compare.streaming = false;
+        state.compare.aborts = [];
+        sendBtn.classList.remove("is-stop");
+        sendBtn.setAttribute("aria-label", "Send");
+        sendBtn.replaceChildren(icon("send"));
+        if (!state.disposed) textarea.focus();
+    }
+
+    async function compareColumn(grid, modelId, body, controller) {
+        const md = el("div", { class: "md" });
+        const cursor = el("span", { class: "stream-cursor" });
+        const colBody = el("div", { class: "compare-col-body" }, md, cursor);
+        const foot = el("div", { class: "compare-col-foot" });
+        const column = el("div", { class: "compare-col" },
+            el("div", { class: "compare-col-head" }, el("span", { class: "mono" }, modelId)),
+            colBody,
+            foot,
+        );
+        grid.append(column);
+
+        const started = performance.now();
+        let firstDelta = 0;
+        let content = "";
+        let lastPaint = 0;
+        const paint = (final = false) => {
+            const now = performance.now();
+            if (!final && now - lastPaint < 120) return;
+            lastPaint = now;
+            renderMarkdown(md, content);
+        };
+
+        try {
+            const meta = await streamChat(body, {
+                signal: controller.signal,
+                onDelta: (delta) => {
+                    if (!firstDelta) firstDelta = performance.now() - started;
+                    content += delta;
+                    paint();
+                },
+                onReasoning: () => {
+                    if (!firstDelta) firstDelta = performance.now() - started;
+                },
+            });
+            paint(true);
+            if (!content) md.append(el("em", {}, "The model returned no content."));
+            const elapsed = (performance.now() - started) / 1000;
+            const usedProvider = (meta.model || "").split("/")[0];
+            const cost = compareCost(modelId, meta.usage);
+            const parts = [];
+            if (usedProvider && !modelId.startsWith("@preset/")) parts.push(`via ${usedProvider}`);
+            if (firstDelta) parts.push(`ttft ${(firstDelta / 1000).toFixed(2)}s`);
+            parts.push(`${elapsed.toFixed(1)}s total`);
+            if (meta.usage?.total_tokens) parts.push(`${formatCount(meta.usage.total_tokens)} tokens`);
+            parts.push(cost !== null ? formatNanoUSD(cost * 1_000_000_000) : "no pricing");
+            foot.replaceChildren(...parts.map((part) => el("span", {}, part)));
+        } catch (error) {
+            paint(true);
+            if (error.name !== "AbortError") {
+                colBody.append(el("div", { class: "msg-error" }, error.message));
+                foot.replaceChildren(el("span", {}, "failed"));
+            } else {
+                foot.replaceChildren(el("span", {}, "stopped"));
+            }
+        } finally {
+            cursor.remove();
+        }
     }
 
     // --- Composer helpers ---
