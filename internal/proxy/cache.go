@@ -663,9 +663,10 @@ func (w *cachingStreamWrapper) Read() (*inference.StreamEvent, error) {
 	return event, err
 }
 
-func (w *cachingStreamWrapper) Close() error           { return w.stream.Close() }
-func (w *cachingStreamWrapper) GetCacheStatus() string { return CacheStatusMiss }
-func (w *cachingStreamWrapper) GetCacheAge() int       { return 0 }
+func (w *cachingStreamWrapper) Close() error                         { return w.stream.Close() }
+func (w *cachingStreamWrapper) GetCacheStatus() string               { return CacheStatusMiss }
+func (w *cachingStreamWrapper) GetCacheAge() int                     { return 0 }
+func (w *cachingStreamWrapper) Unwrap() ChatCompletionStreamResponse { return w.stream }
 
 func (w *cachingStreamWrapper) cacheResponse() {
 	response, err := responsecache.CompleteStream(w.events)
@@ -728,6 +729,8 @@ func (s *runtimeLeaseStream) GetCacheAge() int {
 	}
 	return 0
 }
+
+func (s *runtimeLeaseStream) Unwrap() ChatCompletionStreamResponse { return s.stream }
 
 func (s *runtimeLeaseStream) release() {
 	s.once.Do(s.runtime.Release)

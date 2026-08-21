@@ -230,6 +230,11 @@ func (s *loggingStream) Read() (*inference.StreamEvent, error) {
 	return s.stream.Read()
 }
 
+// Unwrap exposes the wrapped stream for cross-cutting middleware.
+func (s *loggingStream) Unwrap() ChatCompletionStreamResponse {
+	return s.stream
+}
+
 // Close logs the stream completion and closes the underlying stream.
 func (s *loggingStream) Close() error {
 	err := s.stream.Close()

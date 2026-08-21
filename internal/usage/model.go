@@ -21,6 +21,14 @@ const (
 	StatusCancelled = "cancelled"
 )
 
+// Operations name the inference surface a record measures.
+const (
+	// OperationChat reports a chat completion request.
+	OperationChat = "chat"
+	// OperationEmbeddings reports an embeddings request.
+	OperationEmbeddings = "embeddings"
+)
+
 // Cost unavailability reasons. A record without a cost carries one so the
 // gap is loud, never a silent zero.
 const (

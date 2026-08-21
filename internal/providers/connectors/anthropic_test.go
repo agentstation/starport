@@ -87,10 +87,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 				},
 				Model:      "claude-3-haiku-20240307",
 				StopReason: "end_turn",
-				Usage: struct {
-					InputTokens  int `json:"input_tokens"`
-					OutputTokens int `json:"output_tokens"`
-				}{
+				Usage: anthropicUsage{
 					InputTokens:  10,
 					OutputTokens: 8,
 				},
@@ -116,10 +113,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 				},
 				Model:      "claude-3-haiku-20240307",
 				StopReason: "end_turn",
-				Usage: struct {
-					InputTokens  int `json:"input_tokens"`
-					OutputTokens int `json:"output_tokens"`
-				}{
+				Usage: anthropicUsage{
 					InputTokens:  15,
 					OutputTokens: 6,
 				},
@@ -306,6 +300,78 @@ func TestAnthropicConnector_ChatStream(t *testing.T) {
 	}
 	if content != "Hello world!" {
 		t.Errorf("Expected 'Hello world!', got '%s'", content)
+	}
+}
+
+func TestAnthropicStreamReportsPromptTokens(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		chunks := []string{
+			`data: {"type":"message_start","message":{"id":"msg_123","usage":{"input_tokens":10,"cache_read_input_tokens":5,"cache_creation_input_tokens":2}}}`,
+			`data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+			`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}`,
+			`data: {"type":"content_block_stop","index":0}`,
+			`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}`,
+			`data: {"type":"message_stop"}`,
+		}
+		for _, chunk := range chunks {
+			w.Write([]byte(chunk + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	connector, _ := NewAnthropicConnector(ProviderConfig{
+		BaseURL:        server.URL + "/v1",
+		Timeout:        5 * time.Second,
+		MaxConnections: 10,
+	})
+
+	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAnthropicMaterial("test-key"),
+		Model:    "claude-3-haiku-20240307",
+		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
+		Messages: []Message{
+			{Role: "user", Content: "Hello"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	defer stream.Close()
+
+	var usage *Usage
+	for {
+		chunk, err := stream.Recv()
+		if err != nil {
+			break
+		}
+		if chunk.Usage != nil {
+			usage = chunk.Usage
+		}
+	}
+
+	if usage == nil {
+		t.Fatal("Expected a streamed usage payload")
+	}
+	// Anthropic reports prompt-side usage only in message_start; the stream
+	// must latch it and compose it with message_delta output tokens.
+	// PromptTokens must include cache reads and cache writes.
+	if usage.PromptTokens != 17 {
+		t.Errorf("PromptTokens = %d, want 17", usage.PromptTokens)
+	}
+	if usage.CompletionTokens != 7 {
+		t.Errorf("CompletionTokens = %d, want 7", usage.CompletionTokens)
+	}
+	if usage.TotalTokens != 24 {
+		t.Errorf("TotalTokens = %d, want 24", usage.TotalTokens)
+	}
+	if usage.CacheWriteTokens != 2 {
+		t.Errorf("CacheWriteTokens = %d, want 2", usage.CacheWriteTokens)
+	}
+	if usage.PromptTokensDetails == nil || usage.PromptTokensDetails.CachedTokens != 5 {
+		t.Errorf("PromptTokensDetails = %+v, want CachedTokens 5", usage.PromptTokensDetails)
 	}
 }
 

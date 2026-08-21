@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
@@ -62,7 +64,7 @@ func TestEmbeddingsControllerOpenAIContract(t *testing.T) {
 	))
 	ctx := requestctx.WithAPIKey(request.Context(), "test-key")
 	ctx = requestctx.WithAPIKeyModel(ctx, &identity.APIKey{AllowedModels: []string{"openai/text-embedding-3-small"}})
-	ctx = context.WithValue(ctx, "request_id", "request-1")
+	ctx = context.WithValue(ctx, middleware.RequestIDKey, "request-1")
 	request = request.WithContext(ctx)
 	recorder := httptest.NewRecorder()
 
@@ -78,6 +80,7 @@ func TestEmbeddingsControllerOpenAIContract(t *testing.T) {
 	require.Equal(t, "test-key", service.lastRequest.APIKey)
 	require.Equal(t, []string{"openai/text-embedding-3-small"}, service.lastRequest.APIKeyConfig.AllowedModels)
 	require.Equal(t, "request-1", service.lastRequest.RequestID)
+	require.Equal(t, string(ProtocolOpenAI), service.lastRequest.Protocol)
 }
 
 func TestEmbeddingsControllerOpenRouterContract(t *testing.T) {

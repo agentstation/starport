@@ -307,6 +307,12 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	// Retain the exact route that produced the canonical response.
 	proxyResp.Response.ModelUsed = result.ModelUsed
+	proxyResp.ProviderUsed = result.ProviderUsed
+	proxyResp.Attempts = result.Attempts
+	proxyResp.CatalogSnapshot = result.CatalogSnapshot
+	if result.Metadata != nil {
+		proxyResp.RoutingDuration = result.Metadata.RoutingDuration
+	}
 
 	// Calculate cache costs if cache control was used
 	if hasCacheControl && result.ChatResponse != nil && result.Usage.PromptTokens > 0 {
@@ -423,7 +429,17 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 			Model: req.Request.Model, Reason: "failed to route embedding request", Err: err,
 		}
 	}
-	return &EmbeddingsResponse{Response: result.Response}, nil
+	response := &EmbeddingsResponse{
+		Response:        result.Response,
+		ModelUsed:       result.ModelUsed,
+		ProviderUsed:    result.ProviderUsed,
+		Attempts:        result.Attempts,
+		CatalogSnapshot: result.CatalogSnapshot,
+	}
+	if result.Metadata != nil {
+		response.RoutingDuration = result.Metadata.RoutingDuration
+	}
+	return response, nil
 }
 
 // ListModels returns models from one retained routable catalog generation.

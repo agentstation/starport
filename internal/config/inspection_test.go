@@ -83,7 +83,7 @@ func TestConfigurationSecretFieldsDeclareRedaction(t *testing.T) {
 func TestRedactedUsesReadableDurationAndAcronymKeys(t *testing.T) {
 	cfg := &Config{
 		Server:   ServerConfig{ReadTimeout: 30},
-		Console:   ConsoleConfig{Enabled: true},
+		Console:  ConsoleConfig{Enabled: true},
 		Security: SecurityConfig{TLSCertPath: "/cert.pem"},
 	}
 	view := Redacted(cfg)

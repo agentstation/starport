@@ -327,12 +327,33 @@ func convertAnthropicResponse(resp *anthropicResponse, model string) *ChatRespon
 				FinishReason: resp.StopReason,
 			},
 		},
-		Usage: Usage{
-			PromptTokens:     resp.Usage.InputTokens,
-			CompletionTokens: resp.Usage.OutputTokens,
-			TotalTokens:      resp.Usage.InputTokens + resp.Usage.OutputTokens,
-		},
+		Usage: convertAnthropicUsage(resp.Usage),
 	}
+}
+
+// anthropicUsage is the Anthropic wire usage object. Its input_tokens field
+// excludes cache reads and writes, unlike OpenAI prompt_tokens.
+type anthropicUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+}
+
+// convertAnthropicUsage normalizes Anthropic usage to OpenAI semantics:
+// prompt_tokens includes cached tokens.
+func convertAnthropicUsage(u anthropicUsage) Usage {
+	promptTokens := u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+	usage := Usage{
+		PromptTokens:     promptTokens,
+		CompletionTokens: u.OutputTokens,
+		TotalTokens:      promptTokens + u.OutputTokens,
+		CacheWriteTokens: u.CacheCreationInputTokens,
+	}
+	if u.CacheReadInputTokens != 0 {
+		usage.PromptTokensDetails = &PromptTokensDetails{CachedTokens: u.CacheReadInputTokens}
+	}
+	return usage
 }
 
 // anthropicResponse represents the response from Anthropic API
@@ -343,10 +364,7 @@ type anthropicResponse struct {
 	Content    []anthropicContent `json:"content"`
 	Model      string             `json:"model"`
 	StopReason string             `json:"stop_reason"`
-	Usage      struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage"`
+	Usage      anthropicUsage     `json:"usage"`
 }
 
 type anthropicContent struct {
@@ -356,11 +374,16 @@ type anthropicContent struct {
 
 // anthropicStream implements ChatStream for Anthropic SSE responses
 type anthropicStream struct {
-	response  *http.Response
-	reader    *bufio.Reader
-	model     string
-	closed    bool
-	messageID string
+	response *http.Response
+	reader   *bufio.Reader
+	model    string
+	closed   bool
+
+	// Latched from the message_start event. The message_delta usage event
+	// reports output tokens only, so prompt-side counts come from here.
+	messageID   string
+	promptUsage anthropicUsage
+	promptKnown bool
 }
 
 func newAnthropicStream(resp *http.Response, model string) *anthropicStream {
@@ -439,6 +462,10 @@ func (s *anthropicStream) convertToOpenAIChunk(event *anthropicStreamEvent) *Cha
 		s.messageID = event.Message.ID
 		chunk.ID = s.messageID
 		chunk.Choices[0].Delta.Role = RoleAssistant
+		if event.Message.Usage != nil {
+			s.promptUsage = *event.Message.Usage
+			s.promptKnown = true
+		}
 
 	case "content_block_delta":
 		if event.Delta.Type == "text_delta" {
@@ -450,11 +477,14 @@ func (s *anthropicStream) convertToOpenAIChunk(event *anthropicStreamEvent) *Cha
 			chunk.Choices[0].FinishReason = event.Delta.StopReason
 		}
 		if event.Usage != nil {
-			chunk.Usage = &Usage{
-				PromptTokens:     event.Usage.InputTokens,
-				CompletionTokens: event.Usage.OutputTokens,
-				TotalTokens:      event.Usage.InputTokens + event.Usage.OutputTokens,
+			composed := *event.Usage
+			if s.promptKnown {
+				composed.InputTokens = s.promptUsage.InputTokens
+				composed.CacheCreationInputTokens = s.promptUsage.CacheCreationInputTokens
+				composed.CacheReadInputTokens = s.promptUsage.CacheReadInputTokens
 			}
+			usage := convertAnthropicUsage(composed)
+			chunk.Usage = &usage
 		}
 
 	case "message_stop":
@@ -469,15 +499,13 @@ func (s *anthropicStream) convertToOpenAIChunk(event *anthropicStreamEvent) *Cha
 type anthropicStreamEvent struct {
 	Type    string `json:"type"`
 	Message *struct {
-		ID string `json:"id"`
+		ID    string          `json:"id"`
+		Usage *anthropicUsage `json:"usage,omitempty"`
 	} `json:"message,omitempty"`
 	Delta *struct {
 		Type       string `json:"type,omitempty"`
 		Text       string `json:"text,omitempty"`
 		StopReason string `json:"stop_reason,omitempty"`
 	} `json:"delta,omitempty"`
-	Usage *struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage,omitempty"`
+	Usage *anthropicUsage `json:"usage,omitempty"`
 }
