@@ -91,12 +91,6 @@ func TestLoaderSecurePlatformDefaults(t *testing.T) {
 			cfg.CredentialSources.ReconcileTimeout,
 		)
 	}
-	if cfg.RateLimiting.ConfigPath != paths.RateLimitsFile {
-		t.Errorf("default rate-limit path = %q, want %q", cfg.RateLimiting.ConfigPath, paths.RateLimitsFile)
-	}
-	if cfg.RateLimiting.EnableHotReload {
-		t.Error("rate-limit hot reload is enabled without an explicit configuration")
-	}
 }
 
 func TestLoaderEnvironmentOverridesFiles(t *testing.T) {
@@ -283,7 +277,6 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 	environment := map[string]string{
 		"STARPORT_STORAGE_BADGER_PATH":             "state",
 		"STARPORT_CATALOG_WORKSPACE_PATH":          "catalog",
-		"STARPORT_RATE_LIMITING_CONFIG_PATH":       "rate-limits.yaml",
 		"STARPORT_SECURITY_TLS_CERT_PATH":          "tls/cert.pem",
 		"STARPORT_SECURITY_TLS_KEY_PATH":           "tls/key.pem",
 		"STARPORT_LOGGING_OUTPUT":                  "file",
@@ -304,7 +297,6 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 	wants := map[string]string{
 		"badger":  filepath.Join(paths.ConfigDir, "state"),
 		"catalog": filepath.Join(paths.ConfigDir, "catalog"),
-		"rates":   filepath.Join(paths.ConfigDir, "rate-limits.yaml"),
 		"cert":    filepath.Join(paths.ConfigDir, "tls", "cert.pem"),
 		"key":     filepath.Join(paths.ConfigDir, "tls", "key.pem"),
 		"log":     filepath.Join(paths.ConfigDir, "logs", "starport.log"),
@@ -312,7 +304,6 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 	got := map[string]string{
 		"badger":  cfg.Storage.Badger.Path,
 		"catalog": cfg.Catalog.WorkspacePath,
-		"rates":   cfg.RateLimiting.ConfigPath,
 		"cert":    cfg.Security.TLSCertPath,
 		"key":     cfg.Security.TLSKeyPath,
 		"log":     cfg.Logging.FilePath,
@@ -418,7 +409,7 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 	if cfg.Security.MasterKey != "" || cfg.Security.EnableTLS || cfg.Security.EnableCORS {
 		t.Fatalf("development security = %#v", cfg.Security)
 	}
-	if cfg.Logging.Output != "stdout" || cfg.Logging.FilePath != "" || cfg.RateLimiting.EnableHotReload {
+	if cfg.Logging.Output != "stdout" || cfg.Logging.FilePath != "" {
 		t.Fatalf("development local settings were not guarded")
 	}
 	credential, found := cfg.providerEnvironment.Lookup("OPENAI_API_KEY")

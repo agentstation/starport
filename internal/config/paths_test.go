@@ -49,13 +49,11 @@ func TestPathsForConfigDirDerivesManagedPaths(t *testing.T) {
 		"config": filepath.Join(root, "config.env"),
 		"data":   filepath.Join(root, "data"),
 		"badger": filepath.Join(root, "data", "badger"),
-		"rates":  filepath.Join(root, "rate_limits.yaml"),
 	}
 	got := map[string]string{
 		"config": paths.ConfigFile,
 		"data":   paths.DataDir,
 		"badger": paths.BadgerDir,
-		"rates":  paths.RateLimitsFile,
 	}
 	for name, want := range wants {
 		if got[name] != want {

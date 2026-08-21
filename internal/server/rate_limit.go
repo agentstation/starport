@@ -12,7 +12,8 @@ import (
 
 func (s *Server) rateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.rateLimitingEnabled() {
+		limit, window := s.effectiveRequestLimit(r)
+		if limit <= 0 || window <= 0 || s.rateLimits == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -23,8 +24,6 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 			return
 		}
 
-		limit := s.cfg.RateLimitRequestsPerWindow
-		window := s.cfg.RateLimitWindow
 		subject := "api_key:" + keyID
 
 		decision, err := s.rateLimits.Consume(r.Context(), subject, limit, window)
@@ -43,6 +42,22 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// effectiveRequestLimit resolves the request limit for one request. A
+// per-key request limit is explicit admin intent, so it applies even when
+// the global default window is disabled, and it beats the global window
+// when both exist.
+func (s *Server) effectiveRequestLimit(r *http.Request) (int64, time.Duration) {
+	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil &&
+		apiKey.Limits != nil && apiKey.Limits.Requests != nil {
+		override := apiKey.Limits.Requests
+		return override.Limit, time.Duration(override.WindowSeconds) * time.Second
+	}
+	if !s.rateLimitingEnabled() {
+		return 0, 0
+	}
+	return s.cfg.RateLimitRequestsPerWindow, s.cfg.RateLimitWindow
 }
 
 func (s *Server) rateLimitingEnabled() bool {

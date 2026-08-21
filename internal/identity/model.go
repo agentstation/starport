@@ -10,16 +10,16 @@ import (
 
 // APIKey is one gateway authentication identity.
 type APIKey struct {
-	ID              string         `json:"id"`
-	Name            string         `json:"name"`
-	Hash            string         `json:"hash"`
-	Scopes          []string       `json:"scopes"`
-	AllowedModels   []string       `json:"allowed_models,omitempty"`
-	RateLimitConfig map[string]any `json:"rate_limit_config,omitempty"`
-	Metadata        map[string]any `json:"metadata,omitempty"`
-	Active          bool           `json:"active"`
-	CreatedAt       time.Time      `json:"created_at"`
-	ExpiresAt       *time.Time     `json:"expires_at,omitempty"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Hash          string         `json:"hash"`
+	Scopes        []string       `json:"scopes"`
+	AllowedModels []string       `json:"allowed_models,omitempty"`
+	Limits        *Limits        `json:"limits,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	Active        bool           `json:"active"`
+	CreatedAt     time.Time      `json:"created_at"`
+	ExpiresAt     *time.Time     `json:"expires_at,omitempty"`
 }
 
 var (
@@ -78,6 +78,9 @@ func (k APIKey) Validate() error {
 	}
 	if k.ExpiresAt != nil && k.ExpiresAt.Before(k.CreatedAt) {
 		return ErrInvalidExpiration
+	}
+	if err := k.Limits.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

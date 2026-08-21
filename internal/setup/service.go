@@ -228,7 +228,7 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 		return fmt.Errorf("open initialized identity repository for rollback: %w", err)
 	}
 	keys, scanErr := store.ScanWithPrefix(ctx, "", 0)
-	records, listErr := repository.List(ctx, 2)
+	records, listErr := repository.List(ctx, 2, 0)
 	closeErr := store.Close()
 	if scanErr != nil {
 		return errors.Join(fmt.Errorf("inspect isolated storage keys for rollback: %w", scanErr), closeErr)
@@ -364,7 +364,7 @@ func InitializeIdentity(
 	if err != nil {
 		return identity.IssueResult{}, fmt.Errorf("open identity repository: %w", err)
 	}
-	records, err := repository.List(ctx, 1)
+	records, err := repository.List(ctx, 1, 0)
 	if err != nil {
 		return identity.IssueResult{}, fmt.Errorf("inspect identity repository: %w", err)
 	}

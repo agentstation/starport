@@ -34,12 +34,6 @@ var (
 	ErrConflict = errors.New("rate-limit update conflict")
 	// ErrCorruptRecord reports invalid durable rate-limit data.
 	ErrCorruptRecord = errors.New("rate-limit record is invalid")
-	// ErrInvalidCapacity reports a non-positive token-bucket capacity.
-	ErrInvalidCapacity = errors.New("rate-limit capacity must be positive")
-	// ErrInvalidRefillRate reports a non-positive token refill rate.
-	ErrInvalidRefillRate = errors.New("rate-limit refill rate must be positive")
-	// ErrInvalidTokens reports a token count outside bucket capacity.
-	ErrInvalidTokens = errors.New("rate-limit tokens are outside capacity")
 )
 
 // Clock supplies deterministic repository time.

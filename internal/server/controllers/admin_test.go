@@ -224,3 +224,144 @@ func TestAdminHandler_DeleteKey(t *testing.T) {
 	_, err = identities.GetByID(context.Background(), apiKey.ID)
 	assert.ErrorIs(t, err, identity.ErrNotFound)
 }
+
+func TestAdminKeySetsLimitsAndExpiry(t *testing.T) {
+	handler, repository := newAdminTestController(t)
+
+	body := `{
+		"name": "budgeted",
+		"scopes": ["chat:write"],
+		"allowed_models": ["groq/compound-mini"],
+		"expires_at": "2027-01-01T00:00:00Z",
+		"limits": {
+			"requests": {"limit": 5, "window_seconds": 60},
+			"spend": {"limit": 1000000000, "interval": "day"},
+			"tokens": {"limit": 250000, "interval": "month"}
+		}
+	}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/keys", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	handler.CreateKey(w, req)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var created struct {
+		Key struct {
+			ID            string           `json:"id"`
+			AllowedModels []string         `json:"allowed_models"`
+			Limits        *identity.Limits `json:"limits"`
+			ExpiresAt     string           `json:"expires_at"`
+		} `json:"key"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
+	require.NotNil(t, created.Key.Limits)
+	assert.Equal(t, []string{"groq/compound-mini"}, created.Key.AllowedModels)
+	assert.Equal(t, int64(5), created.Key.Limits.Requests.Limit)
+	assert.Equal(t, int64(60), created.Key.Limits.Requests.WindowSeconds)
+	assert.Equal(t, int64(1_000_000_000), created.Key.Limits.Spend.Limit)
+	assert.Equal(t, "day", created.Key.Limits.Spend.Interval)
+	assert.Equal(t, int64(250_000), created.Key.Limits.Tokens.Limit)
+	assert.Equal(t, "month", created.Key.Limits.Tokens.Interval)
+	assert.Contains(t, created.Key.ExpiresAt, "2027-01-01")
+
+	// The limits persist on the durable record.
+	record, err := repository.GetByID(context.Background(), created.Key.ID)
+	require.NoError(t, err)
+	require.NotNil(t, record.APIKey.Limits)
+	assert.Equal(t, int64(1_000_000_000), record.APIKey.Limits.Spend.Limit)
+	require.NotNil(t, record.APIKey.ExpiresAt)
+
+	// Update changes limits and expiry on the same key.
+	update := `{
+		"limits": {"spend": {"limit": 2000000000, "interval": "week"}},
+		"expires_at": "2028-01-01T00:00:00Z"
+	}`
+	updateReq := httptest.NewRequest("PUT", "/api/v1/admin/keys/"+created.Key.ID, bytes.NewBufferString(update))
+	updateReq = withChiURLParam(updateReq, "key_id", created.Key.ID)
+	updateW := httptest.NewRecorder()
+	handler.UpdateKey(updateW, updateReq)
+	require.Equal(t, http.StatusOK, updateW.Code, updateW.Body.String())
+
+	updated, err := repository.GetByID(context.Background(), created.Key.ID)
+	require.NoError(t, err)
+	require.NotNil(t, updated.APIKey.Limits)
+	assert.Equal(t, int64(2_000_000_000), updated.APIKey.Limits.Spend.Limit)
+	assert.Equal(t, "week", updated.APIKey.Limits.Spend.Interval)
+	assert.Nil(t, updated.APIKey.Limits.Requests, "replacement limits omit the request override")
+	assert.Contains(t, updated.APIKey.ExpiresAt.String(), "2028-01-01")
+
+	// Clearing with an explicit empty object removes every limit.
+	clearReq := httptest.NewRequest("PUT", "/api/v1/admin/keys/"+created.Key.ID, bytes.NewBufferString(`{"limits": {}}`))
+	clearReq = withChiURLParam(clearReq, "key_id", created.Key.ID)
+	clearW := httptest.NewRecorder()
+	handler.UpdateKey(clearW, clearReq)
+	require.Equal(t, http.StatusOK, clearW.Code, clearW.Body.String())
+
+	cleared, err := repository.GetByID(context.Background(), created.Key.ID)
+	require.NoError(t, err)
+	assert.Nil(t, cleared.APIKey.Limits)
+}
+
+func TestAdminKeyRejectsInvalidLimits(t *testing.T) {
+	handler, _ := newAdminTestController(t)
+
+	body := `{
+		"name": "broken",
+		"scopes": ["chat:write"],
+		"limits": {"spend": {"limit": 100, "interval": "hour"}}
+	}`
+	req := httptest.NewRequest("POST", "/api/v1/admin/keys", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+	handler.CreateKey(w, req)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "interval")
+}
+
+func TestKeyListPagination(t *testing.T) {
+	handler, repository := newAdminTestController(t)
+	for _, id := range []string{"key-a", "key-b", "key-c", "key-d", "key-e"} {
+		createAdminTestIdentity(t, repository, identity.APIKey{ID: id, Name: id, Active: true})
+	}
+
+	page := func(query string) (keys []map[string]any, pagination map[string]any) {
+		t.Helper()
+		req := httptest.NewRequest("GET", "/api/v1/admin/keys"+query, nil)
+		w := httptest.NewRecorder()
+		handler.ListKeys(w, req)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var resp struct {
+			Keys       []map[string]any `json:"keys"`
+			Pagination map[string]any   `json:"pagination"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		return resp.Keys, resp.Pagination
+	}
+
+	first, firstPagination := page("?limit=2")
+	require.Len(t, first, 2)
+	assert.Equal(t, "key-a", first[0]["id"])
+	assert.Equal(t, "key-b", first[1]["id"])
+	assert.Equal(t, true, firstPagination["has_more"])
+
+	second, secondPagination := page("?limit=2&offset=2")
+	require.Len(t, second, 2)
+	assert.Equal(t, "key-c", second[0]["id"])
+	assert.Equal(t, "key-d", second[1]["id"])
+	assert.Equal(t, true, secondPagination["has_more"])
+
+	last, lastPagination := page("?limit=2&offset=4")
+	require.Len(t, last, 1)
+	assert.Equal(t, "key-e", last[0]["id"])
+	assert.Equal(t, false, lastPagination["has_more"])
+
+	// An invalid parameter is a caller error, not a silent default.
+	badReq := httptest.NewRequest("GET", "/api/v1/admin/keys?limit=nope", nil)
+	badW := httptest.NewRecorder()
+	handler.ListKeys(badW, badReq)
+	require.Equal(t, http.StatusBadRequest, badW.Code)
+}
+
+func withChiURLParam(req *http.Request, key, value string) *http.Request {
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add(key, value)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+}

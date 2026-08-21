@@ -39,12 +39,11 @@ func writePaths(writer io.Writer, paths config.Paths, asJSON bool) error {
 	}
 	_, err := fmt.Fprintf(
 		writer,
-		"Configuration directory: %s\nConfiguration file: %s\nData directory: %s\nBadger directory: %s\nRate-limit file: %s\n",
+		"Configuration directory: %s\nConfiguration file: %s\nData directory: %s\nBadger directory: %s\n",
 		paths.ConfigDir,
 		paths.ConfigFile,
 		paths.DataDir,
 		paths.BadgerDir,
-		paths.RateLimitsFile,
 	)
 	return err
 }

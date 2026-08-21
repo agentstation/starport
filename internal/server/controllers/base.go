@@ -37,6 +37,11 @@ const (
 	providerField               = "provider"
 	responseCountField          = "count"
 	responseMessageField        = "message"
+	fieldLimit                  = "limit"
+	fieldCreatedAt              = "created_at"
+	fieldError                  = "error"
+	fieldRequests               = "requests"
+	fieldTokens                 = "tokens"
 )
 
 // BaseHandler provides common functionality for all handlers

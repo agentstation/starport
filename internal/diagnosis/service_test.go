@@ -134,7 +134,7 @@ func TestProbeReadsIdentityWithoutChangingIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	records, err := repository.List(context.Background(), 2)
+	records, err := repository.List(context.Background(), 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
