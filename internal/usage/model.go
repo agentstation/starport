@@ -74,6 +74,9 @@ type Record struct {
 	StatusCode     int       `json:"status_code,omitempty"`
 	ErrorClass     string    `json:"error_class,omitempty"`
 	Tokens         Tokens    `json:"tokens"`
+	// TokensEstimated marks counts the gateway synthesized with a
+	// tokenizer because the provider reported none.
+	TokensEstimated bool `json:"tokens_estimated,omitempty"`
 	LatencyMS      int64     `json:"latency_ms"`
 	RoutingMS      int64     `json:"routing_ms,omitempty"`
 	Attempts       int       `json:"attempts,omitempty"`

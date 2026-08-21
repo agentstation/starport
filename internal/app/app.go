@@ -32,6 +32,7 @@ import (
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/tokenize"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -364,7 +365,9 @@ func (b *runtimeBuilder) buildGateway() error {
 		router.WithOperatorCredentialGate(b.application.providerStates),
 		router.WithUserCredentials(b.providerKeys),
 	)
-	proxyOptions := make([]proxy.Option, 0, 1)
+	proxyOptions := make([]proxy.Option, 0, 2)
+	// Codecs build once here and serve every request concurrently.
+	proxyOptions = append(proxyOptions, proxy.WithTokenEstimator(tokenize.NewEstimator()))
 	if b.application.cacheManager != nil {
 		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, &proxy.CacheConfig{
 			EnableChatCache: true, EnableEmbeddingCache: true,

@@ -169,6 +169,12 @@ type Usage struct {
 	ReasoningTokens  int
 	CacheReadTokens  int
 	CacheWriteTokens int
+
+	// Estimated marks counts the gateway synthesized with a tokenizer
+	// because the provider reported no usage. Estimated counts never
+	// appear on the wire as provider-reported facts; accounting records
+	// carry the flag so operators can tell estimates from measurements.
+	Estimated bool
 }
 
 // LogProb reports one token probability and its alternatives.

@@ -179,7 +179,7 @@ export async function streamChat(body, { signal, onDelta, onReasoning }) {
             Authorization: `Bearer ${key}`,
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ...body, stream: true }),
+        body: JSON.stringify({ ...body, stream: true, stream_options: { include_usage: true } }),
     });
     if (!response.ok) throw await parseError(response);
 

@@ -637,8 +637,9 @@ export async function render(container) {
             "thinking");
         const body = el("div", { class: "msg-body" }, thinking, md, cursor);
         let fold = null;
+        const liveTps = el("span", { class: "live-tps", title: "Live estimated generation speed" });
         const liveNode = el("div", { class: "msg msg-assistant" },
-            el("div", { class: "msg-head" }, el("span", { class: "who" }, "assistant"), el("span", {}, state.model)),
+            el("div", { class: "msg-head" }, el("span", { class: "who" }, "assistant"), el("span", {}, state.model), liveTps),
             body,
         );
         if (thread.querySelector(".chat-welcome")) thread.replaceChildren();
@@ -664,11 +665,24 @@ export async function render(container) {
                 thinking.remove();
             }
         };
+        // Live tok/s runs on a chars/4 estimate; the provider's real counts
+        // replace it in the message footer when the stream ends.
+        let lastTps = 0;
+        const paintTps = () => {
+            const now = performance.now();
+            if (!firstDelta || now - lastTps < 250) return;
+            lastTps = now;
+            const seconds = (now - started - firstDelta) / 1000;
+            if (seconds < 0.4) return;
+            const estimate = Math.round((message.content.length + message.reasoning.length) / 4 / seconds);
+            if (estimate > 0) liveTps.textContent = `~${estimate} tok/s`;
+        };
         const paint = (final = false) => {
             const now = performance.now();
             if (!final && now - lastPaint < 120) return;
             lastPaint = now;
             renderMarkdown(md, message.content);
+            paintTps();
             scrollToEnd();
         };
 
@@ -711,6 +725,7 @@ export async function render(container) {
                         fold.setThinking(true);
                         body.prepend(fold);
                     } else fold.update(message.reasoning);
+                    paintTps();
                     scrollToEnd();
                 },
             });
@@ -1143,8 +1158,9 @@ export async function render(container) {
         const cursor = el("span", { class: "stream-cursor" });
         const colBody = el("div", { class: "compare-col-body" }, md, cursor);
         const foot = el("div", { class: "compare-col-foot" });
+        const liveTps = el("span", { class: "live-tps", title: "Live estimated generation speed" });
         const column = el("div", { class: "compare-col" },
-            el("div", { class: "compare-col-head" }, el("span", { class: "mono" }, modelId)),
+            el("div", { class: "compare-col-head" }, el("span", { class: "mono" }, modelId), liveTps),
             colBody,
             foot,
         );
@@ -1154,11 +1170,22 @@ export async function render(container) {
         let firstDelta = 0;
         let content = "";
         let lastPaint = 0;
+        let lastTps = 0;
+        const paintTps = () => {
+            const now = performance.now();
+            if (!firstDelta || now - lastTps < 250) return;
+            lastTps = now;
+            const seconds = (now - started - firstDelta) / 1000;
+            if (seconds < 0.4) return;
+            const estimate = Math.round(content.length / 4 / seconds);
+            if (estimate > 0) liveTps.textContent = `~${estimate} tok/s`;
+        };
         const paint = (final = false) => {
             const now = performance.now();
             if (!final && now - lastPaint < 120) return;
             lastPaint = now;
             renderMarkdown(md, content);
+            paintTps();
         };
 
         try {
@@ -1182,6 +1209,9 @@ export async function render(container) {
             if (usedProvider && !modelId.startsWith("@preset/")) parts.push(`via ${usedProvider}`);
             if (firstDelta) parts.push(`ttft ${(firstDelta / 1000).toFixed(2)}s`);
             parts.push(`${elapsed.toFixed(1)}s total`);
+            if (meta.usage?.completion_tokens && elapsed > 0) {
+                parts.push(`${(meta.usage.completion_tokens / elapsed).toFixed(1)} tok/s`);
+            }
             if (meta.usage?.total_tokens) parts.push(`${formatCount(meta.usage.total_tokens)} tokens`);
             parts.push(cost !== null ? formatNanoUSD(cost * 1_000_000_000) : "no pricing");
             foot.replaceChildren(...parts.map((part) => el("span", {}, part)));
@@ -1195,6 +1225,8 @@ export async function render(container) {
             }
         } finally {
             cursor.remove();
+            // The foot's measured tok/s replaces the live estimate.
+            liveTps.remove();
         }
     }
 

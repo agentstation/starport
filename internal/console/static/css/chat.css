@@ -152,6 +152,7 @@
     color: var(--ink-faint);
 }
 .msg-head .who { letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+.msg-head .live-tps { margin-left: auto; font-variant-numeric: tabular-nums; }
 .msg-user .msg-head .who { color: var(--accent); }
 .msg-assistant .msg-head .who { color: var(--cyan); }
 .msg-user .msg-body {
@@ -531,11 +532,21 @@
     min-width: 0;
 }
 .compare-col-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--sp-2);
     padding: var(--sp-2) var(--sp-3);
     border-bottom: 1px solid var(--line-strong);
     font-size: var(--text-xs);
     color: var(--ink-dim);
     overflow-wrap: anywhere;
+}
+.compare-col-head .live-tps {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
+    white-space: nowrap;
 }
 .compare-col-body { padding: var(--sp-3); flex: 1; font-size: var(--text-sm); }
 .compare-col-foot {
