@@ -1,0 +1,121 @@
+package console
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"testing/fstest"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
+)
+
+func builtDist() fstest.MapFS {
+	return fstest.MapFS{
+		"index.html": &fstest.MapFile{
+			Data: []byte("<!doctype html><div id=\"root\"></div>"),
+		},
+		"assets/index-abc123.js": &fstest.MapFile{
+			Data: []byte("console.log(\"starport\")"),
+		},
+	}
+}
+
+func newSPARouter(t *testing.T, dist fstest.MapFS) *chi.Mux {
+	t.Helper()
+	logger := zerolog.Nop()
+	handler := newSPAHandler(&logger, dist)
+	router := chi.NewRouter()
+	handler.Register(router)
+	return router
+}
+
+func TestSPAHandlerServesIndexForEveryPagePath(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	for _, path := range PagePaths {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusOK)
+		}
+		body, _ := io.ReadAll(recorder.Body)
+		if !strings.Contains(string(body), "id=\"root\"") {
+			t.Fatalf("GET %s did not serve the SPA index", path)
+		}
+		if cache := recorder.Header().Get("Cache-Control"); cache != "no-cache" {
+			t.Fatalf("GET %s Cache-Control = %q, want no-cache", path, cache)
+		}
+		if csp := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'self'") {
+			t.Fatalf("GET %s is missing the same-origin CSP", path)
+		}
+	}
+}
+
+func TestSPAHandlerServesHashedAssetsImmutable(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	request := httptest.NewRequest(http.MethodGet, "/assets/index-abc123.js", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("asset status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	cache := recorder.Header().Get("Cache-Control")
+	if !strings.Contains(cache, "immutable") {
+		t.Fatalf("asset Cache-Control = %q, want immutable", cache)
+	}
+}
+
+func TestSPAHandlerRejectsMissingAndTraversalAssets(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	for _, path := range []string{"/assets/missing.js", "/assets/../index.html"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		if recorder.Code == http.StatusOK {
+			t.Fatalf("GET %s status = 200, want a non-200 rejection", path)
+		}
+	}
+}
+
+func TestSPAHandlerWithoutBuildServesNotice(t *testing.T) {
+	router := newSPARouter(t, fstest.MapFS{
+		".gitkeep": &fstest.MapFile{Data: []byte("")},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	body, _ := io.ReadAll(recorder.Body)
+	if !strings.Contains(string(body), "not built") {
+		t.Fatalf("body %q does not explain the missing build", string(body))
+	}
+}
+
+func TestNewSPAHandlerUsesEmbeddedDist(t *testing.T) {
+	logger := zerolog.Nop()
+	handler, err := NewSPAHandler(&logger)
+	if err != nil {
+		t.Fatalf("NewSPAHandler error: %v", err)
+	}
+	// The embedded dist may or may not contain a build in this checkout;
+	// the handler must exist either way and report the state coherently.
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	recorder := httptest.NewRecorder()
+	router := chi.NewRouter()
+	handler.Register(router)
+	router.ServeHTTP(recorder, request)
+	if handler.Built() && recorder.Code != http.StatusOK {
+		t.Fatalf("built handler status = %d, want 200", recorder.Code)
+	}
+	if !handler.Built() && recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unbuilt handler status = %d, want 503", recorder.Code)
+	}
+}

@@ -1,0 +1,29 @@
+{
+  "name": "starport-console",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node -e \"require('node:fs').writeFileSync('../internal/console/dist/.gitkeep','')\"",
+    "typecheck": "tsc --noEmit",
+    "check": "pnpm build && pnpm typecheck"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.101.4",
+    "@tanstack/react-router": "1.170.31",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@tanstack/router-plugin": "1.168.34",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "6.1.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}

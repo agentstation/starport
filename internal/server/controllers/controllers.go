@@ -25,7 +25,7 @@ type Controllers struct {
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
 	Presets              *PresetsController
-	Console              *console.Handler
+	Console              console.PageServer
 }
 
 // Config holds configuration for creating handlers
@@ -39,7 +39,7 @@ type Config struct {
 	Presets            presets.Repository
 	ServiceName        string
 	Version            string
-	Console            *console.Handler
+	Console            console.PageServer
 }
 
 // NewControllers creates a new controller collection

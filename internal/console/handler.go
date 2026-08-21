@@ -43,6 +43,12 @@ const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'nonce-%s';
 // shell for each path and the client router renders the matching page.
 var PagePaths = []string{"/", "/chat", "/presets", "/models", "/providers", "/keys", "/usage", "/settings"}
 
+// PageServer registers console page and asset routes on a router. Both
+// the legacy static console and the modernized SPA satisfy it.
+type PageServer interface {
+	Register(r chi.Router)
+}
+
 // Config holds console configuration.
 type Config struct {
 	Title string

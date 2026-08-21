@@ -207,6 +207,10 @@ type ConsoleConfig struct {
 	Enabled bool   `env:"ENABLED,default=true"`
 	Title   string `env:"TITLE,default=Starport Console"`
 	Theme   string `env:"THEME,default=dark"`
+	// Next serves the modernized single-page console instead of the
+	// legacy static console. The CM14 cutover in
+	// docs/plans/console-modernization-plan.html removes this flag.
+	Next bool `env:"NEXT,default=false"`
 }
 
 // Validate performs validation on the configuration

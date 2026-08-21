@@ -62,7 +62,7 @@ type Dependencies struct {
 	ProviderKeys       byok.ProviderKeys
 	RateLimits         ratelimit.Repository
 	ProviderOperations controllers.ProviderOperations
-	Console            *console.Handler
+	Console            console.PageServer
 	// Usage serves recorded request activity. A nil repository degrades
 	// the activity and metrics endpoints to 503, loudly.
 	Usage usage.Repository
