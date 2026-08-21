@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -120,11 +121,16 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		tb.Fatal(err)
 	}
 	modelRouter := router.New(testRegistryAdapter{registry: reg}, router.WithCatalog(reg.Catalog()))
-	service := proxy.New(reg, modelRouter)
+	presetRepository, err := presets.Open(testConfig.store)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	// Match production composition: preset references resolve before routing.
+	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter))
 
 	result, err := New(config, Dependencies{
 		Service: service, Identities: identities, ProviderKeys: providerKeys, RateLimits: rateLimits,
-		ProviderOperations: testConfig.providerOperations,
+		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
 	})
 	if err != nil {
 		tb.Fatal(err)

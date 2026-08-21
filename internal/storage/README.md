@@ -92,7 +92,7 @@ err := store.Set(ctx, "test-key", []byte("test-value"))
 The storage layer uses consistent key patterns for different data types:
 
 - API Keys: `apikey:{hash}`
-- Presets: `preset:{name}`
+- Presets: `presets:v1:name:{base64url(name)}`
 - BYOK Credentials: `credential:{api_key_id}:{provider}`
 - Filters: `filter:{name}`
 - Rate Limits: `ratelimit:{key}:{window}`

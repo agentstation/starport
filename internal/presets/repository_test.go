@@ -20,10 +20,8 @@ func TestPresetRepositoryContract(t *testing.T) {
 		require.NoError(t, err)
 		suffix := uuid.NewString()
 		preset := Preset{
-			ID:        "preset-id-" + suffix,
 			Name:      "preset-" + suffix,
-			Config:    map[string]any{"model": "openai/gpt-4o"},
-			Version:   1,
+			Config:    Config{Model: "openai/gpt-4o"},
 			CreatedAt: time.Unix(100, 0).UTC(),
 			UpdatedAt: time.Unix(100, 0).UTC(),
 		}
@@ -50,8 +48,8 @@ func TestPresetRepositoryContract(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, listed, 1)
 
-		preset.Version = 2
-		preset.Config["temperature"] = 0.5
+		temperature := float32(0.5)
+		preset.Config.Temperature = &temperature
 		updated, err := repository.Update(ctx, preset, created.Revision)
 		require.NoError(t, err)
 		require.EqualValues(t, 2, updated.Revision)

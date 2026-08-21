@@ -30,6 +30,9 @@ var (
 
 	// ErrEmbeddingsNotSupported indicates embeddings are not supported by the provider
 	ErrEmbeddingsNotSupported = errors.New("embeddings not supported by provider")
+
+	// ErrPresetNotFound indicates a request referenced an unknown preset
+	ErrPresetNotFound = errors.New("preset not found")
 )
 
 // ValidationError represents a request validation error

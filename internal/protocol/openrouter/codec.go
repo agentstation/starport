@@ -45,6 +45,7 @@ type ChatRequest struct {
 	Reasoning           *Reasoning           `json:"reasoning,omitempty"`
 	ReasoningEffort     string               `json:"reasoning_effort,omitempty"`
 	Provider            *ProviderPreferences `json:"provider,omitempty"`
+	Preset              string               `json:"preset,omitempty"`
 	Route               string               `json:"route,omitempty"`
 	Transforms          []string             `json:"transforms,omitempty"`
 	Plugins             []json.RawMessage    `json:"plugins,omitempty"`
@@ -57,6 +58,8 @@ type DecodedChat struct {
 	Inference inference.ChatRequest
 	Route     string
 	Provider  *ProviderPreferences
+	// Preset names a stored preset the request selects by body field.
+	Preset string
 }
 
 // ProviderPreferences is the OpenRouter provider-routing policy.
@@ -222,7 +225,7 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 			Stream: wire.Stream, User: wire.User, Extensions: extensions,
 			StreamOptions: inference.StreamOptions{IncludeUsage: wire.StreamOptions != nil && wire.StreamOptions.IncludeUsage},
 		},
-		Route: wire.Route, Provider: wire.Provider,
+		Route: wire.Route, Provider: wire.Provider, Preset: wire.Preset,
 	}, nil
 }
 
