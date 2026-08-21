@@ -24,7 +24,7 @@ const NAV = [
   { to: "/chat", label: "Chat", icon: MessageSquare, implemented: false },
   { to: "/models", label: "Models", icon: Sparkles, implemented: true },
   { to: "/providers", label: "Providers", icon: Server, implemented: true },
-  { to: "/keys", label: "Keys", icon: Key, implemented: false },
+  { to: "/keys", label: "Keys", icon: Key, implemented: true },
   { to: "/usage", label: "Usage", icon: BarChart3, implemented: false },
   { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: false },
   { to: "/settings", label: "Settings", icon: Settings, implemented: false },

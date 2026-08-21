@@ -127,11 +127,22 @@ export type ProviderStatus = {
   providers?: ProviderRuntimeStatus[];
 };
 
+// CredentialField is a catalog-declared inference credential field a
+// caller supplies for BYOK. It never carries secret values.
+export type CredentialField = {
+  id: string;
+  kind?: string;
+  required?: boolean;
+  default?: string;
+  description?: string;
+};
+
 export type ProviderCatalogEntry = {
   id: string;
   name?: string;
   url?: string;
   models?: string[];
+  credential_fields?: CredentialField[];
 };
 
 export type ProviderRefreshReport = {
@@ -200,6 +211,71 @@ export type CatalogRefreshReport = {
   generation_id?: string;
 };
 
+// --- Gateway API keys (admin) ---
+
+export type KeyRequestLimit = { limit: number; window_seconds: number };
+
+export type KeyBudget = { limit: number; interval: string };
+
+export type KeyLimits = {
+  requests?: KeyRequestLimit | null;
+  spend?: KeyBudget | null;
+  tokens?: KeyBudget | null;
+};
+
+export type GatewayKey = {
+  id: string;
+  name?: string;
+  scopes?: string[];
+  allowed_models?: string[];
+  limits?: KeyLimits | null;
+  active?: boolean;
+  created_at?: string;
+  expires_at?: string | null;
+};
+
+export type BudgetUsage = {
+  limit?: number;
+  interval?: string;
+  used?: number;
+  remaining?: number;
+};
+
+// KeyDetail adds current-window consumption; budgets appear only for
+// keys that configure them.
+export type KeyDetail = GatewayKey & {
+  usage?: { budgets?: { spend?: BudgetUsage; tokens?: BudgetUsage } };
+};
+
+export type CreateKeyRequest = {
+  name: string;
+  scopes: string[];
+  allowed_models?: string[];
+  limits?: KeyLimits;
+  expires_at?: string;
+};
+
+export type UpdateKeyRequest = {
+  name?: string;
+  allowed_models?: string[];
+  limits?: KeyLimits;
+  expires_at?: string;
+  active?: boolean;
+};
+
+// CreatedKey nests the record under "key"; the plaintext secret at
+// key.key exists only in this response.
+export type CreatedKey = {
+  key?: GatewayKey & { key?: string };
+};
+
+export type ProviderKeySummary = {
+  provider: string;
+  created_at?: string;
+  last_used?: string;
+  usage_count?: number;
+};
+
 export type ActivityRecord = {
   timestamp: string;
   status?: string;
@@ -259,6 +335,80 @@ export function refreshCatalog(): Promise<CatalogRefreshReport> {
   return request<CatalogRefreshReport>("/api/v1/admin/catalog/refresh", {
     method: "POST",
   });
+}
+
+export async function listKeys(): Promise<GatewayKey[]> {
+  const body = await request<{ keys?: GatewayKey[] }>("/api/v1/admin/keys");
+  return body?.keys ?? [];
+}
+
+export function getKeyDetail(keyId: string): Promise<KeyDetail> {
+  return request<KeyDetail>(`/api/v1/admin/keys/${encodeURIComponent(keyId)}`);
+}
+
+export function createKey(body: CreateKeyRequest): Promise<CreatedKey> {
+  return request<CreatedKey>("/api/v1/admin/keys", { method: "POST", body });
+}
+
+export function updateKey(
+  keyId: string,
+  body: UpdateKeyRequest,
+): Promise<GatewayKey> {
+  return request<GatewayKey>(`/api/v1/admin/keys/${encodeURIComponent(keyId)}`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export function deleteKey(keyId: string): Promise<unknown> {
+  return request<unknown>(`/api/v1/admin/keys/${encodeURIComponent(keyId)}`, {
+    method: "DELETE",
+  });
+}
+
+// --- Per-key BYOK provider credentials ---
+
+export async function listProviderKeys(
+  keyId: string,
+): Promise<ProviderKeySummary[]> {
+  const body = await request<{ provider_keys?: ProviderKeySummary[] }>(
+    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys`,
+  );
+  return body?.provider_keys ?? [];
+}
+
+export function createProviderKey(
+  keyId: string,
+  body: {
+    provider: string;
+    credentials: Record<string, string>;
+    config?: Record<string, string>;
+  },
+): Promise<unknown> {
+  return request<unknown>(
+    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys`,
+    { method: "POST", body },
+  );
+}
+
+export function deleteProviderKey(
+  keyId: string,
+  provider: string,
+): Promise<unknown> {
+  return request<unknown>(
+    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys/${encodeURIComponent(provider)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function validateProviderKey(
+  keyId: string,
+  provider: string,
+): Promise<{ valid?: boolean }> {
+  return request<{ valid?: boolean }>(
+    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys/${encodeURIComponent(provider)}/validate`,
+    { method: "POST" },
+  );
 }
 
 export function listAdminActivity(filters: {
