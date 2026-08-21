@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"hash/fnv"
 	"html/template"
+	"io"
 	"io/fs"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -175,15 +177,14 @@ func (h *Handler) Static(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", contentTypeFor(path))
-	content, err := fs.ReadFile(h.staticFS, path)
-	if err != nil {
+	seeker, ok := file.(io.ReadSeeker)
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	// #nosec G705 -- content is from the read-only embedded FS; traversal is rejected above
-	if _, err := w.Write(content); err != nil {
-		h.logger.Error().Err(err).Str("path", path).Msg("failed to write console asset")
-	}
+	// ServeContent keeps the Content-Type and ETag set above; the zero
+	// modtime disables Last-Modified so ETag revalidation stays canonical.
+	http.ServeContent(w, r, path, time.Time{}, seeker)
 }
 
 func contentTypeFor(path string) string {
