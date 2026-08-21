@@ -125,6 +125,31 @@ export function confirmDialog({ title = "Confirm", message, confirmLabel = "Conf
     });
 }
 
+// promptDialog replaces window.prompt with a styled, promise-based dialog.
+// Resolves with the trimmed value, or null on cancel/empty.
+export function promptDialog({ title = "Rename", label = "", value = "", confirmLabel = "Save" }) {
+    return new Promise((resolve) => {
+        let done = false;
+        const input = el("input", { class: "input", type: "text", value });
+        const finish = (result) => { if (!done) { done = true; close(); resolve(result); } };
+        const okBtn = el("button", { class: "btn btn-primary", type: "button" }, confirmLabel);
+        const cancelBtn = el("button", { class: "btn btn-ghost", type: "button" }, "Cancel");
+        okBtn.addEventListener("click", () => finish(input.value.trim() || null));
+        cancelBtn.addEventListener("click", () => finish(null));
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") { event.preventDefault(); finish(input.value.trim() || null); }
+        });
+        const close = modal({
+            title,
+            body: el("div", { class: "field" }, label ? el("label", {}, label) : null, input),
+            foot: [cancelBtn, okBtn],
+            onClose: () => { if (!done) { done = true; resolve(null); } },
+        });
+        input.focus();
+        input.select();
+    });
+}
+
 // --- Clipboard ---
 
 export async function copyText(text, trigger) {

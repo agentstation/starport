@@ -5,7 +5,11 @@
     grid-template-columns: 15rem 1fr;
     height: 100%;
     min-height: 0;
+    transition: grid-template-columns var(--dur-med) var(--ease);
 }
+/* Desktop sidebar collapse (persisted). The mobile drawer is separate. */
+.chat-layout.side-collapsed { grid-template-columns: 0 1fr; }
+.chat-layout.side-collapsed .chat-side { overflow: hidden; border-right: none; }
 
 /* Conversation list */
 .chat-side {
@@ -16,6 +20,8 @@
     min-height: 0;
 }
 .chat-side-head { padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
+.chat-side-search { font-size: var(--text-sm); padding: var(--sp-1) var(--sp-2); }
+.chat-side { min-width: 0; }
 .chat-list { flex: 1; overflow-y: auto; padding: 0 var(--sp-2) var(--sp-2); }
 .chat-list-section {
     font-family: var(--font-mono);
@@ -44,9 +50,22 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.chat-item .icon-btn { width: 22px; height: 22px; opacity: 0; flex: none; }
-.chat-item:hover .icon-btn { opacity: 1; }
+.chat-item .actions {
+    display: inline-flex;
+    gap: 1px;
+    flex: none;
+    opacity: 0;
+    transform: translateX(4px);
+    transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.chat-item:hover .actions, .chat-item:focus-within .actions { opacity: 1; transform: none; }
+.chat-item .icon-btn { width: 22px; height: 22px; flex: none; }
 .chat-item .icon-btn svg { width: 12px; height: 12px; }
+.chat-item .pin-btn.is-pinned { color: var(--accent); }
+.chat-item .pin-btn.is-pinned svg { fill: currentColor; }
+.chat-list-section.is-pinned { color: var(--accent); }
+.chat-item-spin { color: var(--accent); flex: none; display: inline-flex; }
+.chat-item-spin svg { width: 12px; height: 12px; animation: spin 0.8s linear infinite; }
 
 /* Main column */
 .chat-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
@@ -100,6 +119,7 @@
 .model-opt .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-opt .name small { display: block; color: var(--ink-faint); font-family: var(--font-mono); font-size: var(--text-xs); }
 .model-opt .price { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-dim); white-space: nowrap; }
+.model-opt .ctx { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); white-space: nowrap; }
 .model-opt .fav { color: var(--ink-faint); }
 .model-opt .fav:hover, .model-opt .fav.is-fav { color: var(--accent); }
 .model-opt .fav.is-fav svg { fill: currentColor; }
@@ -143,6 +163,11 @@
     overflow-wrap: anywhere;
 }
 .msg-assistant .msg-body { min-width: 0; }
+/* Chat prose reads at 15px — between the 14px app base and the old UI's 16px. */
+.chat-thread .msg-body { font-size: 0.9375rem; }
+/* Jump-to-message highlight from the search modal. */
+.msg.is-flash { animation: flash-fade 2s var(--ease); border-radius: var(--r-md); }
+@keyframes flash-fade { 0%, 30% { background: var(--accent-dim); } 100% { background: transparent; } }
 .msg-foot { display: flex; gap: var(--sp-1); align-items: center; flex-wrap: wrap; }
 .msg-foot .meta {
     font-family: var(--font-mono);
@@ -153,6 +178,8 @@
     flex-wrap: wrap;
 }
 .msg-foot .meta .unenforced { color: var(--warn); }
+.msg-foot .meta .cache-hit { color: var(--ok); }
+.msg-foot .meta span[title] { cursor: help; }
 .msg-foot .icon-btn { width: 24px; height: 24px; }
 .msg-foot .icon-btn svg { width: 13px; height: 13px; }
 .msg-error {
@@ -197,6 +224,43 @@
     overflow-y: auto;
 }
 
+/* Reasoning stream spinner ("thinking" while deltas arrive) */
+.reasoning-spin { display: inline-flex; color: var(--cyan); }
+.reasoning-spin svg { width: 11px; height: 11px; animation: spin 0.8s linear infinite; }
+
+/* Pre-first-token indicator */
+.thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    align-self: flex-start;
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    color: var(--ink-dim);
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-full, 999px);
+    padding: 4px 12px;
+    margin-bottom: var(--sp-2);
+}
+.thinking .dots { display: inline-flex; }
+.thinking .dots i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--cyan);
+    display: inline-block;
+    margin-right: 3px;
+    animation: think-dot 1.4s infinite ease-in-out;
+}
+.thinking .dots i:nth-child(2) { animation-delay: 0.2s; }
+.thinking .dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes think-dot {
+    0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
+}
+
 /* Typing cursor */
 .stream-cursor {
     display: inline-block;
@@ -211,10 +275,37 @@
 
 /* Composer */
 .composer-wrap {
+    position: relative;
     border-top: 1px solid var(--line);
     background: linear-gradient(to top, var(--bg1), transparent 160%);
     padding: var(--sp-3) var(--sp-4);
 }
+
+/* Floating scroll-to-bottom button, anchored just above the composer. */
+.scroll-btn {
+    position: absolute;
+    top: -46px;
+    right: var(--sp-4);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--bg2);
+    border: 1px solid var(--line-strong);
+    color: var(--ink-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(4px);
+    transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+    z-index: 20;
+}
+.scroll-btn.is-visible { opacity: 1; pointer-events: auto; transform: none; }
+.scroll-btn:hover { color: var(--ink); transform: translateY(-2px); }
+.scroll-btn svg { width: 16px; height: 16px; }
 .composer {
     max-width: 46rem;
     margin: 0 auto;
@@ -439,12 +530,28 @@
     .compare-chips { display: none; }
 }
 
-.chat-side-toggle { display: none; }
+.chat-side-toggle { display: inline-flex; }
+
+/* ---------- Conversation search modal (⌘K) ---------- */
+.search-box { display: flex; flex-direction: column; gap: var(--sp-3); min-height: 18rem; }
+.search-results { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: 22rem; }
+.search-hit { padding: var(--sp-2); border-radius: var(--r-md); cursor: pointer; }
+.search-hit:hover, .search-hit.is-hilite { background: var(--bg3); }
+.search-hit .t { font-size: var(--text-sm); }
+.search-hit .s {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--ink-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.search-hit mark { background: var(--accent-dim); color: var(--accent); border-radius: 2px; padding: 0 1px; }
+.search-empty { color: var(--ink-faint); font-size: var(--text-sm); padding: var(--sp-2); }
 
 /* ---------- Responsive chat ---------- */
 @media (max-width: 860px) {
-    .chat-layout { grid-template-columns: 1fr; }
-    .chat-side-toggle { display: inline-flex; }
+    .chat-layout, .chat-layout.side-collapsed { grid-template-columns: 1fr; }
     .chat-side {
         position: fixed;
         inset: 0 25% 0 0;
