@@ -26,28 +26,32 @@ const (
 type GenerationStore struct {
 	store      storage.KVStore
 	currentKey string
+	// indexKey selects the ordered acceptance-history record. Only the
+	// accepted runtime store keeps history; the remote head store leaves it
+	// empty and records none.
+	indexKey string
 }
 
 // NewGenerationStore creates a durable Starmap generation store.
 func NewGenerationStore(store storage.KVStore) (*GenerationStore, error) {
-	return newGenerationStore(store, catalogCurrentGenerationKey)
+	return newGenerationStore(store, catalogCurrentGenerationKey, catalogGenerationIndexKey)
 }
 
 // newRemoteGenerationStore creates the verified remote-head store. It shares
 // immutable generation records with the accepted runtime store but owns a
 // separate current pointer.
 func newRemoteGenerationStore(store storage.KVStore) (*GenerationStore, error) {
-	return newGenerationStore(store, remoteCurrentGenerationKey)
+	return newGenerationStore(store, remoteCurrentGenerationKey, "")
 }
 
-func newGenerationStore(store storage.KVStore, currentKey string) (*GenerationStore, error) {
+func newGenerationStore(store storage.KVStore, currentKey, indexKey string) (*GenerationStore, error) {
 	if store == nil {
 		return nil, stderrors.New("catalog generation KV store is required")
 	}
 	if currentKey == "" {
 		return nil, stderrors.New("catalog generation current key is required")
 	}
-	return &GenerationStore{store: store, currentKey: currentKey}, nil
+	return &GenerationStore{store: store, currentKey: currentKey, indexKey: indexKey}, nil
 }
 
 // Current returns the atomically selected generation.
@@ -135,7 +139,7 @@ func (s *GenerationStore) Commit(
 		}
 		current, readErr := s.store.Get(ctx, s.currentKey)
 		if readErr == nil && bytes.Equal(current, actual) {
-			return nil
+			return s.appendIndexEntry(ctx, generation)
 		}
 		if readErr != nil && !stderrors.Is(readErr, storage.ErrNotFound) {
 			return fmt.Errorf("read current catalog generation after conflict: %w", readErr)
@@ -146,7 +150,7 @@ func (s *GenerationStore) Commit(
 			Actual:   string(current),
 		}
 	}
-	return nil
+	return s.appendIndexEntry(ctx, generation)
 }
 
 func catalogGenerationKey(generationID string) string {

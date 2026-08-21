@@ -64,6 +64,9 @@ type Dependencies struct {
 	// Usage serves recorded request activity. A nil repository degrades
 	// the activity and metrics endpoints to 503, loudly.
 	Usage usage.Repository
+	// Catalog serves snapshot freshness, diffs, and forced acquisition. A
+	// nil port degrades the catalog endpoints to 503, loudly.
+	Catalog controllers.CatalogOperations
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -104,6 +107,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Identities:         s.identities,
 		Usage:              dependencies.Usage,
 		ProviderOperations: s.providerOperations,
+		Catalog:            dependencies.Catalog,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
 		Console:            dependencies.Console,

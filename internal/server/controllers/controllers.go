@@ -22,6 +22,7 @@ type Controllers struct {
 	Activity             *ActivityController
 	Admin                *AdminController
 	ProviderOperations   *ProviderOperationsController
+	Catalog              *CatalogController
 	Console              *console.Handler
 }
 
@@ -32,6 +33,7 @@ type Config struct {
 	Identities         identity.Repository
 	Usage              usage.Repository
 	ProviderOperations ProviderOperations
+	Catalog            CatalogOperations
 	ServiceName        string
 	Version            string
 	Console            *console.Handler
@@ -52,6 +54,7 @@ func NewControllers(cfg Config) *Controllers {
 		Activity:             NewActivityController(cfg.Usage),
 		Admin:                NewAdminController(cfg.Identities, cfg.Usage),
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
+		Catalog:              NewCatalogController(cfg.Catalog),
 		Console:              cfg.Console,
 	}
 
