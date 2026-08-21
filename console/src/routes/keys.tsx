@@ -5,6 +5,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ConnectCard } from "@/components/overview/ConnectCard";
 import { CopyButton } from "@/components/ui/CopyButton";
+import {
+  Field,
+  GhostButton,
+  INPUT_CLASS,
+  PrimaryButton,
+  RowAction,
+  SELECT_CLASS,
+} from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
   ApiError,
@@ -191,52 +199,6 @@ function LimitsCell({ apiKey }: { apiKey: GatewayKey }) {
         />
       )}
     </div>
-  );
-}
-
-// --- Shared form scaffolding ---
-
-const INPUT_CLASS =
-  "h-9 rounded-sm border border-border-2 bg-bg-raised px-3 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 focus:border-accent";
-const SELECT_CLASS =
-  "h-9 rounded-sm border border-border-2 bg-bg-raised px-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard focus:border-accent";
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-text-2">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function GhostButton({
-  children,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className="flex h-9 items-center rounded-sm px-3 text-sm text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover disabled:opacity-50"
-    >
-      {children}
-    </button>
-  );
-}
-
-function PrimaryButton({
-  children,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className="flex h-9 items-center gap-1.5 rounded-sm bg-accent px-4 text-sm font-medium text-accent-ink transition-colors duration-150 ease-standard hover:bg-accent-hover disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -1163,21 +1125,6 @@ function KeysPage() {
         <ByokModal apiKey={modal.apiKey} onClose={() => setModal(null)} />
       )}
     </div>
-  );
-}
-
-function RowAction({
-  children,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      {...props}
-      className="flex h-7 items-center rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2 disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }
 

@@ -26,7 +26,7 @@ const NAV = [
   { to: "/providers", label: "Providers", icon: Server, implemented: true },
   { to: "/keys", label: "Keys", icon: Key, implemented: true },
   { to: "/usage", label: "Usage", icon: BarChart3, implemented: true },
-  { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: false },
+  { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: true },
   { to: "/settings", label: "Settings", icon: Settings, implemented: false },
 ] as const;
 
