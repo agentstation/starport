@@ -230,6 +230,23 @@
     color: var(--ink-dim);
 }
 .field .hint { font-size: var(--text-xs); color: var(--ink-faint); }
+.field > .muted { font-size: var(--text-xs); color: var(--ink-faint); }
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--sp-3);
+    margin-block: var(--sp-3);
+}
+.form-section {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: var(--sp-1);
+    margin-top: var(--sp-4);
+}
 .input-row { display: flex; gap: var(--sp-2); align-items: center; }
 .input-row .input { flex: 1; }
 
@@ -675,7 +692,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--text-sm);
 .btn.is-active { color: var(--accent); background: var(--accent-dim); }
 .icon-btn.danger:hover { color: var(--err); background: var(--err-dim); }
 .row-actions { display: inline-flex; gap: var(--sp-1); align-items: center; }
-.cell-name { font-weight: 500; }
+.cell-name { display: flex; flex-direction: column; gap: 1px; font-weight: 500; align-items: flex-start; }
 .cell-id { color: var(--ink-faint); font-family: var(--font-mono); font-size: var(--text-xs); margin-top: 1px; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); }
 .empty > svg { width: 26px; height: 26px; color: var(--ink-faint); }

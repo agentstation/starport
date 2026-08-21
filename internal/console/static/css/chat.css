@@ -152,6 +152,7 @@
     gap: var(--sp-2);
     flex-wrap: wrap;
 }
+.msg-foot .meta .unenforced { color: var(--warn); }
 .msg-foot .icon-btn { width: 24px; height: 24px; }
 .msg-foot .icon-btn svg { width: 13px; height: 13px; }
 .msg-error {

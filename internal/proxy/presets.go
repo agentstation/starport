@@ -143,10 +143,13 @@ func mergePresetConfig(req *ChatCompletionRequest, config presets.Config, usedRe
 			allowFallback = *config.Provider.AllowFallbacks
 		}
 		req.Provider = &ProviderPreferences{
-			Order:         append([]string(nil), config.Provider.Order...),
-			Only:          append([]string(nil), config.Provider.Only...),
-			Ignore:        append([]string(nil), config.Provider.Ignore...),
-			AllowFallback: allowFallback,
+			Order:                   append([]string(nil), config.Provider.Order...),
+			Only:                    append([]string(nil), config.Provider.Only...),
+			Ignore:                  append([]string(nil), config.Provider.Ignore...),
+			AllowFallback:           allowFallback,
+			Sort:                    config.Provider.Sort,
+			MaxPromptPricePer1M:     config.Provider.MaxPromptPricePer1M,
+			MaxCompletionPricePer1M: config.Provider.MaxCompletionPricePer1M,
 		}
 	}
 }
