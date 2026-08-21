@@ -27,6 +27,18 @@ type HealthResponse struct {
 	Version   string `json:"version,omitempty"`
 }
 
+// ListResponse is the shared envelope for cursor-paginated listings.
+type ListResponse struct {
+	Data any `json:"data"`
+	// NextCursor continues the listing; empty when the page is the last.
+	NextCursor string `json:"next_cursor,omitempty"`
+}
+
+// WriteList writes a cursor-paginated listing response.
+func WriteList(w http.ResponseWriter, status int, data any, nextCursor string) error {
+	return WriteJSON(w, status, ListResponse{Data: data, NextCursor: nextCursor})
+}
+
 // WriteJSON writes a JSON response
 func WriteJSON(w http.ResponseWriter, status int, data any) error {
 	w.Header().Set("Content-Type", "application/json")

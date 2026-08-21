@@ -1,10 +1,14 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"runtime"
+	"sort"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -12,22 +16,25 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 const systemInfoUnavailable = "unavailable"
 
 // AdminController handles administrative endpoints
 type AdminController struct {
-	identities identity.Repository
-	issuer     *identity.Issuer
+	identities   identity.Repository
+	issuer       *identity.Issuer
+	usageRecords usage.Repository
 }
 
 // NewAdminController creates a new admin controller
-func NewAdminController(identities identity.Repository) *AdminController {
+func NewAdminController(identities identity.Repository, usageRecords usage.Repository) *AdminController {
 	issuer, _ := identity.NewIssuer(identities)
 	return &AdminController{
-		identities: identities,
-		issuer:     issuer,
+		identities:   identities,
+		issuer:       issuer,
+		usageRecords: usageRecords,
 	}
 }
 
@@ -270,29 +277,152 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// metricsSampleWindow bounds the record sample behind rates, error
+// counts, latency percentiles, and per-provider counts.
+const metricsSampleWindow = 24 * time.Hour
+
 // Metrics handles GET /api/v1/admin/metrics
-func (h *AdminController) Metrics(w http.ResponseWriter, _ *http.Request) {
-	// TODO: Implement actual metrics gathering
-	metrics := map[string]any{
-		"requests": map[string]any{
-			"total":     0,
-			"success":   0,
-			"errors":    0,
-			"rate_1min": 0,
-		},
-		"latency": map[string]any{
-			"p50": 0,
-			"p95": 0,
-			"p99": 0,
-		},
-		"providers": map[string]any{
-			// Provider-specific metrics
-		},
+func (h *AdminController) Metrics(w http.ResponseWriter, r *http.Request) {
+	if h.usageRecords == nil {
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, usageNotConfiguredMessage)
+		return
+	}
+
+	ctx := r.Context()
+	now := time.Now().UTC()
+
+	sample, err := h.usageRecords.List(ctx, usage.Query{
+		KeyID: usage.AggregateAllKeys,
+		Since: now.Add(-metricsSampleWindow),
+		Limit: usage.MaxListLimit,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to sample usage records for metrics")
+		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to compute metrics")
+		return
+	}
+
+	metrics := metricsFromSample(sample.Records, now)
+	metrics["windows"] = h.metricsWindows(ctx, now)
+	metrics["sample"] = map[string]any{
+		"records":   len(sample.Records),
+		"window":    metricsSampleWindow.String(),
+		"truncated": sample.NextCursor != "",
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, metrics); err != nil {
 		log.Error().Err(err).Msg("Failed to write response")
 	}
+}
+
+// metricsFromSample derives one consistent metrics view from a single
+// newest-first record sample.
+func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
+	var success, failures, lastMinute, tokens, spendNanoUSD, uncosted int64
+	latencies := make([]int64, 0, len(records))
+	currency := "USD"
+
+	type providerCounters struct {
+		Requests int64 `json:"requests"`
+		Errors   int64 `json:"errors"`
+	}
+	providers := map[string]*providerCounters{}
+
+	for _, record := range records {
+		if record.Status == usage.StatusError {
+			failures++
+		} else {
+			success++
+		}
+		if record.Timestamp.After(now.Add(-time.Minute)) {
+			lastMinute++
+		}
+		tokens += record.Tokens.Total
+		if record.Cost != nil {
+			spendNanoUSD += record.Cost.NanoUSD
+			if record.Cost.Currency != "" {
+				currency = record.Cost.Currency
+			}
+		} else {
+			uncosted++
+		}
+		latencies = append(latencies, record.LatencyMS)
+
+		provider := record.Provider
+		if provider == "" {
+			provider = "unrouted"
+		}
+		counters := providers[provider]
+		if counters == nil {
+			counters = &providerCounters{}
+			providers[provider] = counters
+		}
+		counters.Requests++
+		if record.Status == usage.StatusError {
+			counters.Errors++
+		}
+	}
+
+	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+
+	return map[string]any{
+		"requests": map[string]any{
+			"total":     success + failures,
+			"success":   success,
+			"errors":    failures,
+			"rate_1min": lastMinute,
+		},
+		"latency": map[string]any{
+			"p50": latencyPercentile(latencies, 0.50),
+			"p95": latencyPercentile(latencies, 0.95),
+			"p99": latencyPercentile(latencies, 0.99),
+		},
+		"tokens": map[string]any{
+			"total": tokens,
+		},
+		"spend": map[string]any{
+			"nano_usd":              spendNanoUSD,
+			"currency":              currency,
+			"requests_without_cost": uncosted,
+		},
+		"providers": providers,
+	}
+}
+
+// metricsWindows reads the exact aggregate counters for the fixed
+// UTC-aligned day, week, and month windows containing now.
+func (h *AdminController) metricsWindows(ctx context.Context, now time.Time) map[string]any {
+	windows := map[string]any{}
+	for _, interval := range []string{usage.IntervalDay, usage.IntervalWeek, usage.IntervalMonth} {
+		totals, err := h.usageRecords.Totals(ctx, usage.AggregateAllKeys, interval, now)
+		if err != nil {
+			log.Error().Err(err).Str("interval", interval).Msg("Failed to read usage totals")
+			windows[interval] = map[string]any{"error": "unavailable"}
+			continue
+		}
+		windows[interval] = map[string]any{
+			"requests":       totals.Requests,
+			"tokens":         totals.Tokens,
+			"spend_nano_usd": totals.SpendNanoUSD,
+		}
+	}
+	return windows
+}
+
+// latencyPercentile returns the nearest-rank percentile of an ascending
+// latency sample, or zero for an empty sample.
+func latencyPercentile(sorted []int64, quantile float64) int64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	rank := int(math.Ceil(quantile*float64(len(sorted)))) - 1
+	if rank < 0 {
+		rank = 0
+	}
+	if rank >= len(sorted) {
+		rank = len(sorted) - 1
+	}
+	return sorted[rank]
 }
 
 // Helper functions

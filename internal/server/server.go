@@ -15,6 +15,7 @@ import (
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/controllers"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 var (
@@ -60,6 +61,9 @@ type Dependencies struct {
 	RateLimits         ratelimit.Repository
 	ProviderOperations controllers.ProviderOperations
 	Console            *console.Handler
+	// Usage serves recorded request activity. A nil repository degrades
+	// the activity and metrics endpoints to 503, loudly.
+	Usage usage.Repository
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -98,6 +102,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Service:            s.service,
 		ProviderKeys:       s.providerKeys,
 		Identities:         s.identities,
+		Usage:              dependencies.Usage,
 		ProviderOperations: s.providerOperations,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
