@@ -1,8 +1,10 @@
-// Models — the Starmap catalog: searchable model table, snapshot identity,
-// catalog refresh, and a per-model detail drawer with endpoint health.
+// Models — the Starmap catalog: searchable model table, catalog freshness
+// (generation age, degradation, generation diff), catalog refresh, and a
+// per-model detail drawer with endpoint health.
 
-import { getApiKey, listModels, invalidateModels, getModelEndpoints, providerStatus, refreshCatalog } from "../api.js";
-import { el, icon, toast, copyButton, formatModelPrice, formatPricePerM, formatContext, debounce, sidePanel } from "../ui.js";
+import { getApiKey, listModels, invalidateModels, getModelEndpoints, catalogMetadata, refreshCatalog } from "../api.js";
+import { el, icon, toast, copyButton, formatModelPrice, formatPricePerM, formatContext, formatRelativeTime, debounce, sidePanel } from "../ui.js";
+import { shortGenerationID, freshnessBadges, counterText, openChangesPanel } from "../freshness.js";
 import { navigate } from "../router.js";
 
 export const title = "Models";
@@ -53,12 +55,17 @@ export async function render(container) {
         countLabel,
     );
 
-    // --- Snapshot bar ---
-    const snapshotText = el("span", { class: "snapshot-id" }, "snapshot —");
+    // --- Freshness bar ---
+    const snapshotText = el("span", { class: "snapshot-id" }, "generation —");
+    const badgesHost = el("span", { class: "freshness-badges" });
+    const countersText = el("span", { class: "muted" }, "");
+    const changesBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "what changed");
+    changesBtn.hidden = true;
+    changesBtn.addEventListener("click", () => openChangesPanel());
     const refreshBtn = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("refresh"), "refresh catalog");
     const snapshotBar = el("div", { class: "snapshot-bar" },
-        el("span", { class: "snapshot-left" }, icon("star"), snapshotText),
-        refreshBtn,
+        el("span", { class: "snapshot-left" }, icon("star"), snapshotText, badgesHost),
+        el("span", { class: "snapshot-right" }, countersText, changesBtn, refreshBtn),
     );
     refreshBtn.addEventListener("click", async () => {
         refreshBtn.disabled = true;
@@ -106,12 +113,19 @@ export async function render(container) {
             if (state.disposed) return;
             tableHost.replaceChildren(errorCard(error));
         }
-        providerStatus().then((status) => {
-            if (state.disposed || !status?.catalog_generation_id) return;
-            snapshotText.textContent = `snapshot ${status.catalog_generation_id} · rev ${status.revision ?? "—"}`;
+        catalogMetadata().then((metadata) => {
+            if (state.disposed || !metadata?.generation_id) return;
+            snapshotText.textContent = `generation ${shortGenerationID(metadata.generation_id)}`;
+            snapshotText.title = metadata.generation_id;
+            const generated = metadata.generated_at ? formatRelativeTime(metadata.generated_at) : "—";
+            badgesHost.replaceChildren(
+                el("span", { class: "muted", title: metadata.generated_at || "" }, `generated ${generated}`),
+                ...freshnessBadges(metadata),
+            );
+            countersText.textContent = counterText(metadata);
+            changesBtn.hidden = false;
         }).catch(() => {
-            snapshotText.textContent = "snapshot — (admin key required)";
-            refreshBtn.hidden = true;
+            snapshotText.textContent = "generation — (metadata unavailable)";
         });
     }
 

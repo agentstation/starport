@@ -1,6 +1,7 @@
 package console
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -92,6 +93,33 @@ func TestUsagePageIsRouted(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/js/pages/usage.js", nil))
 	assert.Equal(t, http.StatusOK, rec.Code, "the usage page module ships in the binary")
+}
+
+// TestCatalogFreshnessSurfaceShips guards the F7 repair: the console renders
+// catalog freshness (age, completeness, degradation, generation diff) from the
+// catalog endpoints, names the two counters distinctly, and no longer conflates
+// the generation ID with the availability revision.
+func TestCatalogFreshnessSurfaceShips(t *testing.T) {
+	handler := newTestHandler(t)
+	router := chi.NewRouter()
+	handler.Register(router)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/js/freshness.js", nil))
+	require.Equal(t, http.StatusOK, rec.Code, "the shared freshness module ships in the binary")
+	module := rec.Body.String()
+	assert.Contains(t, module, "degraded", "the freshness module surfaces degradation")
+	assert.Contains(t, module, "catalogChanges", "the freshness module reads the generation diff endpoint")
+
+	modelsPage, err := fs.ReadFile(staticFiles, "static/js/pages/models.js")
+	require.NoError(t, err)
+	assert.NotContains(t, string(modelsPage), "· rev", "the conflated snapshot/revision display is gone")
+	assert.Contains(t, string(modelsPage), "freshness.js", "the models page uses the shared freshness module")
+
+	overviewPage, err := fs.ReadFile(staticFiles, "static/js/pages/overview.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(overviewPage), "availability revision", "the overview names the availability counter distinctly")
+	assert.Contains(t, string(overviewPage), "catalog sequence", "the overview names the sequence counter distinctly")
 }
 
 func TestStaticServesAssetsWithETag(t *testing.T) {

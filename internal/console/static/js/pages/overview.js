@@ -1,8 +1,9 @@
 // Overview — mission control for the local gateway: identity, endpoints,
 // quickstart, live metrics, provider posture, and the Starmap snapshot.
 
-import { getApiKey, healthReady, systemInfo, systemMetrics, providerStatus, listModels } from "../api.js";
-import { el, icon, copyButton, formatCount, formatMs, formatNanoUSD, toast } from "../ui.js";
+import { getApiKey, healthReady, systemInfo, systemMetrics, providerStatus, catalogMetadata, listModels } from "../api.js";
+import { el, icon, copyButton, formatCount, formatMs, formatNanoUSD, formatRelativeTime, toast } from "../ui.js";
+import { shortGenerationID, freshnessBadges, openChangesPanel } from "../freshness.js";
 import { navigate } from "../router.js";
 
 export const title = "Overview";
@@ -55,14 +56,27 @@ export async function render(container) {
             else toast(`Failed to load metrics: ${error.message}`, "err");
         }
 
-        try {
-            const status = await providerStatus();
+        const providersHost = el("div", {});
+        const catalogHost = el("div", {});
+        lowerHost.append(providersHost, catalogHost);
+
+        providerStatus().then((status) => {
             if (disposed) return;
-            lowerHost.append(renderProvidersCard(status), renderSnapshotCard(status));
-        } catch (error) {
+            providersHost.append(renderProvidersCard(status));
+        }).catch((error) => {
             if (disposed) return;
-            if (error.unauthorized || error.forbidden) lowerHost.append(lockedCard("Provider status needs an admin-scoped key."));
-        }
+            if (error.unauthorized || error.forbidden) providersHost.append(lockedCard("Provider status needs an admin-scoped key."));
+        });
+
+        // Catalog freshness needs only models:read, so it renders even when
+        // the admin-scoped provider status does not.
+        catalogMetadata().then((metadata) => {
+            if (disposed) return;
+            catalogHost.append(renderCatalogCard(metadata));
+        }).catch((error) => {
+            if (disposed) return;
+            if (error.unauthorized || error.forbidden) catalogHost.append(lockedCard("Catalog freshness needs a key with the models:read scope."));
+        });
     }
 
     return () => { disposed = true; };
@@ -195,16 +209,27 @@ function renderProvidersCard(status) {
     );
 }
 
-function renderSnapshotCard(status) {
+// renderCatalogCard shows catalog freshness with its two counters named
+// distinctly: the catalog sequence counts accepted generations, and the
+// availability revision counts provider availability flips.
+function renderCatalogCard(metadata) {
     const link = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "open models", icon("chevron-r"));
     link.addEventListener("click", () => navigate("/models"));
+    const changesLink = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "what changed");
+    changesLink.addEventListener("click", () => openChangesPanel());
+    const badges = freshnessBadges(metadata);
     return el("div", { class: "card" },
-        el("div", { class: "card-title" }, "Starmap catalog", link),
+        el("div", { class: "card-title" }, "Starmap catalog", el("span", {}, changesLink, link)),
+        badges.length ? el("div", { class: "freshness-badges" }, ...badges) : null,
         el("dl", { class: "kv" },
-            el("dt", {}, "snapshot"),
-            el("dd", {}, status?.catalog_generation_id || "—"),
-            el("dt", {}, "revision"),
-            el("dd", {}, String(status?.revision ?? "—")),
+            el("dt", {}, "generation"),
+            el("dd", { class: "mono", title: metadata.generation_id || "" }, shortGenerationID(metadata.generation_id)),
+            el("dt", {}, "generated"),
+            el("dd", { title: metadata.generated_at || "" }, metadata.generated_at ? formatRelativeTime(metadata.generated_at) : "—"),
+            el("dt", {}, "catalog sequence"),
+            el("dd", {}, String(metadata.catalog_sequence ?? "—")),
+            el("dt", {}, "availability revision"),
+            el("dd", {}, String(metadata.availability_revision ?? "—")),
         ),
     );
 }
