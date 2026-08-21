@@ -3,7 +3,9 @@ package proxy
 
 import (
 	"context"
+	"time"
 
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/byok"
 )
@@ -47,6 +49,7 @@ type ChatCompletionRequest struct {
 	TenantID     string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
+	Protocol     string               `json:"-"` // Protocol surface that received the request
 }
 
 // ChatCompletionResponse is a canonical result plus gateway response metadata.
@@ -58,6 +61,12 @@ type ChatCompletionResponse struct {
 	CacheAge    int        `json:"-"` // Seconds since cached
 	ETag        string     `json:"-"` // Entity tag for response
 	CacheCost   *CacheCost `json:"-"` // Cache pricing information
+
+	// Route evidence (not serialized)
+	ProviderUsed    string                           `json:"-"`
+	Attempts        int                              `json:"-"`
+	RoutingDuration time.Duration                    `json:"-"`
+	CatalogSnapshot *runtimecatalog.RoutableSnapshot `json:"-"`
 }
 
 // ChatCompletionStreamResponse represents a streaming response
@@ -69,6 +78,12 @@ type ChatCompletionStreamResponse interface {
 	Close() error
 }
 
+// StreamUnwrapper exposes the inner stream of a decorating stream wrapper so
+// cross-cutting middleware can reach route evidence on the routed stream.
+type StreamUnwrapper interface {
+	Unwrap() ChatCompletionStreamResponse
+}
+
 // EmbeddingsRequest is a canonical embedding request plus gateway identity.
 type EmbeddingsRequest struct {
 	Request inference.EmbeddingRequest
@@ -78,6 +93,7 @@ type EmbeddingsRequest struct {
 	TenantID     string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
+	Protocol     string               `json:"-"` // Protocol surface that received the request
 }
 
 // EmbeddingsResponse is a canonical embedding result plus gateway metadata.
@@ -89,6 +105,13 @@ type EmbeddingsResponse struct {
 	CacheAge    int        `json:"-"` // Seconds since cached
 	ETag        string     `json:"-"` // Entity tag for response
 	CacheCost   *CacheCost `json:"-"` // Cache pricing information
+
+	// Route evidence (not serialized)
+	ModelUsed       string                           `json:"-"`
+	ProviderUsed    string                           `json:"-"`
+	Attempts        int                              `json:"-"`
+	RoutingDuration time.Duration                    `json:"-"`
+	CatalogSnapshot *runtimecatalog.RoutableSnapshot `json:"-"`
 }
 
 // ModelsResponse represents a list of available models

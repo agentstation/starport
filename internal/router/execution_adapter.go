@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
@@ -91,10 +92,55 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		}
 		return nil, err
 	}
-	if !owned {
-		return stream, nil
+	// Snapshot generations are immutable, so the evidence pointer stays valid
+	// after the lease releases (same contract as RouteWithFallback).
+	snapshot := runtime.Snapshot()
+	managed := stream
+	if owned {
+		managed = &runtimeManagedStream{ManagedStream: stream, runtime: runtime}
 	}
-	return &runtimeManagedStream{ManagedStream: stream, runtime: runtime}, nil
+	return &evidenceManagedStream{ManagedStream: managed, snapshot: snapshot}, nil
+}
+
+// StreamEvidence exposes route evidence from a managed stream for usage
+// accounting.
+type StreamEvidence interface {
+	ProviderUsed() string
+	AttemptCount() int
+	RoutingDuration() time.Duration
+	CatalogSnapshot() *runtimecatalog.RoutableSnapshot
+}
+
+// evidenceManagedStream decorates every routed stream with the evidence a
+// usage recorder needs after the stream ends.
+type evidenceManagedStream struct {
+	execution.ManagedStream
+	snapshot *runtimecatalog.RoutableSnapshot
+}
+
+func (s *evidenceManagedStream) ProviderUsed() string {
+	evidence := s.Attempts()
+	for index := len(evidence) - 1; index >= 0; index-- {
+		if evidence[index].State == execution.StateSkipped {
+			continue
+		}
+		return evidence[index].Route.ProviderID
+	}
+	return ""
+}
+
+func (s *evidenceManagedStream) AttemptCount() int { return len(s.Attempts()) }
+
+func (s *evidenceManagedStream) RoutingDuration() time.Duration {
+	var duration time.Duration
+	for _, item := range s.Attempts() {
+		duration += item.Duration
+	}
+	return duration
+}
+
+func (s *evidenceManagedStream) CatalogSnapshot() *runtimecatalog.RoutableSnapshot {
+	return s.snapshot
 }
 
 type runtimeManagedStream struct {

@@ -159,12 +159,16 @@ type ChatRequest struct {
 	Extensions     map[string]json.RawMessage
 }
 
-// Usage reports normalized token counts.
+// Usage reports normalized token counts. InputTokens includes cache reads
+// and cache writes; CacheReadTokens and CacheWriteTokens break out the
+// cached portions for pricing.
 type Usage struct {
-	InputTokens     int
-	OutputTokens    int
-	TotalTokens     int
-	ReasoningTokens int
+	InputTokens      int
+	OutputTokens     int
+	TotalTokens      int
+	ReasoningTokens  int
+	CacheReadTokens  int
+	CacheWriteTokens int
 }
 
 // LogProb reports one token probability and its alternatives.

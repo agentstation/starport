@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/failure"
@@ -58,10 +59,7 @@ func NewProtocolBaseHandler(service proxy.Proxy, protocol Protocol) *BaseHandler
 
 // getRequestID extracts the request ID from the context
 func (h *BaseHandler) getRequestID(ctx context.Context) string {
-	if reqID, ok := ctx.Value("request_id").(string); ok {
-		return reqID
-	}
-	return ""
+	return middleware.GetReqID(ctx)
 }
 
 // getAPIKey extracts the API key from the context
