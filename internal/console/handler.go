@@ -30,8 +30,10 @@ var staticFiles embed.FS
 // every script, style, and font ships inside the binary. The nonce admits
 // one inline script in the shell that restores the saved theme before the
 // first paint.
+// style-src allows 'unsafe-inline' because KaTeX and Mermaid position math
+// and diagrams through inline style attributes. Scripts stay nonce-guarded.
 const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'nonce-%s'; " +
-	"style-src 'self'; img-src 'self' data:; font-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; " +
 	"connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; " +
 	"form-action 'self'"
 
