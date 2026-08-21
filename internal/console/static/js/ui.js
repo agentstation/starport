@@ -84,6 +84,28 @@ export function modal({ title, body, foot, wide = false, onClose }) {
     return close;
 }
 
+// sidePanel slides in a right-hand drawer with a title, body, and action.
+// Returns close().
+export function sidePanel(titleText, body, action) {
+    const closeBtn = el("button", { class: "icon-btn", type: "button", "aria-label": "Close" }, icon("close"));
+    const panel = el("aside", { class: "drawer", role: "dialog", "aria-modal": "true" },
+        el("div", { class: "drawer-head" }, el("h2", {}, titleText), closeBtn),
+        body,
+        action ? el("div", { class: "drawer-foot" }, action) : null,
+    );
+    const scrim = el("div", { class: "drawer-scrim" }, panel);
+    const close = () => {
+        scrim.remove();
+        document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (event) => { if (event.key === "Escape") close(); };
+    scrim.addEventListener("mousedown", (event) => { if (event.target === scrim) close(); });
+    closeBtn.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    document.body.append(scrim);
+    return close;
+}
+
 // confirmDialog replaces window.confirm with a styled, promise-based dialog.
 export function confirmDialog({ title = "Confirm", message, confirmLabel = "Confirm", danger = false }) {
     return new Promise((resolve) => {
@@ -149,6 +171,17 @@ export function formatModelPrice(pricing) {
     const completion = formatPricePerM(pricing.completion);
     if (prompt === null && completion === null) return null;
     return `${prompt ?? "—"} in / ${completion ?? "—"} out per 1M`;
+}
+
+// formatNanoUSD renders the gateway's exact nano-USD cost unit as dollars.
+// Small per-request costs keep enough precision to stay meaningful.
+export function formatNanoUSD(nanoUSD) {
+    const dollars = Number(nanoUSD) / 1_000_000_000;
+    if (!Number.isFinite(dollars)) return "—";
+    if (dollars === 0) return "$0";
+    if (dollars >= 1) return `$${dollars.toFixed(2)}`;
+    if (dollars >= 0.001) return `$${dollars.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
+    return `$${dollars.toPrecision(2)}`;
 }
 
 export function formatCount(value) {

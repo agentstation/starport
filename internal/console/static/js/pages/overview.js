@@ -2,7 +2,7 @@
 // quickstart, live metrics, provider posture, and the Starmap snapshot.
 
 import { getApiKey, healthReady, systemInfo, systemMetrics, providerStatus, listModels } from "../api.js";
-import { el, icon, copyButton, formatCount, formatMs, toast } from "../ui.js";
+import { el, icon, copyButton, formatCount, formatMs, formatNanoUSD, toast } from "../ui.js";
 import { navigate } from "../router.js";
 
 export const title = "Overview";
@@ -151,19 +151,31 @@ const reply = await client.chat.completions.create({
     );
 }
 
+// renderStats shows the last 24 hours of recorded traffic. Spend that the
+// gateway could not price is surfaced as "without cost", never as zero.
 function renderStats(metrics) {
     const requests = metrics?.requests || {};
     const latency = metrics?.latency || {};
+    const tokens = metrics?.tokens || {};
+    const spend = metrics?.spend || {};
     const stat = (k, v, d) => el("div", { class: "stat" },
         el("div", { class: "k" }, k),
         el("div", { class: "v" }, v),
         d ? el("div", { class: "d" }, d) : null,
     );
-    return el("div", { class: "grid cols-4" },
-        stat("requests", formatCount(requests.total ?? 0), `${formatCount(requests.rate_1min ?? 0)}/min now`),
-        stat("errors", formatCount(requests.errors ?? 0), requests.total ? `${((requests.errors / requests.total) * 100).toFixed(1)}% of total` : null),
-        stat("latency p50", formatMs(latency.p50 ?? NaN)),
-        stat("latency p95", formatMs(latency.p95 ?? NaN)),
+    const openUsage = el("button", { class: "btn btn-ghost btn-sm", type: "button" }, "open usage", icon("chevron-r"));
+    openUsage.addEventListener("click", () => navigate("/usage"));
+    return el("div", {},
+        el("div", { class: "grid cols-3" },
+            stat("requests 24h", formatCount(requests.total ?? 0), `${formatCount(requests.rate_1min ?? 0)}/min now`),
+            stat("errors", formatCount(requests.errors ?? 0), requests.total ? `${((requests.errors / requests.total) * 100).toFixed(1)}% of total` : null),
+            stat("tokens", formatCount(tokens.total ?? 0)),
+            stat("spend", spend.nano_usd || !spend.requests_without_cost ? formatNanoUSD(spend.nano_usd ?? 0) : "—",
+                spend.requests_without_cost ? `${formatCount(spend.requests_without_cost)} without cost` : null),
+            stat("latency p50", formatMs(latency.p50 ?? NaN)),
+            stat("latency p95", formatMs(latency.p95 ?? NaN)),
+        ),
+        el("div", { class: "stats-foot" }, openUsage),
     );
 }
 
