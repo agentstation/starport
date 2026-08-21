@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM5 (providers page)
+    Next action: execute CM6 (keys page)
   </p>
 
   <section id="outcome">
@@ -328,7 +328,7 @@
         <tr id="CM2" data-status="done"><td>CM2</td><td>Design tokens, fonts, app shell (sidebar, page header, themes).</td><td><code>done</code></td><td>CM-V03/V05/V06 pass (verifier: 8 passed). Both-theme and rail screenshots. Reload persistence verified. proof/console-modernization/cm2.md</td></tr>
         <tr id="CM3" data-status="done"><td>CM3</td><td>Overview page.</td><td><code>done</code></td><td>CM-V07 passes (verifier: 9 passed). Live render with real gateway data verified; dark and light screenshots. proof/console-modernization/cm3.md</td></tr>
         <tr id="CM4" data-status="done"><td>CM4</td><td>Models catalog page.</td><td><code>done</code></td><td>CM-V08 passes (verifier: 10 passed). URL filter persistence, virtualization (36 of 422 rows), and "/" focus live-verified; dark and light screenshots. proof/console-modernization/cm4.md</td></tr>
-        <tr id="CM5" data-status="todo"><td>CM5</td><td>Providers page.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM5" data-status="done"><td>CM5</td><td>Providers page.</td><td><code>done</code></td><td>CM-V09 passes (verifier: 11 passed). One status vocabulary live-verified (dot = adapter, pill = credential); offerings link into filtered models; dark and light screenshots. proof/console-modernization/cm5.md</td></tr>
         <tr id="CM6" data-status="todo"><td>CM6</td><td>Keys page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM7" data-status="todo"><td>CM7</td><td>Usage page with charts.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM8" data-status="todo"><td>CM8</td><td>Presets page.</td><td><code>todo</code></td><td></td></tr>
@@ -766,6 +766,21 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           availability; detail drawer and open-in-chat deferred to
           CM10. Live-verified against 422 real models. Verifier: 10
           passed, 11 failed (cm4.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM4</td><td>merged</td><td>PR #149
+          squash-merged to main (d33adb1) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM5</td><td>done</td><td>Providers
+          page: cards from the admin provider-state snapshot joined
+          with catalog names. One status vocabulary — dot = adapter
+          liveness, tint pill = credential lifecycle — replacing the
+          legacy page's three vocabularies and the offering dot
+          matrix. Credentialed providers sort first; offering counts
+          are plain numbers linking into the filtered models page;
+          refresh and the non-admin catalog-only fallback carried
+          over. Live-verified with a Groq credential (usable-first
+          sort, unavailable google-vertex reason, refresh failure
+          count, limited-key fallback). Verifier: 11 passed, 10
+          failed (cm5.md).</td></tr>
     </table>
   </section>
 </main>

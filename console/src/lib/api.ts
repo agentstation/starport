@@ -100,11 +100,44 @@ export type SystemMetrics = {
   spend?: { nano_usd?: number; requests_without_cost?: number };
 };
 
+export type ProviderOfferingStatus = {
+  provider_model_id: string;
+  state?: string;
+  reason?: string;
+};
+
+export type ProviderRuntimeStatus = {
+  provider_id: string;
+  adapter?: { state?: string; reason?: string };
+  operator_credential?: {
+    state?: string;
+    reason?: string;
+    usable?: boolean;
+    updated_at?: string;
+  };
+  offerings?: ProviderOfferingStatus[];
+};
+
+// ProviderStatus is the safe provider-state snapshot from
+// /api/v1/admin/providers: one revision over adapter, operator
+// credential, and offering projections.
 export type ProviderStatus = {
-  providers?: Array<{
-    provider?: string;
-    operator_credential?: { usable?: boolean; state?: string };
-  }>;
+  revision?: number;
+  catalog_generation_id?: string;
+  providers?: ProviderRuntimeStatus[];
+};
+
+export type ProviderCatalogEntry = {
+  id: string;
+  name?: string;
+  url?: string;
+  models?: string[];
+};
+
+export type ProviderRefreshReport = {
+  changed?: boolean;
+  failure_count?: number;
+  provider_state_revision?: number;
 };
 
 export type CatalogMetadata = {
@@ -199,6 +232,19 @@ export function systemMetrics(): Promise<SystemMetrics> {
 
 export function providerStatus(): Promise<ProviderStatus> {
   return request<ProviderStatus>("/api/v1/admin/providers");
+}
+
+export async function listProviderCatalog(): Promise<ProviderCatalogEntry[]> {
+  const body = await request<{ providers?: ProviderCatalogEntry[] }>(
+    "/api/v1/providers",
+  );
+  return body?.providers ?? [];
+}
+
+export function refreshProviders(): Promise<ProviderRefreshReport> {
+  return request<ProviderRefreshReport>("/api/v1/admin/providers/refresh", {
+    method: "POST",
+  });
 }
 
 export function catalogMetadata(): Promise<CatalogMetadata> {
