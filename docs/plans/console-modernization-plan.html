@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM3 (overview page)
+    Next action: execute CM4 (models catalog page)
   </p>
 
   <section id="outcome">
@@ -326,7 +326,7 @@
         <tr id="CM0" data-status="done"><td>CM0</td><td>Baseline: DESIGN.md, plan, red verifier, fail-before evidence.</td><td><code>done</code></td><td>Plan PR. Verifier red: 1 passed, 20 failed. proof/console-modernization/cm0.md</td></tr>
         <tr id="CM1" data-status="done"><td>CM1</td><td>Frontend workspace scaffold, go:embed contract, Makefile and CI wiring.</td><td><code>done</code></td><td>CM-V01/V02/V04/V18 pass (verifier: 5 passed). 5 Go SPA tests pass. Flag-on and flag-off smoke verified. proof/console-modernization/cm1.md</td></tr>
         <tr id="CM2" data-status="done"><td>CM2</td><td>Design tokens, fonts, app shell (sidebar, page header, themes).</td><td><code>done</code></td><td>CM-V03/V05/V06 pass (verifier: 8 passed). Both-theme and rail screenshots. Reload persistence verified. proof/console-modernization/cm2.md</td></tr>
-        <tr id="CM3" data-status="todo"><td>CM3</td><td>Overview page.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM3" data-status="done"><td>CM3</td><td>Overview page.</td><td><code>done</code></td><td>CM-V07 passes (verifier: 9 passed). Live render with real gateway data verified; dark and light screenshots. proof/console-modernization/cm3.md</td></tr>
         <tr id="CM4" data-status="todo"><td>CM4</td><td>Models catalog page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM5" data-status="todo"><td>CM5</td><td>Providers page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM6" data-status="todo"><td>CM6</td><td>Keys page.</td><td><code>todo</code></td><td></td></tr>
@@ -736,6 +736,20 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           Lucide 1.x removed brand icons, so the GitHub mark is an
           inline octicon path. Verifier: 8 passed, 13 failed
           (cm2.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM2</td><td>merged</td><td>PR #147
+          squash-merged to main (d68af6f) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM3</td><td>done</td><td>Typed API
+          client (lib/api.ts: starport.apiKey storage with change
+          listeners, ApiError with needsKey), legacy-exact formatters
+          (lib/format.ts), useHasApiKey, first shared primitives
+          (Card, CopyButton), and the overview composition: StatusHero,
+          EndpointsCard, QuickstartCard (curl/python/js tabs), StatsRow
+          (six 24h stats + hourly sparklines from admin activity;
+          unpriced spend shows "without cost"), ProvidersCard,
+          CatalogCard, ConnectCard. Admin cards render locked messages
+          on 401/403. Live-verified against real gateway state.
+          Verifier: 9 passed, 12 failed (cm3.md).</td></tr>
     </table>
   </section>
 </main>
