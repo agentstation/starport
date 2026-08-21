@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM7 (usage with charts)
+    Next action: execute CM8 (presets)
   </p>
 
   <section id="outcome">
@@ -330,7 +330,7 @@
         <tr id="CM4" data-status="done"><td>CM4</td><td>Models catalog page.</td><td><code>done</code></td><td>CM-V08 passes (verifier: 10 passed). URL filter persistence, virtualization (36 of 422 rows), and "/" focus live-verified; dark and light screenshots. proof/console-modernization/cm4.md</td></tr>
         <tr id="CM5" data-status="done"><td>CM5</td><td>Providers page.</td><td><code>done</code></td><td>CM-V09 passes (verifier: 11 passed). One status vocabulary live-verified (dot = adapter, pill = credential); offerings link into filtered models; dark and light screenshots. proof/console-modernization/cm5.md</td></tr>
         <tr id="CM6" data-status="done"><td>CM6</td><td>Keys page.</td><td><code>done</code></td><td>CM-V10 passes (verifier: 12 passed). Full CRUD, once-only secret modal, budget bars, catalog-driven BYOK live-verified; dark and light screenshots. proof/console-modernization/cm6.md</td></tr>
-        <tr id="CM7" data-status="todo"><td>CM7</td><td>Usage page with charts.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM7" data-status="done"><td>CM7</td><td>Usage page with charts.</td><td><code>done</code></td><td>CM-V11 passes (verifier: 13 passed). Four neutral-series charts, URL-persisted filters, virtualized table, request detail panel live-verified against seeded traffic; dark and light screenshots. proof/console-modernization/cm7.md</td></tr>
         <tr id="CM8" data-status="todo"><td>CM8</td><td>Presets page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM9" data-status="todo"><td>CM9</td><td>Settings page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM10" data-status="todo"><td>CM10</td><td>Chat: thread shell, composer with bottom-bar model picker.</td><td><code>todo</code></td><td></td></tr>
@@ -797,6 +797,21 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           bars on real budgets, groq validate green on a real
           credential, both themes. Verifier: 12 passed, 9 failed
           (cm6.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM6</td><td>merged</td><td>PR #151
+          squash-merged to main (400cc84) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM7</td><td>done</td><td>Usage
+          page: admin-then-own scope resolution, URL-persisted
+          filters (model, provider, key, status, range), four chart
+          cards on the neutral-series contract over 32 buckets
+          (requests with error stack, tokens, spend with w/o-cost
+          count, latency line), virtualized dense table with named
+          402/429 rejections and cost-reason chips, request detail
+          side panel, 200-record pages with auto-fetch to 5 then
+          manual load. recharts 3.10.1 stays in the lazy usage
+          chunk. Live-verified against seeded gateway traffic (real
+          groq 200s, 429s, 401s, 503s), filter URL round-trip, both
+          themes. Verifier: 13 passed, 8 failed (cm7.md).</td></tr>
     </table>
   </section>
 </main>

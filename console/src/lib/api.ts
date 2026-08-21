@@ -276,15 +276,54 @@ export type ProviderKeySummary = {
   usage_count?: number;
 };
 
+export type ActivityTokens = {
+  input?: number;
+  output?: number;
+  total?: number;
+  reasoning?: number;
+  cache_read?: number;
+  cache_write?: number;
+};
+
+// ActivityRecord is one completed inference request from the usage log.
+// An absent cost always carries cost_unavailable_reason — never a
+// silent zero.
 export type ActivityRecord = {
+  request_id?: string;
+  key_id?: string;
   timestamp: string;
+  protocol?: string;
+  operation?: string;
+  model_requested?: string;
+  model_used?: string;
+  provider?: string;
+  streaming?: boolean;
   status?: string;
-  tokens?: { total?: number };
+  status_code?: number;
+  error_class?: string;
+  tokens?: ActivityTokens;
+  tokens_estimated?: boolean;
+  latency_ms?: number;
+  routing_ms?: number;
+  attempts?: number;
+  cache_status?: string;
+  cost?: { nano_usd?: number; currency?: string };
+  cost_unavailable_reason?: string;
 };
 
 export type ActivityPage = {
   data?: ActivityRecord[];
   next_cursor?: string;
+};
+
+export type ActivityFilters = {
+  model?: string;
+  provider?: string;
+  status?: string;
+  key_id?: string;
+  since?: string;
+  limit?: number;
+  cursor?: string;
 };
 
 // --- Endpoints ---
@@ -411,13 +450,25 @@ export function validateProviderKey(
   );
 }
 
-export function listAdminActivity(filters: {
-  since?: string;
-  limit?: number;
-}): Promise<ActivityPage> {
+function activityQuery(filters: ActivityFilters): string {
   const params = new URLSearchParams();
+  if (filters.model) params.set("model", filters.model);
+  if (filters.provider) params.set("provider", filters.provider);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.key_id) params.set("key_id", filters.key_id);
   if (filters.since) params.set("since", filters.since);
   if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.cursor) params.set("cursor", filters.cursor);
   const query = params.toString();
-  return request<ActivityPage>(`/api/v1/admin/activity${query ? `?${query}` : ""}`);
+  return query ? `?${query}` : "";
+}
+
+// listActivity reads the authenticated key's own request log; key_id is
+// ignored there — only the admin listing can widen the scope.
+export function listActivity(filters: ActivityFilters): Promise<ActivityPage> {
+  return request<ActivityPage>(`/api/v1/activity${activityQuery(filters)}`);
+}
+
+export function listAdminActivity(filters: ActivityFilters): Promise<ActivityPage> {
+  return request<ActivityPage>(`/api/v1/admin/activity${activityQuery(filters)}`);
 }
