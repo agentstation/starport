@@ -31,6 +31,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../credentials",
 		"../ratelimit",
 		"../presets",
+		"../usage",
 		"../response/cache",
 		"../protocol/openai",
 		"../protocol/openrouter",
@@ -46,6 +47,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
+		"github.com/agentstation/starport/internal/usage",
 		"github.com/agentstation/starport/internal/response/cache",
 		"github.com/agentstation/starport/internal/protocol/openai",
 		"github.com/agentstation/starport/internal/protocol/openrouter",
@@ -85,6 +87,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
+		"github.com/agentstation/starport/internal/usage",
 	} {
 		assertOnlyInternalImports(t, packages[packagePath],
 			"github.com/agentstation/starport/internal/storage",
