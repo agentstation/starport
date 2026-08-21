@@ -17,6 +17,8 @@ import (
 // window ends.
 //
 //nolint:gosec // These are HTTP header names, not credentials.
+//
+// #nosec G101 -- HTTP header names, not credentials.
 const (
 	headerBudgetSpendLimit      = "X-Starport-Budget-Spend-Limit"
 	headerBudgetSpendRemaining  = "X-Starport-Budget-Spend-Remaining"
