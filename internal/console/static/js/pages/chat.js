@@ -453,7 +453,11 @@ export async function render(container) {
             } else {
                 message.error = error.unauthorized
                     ? "The gateway rejected your API key. Update it in Settings."
-                    : error.message;
+                    : error.budgetExhausted
+                        ? `Budget exhausted — ${error.message} Raise or clear this key's budget on the Keys page.`
+                        : error.rateLimited
+                            ? `Rate limited — ${error.message} Retry shortly, or raise this key's request limit on the Keys page.`
+                            : error.message;
             }
         } finally {
             state.streaming = false;

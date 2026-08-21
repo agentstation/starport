@@ -35,6 +35,8 @@ export class ApiError extends Error {
     }
     get unauthorized() { return this.status === 401; }
     get forbidden() { return this.status === 403; }
+    get budgetExhausted() { return this.status === 402; }
+    get rateLimited() { return this.status === 429; }
 }
 
 async function parseError(response) {
@@ -103,6 +105,9 @@ export function providerStatus() { return request("/api/v1/admin/providers"); }
 export function refreshProviders() { return request("/api/v1/admin/providers/refresh", { method: "POST" }); }
 
 export function listKeys() { return request("/api/v1/admin/keys"); }
+// getKey returns one key's record plus its current-window usage and
+// per-budget remaining allowance.
+export function getKey(id) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`); }
 export function createKey(body) { return request("/api/v1/admin/keys", { method: "POST", body }); }
 export function updateKey(id, body) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "PUT", body }); }
 export function deleteKey(id) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "DELETE" }); }
