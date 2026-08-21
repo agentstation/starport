@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"github.com/agentstation/starport/internal/chatui"
+	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
@@ -20,7 +20,7 @@ type Controllers struct {
 	ProviderKeys         *ProviderKeysController
 	Admin                *AdminController
 	ProviderOperations   *ProviderOperationsController
-	ChatUI               *chatui.Handler
+	Console              *console.Handler
 }
 
 // Config holds configuration for creating handlers
@@ -31,7 +31,7 @@ type Config struct {
 	ProviderOperations ProviderOperations
 	ServiceName        string
 	Version            string
-	ChatUI             *chatui.Handler
+	Console            *console.Handler
 }
 
 // NewControllers creates a new controller collection
@@ -48,7 +48,7 @@ func NewControllers(cfg Config) *Controllers {
 		ProviderKeys:         NewProviderKeysController(cfg.ProviderKeys),
 		Admin:                NewAdminController(cfg.Identities),
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
-		ChatUI:               cfg.ChatUI,
+		Console:              cfg.Console,
 	}
 
 	return collections

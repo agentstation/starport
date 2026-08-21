@@ -101,9 +101,9 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		})
 	})
 
-	// ChatUI endpoints (optional feature)
-	if s.controllers.ChatUI != nil {
-		mux.Mount("/chat", s.controllers.ChatUI.Routes())
+	// Console pages and assets (optional feature)
+	if s.controllers.Console != nil {
+		s.controllers.Console.Register(mux)
 	}
 
 	// Catch-all for undefined routes

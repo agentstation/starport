@@ -631,7 +631,8 @@ func providerInfosFromRuntime(runtime connectors.RuntimeLease) []ProviderInfo {
 		}
 		info := ProviderInfo{
 			ID: string(provider.ID), Name: provider.Name,
-			RequiresAuth: runtime.RequiresAuthentication(string(provider.ID)),
+			RequiresAuth:     runtime.RequiresAuthentication(string(provider.ID)),
+			CredentialFields: inferenceCredentialFields(provider),
 		}
 		if provider.StatusPageURL != nil {
 			info.URL = *provider.StatusPageURL
@@ -651,6 +652,49 @@ func providerInfosFromRuntime(runtime connectors.RuntimeLease) []ProviderInfo {
 		providers = append(providers, info)
 	}
 	return providers
+}
+
+// inferenceCredentialFields projects the catalog's inference credential
+// contract in profile order, deduplicated across alternatives.
+func inferenceCredentialFields(provider starmapcatalogs.Provider) []CredentialFieldInfo {
+	contract := provider.Credentials
+	if contract == nil {
+		return nil
+	}
+	fields := make(map[starmapcatalogs.ProviderCredentialFieldID]starmapcatalogs.ProviderCredentialField, len(contract.Fields))
+	for _, field := range contract.Fields {
+		fields[field.ID] = field
+	}
+	profiles := make(map[starmapcatalogs.ProviderCredentialProfileID]starmapcatalogs.ProviderCredentialProfile, len(contract.Profiles))
+	for _, profile := range contract.Profiles {
+		profiles[profile.ID] = profile
+	}
+	seen := make(map[starmapcatalogs.ProviderCredentialFieldID]struct{})
+	infos := make([]CredentialFieldInfo, 0)
+	for _, profileID := range contract.Inference.Alternatives {
+		profile, exists := profiles[profileID]
+		if !exists {
+			continue
+		}
+		for _, fieldID := range profile.Fields {
+			if _, exists := seen[fieldID]; exists {
+				continue
+			}
+			field, exists := fields[fieldID]
+			if !exists {
+				continue
+			}
+			seen[fieldID] = struct{}{}
+			infos = append(infos, CredentialFieldInfo{
+				ID:          string(field.ID),
+				Kind:        string(field.Kind),
+				Required:    field.Required,
+				Default:     field.Default,
+				Description: field.Description,
+			})
+		}
+	}
+	return infos
 }
 
 func cacheTokenPrices(snapshot *runtimecatalog.RoutableSnapshot, modelID string) (float64, float64, bool) {

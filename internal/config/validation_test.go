@@ -482,36 +482,36 @@ func TestLoggingConfig_Validate(t *testing.T) {
 	}
 }
 
-func TestChatUIConfig_Validate(t *testing.T) {
+func TestConsoleConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  ChatUIConfig
+		config  ConsoleConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid config",
-			config: ChatUIConfig{
+			config: ConsoleConfig{
 				Enabled: true,
-				Title:   "Starport Chat",
+				Title:   "Starport Console",
 				Theme:   "light",
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid dark theme",
-			config: ChatUIConfig{
+			config: ConsoleConfig{
 				Enabled: true,
-				Title:   "Starport Chat",
+				Title:   "Starport Console",
 				Theme:   "dark",
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid theme",
-			config: ChatUIConfig{
+			config: ConsoleConfig{
 				Enabled: true,
-				Title:   "Starport Chat",
+				Title:   "Starport Console",
 				Theme:   "purple",
 			},
 			wantErr: true,
@@ -519,17 +519,17 @@ func TestChatUIConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "empty title",
-			config: ChatUIConfig{
+			config: ConsoleConfig{
 				Enabled: true,
 				Title:   "",
 				Theme:   "light",
 			},
 			wantErr: true,
-			errMsg:  "ChatUI title cannot be empty",
+			errMsg:  "console title cannot be empty",
 		},
 		{
 			name: "disabled config still validates",
-			config: ChatUIConfig{
+			config: ConsoleConfig{
 				Enabled: false,
 				Title:   "Test",
 				Theme:   "light",
