@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM2 (tokens, fonts, app shell)
+    Next action: execute CM3 (overview page)
   </p>
 
   <section id="outcome">
@@ -325,7 +325,7 @@
       <tbody>
         <tr id="CM0" data-status="done"><td>CM0</td><td>Baseline: DESIGN.md, plan, red verifier, fail-before evidence.</td><td><code>done</code></td><td>Plan PR. Verifier red: 1 passed, 20 failed. proof/console-modernization/cm0.md</td></tr>
         <tr id="CM1" data-status="done"><td>CM1</td><td>Frontend workspace scaffold, go:embed contract, Makefile and CI wiring.</td><td><code>done</code></td><td>CM-V01/V02/V04/V18 pass (verifier: 5 passed). 5 Go SPA tests pass. Flag-on and flag-off smoke verified. proof/console-modernization/cm1.md</td></tr>
-        <tr id="CM2" data-status="todo"><td>CM2</td><td>Design tokens, fonts, app shell (sidebar, page header, themes).</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM2" data-status="done"><td>CM2</td><td>Design tokens, fonts, app shell (sidebar, page header, themes).</td><td><code>done</code></td><td>CM-V03/V05/V06 pass (verifier: 8 passed). Both-theme and rail screenshots. Reload persistence verified. proof/console-modernization/cm2.md</td></tr>
         <tr id="CM3" data-status="todo"><td>CM3</td><td>Overview page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM4" data-status="todo"><td>CM4</td><td>Models catalog page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM5" data-status="todo"><td>CM5</td><td>Providers page.</td><td><code>todo</code></td><td></td></tr>
@@ -720,6 +720,22 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           components (the CM1 placeholder route would have turned it
           green early) and CM-V18 to grep spa.go instead of handler.go.
           Verifier: 5 passed, 16 failed (cm1.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM1</td><td>merged</td><td>PR #146
+          squash-merged to main (7f3c45f) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM2</td><td>done</td><td>Token layer
+          (tokens.css: role tokens, @theme inline map, type/radius
+          scales, focus ring, reduced motion), self-hosted Geist and
+          Geist Mono (OFL license committed; Vite hashes the woff2 and
+          favicon into /assets so the CM1 Go handler serves them with
+          immutable caching — nothing serves from dist root), theme
+          bootstrap (lib/theme.ts: dark default, .light class, system
+          tracking), Shell (240px sidebar to 64px rail, persisted;
+          active nav = bg-hover + 2px accent bar; footer health dot
+          from /health/ready + theme toggle + GitHub) and PageHeader.
+          Lucide 1.x removed brand icons, so the GitHub mark is an
+          inline octicon path. Verifier: 8 passed, 13 failed
+          (cm2.md).</td></tr>
     </table>
   </section>
 </main>

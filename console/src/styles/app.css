@@ -1,3 +1,2 @@
 @import "tailwindcss";
-
-/* CM2 adds the DESIGN.md token layer in tokens.css and imports it here. */
+@import "./tokens.css";
