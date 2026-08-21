@@ -95,6 +95,13 @@ export function listProviders() {
 
 export function systemInfo() { return request("/api/v1/admin/info"); }
 export function systemMetrics() { return request("/api/v1/admin/metrics"); }
+export function providerStatus() { return request("/api/v1/admin/providers"); }
+export function refreshProviders() { return request("/api/v1/admin/providers/refresh", { method: "POST" }); }
+
+export function listKeys() { return request("/api/v1/admin/keys"); }
+export function createKey(body) { return request("/api/v1/admin/keys", { method: "POST", body }); }
+export function updateKey(id, body) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "PUT", body }); }
+export function deleteKey(id) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "DELETE" }); }
 
 // --- Activity ---
 
@@ -116,13 +123,6 @@ export function listActivity(filters = {}) {
 export function listAdminActivity(filters = {}) {
     return request(`/api/v1/admin/activity${activityQuery(filters)}`);
 }
-export function providerStatus() { return request("/api/v1/admin/providers"); }
-export function refreshProviders() { return request("/api/v1/admin/providers/refresh", { method: "POST" }); }
-
-export function listKeys() { return request("/api/v1/admin/keys"); }
-export function createKey(body) { return request("/api/v1/admin/keys", { method: "POST", body }); }
-export function updateKey(id, body) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "PUT", body }); }
-export function deleteKey(id) { return request(`/api/v1/admin/keys/${encodeURIComponent(id)}`, { method: "DELETE" }); }
 
 // --- Provider keys (BYOK) ---
 

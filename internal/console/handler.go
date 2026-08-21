@@ -37,7 +37,7 @@ const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'nonce-%s';
 
 // PagePaths lists every console page route. The console serves the same
 // shell for each path and the client router renders the matching page.
-var PagePaths = []string{"/", "/chat", "/models", "/providers", "/keys", "/settings"}
+var PagePaths = []string{"/", "/chat", "/models", "/providers", "/keys", "/usage", "/settings"}
 
 // Config holds console configuration.
 type Config struct {
