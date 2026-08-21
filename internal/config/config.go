@@ -164,28 +164,12 @@ func (c *Config) EnableProvider(providerID catalogs.ProviderID) {
 	c.Providers[providerID] = provider
 }
 
-// RateLimitingConfig defines rate limiting settings
+// RateLimitingConfig defines the global default request window. Per-key
+// request limits and budgets live on the identity record and beat these
+// defaults.
 type RateLimitingConfig struct {
-	// Global limits
-	GlobalRequestsPerSecond int     `env:"GLOBAL_REQUESTS_PER_SECOND,default=10000"`
-	GlobalBurstMultiplier   float64 `env:"GLOBAL_BURST_MULTIPLIER,default=2.0"`
-
-	// Default key limits
-	DefaultRequestsPerMinute int `env:"DEFAULT_REQUESTS_PER_MINUTE,default=60"`
-	DefaultRequestsPerHour   int `env:"DEFAULT_REQUESTS_PER_HOUR,default=1000"`
-	DefaultTokensPerMinute   int `env:"DEFAULT_TOKENS_PER_MINUTE,default=100000"`
-	DefaultTokensPerHour     int `env:"DEFAULT_TOKENS_PER_HOUR,default=1000000"`
-	DefaultBurst             int `env:"DEFAULT_BURST,default=10"`
-
-	// Rate limit window
-	WindowSize      time.Duration `env:"WINDOW_SIZE,default=1m"`
-	SyncInterval    time.Duration `env:"SYNC_INTERVAL,default=5s"`
-	CleanupInterval time.Duration `env:"CLEANUP_INTERVAL,default=10m"`
-
-	// Hot reload settings
-	EnableHotReload     bool          `env:"ENABLE_HOT_RELOAD,default=false"`
-	ConfigPath          string        `env:"CONFIG_PATH,overwrite"`
-	ReloadCheckInterval time.Duration `env:"RELOAD_CHECK_INTERVAL,default=10s"`
+	DefaultRequestsPerMinute int           `env:"DEFAULT_REQUESTS_PER_MINUTE,default=60"`
+	WindowSize               time.Duration `env:"WINDOW_SIZE,default=1m"`
 }
 
 // SecurityConfig defines security settings

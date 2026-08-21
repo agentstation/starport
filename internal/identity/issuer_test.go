@@ -87,7 +87,7 @@ func TestIssuerRejectsInvalidIdentityBeforeStorage(t *testing.T) {
 	if !errors.Is(err, ErrInvalidName) {
 		t.Fatalf("issue error = %v, want %v", err, ErrInvalidName)
 	}
-	records, listErr := repository.List(context.Background(), 10)
+	records, listErr := repository.List(context.Background(), 10, 0)
 	if listErr != nil {
 		t.Fatal(listErr)
 	}

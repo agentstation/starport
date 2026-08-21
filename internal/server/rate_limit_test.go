@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/ratelimit"
+	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -92,6 +94,85 @@ func TestRateLimitMiddlewareRequiresAuthenticatedIdentity(t *testing.T) {
 
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Rate limit identity missing")
+}
+
+func TestPerKeyRequestLimitOverridesGlobal(t *testing.T) {
+	server := &Server{
+		cfg: &Config{
+			EnableRateLimiting:         true,
+			RateLimitRequestsPerWindow: 100,
+			RateLimitWindow:            time.Minute,
+		},
+		rateLimits: mustOpenRateLimitRepository(t),
+	}
+
+	handler := server.rateLimit(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	limited := &identity.APIKey{
+		ID:     "key-limited",
+		Name:   "limited",
+		Scopes: []string{"*"},
+		Active: true,
+		Limits: &identity.Limits{
+			Requests: &identity.RequestLimit{Limit: 1, WindowSeconds: 60},
+		},
+	}
+
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, rateLimitRequestWithModel(limited))
+	require.Equal(t, http.StatusOK, first.Code)
+	assert.Equal(t, "1", first.Header().Get("X-RateLimit-Limit"),
+		"per-key limit must beat the global window")
+
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, rateLimitRequestWithModel(limited))
+	require.Equal(t, http.StatusTooManyRequests, second.Code)
+
+	// A key without an override still uses the global window.
+	unlimited := &identity.APIKey{ID: "key-global", Name: "global", Scopes: []string{"*"}, Active: true}
+	global := httptest.NewRecorder()
+	handler.ServeHTTP(global, rateLimitRequestWithModel(unlimited))
+	require.Equal(t, http.StatusOK, global.Code)
+	assert.Equal(t, "100", global.Header().Get("X-RateLimit-Limit"))
+}
+
+func TestPerKeyRequestLimitAppliesWhenGlobalDisabled(t *testing.T) {
+	server := &Server{
+		cfg:        &Config{},
+		rateLimits: mustOpenRateLimitRepository(t),
+	}
+
+	handler := server.rateLimit(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	limited := &identity.APIKey{
+		ID:     "key-explicit",
+		Name:   "explicit",
+		Scopes: []string{"*"},
+		Active: true,
+		Limits: &identity.Limits{
+			Requests: &identity.RequestLimit{Limit: 1, WindowSeconds: 60},
+		},
+	}
+
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, rateLimitRequestWithModel(limited))
+	require.Equal(t, http.StatusOK, first.Code)
+
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, rateLimitRequestWithModel(limited))
+	require.Equal(t, http.StatusTooManyRequests, second.Code,
+		"an explicit per-key limit is admin intent and applies without the global default")
+}
+
+func rateLimitRequestWithModel(apiKey *identity.APIKey) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	ctx := requestctx.WithAPIKeyID(req.Context(), apiKey.ID)
+	ctx = requestctx.WithAPIKeyModel(ctx, apiKey)
+	return req.WithContext(ctx)
 }
 
 func mustOpenRateLimitRepository(t *testing.T) ratelimit.Repository {

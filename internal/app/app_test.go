@@ -145,12 +145,6 @@ func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, httpServer)
 
-	configPath := filepath.Join(t.TempDir(), "invalid.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte("invalid: [yaml document"), 0o600))
-	reloader, err := factories.newHotReload(configPath, time.Second)
-	require.Error(t, err)
-	require.Nil(t, reloader)
-
 	storagePath := filepath.Join(t.TempDir(), "not-a-directory")
 	require.NoError(t, os.WriteFile(storagePath, []byte("occupied"), 0o600))
 	store, err := openStorage(config.StorageConfig{
@@ -292,12 +286,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 			},
 		},
 		RateLimiting: config.RateLimitingConfig{
-			GlobalRequestsPerSecond: 100, GlobalBurstMultiplier: 2,
-			DefaultRequestsPerMinute: 60, DefaultRequestsPerHour: 1000,
-			DefaultTokensPerMinute: 1000, DefaultTokensPerHour: 10000,
-			DefaultBurst: 10, WindowSize: time.Minute,
-			SyncInterval: time.Second, CleanupInterval: time.Minute,
-			EnableHotReload: false,
+			DefaultRequestsPerMinute: 60, WindowSize: time.Minute,
 		},
 		Security: config.SecurityConfig{
 			MasterKey:      strings.Repeat("k", 32),

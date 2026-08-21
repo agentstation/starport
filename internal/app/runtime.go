@@ -20,11 +20,6 @@ type httpRuntime interface {
 	Shutdown(context.Context) error
 }
 
-type hotReloadRuntime interface {
-	Start(context.Context) error
-	Stop()
-}
-
 type catalogRuntime interface {
 	ControlPlane() *runtimecatalog.ControlPlane
 	RefreshCandidate(context.Context, time.Duration) (starmap.CatalogState, error)
@@ -43,7 +38,6 @@ type runtimeFactories struct {
 	openCatalog  func(context.Context, storage.KVStore, config.CatalogConfig) (catalogRuntime, error)
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	newCache     func(cache.ManagerConfig, storage.KVStore) (*cache.Manager, error)
-	newHotReload func(string, time.Duration) (hotReloadRuntime, error)
 	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)
 }
 

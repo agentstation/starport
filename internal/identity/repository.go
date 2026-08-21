@@ -52,7 +52,7 @@ type Repository interface {
 	ReleaseInitial(context.Context, string) error
 	GetByID(context.Context, string) (Record, error)
 	GetByHash(context.Context, string) (Record, error)
-	List(context.Context, int) ([]Record, error)
+	List(context.Context, int, int) ([]Record, error)
 	Update(context.Context, APIKey, uint64) (Record, error)
 	Delete(context.Context, string, uint64) error
 }
@@ -207,7 +207,7 @@ func (r *repository) replaceMissingInitial(
 	} else if !errors.Is(err, storage.ErrNotFound) {
 		return Record{}, mapReadError("get claimed initial identity", err)
 	}
-	records, err := r.List(ctx, 1)
+	records, err := r.List(ctx, 1, 0)
 	if err != nil {
 		return Record{}, err
 	}
@@ -347,15 +347,27 @@ func (r *repository) GetByHash(ctx context.Context, hash string) (Record, error)
 	return record, nil
 }
 
-func (r *repository) List(ctx context.Context, limit int) ([]Record, error) {
+func (r *repository) List(ctx context.Context, limit, offset int) ([]Record, error) {
 	if limit <= 0 {
 		limit = defaultListLimit
 	}
-	keys, err := r.store.ScanWithPrefix(ctx, identityKeyPrefix, limit)
+	if offset < 0 {
+		offset = 0
+	}
+	// Scan every identity key: the store scan order is not a contract, so
+	// stable pagination needs the full sorted key set before slicing.
+	keys, err := r.store.ScanWithPrefix(ctx, identityKeyPrefix, 0)
 	if err != nil {
 		return nil, fmt.Errorf("list identity keys: %w", err)
 	}
 	sort.Strings(keys)
+	if offset >= len(keys) {
+		return []Record{}, nil
+	}
+	keys = keys[offset:]
+	if len(keys) > limit {
+		keys = keys[:limit]
+	}
 	records := make([]Record, 0, len(keys))
 	for _, key := range keys {
 		data, err := r.store.Get(ctx, key)
@@ -535,7 +547,7 @@ func recordFromIdentity(stored identityRecord) Record {
 func cloneAPIKey(apiKey APIKey) APIKey {
 	apiKey.Scopes = append([]string(nil), apiKey.Scopes...)
 	apiKey.AllowedModels = append([]string(nil), apiKey.AllowedModels...)
-	apiKey.RateLimitConfig = cloneMap(apiKey.RateLimitConfig)
+	apiKey.Limits = apiKey.Limits.Clone()
 	apiKey.Metadata = cloneMap(apiKey.Metadata)
 	if apiKey.ExpiresAt != nil {
 		expiresAt := *apiKey.ExpiresAt

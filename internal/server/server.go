@@ -45,6 +45,7 @@ type Server struct {
 	identities         identity.Repository
 	providerKeys       byok.ProviderKeys
 	rateLimits         ratelimit.Repository
+	usage              usage.Repository
 	providerOperations controllers.ProviderOperations
 
 	// Handler collection
@@ -101,6 +102,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		identities:         dependencies.Identities,
 		providerKeys:       dependencies.ProviderKeys,
 		rateLimits:         dependencies.RateLimits,
+		usage:              dependencies.Usage,
 		providerOperations: dependencies.ProviderOperations,
 	}
 	s.auth = NewAuthMiddleware(s.identities)

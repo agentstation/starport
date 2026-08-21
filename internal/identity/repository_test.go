@@ -59,7 +59,7 @@ func TestIdentityRepositoryContract(t *testing.T) {
 		_, err = repository.GetByID(ctx, duplicateHash.ID)
 		require.ErrorIs(t, err, ErrNotFound)
 
-		listed, err := repository.List(ctx, 10)
+		listed, err := repository.List(ctx, 10, 0)
 		require.NoError(t, err)
 		require.Len(t, listed, 1)
 
@@ -155,7 +155,7 @@ func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
 	second.Hash = "second-hash"
 	_, err = repository.CreateInitial(context.Background(), second)
 	require.ErrorIs(t, err, ErrConflict)
-	records, err := repository.List(context.Background(), 10)
+	records, err := repository.List(context.Background(), 10, 0)
 	require.NoError(t, err)
 	require.Len(t, records, 1)
 	require.Equal(t, first.ID, records[0].APIKey.ID)
@@ -191,7 +191,7 @@ func TestConcurrentCreatesRetryCollectionContention(t *testing.T) {
 			t.Fatalf("concurrent create error = %v", err)
 		}
 	}
-	records, err := repository.List(context.Background(), 2)
+	records, err := repository.List(context.Background(), 2, 0)
 	require.NoError(t, err)
 	require.Len(t, records, 2)
 }

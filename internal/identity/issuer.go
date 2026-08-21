@@ -26,10 +26,12 @@ var ErrIssuerRequired = errors.New("identity issuer repository is required")
 
 // IssueRequest contains the durable attributes for a new gateway identity.
 type IssueRequest struct {
-	Name      string
-	Scopes    []string
-	Metadata  map[string]any
-	ExpiresAt *time.Time
+	Name          string
+	Scopes        []string
+	AllowedModels []string
+	Limits        *Limits
+	Metadata      map[string]any
+	ExpiresAt     *time.Time
 }
 
 // IssueResult contains a new identity and its one-time plaintext credential.
@@ -97,14 +99,16 @@ func (i *Issuer) issue(
 	}
 	digest := sha256.Sum256([]byte(credential.secret))
 	apiKey := APIKey{
-		ID:        credential.id,
-		Name:      request.Name,
-		Hash:      hex.EncodeToString(digest[:]),
-		Scopes:    append([]string(nil), request.Scopes...),
-		Metadata:  cloneMap(request.Metadata),
-		Active:    true,
-		CreatedAt: i.now().UTC(),
-		ExpiresAt: cloneTime(request.ExpiresAt),
+		ID:            credential.id,
+		Name:          request.Name,
+		Hash:          hex.EncodeToString(digest[:]),
+		Scopes:        append([]string(nil), request.Scopes...),
+		AllowedModels: append([]string(nil), request.AllowedModels...),
+		Limits:        request.Limits.Clone(),
+		Metadata:      cloneMap(request.Metadata),
+		Active:        true,
+		CreatedAt:     i.now().UTC(),
+		ExpiresAt:     cloneTime(request.ExpiresAt),
 	}
 	if err := apiKey.Validate(); err != nil {
 		return IssueResult{}, err

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"runtime"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -38,20 +40,37 @@ func NewAdminController(identities identity.Repository, usageRecords usage.Repos
 	}
 }
 
+// Key list pagination bounds.
+const (
+	keyListDefaultLimit = 100
+	keyListMaxLimit     = 1000
+)
+
 // ListKeys handles GET /api/v1/admin/keys
 func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get pagination parameters
-	limit := 100
-	offset := 0
-	// TODO: Parse from query params
+	limit, err := positiveQueryInt(r, "limit", keyListDefaultLimit, keyListMaxLimit)
+	if err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
+		return
+	}
+	offset, err := positiveQueryInt(r, "offset", 0, math.MaxInt)
+	if err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
+		return
+	}
 
-	records, err := h.identities.List(ctx, limit)
+	// One extra record proves or disproves a following page.
+	records, err := h.identities.List(ctx, limit+1, offset)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list API keys")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to list API keys")
 		return
+	}
+	hasMore := len(records) > limit
+	if hasMore {
+		records = records[:limit]
 	}
 
 	apiKeys := make([]identity.APIKey, 0, len(records))
@@ -65,8 +84,9 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 		"keys":             apiKeys,
 		responseCountField: len(apiKeys),
 		"pagination": map[string]any{
-			"limit":  limit,
-			"offset": offset,
+			fieldLimit: limit,
+			"offset":   offset,
+			"has_more": hasMore,
 		},
 	}
 
@@ -75,15 +95,34 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// positiveQueryInt parses one non-negative integer query parameter.
+func positiveQueryInt(r *http.Request, name string, fallback, ceiling int) (int, error) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", name)
+	}
+	if value > ceiling {
+		return 0, fmt.Errorf("%s must not exceed %d", name, ceiling)
+	}
+	return value, nil
+}
+
 // CreateKey handles POST /api/v1/admin/keys
 func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req struct {
-		Name        string            `json:"name"`
-		Description string            `json:"description,omitempty"`
-		Scopes      []string          `json:"scopes,omitempty"`
-		Metadata    map[string]string `json:"metadata,omitempty"`
+		Name          string            `json:"name"`
+		Description   string            `json:"description,omitempty"`
+		Scopes        []string          `json:"scopes,omitempty"`
+		AllowedModels []string          `json:"allowed_models,omitempty"`
+		Limits        *identity.Limits  `json:"limits,omitempty"`
+		ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
+		Metadata      map[string]string `json:"metadata,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -94,15 +133,20 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 		return
 	}
+	if req.Limits.IsZero() {
+		req.Limits = nil
+	}
 
 	issued, err := h.issuer.Issue(ctx, identity.IssueRequest{
-		Name:     req.Name,
-		Scopes:   req.Scopes,
-		Metadata: convertStringMapToInterface(req.Metadata),
+		Name:          req.Name,
+		Scopes:        req.Scopes,
+		AllowedModels: req.AllowedModels,
+		Limits:        req.Limits,
+		ExpiresAt:     req.ExpiresAt,
+		Metadata:      convertStringMapToInterface(req.Metadata),
 	})
 	if err != nil {
-		if errors.Is(err, identity.ErrInvalidName) || errors.Is(err, identity.ErrMissingScopes) ||
-			errors.Is(err, identity.ErrInvalidScope) {
+		if isKeyValidationError(err) {
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 			return
 		}
@@ -115,12 +159,15 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 	// Return created key (with the actual key value visible once)
 	response := map[string]any{
 		"key": map[string]any{
-			"id":         apiKey.ID,
-			"key":        issued.Secret,
-			"name":       apiKey.Name,
-			"scopes":     apiKey.Scopes,
-			"active":     apiKey.Active,
-			"created_at": apiKey.CreatedAt,
+			"id":             apiKey.ID,
+			"key":            issued.Secret,
+			"name":           apiKey.Name,
+			"scopes":         apiKey.Scopes,
+			"allowed_models": apiKey.AllowedModels,
+			"limits":         apiKey.Limits,
+			"expires_at":     apiKey.ExpiresAt,
+			"active":         apiKey.Active,
+			fieldCreatedAt:   apiKey.CreatedAt,
 		},
 		responseMessageField: "API key created successfully. Save the key value as it won't be shown again.",
 	}
@@ -149,9 +196,100 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 	apiKey := record.APIKey
 	apiKey.Hash = ""
 
-	if err := dto.WriteJSON(w, http.StatusOK, apiKey); err != nil {
+	response := map[string]any{
+		"id":             apiKey.ID,
+		"name":           apiKey.Name,
+		"scopes":         apiKey.Scopes,
+		"allowed_models": apiKey.AllowedModels,
+		"limits":         apiKey.Limits,
+		"metadata":       apiKey.Metadata,
+		"active":         apiKey.Active,
+		fieldCreatedAt:   apiKey.CreatedAt,
+		"expires_at":     apiKey.ExpiresAt,
+		"usage":          h.keyUsage(ctx, apiKey),
+	}
+
+	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write response")
 	}
+}
+
+// keyUsage reads the key's consumption for the current fixed UTC windows
+// and, for each configured budget, the remaining allowance.
+func (h *AdminController) keyUsage(ctx context.Context, apiKey identity.APIKey) map[string]any {
+	if h.usageRecords == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	windows := map[string]any{}
+	totalsByInterval := map[string]usage.Totals{}
+	for _, interval := range []string{usage.IntervalDay, usage.IntervalWeek, usage.IntervalMonth} {
+		totals, err := h.usageRecords.Totals(ctx, apiKey.ID, interval, now)
+		if err != nil {
+			log.Error().Err(err).Str("key_id", apiKey.ID).Str("interval", interval).
+				Msg("Failed to read key usage totals")
+			windows[interval] = map[string]any{fieldError: systemInfoUnavailable}
+			continue
+		}
+		totalsByInterval[interval] = totals
+		windows[interval] = map[string]any{
+			fieldRequests:    totals.Requests,
+			fieldTokens:      totals.Tokens,
+			"spend_nano_usd": totals.SpendNanoUSD,
+		}
+	}
+
+	result := map[string]any{"windows": windows}
+	if apiKey.Limits == nil {
+		return result
+	}
+	budgets := map[string]any{}
+	if budget := apiKey.Limits.Spend; budget != nil {
+		budgets["spend"] = budgetUsage(budget, totalsByInterval, func(t usage.Totals) int64 { return t.SpendNanoUSD })
+	}
+	if budget := apiKey.Limits.Tokens; budget != nil {
+		budgets[fieldTokens] = budgetUsage(budget, totalsByInterval, func(t usage.Totals) int64 { return t.Tokens })
+	}
+	if len(budgets) > 0 {
+		result["budgets"] = budgets
+	}
+	return result
+}
+
+// budgetUsage shapes one budget's current-window consumption.
+func budgetUsage(
+	budget *identity.Budget,
+	totalsByInterval map[string]usage.Totals,
+	used func(usage.Totals) int64,
+) map[string]any {
+	totals, ok := totalsByInterval[budget.Interval]
+	if !ok {
+		return map[string]any{fieldLimit: budget.Limit, "interval": budget.Interval, fieldError: systemInfoUnavailable}
+	}
+	consumed := used(totals)
+	remaining := budget.Limit - consumed
+	if remaining < 0 {
+		remaining = 0
+	}
+	return map[string]any{
+		fieldLimit:  budget.Limit,
+		"interval":  budget.Interval,
+		"used":      consumed,
+		"remaining": remaining,
+	}
+}
+
+// isKeyValidationError reports whether err is a caller-shaped identity error.
+func isKeyValidationError(err error) bool {
+	return errors.Is(err, identity.ErrInvalidName) ||
+		errors.Is(err, identity.ErrMissingScopes) ||
+		errors.Is(err, identity.ErrInvalidScope) ||
+		errors.Is(err, identity.ErrInvalidModel) ||
+		errors.Is(err, identity.ErrInvalidExpiration) ||
+		errors.Is(err, identity.ErrInvalidRequestLimit) ||
+		errors.Is(err, identity.ErrInvalidRequestWindow) ||
+		errors.Is(err, identity.ErrInvalidBudgetLimit) ||
+		errors.Is(err, identity.ErrInvalidBudgetInterval)
 }
 
 // UpdateKey handles PUT /api/v1/admin/keys/{key_id}
@@ -174,10 +312,13 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 
 	// Parse update request
 	var req struct {
-		Name     *string           `json:"name,omitempty"`
-		Scopes   []string          `json:"scopes,omitempty"`
-		Metadata map[string]string `json:"metadata,omitempty"`
-		Active   *bool             `json:"active,omitempty"`
+		Name          *string           `json:"name,omitempty"`
+		Scopes        []string          `json:"scopes,omitempty"`
+		AllowedModels []string          `json:"allowed_models,omitempty"`
+		Limits        *identity.Limits  `json:"limits,omitempty"`
+		ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
+		Metadata      map[string]string `json:"metadata,omitempty"`
+		Active        *bool             `json:"active,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -191,6 +332,23 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Scopes != nil {
 		apiKey.Scopes = req.Scopes
+	}
+	if req.AllowedModels != nil {
+		// An explicit empty list clears the restriction.
+		apiKey.AllowedModels = req.AllowedModels
+		if len(req.AllowedModels) == 0 {
+			apiKey.AllowedModels = nil
+		}
+	}
+	if req.Limits != nil {
+		// An explicit empty object clears every limit.
+		apiKey.Limits = req.Limits
+		if req.Limits.IsZero() {
+			apiKey.Limits = nil
+		}
+	}
+	if req.ExpiresAt != nil {
+		apiKey.ExpiresAt = req.ExpiresAt
 	}
 	if req.Metadata != nil {
 		if _, err := byok.ParseStrategy(req.Metadata[byok.StrategyMetadataKey]); err != nil {
@@ -366,7 +524,7 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
 
 	return map[string]any{
-		"requests": map[string]any{
+		fieldRequests: map[string]any{
 			"total":     success + failures,
 			"success":   success,
 			"errors":    failures,
@@ -377,7 +535,7 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 			"p95": latencyPercentile(latencies, 0.95),
 			"p99": latencyPercentile(latencies, 0.99),
 		},
-		"tokens": map[string]any{
+		fieldTokens: map[string]any{
 			"total": tokens,
 		},
 		"spend": map[string]any{
@@ -397,12 +555,12 @@ func (h *AdminController) metricsWindows(ctx context.Context, now time.Time) map
 		totals, err := h.usageRecords.Totals(ctx, usage.AggregateAllKeys, interval, now)
 		if err != nil {
 			log.Error().Err(err).Str("interval", interval).Msg("Failed to read usage totals")
-			windows[interval] = map[string]any{"error": "unavailable"}
+			windows[interval] = map[string]any{fieldError: systemInfoUnavailable}
 			continue
 		}
 		windows[interval] = map[string]any{
-			"requests":       totals.Requests,
-			"tokens":         totals.Tokens,
+			fieldRequests:    totals.Requests,
+			fieldTokens:      totals.Tokens,
 			"spend_nano_usd": totals.SpendNanoUSD,
 		}
 	}

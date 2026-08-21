@@ -16,7 +16,6 @@ type Paths struct {
 	ConfigFile     string `json:"config_file"`
 	DataDir        string `json:"data_dir"`
 	BadgerDir      string `json:"badger_dir"`
-	RateLimitsFile string `json:"rate_limits_file"`
 }
 
 // PlatformPaths resolves the current user's Starport paths.
@@ -46,6 +45,5 @@ func PathsForConfigDir(configDir string) Paths {
 		ConfigFile:     filepath.Join(configDir, "config.env"),
 		DataDir:        dataDir,
 		BadgerDir:      filepath.Join(dataDir, "badger"),
-		RateLimitsFile: filepath.Join(configDir, "rate_limits.yaml"),
 	}
 }

@@ -128,7 +128,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 			if openErr != nil {
 				report.addFailure("identities", "gateway identity repository could not be opened")
 			} else {
-				records, listErr := repository.List(ctx, 1)
+				records, listErr := repository.List(ctx, 1, 0)
 				switch {
 				case listErr != nil:
 					report.addFailure("identities", "gateway identity storage could not be read")

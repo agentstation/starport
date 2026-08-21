@@ -413,6 +413,12 @@ func validInterval(interval string) bool {
 	return false
 }
 
+// Window returns the UTC-aligned [start, end) of the interval containing
+// at. Callers use the end to report when a fixed budget window resets.
+func Window(interval string, at time.Time) (time.Time, time.Time) {
+	return window(interval, at)
+}
+
 // window returns the UTC-aligned [start, end) of the interval containing at.
 func window(interval string, at time.Time) (time.Time, time.Time) {
 	at = at.UTC()

@@ -43,12 +43,7 @@ func TestConfig_Validate(t *testing.T) {
 					},
 				},
 				RateLimiting: RateLimitingConfig{
-					GlobalRequestsPerSecond:  10000,
-					GlobalBurstMultiplier:    2.0,
 					DefaultRequestsPerMinute: 60,
-					DefaultRequestsPerHour:   1000,
-					DefaultTokensPerMinute:   100000,
-					DefaultTokensPerHour:     1000000,
 					WindowSize:               time.Minute,
 				},
 				Security: SecurityConfig{
@@ -88,12 +83,7 @@ func TestConfig_Validate(t *testing.T) {
 					},
 				},
 				RateLimiting: RateLimitingConfig{
-					GlobalRequestsPerSecond:  10000,
-					GlobalBurstMultiplier:    2.0,
 					DefaultRequestsPerMinute: 60,
-					DefaultRequestsPerHour:   1000,
-					DefaultTokensPerMinute:   100000,
-					DefaultTokensPerHour:     1000000,
 					WindowSize:               time.Minute,
 				},
 				Security: SecurityConfig{
@@ -128,12 +118,7 @@ func TestConfig_Validate(t *testing.T) {
 					Mode: "invalid", // Invalid storage mode
 				},
 				RateLimiting: RateLimitingConfig{
-					GlobalRequestsPerSecond:  10000,
-					GlobalBurstMultiplier:    2.0,
 					DefaultRequestsPerMinute: 60,
-					DefaultRequestsPerHour:   1000,
-					DefaultTokensPerMinute:   100000,
-					DefaultTokensPerHour:     1000000,
 					WindowSize:               time.Minute,
 				},
 				Security: SecurityConfig{
@@ -174,12 +159,7 @@ func TestConfig_Validate(t *testing.T) {
 					},
 				},
 				RateLimiting: RateLimitingConfig{
-					GlobalRequestsPerSecond:  10000,
-					GlobalBurstMultiplier:    2.0,
 					DefaultRequestsPerMinute: 60,
-					DefaultRequestsPerHour:   1000,
-					DefaultTokensPerMinute:   100000,
-					DefaultTokensPerHour:     1000000,
 					WindowSize:               time.Minute,
 				},
 				Security: SecurityConfig{
