@@ -157,6 +157,33 @@ func TestCatalogFreshnessSurfaceShips(t *testing.T) {
 	assert.Contains(t, string(overviewPage), "catalog sequence", "the overview names the sequence counter distinctly")
 }
 
+// TestKeyLimitsAndBudgetsShip guards the ORP11 surface: the keys page
+// collects allowed models, expiry, request limits, and spend/token budgets;
+// rows surface remaining budget with an exhausted badge; and the chat page
+// names 402 and 429 rejections instead of echoing a bare error.
+func TestKeyLimitsAndBudgetsShip(t *testing.T) {
+	keysPage, err := fs.ReadFile(staticFiles, "static/js/pages/keys.js")
+	require.NoError(t, err)
+	page := string(keysPage)
+	assert.Contains(t, page, "allowed_models", "the key form sends the model restriction")
+	assert.Contains(t, page, "expires_at", "the key form sends the expiry")
+	assert.Contains(t, page, "window_seconds", "the key form sends the request limit window")
+	assert.Contains(t, page, "Spend budget", "the key form collects a spend budget")
+	assert.Contains(t, page, "Token budget", "the key form collects a token budget")
+	assert.Contains(t, page, "exhausted", "key rows badge an exhausted budget")
+	assert.Contains(t, page, "openEditModal", "keys are editable after creation")
+
+	apiModule, err := fs.ReadFile(staticFiles, "static/js/api.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(apiModule), "budgetExhausted", "the API client classifies 402 responses")
+	assert.Contains(t, string(apiModule), "rateLimited", "the API client classifies 429 responses")
+
+	chatPage, err := fs.ReadFile(staticFiles, "static/js/pages/chat.js")
+	require.NoError(t, err)
+	assert.Contains(t, string(chatPage), "Budget exhausted", "the chat page names a budget rejection")
+	assert.Contains(t, string(chatPage), "Rate limited", "the chat page names a rate-limit rejection")
+}
+
 func TestStaticServesAssetsWithETag(t *testing.T) {
 	handler := newTestHandler(t)
 	router := chi.NewRouter()

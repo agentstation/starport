@@ -302,7 +302,10 @@ export async function render(container) {
 function statusBadge(record) {
     const status = record.status || "—";
     const cls = status === "ok" ? "badge-ok" : status === "error" ? "badge-err" : "badge-warn";
-    const label = status === "error" && record.error_class ? record.error_class.replaceAll("_", " ") : status;
+    // Name the two enforcement rejections instead of a bare code.
+    let label = status === "error" && record.error_class ? record.error_class.replaceAll("_", " ") : status;
+    if (status === "error" && record.status_code === 402) label = "budget exhausted";
+    if (status === "error" && record.status_code === 429) label = "rate limited";
     return el("span", { class: `badge ${cls}`, title: record.status_code ? `HTTP ${record.status_code}` : "" }, label);
 }
 
