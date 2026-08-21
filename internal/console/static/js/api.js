@@ -95,6 +95,27 @@ export function listProviders() {
 
 export function systemInfo() { return request("/api/v1/admin/info"); }
 export function systemMetrics() { return request("/api/v1/admin/metrics"); }
+
+// --- Activity ---
+
+function activityQuery(filters = {}) {
+    const params = new URLSearchParams();
+    for (const name of ["key_id", "model", "provider", "status", "since", "until", "limit", "cursor"]) {
+        if (filters[name] !== undefined && filters[name] !== null && filters[name] !== "") {
+            params.set(name, filters[name]);
+        }
+    }
+    const query = params.toString();
+    return query ? `?${query}` : "";
+}
+
+export function listActivity(filters = {}) {
+    return request(`/api/v1/activity${activityQuery(filters)}`);
+}
+
+export function listAdminActivity(filters = {}) {
+    return request(`/api/v1/admin/activity${activityQuery(filters)}`);
+}
 export function providerStatus() { return request("/api/v1/admin/providers"); }
 export function refreshProviders() { return request("/api/v1/admin/providers/refresh", { method: "POST" }); }
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/usage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,9 @@ func newAdminTestController(t *testing.T) (*AdminController, identity.Repository
 	t.Helper()
 	repository, err := identity.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	return NewAdminController(repository), repository
+	usageRecords, err := usage.Open(storage.NewMockStore(), usage.Options{})
+	require.NoError(t, err)
+	return NewAdminController(repository, usageRecords), repository
 }
 
 func createAdminTestIdentity(t *testing.T, repository identity.Repository, apiKey identity.APIKey) {

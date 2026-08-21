@@ -411,6 +411,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, ProviderKeys: b.providerKeys,
 		RateLimits: b.rateLimits, ProviderOperations: b.application, Console: b.console,
+		Usage: b.usageRecords,
 	})
 	if err != nil {
 		if httpServer != nil {

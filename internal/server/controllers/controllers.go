@@ -5,6 +5,7 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 // Controllers holds all HTTP Controllers
@@ -18,6 +19,7 @@ type Controllers struct {
 	OpenRouterModels     *ModelsController
 	Providers            *ProvidersController
 	ProviderKeys         *ProviderKeysController
+	Activity             *ActivityController
 	Admin                *AdminController
 	ProviderOperations   *ProviderOperationsController
 	Console              *console.Handler
@@ -28,6 +30,7 @@ type Config struct {
 	Service            proxy.Proxy
 	ProviderKeys       byok.ProviderKeys
 	Identities         identity.Repository
+	Usage              usage.Repository
 	ProviderOperations ProviderOperations
 	ServiceName        string
 	Version            string
@@ -45,8 +48,9 @@ func NewControllers(cfg Config) *Controllers {
 		Models:               NewModelsController(cfg.Service),
 		OpenRouterModels:     NewOpenRouterModelsController(cfg.Service),
 		Providers:            NewProvidersController(cfg.Service),
-		ProviderKeys:         NewProviderKeysController(cfg.ProviderKeys),
-		Admin:                NewAdminController(cfg.Identities),
+		ProviderKeys:         NewProviderKeysController(cfg.ProviderKeys, cfg.Usage),
+		Activity:             NewActivityController(cfg.Usage),
+		Admin:                NewAdminController(cfg.Identities, cfg.Usage),
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
 		Console:              cfg.Console,
 	}
