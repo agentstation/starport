@@ -15,6 +15,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/tokenize"
 )
 
 // Config holds the configuration for creating a new proxy service.
@@ -33,6 +34,10 @@ type Config struct {
 
 	// Middlewares to apply to the proxy service
 	Middlewares []Middleware
+
+	// TokenEstimator synthesizes estimated usage for streams that end
+	// without provider-reported usage (optional)
+	TokenEstimator *tokenize.Estimator
 }
 
 // Option configures the proxy service.
@@ -59,6 +64,14 @@ func WithCacheConfig(config *CacheConfig) Option {
 func WithMiddleware(m Middleware) Option {
 	return func(c *Config) {
 		c.Middlewares = append(c.Middlewares, m)
+	}
+}
+
+// WithTokenEstimator guarantees every chat stream ends with a usage event:
+// when the provider reports none, the estimator synthesizes estimated counts.
+func WithTokenEstimator(estimator *tokenize.Estimator) Option {
+	return func(c *Config) {
+		c.TokenEstimator = estimator
 	}
 }
 
@@ -94,8 +107,9 @@ func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ..
 
 	// Create the core proxy implementation
 	core := &proxy{
-		registry: cfg.Registry,
-		router:   cfg.Router,
+		registry:  cfg.Registry,
+		router:    cfg.Router,
+		estimator: cfg.TokenEstimator,
 	}
 
 	// Build the proxy with middleware chain
@@ -245,8 +259,9 @@ func requestHasVision(messages []inference.Message) bool {
 
 // proxy implements the Proxy interface
 type proxy struct {
-	registry connectors.LeasingRegistry
-	router   router.ModelRouter
+	registry  connectors.LeasingRegistry
+	router    router.ModelRouter
+	estimator *tokenize.Estimator
 }
 
 // ProcessChatCompletion handles chat completion requests with routing
@@ -352,6 +367,10 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 		return nil, &ValidationError{Field: "request", Message: err.Error()}
 	}
 	connReq.Stream = true
+	// Ask the provider for measured usage on every stream. Providers
+	// that honor stream_options report exact counts; the estimator
+	// below covers the rest.
+	connReq.StreamOptions = &connectors.StreamOptions{IncludeUsage: true}
 
 	// Check if request has cache control
 	hasCacheControl := false
@@ -390,7 +409,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 			Err:    err,
 		}
 	}
-	return stream, nil
+	return newUsageNormalizingStream(stream, req.Request.Messages, p.estimator), nil
 }
 
 func stripCacheControlFromMessages(messages []connectors.Message) []connectors.Message {

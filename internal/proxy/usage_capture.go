@@ -239,6 +239,7 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		record.CacheStatus = s.GetCacheStatus()
 		if s.usage != nil {
 			record.Tokens = usageTokens(*s.usage)
+			record.TokensEstimated = s.usage.Estimated
 		}
 		var snapshot *runtimecatalog.RoutableSnapshot
 		if evidence := findStreamEvidence(s.stream); evidence != nil {
