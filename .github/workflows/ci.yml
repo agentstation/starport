@@ -165,6 +165,7 @@ jobs:
           bash scripts/verify-developer-experience.sh
           bash scripts/verify-doc-links.sh
           bash scripts/test-doc-link-verifier.sh
+          bash scripts/verify-openrouter-parity.sh
 
       - name: Check GoReleaser configuration
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
