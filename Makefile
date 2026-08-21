@@ -64,10 +64,18 @@ build-run: run ## Alias for build and run
 ##@ Build
 
 .PHONY: build
-build: ## Build the binary
+build: console-build ## Build the binary
 	@echo "Building $(BINARY_NAME)..."
 	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
+
+.PHONY: console-build
+console-build: ## Build the embedded SPA console when pnpm is available
+	@if command -v pnpm >/dev/null 2>&1; then \
+		pnpm -C console install --frozen-lockfile && pnpm -C console build; \
+	else \
+		echo "pnpm not found; skipping console build (the binary serves a console-not-built notice behind STARPORT_CONSOLE_NEXT)"; \
+	fi
 
 .PHONY: build-race
 build-race: ## Build with race detector enabled

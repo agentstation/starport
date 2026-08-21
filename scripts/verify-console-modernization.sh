@@ -38,8 +38,8 @@ check CM-V05 "token layer defines the raised-surface role token" \
   grep_q -- '--color-bg-raised' console/src/styles/tokens.css
 check CM-V06 "app shell component exists" \
   test -f console/src/components/shell/Shell.tsx
-check CM-V07 "overview route exists" \
-  test -f console/src/routes/index.tsx
+check CM-V07 "overview route renders its page components" \
+  grep_q 'components/overview' console/src/routes/index.tsx
 check CM-V08 "models route exists" \
   test -f console/src/routes/models.tsx
 check CM-V09 "providers route exists" \
@@ -60,8 +60,8 @@ check CM-V16 "chat renders streaming markdown through streamdown" \
   grep_q '"streamdown"' console/package.json
 check CM-V17 "chat has a comparison mode component" \
   grep_q 'compare' console/src/components/chat
-check CM-V18 "console handler serves the SPA with a fallback" \
-  grep_q 'spaFallback\|SPAFallback' internal/console/handler.go
+check CM-V18 "console embeds the SPA build and serves its page fallback" \
+  grep_q 'go:embed all:dist' internal/console/spa.go
 check CM-V19 "command palette component exists" \
   test -f console/src/components/command/CommandPalette.tsx
 check CM-V20 "DESIGN.md states the one-accent law" \

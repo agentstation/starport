@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM1 (frontend workspace scaffold and embed)
+    Next action: execute CM2 (tokens, fonts, app shell)
   </p>
 
   <section id="outcome">
@@ -324,7 +324,7 @@
       </thead>
       <tbody>
         <tr id="CM0" data-status="done"><td>CM0</td><td>Baseline: DESIGN.md, plan, red verifier, fail-before evidence.</td><td><code>done</code></td><td>Plan PR. Verifier red: 1 passed, 20 failed. proof/console-modernization/cm0.md</td></tr>
-        <tr id="CM1" data-status="todo"><td>CM1</td><td>Frontend workspace scaffold, go:embed contract, Makefile and CI wiring.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM1" data-status="done"><td>CM1</td><td>Frontend workspace scaffold, go:embed contract, Makefile and CI wiring.</td><td><code>done</code></td><td>CM-V01/V02/V04/V18 pass (verifier: 5 passed). 5 Go SPA tests pass. Flag-on and flag-off smoke verified. proof/console-modernization/cm1.md</td></tr>
         <tr id="CM2" data-status="todo"><td>CM2</td><td>Design tokens, fonts, app shell (sidebar, page header, themes).</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM3" data-status="todo"><td>CM3</td><td>Overview page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM4" data-status="todo"><td>CM4</td><td>Models catalog page.</td><td><code>todo</code></td><td></td></tr>
@@ -705,7 +705,21 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           (stack versions, devtool design exemplars, chat UX) and a
           rendered-page review of all eight legacy pages. Verifier
           baseline: 1 passed, 20 failed (cm0.md).</td></tr>
-      </tbody>
+        <tr><td>2026-08-21</td><td>CM0</td><td>merged</td><td>PR #145
+          squash-merged to main (cca2b3e) after the required checks
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM1</td><td>done</td><td>Scaffolded
+          console/ (Vite 8.2.2, React 19.2.8, TS 7.0.2, Tailwind 4.3.3,
+          TanStack Router 1.170.31 with router-plugin 1.168.34 — the
+          plugin versions independently of the router; the planned
+          1.170.31 pin does not exist). Added internal/console/spa.go
+          (go:embed all:dist, SPA fallback, immutable hashed assets,
+          not-built notice) behind STARPORT_CONSOLE_NEXT, the
+          console.PageServer seam, make console-build, and the CI
+          console check. Amended CM-V07 to require the overview page
+          components (the CM1 placeholder route would have turned it
+          green early) and CM-V18 to grep spa.go instead of handler.go.
+          Verifier: 5 passed, 16 failed (cm1.md).</td></tr>
     </table>
   </section>
 </main>

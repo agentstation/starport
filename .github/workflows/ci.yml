@@ -81,6 +81,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Check console workspace
+        run: |
+          npm install -g pnpm@11.22.0
+          pnpm -C console install --frozen-lockfile
+          pnpm -C console check
+
       - name: Build binary
         run: make build
 
