@@ -51,7 +51,12 @@ func TestIndexCSPNonceMatchesInlineScript(t *testing.T) {
 	require.NotEmpty(t, csp)
 	assert.Contains(t, csp, "default-src 'self'")
 	assert.Contains(t, csp, "frame-ancestors 'none'")
-	assert.NotContains(t, csp, "unsafe-inline")
+	// Scripts stay nonce-guarded: 'unsafe-inline' is allowed only for styles,
+	// where KaTeX and Mermaid position output through style attributes.
+	assert.Contains(t, csp, "style-src 'self' 'unsafe-inline'")
+	scriptSrc := regexp.MustCompile(`script-src [^;]+`).FindString(csp)
+	require.NotEmpty(t, scriptSrc)
+	assert.NotContains(t, scriptSrc, "unsafe-inline")
 
 	nonceMatch := regexp.MustCompile(`'nonce-([A-Za-z0-9_-]+)'`).FindStringSubmatch(csp)
 	require.Len(t, nonceMatch, 2, "CSP carries a script nonce")

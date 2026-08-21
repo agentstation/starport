@@ -453,6 +453,32 @@
 .md hr { border: none; border-top: 1px solid var(--line-strong); }
 .md img { max-width: 100%; border-radius: var(--r-md); }
 
+/* ---------- Math (KaTeX) and diagrams (Mermaid) ---------- */
+.md .math-block {
+    display: block;
+    overflow-x: auto;
+    padding: var(--sp-2) 0;
+    text-align: center;
+}
+/* Raw TeX before KaTeX loads (or when it fails) reads as code, not prose. */
+.md .math:not([data-math-rendered]) {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--ink-dim);
+}
+.md .katex-display { margin: 0; }
+.md .md-mermaid {
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    padding: var(--sp-2);
+    background: var(--bg1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    margin: var(--sp-2) 0;
+}
+.md .md-mermaid svg { max-width: 100%; height: auto; }
+
 /* ---------- Prism (token colors from the palette) ---------- */
 .token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--syn-comment); font-style: italic; }
 .token.punctuation { color: var(--syn-punct); }
