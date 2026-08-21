@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Verifier for docs/plans/openrouter-parity-plan.html.
-# Each condition asserts one shipped capability of the OpenRouter parity
-# campaign. The script stays red until the campaign closes (ORP13). It
+# Guard for the shipped OpenRouter parity surface. Each condition asserts
+# one capability of the closed parity campaign (merged via PR #143). It
 # reports every condition and exits nonzero while any condition fails.
 set -u
 
