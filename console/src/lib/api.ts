@@ -463,6 +463,79 @@ function activityQuery(filters: ActivityFilters): string {
   return query ? `?${query}` : "";
 }
 
+// --- Presets ---
+
+// PresetProviderPreferences is the preset-owned provider routing
+// policy, mirroring internal/presets.ProviderPreferences.
+export type PresetProviderPreferences = {
+  order?: string[];
+  only?: string[];
+  ignore?: string[];
+  allow_fallbacks?: boolean;
+  sort?: string;
+  max_prompt_price_per_1m?: number;
+  max_completion_price_per_1m?: number;
+};
+
+// PresetConfig is the typed request subset a preset stores; request
+// fields win over preset fields at inference time.
+export type PresetConfig = {
+  model?: string;
+  models?: string[];
+  provider?: PresetProviderPreferences;
+  system?: string;
+  temperature?: number;
+  top_p?: number;
+  presence_penalty?: number;
+  frequency_penalty?: number;
+  max_tokens?: number;
+  seed?: number;
+  stop?: string[];
+};
+
+// Preset revision is server-assigned; updates and deletes send it back
+// for optimistic concurrency (409 on mismatch).
+export type Preset = {
+  name: string;
+  description?: string;
+  config: PresetConfig;
+  revision?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PresetWriteRequest = {
+  name: string;
+  description?: string;
+  config: PresetConfig;
+  revision?: number;
+};
+
+export async function listPresets(): Promise<Preset[]> {
+  const body = await request<{ data?: Preset[] }>("/api/v1/presets");
+  return body?.data ?? [];
+}
+
+export function createPreset(body: PresetWriteRequest): Promise<Preset> {
+  return request<Preset>("/api/v1/presets", { method: "POST", body });
+}
+
+export function updatePreset(
+  name: string,
+  body: PresetWriteRequest,
+): Promise<Preset> {
+  return request<Preset>(`/api/v1/presets/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export function deletePreset(name: string): Promise<unknown> {
+  return request<unknown>(`/api/v1/presets/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+}
+
 // listActivity reads the authenticated key's own request log; key_id is
 // ignored there — only the admin listing can widen the scope.
 export function listActivity(filters: ActivityFilters): Promise<ActivityPage> {
