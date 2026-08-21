@@ -459,12 +459,14 @@ GET    /api/v1/admin/providers
 POST   /api/v1/admin/providers/refresh
 ```
 
-Health and optional UI:
+Health and the optional web console:
 
 ```text
 GET /health/live
 GET /health/ready
-GET /chat/*   # when ChatUI is enabled
+GET /            # console pages, when the console is enabled:
+GET /chat        #   /, /chat, /models, /providers, /keys, /settings
+GET /static/*    # embedded console assets
 ```
 
 ## Release Verification

@@ -150,14 +150,25 @@ type ProvidersResponse struct {
 
 // ProviderInfo represents provider metadata
 type ProviderInfo struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	Description     string   `json:"description,omitempty"`
-	URL             string   `json:"url,omitempty"`
-	Models          []string `json:"models"`
-	Capabilities    []string `json:"capabilities,omitempty"`
-	RequiresAuth    bool     `json:"requires_auth"`
-	AuthDescription string   `json:"auth_description,omitempty"`
+	ID               string                `json:"id"`
+	Name             string                `json:"name"`
+	Description      string                `json:"description,omitempty"`
+	URL              string                `json:"url,omitempty"`
+	Models           []string              `json:"models"`
+	Capabilities     []string              `json:"capabilities,omitempty"`
+	RequiresAuth     bool                  `json:"requires_auth"`
+	AuthDescription  string                `json:"auth_description,omitempty"`
+	CredentialFields []CredentialFieldInfo `json:"credential_fields,omitempty"`
+}
+
+// CredentialFieldInfo is the catalog-declared inference credential field a
+// caller supplies for BYOK. It carries no secret values.
+type CredentialFieldInfo struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	Required    bool   `json:"required"`
+	Default     string `json:"default,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // ModelEndpointsResponse represents available endpoints for a model

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -68,11 +69,11 @@ func (h *ProviderKeysController) List(w http.ResponseWriter, r *http.Request) {
 			Config:     key.Config,
 			IsFallback: key.IsFallback,
 			Priority:   key.Priority,
-			CreatedAt:  key.CreatedAt.Format("2006-01-02T15:04:05Z"),
+			CreatedAt:  key.CreatedAt.UTC().Format(time.RFC3339),
 			UsageCount: key.UsageCount,
 		}
 		if key.LastUsed != nil {
-			lastUsed := key.LastUsed.Format("2006-01-02T15:04:05Z")
+			lastUsed := key.LastUsed.UTC().Format(time.RFC3339)
 			summary.LastUsed = &lastUsed
 		}
 		summaries[i] = summary
@@ -191,12 +192,12 @@ func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
 		"config":      key.Config,
 		"is_fallback": key.IsFallback,
 		"priority":    key.Priority,
-		"created_at":  key.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		"created_at":  key.CreatedAt.UTC().Format(time.RFC3339),
 		"usage_count": key.UsageCount,
 	}
 
 	if key.LastUsed != nil {
-		response["last_used"] = key.LastUsed.Format("2006-01-02T15:04:05Z")
+		response["last_used"] = key.LastUsed.UTC().Format(time.RFC3339)
 	}
 
 	// Credentials are encrypted, we can't show fields

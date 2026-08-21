@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starport/internal/chatui"
+	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
@@ -59,7 +59,7 @@ type Dependencies struct {
 	ProviderKeys       byok.ProviderKeys
 	RateLimits         ratelimit.Repository
 	ProviderOperations controllers.ProviderOperations
-	ChatUI             *chatui.Handler
+	Console            *console.Handler
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -101,7 +101,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		ProviderOperations: s.providerOperations,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
-		ChatUI:             dependencies.ChatUI,
+		Console:            dependencies.Console,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 
@@ -153,6 +153,16 @@ func (s *Server) Start() error {
 		Int("port", s.cfg.Port).
 		Str("host", s.cfg.Host).
 		Msg("starting HTTP server")
+
+	if s.controllers.Console != nil {
+		host := s.cfg.Host
+		if host == "" || host == "0.0.0.0" || host == "::" {
+			host = "localhost"
+		}
+		log.Info().
+			Str("url", fmt.Sprintf("http://%s:%d", host, s.cfg.Port)).
+			Msg("console ready")
+	}
 
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("failed to start server: %w", err)

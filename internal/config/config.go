@@ -24,7 +24,7 @@ type Config struct {
 	Security          SecurityConfig     `env:",prefix=SECURITY_"`
 	Logging           LoggingConfig      `env:",prefix=LOGGING_"`
 	Cache             CacheConfig        `env:",prefix=CACHE_"`
-	ChatUI            ChatUIConfig       `env:",prefix=CHATUI_"`
+	Console           ConsoleConfig      `env:",prefix=CONSOLE_"`
 
 	providerEnvironment  environmentLookup
 	credentialResolver   *credentials.Resolver
@@ -218,11 +218,11 @@ type CacheConfig struct {
 	Enabled bool `env:"ENABLED,default=true"`
 }
 
-// ChatUIConfig defines settings for the embedded chat UI
-type ChatUIConfig struct {
-	Enabled bool   `env:"ENABLED,default=false"`
-	Title   string `env:"TITLE,default=Starport Chat"`
-	Theme   string `env:"THEME,default=light"`
+// ConsoleConfig defines settings for the embedded web console
+type ConsoleConfig struct {
+	Enabled bool   `env:"ENABLED,default=true"`
+	Title   string `env:"TITLE,default=Starport Console"`
+	Theme   string `env:"THEME,default=dark"`
 }
 
 // Validate performs validation on the configuration
@@ -262,8 +262,8 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	// Validate ChatUI config
-	if err := c.ChatUI.Validate(); err != nil {
+	// Validate console config
+	if err := c.Console.Validate(); err != nil {
 		return err
 	}
 
