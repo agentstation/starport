@@ -78,6 +78,13 @@ func (r *modelRouter) planRegistryRoute(
 	runtime connectors.RuntimeLease,
 ) (*routing.Plan, error) {
 	models := r.getCandidateModels(req)
+	models, variants := parseModelVariants(models)
+	if len(variants.zeroPriceModels) > 0 {
+		// The registry fallback has no catalog price facts, so the ":free"
+		// promise cannot be kept. Fail loudly instead of routing to a route
+		// that may bill the caller.
+		return nil, fmt.Errorf("%w: variant :free needs catalog price facts", ErrNoModelsAvailable)
+	}
 	if req != nil {
 		models = r.filterByProviderPreferences(models, req.ProviderPreferences)
 		if req.APIKeyConfig != nil {
@@ -140,13 +147,12 @@ func (r *modelRouter) toPlanningRequest(req *Request) routing.Request {
 	if req != nil {
 		models = r.getCandidateModels(req)
 	}
+	models, variants := parseModelVariants(models)
 	request := routing.Request{
-		Models:              append([]string(nil), models...),
+		Models:              models,
 		AllowModelFallbacks: len(models) > 1,
-		Optimization: routing.OptimizationPolicy{
-			PreferLowestCost:    r.config.EnableCostOptimization,
-			PreferLowestLatency: true,
-		},
+		ZeroPriceModels:     variants.zeroPriceModels,
+		Optimization:        r.plannerOptimization(req, variants),
 	}
 	if req == nil {
 		return request
@@ -171,6 +177,9 @@ func (r *modelRouter) toPlanningRequest(req *Request) routing.Request {
 			Only:           normalizeProviders(req.ProviderPreferences.Only),
 			Ignore:         normalizeProviders(req.ProviderPreferences.Ignore),
 			AllowFallbacks: req.ProviderPreferences.AllowFallbacks,
+			// Wire prices are USD per million tokens; catalog costs are per token.
+			MaxPromptPricePerToken:     req.ProviderPreferences.MaxPromptPricePer1M / 1_000_000,
+			MaxCompletionPricePerToken: req.ProviderPreferences.MaxCompletionPricePer1M / 1_000_000,
 		}
 	}
 	if req.APIKeyConfig != nil {
@@ -181,6 +190,31 @@ func (r *modelRouter) toPlanningRequest(req *Request) routing.Request {
 		}
 	}
 	return request
+}
+
+// plannerOptimization resolves the route ordering with defined precedence:
+// an explicit provider.sort wins over a model variant suffix, which wins
+// over the server default. Starport measures latency, not throughput, so
+// "throughput" routes by measured latency.
+func (r *modelRouter) plannerOptimization(req *Request, variants variantEffects) routing.OptimizationPolicy {
+	requestedSort := ""
+	if req != nil && req.ProviderPreferences != nil {
+		requestedSort = req.ProviderPreferences.Sort
+	}
+	switch {
+	case requestedSort == "price":
+		return routing.OptimizationPolicy{PreferLowestCost: true}
+	case requestedSort == "latency" || requestedSort == "throughput":
+		return routing.OptimizationPolicy{PreferLowestLatency: true}
+	case variants.sortPrice:
+		return routing.OptimizationPolicy{PreferLowestCost: true}
+	case variants.sortLatency:
+		return routing.OptimizationPolicy{PreferLowestLatency: true}
+	}
+	return routing.OptimizationPolicy{
+		PreferLowestCost:    r.config.EnableCostOptimization,
+		PreferLowestLatency: true,
+	}
 }
 
 func cloneModelOverrides(overrides map[string]string) map[string]string {

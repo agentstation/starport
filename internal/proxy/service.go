@@ -220,6 +220,15 @@ type ProviderPreferences struct {
 	Ignore        []string `json:"ignore,omitempty"`
 	Only          []string `json:"only,omitempty"`
 	AllowFallback bool     `json:"allow_fallback,omitempty"`
+
+	// Sort selects route ordering: "price", "latency", or "throughput"
+	// (routed by measured latency). Empty keeps the server default.
+	Sort string `json:"sort,omitempty"`
+
+	// MaxPromptPricePer1M and MaxCompletionPricePer1M cap the accepted route
+	// price in USD per million tokens. Zero means no cap.
+	MaxPromptPricePer1M     float64 `json:"max_prompt_price_per_1m,omitempty"`
+	MaxCompletionPricePer1M float64 `json:"max_completion_price_per_1m,omitempty"`
 }
 
 // APIKeyRoutingConfig contains API-key scoped routing restrictions.

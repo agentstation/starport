@@ -69,6 +69,16 @@ type ProviderPreferences struct {
 
 	// Allow fallback to other providers not in order list
 	AllowFallbacks bool `json:"allow_fallbacks,omitempty"`
+
+	// Sort selects the route ordering: "price", "latency", or "throughput".
+	// Starport measures latency, not throughput, so "throughput" routes by
+	// measured latency. Empty keeps the server default ordering.
+	Sort string `json:"sort,omitempty"`
+
+	// MaxPromptPricePer1M and MaxCompletionPricePer1M cap the accepted route
+	// price in USD per million tokens. Zero means no cap.
+	MaxPromptPricePer1M     float64 `json:"max_prompt_price_per_1m,omitempty"`
+	MaxCompletionPricePer1M float64 `json:"max_completion_price_per_1m,omitempty"`
 }
 
 // APIKeyConfig contains API key specific routing configuration

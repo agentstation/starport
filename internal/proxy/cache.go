@@ -550,6 +550,9 @@ func cachePolicy(route string, provider *ProviderPreferences, tenant *APIKeyRout
 		policy.Provider.Only = append([]string(nil), provider.Only...)
 		policy.Provider.Ignore = append([]string(nil), provider.Ignore...)
 		policy.Provider.AllowFallbacks = provider.AllowFallback
+		policy.Provider.Sort = provider.Sort
+		policy.Provider.MaxPromptPricePer1M = provider.MaxPromptPricePer1M
+		policy.Provider.MaxCompletionPricePer1M = provider.MaxCompletionPricePer1M
 	}
 	if tenant != nil {
 		policy.Tenant.AllowedModels = append([]string(nil), tenant.AllowedModels...)

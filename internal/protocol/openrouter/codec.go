@@ -60,6 +60,9 @@ type DecodedChat struct {
 	Provider  *ProviderPreferences
 	// Preset names a stored preset the request selects by body field.
 	Preset string
+	// UnenforcedProviderFields names documented provider fields this request
+	// used that Starport accepts but cannot yet enforce, in sorted order.
+	UnenforcedProviderFields []string
 }
 
 // ProviderPreferences is the OpenRouter provider-routing policy.
@@ -71,8 +74,10 @@ type ProviderPreferences struct {
 	RequireParameters *bool           `json:"require_parameters,omitempty"`
 	DataCollection    string          `json:"data_collection,omitempty"`
 	ZDR               *bool           `json:"zdr,omitempty"`
+	Quantizations     []string        `json:"quantizations,omitempty"`
+	Experimental      json.RawMessage `json:"experimental,omitempty"`
 	Sort              string          `json:"sort,omitempty"`
-	MaxPrice          json.RawMessage `json:"max_price,omitempty"`
+	MaxPrice          *MaxPrice       `json:"max_price,omitempty"`
 }
 
 // Message is one OpenRouter chat message.
@@ -165,6 +170,9 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 	if wire.MaxTokens != nil && wire.MaxCompletionTokens != nil {
 		return DecodedChat{}, fmt.Errorf("max_tokens and max_completion_tokens cannot both be set")
 	}
+	if err := validateProviderPreferences(wire.Provider); err != nil {
+		return DecodedChat{}, err
+	}
 	messages := make([]inference.Message, len(wire.Messages))
 	for index, message := range wire.Messages {
 		converted, err := decodeMessage(message)
@@ -226,6 +234,7 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 			StreamOptions: inference.StreamOptions{IncludeUsage: wire.StreamOptions != nil && wire.StreamOptions.IncludeUsage},
 		},
 		Route: wire.Route, Provider: wire.Provider, Preset: wire.Preset,
+		UnenforcedProviderFields: unenforcedProviderFields(wire.Provider),
 	}, nil
 }
 
