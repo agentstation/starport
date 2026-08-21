@@ -141,10 +141,13 @@ func transformProviderPreferences(prefs *ProviderPreferences) *router.ProviderPr
 	}
 
 	return &router.ProviderPreferences{
-		Order:          append([]string(nil), prefs.Order...),
-		Only:           append([]string(nil), prefs.Only...),
-		Ignore:         append([]string(nil), prefs.Ignore...),
-		AllowFallbacks: prefs.AllowFallback,
+		Order:                   append([]string(nil), prefs.Order...),
+		Only:                    append([]string(nil), prefs.Only...),
+		Ignore:                  append([]string(nil), prefs.Ignore...),
+		AllowFallbacks:          prefs.AllowFallback,
+		Sort:                    prefs.Sort,
+		MaxPromptPricePer1M:     prefs.MaxPromptPricePer1M,
+		MaxCompletionPricePer1M: prefs.MaxCompletionPricePer1M,
 	}
 }
 

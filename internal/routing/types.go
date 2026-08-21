@@ -95,6 +95,13 @@ type ProviderPolicy struct {
 	Only           []string
 	Ignore         []string
 	AllowFallbacks bool
+
+	// MaxPromptPricePerToken and MaxCompletionPricePerToken cap the accepted
+	// per-token price. Zero means no cap. A capped request rejects routes
+	// whose price is unknown: a cap is a promise the planner can only keep
+	// with known prices.
+	MaxPromptPricePerToken     float64
+	MaxCompletionPricePerToken float64
 }
 
 // OptimizationPolicy defines deterministic soft preferences.
@@ -117,6 +124,10 @@ type Request struct {
 	Providers             ProviderPolicy
 	AffinityProvider      string
 	Optimization          OptimizationPolicy
+
+	// ZeroPriceModels lists requested model IDs that only accept offerings
+	// with a known zero token price (the ":free" variant).
+	ZeroPriceModels []string
 }
 
 // RejectionCode is a stable reason that excluded one route.
@@ -141,6 +152,11 @@ const (
 	RejectionMissingEndpoint RejectionCode = "missing_endpoint"
 	// RejectionInsufficientContext means the route cannot accept the required context.
 	RejectionInsufficientContext RejectionCode = "insufficient_context"
+	// RejectionPriceExceeded means the route price violates a request price cap.
+	RejectionPriceExceeded RejectionCode = "price_exceeded"
+	// RejectionUnknownModel means a requested model matched no catalog offering.
+	// The rejection carries only the model identity, not a full route.
+	RejectionUnknownModel RejectionCode = "unknown_model"
 )
 
 // Rejection records why one considered route was not planned.

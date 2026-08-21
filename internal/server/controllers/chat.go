@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/agentstation/starport/internal/inference"
@@ -36,10 +37,15 @@ func newChatController(service proxy.Proxy, protocol Protocol) *ChatController {
 
 // Create handles POST /v1/chat/completions and /api/v1/chat/completions
 func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
-	req, err := h.decodeRequest(r)
+	req, unenforced, err := h.decodeRequest(r)
 	if err != nil {
 		h.writeInvalidRequest(w, "Invalid request body: "+err.Error())
 		return
+	}
+	if len(unenforced) > 0 {
+		// Documented provider fields Starport accepts but cannot yet enforce
+		// are reported loudly instead of silently dropped.
+		w.Header().Set("X-Starport-Unenforced-Provider-Fields", strings.Join(unenforced, ","))
 	}
 
 	// Add context from HTTP request
@@ -62,11 +68,11 @@ func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *ChatController) decodeRequest(r *http.Request) (*proxy.ChatCompletionRequest, error) {
+func (h *ChatController) decodeRequest(r *http.Request) (*proxy.ChatCompletionRequest, []string, error) {
 	if h.protocol == ProtocolOpenRouter {
 		decoded, err := openrouter.DecodeChat(r.Body)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		request := &proxy.ChatCompletionRequest{Request: decoded.Inference, Route: decoded.Route, Preset: decoded.Preset}
 		if decoded.Provider != nil {
@@ -79,15 +85,20 @@ func (h *ChatController) decodeRequest(r *http.Request) (*proxy.ChatCompletionRe
 				Only:          append([]string(nil), decoded.Provider.Only...),
 				Ignore:        append([]string(nil), decoded.Provider.Ignore...),
 				AllowFallback: allowFallback,
+				Sort:          decoded.Provider.Sort,
+			}
+			if decoded.Provider.MaxPrice != nil {
+				request.Provider.MaxPromptPricePer1M = decoded.Provider.MaxPrice.Prompt
+				request.Provider.MaxCompletionPricePer1M = decoded.Provider.MaxPrice.Completion
 			}
 		}
-		return request, nil
+		return request, decoded.UnenforcedProviderFields, nil
 	}
 	decoded, err := openai.DecodeChat(r.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &proxy.ChatCompletionRequest{Request: decoded}, nil
+	return &proxy.ChatCompletionRequest{Request: decoded}, nil, nil
 }
 
 // handleNonStream handles non-streaming chat completions

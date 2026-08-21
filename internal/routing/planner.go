@@ -32,14 +32,17 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 	ignoredProviders := normalizedSet(request.Providers.Ignore)
 	requiredCapabilities := normalizedSet(request.RequiredCapabilities)
 	affinityProvider := normalize(request.AffinityProvider)
+	zeroPriceModels := exactSet(request.ZeroPriceModels)
 
 	eligible := make([]rankedCandidate, 0, len(snapshot.Candidates))
 	rejections := make([]Rejection, 0)
+	matchedModels := make(map[string]struct{}, len(modelRanks.ranks))
 	for _, candidate := range snapshot.Candidates {
 		modelRank, considered := consideredModelRank(candidate.Route, modelRanks)
 		if !considered {
 			continue
 		}
+		recordMatchedModel(candidate.Route, modelRanks, matchedModels)
 
 		if rejection, rejected := rejectCandidate(
 			candidate,
@@ -50,6 +53,7 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 			ignoredProviders,
 			providerRanks,
 			requiredCapabilities,
+			zeroPriceModels,
 		); rejected {
 			rejections = append(rejections, rejection)
 			continue
@@ -89,6 +93,7 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 		})
 	}
 
+	rejections = append(rejections, unmatchedModelRejections(modelRanks, matchedModels, snapshot.CatalogGenerationID)...)
 	sortRankedCandidates(eligible, request.Optimization, len(providerRanks) > 0)
 	sort.Slice(rejections, func(left, right int) bool {
 		if rejections[left].Route.ID() != rejections[right].Route.ID() {
@@ -215,6 +220,46 @@ func consideredModelRank(route Route, selection modelSelection) (int, bool) {
 	return selection.anyModelRank, selection.allowAny
 }
 
+// recordMatchedModel marks the requested model identities one considered
+// candidate satisfied, so requested models that match nothing are reportable.
+func recordMatchedModel(route Route, selection modelSelection, matched map[string]struct{}) {
+	if _, exists := selection.ranks[route.ID()]; exists {
+		matched[route.ID()] = struct{}{}
+	}
+	if _, exists := selection.ranks[route.ModelID]; exists {
+		matched[route.ModelID] = struct{}{}
+	}
+}
+
+// unmatchedModelRejections produces one model-level rejection per requested
+// model that matched no candidate at all, so a plan never fails with zero
+// recorded reasons.
+func unmatchedModelRejections(
+	selection modelSelection,
+	matched map[string]struct{},
+	catalogGenerationID string,
+) []Rejection {
+	unmatched := make([]string, 0)
+	for modelID := range selection.ranks {
+		if _, exists := matched[modelID]; !exists {
+			unmatched = append(unmatched, modelID)
+		}
+	}
+	sort.Strings(unmatched)
+	rejections := make([]Rejection, 0, len(unmatched))
+	for _, modelID := range unmatched {
+		rejections = append(rejections, Rejection{
+			Route: Route{
+				CatalogGenerationID: catalogGenerationID,
+				ModelID:             modelID,
+			},
+			Code:   RejectionUnknownModel,
+			Detail: "no catalog offering matches the requested model",
+		})
+	}
+	return rejections
+}
+
 func rejectCandidate(
 	candidate Candidate,
 	request Request,
@@ -224,6 +269,7 @@ func rejectCandidate(
 	ignoredProviders map[string]struct{},
 	providerRanks map[string]int,
 	requiredCapabilities map[string]struct{},
+	zeroPriceModels map[string]struct{},
 ) (Rejection, bool) {
 	reject := func(code RejectionCode, detail string) (Rejection, bool) {
 		return Rejection{Route: candidate.Route, Code: code, Detail: detail}, true
@@ -267,7 +313,40 @@ func rejectCandidate(
 	if request.RequiredContextTokens > 0 && candidate.ContextWindow < request.RequiredContextTokens {
 		return reject(RejectionInsufficientContext, "context window is smaller than the request")
 	}
+	if code, detail, rejected := rejectPrice(candidate, request.Providers, zeroPriceModels); rejected {
+		return reject(code, detail)
+	}
 	return Rejection{}, false
+}
+
+// rejectPrice enforces the request price cap and the zero-price (":free")
+// model constraint. Both require a known price: a price promise cannot be
+// kept for an offering whose price the catalog does not state.
+func rejectPrice(
+	candidate Candidate,
+	policy ProviderPolicy,
+	zeroPriceModels map[string]struct{},
+) (RejectionCode, string, bool) {
+	_, zeroByModel := zeroPriceModels[candidate.Route.ModelID]
+	_, zeroByRoute := zeroPriceModels[candidate.Route.ID()]
+	requireZero := zeroByModel || zeroByRoute
+	capped := policy.MaxPromptPricePerToken > 0 || policy.MaxCompletionPricePerToken > 0
+	if !requireZero && !capped {
+		return "", "", false
+	}
+	if candidate.Cost == nil {
+		return RejectionPriceExceeded, "offering price is unknown", true
+	}
+	if requireZero && (candidate.Cost.InputPerToken > 0 || candidate.Cost.OutputPerToken > 0) {
+		return RejectionPriceExceeded, "the :free variant requires a zero-price offering", true
+	}
+	if policy.MaxPromptPricePerToken > 0 && candidate.Cost.InputPerToken > policy.MaxPromptPricePerToken {
+		return RejectionPriceExceeded, "prompt price exceeds the request max_price", true
+	}
+	if policy.MaxCompletionPricePerToken > 0 && candidate.Cost.OutputPerToken > policy.MaxCompletionPricePerToken {
+		return RejectionPriceExceeded, "completion price exceeds the request max_price", true
+	}
+	return "", "", false
 }
 
 func supportsOperation(operations []Operation, required Operation) bool {
