@@ -536,6 +536,131 @@ export function deletePreset(name: string): Promise<unknown> {
   });
 }
 
+// --- Chat completions ---
+
+export type ChatUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  completion_tokens_details?: { reasoning_tokens?: number };
+};
+
+// ChatStreamMeta carries the response facts the chat page records per
+// assistant turn: the routed model, final usage, cache headers, and any
+// provider-preference fields the gateway accepted but cannot enforce.
+export type ChatStreamMeta = {
+  model: string;
+  usage: ChatUsage | null;
+  cache: string;
+  cacheAge: string;
+  unenforced: string;
+};
+
+// streamChat posts to /api/v1/chat/completions with stream=true and
+// invokes callbacks per SSE delta. Resolves with the stream metadata.
+export async function streamChat(
+  body: Record<string, unknown>,
+  {
+    signal,
+    onDelta,
+    onReasoning,
+  }: {
+    signal?: AbortSignal;
+    onDelta: (text: string) => void;
+    onReasoning?: (text: string) => void;
+  },
+): Promise<ChatStreamMeta> {
+  const key = getApiKey();
+  const response = await fetch("/api/v1/chat/completions", {
+    method: "POST",
+    signal,
+    headers: {
+      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...body,
+      stream: true,
+      stream_options: { include_usage: true },
+    }),
+  });
+  if (!response.ok || !response.body) throw await parseError(response);
+
+  const meta: ChatStreamMeta = {
+    model: "",
+    usage: null,
+    cache: response.headers.get("X-Cache") ?? "",
+    cacheAge: response.headers.get("X-Cache-Age") ?? "",
+    unenforced:
+      response.headers.get("X-Starport-Unenforced-Provider-Fields") ?? "",
+  };
+
+  type StreamEvent = {
+    error?: { code?: number; message?: string };
+    usage?: ChatUsage;
+    model?: string;
+    choices?: {
+      delta?: { content?: string; reasoning?: string; reasoning_content?: string };
+    }[];
+  };
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (payload === "[DONE]") continue;
+      let event: StreamEvent;
+      try {
+        event = JSON.parse(payload) as StreamEvent;
+      } catch {
+        continue;
+      }
+      if (event.error) {
+        throw new ApiError(
+          event.error.code ?? 500,
+          event.error.message ?? "stream error",
+          event,
+        );
+      }
+      if (event.usage) meta.usage = event.usage;
+      if (event.model) meta.model = event.model;
+      const delta = event.choices?.[0]?.delta;
+      if (!delta) continue;
+      const reasoning = delta.reasoning_content ?? delta.reasoning;
+      if (reasoning && onReasoning) onReasoning(reasoning);
+      if (delta.content) onDelta(delta.content);
+    }
+  }
+  return meta;
+}
+
+export type ChatCompletion = {
+  model?: string;
+  choices?: { message?: { content?: string } }[];
+  usage?: ChatUsage;
+};
+
+// completeChat is the non-streaming variant (thread title generation).
+export function completeChat(
+  body: Record<string, unknown>,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<ChatCompletion> {
+  return request<ChatCompletion>("/api/v1/chat/completions", {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
 // listActivity reads the authenticated key's own request log; key_id is
 // ignored there — only the admin listing can widen the scope.
 export function listActivity(filters: ActivityFilters): Promise<ActivityPage> {
