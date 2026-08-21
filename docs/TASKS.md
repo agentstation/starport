@@ -1,16 +1,13 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-20
+Last Updated: 2026-08-21
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-- [Starport OpenRouter parity](plans/openrouter-parity-plan.html) (ORP) —
-  request log and usage accounting, catalog freshness surface, presets and
-  routing preferences, per-key budgets and limits, and side-by-side chat
-  comparison. The plan's status ledger is the task-level source of truth.
+No active durable plan exists.
 
 ### Proposed Work
 
@@ -20,7 +17,8 @@ No proposed durable plan exists.
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
-| OpenRouter parity campaign | ORP | #126–#139 | 2026-08-20 | Closed the OpenRouter feature-parity roadmap as a stacked pull-request train on top of #125. Shipped request logs and usage accounting (`internal/usage`, `usage:v1:` namespace, `/api/v1/activity`, console Usage page: #127–#130), the catalog freshness surface with console-triggered refresh (#131, #132), preset CRUD with `@preset/` model resolution (#133), `provider.sort` and `max_price` routing completion (#134, #135), per-key budgets and allowed-model limits with 402 responses and `X-Starport-Budget-*` headers (#136, #137), and side-by-side model comparison in chat (#138). `scripts/verify-openrouter-parity.sh` keeps conditions `ORP-V01` through `ORP-V16` and runs in CI (#139). |
+| Console chat parity and streaming usage | Console | #140–#142 via #143 | 2026-08-21 | Restored the legacy chat UX details (#140), added KaTeX math and Mermaid diagram rendering in chat (#141), and normalized streaming usage: every chat stream ends with one usage frame — provider-reported when available, otherwise estimated by a startup-initialized tiktoken estimator — with a live tok/s badge during streams (#142). The whole open train (#125, #127–#142) landed on `main` through merge-train PR #143 as one linear commit per pull request. |
+| OpenRouter parity campaign | ORP | #126–#139 via #143 | 2026-08-20 | Closed the OpenRouter feature-parity roadmap as a stacked pull-request train on top of #125. Shipped request logs and usage accounting (`internal/usage`, `usage:v1:` namespace, `/api/v1/activity`, console Usage page: #127–#130), the catalog freshness surface with console-triggered refresh (#131, #132), preset CRUD with `@preset/` model resolution (#133), `provider.sort` and `max_price` routing completion (#134, #135), per-key budgets and allowed-model limits with 402 responses and `X-Starport-Budget-*` headers (#136, #137), and side-by-side model comparison in chat (#138). `scripts/verify-openrouter-parity.sh` keeps conditions `ORP-V01` through `ORP-V16` and runs in CI (#139). |
 | Starport console revamp | Console | #125 | 2026-08-20 | Replaced the chat-only UI with a six-page embedded console (Overview, Chat, Models, Providers, Keys, Settings) designed from first principles as a local OpenRouter replacement. Renamed `CHATUI_*` config to `CONSOLE_*`, added catalog-driven `credential_fields` to the providers API, fixed provider-key timestamps to RFC 3339 UTC, and anchored the `vendor/` gitignore rule. All verification gates and the OpenRouter SDK smoke checks pass. |
 | Dependency direction hardening | DDH | Starmap #94; Starport #117–#123 | 2026-08-20 | Established 14 executable dependency rules, moved provider and resource ownership into Starmap, isolated Starport proxy and catalog contracts, corrected release VCS provenance, and passed all hosted checks for both implementation pull requests. |
 | Package ownership refactor | POR | Starport #105–#110 and Starmap #74–#76 | 2026-08-12 | Moved packages to concept-owned paths in both repositories. Deleted unused HTTP transport code. All nine campaign assertions pass. |

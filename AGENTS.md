@@ -77,10 +77,8 @@ guards to hide a defect. Report skipped optional SDK checks as `UNVERIFIED`.
 Every `scripts/verify-*.sh` gate belongs to CI, this list, or both. A gate that
 no workflow runs cannot report a regression.
 
-`scripts/verify-openrouter-parity.sh` tracks
-`docs/plans/openrouter-parity-plan.html`. Run it per plan task as a progress
-report. It stays red until the campaign closes, so it does not block a pull
-request before ORP13; ORP13 adds it to CI as a required gate.
+`scripts/verify-openrouter-parity.sh` guards the shipped OpenRouter parity
+surface (conditions `ORP-V01` through `ORP-V16`) and runs in CI.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.
