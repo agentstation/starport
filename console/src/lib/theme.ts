@@ -30,6 +30,16 @@ export function applyTheme(choice: ThemeChoice): void {
 export function setTheme(choice: ThemeChoice): void {
   localStorage.setItem(STORAGE_KEY, choice);
   applyTheme(choice);
+  for (const listener of themeListeners) listener();
+}
+
+// Subscribers (the shell toggle, the settings page) re-render when the
+// choice changes from anywhere.
+const themeListeners = new Set<() => void>();
+
+export function onThemeChange(listener: () => void): () => void {
+  themeListeners.add(listener);
+  return () => themeListeners.delete(listener);
 }
 
 // Bootstrap: apply before first paint (imported from main.tsx, which
@@ -39,6 +49,7 @@ export function initTheme(): void {
   window.matchMedia(lightQuery).addEventListener("change", () => {
     if (savedTheme() === "system") {
       applyTheme("system");
+      for (const listener of themeListeners) listener();
     }
   });
 }

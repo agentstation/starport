@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM9 (settings)
+    Next action: execute CM10 (chat shell and composer)
   </p>
 
   <section id="outcome">
@@ -332,7 +332,7 @@
         <tr id="CM6" data-status="done"><td>CM6</td><td>Keys page.</td><td><code>done</code></td><td>CM-V10 passes (verifier: 12 passed). Full CRUD, once-only secret modal, budget bars, catalog-driven BYOK live-verified; dark and light screenshots. proof/console-modernization/cm6.md</td></tr>
         <tr id="CM7" data-status="done"><td>CM7</td><td>Usage page with charts.</td><td><code>done</code></td><td>CM-V11 passes (verifier: 13 passed). Four neutral-series charts, URL-persisted filters, virtualized table, request detail panel live-verified against seeded traffic; dark and light screenshots. proof/console-modernization/cm7.md</td></tr>
         <tr id="CM8" data-status="done"><td>CM8</td><td>Presets page.</td><td><code>done</code></td><td>CM-V12 passes (verifier: 14 passed). Full CRUD over /api/v1/presets with catalog-backed ModelPicker, revision-checked saves, and a live @preset request resolving through the gateway; dark and light screenshots. proof/console-modernization/cm8.md</td></tr>
-        <tr id="CM9" data-status="todo"><td>CM9</td><td>Settings page.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM9" data-status="done"><td>CM9</td><td>Settings page.</td><td><code>done</code></td><td>CM-V13 passes (verifier: 15 passed). Calm-density sections: save-and-test connection flow with key restore on rejection, three-way theme radio synced to the shell toggle, chat-data export and confirmed delete, about with admin info; dark and light screenshots. proof/console-modernization/cm9.md</td></tr>
         <tr id="CM10" data-status="todo"><td>CM10</td><td>Chat: thread shell, composer with bottom-bar model picker.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM11" data-status="todo"><td>CM11</td><td>Chat: streaming messages, metadata line, reasoning, code blocks.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM12" data-status="todo"><td>CM12</td><td>Chat: comparison mode.</td><td><code>todo</code></td><td></td></tr>
@@ -827,6 +827,20 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           end-to-end request with model @preset/cm8-proof resolving
           to groq/compound-mini (200, "ready", 486 tokens); both
           themes. Verifier: 14 passed, 7 failed (cm8.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM8</td><td>merged</td><td>PR #153
+          squash-merged to main (079fb98) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM9</td><td>done</td><td>Settings
+          page: calm-density flat sections. Connection save-and-test
+          probes /models, restores the previous key on rejection,
+          and reports "Key valid · N models visible"; theme radio
+          (dark/light/system) synced to the shell toggle through
+          theme-change listeners; chat-data JSON export and
+          delete-all behind a count-restating confirmation; about
+          section with admin info that degrades when locked.
+          Live-verified: invalid-key restore, valid-key test (422
+          models), theme sync, export download, both themes.
+          Verifier: 15 passed, 6 failed (cm9.md).</td></tr>
     </table>
   </section>
 </main>

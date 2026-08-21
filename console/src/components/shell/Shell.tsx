@@ -14,9 +14,9 @@ import {
   Sparkles,
   Sun,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { appliedTheme, setTheme } from "@/lib/theme";
+import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
 // Nav entries flip to implemented as their page tasks land (CM3–CM10).
 const NAV = [
@@ -27,7 +27,7 @@ const NAV = [
   { to: "/keys", label: "Keys", icon: Key, implemented: true },
   { to: "/usage", label: "Usage", icon: BarChart3, implemented: true },
   { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: true },
-  { to: "/settings", label: "Settings", icon: Settings, implemented: false },
+  { to: "/settings", label: "Settings", icon: Settings, implemented: true },
 ] as const;
 
 const COLLAPSE_KEY = "starport.sidebar.collapsed";
@@ -73,11 +73,9 @@ function StarMark() {
 }
 
 function ThemeToggle({ collapsed }: { collapsed: boolean }) {
-  const [theme, setThemeState] = useState<"dark" | "light">(() => appliedTheme());
+  const theme = useSyncExternalStore(onThemeChange, appliedTheme);
   const flip = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    setThemeState(next);
+    setTheme(theme === "dark" ? "light" : "dark");
   };
   const Icon = theme === "dark" ? Sun : Moon;
   return (
