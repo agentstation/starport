@@ -1,7 +1,7 @@
 // Models — the Starmap catalog: searchable model table, snapshot identity,
 // catalog refresh, and a per-model detail drawer with endpoint health.
 
-import { getApiKey, listModels, invalidateModels, getModelEndpoints, providerStatus, refreshProviders } from "../api.js";
+import { getApiKey, listModels, invalidateModels, getModelEndpoints, providerStatus, refreshCatalog } from "../api.js";
 import { el, icon, toast, copyButton, formatModelPrice, formatPricePerM, formatContext, debounce, sidePanel } from "../ui.js";
 import { navigate } from "../router.js";
 
@@ -64,9 +64,10 @@ export async function render(container) {
         refreshBtn.disabled = true;
         refreshBtn.classList.add("is-busy");
         try {
-            await refreshProviders();
+            const report = await refreshCatalog();
             invalidateModels();
-            toast("Catalog refresh triggered", "ok");
+            if (report?.changed) toast(`Catalog updated to generation ${report.generation_id}`, "ok");
+            else toast("Catalog is already current", "ok");
             await load({ fresh: true });
         } catch (error) {
             if (error.unauthorized || error.forbidden) toast("Catalog refresh needs an admin-scoped key", "err");

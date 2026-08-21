@@ -65,6 +65,7 @@ type App struct {
 	catalogRuntime     catalogRuntime
 	catalogUpdates     catalogUpdateRuntime
 	catalog            *runtimecatalog.ControlPlane
+	catalogFreshness   *runtimecatalog.FreshnessService
 	store              storage.KVStore
 	cacheManager       *cache.Manager
 	transports         *connectors.TransportRegistry
@@ -195,6 +196,11 @@ func (b *runtimeBuilder) openConcepts() error {
 	}
 	b.application.catalogRuntime = catalogRuntime
 	b.application.catalog = catalogRuntime.ControlPlane()
+	generations, err := runtimecatalog.NewGenerationStore(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open catalog generation store: %w", err)
+	}
+	b.application.catalogFreshness = runtimecatalog.NewFreshnessService(b.application.catalog, generations)
 	if updates, ok := catalogRuntime.(catalogUpdateRuntime); ok {
 		b.application.catalogUpdates = updates
 		b.application.own("remote catalog", updates.Close)
@@ -411,7 +417,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, ProviderKeys: b.providerKeys,
 		RateLimits: b.rateLimits, ProviderOperations: b.application, Console: b.console,
-		Usage: b.usageRecords,
+		Usage: b.usageRecords, Catalog: b.application,
 	})
 	if err != nil {
 		if httpServer != nil {
