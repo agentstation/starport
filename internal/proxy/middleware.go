@@ -164,6 +164,37 @@ func (s *loggingService) ListModels(ctx context.Context) (*ModelsResponse, error
 	return resp, err
 }
 
+// ListAuthors logs the list authors request.
+func (s *loggingService) ListAuthors(ctx context.Context) (*AuthorsResponse, error) {
+	start := time.Now()
+
+	resp, err := s.proxy.ListAuthors(ctx)
+
+	duration := time.Since(start)
+	logger := log.Info().
+		Str("method", "ListAuthors").
+		Dur("duration", duration)
+
+	if err != nil {
+		logger.Err(err).Msg("list authors failed")
+	} else {
+		logger.
+			Int("authors", len(resp.Authors)).
+			Msg("list authors succeeded")
+	}
+
+	return resp, err
+}
+
+// GetAuthor logs the get author request.
+func (s *loggingService) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error) {
+	resp, err := s.proxy.GetAuthor(ctx, authorID)
+	if err != nil {
+		log.Info().Str("method", "GetAuthor").Str("author", authorID).Err(err).Msg("get author failed")
+	}
+	return resp, err
+}
+
 // ListProviders logs the list providers request.
 func (s *loggingService) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	start := time.Now()
@@ -298,6 +329,18 @@ func (s *timingService) ListModels(ctx context.Context) (*ModelsResponse, error)
 func (s *timingService) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
 	return s.proxy.ListProviders(ctx)
+}
+
+// ListAuthors adds timing to context.
+func (s *timingService) ListAuthors(ctx context.Context) (*AuthorsResponse, error) {
+	ctx = context.WithValue(ctx, timingKey{}, time.Now())
+	return s.proxy.ListAuthors(ctx)
+}
+
+// GetAuthor adds timing to context.
+func (s *timingService) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error) {
+	ctx = context.WithValue(ctx, timingKey{}, time.Now())
+	return s.proxy.GetAuthor(ctx, authorID)
 }
 
 // GetModelEndpoints adds timing to context.

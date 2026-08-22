@@ -35,6 +35,13 @@ type Proxy interface {
 	// ListProviders returns available provider information
 	ListProviders(ctx context.Context) (*ProvidersResponse, error)
 
+	// ListAuthors returns catalog author information
+	ListAuthors(ctx context.Context) (*AuthorsResponse, error)
+
+	// GetAuthor returns one catalog author. It reports a not_found
+	// provider error for an unknown author ID.
+	GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error)
+
 	// GetModelEndpoints returns provider endpoints for a specific model
 	GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error)
 }
@@ -157,7 +164,17 @@ type (
 	OfferingPricingInfo = view.OfferingPricingInfo
 	// ProviderPolicyInfo summarizes the provider's published data policies.
 	ProviderPolicyInfo = view.ProviderPolicyInfo
+	// AuthorInfo represents one catalog author or organization.
+	AuthorInfo = view.AuthorInfo
 )
+
+// AuthorsResponse represents catalog author information
+type AuthorsResponse struct {
+	Authors []AuthorInfo `json:"authors"`
+
+	// Internal fields (not serialized)
+	CacheStatus string `json:"-"`
+}
 
 // ProvidersResponse represents provider information
 type ProvidersResponse struct {

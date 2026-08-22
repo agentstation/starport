@@ -39,6 +39,14 @@ func (m *mockProviders) ListProviders(ctx context.Context) (*proxy.ProvidersResp
 	return m.providers, m.err
 }
 
+func (m *mockProviders) ListAuthors(ctx context.Context) (*proxy.AuthorsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockProviders) GetAuthor(ctx context.Context, authorID string) (*proxy.AuthorInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockProviders) GetModelEndpoints(ctx context.Context, modelID string) (*proxy.ModelEndpointsResponse, error) {
 	return nil, errors.New("not implemented")
 }

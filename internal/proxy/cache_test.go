@@ -382,6 +382,15 @@ func (m *mockProxyImpl) ListProviders(context.Context) (*ProvidersResponse, erro
 	return m.providersResponse, nil
 }
 
+func (m *mockProxyImpl) ListAuthors(context.Context) (*AuthorsResponse, error) {
+	m.count("ListAuthors")
+	return &AuthorsResponse{}, nil
+}
+
+func (m *mockProxyImpl) GetAuthor(_ context.Context, authorID string) (*AuthorInfo, error) {
+	return &AuthorInfo{ID: authorID}, nil
+}
+
 func (m *mockProxyImpl) GetModelEndpoints(_ context.Context, modelID string) (*ModelEndpointsResponse, error) {
 	return &ModelEndpointsResponse{Model: modelID}, nil
 }
