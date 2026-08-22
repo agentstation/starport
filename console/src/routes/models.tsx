@@ -6,8 +6,8 @@ import { useEffect, useMemo, useRef } from "react";
 import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
 import { ConnectCard } from "@/components/overview/ConnectCard";
-import { ApiError, listModels, type Model } from "@/lib/api";
-import { formatCount } from "@/lib/format";
+import { ApiError, listModels, listProviderCatalog, type Model } from "@/lib/api";
+import { formatCount, providerLabel } from "@/lib/format";
 import { useHasApiKey } from "@/lib/useApiKey";
 
 // Filter state lives in the URL so a filtered view survives reload and
@@ -106,6 +106,16 @@ function ModelsPage() {
     enabled: hasKey,
     retry: false,
   });
+  const catalog = useQuery({
+    queryKey: ["provider-catalog"],
+    queryFn: listProviderCatalog,
+    enabled: hasKey,
+    retry: false,
+  });
+  const providerNames = useMemo(
+    () => new Map((catalog.data ?? []).map((entry) => [entry.id, entry.name])),
+    [catalog.data],
+  );
 
   // "/" focuses catalog search from anywhere on the page (DESIGN.md).
   useEffect(() => {
@@ -147,9 +157,9 @@ function ModelsPage() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([provider, count]) => ({
         value: provider,
-        label: `${provider} (${count})`,
+        label: `${providerLabel(provider, providerNames.get(provider))} (${count})`,
       }));
-  }, [all]);
+  }, [all, providerNames]);
 
   const filtered = useMemo(
     () => all.filter((model) => matches(model, search)),
