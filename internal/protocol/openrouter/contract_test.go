@@ -33,6 +33,16 @@ func TestOpenRouterProtocolContract(t *testing.T) {
 		require.True(t, *request.Provider.AllowFallbacks)
 		require.JSONEq(t, `40`, string(request.Inference.Extensions["top_k"]))
 
+		// transforms names work the OpenRouter gateway does for the caller.
+		// No provider understands the field, so it must not travel as an
+		// extension into the upstream body. The unkept promise is reported
+		// alongside the unenforced provider preferences, in one sorted list.
+		require.NotContains(t, request.Inference.Extensions, "transforms")
+		require.Equal(t,
+			[]string{"require_parameters", "transforms"},
+			request.UnenforcedProviderFields,
+		)
+
 		request, err = DecodeChat(strings.NewReader(`{
 			"model":"openai/o3","messages":[],"reasoning_effort":"high","reasoning":{"max_tokens":512}
 		}`))

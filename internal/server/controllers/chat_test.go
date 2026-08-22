@@ -121,6 +121,21 @@ func TestUnenforcedProviderFieldsHeader(t *testing.T) {
 	require.Equal(t, "price", service.lastChat.Provider.Sort)
 	require.InDelta(t, 2.0, service.lastChat.Provider.MaxPromptPricePer1M, 1e-9)
 
+	// A top-level gateway field joins the same sorted list. Starport used to
+	// forward plugins into the provider request body, where it turned a
+	// servable request into a provider rejection.
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
+		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],`+
+			`"plugins":[{"id":"web"}],"provider":{"zdr":true}}`,
+	))
+	recorder = httptest.NewRecorder()
+	controller.Create(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "plugins,zdr",
+		recorder.Header().Get("X-Starport-Unenforced-Provider-Fields"))
+	require.Empty(t, service.lastChat.Request.Extensions,
+		"a gateway field must not travel to the provider as an extension")
+
 	// Enforced-only requests carry no unenforced-fields header.
 	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
 		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],"provider":{"only":["openai"]}}`,

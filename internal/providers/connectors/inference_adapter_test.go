@@ -10,6 +10,7 @@ import (
 
 func TestInferenceAdapterPreservesChatSemantics(t *testing.T) {
 	maxTokens := 200
+	parallelToolCalls := false
 	original := inference.ChatRequest{
 		Model: "openai/gpt-4.1",
 		Messages: []inference.Message{{
@@ -19,8 +20,9 @@ func TestInferenceAdapterPreservesChatSemantics(t *testing.T) {
 				{Kind: inference.ContentImage, Image: &inference.Image{URL: "https://example.invalid/image.png", Detail: "high"}},
 			},
 		}},
-		Tools:      []inference.Tool{{Name: "lookup", Parameters: json.RawMessage(`{"type":"object"}`)}},
-		ToolChoice: inference.ToolChoice{Mode: inference.ToolChoiceNamed, Name: "lookup"},
+		Tools:             []inference.Tool{{Name: "lookup", Parameters: json.RawMessage(`{"type":"object"}`)}},
+		ToolChoice:        inference.ToolChoice{Mode: inference.ToolChoiceNamed, Name: "lookup"},
+		ParallelToolCalls: &parallelToolCalls,
 		Output: inference.StructuredOutput{
 			Format: inference.OutputJSONSchema, Name: "result",
 			Schema: json.RawMessage(`{"type":"object","required":["id"]}`), Strict: true,

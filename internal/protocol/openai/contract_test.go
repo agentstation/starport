@@ -22,6 +22,7 @@ func TestOpenAIProtocolContract(t *testing.T) {
 			"max_completion_tokens":128,
 			"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object"}}}],
 			"tool_choice":{"type":"function","function":{"name":"lookup"}},
+			"parallel_tool_calls":false,
 			"response_format":{"type":"json_schema","json_schema":{"name":"result","schema":{"type":"object"},"strict":true}},
 			"reasoning_effort":"high",
 			"logprobs":true,"top_logprobs":3,
@@ -32,6 +33,11 @@ func TestOpenAIProtocolContract(t *testing.T) {
 		require.Equal(t, "https://example.test/image.png", request.Messages[1].Content[1].Image.URL)
 		require.Equal(t, 128, *request.Sampling.MaxTokens)
 		require.Equal(t, inference.ToolChoiceNamed, request.ToolChoice.Mode)
+		// parallel_tool_calls is a canonical field, not an extension: it must
+		// reach the provider, and it must take part in the cache key.
+		require.NotNil(t, request.ParallelToolCalls)
+		require.False(t, *request.ParallelToolCalls)
+		require.NotContains(t, request.Extensions, "parallel_tool_calls")
 		require.Equal(t, inference.OutputJSONSchema, request.Output.Format)
 		require.Equal(t, inference.ReasoningHigh, request.Reasoning.Effort)
 		require.True(t, request.StreamOptions.IncludeUsage)

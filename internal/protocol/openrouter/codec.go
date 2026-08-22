@@ -60,8 +60,11 @@ type DecodedChat struct {
 	Provider  *ProviderPreferences
 	// Preset names a stored preset the request selects by body field.
 	Preset string
-	// UnenforcedProviderFields names documented provider fields this request
-	// used that Starport accepts but cannot yet enforce, in sorted order.
+	// UnenforcedProviderFields names documented OpenRouter fields this request
+	// used that Starport accepts but cannot yet enforce, in sorted order. It
+	// covers both provider-routing preferences and top-level gateway fields,
+	// because the caller reads one list and only cares which promises were not
+	// kept.
 	UnenforcedProviderFields []string
 }
 
@@ -216,8 +219,9 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 	putExtension(extensions, "top_a", wire.TopA)
 	putExtension(extensions, "logprobs", wire.LogProbs)
 	putExtension(extensions, "top_logprobs", wire.TopLogProbs)
-	putExtension(extensions, "transforms", wire.Transforms)
-	putExtension(extensions, "plugins", wire.Plugins)
+	// transforms and plugins name OpenRouter gateway work, not provider
+	// request fields. Forwarding them upstream makes a provider reject a
+	// request it would otherwise serve, so they are reported instead.
 	if len(extensions) == 0 {
 		extensions = nil
 	}
@@ -229,12 +233,13 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 				MaxTokens: maxTokens, Stop: stop, PresencePenalty: wire.PresencePenalty,
 				FrequencyPenalty: wire.FrequencyPenalty, LogitBias: wire.LogitBias, Seed: wire.Seed,
 			},
-			Tools: tools, ToolChoice: toolChoice, Output: output, Reasoning: reasoning,
+			Tools: tools, ToolChoice: toolChoice, ParallelToolCalls: wire.ParallelToolCalls,
+			Output: output, Reasoning: reasoning,
 			Stream: wire.Stream, User: wire.User, Extensions: extensions,
 			StreamOptions: inference.StreamOptions{IncludeUsage: wire.StreamOptions != nil && wire.StreamOptions.IncludeUsage},
 		},
 		Route: wire.Route, Provider: wire.Provider, Preset: wire.Preset,
-		UnenforcedProviderFields: unenforcedProviderFields(wire.Provider),
+		UnenforcedProviderFields: unenforcedFields(&wire),
 	}, nil
 }
 

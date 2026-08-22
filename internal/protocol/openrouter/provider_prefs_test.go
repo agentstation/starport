@@ -66,3 +66,26 @@ func TestQuantizationsAccepted(t *testing.T) {
 	_, err = DecodeChat(strings.NewReader(badPrice))
 	require.Error(t, err)
 }
+
+// plugins names work the OpenRouter gateway performs itself, such as its web
+// search plugin. Starport routes to providers directly, and no provider
+// understands the field. Forwarding it made the provider reject a request it
+// would otherwise have served, so it follows the drop-in contract instead:
+// accept, do not forward, and report the unkept promise.
+func TestGatewayPluginsAreReportedNotForwarded(t *testing.T) {
+	body := `{
+		"model": "openai/gpt-4o",
+		"messages": [{"role": "user", "content": "hi"}],
+		"plugins": [{"id": "web", "max_results": 3}]
+	}`
+	decoded, err := DecodeChat(strings.NewReader(body))
+	require.NoError(t, err, "a documented OpenRouter field must not be rejected")
+
+	// Extensions travel into the upstream request body verbatim. A gateway
+	// field placed there reaches a provider that cannot read it.
+	require.NotContains(t, decoded.Inference.Extensions, "plugins")
+	require.Empty(t, decoded.Inference.Extensions,
+		"a plugins-only request must stay free of extensions, which also keeps it cacheable")
+
+	require.Equal(t, []string{"plugins"}, decoded.UnenforcedProviderFields)
+}

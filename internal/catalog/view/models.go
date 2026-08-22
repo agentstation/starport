@@ -236,13 +236,14 @@ func supportedModelParameters(definition starmapcatalogs.ModelDefinition) []stri
 	if features == nil {
 		return nil
 	}
-	parameters := make([]string, 0, 16)
+	parameters := make([]string, 0, 17)
 	for _, item := range []struct {
 		name      string
 		supported bool
 	}{
 		{"tools", features.Tools},
 		{"tool_choice", features.ToolChoice},
+		{"web_search_options", features.WebSearch},
 		{"reasoning", features.Reasoning},
 		{"reasoning_effort", features.ReasoningEffort},
 		{"temperature", features.Temperature},
