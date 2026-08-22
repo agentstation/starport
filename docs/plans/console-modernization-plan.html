@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM12 (comparison mode)
+    Next action: execute CM13 (command palette)
   </p>
 
   <section id="outcome">
@@ -335,7 +335,7 @@
         <tr id="CM9" data-status="done"><td>CM9</td><td>Settings page.</td><td><code>done</code></td><td>CM-V13 passes (verifier: 15 passed). Calm-density sections: save-and-test connection flow with key restore on rejection, three-way theme radio synced to the shell toggle, chat-data export and confirmed delete, about with admin info; dark and light screenshots. proof/console-modernization/cm9.md</td></tr>
         <tr id="CM10" data-status="done"><td>CM10</td><td>Chat: thread shell, composer with bottom-bar model picker.</td><td><code>done</code></td><td>CM-V14 and CM-V15 pass (verifier: 17 passed). Legacy localStorage contract carried over (8 real threads load, per-thread models persist); live streamed reply with stats, stop-mid-stream keeps partial output, reasoning effort gated per model, gateway error messages surfaced once; dark and light screenshots. proof/console-modernization/cm10.md</td></tr>
         <tr id="CM11" data-status="done"><td>CM11</td><td>Chat: streaming messages, metadata line, reasoning, code blocks.</td><td><code>done</code></td><td>CM-V16 passes (verifier: 18 passed). Streamdown + code/math/mermaid plugins bundled (air-gapped); live-verified table/code/math/mermaid rendering with copy controls, reasoning fold with measured time, metadata line incl. cache hit/miss and cost, live tok/s, hover copy/retry/edit, scroll pill; stop-mid-stream preserves partial content and partial reasoning marked stopped. proof/console-modernization/cm11.md</td></tr>
-        <tr id="CM12" data-status="todo"><td>CM12</td><td>Chat: comparison mode.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM12" data-status="done"><td>CM12</td><td>Chat: comparison mode.</td><td><code>done</code></td><td>CM-V17 passes (verifier: 19 passed). Compare.tsx seam reusing CM11 Markdown/ReasoningFold/MetadataLine; composer chips with 2–4 attach, stay-open picker, duplicate guard; live fan-out with per-column stats, per-column stop (column isolation held), per-column retry, error branch, continue-with-this-model collapsed into a saved thread; comparisons never persisted; dark and light screenshots. proof/console-modernization/cm12.md</td></tr>
         <tr id="CM13" data-status="todo"><td>CM13</td><td>Command palette and keyboard-first polish.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM14" data-status="todo"><td>CM14</td><td>Cutover: serve the new console, delete the legacy static console, re-point parity conditions, CI gate.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CM15" data-status="todo"><td>CM15</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
@@ -885,6 +885,26 @@ Summary: 21 passed, 0 failed on main and CM15 cleanup has run.</code></pre>
           (cache hit · 50 in green), both stop branches preserved
           partials marked stopped, edit truncated and resent.
           Verifier: 18 passed, 3 failed (cm11.md).</td></tr>
+        <tr><td>2026-08-21</td><td>CM11</td><td>merged</td><td>PR #156
+          squash-merged to main (7e71726) after the Build check
+          passed.</td></tr>
+        <tr><td>2026-08-21</td><td>CM12</td><td>done</td><td>Comparison
+          mode: Compare.tsx owns ephemeral compare state (2–4
+          models, per-column stream lifecycle mirroring single chat,
+          frozen base body for retry) and the responsive column
+          grid; column cards reuse CM11 Markdown, ReasoningFold,
+          and MetadataLine; composer gains the Compare toggle,
+          attached-model chips with remove, a stay-open add-mode
+          picker with duplicate guard, and a 2–4 send gate; chat
+          route seeds the current model on entry, exits compare on
+          thread open/new, and collapses continue-with-this-model
+          into a new saved conversation with the chosen answer.
+          Live-verified on groq: 3-column fan-out with full stats,
+          error branch on a credential-less route, per-column retry,
+          per-column stop kept the neighbor streaming to completion,
+          continue created a persisted thread that answered a
+          follow-up from seeded history. Verifier: 19 passed,
+          2 failed (cm12.md).</td></tr>
     </table>
   </section>
 </main>

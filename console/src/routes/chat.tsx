@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 
+import { CompareView, useCompare } from "@/components/chat/Compare";
 import { Composer } from "@/components/chat/Composer";
 import { AssistantMessage, UserMessage } from "@/components/chat/Messages";
 import { supportsReasoning } from "@/components/chat/ModelPicker";
@@ -279,8 +280,27 @@ function ChatPage() {
       });
   };
 
+  // Compare mode (CM12): ephemeral fan-out across 2–4 models. A chosen
+  // column collapses into a normal saved conversation via onContinue.
+  const compare = useCompare({
+    onContinue: (chosenModel, prompt, message) => {
+      const conversation = newConversation(chosenModel, truncateTitle(prompt));
+      conversation.params = { ...newParams };
+      conversation.messages = [{ role: "user", content: prompt }, message];
+      persist([conversation, ...conversations]);
+      setActiveId(conversation.id);
+      rememberModel(chosenModel);
+      generateTitle(conversation, prompt);
+    },
+  });
+
   const send = (text: string) => {
-    if (streamingId) return;
+    if (streamingId || compare.streaming) return;
+    if (compare.active) {
+      compare.send(text, newParams);
+      setDrafts((previous) => ({ ...previous, [draftKey]: "" }));
+      return;
+    }
 
     let conversation = active;
     if (!conversation) {
@@ -494,8 +514,21 @@ function ChatPage() {
       draft={draft}
       onDraftChange={setDraft}
       onSend={send}
-      streaming={streamingId !== null && streamingId === (activeId ?? streamingId)}
-      onStop={stop}
+      streaming={
+        compare.active
+          ? compare.streaming
+          : streamingId !== null && streamingId === (activeId ?? streamingId)
+      }
+      onStop={compare.active ? compare.stopAll : stop}
+      compareActive={compare.active}
+      compareModels={compare.models}
+      onCompareToggle={() => {
+        if (streamingId) return;
+        if (!compare.active) setActiveId(null);
+        compare.toggle(model);
+      }}
+      onCompareAdd={compare.add}
+      onCompareRemove={compare.remove}
       model={model}
       onModelChange={setModel}
       favorites={favorites}
@@ -515,10 +548,14 @@ function ChatPage() {
           conversations={conversations}
           activeId={activeId}
           onOpen={(id) => {
+            compare.exit();
             setActiveId(id);
             setPickerOpen(false);
           }}
-          onNew={() => setActiveId(null)}
+          onNew={() => {
+            compare.exit();
+            setActiveId(null);
+          }}
           onTogglePin={(id) =>
             updateConversation(id, (conversation) => ({
               ...conversation,
@@ -553,12 +590,23 @@ function ChatPage() {
               <PanelLeftOpen className="size-4" />
             )}
           </button>
-          {active && (
-            <p className="truncate text-sm text-text-2">{active.title}</p>
+          {compare.active ? (
+            <p className="truncate text-sm text-text-2">Compare models</p>
+          ) : (
+            active && (
+              <p className="truncate text-sm text-text-2">{active.title}</p>
+            )
           )}
         </div>
 
-        {active ? (
+        {compare.active ? (
+          <>
+            <CompareView compare={compare} models={models.data} />
+            <div className="relative mx-auto w-full max-w-[768px] px-4 pb-4">
+              {composer}
+            </div>
+          </>
+        ) : active ? (
           <>
             <div
               ref={scrollRef}
