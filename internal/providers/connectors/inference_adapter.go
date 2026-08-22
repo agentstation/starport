@@ -238,36 +238,6 @@ func streamEventKind(deltas []inference.ChoiceDelta) inference.StreamEventKind {
 	return inference.StreamDelta
 }
 
-// StreamChunkFromInference converts one canonical event to a wire chunk.
-func StreamChunkFromInference(event inference.StreamEvent) *ChatStreamChunk {
-	chunk := &ChatStreamChunk{
-		ID: event.ID, Object: objectChatCompletionChunk, Created: event.CreatedUnix,
-		Model: event.Model, SystemFingerprint: event.SystemFingerprint,
-	}
-	if chunk.Model == "" {
-		chunk.Model = event.ModelUsed
-	}
-	if event.Usage != nil {
-		usage := usageFromInference(*event.Usage)
-		chunk.Usage = &usage
-	}
-	if len(event.Deltas) > 0 {
-		chunk.Choices = make([]StreamChoice, len(event.Deltas))
-		for i, delta := range event.Deltas {
-			chunk.Choices[i] = StreamChoice{
-				Index: delta.Index,
-				Delta: MessageDelta{
-					Role: string(delta.Role), Content: delta.Text, Reasoning: delta.Reasoning,
-					ToolCalls: toolCallsFromInference(delta.ToolCalls),
-				},
-				FinishReason: delta.FinishReason,
-				LogProbs:     logProbsFromInference(delta.LogProbs),
-			}
-		}
-	}
-	return chunk
-}
-
 // EmbeddingRequestFromInference converts a canonical embedding request.
 func EmbeddingRequestFromInference(request inference.EmbeddingRequest) *EmbeddingsRequest {
 	var input any
@@ -298,15 +268,6 @@ func EmbeddingResponseToInference(response *EmbeddingsResponse) (inference.Embed
 		data[i] = inference.Embedding{Index: embedding.Index, Vector: append([]float32(nil), embedding.Embedding...)}
 	}
 	return inference.EmbeddingResponse{Model: response.Model, Data: data, Usage: usageToInference(response.Usage)}, nil
-}
-
-// EmbeddingResponseFromInference converts a canonical embedding response.
-func EmbeddingResponseFromInference(response inference.EmbeddingResponse) *EmbeddingsResponse {
-	data := make([]Embedding, len(response.Data))
-	for i, embedding := range response.Data {
-		data[i] = Embedding{Object: objectEmbedding, Index: embedding.Index, Embedding: append([]float32(nil), embedding.Vector...)}
-	}
-	return &EmbeddingsResponse{Object: objectList, Data: data, Model: response.Model, Usage: usageFromInference(response.Usage)}
 }
 
 func messagesFromInference(messages []inference.Message) ([]Message, error) {

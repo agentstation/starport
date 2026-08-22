@@ -1,5 +1,4 @@
-// Display formatters shared across console pages. Behavior matches the
-// legacy console so numbers read identically during the migration.
+// Display formatters shared across console pages.
 
 export function formatCount(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";

@@ -18,8 +18,8 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-// Chat conversations live in this browser's localStorage only; the new
-// chat page (CM10) reads the same store the legacy console wrote.
+// Chat conversations live in this browser's localStorage only. Both keys
+// stay readable so history from an earlier console survives an upgrade.
 const CHAT_STORAGE = "starport.chats";
 const LEGACY_CHAT_STORAGE = "starport_chats";
 

@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-21
+Last Updated: 2026-08-22
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -14,18 +14,16 @@ Last Updated: 2026-08-21
   gateway overhead (`x-starport-overhead-ms`), sweep the brand
   (STARPORT wordmark, API Keys, TTFT), fix the four gateway defects
   from Design Review No. 2, and cut the SPA over as the only console.
-  Absorbs CM13–CM15. Status lives in the plan ledger; CP0 (baseline,
-  proof root, research corpus, red verifier) is done.
-- **Console modernization (CM)** —
-  [durable plan](plans/console-modernization-plan.html). Rebuild the
-  embedded console as a React SPA on the modern verified stack (Vite 8,
-  React 19, Tailwind 4, shadcn/ui on Base UI, TanStack
-  Router/Query/Table/Virtual, Streamdown), governed by the repository
-  design system in `DESIGN.md`. The chat composer carries the model
-  picker in the bottom input bar. CM14 cuts over, deletes the legacy
-  static console, and re-points the parity verifier conditions. Status
-  lives in the plan ledger; CM0 (baseline, design system, red verifier)
-  is done.
+  Absorbs CM13–CM15. Status lives in the plan ledger; CP0–CP18 are
+  done. The SPA is now the only console (CP18), the campaign verifier
+  `scripts/verify-catalog-performance.sh` is terminal at 20/20, and
+  both campaign verifiers run in CI. CP19 (campaign cleanup) is in
+  progress; CP20 closes the campaign.
+- **Console modernization (CM)** — `superseded(catalog-performance-plan)`.
+  CM0–CM12 shipped the React SPA console; the campaign carried the last
+  three tasks (CM13→CP12, CM14→CP18, CM15→CP19).
+  `scripts/verify-console-modernization.sh` is terminal at 21/21 and
+  runs in CI.
 
 ### Proposed Work
 

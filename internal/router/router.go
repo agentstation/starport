@@ -91,13 +91,6 @@ func WithAvailability(tracker *availability.Tracker) Option {
 	}
 }
 
-// WithExecutionConfig replaces the total attempt budget.
-func WithExecutionConfig(config execution.Config) Option {
-	return func(r *modelRouter) {
-		r.config.Execution = config
-	}
-}
-
 // WithUserCredentials supplies the tenant-scoped inference credential plane.
 func WithUserCredentials(resolver UserCredentialResolver) Option {
 	return func(r *modelRouter) {

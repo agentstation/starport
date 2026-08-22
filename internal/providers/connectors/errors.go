@@ -107,11 +107,3 @@ func IsRetryable(err error) bool {
 	// Check for specific errors that are retryable
 	return errors.Is(err, ErrRateLimited) || errors.Is(err, ErrTimeout)
 }
-
-// NewAPIError creates a new APIError with the given status code and message
-func NewAPIError(statusCode int, message string) *APIError {
-	return &APIError{
-		StatusCode: statusCode,
-		Message:    message,
-	}
-}

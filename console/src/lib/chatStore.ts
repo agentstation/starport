@@ -1,7 +1,7 @@
 // Local chat persistence. Conversations live in this browser's
 // localStorage only — the gateway never stores console state. The keys
-// and record shapes match the legacy console exactly, so existing
-// history carries over unchanged (CM10 carry-over contract).
+// and record shapes are fixed by the carry-over contract: a browser that
+// used an earlier console keeps its history, so they must not change.
 
 import type { ChatUsage } from "@/lib/api";
 
