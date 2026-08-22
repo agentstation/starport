@@ -8,6 +8,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Search as SearchIcon,
   Server,
   Settings,
   SlidersHorizontal,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
+import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
 // Nav entries flip to implemented as their page tasks land (CM3–CM10).
@@ -141,6 +143,24 @@ export function Shell({ children }: { children: ReactNode }) {
           )}
         </div>
 
+        <div className="px-2 pt-2">
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            className={`flex h-9 w-full items-center gap-2.5 rounded-sm border border-border-1 bg-bg-raised px-3 text-text-4 transition-colors duration-150 ease-standard hover:border-border-2 hover:text-text-2 ${collapsed ? "justify-center px-0" : ""}`}
+          >
+            <SearchIcon className="size-4 shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="text-sm">Search</span>
+                <kbd className="ml-auto rounded-xs border border-border-1 px-1.5 py-0.5 text-[10px]">
+                  ⌘K
+                </kbd>
+              </>
+            )}
+          </button>
+        </div>
+
         <nav aria-label="Console" className="flex flex-1 flex-col gap-0.5 px-2 pt-2">
           {NAV.map((item) => {
             const active = pathname === item.to;
@@ -224,6 +244,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="mx-auto max-w-[1280px] px-8 py-8">{children}</div>
         )}
       </main>
+      <CommandPalette />
     </div>
   );
 }
