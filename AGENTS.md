@@ -60,7 +60,15 @@ bash scripts/verify-dependency-direction.sh
 bash scripts/verify-catalog-driven-providers.sh
 bash scripts/verify-package-layout.sh
 bash scripts/verify-readme-quickstart.sh
+bash scripts/verify-v1-release.sh
+bash scripts/verify-release-workflow.sh
+bash scripts/verify-developer-experience.sh
+bash scripts/verify-doc-links.sh
+bash scripts/test-doc-link-verifier.sh
 bash scripts/verify-openrouter-parity.sh
+bash scripts/verify-console-modernization.sh
+bash scripts/verify-catalog-performance.sh
+bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
 go test ./...
 go vet ./...
@@ -75,8 +83,11 @@ tree, such as the published module that CI resolves.
 
 Add contract tests at each changed seam. Do not weaken tests or verification
 guards to hide a defect. Report skipped optional SDK checks as `UNVERIFIED`.
-Every `scripts/verify-*.sh` gate belongs to CI, this list, or both. A gate that
-no workflow runs cannot report a regression.
+This list holds every gate that blocks a pull request except the three that
+need a release build: `verify-release-binaries.sh`, `verify-release-archives.sh`,
+and `verify-homebrew-cask.sh` read a goreleaser `dist` tree, so the Release
+Snapshot job owns them. Keep the list and the required CI jobs in step. A gate
+that no workflow runs cannot report a regression.
 
 `scripts/verify-openrouter-parity.sh` guards the shipped OpenRouter parity
 surface (conditions `ORP-V01` through `ORP-V16`) and runs in CI.
