@@ -90,6 +90,7 @@ export function StatsRow() {
 
   const requests = metrics.data?.requests ?? {};
   const latency = metrics.data?.latency ?? {};
+  const overhead = metrics.data?.overhead ?? {};
   const tokens = metrics.data?.tokens ?? {};
   const spend = metrics.data?.spend ?? {};
   const records = activity.data?.data ?? [];
@@ -130,8 +131,16 @@ export function StatsRow() {
               : null
           }
         />
-        <Stat label="Latency p50" value={formatMs(latency.p50)} />
-        <Stat label="Latency p95" value={formatMs(latency.p95)} />
+        <Stat
+          label="Latency p50"
+          value={formatMs(latency.p50)}
+          detail={`p95 ${formatMs(latency.p95)}`}
+        />
+        <Stat
+          label="Starport overhead p50"
+          value={formatMs(overhead.p50)}
+          detail={`p99 ${formatMs(overhead.p99)}`}
+        />
       </div>
       <div className="mt-4 flex justify-end border-t border-border-1 pt-3">
         <span className="text-xs text-text-4">

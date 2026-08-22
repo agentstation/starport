@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 7e71726 ·
     Proof root: <code>proof/catalog-performance/</code> ·
-    Next action: CP15 — Overhead surfacing: Usage column, Overview p50/p99, benchmark harness, README claim
+    Next action: CP16 — Credential resolution defects: fix silent skip, add operator-visible reasons, refresh failure detail
   </p>
 
   <section id="outcome">
@@ -285,8 +285,8 @@
         <tr id="CP12" data-status="done"><td>CP12</td><td>B: Command palette over models, providers, authors, pages, actions (absorbs CM13)</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp12.md">cp12.md</a>: 55 console tests, CPV10 PASS, ⌘K palette live across kinds with keyboard navigation</td></tr>
         <tr id="CP13" data-status="done"><td>CP13</td><td>C: Composer retool — presets to picker only, "+" becomes attachments (image, capability-gated)</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp13.md">cp13.md</a> — 62 console tests, CPV11+CPV12 PASS, live image round-trip (gemma-4-26b via google-ai-studio); fixed Google/Anthropic connector multimodal panic</td></tr>
         <tr id="CP14" data-status="done"><td>CP14</td><td>D: Overhead timing seam + x-starport-overhead-ms header (stream and non-stream)</td><td><code>done</code></td><td>cp14.md — 9 named contract tests (500ms mock upstream, overhead &lt;50ms both paths), CPV13 PASS, live header + persisted overhead_ms on stream and non-stream records</td></tr>
-        <tr id="CP15" data-status="in_progress"><td>CP15</td><td>D: Overhead surfacing — Usage column, Overview p50/p99, benchmark harness, README claim</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="CP16" data-status="todo"><td>CP16</td><td>D: Credential resolution defects — fix silent skip, add operator-visible reasons, refresh failure detail</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP15" data-status="done"><td>CP15</td><td>D: Overhead surfacing — Usage column, Overview p50/p99, benchmark harness, README claim</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp15.md">cp15.md</a>: TTFT + overhead columns and detail rows, Overview p50/p99 stat, metrics overhead map live {p50:52,p95:69,p99:69}, benchmark p99=0ms&lt;50ms in CI, README claim + PERFORMANCE.md, 4 new Go tests + 62 console tests, CPV 18/18</td></tr>
+        <tr id="CP16" data-status="in_progress"><td>CP16</td><td>D: Credential resolution defects — fix silent skip, add operator-visible reasons, refresh failure detail</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="CP17" data-status="todo"><td>CP17</td><td>D: Failure normalization — streaming 429 not an empty 200; never cache empty completions</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP18" data-status="todo"><td>CP18</td><td>E: Console cutover — SPA default, legacy static removed, verifier green and wired into CI (absorbs CM14)</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP19" data-status="todo"><td>CP19</td><td>E: Campaign cleanup — flag removal, dead code, docs (absorbs CM15)</td><td><code>todo</code></td><td></td></tr>

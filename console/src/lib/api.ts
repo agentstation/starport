@@ -95,7 +95,9 @@ export type SystemInfo = {
 
 export type SystemMetrics = {
   requests?: { total?: number; errors?: number; rate_1min?: number };
-  latency?: { p50?: number; p95?: number };
+  latency?: { p50?: number; p95?: number; p99?: number };
+  // Gateway-added latency only: total handling minus upstream waits.
+  overhead?: { p50?: number; p95?: number; p99?: number };
   tokens?: { total?: number };
   spend?: { nano_usd?: number; requests_without_cost?: number };
 };
@@ -365,6 +367,10 @@ export type ActivityRecord = {
   tokens_estimated?: boolean;
   latency_ms?: number;
   routing_ms?: number;
+  // Gateway-added latency: total handling minus upstream provider waits.
+  overhead_ms?: number;
+  // Time to first stream event; streamed requests only.
+  ttft_ms?: number;
   attempts?: number;
   cache_status?: string;
   cost?: { nano_usd?: number; currency?: string };

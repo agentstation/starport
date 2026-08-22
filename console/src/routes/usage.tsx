@@ -374,6 +374,12 @@ function RequestDetail({
           <DetailRow label="Routing">{formatMs(record.routing_ms)}</DetailRow>
         ) : null}
         <DetailRow label="Latency">{formatMs(record.latency_ms)}</DetailRow>
+        {record.overhead_ms !== undefined && (
+          <DetailRow label="Starport overhead">{formatMs(record.overhead_ms)}</DetailRow>
+        )}
+        {record.streaming && record.ttft_ms !== undefined && (
+          <DetailRow label="TTFT">{formatMs(record.ttft_ms)}</DetailRow>
+        )}
         {record.cache_status && (
           <DetailRow label="Cache">
             <CacheCell status={record.cache_status} />
@@ -418,7 +424,7 @@ function Header() {
     <div>
       <h1 className="text-xl font-semibold text-text-1">Usage</h1>
       <p className="mt-1 text-base text-text-3">
-        Every request through the gateway: models, providers, tokens, latency, and cost.
+        Every request through the gateway: models, providers, tokens, latency, gateway overhead, and cost.
       </p>
     </div>
   );
@@ -609,8 +615,8 @@ function UsagePage() {
   }
 
   const grid = admin
-    ? "grid grid-cols-[120px_minmax(180px,1fr)_150px_110px_130px_80px_80px_90px_70px] items-center"
-    : "grid grid-cols-[120px_minmax(180px,1fr)_110px_130px_80px_80px_90px_70px] items-center";
+    ? "grid grid-cols-[120px_minmax(180px,1fr)_150px_110px_130px_80px_85px_70px_80px_90px_70px] items-center"
+    : "grid grid-cols-[120px_minmax(180px,1fr)_110px_130px_80px_85px_70px_80px_90px_70px] items-center";
   const hasFilters = Boolean(search.model || search.provider || search.status || search.key);
   const loading = scope.isPending || activity.isPending;
 
@@ -927,6 +933,8 @@ function UsagePage() {
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">provider</div>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">status</div>
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">tokens</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Gateway-added latency: total handling minus provider time">overhead</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Time to first token (streamed requests)">TTFT</div>
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">latency</div>
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">cost</div>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">cache</div>
@@ -985,6 +993,14 @@ function UsagePage() {
                     </div>
                     <div role="cell" className="px-2.5 text-right font-mono text-xs tabular-nums text-text-2">
                       {record.tokens?.total ? formatCount(record.tokens.total) : "—"}
+                    </div>
+                    <div role="cell" className="px-2.5 text-right font-mono text-xs tabular-nums text-text-2">
+                      {record.overhead_ms !== undefined ? formatMs(record.overhead_ms) : "—"}
+                    </div>
+                    <div role="cell" className="px-2.5 text-right font-mono text-xs tabular-nums text-text-2">
+                      {record.streaming && record.ttft_ms !== undefined
+                        ? formatMs(record.ttft_ms)
+                        : "—"}
                     </div>
                     <div role="cell" className="px-2.5 text-right font-mono text-xs tabular-nums text-text-2">
                       {formatMs(record.latency_ms)}
