@@ -1,30 +1,37 @@
 package controllers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/agentstation/starport/internal/catalog/logos"
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/proxy"
 )
 
-// LogosController serves catalog identity marks from the bundled SVG set.
-// The route is public: logos are static brand assets the console loads
-// without credentials, like the health probes.
+// LogosController serves catalog identity marks. Catalog-carried logo
+// bytes lead; the bundled SVG set is the offline fallback. The route is
+// public: logos are static brand assets the console loads without
+// credentials, like the health probes.
 type LogosController struct {
 	*BaseHandler
 }
 
-// NewLogosController creates the logos controller. It reads embedded
-// bytes only, so it takes no service.
-func NewLogosController() *LogosController {
-	return &LogosController{BaseHandler: NewBaseHandler(nil)}
+// NewLogosController creates the logos controller.
+func NewLogosController(service proxy.Proxy) *LogosController {
+	return &LogosController{BaseHandler: NewBaseHandler(service)}
 }
 
 // Get handles GET /api/v1/logos/{kind}/{id}.svg.
 func (h *LogosController) Get(w http.ResponseWriter, r *http.Request) {
-	svg, etag, ok := logos.Bytes(logos.Kind(chi.URLParam(r, "kind")), chi.URLParam(r, "id"))
+	kind, id := chi.URLParam(r, "kind"), chi.URLParam(r, "id")
+	svg, etag, ok := h.catalogLogo(r, kind, id)
+	if !ok {
+		svg, etag, ok = logos.Bytes(logos.Kind(kind), id)
+	}
 	if !ok {
 		h.writeError(w, &proxy.ProviderError{Code: errorCodeNotFound, Message: "Logo not found"})
 		return
@@ -37,5 +44,20 @@ func (h *LogosController) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/svg+xml")
-	_, _ = w.Write(svg) // #nosec G705 -- bytes come from the embedded, license-audited bundle keyed by a validated ID, never from the request.
+	_, _ = w.Write(svg) // #nosec G705 -- bytes come from the catalog payload or the embedded, license-audited bundle keyed by a validated ID, never from the request.
+}
+
+// catalogLogo returns the catalog-carried mark for this kind and ID. ok
+// is false when no service is wired or the catalog has no bytes, so the
+// caller falls back to the bundled set.
+func (h *LogosController) catalogLogo(r *http.Request, kind, id string) (svg []byte, etag string, ok bool) {
+	if h.service == nil {
+		return nil, "", false
+	}
+	svg, err := h.service.GetLogo(r.Context(), view.LogoKind(kind), id)
+	if err != nil || len(svg) == 0 {
+		return nil, "", false
+	}
+	sum := sha256.Sum256(svg)
+	return svg, hex.EncodeToString(sum[:16]), true
 }

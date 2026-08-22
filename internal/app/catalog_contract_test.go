@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	starmap "github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
@@ -81,7 +82,7 @@ func TestUnsupportedCatalogPrimitivesRemainUnavailable(t *testing.T) {
 	})
 
 	t.Run("authentication", func(t *testing.T) {
-		builder, err := catalogs.NewEmbedded()
+		builder, err := starmap.EmbeddedBuilder()
 		require.NoError(t, err)
 		catalog, err := builder.Build()
 		require.NoError(t, err)

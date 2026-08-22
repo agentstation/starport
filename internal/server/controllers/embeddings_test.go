@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
@@ -30,6 +31,10 @@ func (m *mockEmbeddings) ProcessChatCompletion(context.Context, *proxy.ChatCompl
 
 func (m *mockEmbeddings) ProcessChatCompletionStream(context.Context, *proxy.ChatCompletionRequest) (proxy.ChatCompletionStreamResponse, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockEmbeddings) GetLogo(context.Context, view.LogoKind, string) ([]byte, error) {
+	return nil, &proxy.ProviderError{Code: "not_found", Message: "Logo not found"}
 }
 
 func (m *mockEmbeddings) ProcessEmbeddings(_ context.Context, request *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {

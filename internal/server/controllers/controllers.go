@@ -56,7 +56,7 @@ func NewControllers(cfg Config) *Controllers {
 		OpenRouterModels:     NewOpenRouterModelsController(cfg.Service),
 		Providers:            NewProvidersController(cfg.Service),
 		Authors:              NewAuthorsController(cfg.Service),
-		Logos:                NewLogosController(),
+		Logos:                NewLogosController(cfg.Service),
 		ProviderKeys:         NewProviderKeysController(cfg.ProviderKeys, cfg.Usage),
 		Activity:             NewActivityController(cfg.Usage),
 		Admin:                NewAdminController(cfg.Identities, cfg.Usage),

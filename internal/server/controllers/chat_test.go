@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
@@ -52,6 +53,10 @@ func (m *mockProxy) ListAuthors(context.Context) (*proxy.AuthorsResponse, error)
 }
 
 func (m *mockProxy) GetAuthor(context.Context, string) (*proxy.AuthorInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockProxy) GetLogo(context.Context, view.LogoKind, string) ([]byte, error) {
 	return nil, errors.New("not implemented")
 }
 

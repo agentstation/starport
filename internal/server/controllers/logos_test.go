@@ -1,18 +1,38 @@
 package controllers
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/catalog/view"
+	"github.com/agentstation/starport/internal/proxy"
 )
 
 func logosRouter() chi.Router {
 	router := chi.NewRouter()
-	router.Get("/api/v1/logos/{kind}/{id}.svg", NewLogosController().Get)
+	router.Get("/api/v1/logos/{kind}/{id}.svg", NewLogosController(nil).Get)
 	return router
+}
+
+// catalogLogoProxy serves catalog bytes for one provider ID and reports
+// not_found for everything else, so tests can prove the controller prefers
+// catalog bytes and still falls back to the embedded asset set.
+type catalogLogoProxy struct {
+	mockProviders
+	id  string
+	svg []byte
+}
+
+func (m *catalogLogoProxy) GetLogo(_ context.Context, kind view.LogoKind, id string) ([]byte, error) {
+	if kind == view.LogoKindProviders && id == m.id {
+		return m.svg, nil
+	}
+	return nil, &proxy.ProviderError{Code: "not_found", Message: "Logo not found"}
 }
 
 func TestLogosControllerServesSVG(t *testing.T) {
@@ -40,6 +60,27 @@ func TestLogosControllerNotModified(t *testing.T) {
 	router.ServeHTTP(second, request)
 	require.Equal(t, http.StatusNotModified, second.Code)
 	require.Empty(t, second.Body.String())
+}
+
+func TestLogosControllerPrefersCatalogBytes(t *testing.T) {
+	catalogSVG := `<svg xmlns="http://www.w3.org/2000/svg"><title>catalog-openai</title></svg>`
+	controller := NewLogosController(&catalogLogoProxy{id: "openai", svg: []byte(catalogSVG)})
+	router := chi.NewRouter()
+	router.Get("/api/v1/logos/{kind}/{id}.svg", controller.Get)
+
+	catalog := httptest.NewRecorder()
+	router.ServeHTTP(catalog,
+		httptest.NewRequest(http.MethodGet, "/api/v1/logos/providers/openai.svg", nil))
+	require.Equal(t, http.StatusOK, catalog.Code)
+	require.Equal(t, catalogSVG, catalog.Body.String())
+	require.NotEmpty(t, catalog.Header().Get("ETag"))
+
+	fallback := httptest.NewRecorder()
+	router.ServeHTTP(fallback,
+		httptest.NewRequest(http.MethodGet, "/api/v1/logos/providers/groq.svg", nil))
+	require.Equal(t, http.StatusOK, fallback.Code)
+	require.NotEqual(t, catalogSVG, fallback.Body.String())
+	require.Contains(t, fallback.Body.String(), "<svg")
 }
 
 func TestLogosControllerUnknownIs404(t *testing.T) {

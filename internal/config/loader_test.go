@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	starmap "github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 )
 
@@ -317,7 +318,7 @@ func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 
 func resolveTestProviders(t *testing.T, cfg *Config) {
 	t.Helper()
-	builder, err := catalogs.NewEmbedded()
+	builder, err := starmap.EmbeddedBuilder()
 	if err != nil {
 		t.Fatalf("open embedded catalog: %v", err)
 	}

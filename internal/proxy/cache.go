@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	responsecache "github.com/agentstation/starport/internal/response/cache"
@@ -406,6 +407,12 @@ func (s *cachedService) ListAuthors(ctx context.Context) (*AuthorsResponse, erro
 // GetAuthor delegates to the wrapped service.
 func (s *cachedService) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error) {
 	return s.service.GetAuthor(ctx, authorID)
+}
+
+// GetLogo delegates to the wrapped service. Logo bytes come from the
+// in-memory catalog snapshot, so a cache layer adds no value.
+func (s *cachedService) GetLogo(ctx context.Context, kind view.LogoKind, id string) ([]byte, error) {
+	return s.service.GetLogo(ctx, kind, id)
 }
 
 // ListProviders with caching

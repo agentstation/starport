@@ -95,6 +95,7 @@ type ProviderInfo struct {
 	ID               string                `json:"id"`
 	Name             string                `json:"name"`
 	Description      string                `json:"description,omitempty"`
+	DocsURL          string                `json:"docs_url,omitempty"`
 	URL              string                `json:"url,omitempty"`
 	Models           []string              `json:"models"`
 	Capabilities     []string              `json:"capabilities,omitempty"`
