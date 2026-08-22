@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { ConnectCard } from "@/components/overview/ConnectCard";
 import {
   ApiError,
@@ -95,13 +96,22 @@ function ProviderCard({
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border-1 bg-bg-panel p-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="truncate text-sm font-medium text-text-1">
-            {providerLabel(status.provider_id, entry?.name)}
+        <div className="flex min-w-0 items-start gap-2.5">
+          <EntityLogo
+            kind="providers"
+            id={status.provider_id}
+            name={providerLabel(status.provider_id, entry?.name)}
+            size={28}
+            className="mt-0.5"
+          />
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="truncate text-sm font-medium text-text-1">
+              {providerLabel(status.provider_id, entry?.name)}
+            </div>
+            <span className="self-start rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2">
+              {status.provider_id}
+            </span>
           </div>
-          <span className="self-start rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2">
-            {status.provider_id}
-          </span>
         </div>
         <CredentialPill credential={credential} />
       </div>
@@ -153,8 +163,16 @@ function CatalogOnly({ catalog }: { catalog: ProviderCatalogEntry[] }) {
             key={entry.id}
             className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
           >
-            <div className="text-sm font-medium text-text-1">
-              {providerLabel(entry.id, entry.name)}
+            <div className="flex items-center gap-2.5">
+              <EntityLogo
+                kind="providers"
+                id={entry.id}
+                name={providerLabel(entry.id, entry.name)}
+                size={24}
+              />
+              <div className="truncate text-sm font-medium text-text-1">
+                {providerLabel(entry.id, entry.name)}
+              </div>
             </div>
             <span className="self-start rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2">
               {entry.id}

@@ -92,7 +92,7 @@ func (h *ModelsController) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Model not found
-	h.writeError(w, &proxy.ProviderError{Code: "not_found", Message: "Model not found"})
+	h.writeError(w, &proxy.ProviderError{Code: errorCodeNotFound, Message: "Model not found"})
 }
 
 // GetEndpoints handles GET /api/v1/models/{model}/endpoints

@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 7e71726 ·
     Proof root: <code>proof/catalog-performance/</code> ·
-    Next action: CP5 — logo route with fallback chain and interim bundled SVG set
+    Next action: CP6 — Starmap v0.7.0 release (logo payload, lifecycle dates, coverage fill) and pin bump
   </p>
 
   <section id="outcome">
@@ -275,8 +275,8 @@
         <tr id="CP2" data-status="done"><td>CP2</td><td>A: Extract catalog projection package from proxy inline DTO assembly</td><td><code>done</code></td><td>Golden byte-identity held; view tests added; verifier 4 passed (CPV02 green); proof/catalog-performance/cp2.md</td></tr>
         <tr id="CP3" data-status="done"><td>CP3</td><td>A: Widen ModelInfo (author, tags, lineage, cutoff, weights, all offerings) and populate ProviderInfo</td><td><code>done</code></td><td>49e63d3; fail-before: 4 new tests failed pre-change; go test ./... ok; parity 16/16; CPV02+CPV03 green, CPV04 red by design (needs CP6 Starmap v0.7.0); live: 422 models all carry offerings, 61 with ≥2 providers; <a href="proof/catalog-performance/cp3.md">cp3.md</a></td></tr>
         <tr id="CP4" data-status="done"><td>CP4</td><td>A: Authors API — /api/v1/authors and /api/v1/authors/{id}</td><td><code>done</code></td><td>fail-before: 404 + CPV01 red + 3 view tests undefined; after: go test ./... ok, CPV01 green (verifier 6 passed); live: 104 authors listed, detail + 404 contract proven; <a href="proof/catalog-performance/cp4.md">cp4.md</a></td></tr>
-        <tr id="CP5" data-status="in_progress"><td>CP5</td><td>A: Logo route with fallback chain and interim bundled SVG set</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="CP6" data-status="todo"><td>CP6</td><td>A: Starmap v0.7.0 — logo payload, lifecycle dates, coverage fill, release, pin bump</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP5" data-status="done"><td>CP5</td><td>A: Logo route with fallback chain and interim bundled SVG set</td><td><code>done</code></td><td>562372c; fail-before: logo route 404, CPV05+CPV06 red; 56 vendored marks (MIT/CC0, NOTICE); go test ok, console vitest 6/6 (first console test runner), CPV05+CPV06 green; live: 200+ETag/304/404, /api/v1/models still 401 keyless; <a href="proof/catalog-performance/cp5.md">cp5.md</a></td></tr>
+        <tr id="CP6" data-status="in_progress"><td>CP6</td><td>A: Starmap v0.7.0 — logo payload, lifecycle dates, coverage fill, release, pin bump</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="CP7" data-status="todo"><td>CP7</td><td>B: Providers page revamp — identity cards, single status, search</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP8" data-status="todo"><td>CP8</td><td>B: Provider detail page — identity, credential CTA, served models, health</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP9" data-status="todo"><td>CP9</td><td>B: Model detail page — header, capabilities, per-provider offering table, lineage, Open in chat</td><td><code>todo</code></td><td></td></tr>
