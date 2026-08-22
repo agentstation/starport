@@ -179,6 +179,22 @@ export type CatalogMetadata = {
 
 export type ModelAuthor = { id: string; name?: string };
 
+// CatalogAuthor is the full author record from /api/v1/authors. The
+// list endpoint leaves `models` empty; only the detail endpoint
+// populates it with canonical model ids.
+export type CatalogAuthor = {
+  id: string;
+  name?: string;
+  description?: string;
+  headquarters?: string;
+  icon_url?: string;
+  website?: string;
+  github?: string;
+  huggingface?: string;
+  twitter?: string;
+  models?: string[];
+};
+
 export type ModelLineage = { family?: string; root?: string; parent?: string };
 
 export type OfferingPricing = {
@@ -387,6 +403,15 @@ export function systemInfo(): Promise<SystemInfo> {
 
 export function systemMetrics(): Promise<SystemMetrics> {
   return request<SystemMetrics>("/api/v1/admin/metrics");
+}
+
+export async function listAuthors(): Promise<CatalogAuthor[]> {
+  const body = await request<{ authors?: CatalogAuthor[] }>("/api/v1/authors");
+  return body?.authors ?? [];
+}
+
+export function getAuthor(id: string): Promise<CatalogAuthor> {
+  return request<CatalogAuthor>(`/api/v1/authors/${encodeURIComponent(id)}`);
 }
 
 export function providerStatus(): Promise<ProviderStatus> {

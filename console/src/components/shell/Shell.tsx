@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Sun,
+  Users,
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
@@ -23,6 +24,7 @@ const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, implemented: true },
   { to: "/chat", label: "Chat", icon: MessageSquare, implemented: true },
   { to: "/models", label: "Models", icon: Sparkles, implemented: true },
+  { to: "/authors", label: "Authors", icon: Users, implemented: true },
   { to: "/providers", label: "Providers", icon: Server, implemented: true },
   { to: "/keys", label: "API Keys", icon: Key, implemented: true },
   { to: "/usage", label: "Usage", icon: BarChart3, implemented: true },

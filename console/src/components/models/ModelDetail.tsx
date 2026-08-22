@@ -132,6 +132,21 @@ export function offeringCircuit(
   )?.state;
 }
 
+// offeringAvailability summarizes a model's live routability: how many
+// of its offerings sit on circuits the router still admits attempts
+// against (healthy or half-open).
+export function offeringAvailability(
+  model: Model,
+  providers: ProviderRuntimeStatus[] | undefined,
+): { total: number; available: number } {
+  const offerings = model.offerings ?? [];
+  const available = offerings.filter((offering) => {
+    const state = offeringCircuit(providers, offering);
+    return state === "healthy" || state === "half_open";
+  }).length;
+  return { total: offerings.length, available };
+}
+
 const CIRCUIT_TONES: Record<string, string> = {
   healthy: "bg-success-tint text-success",
   half_open: "bg-warning-tint text-warning",

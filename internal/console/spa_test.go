@@ -57,7 +57,12 @@ func TestSPAHandlerServesIndexForEveryPagePath(t *testing.T) {
 
 func TestSPAHandlerServesIndexForNestedPagePaths(t *testing.T) {
 	// Model detail paths carry an encoded slash in the id segment.
-	paths := []string{"/providers/groq", "/models/meta%2Fllama-3.1-8b-instruct"}
+	paths := []string{
+		"/providers/groq",
+		"/models/meta%2Fllama-3.1-8b-instruct",
+		"/authors",
+		"/authors/openai",
+	}
 	for _, path := range paths {
 		router := newSPARouter(t, builtDist())
 		request := httptest.NewRequest(http.MethodGet, path, nil)

@@ -110,6 +110,8 @@ var spaPagePaths = append(
 	PagePaths[:len(PagePaths):len(PagePaths)],
 	"/providers/*",
 	"/models/*",
+	"/authors",
+	"/authors/*",
 )
 
 // Register mounts the SPA page routes and hashed assets on the router.

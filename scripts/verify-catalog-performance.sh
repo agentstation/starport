@@ -60,7 +60,8 @@ check CPV08 "model detail route exists in the SPA" \
     'console/src/routes/models/$modelId.tsx'
 check CPV09 "author list and detail routes exist in the SPA" \
   bash -c 'test -f console/src/routes/authors.tsx &&
-    { test -f "console/src/routes/authors.\$authorId.tsx" ||
+    { test -f "console/src/routes/authors_.\$authorId.tsx" ||
+      test -f "console/src/routes/authors.\$authorId.tsx" ||
       test -f "console/src/routes/authors/\$authorId.tsx"; }'
 check CPV10 "global command palette component exists" \
   test -f console/src/components/palette/CommandPalette.tsx
