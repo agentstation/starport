@@ -45,6 +45,7 @@ export function FreshnessBar() {
     retry: false,
   });
   const [changesOpen, setChangesOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
@@ -82,8 +83,8 @@ export function FreshnessBar() {
 
   const data = metadata.data;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border border-border-1 bg-bg-panel px-4 py-2.5">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="relative flex items-center justify-between gap-x-4 overflow-visible rounded-md border border-border-1 bg-bg-panel px-4 py-2">
+      <div className="flex min-w-0 items-center gap-2">
         <span
           className="rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2"
           title={data?.generation_id}
@@ -123,17 +124,21 @@ export function FreshnessBar() {
           </Badge>
         )}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1.5">
         {notice && (
           <span className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
             {notice.text}
           </span>
         )}
         {data && (
-          <span className="text-xs text-text-4">
-            catalog sequence {data.catalog_sequence ?? "—"} · availability revision{" "}
-            {data.availability_revision ?? "—"}
-          </span>
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((open) => !open)}
+            aria-expanded={detailsOpen}
+            className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
+          >
+            details
+          </button>
         )}
         {data?.generation_id && (
           <button
@@ -154,6 +159,51 @@ export function FreshnessBar() {
           refresh catalog
         </button>
       </div>
+      {detailsOpen && data && (
+        <div
+          data-testid="freshness-details"
+          className="absolute right-3 top-full z-20 mt-1 w-80 rounded-md border border-border-1 bg-bg-panel p-3 text-xs shadow-lg"
+        >
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+            <dt className="text-text-4">generation</dt>
+            <dd className="break-all font-mono text-text-2">
+              {data.generation_id ?? "—"}
+            </dd>
+            <dt className="text-text-4">generated at</dt>
+            <dd className="text-text-2">{data.generated_at ?? "—"}</dd>
+            <dt className="text-text-4">catalog sequence</dt>
+            <dd className="tabular-nums text-text-2">
+              {data.catalog_sequence ?? "—"}
+            </dd>
+            <dt className="text-text-4">availability revision</dt>
+            <dd className="tabular-nums text-text-2">
+              {data.availability_revision ?? "—"}
+            </dd>
+            {data.completeness && (
+              <>
+                <dt className="text-text-4">completeness</dt>
+                <dd className="text-text-2">{data.completeness}</dd>
+              </>
+            )}
+            {data.degraded && (
+              <>
+                <dt className="text-text-4">degraded</dt>
+                <dd className="text-error">
+                  {data.degradation_reasons?.join("; ") || "no reason recorded"}
+                </dd>
+              </>
+            )}
+            {!data.manifest_available && (
+              <>
+                <dt className="text-text-4">manifest</dt>
+                <dd className="text-text-2">
+                  {data.manifest_unavailable_reason ?? "unavailable"}
+                </dd>
+              </>
+            )}
+          </dl>
+        </div>
+      )}
       {changesOpen && <ChangesPanel onClose={() => setChangesOpen(false)} />}
     </div>
   );

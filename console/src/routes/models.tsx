@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
@@ -9,6 +9,7 @@ import { ConnectCard } from "@/components/overview/ConnectCard";
 import { ApiError, listModels, listProviderCatalog } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
 import {
+  authorIdsOf,
   matches,
   type ModelsSearch,
   providerOf,
@@ -28,6 +29,8 @@ export const Route = createFileRoute("/models")({
     return {
       q: str(search.q),
       provider: str(search.provider),
+      author: str(search.author),
+      tag: str(search.tag),
       modality: str(search.modality),
       capability: str(search.capability),
     };
@@ -63,11 +66,28 @@ function FilterSelect({
   );
 }
 
+const SEARCH_DEBOUNCE_MS = 200;
+
 function ModelsPage() {
   const hasKey = useHasApiKey();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // The input edits a local draft; the URL (and the filter pass over
+  // 400+ rows) follows after a debounce.
+  const [draftQuery, setDraftQuery] = useState(search.q ?? "");
+  useEffect(() => {
+    setDraftQuery(search.q ?? "");
+  }, [search.q]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if ((search.q ?? "") !== draftQuery) {
+        setSearch({ q: draftQuery || undefined });
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  });
 
   const models = useQuery({
     queryKey: ["models"],
@@ -130,6 +150,38 @@ function ModelsPage() {
       }));
   }, [all, providerNames]);
 
+  const authors = useMemo(() => {
+    const counts = new Map<string, { name: string; count: number }>();
+    for (const model of all) {
+      const named = new Map(
+        (model.authors ?? []).map((author) => [author.id, author.name]),
+      );
+      for (const id of authorIdsOf(model)) {
+        const entry = counts.get(id) ?? { name: named.get(id) ?? id, count: 0 };
+        entry.count += 1;
+        counts.set(id, entry);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([id, entry]) => ({
+        value: id,
+        label: `${entry.name} (${entry.count})`,
+      }));
+  }, [all]);
+
+  const tags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const model of all) {
+      for (const tag of model.tags ?? []) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([tag, count]) => ({ value: tag, label: `${tag} (${count})` }));
+  }, [all]);
+
   const filtered = useMemo(
     () => all.filter((model) => matches(model, search)),
     [all, search],
@@ -156,8 +208,8 @@ function ModelsPage() {
             type="search"
             placeholder="Search models  /"
             aria-label="Search models"
-            value={search.q ?? ""}
-            onChange={(event) => setSearch({ q: event.target.value || undefined })}
+            value={draftQuery}
+            onChange={(event) => setDraftQuery(event.target.value)}
             className="h-8 w-64 rounded-sm border border-border-1 bg-bg-panel pl-8 pr-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 hover:border-border-2 focus:border-accent"
           />
         </div>
@@ -167,6 +219,20 @@ function ModelsPage() {
           options={providers}
           onChange={(provider) => setSearch({ provider })}
         />
+        <FilterSelect
+          label="All authors"
+          value={search.author}
+          options={authors}
+          onChange={(author) => setSearch({ author })}
+        />
+        {tags.length > 0 && (
+          <FilterSelect
+            label="All tags"
+            value={search.tag}
+            options={tags}
+            onChange={(tag) => setSearch({ tag })}
+          />
+        )}
         <FilterSelect
           label="All modalities"
           value={search.modality}
@@ -205,6 +271,8 @@ function ModelsPage() {
               setSearch({
                 q: undefined,
                 provider: undefined,
+                author: undefined,
+                tag: undefined,
                 modality: undefined,
                 capability: undefined,
               })
