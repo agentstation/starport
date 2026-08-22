@@ -7,6 +7,7 @@ import {
   tableFeatures,
   useTable,
 } from "@tanstack/react-table";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useRef, type ReactNode } from "react";
@@ -82,9 +83,14 @@ const columns = helper.columns([
 function ModelCell({ model }: { model: Model }) {
   return (
     <div className="group flex min-w-0 items-center gap-2">
-      <span className="flex min-w-0 items-center rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5">
+      <Link
+        to="/models/$modelId"
+        params={{ modelId: model.id }}
+        onClick={(event) => event.stopPropagation()}
+        className="flex min-w-0 items-center rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 transition-colors duration-150 ease-standard hover:border-border-2"
+      >
         <span className="truncate font-mono text-xs text-text-1">{model.id}</span>
-      </span>
+      </Link>
       <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100">
         <CopyButton text={model.id} />
       </span>
@@ -114,6 +120,7 @@ function PriceCell({ model }: { model: Model }) {
 // order and sorting, TanStack Virtual keeps 400+ rows cheap through the
 // window scroller, and the header stays sticky above the virtual list.
 export function ModelsTable({ models }: { models: Model[] }) {
+  const navigate = useNavigate();
   const table = useTable({
     features,
     columns,
@@ -192,7 +199,16 @@ export function ModelsTable({ models }: { models: Model[] }) {
             <div
               role="row"
               key={row.id}
-              className={`${GRID} absolute left-0 top-0 w-full border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover`}
+              onClick={(event) => {
+                // Inner links and the copy button own their own clicks.
+                const target = event.target as HTMLElement | null;
+                if (target?.closest("a,button")) return;
+                void navigate({
+                  to: "/models/$modelId",
+                  params: { modelId: model.id },
+                });
+              }}
+              className={`${GRID} absolute left-0 top-0 w-full cursor-pointer border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover`}
               style={{
                 height: item.size,
                 transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
