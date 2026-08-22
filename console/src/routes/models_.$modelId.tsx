@@ -134,8 +134,8 @@ function ModelDetailPage() {
         {(model.authors ?? []).map((entry) => (
           <Link
             key={entry.id}
-            to="/models"
-            search={{ q: entry.id }}
+            to="/authors/$authorId"
+            params={{ authorId: entry.id }}
             className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
           >
             {entry.name ?? entry.id}
