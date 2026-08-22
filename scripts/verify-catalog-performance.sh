@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Guard for the catalog, performance, and brand campaign
-# (docs/plans/catalog-performance-plan.html). Each condition asserts one
-# capability the campaign delivers. It reports every condition and exits
+# Guard for the catalog, performance, and brand campaign, whose durable
+# plan closed on 2026-08-22. Each condition asserts one capability the
+# campaign delivers. It reports every condition and exits
 # nonzero while any condition fails. CI runs it as a required gate.
 set -u
 

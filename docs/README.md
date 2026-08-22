@@ -23,7 +23,9 @@ Use this index to find current product, operator, and developer information.
   concept boundaries.
 - [Architecture control-plane history](ARCHITECTURE_CONTROL_PLANE.md): inspect
   the completed architecture-hardening record.
-- [Task status](TASKS.md): inspect current repository work.
+- [Task status](TASKS.md): inspect current repository work. A durable plan
+  lives under `docs/plans/` while its campaign runs, and is deleted when the
+  campaign closes.
 
 Starport has no legacy provider aliases or storage compatibility readers.
 Starmap owns provider and model facts. Starport owns inference and gateway
@@ -35,5 +37,3 @@ runtime behavior.
   release snapshot.
 - [Contribution guide](CONTRIBUTING.md): prepare a focused pull request.
 - [Community rules](CODE_OF_CONDUCT.md): follow the rules for project work.
-- [Active plans](plans/README.md): inspect durable implementation control
-  planes.

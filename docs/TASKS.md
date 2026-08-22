@@ -7,25 +7,8 @@ Last Updated: 2026-08-22
 
 ### Active Work
 
-- **Catalog, performance, and brand campaign (CP)** —
-  [durable plan](plans/catalog-performance-plan.html). Make the catalog
-  a traversable provider/model/author graph with logos and detail
-  pages, retool the composer, measure and publish the per-request
-  gateway overhead (`x-starport-overhead-ms`), sweep the brand
-  (STARPORT wordmark, API Keys, TTFT), fix the four gateway defects
-  from Design Review No. 2, and cut the SPA over as the only console.
-  Absorbs CM13–CM15. Status lives in the plan ledger.
-  The SPA is now the only console (CP18), the campaign verifier
-  `scripts/verify-catalog-performance.sh` is terminal at 20/20, and
-  both campaign verifiers run in CI. CP0–CP19 are done. CP20 fixes the
-  development-runtime catalog refresh — the generation payload is
-  chunked so it fits an in-memory store, and the console tells a stale
-  key (401) apart from a missing scope (403). CP21 closes the campaign.
-- **Console modernization (CM)** — `superseded(catalog-performance-plan)`.
-  CM0–CM12 shipped the React SPA console; the campaign carried the last
-  three tasks (CM13→CP12, CM14→CP18, CM15→CP19).
-  `scripts/verify-console-modernization.sh` is terminal at 21/21 and
-  runs in CI.
+No durable plan is active. The catalog, performance, and brand campaign
+closed on 2026-08-22; see Recently Completed.
 
 ### Proposed Work
 
@@ -35,6 +18,7 @@ No proposed durable plan exists.
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| Catalog, performance, and brand campaign | CP | #144–#179 | 2026-08-22 | Closed the Design Review No. 2 roadmap and absorbed the last three console-modernization tasks (CM13→CP12, CM14→CP18, CM15→CP19). Made the catalog a traversable provider/model/author graph with logos, detail pages, facets, and a global command palette; retooled the composer so presets live in the model picker and `+` attaches images; measured and published the per-request gateway overhead through `x-starport-overhead-ms`, a console p50/p99 stat, and a CI benchmark; swept the brand to the STARPORT wordmark, API Keys, and TTFT; fixed the gateway defects the review found (credential resolution, streaming 429 honesty, empty-completion caching, and the development-runtime catalog refresh, whose 11 MB generation value now stores as content-addressed chunks); and cut the React SPA over as the only console. `scripts/verify-catalog-performance.sh` is terminal at 20/20 and `scripts/verify-console-modernization.sh` at 21/21, both running in CI. |
 | Console chat parity and streaming usage | Console | #140–#142 via #143 | 2026-08-21 | Restored the legacy chat UX details (#140), added KaTeX math and Mermaid diagram rendering in chat (#141), and normalized streaming usage: every chat stream ends with one usage frame — provider-reported when available, otherwise estimated by a startup-initialized tiktoken estimator — with a live tok/s badge during streams (#142). The whole open train (#125, #127–#142) landed on `main` through merge-train PR #143 as one linear commit per pull request. |
 | OpenRouter parity campaign | ORP | #126–#139 via #143 | 2026-08-20 | Closed the OpenRouter feature-parity roadmap as a stacked pull-request train on top of #125. Shipped request logs and usage accounting (`internal/usage`, `usage:v1:` namespace, `/api/v1/activity`, console Usage page: #127–#130), the catalog freshness surface with console-triggered refresh (#131, #132), preset CRUD with `@preset/` model resolution (#133), `provider.sort` and `max_price` routing completion (#134, #135), per-key budgets and allowed-model limits with 402 responses and `X-Starport-Budget-*` headers (#136, #137), and side-by-side model comparison in chat (#138). `scripts/verify-openrouter-parity.sh` keeps conditions `ORP-V01` through `ORP-V16` and runs in CI (#139). |
 | Starport console revamp | Console | #125 | 2026-08-20 | Replaced the chat-only UI with a six-page embedded console (Overview, Chat, Models, Providers, Keys, Settings) designed from first principles as a local OpenRouter replacement. Renamed `CHATUI_*` config to `CONSOLE_*`, added catalog-driven `credential_fields` to the providers API, fixed provider-key timestamps to RFC 3339 UTC, and anchored the `vendor/` gitignore rule. All verification gates and the OpenRouter SDK smoke checks pass. |
