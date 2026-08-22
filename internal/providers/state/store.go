@@ -88,10 +88,13 @@ type AdapterObservation struct {
 
 // CredentialObservation is the reconciler's safe lifecycle projection.
 // MaterialVersion is opaque internal evidence and never enters Snapshot.
+// Detail elaborates the reason for an operator and must stay free of
+// credential material: checked environment names, source errors, never values.
 type CredentialObservation struct {
 	ProviderID      catalogs.ProviderID
 	State           CredentialState
 	Reason          ReasonCode
+	Detail          string
 	Usable          bool
 	MaterialVersion string
 }
@@ -114,10 +117,13 @@ type AdapterStatus struct {
 	Reason ReasonCode   `json:"reason,omitempty"`
 }
 
-// CredentialStatus is safe operator credential state.
+// CredentialStatus is safe operator credential state. Detail elaborates the
+// reason without credential material: which environment names were checked,
+// or which source operation failed.
 type CredentialStatus struct {
 	State     CredentialState `json:"state"`
 	Reason    ReasonCode      `json:"reason,omitempty"`
+	Detail    string          `json:"detail,omitempty"`
 	Usable    bool            `json:"usable"`
 	UpdatedAt time.Time       `json:"updated_at,omitempty"`
 }
@@ -325,7 +331,7 @@ func (s *Store) PublishCredentials(generation CredentialGeneration) {
 		next := credentialEntry{
 			status: CredentialStatus{
 				State: observation.State, Reason: observation.Reason,
-				Usable: observation.Usable,
+				Detail: observation.Detail, Usable: observation.Usable,
 			},
 			materialVersion: observation.MaterialVersion,
 		}
@@ -575,5 +581,6 @@ func equalCredentialEntryWithoutTime(left, right credentialEntry) bool {
 }
 
 func equalCredentialStatusWithoutTime(left, right CredentialStatus) bool {
-	return left.State == right.State && left.Reason == right.Reason && left.Usable == right.Usable
+	return left.State == right.State && left.Reason == right.Reason &&
+		left.Detail == right.Detail && left.Usable == right.Usable
 }

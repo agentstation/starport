@@ -5,6 +5,7 @@ import (
 	"errors"
 	"maps"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -345,6 +346,7 @@ func (r *Reconciler) publishCredentialState(
 					ProviderID:      provider.ID,
 					State:           providerstate.CredentialReady,
 					Reason:          providerstate.ReasonOperatorRefreshRetained,
+					Detail:          "refresh failed; kept prior material: " + CredentialFailureDetail(resolveErr),
 					Usable:          true,
 					MaterialVersion: version,
 				})
@@ -353,6 +355,7 @@ func (r *Reconciler) publishCredentialState(
 			state, reason := credentialSourceFailureState(resolveErr)
 			observations = append(observations, providerstate.CredentialObservation{
 				ProviderID: provider.ID, State: state, Reason: reason,
+				Detail: CredentialFailureDetail(resolveErr),
 			})
 			continue
 		}
@@ -369,6 +372,7 @@ func (r *Reconciler) publishCredentialState(
 			ProviderID: provider.ID,
 			State:      providerstate.CredentialNotConfigured,
 			Reason:     providerstate.ReasonOperatorNotConfigured,
+			Detail:     checkedCredentialEnvironment(provider),
 		})
 	}
 	r.states.PublishCredentials(providerstate.CredentialGeneration{
@@ -389,6 +393,60 @@ func credentialSourceFailureState(err error) (providerstate.CredentialState, pro
 	default:
 		return providerstate.CredentialUnavailable, providerstate.ReasonOperatorSourceUnavailable
 	}
+}
+
+// CredentialFailureDetail renders a secret-free description of one source
+// failure for operator surfaces. Typed source errors are safe by
+// construction; any other error collapses to its classification so raw
+// internal text never reaches an HTTP response.
+func CredentialFailureDetail(err error) string {
+	var sourceErr *credentials.SourceError
+	if errors.As(err, &sourceErr) {
+		return sourceErr.Error()
+	}
+	state, _ := credentialSourceFailureState(err)
+	return "credential source is " + strings.ReplaceAll(string(state), "_", " ")
+}
+
+// starportCredentialProduct scopes derived environment names, mirroring the
+// resolution product in internal/config.
+const starportCredentialProduct = "STARPORT"
+
+// checkedCredentialEnvironment names the environment variables the resolver
+// consulted for a provider that stayed unconfigured. Names only — never
+// credential values.
+func checkedCredentialEnvironment(provider catalogs.Provider) string {
+	if provider.Credentials == nil {
+		return ""
+	}
+	names := make([]string, 0, 4)
+	seen := make(map[string]struct{})
+	add := func(name string) {
+		if name == "" {
+			return
+		}
+		if _, exists := seen[name]; exists {
+			return
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	for _, field := range provider.Credentials.Fields {
+		derived, err := catalogs.DerivedCredentialEnvironmentName(
+			starportCredentialProduct, provider.ID, field.ID,
+		)
+		if err == nil {
+			add(derived)
+			add(derived + "_REFERENCE")
+		}
+		for _, ambient := range field.Environment {
+			add(ambient)
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "checked " + strings.Join(names, ", ")
 }
 
 func equivalentProviderConfigs(left, right config.ProvidersConfig) bool {

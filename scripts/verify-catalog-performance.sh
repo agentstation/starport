@@ -89,5 +89,11 @@ check CPV18 "Starmap pin is v0.7.0 or later" \
   bash -c 'v=$(grep -o "starmap v[0-9.]*" go.mod | head -1 | cut -d" " -f2);
     test -n "$v" && printf "0.7.0\n%s\n" "${v#v}" | sort -V -C'
 
+# Phase F: credential evidence
+check CPV19 "credential state carries operator-facing detail" \
+  bash -c 'grep -q "detail,omitempty" internal/providers/state/store.go &&
+    grep -q "checkedCredentialEnvironment" internal/providers/reconciler.go &&
+    grep -q "refreshFailures" internal/server/controllers/provider_operations.go'
+
 printf 'Summary: %d passed, %d failed\n' "$pass" "$fail"
 test "$fail" -eq 0

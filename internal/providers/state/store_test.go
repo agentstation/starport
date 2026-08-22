@@ -75,6 +75,53 @@ func TestProviderStateProjectionContract(t *testing.T) {
 	require.Equal(t, ReasonAuthenticationUnsupported, anthropic.Adapter.Reason)
 }
 
+// TestCredentialDetailRoundTripsAndDetectsChange proves the operator-facing
+// detail text survives projection into the snapshot and that a detail-only
+// change advances the revision.
+func TestCredentialDetailRoundTripsAndDetectsChange(t *testing.T) {
+	catalog := embeddedCatalog(t)
+	store := New()
+	require.NoError(t, store.PublishCatalog("generation-1", catalog, catalogAdapterObservations(catalog,
+		AdapterObservation{ProviderID: catalogs.ProviderIDOpenAI, State: AdapterReady},
+	)))
+	publish := func(detail string) {
+		store.PublishCredentials(CredentialGeneration{
+			CatalogGenerationID: "generation-1",
+			Observations: []CredentialObservation{{
+				ProviderID: catalogs.ProviderIDOpenAI,
+				State:      CredentialNotConfigured,
+				Reason:     ReasonOperatorNotConfigured,
+				Detail:     detail,
+			}},
+		})
+	}
+	publish("checked OPENAI_API_KEY, STARPORT_OPENAI_API_KEY")
+
+	snapshot := store.Snapshot()
+	openAI := requireProvider(t, snapshot, catalogs.ProviderIDOpenAI)
+	require.Equal(
+		t,
+		"checked OPENAI_API_KEY, STARPORT_OPENAI_API_KEY",
+		openAI.OperatorCredential.Detail,
+	)
+	payload, err := json.Marshal(snapshot)
+	require.NoError(t, err)
+	require.Contains(t, string(payload), `"detail":"checked OPENAI_API_KEY`)
+
+	// An identical generation keeps the revision; a detail change advances it.
+	before := snapshot.Revision
+	publish("checked OPENAI_API_KEY, STARPORT_OPENAI_API_KEY")
+	require.Equal(t, before, store.Snapshot().Revision)
+	publish("checked OPENAI_API_KEY")
+	after := store.Snapshot()
+	require.Greater(t, after.Revision, before)
+	require.Equal(
+		t,
+		"checked OPENAI_API_KEY",
+		requireProvider(t, after, catalogs.ProviderIDOpenAI).OperatorCredential.Detail,
+	)
+}
+
 func TestProviderStateRejectsIncompleteAdapterProjection(t *testing.T) {
 	catalog := embeddedCatalog(t)
 	store := New()

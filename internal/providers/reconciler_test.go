@@ -165,6 +165,124 @@ func TestProviderReconcilerPublishesCredentialLifecycle(t *testing.T) {
 	require.Equal(t, providerstate.ReasonOperatorSourceDenied, deniedLast.Reason)
 }
 
+// TestReconcilerCredentialDetailNamesCheckedEnvironment proves an
+// unconfigured provider's observation names every environment variable the
+// resolver consulted, so the operator can see exactly what to set.
+func TestReconcilerCredentialDetailNamesCheckedEnvironment(t *testing.T) {
+	provider := reconcilerTestProvider("unconfigured")
+	states := &credentialStateCapture{}
+	resolver := &reconcilerTestResolver{resolve: func(
+		context.Context,
+		catalogs.Provider,
+	) (config.ProviderConfig, bool, error) {
+		return config.ProviderConfig{}, false, nil
+	}}
+	view := reconcilerTestView(provider)
+	reconciler, err := NewReconciler(
+		func() (CatalogView, error) { return view, nil },
+		resolver,
+		nil,
+		func(context.Context, CatalogView, config.ProvidersConfig) error { return nil },
+		time.Second,
+		states,
+	)
+	require.NoError(t, err)
+	_, err = reconciler.Reconcile(t.Context(), false)
+	require.NoError(t, err)
+
+	generations := states.snapshot()
+	last := generations[len(generations)-1].Observations[0]
+	require.Equal(t, providerstate.CredentialNotConfigured, last.State)
+	require.Equal(t, providerstate.ReasonOperatorNotConfigured, last.Reason)
+	derived, err := catalogs.DerivedCredentialEnvironmentName(
+		"STARPORT", provider.ID, "api-key",
+	)
+	require.NoError(t, err)
+	require.Equal(
+		t,
+		"checked "+derived+", "+derived+"_REFERENCE, OPENAI_API_KEY",
+		last.Detail,
+	)
+}
+
+// TestReconcilerCredentialDetailCarriesSourceError proves a failed source
+// resolution surfaces the error text, and a retained credential explains
+// what was kept.
+func TestReconcilerCredentialDetailCarriesSourceError(t *testing.T) {
+	provider := reconcilerTestProvider("failing")
+	states := &credentialStateCapture{}
+	var fail atomic.Bool
+	sourceErr := credentials.NewSourceError(
+		credentials.SourceErrorDenied,
+		credentials.ReferenceBackendEnvironment,
+	)
+	resolver := &reconcilerTestResolver{resolve: func(
+		context.Context,
+		catalogs.Provider,
+	) (config.ProviderConfig, bool, error) {
+		if fail.Load() {
+			return config.ProviderConfig{}, false, sourceErr
+		}
+		return reconcilerProviderConfig(provider), true, nil
+	}}
+	view := reconcilerTestView(provider)
+	reconciler, err := NewReconciler(
+		func() (CatalogView, error) { return view, nil },
+		resolver,
+		nil,
+		func(context.Context, CatalogView, config.ProvidersConfig) error { return nil },
+		time.Second,
+		states,
+	)
+	require.NoError(t, err)
+	_, err = reconciler.Reconcile(t.Context(), false)
+	require.NoError(t, err)
+
+	// A later refresh failure keeps the configured material and says so.
+	fail.Store(true)
+	_, err = reconciler.Reconcile(t.Context(), true)
+	require.NoError(t, err)
+	generations := states.snapshot()
+	retained := generations[len(generations)-1].Observations[0]
+	require.Equal(t, providerstate.CredentialReady, retained.State)
+	require.Equal(t, providerstate.ReasonOperatorRefreshRetained, retained.Reason)
+	require.Equal(
+		t,
+		"refresh failed; kept prior material: "+sourceErr.Error(),
+		retained.Detail,
+	)
+
+	// A failure with nothing configured carries the source error itself.
+	deniedStates := &credentialStateCapture{}
+	deniedResolver := &reconcilerTestResolver{resolve: func(
+		context.Context,
+		catalogs.Provider,
+	) (config.ProviderConfig, bool, error) {
+		return config.ProviderConfig{}, false, sourceErr
+	}}
+	denied, err := NewReconciler(
+		func() (CatalogView, error) { return view, nil },
+		deniedResolver,
+		nil,
+		func(context.Context, CatalogView, config.ProvidersConfig) error { return nil },
+		time.Second,
+		deniedStates,
+	)
+	require.NoError(t, err)
+	_, err = denied.Reconcile(t.Context(), true)
+	require.NoError(t, err)
+	deniedGenerations := deniedStates.snapshot()
+	deniedLast := deniedGenerations[len(deniedGenerations)-1].Observations[0]
+	require.Equal(t, providerstate.CredentialDenied, deniedLast.State)
+	require.Equal(t, sourceErr.Error(), deniedLast.Detail)
+}
+
+// TestCheckedCredentialEnvironmentWithoutContract proves a provider with no
+// credential contract yields no detail text.
+func TestCheckedCredentialEnvironmentWithoutContract(t *testing.T) {
+	require.Empty(t, checkedCredentialEnvironment(catalogs.Provider{ID: "bare"}))
+}
+
 type reconcilerTestResolver struct {
 	calls   atomic.Int32
 	resolve func(context.Context, catalogs.Provider) (config.ProviderConfig, bool, error)

@@ -7,6 +7,7 @@ import type { ActivityRecord } from "@/lib/api";
 
 import {
   activityStats,
+  checkedEnvNames,
   circuitBreakdown,
   CredentialPanel,
   HealthPanel,
@@ -112,6 +113,51 @@ test("offers env names and the API Keys path when unconfigured", () => {
   expect(screen.getByText("STARPORT_GROQ_API_KEY")).toBeDefined();
   expect(screen.getByText("Manage API Keys").closest("a")?.getAttribute("href")).toBe(
     "/keys",
+  );
+});
+
+test("parses the server's checked-environment detail", () => {
+  expect(
+    checkedEnvNames("checked STARPORT_GOOGLE_AI_STUDIO_API_KEY, GEMINI_API_KEY"),
+  ).toEqual(["STARPORT_GOOGLE_AI_STUDIO_API_KEY", "GEMINI_API_KEY"]);
+  expect(checkedEnvNames("credential source environment is denied")).toEqual([]);
+  expect(checkedEnvNames(undefined)).toEqual([]);
+});
+
+test("prefers the server's checked env names over the derived guess", () => {
+  render(
+    <CredentialPanel
+      providerId="google-ai-studio"
+      credential={{
+        state: "not_configured",
+        usable: false,
+        reason: "credential_not_configured",
+        detail: "checked STARPORT_GOOGLE_AI_STUDIO_API_KEY, GEMINI_API_KEY",
+      }}
+    />,
+  );
+
+  expect(screen.getByText("STARPORT_GOOGLE_AI_STUDIO_API_KEY")).toBeDefined();
+  expect(screen.getByText("GEMINI_API_KEY")).toBeDefined();
+  // The naive client-side derivation is replaced by the authoritative list.
+  expect(screen.queryByText("GOOGLE_AI_STUDIO_API_KEY")).toBeNull();
+});
+
+test("shows a source failure detail beneath the state line", () => {
+  render(
+    <CredentialPanel
+      providerId="google-vertex"
+      credential={{
+        state: "unavailable",
+        usable: false,
+        reason: "credential_source_unavailable",
+        detail: "credential source environment is unavailable",
+      }}
+    />,
+  );
+
+  expect(screen.getByTestId("credential-detail").textContent).toBe(
+    "credential source environment is unavailable",
   );
 });
 
