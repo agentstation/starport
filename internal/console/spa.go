@@ -103,11 +103,19 @@ func (h *SPAHandler) Assets(w http.ResponseWriter, r *http.Request) {
 	http.FileServerFS(h.dist).ServeHTTP(w, r)
 }
 
+// spaPagePaths extends PagePaths with the nested detail routes the
+// client router owns. The legacy console has no nested pages, so the
+// wildcards live here instead of in the shared list.
+var spaPagePaths = append(
+	PagePaths[:len(PagePaths):len(PagePaths)],
+	"/providers/*",
+)
+
 // Register mounts the SPA page routes and hashed assets on the router.
 // Every console page path serves the same shell (spaFallback); the
 // client router renders the matching page.
 func (h *SPAHandler) Register(r chi.Router) {
-	for _, path := range PagePaths {
+	for _, path := range spaPagePaths {
 		r.Get(path, h.Index)
 	}
 	r.Get("/assets/*", h.Assets)

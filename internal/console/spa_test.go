@@ -55,6 +55,21 @@ func TestSPAHandlerServesIndexForEveryPagePath(t *testing.T) {
 	}
 }
 
+func TestSPAHandlerServesIndexForNestedPagePaths(t *testing.T) {
+	router := newSPARouter(t, builtDist())
+	request := httptest.NewRequest(http.MethodGet, "/providers/groq", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET /providers/groq status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	body, _ := io.ReadAll(recorder.Body)
+	if !strings.Contains(string(body), "id=\"root\"") {
+		t.Fatal("GET /providers/groq did not serve the SPA index")
+	}
+}
+
 func TestSPAHandlerServesHashedAssetsImmutable(t *testing.T) {
 	router := newSPARouter(t, builtDist())
 	request := httptest.NewRequest(http.MethodGet, "/assets/index-abc123.js", nil)

@@ -1,10 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { RefreshCw } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { ConnectCard } from "@/components/overview/ConnectCard";
+import {
+  CatalogProviderCard,
+  ProviderCard,
+  credentialRank,
+} from "@/components/providers/ProviderCard";
 import {
   ApiError,
   listProviderCatalog,
@@ -13,137 +17,54 @@ import {
   type ProviderCatalogEntry,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
-import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
+import { providerLabel } from "@/lib/format";
 import { useHasApiKey } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/providers")({
   component: ProvidersPage,
 });
 
-// One status vocabulary (DESIGN.md): the dot is adapter liveness — can
-// this build route to the provider at all — and the pill is the operator
-// credential lifecycle. The two signals are orthogonal and never mixed.
-function AdapterDot({ state }: { state: string | undefined }) {
-  const ready = state === "ready";
-  const label = ready ? "ready" : (state ?? "unknown").replaceAll("_", " ");
-  return (
-    <span className="flex items-center gap-1.5 text-xs text-text-3">
-      <span
-        aria-hidden="true"
-        className={`size-2 shrink-0 rounded-full ${
-          ready ? "bg-success" : state === "no_offerings" ? "bg-text-4" : "bg-error"
-        }`}
-      />
-      {label}
-    </span>
-  );
+type SortKey = "status" | "name" | "models";
+
+function matchesQuery(
+  query: string,
+  id: string,
+  entry: ProviderCatalogEntry | undefined,
+): boolean {
+  if (!query) return true;
+  const haystack = [id, entry?.name, entry?.description]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
 }
 
-const CREDENTIAL_TONES: Record<string, string> = {
-  ready: "bg-success-tint text-success",
-  not_configured: "bg-bg-raised text-text-3",
-  refreshing: "bg-info-tint text-text-2",
-  denied: "bg-error-tint text-error",
-  invalid: "bg-error-tint text-error",
-  unavailable: "bg-warning-tint text-warning",
-};
+function sortProviders(
+  providers: ProviderRuntimeStatus[],
+  byId: Map<string, ProviderCatalogEntry>,
+  sort: SortKey,
+): ProviderRuntimeStatus[] {
+  const name = (status: ProviderRuntimeStatus) =>
+    providerLabel(status.provider_id, byId.get(status.provider_id)?.name);
+  return [...providers].sort((a, b) => {
+    if (sort === "models") {
+      return (
+        (b.offerings?.length ?? 0) - (a.offerings?.length ?? 0) ||
+        name(a).localeCompare(name(b))
+      );
+    }
+    if (sort === "name") return name(a).localeCompare(name(b));
+    return credentialRank(a) - credentialRank(b) || name(a).localeCompare(name(b));
+  });
+}
 
-function CredentialPill({
-  credential,
+function CatalogOnly({
+  catalog,
+  query,
 }: {
-  credential: ProviderRuntimeStatus["operator_credential"];
+  catalog: ProviderCatalogEntry[];
+  query: string;
 }) {
-  const state = credential?.state ?? "unknown";
-  const label =
-    state === "not_configured" ? "no credential" : state.replaceAll("_", " ");
-  return (
-    <span
-      title={
-        credential?.updated_at
-          ? `updated ${formatRelativeTime(credential.updated_at)}`
-          : undefined
-      }
-      className={`inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
-        CREDENTIAL_TONES[state] ?? "bg-bg-raised text-text-3"
-      }`}
-    >
-      {label}
-    </span>
-  );
-}
-
-function ProviderCard({
-  status,
-  entry,
-}: {
-  status: ProviderRuntimeStatus;
-  entry: ProviderCatalogEntry | undefined;
-}) {
-  const credential = status.operator_credential;
-  const offerings = status.offerings ?? [];
-  const available = offerings.filter(
-    (offering) => offering.state === "available",
-  ).length;
-  const credentialReason =
-    credential &&
-    !credential.usable &&
-    credential.state !== "not_configured" &&
-    credential.reason;
-  const adapterReason =
-    status.adapter?.state !== "ready" &&
-    status.adapter?.state !== "no_offerings" &&
-    status.adapter?.reason;
-  return (
-    <div className="flex flex-col gap-3 rounded-md border border-border-1 bg-bg-panel p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <EntityLogo
-            kind="providers"
-            id={status.provider_id}
-            name={providerLabel(status.provider_id, entry?.name)}
-            size={28}
-            className="mt-0.5"
-          />
-          <div className="flex min-w-0 flex-col gap-1">
-            <div className="truncate text-sm font-medium text-text-1">
-              {providerLabel(status.provider_id, entry?.name)}
-            </div>
-            <span className="self-start rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2">
-              {status.provider_id}
-            </span>
-          </div>
-        </div>
-        <CredentialPill credential={credential} />
-      </div>
-      {(credentialReason || adapterReason) && (
-        <p className="text-xs text-text-3">
-          {(credentialReason || adapterReason || "").replaceAll("_", " ")}
-        </p>
-      )}
-      <div className="flex items-center gap-4 text-xs text-text-3">
-        <AdapterDot state={status.adapter?.state} />
-        <Link
-          to="/models"
-          search={{ provider: status.provider_id }}
-          className="tabular-nums text-text-2 transition-colors duration-150 ease-standard hover:text-accent-link hover:underline"
-        >
-          {formatCount(offerings.length)} offerings
-        </Link>
-        <span className="tabular-nums">{formatCount(available)} available</span>
-      </div>
-    </div>
-  );
-}
-
-// Credentialed providers sort first: a usable credential ranks above a
-// configured-but-broken one, which ranks above no credential at all.
-function credentialRank(status: ProviderRuntimeStatus): number {
-  if (status.operator_credential?.usable) return 0;
-  if (status.operator_credential?.state === "not_configured") return 2;
-  return 1;
-}
-
-function CatalogOnly({ catalog }: { catalog: ProviderCatalogEntry[] }) {
   if (catalog.length === 0) {
     return (
       <p className="text-base text-text-3">
@@ -151,6 +72,9 @@ function CatalogOnly({ catalog }: { catalog: ProviderCatalogEntry[] }) {
       </p>
     );
   }
+  const visible = catalog.filter((entry) =>
+    matchesQuery(query, entry.id, entry),
+  );
   return (
     <>
       <p className="text-sm text-text-3">
@@ -158,33 +82,8 @@ function CatalogOnly({ catalog }: { catalog: ProviderCatalogEntry[] }) {
         the catalog view.
       </p>
       <div className="grid gap-3 md:grid-cols-2">
-        {catalog.map((entry) => (
-          <div
-            key={entry.id}
-            className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
-          >
-            <div className="flex items-center gap-2.5">
-              <EntityLogo
-                kind="providers"
-                id={entry.id}
-                name={providerLabel(entry.id, entry.name)}
-                size={24}
-              />
-              <div className="truncate text-sm font-medium text-text-1">
-                {providerLabel(entry.id, entry.name)}
-              </div>
-            </div>
-            <span className="self-start rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2">
-              {entry.id}
-            </span>
-            <Link
-              to="/models"
-              search={{ provider: entry.id }}
-              className="text-xs tabular-nums text-text-2 transition-colors duration-150 ease-standard hover:text-accent-link hover:underline"
-            >
-              {formatCount(entry.models?.length ?? 0)} models
-            </Link>
-          </div>
+        {visible.map((entry) => (
+          <CatalogProviderCard key={entry.id} entry={entry} />
         ))}
       </div>
     </>
@@ -195,6 +94,8 @@ function ProvidersPage() {
   const hasKey = useHasApiKey();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("status");
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -219,14 +120,17 @@ function ProvidersPage() {
     [catalog.data],
   );
 
-  const sorted = useMemo(
+  const trimmed = query.trim().toLowerCase();
+  const visible = useMemo(
     () =>
-      [...(status.data?.providers ?? [])].sort(
-        (a, b) =>
-          credentialRank(a) - credentialRank(b) ||
-          a.provider_id.localeCompare(b.provider_id),
+      sortProviders(
+        (status.data?.providers ?? []).filter((provider) =>
+          matchesQuery(trimmed, provider.provider_id, byId.get(provider.provider_id)),
+        ),
+        byId,
+        sort,
       ),
-    [status.data],
+    [status.data, byId, trimmed, sort],
   );
 
   const say = (text: string, error = false) => {
@@ -272,7 +176,7 @@ function ProvidersPage() {
   let body: ReactNode;
   if (status.error) {
     if (status.error instanceof ApiError && status.error.needsKey) {
-      body = <CatalogOnly catalog={catalog.data ?? []} />;
+      body = <CatalogOnly catalog={catalog.data ?? []} query={trimmed} />;
     } else {
       body = (
         <p className="text-base text-text-3">
@@ -282,16 +186,22 @@ function ProvidersPage() {
     }
   } else if (status.isPending) {
     body = <p className="text-base text-text-3">Loading providers…</p>;
-  } else if (sorted.length === 0) {
+  } else if ((status.data?.providers ?? []).length === 0) {
     body = (
       <p className="text-base text-text-3">
         No providers in this catalog snapshot.
       </p>
     );
+  } else if (visible.length === 0) {
+    body = (
+      <p className="text-base text-text-3">
+        No providers match “{query.trim()}”.
+      </p>
+    );
   } else {
     body = (
       <div className="grid gap-3 md:grid-cols-2">
-        {sorted.map((provider) => (
+        {visible.map((provider) => (
           <ProviderCard
             key={provider.provider_id}
             status={provider}
@@ -324,6 +234,29 @@ function ProvidersPage() {
             refresh
           </button>
         </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex h-8 flex-1 basis-56 items-center gap-2 rounded-sm border border-border-2 bg-bg-raised px-2.5 focus-within:border-accent">
+          <Search className="size-3.5 shrink-0 text-text-4" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search providers"
+            aria-label="Search providers"
+            className="w-full bg-transparent text-sm text-text-1 outline-none placeholder:text-text-4"
+          />
+        </label>
+        <select
+          value={sort}
+          onChange={(event) => setSort(event.target.value as SortKey)}
+          aria-label="Sort providers"
+          className="h-8 rounded-sm border border-border-2 bg-bg-raised px-2 text-xs text-text-2 outline-none"
+        >
+          <option value="status">Sort: status</option>
+          <option value="name">Sort: name</option>
+          <option value="models">Sort: models</option>
+        </select>
       </div>
       {body}
     </div>
