@@ -50,7 +50,6 @@ done < <(
 	find "$ROOT" \
 		\( -path "$ROOT/.git" \
 		-o -path "$ROOT/docs/reviews" \
-		-o -path "$ROOT/docs/plans/proof" \
 		-o -path "$ROOT/htmlcov" \) -prune \
 		-o -type f \
 		! -path "$ROOT/docs/ARCHITECTURE_CONTROL_PLANE.md" \

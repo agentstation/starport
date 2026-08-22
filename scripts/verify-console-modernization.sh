@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Guard for the console modernization campaign
-# (docs/plans/console-modernization-plan.html). Each condition asserts one
-# capability of the modernized console. It reports every condition and
+# Guard for the console modernization campaign, whose durable plan closed
+# on 2026-08-22. Each condition asserts one capability of the modernized
+# console. It reports every condition and
 # exits nonzero while any condition fails. CI runs it as a required gate.
 set -u
 
