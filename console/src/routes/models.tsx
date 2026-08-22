@@ -6,19 +6,17 @@ import { useEffect, useMemo, useRef } from "react";
 import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
 import { ConnectCard } from "@/components/overview/ConnectCard";
-import { ApiError, listModels, listProviderCatalog, type Model } from "@/lib/api";
+import { ApiError, listModels, listProviderCatalog } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
+import {
+  matches,
+  type ModelsSearch,
+  providerOf,
+} from "@/lib/modelFilter";
 import { useHasApiKey } from "@/lib/useApiKey";
 
 // Filter state lives in the URL so a filtered view survives reload and
 // pastes as a link. Empty params are dropped from the search string.
-type ModelsSearch = {
-  q?: string;
-  provider?: string;
-  modality?: string;
-  capability?: string;
-};
-
 const MODALITIES = ["text", "image", "audio", "file"] as const;
 const CAPABILITIES = ["tools", "reasoning", "structured_outputs"] as const;
 
@@ -36,35 +34,6 @@ export const Route = createFileRoute("/models")({
   },
 });
 
-// providerOf mirrors the gateway's model ID shape: "<provider>/<model>".
-function providerOf(model: Model): string {
-  const slash = model.id.indexOf("/");
-  return slash > 0 ? model.id.slice(0, slash) : "";
-}
-
-function hasCapability(model: Model, capability: string): boolean {
-  const params = model.supported_parameters ?? [];
-  if (capability === "reasoning") {
-    return params.includes("reasoning") || params.includes("include_reasoning");
-  }
-  return params.includes(capability);
-}
-
-function matches(model: Model, search: ModelsSearch): boolean {
-  if (search.provider && providerOf(model) !== search.provider) return false;
-  if (
-    search.modality &&
-    !(model.architecture?.input_modalities ?? []).includes(search.modality)
-  ) {
-    return false;
-  }
-  if (search.capability && !hasCapability(model, search.capability)) return false;
-  if (search.q) {
-    const haystack = `${model.id} ${model.name ?? ""}`.toLowerCase();
-    if (!haystack.includes(search.q.toLowerCase())) return false;
-  }
-  return true;
-}
 
 function FilterSelect({
   label,

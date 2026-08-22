@@ -38,10 +38,17 @@ import {
   type Conversation,
 } from "@/lib/chatStore";
 
+type ChatSearch = {
+  model?: string;
+  compare?: true;
+};
+
 export const Route = createFileRoute("/chat")({
-  // /chat?model=… seeds the next conversation's model (Models page link).
-  validateSearch: (search: Record<string, unknown>) => ({
+  // /chat?model=… seeds the next conversation's model (Models page link);
+  // &compare=true opens comparison mode with that model pre-selected.
+  validateSearch: (search: Record<string, unknown>): ChatSearch => ({
     model: typeof search.model === "string" ? search.model : undefined,
+    compare: search.compare === true || search.compare === "true" ? true : undefined,
   }),
   component: ChatPage,
 });
@@ -101,7 +108,7 @@ function requestMessages(
 
 function ChatPage() {
   const navigate = useNavigate();
-  const { model: seedModel } = Route.useSearch();
+  const { model: seedModel, compare: seedCompare } = Route.useSearch();
 
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -293,6 +300,15 @@ function ChatPage() {
       generateTitle(conversation, prompt);
     },
   });
+
+  // A ?compare=true landing (the model page's Compare CTA) enters
+  // compare mode once, seeded with the model from the same search.
+  const seededCompareRef = useRef(false);
+  useEffect(() => {
+    if (!seedCompare || seededCompareRef.current || compare.active) return;
+    seededCompareRef.current = true;
+    compare.toggle(seedModel);
+  }, [seedCompare, seedModel, compare]);
 
   const send = (text: string) => {
     if (streamingId || compare.streaming) return;

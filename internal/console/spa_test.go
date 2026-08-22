@@ -56,17 +56,21 @@ func TestSPAHandlerServesIndexForEveryPagePath(t *testing.T) {
 }
 
 func TestSPAHandlerServesIndexForNestedPagePaths(t *testing.T) {
-	router := newSPARouter(t, builtDist())
-	request := httptest.NewRequest(http.MethodGet, "/providers/groq", nil)
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, request)
+	// Model detail paths carry an encoded slash in the id segment.
+	paths := []string{"/providers/groq", "/models/meta%2Fllama-3.1-8b-instruct"}
+	for _, path := range paths {
+		router := newSPARouter(t, builtDist())
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("GET /providers/groq status = %d, want %d", recorder.Code, http.StatusOK)
-	}
-	body, _ := io.ReadAll(recorder.Body)
-	if !strings.Contains(string(body), "id=\"root\"") {
-		t.Fatal("GET /providers/groq did not serve the SPA index")
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusOK)
+		}
+		body, _ := io.ReadAll(recorder.Body)
+		if !strings.Contains(string(body), "id=\"root\"") {
+			t.Fatalf("GET %s did not serve the SPA index", path)
+		}
 	}
 }
 
