@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starport catalog, performance, and brand campaign</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Starport catalog, performance, and brand campaign</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="active">active</code> ·
+    Owner: this plan ·
+    Created: 2026-08-21 ·
+    Baseline: main @ 7e71726 ·
+    Proof root: <code>proof/catalog-performance/</code> ·
+    Next action: CP1 — brand sweep (STARPORT wordmark, API Keys, TTFT)
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      The Starport console presents the catalog as a traversable graph of
+      providers, models, and authors — each with an identity (logo, display
+      name, description) and a full detail page — searchable from a global
+      command palette; the composer follows the industry convention
+      (presets in the model picker, "+" for attachments); every proxied
+      response carries a measured <code>x-starport-overhead-ms</code>
+      header backed by a CI benchmark; the brand reads enterprise-grade
+      (STARPORT wordmark, API Keys, exact metric vocabulary); and the SPA
+      becomes the only console. Design authority: the published Design
+      Review No. 2 (research copies in the proof root).
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 340 170" role="img" aria-label="Before diagram">
+          <rect x="10" y="10" width="150" height="66" rx="8" fill="none" stroke="currentColor"/>
+          <text x="85" y="38" text-anchor="middle" fill="currentColor" font-size="12">internal/proxy</text>
+          <text x="85" y="56" text-anchor="middle" fill="currentColor" font-size="10">inline console DTOs</text>
+          <rect x="180" y="10" width="150" height="66" rx="8" fill="none" stroke="currentColor"/>
+          <text x="255" y="38" text-anchor="middle" fill="currentColor" font-size="12">console SPA</text>
+          <text x="255" y="56" text-anchor="middle" fill="currentColor" font-size="10">flat lists, no detail</text>
+          <rect x="10" y="94" width="320" height="60" rx="8" fill="none" stroke="currentColor" stroke-dasharray="4 3"/>
+          <text x="170" y="120" text-anchor="middle" fill="currentColor" font-size="11">dropped: authors, offerings, logos,</text>
+          <text x="170" y="138" text-anchor="middle" fill="currentColor" font-size="11">policies, tags · no overhead metric</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 340 170" role="img" aria-label="After diagram">
+          <defs>
+            <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4"
+              markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <rect x="10" y="10" width="150" height="50" rx="8" fill="none" stroke="currentColor"/>
+          <text x="85" y="30" text-anchor="middle" fill="currentColor" font-size="11">catalog projection seam</text>
+          <text x="85" y="46" text-anchor="middle" fill="currentColor" font-size="10">models·providers·authors·logos</text>
+          <rect x="180" y="10" width="150" height="50" rx="8" fill="none" stroke="currentColor"/>
+          <text x="255" y="30" text-anchor="middle" fill="currentColor" font-size="11">console SPA</text>
+          <text x="255" y="46" text-anchor="middle" fill="currentColor" font-size="10">detail pages + palette</text>
+          <line x1="160" y1="35" x2="176" y2="35" stroke="currentColor" marker-end="url(#arrow)"/>
+          <rect x="10" y="76" width="150" height="50" rx="8" fill="none" stroke="currentColor"/>
+          <text x="85" y="96" text-anchor="middle" fill="currentColor" font-size="11">overhead timing seam</text>
+          <text x="85" y="112" text-anchor="middle" fill="currentColor" font-size="10">internal/proxy</text>
+          <rect x="180" y="76" width="150" height="50" rx="8" fill="none" stroke="currentColor"/>
+          <text x="255" y="96" text-anchor="middle" fill="currentColor" font-size="11">x-starport-overhead-ms</text>
+          <text x="255" y="112" text-anchor="middle" fill="currentColor" font-size="10">header · Usage · Overview</text>
+          <line x1="160" y1="101" x2="176" y2="101" stroke="currentColor" marker-end="url(#arrow)"/>
+          <rect x="10" y="136" width="320" height="26" rx="8" fill="none" stroke="currentColor"/>
+          <text x="170" y="153" text-anchor="middle" fill="currentColor" font-size="11">Starmap v0.7.0: logo payload + lifecycle dates</text>
+        </svg>
+      </figure>
+    </div>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns:</strong> the catalog projection seam and its API
+      surface (models, providers, authors, logos); the console catalog UX
+      (provider cards and detail, model detail, author pages, list
+      traversal, command palette); the composer retool; the gateway
+      overhead measurement, header, surfacing, and benchmark; the four
+      gateway defects found in Design Review No. 2; the brand sweep; and
+      the console cutover and cleanup. Also owns the supporting Starmap
+      v0.7.0 release (logo payload, lifecycle dates) in the sibling
+      repository <code>~/src/github.com/agentstation/starmap</code>.</p>
+    <p><strong>Does not own:</strong> CM0–CM12 (delivered by
+      <code>console-modernization-plan.html</code>, which this plan
+      supersedes once CM12 merges); routing policy changes; new provider
+      integrations.</p>
+    <p><strong>Non-goals:</strong> web-search or deep-research composer
+      tools (no gateway tools path exists; owner: a future tools plan);
+      multi-tenant RBAC; remote catalog hosting changes; marketing site
+      work beyond README claims.</p>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <ol>
+      <li>Air-gapped console: no CDN or external requests at runtime; logos
+        ship in the binary or the catalog payload.</li>
+      <li><code>DESIGN.md</code> governs visual decisions; both themes ship
+        for every surface.</li>
+      <li>No model, price, or provider facts hardcoded in the frontend; all
+        catalog facts flow from one Starmap snapshot per process.</li>
+      <li>Provider model IDs stay exact and opaque.</li>
+      <li>The overhead number is measured, never estimated; the README
+        claim cites the CI benchmark that enforces it.</li>
+      <li>One task, one pull request to <code>main</code>, branch
+        <code>codex/cp-&lt;n&gt;-&lt;slug&gt;</code>; autoreview pre-PR
+        gate per repository rules.</li>
+      <li>Do not weaken existing tests or verifier gates to land a task.</li>
+    </ol>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-catalog-performance.sh</code>, authored red in
+      CP0 with a fixed condition roster CPV01–CPV18 and output shape
+      <code>Summary: N passed, M failed</code>. The plan runs it at every
+      task closeout; CP18 wires it into CI once green. Terminal state:
+      18 passed, 0 failed. Conditions map one-to-one to acceptance
+      criteria named in the tasks below (authors API present, all
+      offerings projected, logo route serves SVG with fallback,
+      provider/model/author routes exist in the SPA, palette indexes three
+      entity kinds, no "+"→presets popover, overhead header on stream and
+      non-stream, TTFT capitalization, STARPORT wordmark, API Keys nav,
+      Starmap pin at v0.7.0 or later). The legacy-console cutover keeps
+      its own gate in <code>scripts/verify-console-modernization.sh</code>;
+      CP18 wires both scripts into CI.</p>
+  </section>
+
+  <section id="coordination">
+    <h2>Coordination</h2>
+    <p><code>console-modernization-plan.html</code> owns work through CM12.
+      When CM12's PR merges, mark that plan
+      <code>superseded(catalog-performance-plan)</code>: CM13 maps to CP12,
+      CM14 to CP18, CM15 to CP19. On any disagreement about console scope,
+      this plan wins; on visual tokens, <code>DESIGN.md</code> wins. The
+      published Design Review No. 2 artifact is advisory input; this plan
+      is the execution authority.</p>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="CP0" data-status="done"><td>CP0</td><td>Baseline: pin commit, proof root, research copies, verifier red</td><td><code>done</code></td><td>main @ 7e71726; verifier red 0 passed / 18 failed; <code>proof/catalog-performance/cp0.md</code>; 13 research files under <code>proof/catalog-performance/research/</code></td></tr>
+        <tr id="CP1" data-status="in_progress"><td>CP1</td><td>A: Brand sweep — STARPORT wordmark, API Keys, display names, pill truncation, TTFT</td><td><code>in_progress</code></td><td></td></tr>
+        <tr id="CP2" data-status="todo"><td>CP2</td><td>A: Extract catalog projection package from proxy inline DTO assembly</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP3" data-status="todo"><td>CP3</td><td>A: Widen ModelInfo (author, tags, lineage, cutoff, weights, all offerings) and populate ProviderInfo</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP4" data-status="todo"><td>CP4</td><td>A: Authors API — /api/v1/authors and /api/v1/authors/{id}</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP5" data-status="todo"><td>CP5</td><td>A: Logo route with fallback chain and interim bundled SVG set</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP6" data-status="todo"><td>CP6</td><td>A: Starmap v0.7.0 — logo payload, lifecycle dates, coverage fill, release, pin bump</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP7" data-status="todo"><td>CP7</td><td>B: Providers page revamp — identity cards, single status, search</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP8" data-status="todo"><td>CP8</td><td>B: Provider detail page — identity, credential CTA, served models, health</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP9" data-status="todo"><td>CP9</td><td>B: Model detail page — header, capabilities, per-provider offering table, lineage, Open in chat</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP10" data-status="todo"><td>CP10</td><td>B: Models list traversal — author/tag facets, clickable rows, virtualization, fuzzy search</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP11" data-status="todo"><td>CP11</td><td>B: Author pages — list and detail with model catalog and availability</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP12" data-status="todo"><td>CP12</td><td>B: Command palette over models, providers, authors, pages, actions (absorbs CM13)</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP13" data-status="todo"><td>CP13</td><td>C: Composer retool — presets to picker only, "+" becomes attachments (image, capability-gated)</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP14" data-status="todo"><td>CP14</td><td>D: Overhead timing seam + x-starport-overhead-ms header (stream and non-stream)</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP15" data-status="todo"><td>CP15</td><td>D: Overhead surfacing — Usage column, Overview p50/p99, benchmark harness, README claim</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP16" data-status="todo"><td>CP16</td><td>D: Credential resolution defects — fix silent skip, add operator-visible reasons, refresh failure detail</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP17" data-status="todo"><td>CP17</td><td>D: Failure normalization — streaming 429 not an empty 200; never cache empty completions</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP18" data-status="todo"><td>CP18</td><td>E: Console cutover — SPA default, legacy static removed, verifier green and wired into CI (absorbs CM14)</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP19" data-status="todo"><td>CP19</td><td>E: Campaign cleanup — flag removal, dead code, docs (absorbs CM15)</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP20" data-status="todo"><td>CP20</td><td>Cleanup after the final pull request merges: archive or delete this plan, proof root, index entry</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <h3 id="task-CP0">CP0 Baseline</h3>
+    <ul>
+      <li><strong>Problem:</strong> the campaign needs a pinned baseline, durable research, and a red verifier.</li>
+      <li><strong>Owning seam and paths:</strong> this plan, <code>docs/plans/proof/catalog-performance/</code>, <code>scripts/verify-catalog-performance.sh</code>.</li>
+      <li><strong>Steps:</strong> 1. Pin baseline to main after CM12 merges. 2. Create the proof root and copy the six design-review research documents into <code>proof/catalog-performance/research/</code>. 3. Author the verifier with conditions CPV01–CPV18 and record its red baseline. 4. Update the plans index README.</li>
+      <li><strong>Acceptance:</strong> verifier reports <code>Summary: 0 passed, 18 failed</code> (or its true red count with brand conditions that already hold marked); no production behavior change.</li>
+      <li><strong>Fail-before:</strong> the verifier itself is the fail-before for the whole campaign.</li>
+      <li><strong>Verification:</strong> <code>bash scripts/verify-catalog-performance.sh</code>; <code>go build ./...</code> untouched.</li>
+    </ul>
+
+    <h3 id="task-CP1">CP1 Brand sweep</h3>
+    <ul>
+      <li><strong>Problem:</strong> title-case wordmark, "Keys" nav, lowercase provider names, truncating status pills, lowercase "ttft" spend trust.</li>
+      <li><strong>Owning seam and paths:</strong> console shell and shared components (<code>console/src/components/</code>, sidebar, nav config, MetadataLine, status pill component); <code>DESIGN.md</code> tokens if the wordmark needs a type ramp entry.</li>
+      <li><strong>Steps:</strong> 1. Wordmark renders STARPORT (uppercase, tracked). 2. Nav and page title "API Keys". 3. Provider and author names render Starmap display names everywhere (one formatting helper, no per-page casing). 4. Status pills get a no-truncation treatment (full label or title attribute plus max-width fix). 5. "ttft" label becomes "TTFT".</li>
+      <li><strong>Acceptance:</strong> CPV brand conditions pass; screenshots in proof show both themes.</li>
+      <li><strong>Fail-before:</strong> grep shows <code>Keys</code> nav label and lowercase <code>ttft</code> before the change.</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console build</code>, <code>pnpm -C console test</code>, verifier, screenshots.</li>
+    </ul>
+
+    <h3 id="task-CP2">CP2 Catalog projection seam</h3>
+    <ul>
+      <li><strong>Problem:</strong> console DTOs are assembled inline in <code>internal/proxy/service.go</code>; fields are declared but never populated; the seam is untestable.</li>
+      <li><strong>Owning seam and paths:</strong> new <code>internal/catalog/view</code> package owning ModelInfo/ProviderInfo/AuthorInfo assembly from the snapshot; <code>internal/proxy</code> becomes a thin caller.</li>
+      <li><strong>Steps:</strong> 1. Create the package with the existing DTO shapes. 2. Move assembly; proxy delegates. 3. Fixture catalog + unit tests for every projection rule. 4. No wire-format change in this task.</li>
+      <li><strong>Acceptance:</strong> new <code>internal/catalog/view</code> tests pass; existing API responses byte-identical (golden test); dependency-direction verifier still green.</li>
+      <li><strong>Fail-before:</strong> a projection unit test cannot be written against proxy internals (record the attempt).</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/catalog/... ./internal/proxy/...</code>, <code>bash scripts/verify-dependency-direction.sh</code>, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP3">CP3 Widened projections</h3>
+    <ul>
+      <li><strong>Problem:</strong> the console sees one offering per model and empty provider metadata; authors, tags, lineage, cutoff, weights, reasoning/cache prices are dropped.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/catalog/view</code>, console <code>console/src/lib/api.ts</code> types.</li>
+      <li><strong>Steps:</strong> 1. ModelInfo gains author id+name, tags, lineage/family, knowledge cutoff, open-weights, and an offerings array (provider, all price dimensions, context, availability, lifecycle). 2. ProviderInfo gains description, docs URL, policy summary, headquarters. 3. Console types updated; existing pages keep rendering.</li>
+      <li><strong>Acceptance:</strong> named projection tests cover a multi-offering model and a policy-bearing provider; <code>/api/v1/models</code> returns every offering for a model served by two providers.</li>
+      <li><strong>Fail-before:</strong> test asserting a second offering fails on the old projection.</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/catalog/...</code>, curl samples into proof, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP4">CP4 Authors API</h3>
+    <ul>
+      <li><strong>Problem:</strong> 104 catalog authors are invisible to the console.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/catalog/view</code> (AuthorInfo), <code>internal/server</code> routes, <code>internal/proxy</code> service methods.</li>
+      <li><strong>Steps:</strong> 1. AuthorInfo projection (name, description, website, GitHub, HuggingFace, HQ, model ids via <code>AuthorModels</code>). 2. <code>GET /api/v1/authors</code> and <code>GET /api/v1/authors/{id}</code>. 3. Contract tests at the HTTP seam.</li>
+      <li><strong>Acceptance:</strong> both endpoints return projected data for a fixture and the live catalog; 404 contract for unknown id.</li>
+      <li><strong>Fail-before:</strong> <code>curl /api/v1/authors</code> returns 404 before the change.</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/server/... ./internal/catalog/...</code>, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP5">CP5 Logo route and fallback chain</h3>
+    <ul>
+      <li><strong>Problem:</strong> no logos anywhere; reachable IconURLs are hotlinked favicons that violate the air-gap.</li>
+      <li><strong>Owning seam and paths:</strong> gateway logo route (served from embedded interim set, then catalog payload after CP6); console <code>EntityLogo</code> component with chain: catalog/gateway SVG → tinted monochrome → two-letter initials.</li>
+      <li><strong>Steps:</strong> 1. Vendor a clean-license interim SVG set (lobe-icons MIT / simple-icons CC0) for the 15 catalog providers + major authors, with NOTICE entries. 2. <code>GET /api/v1/logos/{kind}/{id}.svg</code> with strong caching and 404 contract. 3. EntityLogo component + tests for every chain step. 4. No external URL is ever fetched.</li>
+      <li><strong>Acceptance:</strong> every provider card renders identity (logo or initials) offline; component tests cover missing-logo fallback; no network request leaves the origin.</li>
+      <li><strong>Fail-before:</strong> logo route 404s for all ids before the change.</li>
+      <li><strong>Verification:</strong> <code>go test ./...</code> logo tests, <code>pnpm -C console test</code>, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP6">CP6 Starmap v0.7.0</h3>
+    <ul>
+      <li><strong>Problem:</strong> 26 logo SVGs sit behind <code>internal/embedded</code> in Starmap and never reach consumers; offerings lack lifecycle dates.</li>
+      <li><strong>Owning seam and paths:</strong> sibling repo <code>~/src/github.com/agentstation/starmap</code>: catalog payload types, embedded catalog, release; then Starport's <code>go.mod</code> pin and logo source switch.</li>
+      <li><strong>Steps:</strong> 1. Add logo bytes to Author and Provider in the payload (schema version bump). 2. Add deprecated_at/retires_at to offerings. 3. Fill author logo coverage from clean-license sets. 4. <code>make release VERSION=0.7.0</code>. 5. Bump Starport pin; logo route prefers catalog bytes over the interim set.</li>
+      <li><strong>Acceptance:</strong> Starmap tests green; Starport builds against v0.7.0; logo route serves catalog bytes for an author absent from the interim set.</li>
+      <li><strong>Fail-before:</strong> payload round-trip test for logo bytes fails on v0.6.0 types.</li>
+      <li><strong>Verification:</strong> Starmap <code>make test</code>; Starport <code>go test ./...</code>, <code>bash scripts/verify-catalog-driven-providers.sh</code>, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP7">CP7 Providers page revamp</h3>
+    <ul>
+      <li><strong>Problem:</strong> slug chip wastes a row, status stated twice, no identity, cards are dead ends.</li>
+      <li><strong>Owning seam and paths:</strong> <code>console/src/routes/providers</code> and provider card component.</li>
+      <li><strong>Steps:</strong> 1. Compact card: logo + display name + inline muted mono slug on one row. 2. One status treatment; copy "N models · M available". 3. Cards link to <code>/providers/$id</code>. 4. Page search and sort.</li>
+      <li><strong>Acceptance:</strong> both-theme screenshots in proof; component tests for status states and copy; CPV condition passes.</li>
+      <li><strong>Fail-before:</strong> DOM shows the slug chip on its own row before the change.</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console test</code>, <code>pnpm -C console build</code>, verifier, screenshots.</li>
+    </ul>
+
+    <h3 id="task-CP8">CP8 Provider detail page</h3>
+    <ul>
+      <li><strong>Problem:</strong> no provider page exists; credential state has no fix-it path; live health is invisible.</li>
+      <li><strong>Owning seam and paths:</strong> <code>console/src/routes/providers/$id</code>; reads CP3 ProviderInfo + existing provider state APIs.</li>
+      <li><strong>Steps:</strong> 1. Identity header (logo, name, slug, links, policy chips, HQ). 2. Credential state with CTA into API Keys or env-var doc. 3. Served-models table linking to model detail. 4. Health panel: availability, circuit state, rolling latency/error rate from live routing data.</li>
+      <li><strong>Acceptance:</strong> route renders for a configured and an unconfigured provider; contract tests for both states; screenshots both themes.</li>
+      <li><strong>Fail-before:</strong> <code>/providers/groq</code> 404s in the SPA before the change.</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console test</code>, verifier, screenshots.</li>
+    </ul>
+
+    <h3 id="task-CP9">CP9 Model detail page</h3>
+    <ul>
+      <li><strong>Problem:</strong> no model card exists — the page every evaluation starts from.</li>
+      <li><strong>Owning seam and paths:</strong> <code>console/src/routes/models/$modelId</code> (encoded id); reads CP3 ModelInfo.</li>
+      <li><strong>Steps:</strong> 1. Header: name, author chip link, copyable id, context, dates, open-weights badge, tags. 2. Tiered capability chips. 3. Per-provider offering table (all price dimensions, context, availability, lifecycle) doubling as routing preview. 4. Lineage/family links, "More from author". 5. CTAs: Open in chat (seeds model), Add to comparison.</li>
+      <li><strong>Acceptance:</strong> renders a multi-offering model with the full table; Open in chat lands in chat with the model selected (test); screenshots both themes.</li>
+      <li><strong>Fail-before:</strong> model routes 404 in the SPA before the change.</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console test</code>, verifier, screenshots.</li>
+    </ul>
+
+    <h3 id="task-CP10">CP10 Models list traversal</h3>
+    <ul>
+      <li><strong>Problem:</strong> rows inert, no author dimension, table strains at 422 models.</li>
+      <li><strong>Owning seam and paths:</strong> <code>console/src/routes/models</code> list.</li>
+      <li><strong>Steps:</strong> 1. Author and tag facets alongside existing filters. 2. Clickable rows to model detail. 3. Virtualized rows. 4. Fuzzy search over id, name, author with debounce. 5. Generation banner slims to one line with a details popover.</li>
+      <li><strong>Acceptance:</strong> facet + search logic covered by unit tests (named cases: author facet, tag facet, fuzzy id match); 422-row render stays under a frame budget in a smoke check.</li>
+      <li><strong>Fail-before:</strong> author facet test fails against the old list.</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console test</code>, verifier, screenshots.</li>
+    </ul>
+
+    <h3 id="task-CP11">CP11 Author pages</h3>
+    <ul>
+      <li><strong>Problem:</strong> authors have no UI at all.</li>
+      <li><strong>Owning seam and paths:</strong> <code>console/src/routes/authors</code> and <code>authors/$id</code>; reads CP4 API.</li>
+      <li><strong>Steps:</strong> 1. Authors list (logo, name, model count, links). 2. Detail: bio, links, model catalog with availability-through-providers, cross-links.</li>
+      <li><strong>Acceptance:</strong> both routes render live catalog data; unknown author shows the 404 contract; screenshots both themes.</li>
+      <li><strong>Fail-before:</strong> <code>/authors</code> 404s in the SPA before the change.</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console test</code>, verifier, screenshots.</li>
+    </ul>
+
+    <h3 id="task-CP12">CP12 Command palette</h3>
+    <ul>
+      <li><strong>Problem:</strong> no global traversal or search; CM13 promised the palette.</li>
+      <li><strong>Owning seam and paths:</strong> console palette component (cmdk-style over shadcn), global shortcut, index sources.</li>
+      <li><strong>Steps:</strong> 1. ⌘K palette indexing models, providers, authors, pages, actions (theme, new chat). 2. Entity rows show logo + type; enter navigates. 3. Chat model-picker shortcut coexists (scoped shortcuts).</li>
+      <li><strong>Acceptance:</strong> palette finds one of each entity kind by fuzzy query (named tests); keyboard-only traversal works; CPV condition passes.</li>
+      <li><strong>Fail-before:</strong> CM verifier condition CM-V19 red (already captured).</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console test</code>, verifier, screenshots.</li>
+    </ul>
+
+    <h3 id="task-CP13">CP13 Composer retool</h3>
+    <ul>
+      <li><strong>Problem:</strong> "+" opens a presets popover; presets already live in the model picker; attachments are absent although the gateway passes image content end-to-end.</li>
+      <li><strong>Owning seam and paths:</strong> <code>console/src/components/chat/Composer.tsx</code>, model picker.</li>
+      <li><strong>Steps:</strong> 1. Remove the Insert→Presets popover. 2. "+" becomes attachments: attach image (data URL), enabled only when the selected model has image input. 3. Attached image renders as a chip and ships in the request content parts. 4. Model picker remains the single home for presets and behavior.</li>
+      <li><strong>Acceptance:</strong> image round-trip against a vision model recorded in proof; disabled state for text-only models tested; no presets popover in the DOM.</li>
+      <li><strong>Fail-before:</strong> DOM shows the presets popover on "+" before the change.</li>
+      <li><strong>Verification:</strong> <code>pnpm -C console test</code>, live round-trip capture, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP14">CP14 Overhead timing seam</h3>
+    <ul>
+      <li><strong>Problem:</strong> Starport never measures or states the latency it adds — the core trust number.</li>
+      <li><strong>Owning seam and paths:</strong> timing type in <code>internal/proxy</code> (or <code>internal/execution</code> if attempt-scoped fits better); response header injection.</li>
+      <li><strong>Steps:</strong> 1. Measure per-request overhead: total handling minus upstream wait (streams: pre-upstream + post-upstream processing). 2. Emit <code>x-starport-overhead-ms</code> on every proxied response, stream and non-stream. 3. Persist overhead per request record for CP15. 4. Contract tests with a mock upstream for both paths.</li>
+      <li><strong>Acceptance:</strong> named tests assert the header exists and excludes an injected upstream delay (mock sleeps 500ms; overhead stays &lt;50ms).</li>
+      <li><strong>Fail-before:</strong> curl shows no overhead header before the change.</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/proxy/...</code>, curl evidence into proof, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP15">CP15 Overhead surfacing and claim</h3>
+    <ul>
+      <li><strong>Problem:</strong> a measured number nobody sees builds no trust.</li>
+      <li><strong>Owning seam and paths:</strong> usage/metrics aggregation, Usage page, Overview, README, CI benchmark harness.</li>
+      <li><strong>Steps:</strong> 1. Overhead column in Usage; "Starport overhead p50/p99" stat on Overview. 2. Benchmark harness (mock upstream) producing p50/p99 in CI output. 3. README claim: "adds &lt;X ms p99 gateway overhead (excludes provider inference time)" with methodology link. 4. TTFT column where stream data exists.</li>
+      <li><strong>Acceptance:</strong> harness runs in CI and fails if p99 exceeds the stated bound; console shows both surfaces (screenshots).</li>
+      <li><strong>Fail-before:</strong> no overhead surface exists in the console before the change.</li>
+      <li><strong>Verification:</strong> benchmark run output in proof, <code>pnpm -C console test</code>, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP16">CP16 Credential resolution evidence</h3>
+    <ul>
+      <li><strong>Problem:</strong> google-ai-studio silently stays not_configured despite correct ambient vars and a correct explicit reference; refresh reports a failure count with no detail.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/config/provider_environment.go</code> resolution path; refresh report shape; admin API + console providers page reason display.</li>
+      <li><strong>Steps:</strong> 1. Reproduce and root-cause the silent skip (suspect: generation-store payload drops credential environment lists). 2. Fix resolution. 3. Every unresolved provider carries a machine-readable reason (which env vars were checked, what was missing). 4. Refresh response includes per-provider failure detail; console shows it.</li>
+      <li><strong>Acceptance:</strong> regression test: catalog provider with ambient env var resolves; unresolved provider's reason names the checked variables; live gateway configures google-ai-studio from GEMINI_API_KEY (proof capture).</li>
+      <li><strong>Fail-before:</strong> reproduction already captured in Design Review No. 2 research (proof root).</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/config/...</code>, live refresh evidence, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP17">CP17 Failure normalization and cache honesty</h3>
+    <ul>
+      <li><strong>Problem:</strong> a provider 429 on the streaming path becomes an empty 200 stream, and empty completions are cached for the full TTL.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/failure</code> normalization, streaming pipeline in <code>internal/proxy</code>, <code>internal/response/cache</code> admission.</li>
+      <li><strong>Steps:</strong> 1. Streaming pre-body provider errors propagate as proper status + error payload (parity with non-streaming). 2. Cache refuses zero-token/empty completions. 3. Contract tests for both.</li>
+      <li><strong>Acceptance:</strong> named tests: streaming 429 surfaces 429; empty completion never lands in cache; existing cache tests stay green.</li>
+      <li><strong>Fail-before:</strong> streaming-429 test fails on the old path (write it first).</li>
+      <li><strong>Verification:</strong> <code>go test ./internal/failure/... ./internal/response/... ./internal/proxy/...</code>, verifier.</li>
+    </ul>
+
+    <h3 id="task-CP18">CP18 Console cutover</h3>
+    <ul>
+      <li><strong>Problem:</strong> the SPA still hides behind STARPORT_CONSOLE_NEXT=1; legacy static console still ships; verifier not in CI.</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/server</code> console serving, flag removal, legacy asset deletion, <code>.github/workflows/ci.yml</code>.</li>
+      <li><strong>Steps:</strong> 1. SPA becomes the only console; flag removed. 2. Legacy static assets deleted. 3. <code>scripts/verify-catalog-performance.sh</code> and <code>scripts/verify-console-modernization.sh</code> reach terminal green and join CI. 4. Docs updated.</li>
+      <li><strong>Acceptance:</strong> both verifiers green in CI; no reference to the flag or legacy assets remains.</li>
+      <li><strong>Fail-before:</strong> CM-V21 red (already captured); verifier conditions for cutover red.</li>
+      <li><strong>Verification:</strong> full repository check roster from CLAUDE.md, verifier, CI run link.</li>
+    </ul>
+
+    <h3 id="task-CP19">CP19 Campaign cleanup</h3>
+    <ul>
+      <li><strong>Problem:</strong> the campaign leaves dead code, stale docs, and superseded plan state.</li>
+      <li><strong>Owning seam and paths:</strong> console and gateway dead code, <code>docs/TASKS.md</code>, <code>docs/plans/README.md</code>, <code>console-modernization-plan.html</code> archive state.</li>
+      <li><strong>Steps:</strong> 1. Remove dead code and stale flags found during the campaign. 2. Update TASKS.md and the plans index. 3. Confirm console-modernization plan is archived superseded with its proof root intact.</li>
+      <li><strong>Acceptance:</strong> repository grep finds no stale flag or dead component; index shows one active plan.</li>
+      <li><strong>Fail-before:</strong> not applicable (cleanup).</li>
+      <li><strong>Verification:</strong> greps recorded in proof, full check roster.</li>
+    </ul>
+
+    <h3 id="task-CP20">CP20 Plan cleanup</h3>
+    <ul>
+      <li><strong>Problem:</strong> a merged plan must not linger as a stale control plane.</li>
+      <li><strong>Owning seam and paths:</strong> this plan file, its proof root, the plans index.</li>
+      <li><strong>Steps:</strong> after the final PR merges, delete or archive this plan per repository convention, keep the proof root if archived.</li>
+      <li><strong>Acceptance:</strong> the index holds no active entry for this plan.</li>
+      <li><strong>Fail-before:</strong> not applicable.</li>
+      <li><strong>Verification:</strong> search the repository for the plan slug and confirm the end state.</li>
+    </ul>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/catalog-performance-plan.html to completion. This is
+a whole-plan goal, not a single-task goal. Read the plan fully, then
+read: CLAUDE.md, DESIGN.md, docs/TASKS.md, docs/ARCHITECTURE.md, and
+docs/plans/proof/catalog-performance/research/ (the Design Review No. 2
+inputs). Work in /Users/jack/src/github.com/agentstation/starport on a
+fresh branch codex/cp-&lt;n&gt;-&lt;slug&gt; per task, cut from main. CP6 also works
+in /Users/jack/src/github.com/agentstation/starmap. Chat history is not
+progress state. Resume from the status ledger, the execution log, and
+git state. If compaction happens, continue from the plan and git state
+rather than restarting. Loop: keep one task in_progress, implement at
+the owning seam, capture fail-before evidence, run the verification
+commands, commit the work, write the proof file, append the execution
+log with the work commit, mark the task terminal with evidence, commit
+the plan update, then advance to the next task. Decide rather than ask.
+Mark a wrong or already-satisfied task no-action with a one-line reason.
+Record a blocker and continue with the next eligible task. Binding
+constraints: the seven invariants in this plan; non-goals stay out.
+Commit policy: one task, one PR to main; work commit then plan commit
+(plan: &lt;ID&gt; done (PR #N); &lt;NEXT&gt; in_progress); autoreview --gate pre-pr
+--mode auto before each PR; squash-merge after CI Build is green. Stop
+only at a valid stop state from the plans skill. Before you stop, update
+the ledger and the log, and record the next action in the status line.
+The goal is met when every ledger row except CP20 is terminal, both
+verifiers are green in CI, and CP20 waits on the final merge.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-21</td><td>meta</td><td>authored</td><td>Plan authored from Design Review No. 2 (published artifact + research corpus). No implementation started by this step.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>
