@@ -356,6 +356,63 @@ func TestStreamingChatWritesUsageRecordWithProvider(t *testing.T) {
 	require.NoError(t, record.Validate())
 }
 
+func TestStreamingChatRecordsTimeToFirstToken(t *testing.T) {
+	snapshot, routeID, _ := pricedTestSnapshot(t)
+	stream := &evidenceStream{
+		snapshot: snapshot,
+		provider: "test-provider",
+		model:    routeID,
+		events: []inference.StreamEvent{
+			{Kind: inference.StreamDelta, Model: routeID, ModelUsed: routeID,
+				Deltas: []inference.ChoiceDelta{{Index: 0, Text: "ok"}}},
+			{Kind: inference.StreamUsage, Model: routeID, ModelUsed: routeID,
+				Usage: &inference.Usage{InputTokens: 5, OutputTokens: 2, TotalTokens: 7}},
+		},
+	}
+	repository := &recordingUsageRepository{}
+	capture := NewUsageCapture(repository)
+	service := capture.Wrap(&proxy{router: &usageEvidenceRouter{stream: stream}})
+
+	request := usageChatRequest()
+	request.Request.Stream = true
+	streamResponse, err := service.ProcessChatCompletionStream(context.Background(), request)
+	require.NoError(t, err)
+	// The first event arrives 30 ms after the stream opened.
+	time.Sleep(30 * time.Millisecond)
+	for {
+		_, readErr := streamResponse.Read()
+		if readErr != nil {
+			require.ErrorIs(t, readErr, io.EOF)
+			break
+		}
+	}
+	require.NoError(t, streamResponse.Close())
+	capture.Flush()
+
+	records := repository.all()
+	require.Len(t, records, 1)
+	record := records[0]
+	require.True(t, record.Streaming)
+	require.GreaterOrEqual(t, record.TTFTMS, int64(30))
+	require.LessOrEqual(t, record.TTFTMS, record.LatencyMS)
+}
+
+func TestNonStreamingChatRecordsNoTimeToFirstToken(t *testing.T) {
+	snapshot, routeID, _ := pricedTestSnapshot(t)
+	repository := &recordingUsageRepository{}
+	capture := NewUsageCapture(repository)
+	router := &usageEvidenceRouter{response: chatEvidenceResponse(routeID, snapshot, 10, 5)}
+	service := capture.Wrap(&proxy{router: router})
+
+	_, err := service.ProcessChatCompletion(context.Background(), usageChatRequest())
+	require.NoError(t, err)
+	capture.Flush()
+
+	records := repository.all()
+	require.Len(t, records, 1)
+	require.Zero(t, records[0].TTFTMS)
+}
+
 func TestStreamingCancellationRecordsCancelledStatus(t *testing.T) {
 	stream := &evidenceStream{
 		provider: "test-provider",

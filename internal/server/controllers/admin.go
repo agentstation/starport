@@ -478,6 +478,7 @@ func (h *AdminController) Metrics(w http.ResponseWriter, r *http.Request) {
 func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 	var success, failures, lastMinute, tokens, spendNanoUSD, uncosted int64
 	latencies := make([]int64, 0, len(records))
+	overheads := make([]int64, 0, len(records))
 	currency := "USD"
 
 	type providerCounters struct {
@@ -505,6 +506,7 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 			uncosted++
 		}
 		latencies = append(latencies, record.LatencyMS)
+		overheads = append(overheads, record.OverheadMS)
 
 		provider := record.Provider
 		if provider == "" {
@@ -522,6 +524,7 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 	}
 
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+	sort.Slice(overheads, func(i, j int) bool { return overheads[i] < overheads[j] })
 
 	return map[string]any{
 		fieldRequests: map[string]any{
@@ -534,6 +537,12 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 			"p50": latencyPercentile(latencies, 0.50),
 			"p95": latencyPercentile(latencies, 0.95),
 			"p99": latencyPercentile(latencies, 0.99),
+		},
+		// Gateway-added latency only: total handling minus upstream waits.
+		"overhead": map[string]any{
+			"p50": latencyPercentile(overheads, 0.50),
+			"p95": latencyPercentile(overheads, 0.95),
+			"p99": latencyPercentile(overheads, 0.99),
 		},
 		fieldTokens: map[string]any{
 			"total": tokens,

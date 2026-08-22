@@ -185,6 +185,7 @@ type usageCaptureStream struct {
 	record  usage.Record
 	start   time.Time
 	timer   *execution.OverheadTimer
+	ttft    time.Duration
 
 	usage     *inference.Usage
 	modelUsed string
@@ -194,6 +195,9 @@ type usageCaptureStream struct {
 func (s *usageCaptureStream) Read() (*inference.StreamEvent, error) {
 	event, err := s.stream.Read()
 	if event != nil {
+		if s.ttft == 0 {
+			s.ttft = time.Since(s.start)
+		}
 		if event.Usage != nil {
 			latched := *event.Usage
 			s.usage = &latched
@@ -260,6 +264,9 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.CacheStatus)
 		if s.timer != nil {
 			record.OverheadMS = s.timer.OverheadMS()
+		}
+		if s.ttft > 0 {
+			record.TTFTMS = s.ttft.Milliseconds()
 		}
 		s.capture.submit(record)
 	})

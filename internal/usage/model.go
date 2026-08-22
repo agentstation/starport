@@ -82,6 +82,9 @@ type Record struct {
 	// OverheadMS is the gateway-added latency: total handling time
 	// minus upstream provider waits.
 	OverheadMS     int64     `json:"overhead_ms,omitempty"`
+	// TTFTMS is the time from request start to the first stream event.
+	// Only streamed requests carry it.
+	TTFTMS         int64     `json:"ttft_ms,omitempty"`
 	Attempts       int       `json:"attempts,omitempty"`
 	CacheStatus    string    `json:"cache_status,omitempty"`
 
