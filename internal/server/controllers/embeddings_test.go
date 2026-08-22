@@ -45,6 +45,14 @@ func (m *mockEmbeddings) ListProviders(context.Context) (*proxy.ProvidersRespons
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockEmbeddings) ListAuthors(context.Context) (*proxy.AuthorsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockEmbeddings) GetAuthor(context.Context, string) (*proxy.AuthorInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockEmbeddings) GetModelEndpoints(context.Context, string) (*proxy.ModelEndpointsResponse, error) {
 	return nil, errors.New("not implemented")
 }

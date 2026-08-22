@@ -498,6 +498,49 @@ func (p *proxy) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	return &ProvidersResponse{Providers: providerInfosFromRuntime(runtime)}, nil
 }
 
+// ListAuthors returns catalog author information
+func (p *proxy) ListAuthors(ctx context.Context) (*AuthorsResponse, error) {
+	snapshot, release, err := p.acquireSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return &AuthorsResponse{Authors: view.Authors(snapshot)}, nil
+}
+
+// GetAuthor returns one catalog author by ID
+func (p *proxy) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error) {
+	snapshot, release, err := p.acquireSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	author, ok := view.AuthorByID(snapshot, authorID)
+	if !ok {
+		return nil, &ProviderError{Code: "not_found", Message: "Author not found"}
+	}
+	return &author, nil
+}
+
+// acquireSnapshot leases the runtime and returns its catalog snapshot with
+// a release func that is always safe to defer.
+func (p *proxy) acquireSnapshot(ctx context.Context) (*runtimecatalog.RoutableSnapshot, func(), error) {
+	runtime, owned, err := p.acquireRuntime(ctx)
+	if err != nil {
+		return nil, nil, runtimecatalog.ErrCatalogRequired
+	}
+	release := func() {}
+	if owned {
+		release = runtime.Release
+	}
+	snapshot := runtime.Snapshot()
+	if snapshot == nil {
+		release()
+		return nil, nil, runtimecatalog.ErrCatalogRequired
+	}
+	return snapshot, release, nil
+}
+
 func providerInfosFromRuntime(runtime connectors.RuntimeLease) []ProviderInfo {
 	if runtime == nil {
 		return nil

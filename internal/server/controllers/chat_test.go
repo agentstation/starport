@@ -47,6 +47,14 @@ func (m *mockProxy) ListProviders(context.Context) (*proxy.ProvidersResponse, er
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockProxy) ListAuthors(context.Context) (*proxy.AuthorsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockProxy) GetAuthor(context.Context, string) (*proxy.AuthorInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockProxy) GetModelEndpoints(context.Context, string) (*proxy.ModelEndpointsResponse, error) {
 	return nil, errors.New("not implemented")
 }

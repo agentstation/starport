@@ -62,6 +62,10 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Providers metadata
 		r.With(s.requireAnyScope("models:read")).Get("/providers", s.controllers.Providers.List)
 
+		// Catalog authors
+		r.With(s.requireAnyScope("models:read")).Get("/authors", s.controllers.Authors.List)
+		r.With(s.requireAnyScope("models:read")).Get("/authors/{author}", s.controllers.Authors.Get)
+
 		// Catalog freshness and changes
 		r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Metadata)
 		r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
@@ -172,6 +176,8 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   GET  /api/v1/models/{model}             - Get model details with metadata
 //   GET  /api/v1/models/{model}/endpoints   - List provider endpoints for model
 //   GET  /api/v1/providers                  - List available providers
+//   GET  /api/v1/authors                    - List catalog authors
+//   GET  /api/v1/authors/{author}           - Get catalog author details
 //   GET  /api/v1/activity                   - List request activity for the authenticated key
 //
 // Preset Management:

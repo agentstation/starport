@@ -19,6 +19,7 @@ type Controllers struct {
 	Models               *ModelsController
 	OpenRouterModels     *ModelsController
 	Providers            *ProvidersController
+	Authors              *AuthorsController
 	ProviderKeys         *ProviderKeysController
 	Activity             *ActivityController
 	Admin                *AdminController
@@ -53,6 +54,7 @@ func NewControllers(cfg Config) *Controllers {
 		Models:               NewModelsController(cfg.Service),
 		OpenRouterModels:     NewOpenRouterModelsController(cfg.Service),
 		Providers:            NewProvidersController(cfg.Service),
+		Authors:              NewAuthorsController(cfg.Service),
 		ProviderKeys:         NewProviderKeysController(cfg.ProviderKeys, cfg.Usage),
 		Activity:             NewActivityController(cfg.Usage),
 		Admin:                NewAdminController(cfg.Identities, cfg.Usage),
