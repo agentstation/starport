@@ -29,6 +29,11 @@ search and sort, and whole-card links into a provider detail route.
   for nested detail paths. Fail-before: `GET /providers/groq` on the
   running gateway returned the JSON `not_found_error` body.
 - `console/src/lib/api.ts`: `ProviderCatalogEntry.docs_url`.
+- `availableOfferings`: the available count now reads the circuit
+  states the gateway actually reports (`healthy` and `half_open` admit
+  attempts; `open` and `unavailable` reject). The page previously
+  compared against a nonexistent `"available"` state, so every card
+  showed "0 available" against 613 live healthy offerings.
 - `scripts/verify-catalog-performance.sh`: `either_file` accepts any
   number of candidates; CPV07 accepts the un-nested route spelling.
 
@@ -40,11 +45,12 @@ search and sort, and whole-card links into a provider detail route.
 
 ## Gates
 
-- `pnpm -C console test` — 15 passed (9 new ProviderCard tests: inline
-  slug placement with chip-style regression guard, "N models · M
-  available" copy, whole-card href, single-status treatment,
+- `pnpm -C console test` — 16 passed (10 new ProviderCard tests:
+  inline slug placement with chip-style regression guard, "N models ·
+  M available" copy, whole-card href, single-status treatment,
   no-credential and invalid-credential states, fault-only adapter dot,
-  catalog card, credentialRank ordering)
+  catalog card, credentialRank ordering, circuit-state availability
+  counting)
 - `pnpm -C console typecheck` and `pnpm -C console build` — clean
 - `go test ./...` — ok (new `TestSPAHandlerServesIndexForNestedPagePaths`)
 - `go vet ./...` — clean; `make lint` — 0 issues; `make build` — ok

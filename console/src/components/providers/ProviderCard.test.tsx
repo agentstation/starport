@@ -5,7 +5,12 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import type { ProviderCatalogEntry, ProviderRuntimeStatus } from "@/lib/api";
 
-import { CatalogProviderCard, ProviderCard, credentialRank } from "./ProviderCard";
+import {
+  availableOfferings,
+  CatalogProviderCard,
+  credentialRank,
+  ProviderCard,
+} from "./ProviderCard";
 
 // The cards are unit-tested outside a live router: Link renders as a
 // plain anchor whose href is the resolved path, which is exactly the
@@ -53,9 +58,9 @@ function runtime(
     adapter: { state: "ready" },
     operator_credential: { state: "ready", usable: true },
     offerings: [
-      { provider_model_id: "a", state: "available" },
-      { provider_model_id: "b", state: "available" },
-      { provider_model_id: "c", state: "unavailable" },
+      { provider_model_id: "a", state: "healthy" },
+      { provider_model_id: "b", state: "half_open" },
+      { provider_model_id: "c", state: "open" },
     ],
     ...overrides,
   };
@@ -150,6 +155,18 @@ test("catalog card links and counts models without runtime status", () => {
     "/providers/groq",
   );
   expect(screen.getByText("2 models")).toBeDefined();
+});
+
+test("counts circuit states that admit attempts as available", () => {
+  expect(
+    availableOfferings([
+      { provider_model_id: "a", state: "healthy" },
+      { provider_model_id: "b", state: "half_open" },
+      { provider_model_id: "c", state: "open" },
+      { provider_model_id: "d", state: "unavailable" },
+    ]),
+  ).toBe(2);
+  expect(availableOfferings(undefined)).toBe(0);
 });
 
 test("ranks usable credentials first and missing credentials last", () => {

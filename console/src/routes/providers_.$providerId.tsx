@@ -3,7 +3,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
-import { CredentialPill } from "@/components/providers/ProviderCard";
+import {
+  availableOfferings,
+  CredentialPill,
+} from "@/components/providers/ProviderCard";
 import { listProviderCatalog, providerStatus } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
 import { useHasApiKey } from "@/lib/useApiKey";
@@ -34,9 +37,7 @@ function ProviderDetailPage() {
     (candidate) => candidate.provider_id === providerId,
   );
   const offerings = runtime?.offerings ?? [];
-  const available = offerings.filter(
-    (offering) => offering.state === "available",
-  ).length;
+  const available = availableOfferings(offerings);
   const name = providerLabel(providerId, entry?.name);
 
   if (catalog.isPending && !entry) {

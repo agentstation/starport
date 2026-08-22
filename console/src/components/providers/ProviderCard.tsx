@@ -55,6 +55,16 @@ function AdapterFault({ state }: { state: string }) {
   );
 }
 
+// An offering is available when its circuit admits attempts: healthy,
+// or half_open while it probes recovery. Open and unavailable reject.
+export function availableOfferings(
+  offerings: ProviderRuntimeStatus["offerings"],
+): number {
+  return (offerings ?? []).filter(
+    (offering) => offering.state === "healthy" || offering.state === "half_open",
+  ).length;
+}
+
 export function ProviderCard({
   status,
   entry,
@@ -64,9 +74,7 @@ export function ProviderCard({
 }) {
   const credential = status.operator_credential;
   const offerings = status.offerings ?? [];
-  const available = offerings.filter(
-    (offering) => offering.state === "available",
-  ).length;
+  const available = availableOfferings(offerings);
   const description = entry?.description;
   const credentialReason =
     credential &&
