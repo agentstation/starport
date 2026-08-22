@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { SidePanel } from "@/components/ui/SidePanel";
 import {
+  accessMessage,
   ApiError,
   catalogChanges,
   type CatalogChanges,
@@ -64,7 +65,7 @@ function ChangesBody() {
     const error = changes.error;
     const message =
       error instanceof ApiError && error.needsKey
-        ? "Catalog changes need a key with the models:read scope."
+        ? accessMessage(error, "models:read")
         : `Failed to load catalog changes: ${error.message}`;
     return <p className="text-base text-text-3">{message}</p>;
   }

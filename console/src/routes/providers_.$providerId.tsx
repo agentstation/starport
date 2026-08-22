@@ -22,7 +22,7 @@ import {
   providerStatus,
 } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/providers_/$providerId")({
   component: ProviderDetailPage,
@@ -30,18 +30,18 @@ export const Route = createFileRoute("/providers_/$providerId")({
 
 function ProviderDetailPage() {
   const { providerId } = Route.useParams();
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
 
   const catalog = useQuery({
     queryKey: ["provider-catalog"],
     queryFn: listProviderCatalog,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const status = useQuery({
     queryKey: ["provider-status"],
     queryFn: providerStatus,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 
@@ -63,7 +63,7 @@ function ProviderDetailPage() {
       }
       return listActivity(filters);
     },
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 

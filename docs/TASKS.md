@@ -14,11 +14,13 @@ Last Updated: 2026-08-22
   gateway overhead (`x-starport-overhead-ms`), sweep the brand
   (STARPORT wordmark, API Keys, TTFT), fix the four gateway defects
   from Design Review No. 2, and cut the SPA over as the only console.
-  Absorbs CM13–CM15. Status lives in the plan ledger; CP0–CP18 are
-  done. The SPA is now the only console (CP18), the campaign verifier
+  Absorbs CM13–CM15. Status lives in the plan ledger.
+  The SPA is now the only console (CP18), the campaign verifier
   `scripts/verify-catalog-performance.sh` is terminal at 20/20, and
-  both campaign verifiers run in CI. CP19 (campaign cleanup) is in
-  progress; CP20 closes the campaign.
+  both campaign verifiers run in CI. CP0–CP19 are done. CP20 fixes the
+  development-runtime catalog refresh — the generation payload is
+  chunked so it fits an in-memory store, and the console tells a stale
+  key (401) apart from a missing scope (403). CP21 closes the campaign.
 - **Console modernization (CM)** — `superseded(catalog-performance-plan)`.
   CM0–CM12 shipped the React SPA console; the campaign carried the last
   three tasks (CM13→CP12, CM14→CP18, CM15→CP19).

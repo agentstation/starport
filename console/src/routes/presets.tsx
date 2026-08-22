@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
+  accessMessage,
   ApiError,
   createPreset,
   deletePreset,
@@ -26,7 +27,7 @@ import {
   type PresetProviderPreferences,
 } from "@/lib/api";
 import { formatRelativeTime } from "@/lib/format";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/presets")({
   component: PresetsPage,
@@ -572,7 +573,7 @@ type ModalState =
   | null;
 
 function PresetsPage() {
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<ModalState>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
@@ -584,7 +585,7 @@ function PresetsPage() {
   const presets = useQuery({
     queryKey: ["presets"],
     queryFn: listPresets,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 
@@ -597,7 +598,7 @@ function PresetsPage() {
   const reload = () =>
     queryClient.invalidateQueries({ queryKey: ["presets"] });
 
-  if (!hasKey) {
+  if (!keyUsable) {
     return (
       <div className="flex flex-col gap-4">
         <Header />
@@ -612,8 +613,7 @@ function PresetsPage() {
     if (presets.error instanceof ApiError && presets.error.needsKey) {
       body = (
         <p className="text-base text-text-3">
-          Preset management needs a key with the presets:write scope. Update
-          it in Settings.
+          {accessMessage(presets.error, "presets:write")}
         </p>
       );
     } else if (

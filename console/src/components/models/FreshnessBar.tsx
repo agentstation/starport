@@ -3,7 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ChangesPanel } from "@/components/models/ChangesPanel";
-import { ApiError, catalogMetadata, refreshCatalog } from "@/lib/api";
+import { accessMessage, ApiError, catalogMetadata, refreshCatalog } from "@/lib/api";
 import { formatRelativeTime, shortGenerationID } from "@/lib/format";
 
 // A catalog older than a week is worth flagging: an embedded bootstrap
@@ -72,7 +72,7 @@ export function FreshnessBar() {
       await queryClient.invalidateQueries({ queryKey: ["catalog-metadata"] });
     } catch (error) {
       if (error instanceof ApiError && error.needsKey) {
-        say("Catalog refresh needs an admin-scoped key", true);
+        say(accessMessage(error, "admin"), true);
       } else {
         say(`Refresh failed: ${error instanceof Error ? error.message : error}`, true);
       }

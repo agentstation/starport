@@ -34,7 +34,7 @@ import {
   formatRelativeTime,
   providerLabel,
 } from "@/lib/format";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 const PAGE_LIMIT = 200;
 // Pages fetched eagerly so the charts and counts cover the window, not
@@ -431,10 +431,10 @@ function Header() {
 }
 
 function UsagePage() {
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const scope = useActivityScope(hasKey);
+  const scope = useActivityScope(keyUsable);
   const admin = scope.data === "admin";
 
   const range = search.range ?? "24h";
@@ -583,7 +583,7 @@ function UsagePage() {
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
-  if (!hasKey) {
+  if (!keyUsable) {
     return (
       <div className="flex flex-col gap-4">
         <Header />

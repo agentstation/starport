@@ -12,7 +12,7 @@ import {
 } from "@/components/models/ModelDetail";
 import { listModels, providerStatus } from "@/lib/api";
 import { formatContext } from "@/lib/format";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/models_/$modelId")({
   component: ModelDetailPage,
@@ -44,18 +44,18 @@ function CopyableId({ id }: { id: string }) {
 
 function ModelDetailPage() {
   const { modelId } = Route.useParams();
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
 
   const models = useQuery({
     queryKey: ["models"],
     queryFn: listModels,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const status = useQuery({
     queryKey: ["provider-status"],
     queryFn: providerStatus,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 

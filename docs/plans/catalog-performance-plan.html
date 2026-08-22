@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 7e71726 ·
     Proof root: <code>proof/catalog-performance/</code> ·
-    Next action: CP20 — Plan cleanup once the final pull request merges: delete both plans, both proof roots, and the index entries
+    Next action: CP20 — Development-runtime catalog refresh defect: chunked generation payload and the 401/403 split, then CP21 plan cleanup
   </p>
 
   <section id="outcome">
@@ -290,7 +290,8 @@
         <tr id="CP17" data-status="done"><td>CP17</td><td>D: Failure normalization — streaming 429 not an empty 200; never cache empty completions</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp17.md">cp17.md</a> — stream codecs surface in-stream error frames, router reads first event during establishment, cache refuses empty completions; live burst 429 honest, CPV20, 12 new contract tests with fail-before evidence</td></tr>
         <tr id="CP18" data-status="done"><td>CP18</td><td>E: Console cutover — SPA default, legacy static removed, verifier green and wired into CI (absorbs CM14)</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp18.md">cp18.md</a> — SPA only console, Next/Title/Theme config removed, legacy assets deleted, CM 21/21 + CPV 20/20 + ORP 16/16, both verifiers wired into CI, live: / serves SPA, /static/* 404</td></tr>
         <tr id="CP19" data-status="done"><td>CP19</td><td>E: Campaign cleanup — flag removal, dead code, docs (absorbs CM15)</td><td><code>done</code></td><td>deadcode 43 unreachable to 0; build, vet, and <code>go test ./...</code> (40 packages) clean; CPV 20/20, CM 21/21, ORP 16/16; lint 0 issues; live activity records keep <code>latency_ms</code>, <code>ttft_ms</code>, and <code>overhead_ms</code>; <a href="proof/catalog-performance/cp19.md">cp19.md</a></td></tr>
-        <tr id="CP20" data-status="in_progress"><td>CP20</td><td>Cleanup after the final pull request merges: archive or delete this plan, proof root, index entry</td><td><code>in_progress</code></td><td></td></tr>
+        <tr id="CP20" data-status="in_progress"><td>CP20</td><td>E: Development-runtime catalog refresh defect — chunk the generation payload; split 401 from 403 in the console</td><td><code>in_progress</code></td><td></td></tr>
+        <tr id="CP21" data-status="pending"><td>CP21</td><td>Cleanup after the final pull request merges: archive or delete this plan, proof root, index entry</td><td><code>pending</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -498,7 +499,17 @@
       <li><strong>Verification:</strong> greps recorded in proof, full check roster.</li>
     </ul>
 
-    <h3 id="task-CP20">CP20 Plan cleanup</h3>
+    <h3 id="task-CP20">CP20 Development-runtime catalog refresh</h3>
+    <ul>
+      <li><strong>Problem:</strong> the console Refresh catalog button returned HTTP 500 for every catalog under <code>starport dev</code>. The generation store wrote the whole encoded generation (about 11 MB) as one key-value pair, and Badger caps an in-memory value at 1 MiB. Development also disables refresh on start and the refresh interval, so the button was the only trigger and it always failed. A second capability rode on the same defect: <code>/api/v1/catalog/changes</code> needs two accepted generations, which development could never reach. The console then reported the failure as <code>Refresh needs an admin-scoped key</code> on any credential error, so a stale key (401) read as a missing permission (403).</li>
+      <li><strong>Owning seam and paths:</strong> <code>internal/catalog/generation_payload.go</code>, <code>internal/catalog/generation_store.go</code>, <code>console/src/lib/api.ts</code>, <code>console/src/lib/useApiKey.ts</code>, <code>console/src/components/overview/ConnectCard.tsx</code>, the six console message sites.</li>
+      <li><strong>Steps:</strong> 1. Content-address and chunk the generation payload so no value exceeds 256 KiB on any backend. 2. Compare generations by digest instead of reading the payload back. 3. Split 401 from 403 in the console client and route a rejection to a reconnect prompt.</li>
+      <li><strong>Acceptance:</strong> a generation larger than the in-memory value limit commits and reads back; no stored value exceeds the chunk size; the live development gateway answers the refresh with HTTP 200; 401 and 403 carry separate messages.</li>
+      <li><strong>Fail-before:</strong> refresh returned HTTP 500 with <code>Value with size 11544986 exceeded 1048576 limit</code>; the new Go tests fail against the unchunked store.</li>
+      <li><strong>Verification:</strong> full check roster, console tests, live refresh against the development gateway, rendered proof shots.</li>
+    </ul>
+
+    <h3 id="task-CP21">CP21 Plan cleanup</h3>
     <ul>
       <li><strong>Problem:</strong> a merged plan must not linger as a stale control plane.</li>
       <li><strong>Owning seam and paths:</strong> this plan file, its proof root, the plans index.</li>
@@ -533,8 +544,8 @@ Commit policy: one task, one PR to main; work commit then plan commit
 --mode auto before each PR; squash-merge after CI Build is green. Stop
 only at a valid stop state from the plans skill. Before you stop, update
 the ledger and the log, and record the next action in the status line.
-The goal is met when every ledger row except CP20 is terminal, both
-verifiers are green in CI, and CP20 waits on the final merge.</code></pre>
+The goal is met when every ledger row except CP21 is terminal, both
+verifiers are green in CI, and CP21 waits on the final merge.</code></pre>
   </section>
 
   <section id="execution-log">
@@ -547,6 +558,7 @@ verifiers are green in CI, and CP20 waits on the final merge.</code></pre>
       </thead>
       <tbody>
         <tr><td>2026-08-21</td><td>meta</td><td>authored</td><td>Plan authored from Design Review No. 2 (published artifact + research corpus). No implementation started by this step.</td></tr>
+        <tr><td>2026-08-22</td><td>CP20</td><td>added</td><td>Added ahead of cleanup after a live report: the console Refresh catalog button failed for every catalog under <code>starport dev</code>. Cleanup renumbered to CP21.</td></tr>
       </tbody>
     </table>
   </section>

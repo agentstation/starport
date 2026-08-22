@@ -10,6 +10,7 @@ import {
   credentialRank,
 } from "@/components/providers/ProviderCard";
 import {
+  accessMessage,
   ApiError,
   listProviderCatalog,
   providerStatus,
@@ -18,7 +19,7 @@ import {
   type ProviderRuntimeStatus,
 } from "@/lib/api";
 import { providerLabel } from "@/lib/format";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/providers")({
   component: ProvidersPage,
@@ -91,7 +92,7 @@ function CatalogOnly({
 }
 
 function ProvidersPage() {
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
@@ -105,13 +106,13 @@ function ProvidersPage() {
   const status = useQuery({
     queryKey: ["provider-status"],
     queryFn: providerStatus,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const catalog = useQuery({
     queryKey: ["provider-catalog"],
     queryFn: listProviderCatalog,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 
@@ -152,7 +153,7 @@ function ProvidersPage() {
       await queryClient.invalidateQueries({ queryKey: ["provider-status"] });
     } catch (error) {
       if (error instanceof ApiError && error.needsKey) {
-        say("Refresh needs an admin-scoped key", true);
+        say(accessMessage(error, "admin"), true);
       } else {
         say(
           `Refresh failed: ${error instanceof Error ? error.message : error}`,
@@ -164,7 +165,7 @@ function ProvidersPage() {
     }
   };
 
-  if (!hasKey) {
+  if (!keyUsable) {
     return (
       <div className="flex flex-col gap-4">
         <Header />

@@ -70,7 +70,7 @@ func (s *GenerationStore) Current(ctx context.Context) (catalogs.Generation, err
 
 // Get returns one immutable generation by ID.
 func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalogs.Generation, error) {
-	encoded, err := s.store.Get(ctx, catalogGenerationKey(generationID))
+	stored, err := s.store.Get(ctx, catalogGenerationKey(generationID))
 	if err != nil {
 		if stderrors.Is(err, storage.ErrNotFound) {
 			return catalogs.Generation{}, &starmaperrors.NotFoundError{
@@ -78,6 +78,14 @@ func (s *GenerationStore) Get(ctx context.Context, generationID string) (catalog
 			}
 		}
 		return catalogs.Generation{}, fmt.Errorf("read catalog generation %q: %w", generationID, err)
+	}
+	record, err := decodeGenerationRecord(stored, generationID)
+	if err != nil {
+		return catalogs.Generation{}, err
+	}
+	encoded, err := readGenerationPayload(ctx, s.store, record, generationID)
+	if err != nil {
+		return catalogs.Generation{}, err
 	}
 	var generation catalogs.Generation
 	if err := json.Unmarshal(encoded, &generation); err != nil {
@@ -109,8 +117,17 @@ func (s *GenerationStore) Commit(
 	if err != nil {
 		return fmt.Errorf("encode catalog generation %q: %w", generation.Manifest.GenerationID, err)
 	}
+	record, chunks := encodeGenerationPayload(encoded)
+	if err := writeGenerationChunks(ctx, s.store, chunks); err != nil {
+		return fmt.Errorf("store catalog generation %q payload: %w", generation.Manifest.GenerationID, err)
+	}
+	encodedRecord, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("encode catalog generation record %q: %w", generation.Manifest.GenerationID, err)
+	}
+
 	generationKey := catalogGenerationKey(generation.Manifest.GenerationID)
-	if err := s.store.CompareAndSwap(ctx, generationKey, nil, encoded); err != nil {
+	if err := s.store.CompareAndSwap(ctx, generationKey, nil, encodedRecord); err != nil {
 		if !stderrors.Is(err, storage.ErrConflict) {
 			return fmt.Errorf("store catalog generation %q: %w", generation.Manifest.GenerationID, err)
 		}
@@ -118,7 +135,7 @@ func (s *GenerationStore) Commit(
 		if readErr != nil {
 			return fmt.Errorf("read existing catalog generation %q: %w", generation.Manifest.GenerationID, readErr)
 		}
-		if !bytes.Equal(existing, encoded) {
+		if !sameGenerationContent(existing, record, generation.Manifest.GenerationID) {
 			return &starmaperrors.ConflictError{
 				Resource: catalogGenerationResource,
 				Expected: generation.Manifest.GenerationID,
