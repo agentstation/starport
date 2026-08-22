@@ -54,12 +54,6 @@ func withTestStore(store storage.KVStore) testServerOption {
 	return func(config *testServerConfig) { config.store = store }
 }
 
-func withTestMasterKey(masterKey []byte) testServerOption {
-	return func(config *testServerConfig) {
-		config.masterKey = append([]byte(nil), masterKey...)
-	}
-}
-
 func withTestProviderOperations(operations controllers.ProviderOperations) testServerOption {
 	return func(config *testServerConfig) { config.providerOperations = operations }
 }

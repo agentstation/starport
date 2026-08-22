@@ -65,12 +65,6 @@ func (l *Loader) WithEnvFiles(files ...string) *Loader {
 	return l
 }
 
-// WithPrefix sets the environment variable prefix.
-func (l *Loader) WithPrefix(prefix string) *Loader {
-	l.prefix = prefix
-	return l
-}
-
 // WithEnvironment replaces the process environment source.
 func (l *Loader) WithEnvironment(values map[string]string) *Loader {
 	copyValues := make(map[string]string, len(values))
@@ -216,13 +210,4 @@ func LoadWithDefaults(ctx context.Context) (*Config, error) {
 // file and applies the guarded development runtime contract.
 func LoadDevelopment(ctx context.Context) (*Config, error) {
 	return NewLoader().WithEnvFiles().LoadDevelopment(ctx)
-}
-
-// MustLoad loads configuration and panics if loading fails.
-func MustLoad(ctx context.Context) *Config {
-	cfg, err := LoadWithDefaults(ctx)
-	if err != nil {
-		panic(fmt.Sprintf("load configuration: %v", err))
-	}
-	return cfg
 }

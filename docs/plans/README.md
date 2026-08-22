@@ -10,21 +10,24 @@
   the SPA over as the only console. Absorbs CM13–CM15 from the console
   modernization plan. Verifier: `scripts/verify-catalog-performance.sh`.
   Proof root: `proof/catalog-performance/`.
+
+## Superseded
+
 - [Starport console modernization](console-modernization-plan.html) —
-  rebuild the embedded console as a React SPA (Vite 8, React 19,
+  rebuilt the embedded console as a React SPA (Vite 8, React 19,
   Tailwind 4, shadcn/ui, TanStack, Streamdown) driven by the `DESIGN.md`
-  design system, move the chat model picker into the composer, and
-  delete the legacy static console. CM0–CM12 delivered; becomes
-  `superseded(catalog-performance-plan)` when CM12 merges (CM13→CP12,
-  CM14→CP18, CM15→CP19). Verifier:
-  `scripts/verify-console-modernization.sh`. Proof root:
-  `proof/console-modernization/`.
+  design system, and moved the chat model picker into the composer.
+  CM0–CM12 delivered. The plan became
+  `superseded(catalog-performance-plan)` when CM12 merged; the campaign
+  carried its last three tasks (CM13→CP12, CM14→CP18, CM15→CP19).
+  Verifier: `scripts/verify-console-modernization.sh`, terminal at
+  21/21 and running in CI. Proof root: `proof/console-modernization/`.
 
 ## Order
 
-The catalog, performance, and brand campaign is active. The CM12
-closeout on the console modernization plan runs in parallel; when its
-PR merges, that plan becomes `superseded(catalog-performance-plan)`.
+The catalog, performance, and brand campaign is the one active plan.
+Its cleanup task (CP20) deletes both plans, both proof roots, and this
+index when the campaign's final pull request merges.
 
 ## Proposed
 

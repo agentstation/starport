@@ -103,11 +103,6 @@ func validationError(field, message string) error {
 	return &ValidationError{Field: field, Message: message}
 }
 
-// NormalizeModelID preserves provider-scoped and canonical model IDs.
-func NormalizeModelID(modelID string) string {
-	return modelID
-}
-
 // ExtractProviderFromModel extracts a provider-scoped model ID.
 func ExtractProviderFromModel(modelID string) (provider, model string) {
 	provider, model, ok := runtimecatalog.SplitModelID(modelID)

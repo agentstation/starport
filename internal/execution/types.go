@@ -5,7 +5,6 @@ package execution
 import (
 	"context"
 	"errors"
-	"io"
 	"time"
 
 	"github.com/agentstation/starport/internal/failure"
@@ -239,9 +238,4 @@ func (e *Error) Unwrap() error {
 // Is preserves the terminal budget reason for errors.Is.
 func (e *Error) Is(target error) bool {
 	return e != nil && e.Reason != nil && errors.Is(e.Reason, target)
-}
-
-// IsStreamTerminal reports stream completion without treating it as failure.
-func IsStreamTerminal(err error) bool {
-	return errors.Is(err, io.EOF)
 }

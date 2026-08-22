@@ -31,9 +31,6 @@ type Config struct {
 	// CacheConfig configures caching behavior (optional)
 	CacheConfig *CacheConfig
 
-	// Middlewares to apply to the proxy service
-	Middlewares []Middleware
-
 	// TokenEstimator synthesizes estimated usage for streams that end
 	// without provider-reported usage (optional)
 	TokenEstimator *tokenize.Estimator
@@ -47,22 +44,6 @@ func WithCache(manager CacheManager, config *CacheConfig) Option {
 	return func(c *Config) {
 		c.CacheManager = manager
 		c.CacheConfig = config
-	}
-}
-
-// WithCacheConfig sets custom cache configuration.
-// If a cache manager is not provided separately, a default one will be created.
-func WithCacheConfig(config *CacheConfig) Option {
-	return func(c *Config) {
-		c.CacheConfig = config
-	}
-}
-
-// WithMiddleware adds a middleware to the proxy service.
-// Middlewares are applied in the order they are added.
-func WithMiddleware(m Middleware) Option {
-	return func(c *Config) {
-		c.Middlewares = append(c.Middlewares, m)
 	}
 }
 
@@ -86,12 +67,6 @@ func WithTokenEstimator(estimator *tokenize.Estimator) Option {
 //	proxy := proxy.New(registry, router,
 //	    proxy.WithCache(cacheManager, cacheConfig),
 //	)
-//
-//	// Proxy with custom middleware
-//	proxy := proxy.New(registry, router,
-//	    proxy.WithMiddleware(loggingMiddleware),
-//	    proxy.WithMiddleware(metricsMiddleware),
-//	)
 func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ...Option) Proxy {
 	// Initialize config with required dependencies
 	cfg := &Config{
@@ -111,14 +86,7 @@ func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ..
 		estimator: cfg.TokenEstimator,
 	}
 
-	// Build the proxy with middleware chain
 	var p Proxy = core
-
-	// Apply custom middlewares in reverse order so the first middleware
-	// added is the outermost (called first)
-	for i := len(cfg.Middlewares) - 1; i >= 0; i-- {
-		p = cfg.Middlewares[i].Wrap(p)
-	}
 
 	// Add cache middleware if configured
 	if cfg.CacheManager != nil && cfg.CacheConfig != nil {
@@ -131,21 +99,6 @@ func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ..
 	}
 
 	return p
-}
-
-// NewFromConfig creates a new proxy service from a configuration struct.
-// This is useful when you have a pre-built configuration.
-func NewFromConfig(config *Config) Proxy {
-	if config.Registry == nil || config.Router == nil {
-		panic("proxy: Registry and Router are required")
-	}
-
-	return New(config.Registry, config.Router,
-		WithCache(config.CacheManager, config.CacheConfig),
-		func(c *Config) {
-			c.Middlewares = config.Middlewares
-		},
-	)
 }
 
 func transformProviderPreferences(prefs *ProviderPreferences) *router.ProviderPreferences {
