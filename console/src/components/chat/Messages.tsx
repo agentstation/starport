@@ -414,6 +414,18 @@ export function UserMessage({
 
   return (
     <div className="group flex flex-col items-end">
+      {(message.images ?? []).length > 0 && (
+        <div className="mb-1.5 flex max-w-[85%] flex-wrap justify-end gap-1.5">
+          {(message.images ?? []).map((url, index) => (
+            <img
+              key={`${index}-${url.slice(-24)}`}
+              src={url}
+              alt={`Attachment ${index + 1}`}
+              className="max-h-48 max-w-64 rounded-lg border border-border-1 object-cover"
+            />
+          ))}
+        </div>
+      )}
       <div className="max-w-[85%] whitespace-pre-wrap rounded-xl bg-bg-raised px-4 py-2.5 text-base text-text-1">
         {message.content}
       </div>

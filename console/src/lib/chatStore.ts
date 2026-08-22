@@ -55,6 +55,9 @@ export type ChatStats = {
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  // Attached images on a user turn, as data URLs. Absent on legacy
+  // records and on text-only turns.
+  images?: string[];
   reasoning?: string;
   // The routed model that produced an assistant turn.
   model?: string;
@@ -63,6 +66,26 @@ export type ChatMessage = {
   stopped?: boolean;
   reasoningMs?: number;
 };
+
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+// messageContent builds the request content for one turn: the plain
+// string without attachments (legacy shape), content parts with them.
+export function messageContent(
+  message: Pick<ChatMessage, "content" | "images">,
+): string | ContentPart[] {
+  const images = message.images ?? [];
+  if (!images.length) return message.content;
+  return [
+    { type: "text" as const, text: message.content },
+    ...images.map((url) => ({
+      type: "image_url" as const,
+      image_url: { url },
+    })),
+  ];
+}
 
 export type Conversation = {
   id: string;

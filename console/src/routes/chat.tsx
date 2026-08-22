@@ -25,6 +25,7 @@ import {
   lastModel,
   loadConversations,
   loadFavorites,
+  messageContent,
   newConversation,
   providerPreferences,
   rememberModel,
@@ -35,6 +36,7 @@ import {
   statsFromUsage,
   type ChatMessage,
   type ChatParams,
+  type ContentPart,
   type Conversation,
 } from "@/lib/chatStore";
 
@@ -91,17 +93,18 @@ function errorText(error: unknown): string {
 }
 
 // requestMessages builds the upstream message list: optional system
-// prompt plus every prior non-error turn (legacy behavior).
+// prompt plus every prior non-error turn (legacy behavior). Turns with
+// attached images become content-part arrays.
 function requestMessages(
   conversation: Conversation,
-): { role: string; content: string }[] {
-  const messages: { role: string; content: string }[] = [];
+): { role: string; content: string | ContentPart[] }[] {
+  const messages: { role: string; content: string | ContentPart[] }[] = [];
   const system = conversation.params.system.trim();
   if (system) messages.push({ role: "system", content: system });
   for (const message of conversation.messages) {
     if (message.error) continue;
     if (!message.content) continue;
-    messages.push({ role: message.role, content: message.content });
+    messages.push({ role: message.role, content: messageContent(message) });
   }
   return messages;
 }
@@ -310,7 +313,7 @@ function ChatPage() {
     compare.toggle(seedModel);
   }, [seedCompare, seedModel, compare]);
 
-  const send = (text: string) => {
+  const send = (text: string, images?: string[]) => {
     if (streamingId || compare.streaming) return;
     if (compare.active) {
       compare.send(text, newParams);
@@ -327,18 +330,26 @@ function ChatPage() {
       setNewParams({ ...DEFAULT_PARAMS });
     }
     setDrafts((previous) => ({ ...previous, [draftKey]: "" }));
-    sendTo(conversation, text);
+    sendTo(conversation, text, images);
   };
 
   // sendTo streams one exchange into the given conversation snapshot.
   // send, retry, and edit all funnel through here; retry and edit pass
   // a snapshot whose messages were truncated at the redone turn.
-  const sendTo = (conversation: Conversation, text: string) => {
+  const sendTo = (
+    conversation: Conversation,
+    text: string,
+    images?: string[],
+  ) => {
     const conversationId = conversation.id;
     const isFirstExchange = conversation.messages.length === 0;
     rememberModel(conversation.model);
 
-    const userMessage: ChatMessage = { role: "user", content: text };
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: text,
+      ...(images?.length ? { images } : {}),
+    };
     const placeholder: ChatMessage = { role: "assistant", content: "" };
     updateConversation(conversationId, (current) => ({
       ...current,
@@ -349,7 +360,10 @@ function ChatPage() {
 
     const body: Record<string, unknown> = {
       model: conversation.model,
-      messages: [...requestMessages(conversation), { role: "user", content: text }],
+      messages: [
+        ...requestMessages(conversation),
+        { role: "user", content: messageContent({ content: text, images }) },
+      ],
     };
     if (conversation.params.temperature !== null) {
       body.temperature = conversation.params.temperature;
@@ -499,19 +513,25 @@ function ChatPage() {
       messages: truncated,
       model: nextModel,
     }));
-    sendTo({ ...active, messages: truncated, model: nextModel }, prior.content);
+    sendTo(
+      { ...active, messages: truncated, model: nextModel },
+      prior.content,
+      prior.images,
+    );
   };
 
   // editMessage resends a revised user turn; the conversation is
   // truncated at that turn.
   const editMessage = (index: number, text: string) => {
     if (!active || streamingId) return;
+    // An edit revises the text; the turn's attachments carry over.
+    const images = active.messages[index]?.images;
     const truncated = active.messages.slice(0, index);
     updateConversation(active.id, (conversation) => ({
       ...conversation,
       messages: truncated,
     }));
-    sendTo({ ...active, messages: truncated }, text);
+    sendTo({ ...active, messages: truncated }, text, images);
   };
 
   // Retry-with-model options: the thread's model first, then favorites.
