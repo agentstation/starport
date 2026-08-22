@@ -227,7 +227,7 @@ function costText(message: ChatMessage, model: Model | undefined): string | null
   return known ? formatNanoUSD(dollars * 1_000_000_000) : null;
 }
 
-// MetadataLine carries the legacy badge set: ttft, total latency, tok/s,
+// MetadataLine carries the legacy badge set: TTFT, total latency, tok/s,
 // token counts, reasoning tokens, cache state, cost, stopped, unenforced.
 function MetadataLine({
   message,
@@ -239,7 +239,7 @@ function MetadataLine({
   const stats = message.stats;
   const items: { key: string; text: string; tone?: string }[] = [];
   if (stats?.ttftMs !== undefined) {
-    items.push({ key: "ttft", text: `ttft ${formatMs(stats.ttftMs)}` });
+    items.push({ key: "ttft", text: `TTFT ${formatMs(stats.ttftMs)}` });
   }
   if (stats?.latencyMs !== undefined) {
     items.push({ key: "total", text: `${formatMs(stats.latencyMs)} total` });

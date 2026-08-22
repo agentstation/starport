@@ -23,6 +23,7 @@ import {
   ApiError,
   listActivity,
   listAdminActivity,
+  listProviderCatalog,
   type ActivityFilters,
   type ActivityRecord,
 } from "@/lib/api";
@@ -31,6 +32,7 @@ import {
   formatMs,
   formatNanoUSD,
   formatRelativeTime,
+  providerLabel,
 } from "@/lib/format";
 import { useHasApiKey } from "@/lib/useApiKey";
 
@@ -297,6 +299,16 @@ function RequestDetail({
   admin: boolean;
   onClose: () => void;
 }) {
+  // Display names come from the shared provider-catalog query; react-query
+  // dedupes this against the Providers page fetch.
+  const catalog = useQuery({
+    queryKey: ["provider-catalog"],
+    queryFn: listProviderCatalog,
+    retry: false,
+  });
+  const providerName = catalog.data?.find(
+    (entry) => entry.id === record.provider,
+  )?.name;
   const tokens = record.tokens ?? {};
   const tokenParts = (
     [
@@ -348,7 +360,9 @@ function RequestDetail({
             <code className="break-all font-mono text-xs text-text-2">{record.model_used}</code>
           </DetailRow>
         )}
-        <DetailRow label="Provider">{record.provider ?? "unrouted"}</DetailRow>
+        <DetailRow label="Provider">
+          {record.provider ? providerLabel(record.provider, providerName) : "unrouted"}
+        </DetailRow>
         <DetailRow label="Status">
           <StatusPill record={record} />
         </DetailRow>

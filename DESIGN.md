@@ -122,6 +122,9 @@ report lifecycle.**
 
 - Tracking: `-0.01em` at 20–24px, `-0.02em` at 32px, none below 20px.
   Uppercase micro-labels (rare) get `+0.04em`.
+- Wordmark: the sidebar brand renders `STARPORT` — uppercase, 600 weight,
+  `+0.08em` tracking at 14px. It is the one uppercase display treatment;
+  nothing else borrows it.
 - `font-variant-numeric: tabular-nums` on every numeric column and every
   live-updating number. Costs, tokens, and latencies must not wiggle.
 - Table headers: 12px/500, Text 3, sentence case. No all-caps letterspaced

@@ -24,7 +24,7 @@ const NAV = [
   { to: "/chat", label: "Chat", icon: MessageSquare, implemented: true },
   { to: "/models", label: "Models", icon: Sparkles, implemented: true },
   { to: "/providers", label: "Providers", icon: Server, implemented: true },
-  { to: "/keys", label: "Keys", icon: Key, implemented: true },
+  { to: "/keys", label: "API Keys", icon: Key, implemented: true },
   { to: "/usage", label: "Usage", icon: BarChart3, implemented: true },
   { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: true },
   { to: "/settings", label: "Settings", icon: Settings, implemented: true },
@@ -135,7 +135,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className={`flex h-14 items-center gap-2.5 ${collapsed ? "justify-center px-0" : "px-4"}`}>
           <StarMark />
           {!collapsed && (
-            <span className="text-base font-semibold tracking-[-0.01em]">Starport</span>
+            <span className="text-sm font-semibold tracking-[0.08em]">STARPORT</span>
           )}
         </div>
 
