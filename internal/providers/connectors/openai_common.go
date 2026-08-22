@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -187,6 +188,10 @@ type openAICompatibleStream struct {
 	response *http.Response
 	reader   *bufio.Reader
 	closed   bool
+	// event holds the SSE event name for the data lines that follow it.
+	// Providers such as Groq deliver rejections as an "event: error" frame
+	// inside an established 200 stream.
+	event string
 }
 
 // Recv reads the next chunk from the stream
@@ -213,17 +218,29 @@ func (s *openAICompatibleStream) Recv() (*ChatStreamChunk, error) {
 			continue
 		}
 
+		if eventName, ok := bytes.CutPrefix(line, []byte("event:")); ok {
+			s.event = string(bytes.TrimSpace(eventName))
+			continue
+		}
+
 		// SSE format: "data: {...}"
 		if !bytes.HasPrefix(line, []byte("data: ")) {
 			continue
 		}
 
 		data := bytes.TrimPrefix(line, []byte("data: "))
+		eventName := s.event
+		s.event = ""
 
 		// Check for end of stream
 		if string(data) == SSEDone {
 			s.closed = true
 			return nil, io.EOF
+		}
+
+		if apiErr := decodeStreamAPIError(eventName, data); apiErr != nil {
+			s.closed = true
+			return nil, apiErr
 		}
 
 		var chunk ChatStreamChunk
@@ -235,6 +252,58 @@ func (s *openAICompatibleStream) Recv() (*ChatStreamChunk, error) {
 		}
 
 		return &chunk, nil
+	}
+}
+
+// decodeStreamAPIError detects a provider rejection delivered inside an
+// established 200 stream: an "event: error" frame, or a data frame whose
+// payload is a top-level error object. Both shapes must end the stream as a
+// provider failure, never decode into an empty chunk.
+func decodeStreamAPIError(eventName string, data []byte) *APIError {
+	var envelope struct {
+		Error *struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+			Code    string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil || envelope.Error == nil {
+		if eventName == sseEventError {
+			return &APIError{
+				StatusCode: http.StatusBadGateway,
+				Message:    string(data),
+			}
+		}
+		return nil
+	}
+	return &APIError{
+		StatusCode: statusFromStreamErrorCode(envelope.Error.Type, envelope.Error.Code),
+		Message:    envelope.Error.Message,
+		Type:       envelope.Error.Type,
+		Code:       envelope.Error.Code,
+	}
+}
+
+const sseEventError = "error"
+
+// statusFromStreamErrorCode recovers the HTTP status a provider would have
+// used for the same rejection outside a stream. Unrecognized shapes map to
+// 502 so normalization treats them as a retryable provider failure.
+func statusFromStreamErrorCode(errorType, errorCode string) int {
+	marker := strings.ToLower(errorType + " " + errorCode)
+	switch {
+	case strings.Contains(marker, "rate_limit"):
+		return http.StatusTooManyRequests
+	case strings.Contains(marker, "quota"):
+		return http.StatusTooManyRequests
+	case strings.Contains(marker, "api_key"), strings.Contains(marker, "authentication"):
+		return http.StatusUnauthorized
+	case strings.Contains(marker, "permission"):
+		return http.StatusForbidden
+	case strings.Contains(marker, "not_found"):
+		return http.StatusNotFound
+	default:
+		return http.StatusBadGateway
 	}
 }
 

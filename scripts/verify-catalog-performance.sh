@@ -95,5 +95,11 @@ check CPV19 "credential state carries operator-facing detail" \
     grep -q "checkedCredentialEnvironment" internal/providers/reconciler.go &&
     grep -q "refreshFailures" internal/server/controllers/provider_operations.go'
 
+# Phase G: failure normalization and cache honesty
+check CPV20 "streaming provider rejections normalize and empty completions stay uncached" \
+  bash -c 'grep -q "decodeStreamAPIError" internal/providers/connectors/openai_common.go &&
+    grep -q "firstChunk, streamErr = stream.Recv()" internal/router/execution_adapter.go &&
+    grep -q "ErrEmptyResponse" internal/response/cache/repository.go'
+
 printf 'Summary: %d passed, %d failed\n' "$pass" "$fail"
 test "$fail" -eq 0

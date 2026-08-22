@@ -329,10 +329,21 @@ func (s *ollamaStream) Recv() (*ChatStreamChunk, error) {
 		DoneReason      string `json:"done_reason,omitempty"`
 		PromptEvalCount int    `json:"prompt_eval_count,omitempty"`
 		EvalCount       int    `json:"eval_count,omitempty"`
+		Error           string `json:"error,omitempty"`
 	}
 
 	if err := json.Unmarshal(line, &ollamaChunk); err != nil {
 		return nil, &StreamError{Err: err}
+	}
+
+	// An error line inside the NDJSON stream is a provider rejection, never
+	// an empty message chunk.
+	if ollamaChunk.Error != "" {
+		s.closed = true
+		return nil, &APIError{
+			StatusCode: http.StatusBadGateway,
+			Message:    ollamaChunk.Error,
+		}
 	}
 
 	// Check if stream is done

@@ -8,6 +8,10 @@ import (
 	"github.com/agentstation/starport/internal/failure"
 )
 
+// permissionErrorType is the provider error type shared by OpenAI-compatible
+// and Anthropic rejections for an action the credential cannot perform.
+const permissionErrorType = "permission_error"
+
 // NormalizeFailure converts a provider error into the canonical failure seam.
 func NormalizeFailure(provider string, err error) *failure.Failure {
 	if err == nil {
@@ -141,8 +145,8 @@ func stateScopeForAPIError(apiError *APIError, kind failure.Kind) failure.StateS
 	case failure.Permission:
 		typeCode := strings.ToLower(strings.TrimSpace(apiError.Type))
 		errorCode := strings.ToLower(strings.TrimSpace(apiError.Code))
-		if typeCode == "permission_error" || typeCode == "permission_denied" ||
-			errorCode == "permission_error" || errorCode == "permission_denied" {
+		if typeCode == permissionErrorType || typeCode == "permission_denied" ||
+			errorCode == permissionErrorType || errorCode == "permission_denied" {
 			return failure.ScopeCredential
 		}
 		return failure.ScopeNone

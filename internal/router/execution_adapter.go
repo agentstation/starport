@@ -72,16 +72,40 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		request.Credential = selected.material
 		request.Stream = true
 		timer := execution.OverheadTimerFrom(attemptCtx)
+		// The first event is part of establishment: providers such as Groq
+		// reject an attempt inside an established 200 stream (an SSE error
+		// frame before any content). Reading it here keeps those
+		// rejections on the same fallback-and-status path as a non-200.
 		endUpstream := timer.TrackUpstream()
 		stream, streamErr := connector.ChatStream(attemptCtx, request)
+		var firstChunk *connectors.ChatStreamChunk
+		if streamErr == nil {
+			firstChunk, streamErr = stream.Recv()
+		}
 		endUpstream()
 		if streamErr != nil {
+			if stream != nil {
+				_ = stream.Close()
+			}
+			if errors.Is(streamErr, io.EOF) {
+				streamErr = failure.New(
+					failure.ProviderUnavailable,
+					"The provider returned an empty stream.",
+					true,
+					failure.ProviderDetails{
+						Provider:   planned.Route.ProviderID,
+						StateScope: failure.ScopeOffering,
+					},
+					nil,
+				)
+			}
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, streamErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
 		}
 		execution.RecordCredentialAccepted(attemptCtx)
 		return &connectorEventStream{
 			stream:   stream,
+			first:    firstChunk,
 			timer:    timer,
 			provider: planned.Route.ProviderID,
 			modelID:  planned.Route.ID(),
@@ -319,7 +343,10 @@ func selectionReason(evidence []execution.AttemptEvidence) string {
 }
 
 type connectorEventStream struct {
-	stream   connectors.ChatStream
+	stream connectors.ChatStream
+	// first is the chunk the establishment path already read while
+	// verifying the stream opens with content instead of an error frame.
+	first    *connectors.ChatStreamChunk
 	timer    *execution.OverheadTimer
 	provider string
 	modelID  string
@@ -341,9 +368,15 @@ func (s *connectorEventStream) Read() (*inference.StreamEvent, error) {
 			return nil, err
 		}
 
-		endUpstream := s.timer.TrackUpstream()
-		chunk, err := s.stream.Recv()
-		endUpstream()
+		var chunk *connectors.ChatStreamChunk
+		var err error
+		if s.first != nil {
+			chunk, s.first = s.first, nil
+		} else {
+			endUpstream := s.timer.TrackUpstream()
+			chunk, err = s.stream.Recv()
+			endUpstream()
+		}
 		if err != nil && chunk == nil {
 			if errors.Is(err, io.EOF) {
 				return nil, io.EOF
