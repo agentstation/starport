@@ -79,6 +79,9 @@ type Record struct {
 	TokensEstimated bool `json:"tokens_estimated,omitempty"`
 	LatencyMS      int64     `json:"latency_ms"`
 	RoutingMS      int64     `json:"routing_ms,omitempty"`
+	// OverheadMS is the gateway-added latency: total handling time
+	// minus upstream provider waits.
+	OverheadMS     int64     `json:"overhead_ms,omitempty"`
 	Attempts       int       `json:"attempts,omitempty"`
 	CacheStatus    string    `json:"cache_status,omitempty"`
 

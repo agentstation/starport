@@ -240,7 +240,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		}
 		request := prepareChatAttempt(req, boundRoute, false)
 		request.Credential = selected.material
+		endUpstream := execution.OverheadTimerFrom(attemptCtx).TrackUpstream()
 		response, requestErr := connector.Chat(attemptCtx, request)
+		endUpstream()
 		if requestErr != nil {
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)

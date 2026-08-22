@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,11 +61,23 @@ func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
 	req.RequestID = h.getRequestID(ctx)
 	req.Protocol = string(h.protocol)
 
+	// Measure the latency the gateway adds; route attempts mark their
+	// upstream waits on the same timer.
+	r = r.WithContext(proxy.StartOverhead(ctx))
+
 	// Handle streaming vs non-streaming
 	if req.Request.Stream {
 		h.handleStream(w, r, req)
 	} else {
 		h.handleNonStream(w, r, req)
+	}
+}
+
+// setOverheadHeader states the gateway-added milliseconds measured so
+// far. It runs before the response status is written.
+func setOverheadHeader(w http.ResponseWriter, r *http.Request) {
+	if overheadMS, ok := proxy.OverheadMS(r.Context()); ok {
+		w.Header().Set(proxy.OverheadHeader, strconv.FormatInt(overheadMS, 10))
 	}
 }
 
@@ -108,6 +121,7 @@ func (h *ChatController) handleNonStream(w http.ResponseWriter, r *http.Request,
 
 	// Process the request
 	resp, err := h.service.ProcessChatCompletion(r.Context(), req)
+	setOverheadHeader(w, r)
 	if err != nil {
 		h.logError(r.Context(), err, "chat completion failed")
 		h.writeError(w, err)
@@ -158,6 +172,7 @@ func (h *ChatController) writeChatResponse(w http.ResponseWriter, response infer
 func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, req *proxy.ChatCompletionRequest) {
 	// Process the streaming request
 	stream, err := h.service.ProcessChatCompletionStream(r.Context(), req)
+	setOverheadHeader(w, r)
 	if err != nil {
 		h.logError(r.Context(), err, "chat stream failed")
 		h.writeError(w, err)

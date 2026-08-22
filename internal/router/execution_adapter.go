@@ -71,7 +71,10 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		request := prepareChatAttempt(req, boundRoute, true)
 		request.Credential = selected.material
 		request.Stream = true
+		timer := execution.OverheadTimerFrom(attemptCtx)
+		endUpstream := timer.TrackUpstream()
 		stream, streamErr := connector.ChatStream(attemptCtx, request)
+		endUpstream()
 		if streamErr != nil {
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, streamErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)
@@ -79,6 +82,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		execution.RecordCredentialAccepted(attemptCtx)
 		return &connectorEventStream{
 			stream:   stream,
+			timer:    timer,
 			provider: planned.Route.ProviderID,
 			modelID:  planned.Route.ID(),
 			action: func(providerFailure *failure.Failure) execution.AttemptAction {
@@ -316,6 +320,7 @@ func selectionReason(evidence []execution.AttemptEvidence) string {
 
 type connectorEventStream struct {
 	stream   connectors.ChatStream
+	timer    *execution.OverheadTimer
 	provider string
 	modelID  string
 	pending  []inference.StreamEvent
@@ -336,7 +341,9 @@ func (s *connectorEventStream) Read() (*inference.StreamEvent, error) {
 			return nil, err
 		}
 
+		endUpstream := s.timer.TrackUpstream()
 		chunk, err := s.stream.Recv()
+		endUpstream()
 		if err != nil && chunk == nil {
 			if errors.Is(err, io.EOF) {
 				return nil, io.EOF

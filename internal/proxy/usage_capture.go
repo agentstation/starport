@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/router"
@@ -122,6 +123,9 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.CacheStatus)
+	if overheadMS, ok := OverheadMS(ctx); ok {
+		record.OverheadMS = overheadMS
+	}
 	s.capture.submit(record)
 	return response, err
 }
@@ -136,6 +140,9 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	if err != nil {
 		applyOutcome(&record, err)
 		record.Cost, record.CostUnavailableReason = usageCost(nil, "", record.Tokens, "")
+		if overheadMS, ok := OverheadMS(ctx); ok {
+			record.OverheadMS = overheadMS
+		}
 		s.capture.submit(record)
 		return nil, err
 	}
@@ -144,6 +151,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 		capture: s.capture,
 		record:  record,
 		start:   start,
+		timer:   execution.OverheadTimerFrom(ctx),
 	}, nil
 }
 
@@ -176,6 +184,7 @@ type usageCaptureStream struct {
 	capture *UsageCapture
 	record  usage.Record
 	start   time.Time
+	timer   *execution.OverheadTimer
 
 	usage     *inference.Usage
 	modelUsed string
@@ -249,6 +258,9 @@ func (s *usageCaptureStream) finalize(terminal error) {
 			snapshot = evidence.CatalogSnapshot()
 		}
 		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.CacheStatus)
+		if s.timer != nil {
+			record.OverheadMS = s.timer.OverheadMS()
+		}
 		s.capture.submit(record)
 	})
 }
