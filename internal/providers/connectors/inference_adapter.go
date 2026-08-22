@@ -38,24 +38,25 @@ func ChatRequestFromInference(request inference.ChatRequest) (*ChatRequest, erro
 	}
 
 	wireRequest := &ChatRequest{
-		Model:            request.Model,
-		Messages:         messages,
-		Temperature:      request.Sampling.Temperature,
-		TopP:             request.Sampling.TopP,
-		N:                request.Sampling.CandidateCount,
-		MaxTokens:        request.Sampling.MaxTokens,
-		Stream:           request.Stream,
-		Stop:             append([]string(nil), request.Sampling.Stop...),
-		PresencePenalty:  request.Sampling.PresencePenalty,
-		FrequencyPenalty: request.Sampling.FrequencyPenalty,
-		LogitBias:        cloneIntMap(request.Sampling.LogitBias),
-		User:             request.User,
-		Seed:             request.Sampling.Seed,
-		Tools:            tools,
-		ToolChoice:       toolChoiceFromInference(request.ToolChoice),
-		ResponseFormat:   responseFormatFromInference(request.Output),
-		Models:           append([]string(nil), request.FallbackModels...),
-		ProviderOptions:  providerOptions,
+		Model:             request.Model,
+		Messages:          messages,
+		Temperature:       request.Sampling.Temperature,
+		TopP:              request.Sampling.TopP,
+		N:                 request.Sampling.CandidateCount,
+		MaxTokens:         request.Sampling.MaxTokens,
+		Stream:            request.Stream,
+		Stop:              append([]string(nil), request.Sampling.Stop...),
+		PresencePenalty:   request.Sampling.PresencePenalty,
+		FrequencyPenalty:  request.Sampling.FrequencyPenalty,
+		LogitBias:         cloneIntMap(request.Sampling.LogitBias),
+		User:              request.User,
+		Seed:              request.Sampling.Seed,
+		Tools:             tools,
+		ToolChoice:        toolChoiceFromInference(request.ToolChoice),
+		ParallelToolCalls: request.ParallelToolCalls,
+		ResponseFormat:    responseFormatFromInference(request.Output),
+		Models:            append([]string(nil), request.FallbackModels...),
+		ProviderOptions:   providerOptions,
 	}
 	if request.StreamOptions.IncludeUsage {
 		wireRequest.StreamOptions = &StreamOptions{IncludeUsage: true}
@@ -111,7 +112,8 @@ func ChatRequestToInference(request *ChatRequest) (inference.ChatRequest, error)
 			LogitBias: cloneIntMap(request.LogitBias), Seed: request.Seed,
 		},
 		Tools: tools, ToolChoice: toolChoiceToInference(request.ToolChoice),
-		Output: outputToInference(request.ResponseFormat), Stream: request.Stream, User: request.User,
+		ParallelToolCalls: request.ParallelToolCalls,
+		Output:            outputToInference(request.ResponseFormat), Stream: request.Stream, User: request.User,
 		Extensions: extensions,
 	}
 	if request.StreamOptions != nil {

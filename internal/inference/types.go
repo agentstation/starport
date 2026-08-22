@@ -151,12 +151,15 @@ type ChatRequest struct {
 	Sampling       Sampling
 	Tools          []Tool
 	ToolChoice     ToolChoice
-	Output         StructuredOutput
-	Reasoning      Reasoning
-	Stream         bool
-	StreamOptions  StreamOptions
-	User           string
-	Extensions     map[string]json.RawMessage
+	// ParallelToolCalls permits or forbids several tool calls in one
+	// assistant turn. Nil leaves the provider default in place.
+	ParallelToolCalls *bool
+	Output            StructuredOutput
+	Reasoning         Reasoning
+	Stream            bool
+	StreamOptions     StreamOptions
+	User              string
+	Extensions        map[string]json.RawMessage
 }
 
 // Usage reports normalized token counts. InputTokens includes cache reads
@@ -294,6 +297,7 @@ func (r ChatRequest) Clone() ChatRequest {
 	clone.Messages = cloneMessages(r.Messages)
 	clone.Sampling = r.Sampling.clone()
 	clone.Tools = cloneTools(r.Tools)
+	clone.ParallelToolCalls = clonePointer(r.ParallelToolCalls)
 	clone.Output.Schema = append(json.RawMessage(nil), r.Output.Schema...)
 	clone.Reasoning.MaxTokens = clonePointer(r.Reasoning.MaxTokens)
 	clone.Extensions = cloneExtensions(r.Extensions)

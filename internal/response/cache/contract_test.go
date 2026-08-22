@@ -35,11 +35,12 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 			MaxTokens: &maxTokens, Stop: []string{"END"}, PresencePenalty: &presencePenalty,
 			FrequencyPenalty: &frequencyPenalty, LogitBias: map[string]int{"42": 1}, Seed: &seed,
 		},
-		Tools:      []inference.Tool{{Name: "lookup", Description: "look up one item", Parameters: json.RawMessage(`{"type":"object"}`)}},
-		ToolChoice: inference.ToolChoice{Mode: inference.ToolChoiceNamed, Name: "lookup"},
-		Output:     inference.StructuredOutput{Format: inference.OutputJSONSchema, Name: "answer", Description: "answer schema", Schema: json.RawMessage(`{"type":"object"}`), Strict: true},
-		Reasoning:  inference.Reasoning{Effort: inference.ReasoningHigh, MaxTokens: &maxTokens, Exclude: true},
-		User:       "user-1",
+		Tools:             []inference.Tool{{Name: "lookup", Description: "look up one item", Parameters: json.RawMessage(`{"type":"object"}`)}},
+		ToolChoice:        inference.ToolChoice{Mode: inference.ToolChoiceNamed, Name: "lookup"},
+		ParallelToolCalls: boolPointer(true),
+		Output:            inference.StructuredOutput{Format: inference.OutputJSONSchema, Name: "answer", Description: "answer schema", Schema: json.RawMessage(`{"type":"object"}`), Strict: true},
+		Reasoning:         inference.Reasoning{Effort: inference.ReasoningHigh, MaxTokens: &maxTokens, Exclude: true},
+		User:              "user-1",
 	}
 	base := ChatIdentity{
 		TenantID:          "tenant-1",
@@ -82,26 +83,30 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 		"tool description":       func(value *ChatIdentity) { value.Request.Tools[0].Description = "changed" },
 		"tool schema":            func(value *ChatIdentity) { value.Request.Tools[0].Parameters = json.RawMessage(`{"type":"string"}`) },
 		"tool choice mode":       func(value *ChatIdentity) { value.Request.ToolChoice.Mode = inference.ToolChoiceRequired },
-		"tool choice name":       func(value *ChatIdentity) { value.Request.ToolChoice.Name = "search" },
-		"output format":          func(value *ChatIdentity) { value.Request.Output.Format = inference.OutputJSONObject },
-		"output name":            func(value *ChatIdentity) { value.Request.Output.Name = "other" },
-		"output description":     func(value *ChatIdentity) { value.Request.Output.Description = "changed" },
-		"output schema":          func(value *ChatIdentity) { value.Request.Output.Schema = json.RawMessage(`{"type":"string"}`) },
-		"output strictness":      func(value *ChatIdentity) { value.Request.Output.Strict = false },
-		"reasoning effort":       func(value *ChatIdentity) { value.Request.Reasoning.Effort = inference.ReasoningLow },
-		"reasoning budget":       func(value *ChatIdentity) { value.Request.Reasoning.MaxTokens = intPointer(256) },
-		"reasoning visibility":   func(value *ChatIdentity) { value.Request.Reasoning.Exclude = false },
-		"user":                   func(value *ChatIdentity) { value.Request.User = "user-2" },
-		"provider order":         func(value *ChatIdentity) { value.Policy.Provider.Order = []string{"anthropic", "openai"} },
-		"provider only":          func(value *ChatIdentity) { value.Policy.Provider.Only = []string{"openai"} },
-		"provider ignore":        func(value *ChatIdentity) { value.Policy.Provider.Ignore = []string{"google"} },
-		"fallback policy":        func(value *ChatIdentity) { value.Policy.Provider.AllowFallbacks = false },
-		"route mode":             func(value *ChatIdentity) { value.Policy.Provider.Route = "manual" },
-		"model override":         func(value *ChatIdentity) { value.Policy.Provider.ModelOverrides["openai/gpt-4"] = "openai/gpt-4.2" },
-		"allowed models":         func(value *ChatIdentity) { value.Policy.Tenant.AllowedModels = []string{"openai/gpt-4.2"} },
-		"allowed providers":      func(value *ChatIdentity) { value.Policy.Tenant.AllowedProviders = []string{"anthropic"} },
-		"tenant tier":            func(value *ChatIdentity) { value.Policy.Tenant.RateLimitTier = "enterprise" },
-		"credential strategy":    func(value *ChatIdentity) { value.Policy.Tenant.CredentialStrategy = "user_only" },
+		// Permitting several tool calls in one assistant turn and forbidding
+		// them produce different answers, so the two must never collide in the
+		// cache.
+		"parallel tool calls":  func(value *ChatIdentity) { value.Request.ParallelToolCalls = boolPointer(false) },
+		"tool choice name":     func(value *ChatIdentity) { value.Request.ToolChoice.Name = "search" },
+		"output format":        func(value *ChatIdentity) { value.Request.Output.Format = inference.OutputJSONObject },
+		"output name":          func(value *ChatIdentity) { value.Request.Output.Name = "other" },
+		"output description":   func(value *ChatIdentity) { value.Request.Output.Description = "changed" },
+		"output schema":        func(value *ChatIdentity) { value.Request.Output.Schema = json.RawMessage(`{"type":"string"}`) },
+		"output strictness":    func(value *ChatIdentity) { value.Request.Output.Strict = false },
+		"reasoning effort":     func(value *ChatIdentity) { value.Request.Reasoning.Effort = inference.ReasoningLow },
+		"reasoning budget":     func(value *ChatIdentity) { value.Request.Reasoning.MaxTokens = intPointer(256) },
+		"reasoning visibility": func(value *ChatIdentity) { value.Request.Reasoning.Exclude = false },
+		"user":                 func(value *ChatIdentity) { value.Request.User = "user-2" },
+		"provider order":       func(value *ChatIdentity) { value.Policy.Provider.Order = []string{"anthropic", "openai"} },
+		"provider only":        func(value *ChatIdentity) { value.Policy.Provider.Only = []string{"openai"} },
+		"provider ignore":      func(value *ChatIdentity) { value.Policy.Provider.Ignore = []string{"google"} },
+		"fallback policy":      func(value *ChatIdentity) { value.Policy.Provider.AllowFallbacks = false },
+		"route mode":           func(value *ChatIdentity) { value.Policy.Provider.Route = "manual" },
+		"model override":       func(value *ChatIdentity) { value.Policy.Provider.ModelOverrides["openai/gpt-4"] = "openai/gpt-4.2" },
+		"allowed models":       func(value *ChatIdentity) { value.Policy.Tenant.AllowedModels = []string{"openai/gpt-4.2"} },
+		"allowed providers":    func(value *ChatIdentity) { value.Policy.Tenant.AllowedProviders = []string{"anthropic"} },
+		"tenant tier":          func(value *ChatIdentity) { value.Policy.Tenant.RateLimitTier = "enterprise" },
+		"credential strategy":  func(value *ChatIdentity) { value.Policy.Tenant.CredentialStrategy = "user_only" },
 	}
 	for name, mutate := range variants {
 		t.Run(name, func(t *testing.T) {
@@ -390,3 +395,4 @@ func cloneEmbeddingIdentity(value EmbeddingIdentity, mutate func(*EmbeddingIdent
 
 func float32Pointer(value float32) *float32 { return &value }
 func intPointer(value int) *int             { return &value }
+func boolPointer(value bool) *bool          { return &value }

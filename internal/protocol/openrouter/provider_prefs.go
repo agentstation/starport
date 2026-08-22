@@ -124,3 +124,39 @@ func unenforcedProviderFields(prefs *ProviderPreferences) []string {
 	sort.Strings(fields)
 	return fields
 }
+
+// unenforcedGatewayFields lists top-level OpenRouter fields that name work
+// the OpenRouter gateway performs on the caller's behalf. Starport routes to
+// providers directly, so no upstream understands them. They follow the same
+// drop-in contract as the provider fields above: accept, do not forward, and
+// report the unkept promise.
+func unenforcedGatewayFields(wire *ChatRequest) []string {
+	if wire == nil {
+		return nil
+	}
+	fields := make([]string, 0, 2)
+	if len(wire.Transforms) > 0 {
+		fields = append(fields, "transforms")
+	}
+	if len(wire.Plugins) > 0 {
+		fields = append(fields, "plugins")
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return fields
+}
+
+// unenforcedFields merges the gateway-level and provider-level unkept promises
+// into the single sorted list the caller reads from one response header.
+func unenforcedFields(wire *ChatRequest) []string {
+	if wire == nil {
+		return nil
+	}
+	fields := append(unenforcedGatewayFields(wire), unenforcedProviderFields(wire.Provider)...)
+	if len(fields) == 0 {
+		return nil
+	}
+	sort.Strings(fields)
+	return fields
+}

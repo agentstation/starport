@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Brain, Check, Eye, Star, Wrench } from "lucide-react";
+import { Brain, Check, Eye, Globe, Star, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { listModels, listPresets, listProviderCatalog, type Model } from "@/lib/api";
@@ -20,12 +20,14 @@ function modelCapabilities(model: Model): {
   vision: boolean;
   reasoning: boolean;
   tools: boolean;
+  webSearch: boolean;
 } {
   const params = model.supported_parameters ?? [];
   return {
     vision: (model.architecture?.input_modalities ?? []).includes("image"),
     reasoning: params.some((p) => p === "reasoning" || p === "include_reasoning"),
     tools: params.includes("tools"),
+    webSearch: params.includes("web_search_options"),
   };
 }
 
@@ -39,12 +41,13 @@ export function supportsVision(model: Model | undefined): boolean {
 
 function CapabilityBadges({ model }: { model: Model }) {
   const caps = modelCapabilities(model);
-  if (!caps.vision && !caps.reasoning && !caps.tools) return null;
+  if (!caps.vision && !caps.reasoning && !caps.tools && !caps.webSearch) return null;
   return (
     <span className="flex items-center gap-1 text-text-4">
       {caps.vision && <Eye className="size-3" aria-label="Vision" />}
       {caps.reasoning && <Brain className="size-3" aria-label="Reasoning" />}
       {caps.tools && <Wrench className="size-3" aria-label="Tools" />}
+      {caps.webSearch && <Globe className="size-3" aria-label="Web search" />}
     </span>
   );
 }

@@ -26,7 +26,7 @@ var openAIChatFields = map[string]struct{}{
 	wireModelToken: {}, wireFieldMessages: {}, wireFieldTemperature: {}, "top_p": {}, "n": {},
 	"max_tokens": {}, wireFieldStream: {}, finishReasonStop: {}, "presence_penalty": {},
 	"frequency_penalty": {}, "logit_bias": {}, "user": {}, "seed": {},
-	"tools": {}, "tool_choice": {}, "response_format": {}, "models": {},
+	"tools": {}, "tool_choice": {}, "parallel_tool_calls": {}, "response_format": {}, "models": {},
 	"stream_options": {}, "reasoning": {}, "provider_options": {},
 }
 

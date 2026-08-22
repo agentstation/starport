@@ -105,6 +105,25 @@ func TestSupportedModelParameters(t *testing.T) {
 	)
 }
 
+// Starmap owns the per-model web-search fact and its own OpenRouter server
+// publishes it as web_search_options. Starport must project the same name so
+// a client reads one answer from either gateway.
+func TestSupportedModelParametersCarriesWebSearch(t *testing.T) {
+	definition := catalogs.ModelDefinition{}
+	definition.Capabilities.Features = &catalogs.ModelFeatures{
+		Tools:      true,
+		ToolChoice: true,
+		WebSearch:  true,
+	}
+	require.Equal(t,
+		[]string{"tools", "tool_choice", "web_search_options"},
+		supportedModelParameters(definition),
+	)
+
+	definition.Capabilities.Features.WebSearch = false
+	require.NotContains(t, supportedModelParameters(definition), "web_search_options")
+}
+
 func TestProvidersNilSnapshot(t *testing.T) {
 	require.Nil(t, Providers(nil, nil))
 }

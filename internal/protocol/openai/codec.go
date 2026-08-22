@@ -161,7 +161,7 @@ func DecodeChat(reader io.Reader) (inference.ChatRequest, error) {
 			MaxTokens: maxTokens, Stop: stop, PresencePenalty: wire.PresencePenalty,
 			FrequencyPenalty: wire.FrequencyPenalty, LogitBias: wire.LogitBias, Seed: wire.Seed,
 		},
-		Tools: tools, ToolChoice: toolChoice, Output: output,
+		Tools: tools, ToolChoice: toolChoice, ParallelToolCalls: wire.ParallelToolCalls, Output: output,
 		Reasoning: inference.Reasoning{Effort: inference.ReasoningEffort(wire.ReasoningEffort)},
 		Stream:    wire.Stream, User: wire.User, Extensions: extensions,
 		StreamOptions: inference.StreamOptions{IncludeUsage: wire.StreamOptions != nil && wire.StreamOptions.IncludeUsage},

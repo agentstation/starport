@@ -46,22 +46,23 @@ type StreamOptions struct {
 
 // ChatRequest represents a chat completion request
 type ChatRequest struct {
-	Model            string          `json:"model"`
-	Messages         []Message       `json:"messages"`
-	Temperature      *float32        `json:"temperature,omitempty"`
-	TopP             *float32        `json:"top_p,omitempty"`
-	N                *int            `json:"n,omitempty"`
-	MaxTokens        *int            `json:"max_tokens,omitempty"`
-	Stream           bool            `json:"stream,omitempty"`
-	Stop             []string        `json:"stop,omitempty"`
-	PresencePenalty  *float32        `json:"presence_penalty,omitempty"`
-	FrequencyPenalty *float32        `json:"frequency_penalty,omitempty"`
-	LogitBias        map[string]int  `json:"logit_bias,omitempty"`
-	User             string          `json:"user,omitempty"`
-	Seed             *int            `json:"seed,omitempty"`
-	Tools            []Tool          `json:"tools,omitempty"`
-	ToolChoice       any             `json:"tool_choice,omitempty"`
-	ResponseFormat   *ResponseFormat `json:"response_format,omitempty"`
+	Model             string          `json:"model"`
+	Messages          []Message       `json:"messages"`
+	Temperature       *float32        `json:"temperature,omitempty"`
+	TopP              *float32        `json:"top_p,omitempty"`
+	N                 *int            `json:"n,omitempty"`
+	MaxTokens         *int            `json:"max_tokens,omitempty"`
+	Stream            bool            `json:"stream,omitempty"`
+	Stop              []string        `json:"stop,omitempty"`
+	PresencePenalty   *float32        `json:"presence_penalty,omitempty"`
+	FrequencyPenalty  *float32        `json:"frequency_penalty,omitempty"`
+	LogitBias         map[string]int  `json:"logit_bias,omitempty"`
+	User              string          `json:"user,omitempty"`
+	Seed              *int            `json:"seed,omitempty"`
+	Tools             []Tool          `json:"tools,omitempty"`
+	ToolChoice        any             `json:"tool_choice,omitempty"`
+	ParallelToolCalls *bool           `json:"parallel_tool_calls,omitempty"`
+	ResponseFormat    *ResponseFormat `json:"response_format,omitempty"`
 
 	// OpenRouter-compatible model routing
 	Models []string `json:"models,omitempty"` // Fallback model chain

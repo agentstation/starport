@@ -8,6 +8,7 @@ import (
 
 func TestCanonicalInferenceContract(t *testing.T) {
 	maxTokens := 512
+	parallelToolCalls := true
 	request := ChatRequest{
 		Model:          "openai/gpt-4.1",
 		FallbackModels: []string{"anthropic/claude-sonnet-4"},
@@ -26,7 +27,8 @@ func TestCanonicalInferenceContract(t *testing.T) {
 			Description: "Look up a record.",
 			Parameters:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}}}`),
 		}},
-		ToolChoice: ToolChoice{Mode: ToolChoiceNamed, Name: "lookup"},
+		ToolChoice:        ToolChoice{Mode: ToolChoiceNamed, Name: "lookup"},
+		ParallelToolCalls: &parallelToolCalls,
 		Output: StructuredOutput{
 			Format: OutputJSONSchema,
 			Name:   "record",
@@ -44,6 +46,7 @@ func TestCanonicalInferenceContract(t *testing.T) {
 	request.Sampling.LogitBias["42"] = 0
 	request.Tools[0].Parameters[0] = '['
 	request.Output.Schema[0] = '['
+	*request.ParallelToolCalls = false
 
 	if got := cloned.FallbackModels[0]; got != "anthropic/claude-sonnet-4" {
 		t.Fatalf("fallback model = %q", got)
@@ -59,6 +62,11 @@ func TestCanonicalInferenceContract(t *testing.T) {
 	}
 	if !json.Valid(cloned.Tools[0].Parameters) || !json.Valid(cloned.Output.Schema) {
 		t.Fatal("structured schema was not copied")
+	}
+	// A retry clones the request before an attempt mutates it. An aliased
+	// pointer would let one attempt rewrite the tool-call policy of the next.
+	if cloned.ParallelToolCalls == nil || !*cloned.ParallelToolCalls {
+		t.Fatal("parallel tool call policy was not copied")
 	}
 
 	response := ChatResponse{
