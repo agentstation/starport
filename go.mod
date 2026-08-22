@@ -10,7 +10,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.0
-	github.com/agentstation/starmap v0.6.0
+	github.com/agentstation/starmap v0.7.0
 	github.com/agentstation/uuidkey v1.2.0
 	github.com/aws/aws-sdk-go-v2 v1.43.6
 	github.com/aws/aws-sdk-go-v2/config v1.32.37
@@ -18,7 +18,6 @@ require (
 	github.com/aws/smithy-go v1.27.8
 	github.com/dgraph-io/badger/v4 v4.9.6
 	github.com/dgraph-io/ristretto/v2 v2.4.2
-	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/cors v1.2.2
 	github.com/google/uuid v1.6.0
@@ -28,6 +27,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/sethvargo/go-envconfig v1.4.3
 	github.com/stretchr/testify v1.12.0
+	github.com/tiktoken-go/tokenizer v0.8.1
 	github.com/urfave/cli-docs/v3 v3.1.0
 	github.com/urfave/cli/v3 v3.10.1
 	github.com/valkey-io/valkey-go v1.0.76
@@ -37,7 +37,6 @@ require (
 	golang.org/x/crypto v0.55.0
 	golang.org/x/sys v0.47.0
 	google.golang.org/grpc v1.83.0
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -98,7 +97,6 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
-	github.com/tiktoken-go/tokenizer v0.8.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.67.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.70.0 // indirect
@@ -116,4 +114,5 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260630182238-925bb5da69e7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260807164820-c8921c73eeea // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

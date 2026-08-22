@@ -27,7 +27,7 @@ import (
 )
 
 func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
-	embedded, err := catalogs.NewEmbedded()
+	embedded, err := starmap.EmbeddedBuilder()
 	require.NoError(t, err)
 	baseline, err := embedded.Build()
 	require.NoError(t, err)
@@ -270,7 +270,7 @@ func loadTestConfig(t *testing.T, root string) *config.Config {
 
 func resolveEmbeddedProviders(t *testing.T, cfg *config.Config) {
 	t.Helper()
-	builder, err := catalogs.NewEmbedded()
+	builder, err := starmap.EmbeddedBuilder()
 	if err != nil {
 		t.Fatal(err)
 	}

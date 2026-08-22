@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
@@ -37,6 +38,10 @@ func (m *mockAuthors) ListModels(context.Context) (*proxy.ModelsResponse, error)
 
 func (m *mockAuthors) ListProviders(context.Context) (*proxy.ProvidersResponse, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockAuthors) GetLogo(context.Context, view.LogoKind, string) ([]byte, error) {
+	return nil, &proxy.ProviderError{Code: "not_found", Message: "Logo not found"}
 }
 
 func (m *mockAuthors) ListAuthors(context.Context) (*proxy.AuthorsResponse, error) {

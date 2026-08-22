@@ -44,6 +44,11 @@ type Proxy interface {
 
 	// GetModelEndpoints returns provider endpoints for a specific model
 	GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error)
+
+	// GetLogo returns the catalog-carried SVG brand mark for one provider
+	// or author. It reports a not_found provider error when the catalog
+	// carries no bytes for this kind and ID.
+	GetLogo(ctx context.Context, kind view.LogoKind, id string) ([]byte, error)
 }
 
 // ChatCompletionRequest is a canonical chat request plus gateway policy and identity.

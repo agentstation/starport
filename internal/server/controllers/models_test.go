@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,10 @@ func (m *mockModels) ProcessChatCompletionStream(context.Context, *proxy.ChatCom
 
 func (m *mockModels) ProcessEmbeddings(context.Context, *proxy.EmbeddingsRequest) (*proxy.EmbeddingsResponse, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockModels) GetLogo(context.Context, view.LogoKind, string) ([]byte, error) {
+	return nil, &proxy.ProviderError{Code: "not_found", Message: "Logo not found"}
 }
 
 func (m *mockModels) ListModels(context.Context) (*proxy.ModelsResponse, error) {

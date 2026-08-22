@@ -36,6 +36,12 @@ func Providers(
 		if requiresAuth != nil {
 			info.RequiresAuth = requiresAuth(string(provider.ID))
 		}
+		if provider.Description != nil {
+			info.Description = *provider.Description
+		}
+		if provider.DocsURL != nil {
+			info.DocsURL = *provider.DocsURL
+		}
 		if provider.StatusPageURL != nil {
 			info.URL = *provider.StatusPageURL
 		}

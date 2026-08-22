@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	starmap "github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
@@ -293,7 +294,7 @@ func readyStore(t *testing.T, version string) (*Store, catalogs.ProviderID) {
 
 func embeddedCatalog(t *testing.T) *catalogs.Catalog {
 	t.Helper()
-	source, err := catalogs.NewEmbedded()
+	source, err := starmap.EmbeddedBuilder()
 	require.NoError(t, err)
 	catalog, err := source.Build()
 	require.NoError(t, err)

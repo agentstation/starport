@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starmap"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -367,6 +368,10 @@ func (m *mockProxyImpl) ProcessChatCompletionStream(ctx context.Context, _ *Chat
 func (m *mockProxyImpl) ProcessEmbeddings(context.Context, *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	m.count("ProcessEmbeddings")
 	return m.embeddingsResponse, nil
+}
+
+func (m *mockProxyImpl) GetLogo(context.Context, view.LogoKind, string) ([]byte, error) {
+	return nil, &ProviderError{Code: "not_found", Message: "Logo not found"}
 }
 
 func (m *mockProxyImpl) ListModels(ctx context.Context) (*ModelsResponse, error) {

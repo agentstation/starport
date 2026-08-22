@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	starmap "github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/credentials"
@@ -204,7 +205,7 @@ func TestCatalogDerivedCredentialReferenceEnvironment(t *testing.T) {
 }
 
 func TestCatalogOnlyProviderEnvironmentResolvesWithoutSourceRoster(t *testing.T) {
-	builder, err := catalogs.NewEmbedded()
+	builder, err := starmap.EmbeddedBuilder()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +228,7 @@ func TestCatalogOnlyProviderEnvironmentResolvesWithoutSourceRoster(t *testing.T)
 }
 
 func TestHetznerInferenceEnvironmentComesFromCatalog(t *testing.T) {
-	builder, err := catalogs.NewEmbedded()
+	builder, err := starmap.EmbeddedBuilder()
 	if err != nil {
 		t.Fatal(err)
 	}

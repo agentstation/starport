@@ -522,6 +522,20 @@ func (p *proxy) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, er
 	return &author, nil
 }
 
+// GetLogo returns the catalog-carried SVG brand mark for one provider or author.
+func (p *proxy) GetLogo(ctx context.Context, kind view.LogoKind, id string) ([]byte, error) {
+	snapshot, release, err := p.acquireSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	svg, ok := view.Logo(snapshot, kind, id)
+	if !ok {
+		return nil, &ProviderError{Code: "not_found", Message: "Logo not found"}
+	}
+	return svg, nil
+}
+
 // acquireSnapshot leases the runtime and returns its catalog snapshot with
 // a release func that is always safe to defer.
 func (p *proxy) acquireSnapshot(ctx context.Context) (*runtimecatalog.RoutableSnapshot, func(), error) {

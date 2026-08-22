@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/rs/zerolog/log"
 )
@@ -162,6 +163,12 @@ func (s *loggingService) ListModels(ctx context.Context) (*ModelsResponse, error
 	}
 
 	return resp, err
+}
+
+// GetLogo passes catalog logo reads through without logging; the route
+// is a high-volume static asset fetch.
+func (s *loggingService) GetLogo(ctx context.Context, kind view.LogoKind, id string) ([]byte, error) {
+	return s.proxy.GetLogo(ctx, kind, id)
 }
 
 // ListAuthors logs the list authors request.
@@ -332,6 +339,10 @@ func (s *timingService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 }
 
 // ListAuthors adds timing to context.
+func (s *timingService) GetLogo(ctx context.Context, kind view.LogoKind, id string) ([]byte, error) {
+	return s.proxy.GetLogo(ctx, kind, id)
+}
+
 func (s *timingService) ListAuthors(ctx context.Context) (*AuthorsResponse, error) {
 	ctx = context.WithValue(ctx, timingKey{}, time.Now())
 	return s.proxy.ListAuthors(ctx)

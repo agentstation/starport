@@ -3,6 +3,7 @@ package providers
 import (
 	"testing"
 
+	starmap "github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
@@ -12,7 +13,7 @@ import (
 )
 
 func TestCatalogProviderRegistersWithoutOperatorMaterial(t *testing.T) {
-	embedded, err := catalogs.NewEmbedded()
+	embedded, err := starmap.EmbeddedBuilder()
 	require.NoError(t, err)
 	catalog, err := embedded.Build()
 	require.NoError(t, err)
@@ -31,7 +32,7 @@ func TestCatalogProviderRegistersWithoutOperatorMaterial(t *testing.T) {
 }
 
 func TestNoAuthProviderRegistersWithoutMaterial(t *testing.T) {
-	embedded, err := catalogs.NewEmbedded()
+	embedded, err := starmap.EmbeddedBuilder()
 	require.NoError(t, err)
 	catalog, err := embedded.Build()
 	require.NoError(t, err)
@@ -71,7 +72,7 @@ func TestNoAuthProviderRegistersWithoutMaterial(t *testing.T) {
 }
 
 func TestActivationSkipsUnsupportedAuthenticationPrimitive(t *testing.T) {
-	embedded, err := catalogs.NewEmbedded()
+	embedded, err := starmap.EmbeddedBuilder()
 	require.NoError(t, err)
 	catalog, err := embedded.Build()
 	require.NoError(t, err)
