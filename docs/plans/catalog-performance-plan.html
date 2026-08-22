@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 7e71726 ·
     Proof root: <code>proof/catalog-performance/</code> ·
-    Next action: CP8 — Provider detail page (identity, credential CTA, served models, health)
+    Next action: CP9 — Model detail page (header, capabilities, offering table, lineage, Open in chat)
   </p>
 
   <section id="outcome">
@@ -278,8 +278,8 @@
         <tr id="CP5" data-status="done"><td>CP5</td><td>A: Logo route with fallback chain and interim bundled SVG set</td><td><code>done</code></td><td>562372c; fail-before: logo route 404, CPV05+CPV06 red; 56 vendored marks (MIT/CC0, NOTICE); go test ok, console vitest 6/6 (first console test runner), CPV05+CPV06 green; live: 200+ETag/304/404, /api/v1/models still 401 keyless; <a href="proof/catalog-performance/cp5.md">cp5.md</a></td></tr>
         <tr id="CP6" data-status="done"><td>CP6</td><td>A: Starmap v0.7.0 — logo payload, lifecycle dates, coverage fill, release, pin bump</td><td><code>done</code></td><td>starmap PR #95 merged (e7867540), v0.7.0 released; fail-before: 2 identity round-trip tests fail on v0.6.0 types; pin bumped, replace dropped; go test ./... ok; CPV18+V01 green; live: 12/12 providers carry description+docs_url, phind logo 200 from catalog bytes; <a href="proof/catalog-performance/cp6.md">cp6.md</a></td></tr>
         <tr id="CP7" data-status="done"><td>CP7</td><td>B: Providers page revamp — identity cards, single status, search</td><td><code>done</code></td><td>fail-before: slug chip row, "N offerings" copy, CPV07 red, /providers/groq → API 404 JSON; card seam extracted with 9 component tests (inline slug guard, single status, "N models · M available", card href); search+sort on the page; SPA serves /providers/* shell; console tests 15 pass, go test ok, 8 verify gates PASS, CPV 11 green; both-theme + search + detail shots; <a href="proof/catalog-performance/cp7.md">cp7.md</a></td></tr>
-        <tr id="CP8" data-status="in_progress"><td>CP8</td><td>B: Provider detail page — identity, credential CTA, served models, health</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="CP9" data-status="todo"><td>CP9</td><td>B: Model detail page — header, capabilities, per-provider offering table, lineage, Open in chat</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP8" data-status="done"><td>CP8</td><td>B: Provider detail page — identity, credential CTA, served models, health</td><td><code>done</code></td><td>12 new contract tests (28 total); both acceptance states live-verified; <a href="proof/catalog-performance/cp8.md">cp8.md</a></td></tr>
+        <tr id="CP9" data-status="in_progress"><td>CP9</td><td>B: Model detail page — header, capabilities, per-provider offering table, lineage, Open in chat</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="CP10" data-status="todo"><td>CP10</td><td>B: Models list traversal — author/tag facets, clickable rows, virtualization, fuzzy search</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP11" data-status="todo"><td>CP11</td><td>B: Author pages — list and detail with model catalog and availability</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP12" data-status="todo"><td>CP12</td><td>B: Command palette over models, providers, authors, pages, actions (absorbs CM13)</td><td><code>todo</code></td><td></td></tr>

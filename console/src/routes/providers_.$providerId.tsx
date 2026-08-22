@@ -1,13 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
+import { useMemo } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
 import {
   availableOfferings,
   CredentialPill,
 } from "@/components/providers/ProviderCard";
-import { listProviderCatalog, providerStatus } from "@/lib/api";
+import {
+  CredentialPanel,
+  HealthPanel,
+  OfferingsTable,
+  PolicyChips,
+} from "@/components/providers/ProviderDetail";
+import {
+  ApiError,
+  listActivity,
+  listAdminActivity,
+  listProviderCatalog,
+  providerStatus,
+} from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
 import { useHasApiKey } from "@/lib/useApiKey";
 
@@ -28,6 +41,28 @@ function ProviderDetailPage() {
   const status = useQuery({
     queryKey: ["provider-status"],
     queryFn: providerStatus,
+    enabled: hasKey,
+    retry: false,
+  });
+
+  // The health window is pinned per mount so refetches keep comparable
+  // bounds. Admin keys read the cross-key log; other keys fall back to
+  // their own activity; a locked log leaves the panel on circuit state.
+  const sinceISO = useMemo(
+    () => new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    [],
+  );
+  const activity = useQuery({
+    queryKey: ["provider-activity", providerId, sinceISO],
+    queryFn: async () => {
+      const filters = { provider: providerId, since: sinceISO, limit: 200 };
+      try {
+        return await listAdminActivity(filters);
+      } catch (error) {
+        if (!(error instanceof ApiError) || !error.needsKey) throw error;
+      }
+      return listActivity(filters);
+    },
     enabled: hasKey,
     retry: false,
   });
@@ -76,6 +111,8 @@ function ProviderDetailPage() {
         {runtime && <CredentialPill credential={runtime.operator_credential} />}
       </div>
 
+      <PolicyChips entry={entry} />
+
       <div className="flex flex-wrap items-center gap-4 text-sm text-text-2">
         {runtime && (
           <span className="tabular-nums">
@@ -90,6 +127,16 @@ function ProviderDetailPage() {
         >
           Browse models
         </Link>
+        {entry?.url && (
+          <a
+            href={entry.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
+          >
+            Website
+          </a>
+        )}
         {entry?.docs_url && (
           <a
             href={entry.docs_url}
@@ -101,6 +148,18 @@ function ProviderDetailPage() {
           </a>
         )}
       </div>
+
+      {runtime && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CredentialPanel
+            providerId={providerId}
+            credential={runtime.operator_credential}
+          />
+          <HealthPanel offerings={offerings} records={activity.data?.data} />
+        </div>
+      )}
+
+      {runtime && <OfferingsTable providerId={providerId} offerings={offerings} />}
 
       {!entry && !catalog.isPending && (
         <p className="text-base text-text-3">
