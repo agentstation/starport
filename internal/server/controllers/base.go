@@ -33,6 +33,7 @@ const (
 	errorTypeServiceUnavailable = "service_unavailable"
 	errorTypeProvider           = "provider_error"
 	errorTypeNotFound           = "not_found_error"
+	errorCodeNotFound           = "not_found"
 	openRouterErrorTypeField    = "error_type"
 	providerField               = "provider"
 	responseCountField          = "count"
@@ -175,7 +176,7 @@ func errorShape(err error) (status int, errorType, message string, param *string
 		case errorTypePermission:
 			status = http.StatusForbidden
 			errType = errorTypePermission
-		case "not_found":
+		case errorCodeNotFound:
 			status = http.StatusNotFound
 			errType = errorTypeNotFound
 		}
