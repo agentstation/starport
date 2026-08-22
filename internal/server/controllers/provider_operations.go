@@ -53,6 +53,7 @@ func (h *ProviderOperationsController) Refresh(w http.ResponseWriter, r *http.Re
 		Changed:                       report.Changed,
 		ConfiguredProviders:           providerIDs(report.ConfiguredProviders),
 		FailureCount:                  len(report.Failures),
+		Failures:                      refreshFailures(report.Failures),
 		PreviousProviderStateRevision: before.Revision,
 		ProviderStateRevision:         after.Revision,
 	}
@@ -62,12 +63,35 @@ func (h *ProviderOperationsController) Refresh(w http.ResponseWriter, r *http.Re
 }
 
 type providerRefreshResponse struct {
-	ReconciliationRevision        uint64   `json:"reconciliation_revision"`
-	Changed                       bool     `json:"changed"`
-	ConfiguredProviders           []string `json:"configured_providers"`
-	FailureCount                  int      `json:"failure_count"`
-	PreviousProviderStateRevision uint64   `json:"previous_provider_state_revision"`
-	ProviderStateRevision         uint64   `json:"provider_state_revision"`
+	ReconciliationRevision        uint64                   `json:"reconciliation_revision"`
+	Changed                       bool                     `json:"changed"`
+	ConfiguredProviders           []string                 `json:"configured_providers"`
+	FailureCount                  int                      `json:"failure_count"`
+	Failures                      []providerRefreshFailure `json:"failures,omitempty"`
+	PreviousProviderStateRevision uint64                   `json:"previous_provider_state_revision"`
+	ProviderStateRevision         uint64                   `json:"provider_state_revision"`
+}
+
+// providerRefreshFailure names one provider whose credential source failed
+// during refresh. Reason is the classified secret-free description — never
+// the raw source error, which may reference internal resources.
+type providerRefreshFailure struct {
+	ProviderID string `json:"provider_id"`
+	Reason     string `json:"reason"`
+}
+
+func refreshFailures(failures []providers.ReconcileFailure) []providerRefreshFailure {
+	if len(failures) == 0 {
+		return nil
+	}
+	result := make([]providerRefreshFailure, len(failures))
+	for index, failure := range failures {
+		result[index] = providerRefreshFailure{
+			ProviderID: string(failure.ProviderID),
+			Reason:     providers.CredentialFailureDetail(failure.Err),
+		}
+	}
+	return result
 }
 
 func providerIDs(values []catalogs.ProviderID) []string {

@@ -78,18 +78,25 @@ func TestAdminProviderRefreshContract(t *testing.T) {
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 		require.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
 		var response struct {
-			ReconciliationRevision        uint64   `json:"reconciliation_revision"`
-			Changed                       bool     `json:"changed"`
-			ConfiguredProviders           []string `json:"configured_providers"`
-			FailureCount                  int      `json:"failure_count"`
-			PreviousProviderStateRevision uint64   `json:"previous_provider_state_revision"`
-			ProviderStateRevision         uint64   `json:"provider_state_revision"`
+			ReconciliationRevision uint64   `json:"reconciliation_revision"`
+			Changed                bool     `json:"changed"`
+			ConfiguredProviders    []string `json:"configured_providers"`
+			FailureCount           int      `json:"failure_count"`
+			Failures               []struct {
+				ProviderID string `json:"provider_id"`
+				Reason     string `json:"reason"`
+			} `json:"failures"`
+			PreviousProviderStateRevision uint64 `json:"previous_provider_state_revision"`
+			ProviderStateRevision         uint64 `json:"provider_state_revision"`
 		}
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 		require.Equal(t, uint64(12), response.ReconciliationRevision)
 		require.True(t, response.Changed)
 		require.Equal(t, []string{string(catalogs.ProviderIDOpenAI)}, response.ConfiguredProviders)
 		require.Equal(t, 1, response.FailureCount)
+		require.Len(t, response.Failures, 1)
+		require.Equal(t, string(catalogs.ProviderIDAnthropic), response.Failures[0].ProviderID)
+		require.Equal(t, "credential source is unavailable", response.Failures[0].Reason)
 		require.Equal(t, uint64(7), response.PreviousProviderStateRevision)
 		require.Equal(t, uint64(8), response.ProviderStateRevision)
 		require.NotContains(t, recorder.Body.String(), "private-source-reference")

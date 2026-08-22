@@ -114,6 +114,7 @@ export type ProviderRuntimeStatus = {
   operator_credential?: {
     state?: string;
     reason?: string;
+    detail?: string;
     usable?: boolean;
     updated_at?: string;
   };

@@ -75,6 +75,17 @@ export function operatorEnvNames(providerId: string): [string, string] {
   return [`${stem}_API_KEY`, `STARPORT_${stem}_API_KEY`];
 }
 
+// checkedEnvNames parses the server's "checked A, B, C" credential detail
+// into the authoritative environment names the resolver consulted.
+export function checkedEnvNames(detail: string | undefined): string[] {
+  if (!detail?.startsWith("checked ")) return [];
+  return detail
+    .slice("checked ".length)
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
 export function CredentialPanel({
   providerId,
   credential,
@@ -85,6 +96,9 @@ export function CredentialPanel({
   const state = credential?.state ?? "not_configured";
   const usable = credential?.usable === true;
   const [envName, prefixedEnvName] = operatorEnvNames(providerId);
+  const checked = checkedEnvNames(credential?.detail);
+  const failureDetail =
+    credential?.detail && checked.length === 0 ? credential.detail : undefined;
   return (
     <section
       data-testid="credential-panel"
@@ -112,13 +126,32 @@ export function CredentialPanel({
                     : ""
                 }.`}
           </p>
-          <p className="text-sm text-text-3">
-            Set{" "}
-            <code className="font-mono text-xs text-text-2">{envName}</code> or{" "}
-            <code className="font-mono text-xs text-text-2">{prefixedEnvName}</code>{" "}
-            in the gateway environment, or attach your own provider key to a
-            gateway key.
-          </p>
+          {failureDetail && (
+            <p data-testid="credential-detail" className="text-sm text-text-3">
+              {failureDetail}
+            </p>
+          )}
+          {checked.length > 0 ? (
+            <p data-testid="credential-detail" className="text-sm text-text-3">
+              The gateway checked{" "}
+              {checked.map((name, index) => (
+                <span key={name}>
+                  {index > 0 && (index === checked.length - 1 ? " and " : ", ")}
+                  <code className="font-mono text-xs text-text-2">{name}</code>
+                </span>
+              ))}
+              . Set one in the gateway environment, or attach your own provider
+              key to a gateway key.
+            </p>
+          ) : (
+            <p className="text-sm text-text-3">
+              Set{" "}
+              <code className="font-mono text-xs text-text-2">{envName}</code> or{" "}
+              <code className="font-mono text-xs text-text-2">{prefixedEnvName}</code>{" "}
+              in the gateway environment, or attach your own provider key to a
+              gateway key.
+            </p>
+          )}
           <Link
             to="/keys"
             className="flex w-fit items-center gap-1.5 text-sm text-accent-link transition-colors duration-150 ease-standard hover:underline"
