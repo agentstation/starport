@@ -150,6 +150,7 @@ export type ProviderCatalogEntry = {
   id: string;
   name?: string;
   description?: string;
+  docs_url?: string;
   url?: string;
   models?: string[];
   credential_fields?: CredentialField[];

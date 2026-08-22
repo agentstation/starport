@@ -26,7 +26,12 @@ check() {
 
 grep_q() { grep -Rq -- "$1" "${@:2}"; }
 absent() { ! grep -q -- "$1" "$2"; }
-either_file() { test -f "$1" || test -f "$2"; }
+either_file() {
+  for candidate in "$@"; do
+    test -f "$candidate" && return 0
+  done
+  return 1
+}
 
 # Phase A: projections and API surface
 check CPV01 "authors endpoints are registered on the API router" \
@@ -43,8 +48,11 @@ check CPV06 "console renders identity through an EntityLogo fallback chain" \
   test -f console/src/components/catalog/EntityLogo.tsx
 
 # Phase B: catalog traversal UX
+# The detail page must not nest inside the list route (the list has no
+# Outlet), so the TanStack un-nested spelling providers_. is canonical.
 check CPV07 "provider detail route exists in the SPA" \
-  either_file 'console/src/routes/providers.$providerId.tsx' \
+  either_file 'console/src/routes/providers_.$providerId.tsx' \
+    'console/src/routes/providers.$providerId.tsx' \
     'console/src/routes/providers/$providerId.tsx'
 check CPV08 "model detail route exists in the SPA" \
   either_file 'console/src/routes/models.$modelId.tsx' \
