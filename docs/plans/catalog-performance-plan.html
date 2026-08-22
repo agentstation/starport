@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 7e71726 ·
     Proof root: <code>proof/catalog-performance/</code> ·
-    Next action: CP4 — authors API at /api/v1/authors and /api/v1/authors/{id}
+    Next action: CP5 — logo route with fallback chain and interim bundled SVG set
   </p>
 
   <section id="outcome">
@@ -274,8 +274,8 @@
         <tr id="CP1" data-status="done"><td>CP1</td><td>A: Brand sweep — STARPORT wordmark, API Keys, display names, pill truncation, TTFT</td><td><code>done</code></td><td>Verifier 3 passed (CPV15–17), 15 failed as scoped; build + tsc clean; proof/catalog-performance/cp1.md</td></tr>
         <tr id="CP2" data-status="done"><td>CP2</td><td>A: Extract catalog projection package from proxy inline DTO assembly</td><td><code>done</code></td><td>Golden byte-identity held; view tests added; verifier 4 passed (CPV02 green); proof/catalog-performance/cp2.md</td></tr>
         <tr id="CP3" data-status="done"><td>CP3</td><td>A: Widen ModelInfo (author, tags, lineage, cutoff, weights, all offerings) and populate ProviderInfo</td><td><code>done</code></td><td>49e63d3; fail-before: 4 new tests failed pre-change; go test ./... ok; parity 16/16; CPV02+CPV03 green, CPV04 red by design (needs CP6 Starmap v0.7.0); live: 422 models all carry offerings, 61 with ≥2 providers; <a href="proof/catalog-performance/cp3.md">cp3.md</a></td></tr>
-        <tr id="CP4" data-status="in_progress"><td>CP4</td><td>A: Authors API — /api/v1/authors and /api/v1/authors/{id}</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="CP5" data-status="todo"><td>CP5</td><td>A: Logo route with fallback chain and interim bundled SVG set</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CP4" data-status="done"><td>CP4</td><td>A: Authors API — /api/v1/authors and /api/v1/authors/{id}</td><td><code>done</code></td><td>fail-before: 404 + CPV01 red + 3 view tests undefined; after: go test ./... ok, CPV01 green (verifier 6 passed); live: 104 authors listed, detail + 404 contract proven; <a href="proof/catalog-performance/cp4.md">cp4.md</a></td></tr>
+        <tr id="CP5" data-status="in_progress"><td>CP5</td><td>A: Logo route with fallback chain and interim bundled SVG set</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="CP6" data-status="todo"><td>CP6</td><td>A: Starmap v0.7.0 — logo payload, lifecycle dates, coverage fill, release, pin bump</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP7" data-status="todo"><td>CP7</td><td>B: Providers page revamp — identity cards, single status, search</td><td><code>todo</code></td><td></td></tr>
         <tr id="CP8" data-status="todo"><td>CP8</td><td>B: Provider detail page — identity, credential CTA, served models, health</td><td><code>todo</code></td><td></td></tr>
