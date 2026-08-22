@@ -14,17 +14,20 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ModelPicker,
   supportsReasoning,
+  supportsVision,
 } from "@/components/chat/ModelPicker";
 import { INPUT_CLASS, TEXTAREA_CLASS } from "@/components/ui/Form";
-import { listModels, listPresets } from "@/lib/api";
+import { listModels } from "@/lib/api";
 import type { ChatParams } from "@/lib/chatStore";
 
 // Composer is the DESIGN.md chat input card: one rounded surface with
-// the textarea on top and a control bar below — plus-menu left; model
-// picker, effort selector, params, and send/stop right. Enter sends,
-// Shift+Enter inserts a newline, Escape stops a stream.
+// the textarea on top and a control bar below — attach button left;
+// model picker, effort selector, params, and send/stop right. Presets
+// live in the model picker, not here. Enter sends, Shift+Enter inserts
+// a newline, Escape stops a stream.
 
 const MAX_TEXTAREA_HEIGHT = 240;
+const MAX_ATTACHMENTS = 4;
 
 const EFFORT_CHOICES = [
   { value: "", label: "Default effort" },
@@ -44,11 +47,13 @@ function BarButton({
   onClick,
   label,
   active,
+  disabled,
   children,
 }: {
   onClick: () => void;
   label: string;
   active?: boolean;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -57,11 +62,12 @@ function BarButton({
       onClick={onClick}
       aria-label={label}
       title={label}
+      disabled={disabled}
       className={`flex h-8 items-center gap-1 rounded-sm px-2 text-sm transition-colors duration-150 ease-standard ${
         active
           ? "bg-bg-hover text-text-1"
           : "text-text-3 hover:bg-bg-hover hover:text-text-2"
-      }`}
+      } disabled:cursor-not-allowed disabled:text-text-4 disabled:hover:bg-transparent`}
     >
       {children}
     </button>
@@ -253,7 +259,7 @@ export function Composer({
 }: {
   draft: string;
   onDraftChange: (next: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, images?: string[]) => void;
   streaming: boolean;
   onStop: () => void;
   model: string;
@@ -274,7 +280,10 @@ export function Composer({
   onCompareRemove?: (id: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [menu, setMenu] = useState<"none" | "plus" | "effort" | "params">("none");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [menu, setMenu] = useState<"none" | "effort" | "params">("none");
+  // Attached images as data URLs; they ship with the next send.
+  const [attachments, setAttachments] = useState<string[]>([]);
 
   const models = useQuery({
     queryKey: ["models"],
@@ -282,16 +291,33 @@ export function Composer({
     staleTime: 60_000,
     retry: false,
   });
-  const presets = useQuery({
-    queryKey: ["presets"],
-    queryFn: listPresets,
-    staleTime: 60_000,
-    retry: false,
-  });
 
   const selectedModel = models.data?.find((entry) => entry.id === model);
   const reasoning = supportsReasoning(selectedModel);
+  const vision = supportsVision(selectedModel);
   const effort = params.effort ?? "";
+  // Attachments only exist for a model that accepts image input; a
+  // switch to a text-only model (or compare mode) drops them rather
+  // than silently sending content the model rejects.
+  const canAttach = vision && !compareActive;
+  useEffect(() => {
+    if (!canAttach) setAttachments([]);
+  }, [canAttach]);
+
+  const attachFiles = (files: FileList | null) => {
+    for (const file of [...(files ?? [])].slice(0, MAX_ATTACHMENTS)) {
+      if (!file.type.startsWith("image/")) continue;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result !== "string") return;
+        const url = reader.result;
+        setAttachments((current) =>
+          current.length >= MAX_ATTACHMENTS ? current : [...current, url],
+        );
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Auto-grow the textarea between one and ~10 rows.
   useEffect(() => {
@@ -311,7 +337,8 @@ export function Composer({
     const text = draft.trim();
     if (!text || streaming) return;
     if (compareActive ? compareCount < 2 : !model) return;
-    onSend(text);
+    onSend(text, attachments.length ? attachments : undefined);
+    setAttachments([]);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -340,41 +367,60 @@ export function Composer({
         aria-label="Message"
         className="w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-base text-text-1 outline-none placeholder:text-text-4"
       />
-      <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
-        <div className="relative">
-          <BarButton
-            onClick={() => setMenu(menu === "plus" ? "none" : "plus")}
-            label="Insert"
-            active={menu === "plus"}
-          >
-            <Plus className="size-4" />
-          </BarButton>
-          {menu === "plus" && (
-            <div className="absolute bottom-full left-0 z-20 mb-2 w-64 rounded-md border border-border-2 bg-bg-raised py-1 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
-              <p className="px-3 pb-1 pt-1.5 text-xs uppercase tracking-wide text-text-4">
-                Presets
-              </p>
-              {(presets.data ?? []).length === 0 && (
-                <p className="px-3 pb-2 text-sm text-text-3">
-                  No presets yet. Create one on the Presets page.
-                </p>
-              )}
-              {(presets.data ?? []).map((preset) => (
-                <button
-                  key={preset.name}
-                  type="button"
-                  onClick={() => {
-                    onModelChange(`@preset/${preset.name}`);
-                    setMenu("none");
-                  }}
-                  className="block w-full px-3 py-1.5 text-left font-mono text-xs text-text-2 hover:bg-bg-hover hover:text-text-1"
-                >
-                  @preset/{preset.name}
-                </button>
-              ))}
-            </div>
-          )}
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-3 pb-1">
+          {attachments.map((url, index) => (
+            <span
+              key={`${index}-${url.slice(-24)}`}
+              className="relative inline-flex overflow-hidden rounded-md border border-border-2"
+            >
+              <img
+                src={url}
+                alt={`Attachment ${index + 1}`}
+                className="size-14 object-cover"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setAttachments((current) =>
+                    current.filter((_, position) => position !== index),
+                  )
+                }
+                aria-label={`Remove attachment ${index + 1}`}
+                className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white transition-colors duration-150 ease-standard hover:bg-black/80"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
         </div>
+      )}
+      <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          aria-label="Attach images"
+          className="hidden"
+          onChange={(event) => {
+            attachFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <BarButton
+          onClick={() => fileInputRef.current?.click()}
+          label={
+            canAttach
+              ? "Attach image"
+              : compareActive
+                ? "Attachments are unavailable in compare mode"
+                : "This model does not accept image input"
+          }
+          disabled={!canAttach}
+        >
+          <Plus className="size-4" />
+        </BarButton>
 
         {onCompareToggle && (
           <BarButton
