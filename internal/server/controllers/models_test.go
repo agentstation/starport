@@ -71,6 +71,34 @@ func TestModelsControllerSelectsOpenRouterShape(t *testing.T) {
 	require.Equal(t, float64(128000), model["context_length"])
 }
 
+func TestOpenRouterModelListCarriesEveryOffering(t *testing.T) {
+	models := modelFixture()
+	models.Data[0].Authors = []proxy.ModelAuthorInfo{{ID: "openai", Name: "OpenAI"}}
+	models.Data[0].Offerings = []proxy.ModelOfferingInfo{
+		{
+			Provider: "azure-openai", ProviderModelID: "gpt-4.1",
+			Availability: "available", Lifecycle: "active",
+			Pricing: &proxy.OfferingPricingInfo{Prompt: "0.000002", CacheRead: "0.0000005", Currency: "USD"},
+		},
+		{Provider: "openai", ProviderModelID: "gpt-4.1", Availability: "available"},
+	}
+	controller := NewOpenRouterModelsController(&mockModels{models: models})
+	recorder := httptest.NewRecorder()
+	controller.List(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/models", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	model := response["data"].([]any)[0].(map[string]any)
+	require.Equal(t, "OpenAI", model["authors"].([]any)[0].(map[string]any)["name"])
+	offerings := model["offerings"].([]any)
+	require.Len(t, offerings, 2, "every offering must survive the codec")
+	first := offerings[0].(map[string]any)
+	require.Equal(t, "azure-openai", first["provider"])
+	require.Equal(t, "0.0000005", first["pricing"].(map[string]any)["cache_read"])
+	require.Equal(t, "openai", offerings[1].(map[string]any)["provider"])
+}
+
 func TestModelsControllerGetsEncodedModelID(t *testing.T) {
 	controller := NewOpenRouterModelsController(&mockModels{models: modelFixture()})
 	router := chi.NewRouter()

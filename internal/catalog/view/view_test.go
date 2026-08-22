@@ -11,38 +11,40 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 )
 
-// fixtureSnapshot registers every offering of one embedded-catalog
-// provider so its routes are routable.
-func fixtureSnapshot(t *testing.T, providerID catalogs.ProviderID) *runtimecatalog.RoutableSnapshot {
+// fixtureSnapshot registers every offering of the named embedded-catalog
+// providers so their routes are routable.
+func fixtureSnapshot(t *testing.T, providerIDs ...catalogs.ProviderID) *runtimecatalog.RoutableSnapshot {
 	t.Helper()
 	client, err := starmap.New()
 	require.NoError(t, err)
 	plane, err := runtimecatalog.Open(client)
 	require.NoError(t, err)
-	offerings, err := client.Catalog().ProviderOfferings(providerID)
-	require.NoError(t, err)
-	require.NotEmpty(t, offerings)
-	operations := make(map[catalogs.ProviderOperation]struct{})
-	endpointTypes := make(map[catalogs.EndpointType]struct{})
-	for _, offering := range offerings {
-		for _, operation := range offering.Service.Operations {
-			operations[operation] = struct{}{}
+	for _, providerID := range providerIDs {
+		offerings, err := client.Catalog().ProviderOfferings(providerID)
+		require.NoError(t, err)
+		require.NotEmpty(t, offerings)
+		operations := make(map[catalogs.ProviderOperation]struct{})
+		endpointTypes := make(map[catalogs.EndpointType]struct{})
+		for _, offering := range offerings {
+			for _, operation := range offering.Service.Operations {
+				operations[operation] = struct{}{}
+			}
+			for _, endpoint := range offering.Endpoints {
+				endpointTypes[endpoint.Type] = struct{}{}
+			}
 		}
-		for _, endpoint := range offering.Endpoints {
-			endpointTypes[endpoint.Type] = struct{}{}
+		availability := runtimecatalog.AdapterAvailability{
+			ProviderID: providerID,
+			Registered: true,
 		}
+		for operation := range operations {
+			availability.Operations = append(availability.Operations, operation)
+		}
+		for endpointType := range endpointTypes {
+			availability.EndpointTypes = append(availability.EndpointTypes, endpointType)
+		}
+		require.NoError(t, plane.SetAdapter(availability))
 	}
-	availability := runtimecatalog.AdapterAvailability{
-		ProviderID: providerID,
-		Registered: true,
-	}
-	for operation := range operations {
-		availability.Operations = append(availability.Operations, operation)
-	}
-	for endpointType := range endpointTypes {
-		availability.EndpointTypes = append(availability.EndpointTypes, endpointType)
-	}
-	require.NoError(t, plane.SetAdapter(availability))
 	snapshot := plane.Current()
 	require.NotNil(t, snapshot)
 	return snapshot
@@ -128,6 +130,60 @@ func TestProvidersProjectionContract(t *testing.T) {
 	unauth := Providers(snapshot, nil)
 	require.Len(t, unauth, 1)
 	require.False(t, unauth[0].RequiresAuth)
+}
+
+func TestModelsCarryEveryOffering(t *testing.T) {
+	snapshot := fixtureSnapshot(t, "google-ai-studio", "google-vertex")
+	var multi *ModelInfo
+	models := Models(snapshot)
+	for index := range models {
+		if len(models[index].Offerings) >= 2 {
+			multi = &models[index]
+			break
+		}
+	}
+	require.NotNil(t, multi,
+		"a model served by two providers must list every offering")
+	providers := make(map[string]struct{})
+	for _, offering := range multi.Offerings {
+		require.NotEmpty(t, offering.Provider)
+		require.NotEmpty(t, offering.ProviderModelID)
+		providers[offering.Provider] = struct{}{}
+	}
+	require.GreaterOrEqual(t, len(providers), 2,
+		"offerings must span both serving providers")
+}
+
+func TestModelsCarryDefinitionFacts(t *testing.T) {
+	snapshot := fixtureSnapshot(t, "anthropic")
+	models := Models(snapshot)
+	require.NotEmpty(t, models)
+	var withAuthors, withOfferings int
+	for _, model := range models {
+		if len(model.Authors) > 0 {
+			withAuthors++
+			require.NotEmpty(t, model.Authors[0].ID)
+		}
+		if len(model.Offerings) > 0 {
+			withOfferings++
+		}
+	}
+	require.NotZero(t, withAuthors,
+		"anthropic definitions carry author ids in the catalog")
+	require.Equal(t, len(models), withOfferings,
+		"every routable model has at least one offering")
+}
+
+func TestProvidersCarryPolicyFacts(t *testing.T) {
+	snapshot := fixtureSnapshot(t, "anthropic")
+	providers := Providers(snapshot, nil)
+	require.Len(t, providers, 1)
+	provider := providers[0]
+	require.NotEmpty(t, provider.Headquarters,
+		"anthropic carries headquarters in the catalog")
+	require.NotNil(t, provider.Policies,
+		"anthropic carries policy facts in the catalog")
+	require.NotEmpty(t, provider.Policies.PrivacyPolicyURL)
 }
 
 func TestEndpointsProjection(t *testing.T) {

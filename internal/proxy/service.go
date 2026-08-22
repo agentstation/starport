@@ -147,6 +147,16 @@ type (
 	CredentialFieldInfo = view.CredentialFieldInfo
 	// EndpointInfo represents an endpoint that can serve a model
 	EndpointInfo = view.EndpointInfo
+	// ModelAuthorInfo names one catalog author of a model.
+	ModelAuthorInfo = view.ModelAuthorInfo
+	// ModelLineageInfo describes canonical model-family relationships.
+	ModelLineageInfo = view.ModelLineageInfo
+	// ModelOfferingInfo is one provider's routable offering of a model.
+	ModelOfferingInfo = view.ModelOfferingInfo
+	// OfferingPricingInfo carries every token price dimension of one offering.
+	OfferingPricingInfo = view.OfferingPricingInfo
+	// ProviderPolicyInfo summarizes the provider's published data policies.
+	ProviderPolicyInfo = view.ProviderPolicyInfo
 )
 
 // ProvidersResponse represents provider information

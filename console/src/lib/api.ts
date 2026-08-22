@@ -137,12 +137,24 @@ export type CredentialField = {
   description?: string;
 };
 
+export type ProviderPolicies = {
+  privacy_policy_url?: string;
+  terms_of_service_url?: string;
+  retains_data?: boolean;
+  trains_on_data?: boolean;
+  retention?: string;
+  moderated?: boolean;
+};
+
 export type ProviderCatalogEntry = {
   id: string;
   name?: string;
+  description?: string;
   url?: string;
   models?: string[];
   credential_fields?: CredentialField[];
+  headquarters?: string;
+  policies?: ProviderPolicies;
 };
 
 export type ProviderRefreshReport = {
@@ -164,6 +176,31 @@ export type CatalogMetadata = {
   manifest_unavailable_reason?: string;
 };
 
+export type ModelAuthor = { id: string; name?: string };
+
+export type ModelLineage = { family?: string; root?: string; parent?: string };
+
+export type OfferingPricing = {
+  prompt?: string;
+  completion?: string;
+  reasoning?: string;
+  cache_read?: string;
+  cache_write?: string;
+  currency?: string;
+};
+
+// ModelOffering is one provider's routable offering of a model.
+export type ModelOffering = {
+  provider: string;
+  provider_name?: string;
+  provider_model_id: string;
+  context_length?: number;
+  max_completion_tokens?: number;
+  availability?: string;
+  lifecycle?: string;
+  pricing?: OfferingPricing;
+};
+
 export type Model = {
   id: string;
   name?: string;
@@ -176,6 +213,12 @@ export type Model = {
   };
   top_provider?: { max_completion_tokens?: number };
   supported_parameters?: string[];
+  authors?: ModelAuthor[];
+  tags?: string[];
+  lineage?: ModelLineage;
+  knowledge_cutoff?: string;
+  open_weights?: boolean;
+  offerings?: ModelOffering[];
 };
 
 export type OfferingChange = {

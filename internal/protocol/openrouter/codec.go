@@ -464,6 +464,49 @@ type Model struct {
 	Pricing             *Pricing      `json:"pricing,omitempty"`
 	TopProvider         *TopProvider  `json:"top_provider,omitempty"`
 	SupportedParameters []string      `json:"supported_parameters"`
+
+	// Catalog facts beyond the OpenRouter baseline surface
+	Authors         []ModelAuthor   `json:"authors,omitempty"`
+	Tags            []string        `json:"tags,omitempty"`
+	Lineage         *ModelLineage   `json:"lineage,omitempty"`
+	KnowledgeCutoff string          `json:"knowledge_cutoff,omitempty"`
+	OpenWeights     *bool           `json:"open_weights,omitempty"`
+	Offerings       []ModelOffering `json:"offerings,omitempty"`
+}
+
+// ModelAuthor names one catalog author of a model.
+type ModelAuthor struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
+// ModelLineage describes canonical model-family relationships.
+type ModelLineage struct {
+	Family string `json:"family,omitempty"`
+	Root   string `json:"root,omitempty"`
+	Parent string `json:"parent,omitempty"`
+}
+
+// ModelOffering is one provider's routable offering of a model.
+type ModelOffering struct {
+	Provider            string           `json:"provider"`
+	ProviderName        string           `json:"provider_name,omitempty"`
+	ProviderModelID     string           `json:"provider_model_id"`
+	ContextLength       *int             `json:"context_length,omitempty"`
+	MaxCompletionTokens *int             `json:"max_completion_tokens,omitempty"`
+	Availability        string           `json:"availability,omitempty"`
+	Lifecycle           string           `json:"lifecycle,omitempty"`
+	Pricing             *OfferingPricing `json:"pricing,omitempty"`
+}
+
+// OfferingPricing carries every token price dimension of one offering.
+type OfferingPricing struct {
+	Prompt     string `json:"prompt,omitempty"`
+	Completion string `json:"completion,omitempty"`
+	Reasoning  string `json:"reasoning,omitempty"`
+	CacheRead  string `json:"cache_read,omitempty"`
+	CacheWrite string `json:"cache_write,omitempty"`
+	Currency   string `json:"currency,omitempty"`
 }
 
 // Architecture describes one OpenRouter model architecture.

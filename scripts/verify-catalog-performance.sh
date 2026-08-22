@@ -34,7 +34,7 @@ check CPV01 "authors endpoints are registered on the API router" \
 check CPV02 "catalog presentation projection package exists with tests" \
   bash -c 'test -d internal/catalog/view && ls internal/catalog/view/*_test.go'
 check CPV03 "model projection carries a per-provider offerings table" \
-  grep_q '"offerings"' internal/catalog/view
+  grep_q 'json:"offerings' internal/catalog/view
 check CPV04 "provider projection populates the description field" \
   grep_q 'provider.Description' internal/catalog/view/providers.go
 check CPV05 "gateway serves catalog logos on a dedicated route" \
