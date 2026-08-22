@@ -31,7 +31,7 @@ const CONTROLS: ControlsConfig = {
   mermaid: { copy: true, download: false, fullscreen: true, panZoom: true },
 };
 
-function Markdown({ text, streaming }: { text: string; streaming: boolean }) {
+export function Markdown({ text, streaming }: { text: string; streaming: boolean }) {
   return (
     <Streamdown
       mode={streaming ? "streaming" : "static"}
@@ -158,7 +158,7 @@ function RetryMenu({
 // ReasoningFold auto-opens while the model is reasoning and collapses
 // when the answer starts, unless the user has toggled it by hand
 // (legacy behavior).
-function ReasoningFold({
+export function ReasoningFold({
   reasoning,
   active,
   reasoningMs,
@@ -229,7 +229,7 @@ function costText(message: ChatMessage, model: Model | undefined): string | null
 
 // MetadataLine carries the legacy badge set: ttft, total latency, tok/s,
 // token counts, reasoning tokens, cache state, cost, stopped, unenforced.
-function MetadataLine({
+export function MetadataLine({
   message,
   model,
 }: {

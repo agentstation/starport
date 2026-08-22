@@ -3,9 +3,11 @@ import {
   ArrowUp,
   Brain,
   ChevronDown,
+  Columns2,
   Plus,
   SlidersHorizontal,
   Square,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -243,6 +245,11 @@ export function Composer({
   pickerOpen,
   onPickerOpenChange,
   autoFocus,
+  compareActive,
+  compareModels,
+  onCompareToggle,
+  onCompareAdd,
+  onCompareRemove,
 }: {
   draft: string;
   onDraftChange: (next: string) => void;
@@ -258,6 +265,13 @@ export function Composer({
   pickerOpen: boolean;
   onPickerOpenChange: (open: boolean) => void;
   autoFocus?: boolean;
+  // Compare mode (CM12): when active, the picker attaches models as
+  // chips beside its trigger instead of switching the session model.
+  compareActive?: boolean;
+  compareModels?: string[];
+  onCompareToggle?: () => void;
+  onCompareAdd?: (id: string) => void;
+  onCompareRemove?: (id: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<"none" | "plus" | "effort" | "params">("none");
@@ -291,9 +305,12 @@ export function Composer({
     if (autoFocus) textareaRef.current?.focus();
   }, [autoFocus]);
 
+  const compareCount = compareModels?.length ?? 0;
+
   const send = () => {
     const text = draft.trim();
-    if (!text || streaming || !model) return;
+    if (!text || streaming) return;
+    if (compareActive ? compareCount < 2 : !model) return;
     onSend(text);
   };
 
@@ -307,7 +324,9 @@ export function Composer({
     }
   };
 
-  const canSend = Boolean(draft.trim()) && Boolean(model);
+  const canSend =
+    Boolean(draft.trim()) &&
+    (compareActive ? compareCount >= 2 : Boolean(model));
 
   return (
     <div className="relative rounded-xl border border-border-2 bg-bg-raised">
@@ -317,11 +336,11 @@ export function Composer({
         onChange={(event) => onDraftChange(event.target.value)}
         onKeyDown={onKeyDown}
         rows={1}
-        placeholder="Message the model…"
+        placeholder={compareActive ? "Message every attached model…" : "Message the model…"}
         aria-label="Message"
         className="w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-base text-text-1 outline-none placeholder:text-text-4"
       />
-      <div className="flex items-center gap-1 px-2 pb-2">
+      <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
         <div className="relative">
           <BarButton
             onClick={() => setMenu(menu === "plus" ? "none" : "plus")}
@@ -357,22 +376,62 @@ export function Composer({
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
+        {onCompareToggle && (
+          <BarButton
+            onClick={onCompareToggle}
+            label={compareActive ? "Exit compare" : "Compare models"}
+            active={compareActive}
+          >
+            <Columns2 className="size-4" />
+            {compareActive && <span>Compare</span>}
+          </BarButton>
+        )}
+
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+          {compareActive &&
+            (compareModels ?? []).map((id) => (
+              <span
+                key={id}
+                className="flex h-7 items-center gap-1 rounded-full border border-border-2 bg-bg-panel py-0.5 pl-2.5 pr-1 font-mono text-xs text-text-2"
+                title={id}
+              >
+                <span className="max-w-36 truncate">{shortModelName(id)}</span>
+                <button
+                  type="button"
+                  onClick={() => onCompareRemove?.(id)}
+                  disabled={streaming}
+                  aria-label={`Remove ${id} from comparison`}
+                  className="rounded-full p-0.5 text-text-4 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 disabled:opacity-40"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))}
           <div className="relative">
             <BarButton
               onClick={() => onPickerOpenChange(!pickerOpen)}
-              label="Choose model (⌘K)"
+              label={compareActive ? "Add model to comparison (⌘K)" : "Choose model (⌘K)"}
               active={pickerOpen}
             >
-              <span className="max-w-48 truncate">{shortModelName(model)}</span>
+              <span className="max-w-48 truncate">
+                {compareActive
+                  ? `Add model (${compareCount}/4)`
+                  : shortModelName(model)}
+              </span>
               <ChevronDown className="size-3.5" />
             </BarButton>
             {pickerOpen && (
               <ModelPicker
-                value={model}
+                value={compareActive ? "" : model}
                 favorites={favorites}
                 onToggleFavorite={onToggleFavorite}
                 onSelect={(id) => {
+                  if (compareActive) {
+                    // Stay open so a set of models can be attached in
+                    // one visit; chips give immediate feedback.
+                    onCompareAdd?.(id);
+                    return;
+                  }
                   onModelChange(id);
                   onPickerOpenChange(false);
                   textareaRef.current?.focus();
@@ -385,7 +444,7 @@ export function Composer({
             )}
           </div>
 
-          {reasoning && (
+          {reasoning && !compareActive && (
             <div className="relative">
               <BarButton
                 onClick={() => setMenu(menu === "effort" ? "none" : "effort")}
