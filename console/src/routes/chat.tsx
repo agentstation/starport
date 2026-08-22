@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { ArrowDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { Composer } from "@/components/chat/Composer";
+import { AssistantMessage, UserMessage } from "@/components/chat/Messages";
 import { supportsReasoning } from "@/components/chat/ModelPicker";
 import { ThreadList } from "@/components/chat/ThreadList";
 import {
@@ -97,37 +98,6 @@ function requestMessages(
   return messages;
 }
 
-function MessageView({ message }: { message: ChatMessage }) {
-  if (message.role === "user") {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-xl bg-bg-raised px-4 py-2.5 text-base text-text-1">
-          {message.content}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="text-base text-text-1">
-      {message.model && (
-        <p className="mb-1 font-mono text-xs text-text-4">{message.model}</p>
-      )}
-      {message.error ? (
-        <p className="text-sm text-error">{message.content || "Request failed."}</p>
-      ) : message.content ? (
-        <div className="whitespace-pre-wrap leading-relaxed">
-          {message.content}
-        </div>
-      ) : (
-        <p className="text-text-3">Thinking…</p>
-      )}
-      {message.stopped && (
-        <p className="mt-1 text-sm text-text-4">Stopped.</p>
-      )}
-    </div>
-  );
-}
-
 function ChatPage() {
   const navigate = useNavigate();
   const { model: seedModel } = Route.useSearch();
@@ -145,8 +115,15 @@ function ChatPage() {
     () => localStorage.getItem(STARTERS_KEY) === "dismissed",
   );
 
+  // Scroll lock: auto-follow the stream only while the user stays near
+  // the bottom; a scroll-to-bottom pill appears once they scroll away.
+  const [pinned, setPinned] = useState(true);
+
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // When the first content token of the active stream arrived; drives
+  // the live ~tok/s estimate.
+  const streamStartRef = useRef<number | null>(null);
 
   const models = useQuery({
     queryKey: ["models"],
@@ -205,12 +182,23 @@ function ChatPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Follow the stream: keep the scroll pinned to the bottom.
+  // Opening a thread always starts at the bottom.
+  useEffect(() => {
+    setPinned(true);
+  }, [activeId]);
+
+  // Follow the stream while pinned near the bottom.
   const activeMessages = active?.messages;
   useEffect(() => {
     const el = scrollRef.current;
+    if (el && pinned) el.scrollTop = el.scrollHeight;
+  }, [activeMessages, activeId, pinned]);
+
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [activeMessages, activeId]);
+    setPinned(true);
+  };
 
   const draftKey = activeId ?? "new";
   const draft = drafts[draftKey] ?? "";
@@ -302,6 +290,14 @@ function ChatPage() {
       setActiveId(conversation.id);
       setNewParams({ ...DEFAULT_PARAMS });
     }
+    setDrafts((previous) => ({ ...previous, [draftKey]: "" }));
+    sendTo(conversation, text);
+  };
+
+  // sendTo streams one exchange into the given conversation snapshot.
+  // send, retry, and edit all funnel through here; retry and edit pass
+  // a snapshot whose messages were truncated at the redone turn.
+  const sendTo = (conversation: Conversation, text: string) => {
     const conversationId = conversation.id;
     const isFirstExchange = conversation.messages.length === 0;
     rememberModel(conversation.model);
@@ -313,7 +309,7 @@ function ChatPage() {
       messages: [...current.messages, userMessage, placeholder],
       updatedAt: Date.now(),
     }));
-    setDrafts((previous) => ({ ...previous, [draftKey]: "" }));
+    setPinned(true);
 
     const body: Record<string, unknown> = {
       model: conversation.model,
@@ -343,7 +339,9 @@ function ChatPage() {
 
     const startedAt = performance.now();
     let firstTokenAt: number | undefined;
+    let reasoningStartAt: number | undefined;
     let sawContent = false;
+    streamStartRef.current = null;
 
     const patchLast = (mutate: (message: ChatMessage) => ChatMessage) => {
       updateConversation(conversationId, (current) => {
@@ -359,12 +357,23 @@ function ChatPage() {
     streamChat(body, {
       signal: controller.signal,
       onDelta: (delta) => {
-        if (firstTokenAt === undefined) firstTokenAt = performance.now();
-        sawContent = true;
+        const now = performance.now();
+        if (firstTokenAt === undefined) firstTokenAt = now;
+        if (!sawContent) {
+          sawContent = true;
+          streamStartRef.current = now;
+          // The answer started: close out the reasoning stopwatch.
+          if (reasoningStartAt !== undefined) {
+            const reasoningMs = now - reasoningStartAt;
+            patchLast((message) => ({ ...message, reasoningMs }));
+          }
+        }
         patchLast((message) => ({ ...message, content: message.content + delta }));
       },
       onReasoning: (delta) => {
-        if (firstTokenAt === undefined) firstTokenAt = performance.now();
+        const now = performance.now();
+        if (firstTokenAt === undefined) firstTokenAt = now;
+        if (reasoningStartAt === undefined) reasoningStartAt = now;
         patchLast((message) => ({
           ...message,
           reasoning: (message.reasoning ?? "") + delta,
@@ -384,10 +393,16 @@ function ChatPage() {
           },
           meta,
         );
+        // A reasoning-only completion never hit the onDelta stopwatch.
+        const reasoningMs =
+          reasoningStartAt !== undefined && !sawContent
+            ? performance.now() - reasoningStartAt
+            : undefined;
         patchLast((message) => ({
           ...message,
           model: meta.model || undefined,
           stats,
+          ...(reasoningMs !== undefined ? { reasoningMs } : {}),
         }));
         if (isFirstExchange) {
           const current = { ...conversation, id: conversationId };
@@ -396,8 +411,17 @@ function ChatPage() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
-          if (sawContent) {
-            patchLast((message) => ({ ...message, stopped: true }));
+          if (sawContent || reasoningStartAt !== undefined) {
+            // Keep partial output (content or reasoning) marked stopped.
+            const reasoningMs =
+              reasoningStartAt !== undefined && !sawContent
+                ? performance.now() - reasoningStartAt
+                : undefined;
+            patchLast((message) => ({
+              ...message,
+              stopped: true,
+              ...(reasoningMs !== undefined ? { reasoningMs } : {}),
+            }));
           } else {
             // Nothing arrived; drop the empty placeholder.
             updateConversation(conversationId, (current) => ({
@@ -406,7 +430,8 @@ function ChatPage() {
                 (message, index) =>
                   !(index === current.messages.length - 1 &&
                     message.role === "assistant" &&
-                    !message.content),
+                    !message.content &&
+                    !message.reasoning),
               ),
             }));
           }
@@ -423,6 +448,41 @@ function ChatPage() {
         setStreamingId((current) => (current === conversationId ? null : current));
       });
   };
+
+  // retry redoes the exchange that produced the assistant turn at
+  // `index`, optionally on a different model. The turn (and everything
+  // after it) is replaced.
+  const retry = (index: number, modelOverride?: string) => {
+    if (!active || streamingId) return;
+    const prior = active.messages[index - 1];
+    if (!prior || prior.role !== "user") return;
+    const truncated = active.messages.slice(0, index - 1);
+    const nextModel = modelOverride ?? active.model;
+    updateConversation(active.id, (conversation) => ({
+      ...conversation,
+      messages: truncated,
+      model: nextModel,
+    }));
+    sendTo({ ...active, messages: truncated, model: nextModel }, prior.content);
+  };
+
+  // editMessage resends a revised user turn; the conversation is
+  // truncated at that turn.
+  const editMessage = (index: number, text: string) => {
+    if (!active || streamingId) return;
+    const truncated = active.messages.slice(0, index);
+    updateConversation(active.id, (conversation) => ({
+      ...conversation,
+      messages: truncated,
+    }));
+    sendTo({ ...active, messages: truncated }, text);
+  };
+
+  // Retry-with-model options: the thread's model first, then favorites.
+  const retryOptions = useMemo(
+    () => [...new Set([model, ...favorites])].filter(Boolean),
+    [model, favorites],
+  );
 
   const dismissStarters = () => {
     localStorage.setItem(STARTERS_KEY, "dismissed");
@@ -500,14 +560,64 @@ function ChatPage() {
 
         {active ? (
           <>
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+            <div
+              ref={scrollRef}
+              onScroll={(event) => {
+                const el = event.currentTarget;
+                const nearBottom =
+                  el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+                setPinned(nearBottom);
+              }}
+              className="min-h-0 flex-1 overflow-y-auto"
+            >
               <div className="mx-auto flex max-w-[768px] flex-col gap-6 px-4 py-6">
-                {active.messages.map((message, index) => (
-                  <MessageView key={index} message={message} />
-                ))}
+                {active.messages.map((message, index) =>
+                  message.role === "user" ? (
+                    <UserMessage
+                      key={index}
+                      message={message}
+                      onEdit={
+                        streamingId
+                          ? undefined
+                          : (text) => editMessage(index, text)
+                      }
+                    />
+                  ) : (
+                    <AssistantMessage
+                      key={index}
+                      message={message}
+                      streaming={
+                        streamingId === active.id &&
+                        index === active.messages.length - 1
+                      }
+                      liveStartedAt={streamStartRef.current ?? undefined}
+                      modelRecord={models.data?.find(
+                        (candidate) =>
+                          candidate.id === (message.model ?? active.model),
+                      )}
+                      retryModels={retryOptions}
+                      onRetry={
+                        streamingId
+                          ? undefined
+                          : (nextModel) => retry(index, nextModel)
+                      }
+                    />
+                  ),
+                )}
               </div>
             </div>
-            <div className="mx-auto w-full max-w-[768px] px-4 pb-4">
+            <div className="relative mx-auto w-full max-w-[768px] px-4 pb-4">
+              {!pinned && (
+                <button
+                  type="button"
+                  onClick={scrollToBottom}
+                  aria-label="Scroll to latest message"
+                  className="absolute -top-10 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border-2 bg-bg-panel px-3 py-1.5 text-xs text-text-2 shadow-md transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
+                >
+                  <ArrowDown className="size-3.5" />
+                  Latest
+                </button>
+              )}
               {composer}
             </div>
           </>

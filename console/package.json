@@ -11,14 +11,19 @@
     "check": "pnpm build && pnpm typecheck"
   },
   "dependencies": {
+    "@streamdown/code": "^1.1.1",
+    "@streamdown/math": "^1.0.2",
+    "@streamdown/mermaid": "^1.0.2",
     "@tanstack/react-query": "5.101.4",
     "@tanstack/react-router": "1.170.31",
     "@tanstack/react-table": "9.1.2",
     "@tanstack/react-virtual": "3.14.10",
+    "katex": "^0.16.47",
     "lucide-react": "1.33.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "recharts": "3.10.1"
+    "recharts": "3.10.1",
+    "streamdown": "2.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
