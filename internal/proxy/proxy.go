@@ -5,12 +5,11 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strconv"
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/router"
@@ -484,157 +483,7 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 }
 
 func modelsResponseFromSnapshot(snapshot *runtimecatalog.RoutableSnapshot) *ModelsResponse {
-	if snapshot == nil {
-		return &ModelsResponse{Object: "list"}
-	}
-	definitions := snapshot.Definitions()
-	models := make([]ModelInfo, 0, len(definitions))
-	for _, definition := range definitions {
-		created := definition.CreatedAt.Unix()
-		if !definition.Metadata.ReleaseDate.IsZero() {
-			created = definition.Metadata.ReleaseDate.Unix()
-		}
-		ownedBy := ""
-		if len(definition.AuthorIDs) > 0 {
-			ownedBy = string(definition.AuthorIDs[0])
-		}
-		model := ModelInfo{
-			ID:      string(definition.ID),
-			Object:  "model",
-			Created: created,
-			OwnedBy: ownedBy,
-		}
-		enrichModelInfo(snapshot, definition, &model)
-		models = append(models, model)
-	}
-	return &ModelsResponse{Object: "list", Data: models}
-}
-
-func enrichModelInfo(
-	snapshot *runtimecatalog.RoutableSnapshot,
-	definition starmapcatalogs.ModelDefinition,
-	model *ModelInfo,
-) {
-	if snapshot == nil || model == nil {
-		return
-	}
-	model.CanonicalSlug = string(definition.ID)
-	model.Name = definition.Name
-	model.Description = definition.Description
-	if definition.Weights.Architecture != nil {
-		model.Architecture = &ModelArchitecture{
-			InputModalities:  modelInputModalities(definition),
-			OutputModalities: modelOutputModalities(definition),
-			Tokenizer:        definition.Weights.Architecture.Tokenizer.String(),
-		}
-	} else {
-		model.Architecture = &ModelArchitecture{
-			InputModalities:  modelInputModalities(definition),
-			OutputModalities: modelOutputModalities(definition),
-		}
-	}
-	model.SupportedParameters = supportedModelParameters(definition)
-	routes := snapshot.RoutesForDefinition(definition.ID)
-	if len(routes) == 0 {
-		return
-	}
-	offering, err := snapshot.Offering(routes[0])
-	if err != nil {
-		return
-	}
-	if offering.Limits != nil {
-		contextLength := boundedModelInt(offering.Limits.ContextWindow)
-		model.Context = &contextLength
-		model.TopProvider = &TopProviderInfo{
-			ContextLength:       contextLength,
-			MaxCompletionTokens: boundedModelInt(offering.Limits.OutputTokens),
-		}
-	}
-	if offering.Pricing != nil && offering.Pricing.Tokens != nil {
-		model.Pricing = &ModelPricing{Currency: offering.Pricing.Currency.String()}
-		if offering.Pricing.Tokens.Input != nil {
-			model.Pricing.Prompt = formatTokenPrice(offering.Pricing.Tokens.Input)
-		}
-		if offering.Pricing.Tokens.Output != nil {
-			model.Pricing.Completion = formatTokenPrice(offering.Pricing.Tokens.Output)
-		}
-	}
-}
-
-func formatTokenPrice(cost *starmapcatalogs.ModelTokenCost) string {
-	if cost == nil {
-		return ""
-	}
-	value := cost.PerToken
-	if value == 0 && cost.Per1M != 0 {
-		value = cost.Per1M / 1_000_000
-	}
-	return strconv.FormatFloat(value, 'g', -1, 64)
-}
-
-func boundedModelInt(value int64) int {
-	maxInt := int64(^uint(0) >> 1)
-	if value > maxInt {
-		return int(maxInt)
-	}
-	return int(value)
-}
-
-func modelInputModalities(definition starmapcatalogs.ModelDefinition) []string {
-	if definition.Capabilities.Features == nil {
-		return nil
-	}
-	result := make([]string, 0, len(definition.Capabilities.Features.Modalities.Input))
-	for _, modality := range definition.Capabilities.Features.Modalities.Input {
-		result = append(result, modality.String())
-	}
-	return result
-}
-
-func modelOutputModalities(definition starmapcatalogs.ModelDefinition) []string {
-	if definition.Capabilities.Features == nil {
-		return nil
-	}
-	result := make([]string, 0, len(definition.Capabilities.Features.Modalities.Output))
-	for _, modality := range definition.Capabilities.Features.Modalities.Output {
-		result = append(result, modality.String())
-	}
-	return result
-}
-
-func supportedModelParameters(definition starmapcatalogs.ModelDefinition) []string {
-	features := definition.Capabilities.Features
-	if features == nil {
-		return nil
-	}
-	parameters := make([]string, 0, 16)
-	for _, item := range []struct {
-		name      string
-		supported bool
-	}{
-		{"tools", features.Tools},
-		{"tool_choice", features.ToolChoice},
-		{"reasoning", features.Reasoning},
-		{"reasoning_effort", features.ReasoningEffort},
-		{"temperature", features.Temperature},
-		{"top_p", features.TopP},
-		{"top_k", features.TopK},
-		{"max_tokens", features.MaxTokens || features.MaxOutputTokens},
-		{"stop", features.Stop},
-		{"frequency_penalty", features.FrequencyPenalty},
-		{"presence_penalty", features.PresencePenalty},
-		{"logit_bias", features.LogitBias},
-		{"seed", features.Seed},
-		{"logprobs", features.Logprobs},
-		{"top_logprobs", features.TopLogprobs},
-		{"n", features.N},
-		{"response_format", features.StructuredOutputs},
-	} {
-		if item.supported {
-			parameters = append(parameters, item.name)
-		}
-	}
-	return parameters
+	return &ModelsResponse{Object: "list", Data: view.Models(snapshot)}
 }
 
 // ListProviders returns available provider information
@@ -653,86 +502,7 @@ func providerInfosFromRuntime(runtime connectors.RuntimeLease) []ProviderInfo {
 	if runtime == nil {
 		return nil
 	}
-	snapshot := runtime.Snapshot()
-	if snapshot == nil {
-		return nil
-	}
-	seen := make(map[starmapcatalogs.ProviderID]struct{})
-	providers := make([]ProviderInfo, 0)
-	for _, route := range snapshot.Routes() {
-		if _, exists := seen[route.ProviderID]; exists {
-			continue
-		}
-		provider, err := snapshot.Catalog().Provider(route.ProviderID)
-		if err != nil {
-			continue
-		}
-		info := ProviderInfo{
-			ID: string(provider.ID), Name: provider.Name,
-			RequiresAuth:     runtime.RequiresAuthentication(string(provider.ID)),
-			CredentialFields: inferenceCredentialFields(provider),
-		}
-		if provider.StatusPageURL != nil {
-			info.URL = *provider.StatusPageURL
-		}
-		capabilities := make(map[string]struct{})
-		for _, providerRoute := range snapshot.RoutesForProvider(route.ProviderID) {
-			info.Models = append(info.Models, providerRoute.ID())
-			for _, operation := range providerRoute.Operations {
-				capabilities[string(operation)] = struct{}{}
-			}
-		}
-		for capability := range capabilities {
-			info.Capabilities = append(info.Capabilities, capability)
-		}
-		sort.Strings(info.Capabilities)
-		seen[route.ProviderID] = struct{}{}
-		providers = append(providers, info)
-	}
-	return providers
-}
-
-// inferenceCredentialFields projects the catalog's inference credential
-// contract in profile order, deduplicated across alternatives.
-func inferenceCredentialFields(provider starmapcatalogs.Provider) []CredentialFieldInfo {
-	contract := provider.Credentials
-	if contract == nil {
-		return nil
-	}
-	fields := make(map[starmapcatalogs.ProviderCredentialFieldID]starmapcatalogs.ProviderCredentialField, len(contract.Fields))
-	for _, field := range contract.Fields {
-		fields[field.ID] = field
-	}
-	profiles := make(map[starmapcatalogs.ProviderCredentialProfileID]starmapcatalogs.ProviderCredentialProfile, len(contract.Profiles))
-	for _, profile := range contract.Profiles {
-		profiles[profile.ID] = profile
-	}
-	seen := make(map[starmapcatalogs.ProviderCredentialFieldID]struct{})
-	infos := make([]CredentialFieldInfo, 0)
-	for _, profileID := range contract.Inference.Alternatives {
-		profile, exists := profiles[profileID]
-		if !exists {
-			continue
-		}
-		for _, fieldID := range profile.Fields {
-			if _, exists := seen[fieldID]; exists {
-				continue
-			}
-			field, exists := fields[fieldID]
-			if !exists {
-				continue
-			}
-			seen[fieldID] = struct{}{}
-			infos = append(infos, CredentialFieldInfo{
-				ID:          string(field.ID),
-				Kind:        string(field.Kind),
-				Required:    field.Required,
-				Default:     field.Default,
-				Description: field.Description,
-			})
-		}
-	}
-	return infos
+	return view.Providers(runtime.Snapshot(), runtime.RequiresAuthentication)
 }
 
 func cacheTokenPrices(snapshot *runtimecatalog.RoutableSnapshot, modelID string) (float64, float64, bool) {
@@ -782,29 +552,9 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEn
 	if snapshot == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
-	endpoints := make([]EndpointInfo, 0)
-	for _, route := range snapshot.Routes() {
-		if route.ID() != modelID && string(route.DefinitionID) != modelID {
-			continue
-		}
-		endpoint, found := route.Endpoint(starmapcatalogs.ProviderOperationChatCompletions)
-		if !found {
-			continue
-		}
-		info := EndpointInfo{
-			Provider: string(route.ProviderID), Endpoint: endpoint.URL, Available: true,
-		}
-		offering, err := snapshot.Offering(route)
-		if err == nil && offering.Pricing != nil && offering.Pricing.Tokens != nil {
-			info.CostPrompt = formatTokenPrice(offering.Pricing.Tokens.Input)
-			info.CostOutput = formatTokenPrice(offering.Pricing.Tokens.Output)
-		}
-		endpoints = append(endpoints, info)
-	}
-
 	return &ModelEndpointsResponse{
 		Model:     modelID,
-		Endpoints: endpoints,
+		Endpoints: view.Endpoints(snapshot, modelID),
 	}, nil
 }
 

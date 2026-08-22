@@ -48,7 +48,6 @@ func TestOfferingCacheCapability(t *testing.T) {
 }
 
 func TestOfferingPriceHasNoFallback(t *testing.T) {
-	require.Empty(t, formatTokenPrice(nil))
 	_, _, ok := cacheTokenPrices(nil, "provider/model")
 	require.False(t, ok)
 

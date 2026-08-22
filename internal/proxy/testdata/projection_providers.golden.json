@@ -1,0 +1,53 @@
+[
+  {
+    "id": "anthropic",
+    "name": "Anthropic",
+    "url": "https://status.anthropic.com",
+    "models": [
+      "anthropic/claude-fable-5",
+      "anthropic/claude-haiku-4-5-20251001",
+      "anthropic/claude-opus-4-1-20250805",
+      "anthropic/claude-opus-4-5-20251101",
+      "anthropic/claude-opus-4-6",
+      "anthropic/claude-opus-4-7",
+      "anthropic/claude-opus-4-8",
+      "anthropic/claude-sonnet-4-5-20250929",
+      "anthropic/claude-sonnet-4-6",
+      "anthropic/claude-sonnet-5"
+    ],
+    "capabilities": [
+      "chat-completions"
+    ],
+    "requires_auth": true,
+    "credential_fields": [
+      {
+        "id": "api-key",
+        "kind": "secret",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "groq",
+    "name": "Groq",
+    "url": "https://status.groq.com",
+    "models": [
+      "groq/groq/compound",
+      "groq/groq/compound-mini",
+      "groq/whisper-large-v3",
+      "groq/whisper-large-v3-turbo",
+      "groq/allam-2-7b"
+    ],
+    "capabilities": [
+      "chat-completions"
+    ],
+    "requires_auth": true,
+    "credential_fields": [
+      {
+        "id": "api-key",
+        "kind": "secret",
+        "required": true
+      }
+    ]
+  }
+]

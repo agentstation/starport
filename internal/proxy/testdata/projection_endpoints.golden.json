@@ -1,0 +1,12 @@
+{
+  "model": "anthropic/claude-fable-5",
+  "endpoints": [
+    {
+      "provider": "anthropic",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "available": true,
+      "cost_prompt": "1e-05",
+      "cost_output": "5e-05"
+    }
+  ]
+}
