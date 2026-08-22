@@ -32,4 +32,14 @@ type geminiUsageMetadata struct {
 type geminiResponse struct {
 	Candidates    []geminiCandidate   `json:"candidates"`
 	UsageMetadata geminiUsageMetadata `json:"usageMetadata"`
+	// Error is a provider rejection delivered inside the stream body. A
+	// chunk that carries it is a failure, never an empty candidate list.
+	Error *geminiError `json:"error,omitempty"`
+}
+
+// geminiError is the google.rpc.Status shape Gemini embeds in stream bodies.
+type geminiError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Status  string `json:"status"`
 }

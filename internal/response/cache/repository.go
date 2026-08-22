@@ -20,6 +20,9 @@ var (
 	ErrCorruptRecord = errors.New("response-cache record is invalid")
 	// ErrKindMismatch reports a record payload that does not match its kind.
 	ErrKindMismatch = errors.New("response-cache record kind does not match")
+	// ErrEmptyResponse reports a completion with nothing a later request
+	// can reuse. Caching one would replay a provider failure as a success.
+	ErrEmptyResponse = errors.New("response-cache refuses an empty completion")
 )
 
 // Store is the byte-cache contract required by the repository.
@@ -82,8 +85,32 @@ func (r *repository) GetChat(ctx context.Context, key string) (inference.ChatRes
 }
 
 func (r *repository) PutChat(ctx context.Context, key string, response inference.ChatResponse) error {
+	if emptyChatResponse(response) {
+		return ErrEmptyResponse
+	}
 	response = response.Clone()
 	return r.put(ctx, key, record{Kind: "chat", Chat: &response})
+}
+
+// emptyChatResponse reports a completion that carries no reusable output:
+// no choices, or choices without content, reasoning, or tool calls while
+// the provider reported zero output tokens. That shape is the residue of a
+// dropped provider error, not a cacheable result.
+func emptyChatResponse(response inference.ChatResponse) bool {
+	if len(response.Choices) == 0 {
+		return true
+	}
+	if response.Usage.OutputTokens > 0 {
+		return false
+	}
+	for _, choice := range response.Choices {
+		if len(choice.Message.Content) > 0 ||
+			choice.Message.Reasoning != "" ||
+			len(choice.Message.ToolCalls) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *repository) GetEmbedding(ctx context.Context, key string) (inference.EmbeddingResponse, time.Time, bool, error) {

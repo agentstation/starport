@@ -427,6 +427,21 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			continue
 		}
 
+		// A rejection inside the stream body must fail the stream, never
+		// pass as a candidate-free chunk.
+		if geminiResp.Error != nil {
+			s.closed = true
+			statusCode := geminiResp.Error.Code
+			if statusCode < 400 {
+				statusCode = http.StatusBadGateway
+			}
+			return nil, &APIError{
+				StatusCode: statusCode,
+				Type:       geminiResp.Error.Status,
+				Message:    geminiResp.Error.Message,
+			}
+		}
+
 		// Convert to OpenAI format
 		if len(geminiResp.Candidates) > 0 {
 			content := ""

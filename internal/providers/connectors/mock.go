@@ -21,9 +21,12 @@ type MockConnector struct {
 	embeddingError error
 	chatResponse   *ChatResponse
 	streamChunks   []ChatStreamChunk
-	embeddingResp  *EmbeddingsResponse
-	closed         bool
-	mu             sync.RWMutex
+	// streamRecvError ends the mock stream after its chunks instead of
+	// io.EOF, imitating a provider error frame inside a 200 stream.
+	streamRecvError error
+	embeddingResp   *EmbeddingsResponse
+	closed          bool
+	mu              sync.RWMutex
 }
 
 // NewMockConnector creates a new mock connector
@@ -153,8 +156,9 @@ func (m *MockConnector) ChatStream(ctx context.Context, req *ChatRequest) (ChatS
 	}
 
 	return &mockChatStream{
-		chunks: m.streamChunks,
-		ctx:    ctx,
+		chunks:    m.streamChunks,
+		recvError: m.streamRecvError,
+		ctx:       ctx,
 	}, nil
 }
 
@@ -224,13 +228,22 @@ func (m *MockConnector) SetStreamChunks(chunks []ChatStreamChunk) {
 	m.streamChunks = chunks
 }
 
+// SetStreamRecvError terminates the mock stream with err after its chunks
+// instead of io.EOF, imitating a provider error frame inside a 200 stream.
+func (m *MockConnector) SetStreamRecvError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.streamRecvError = err
+}
+
 // mockChatStream implements ChatStream for testing
 type mockChatStream struct {
-	chunks []ChatStreamChunk
-	index  int
-	closed bool
-	ctx    context.Context
-	mu     sync.Mutex
+	chunks    []ChatStreamChunk
+	recvError error
+	index     int
+	closed    bool
+	ctx       context.Context
+	mu        sync.Mutex
 }
 
 // Recv receives the next chunk
@@ -250,6 +263,9 @@ func (s *mockChatStream) Recv() (*ChatStreamChunk, error) {
 	}
 
 	if s.index >= len(s.chunks) {
+		if s.recvError != nil {
+			return nil, s.recvError
+		}
 		return nil, io.EOF
 	}
 

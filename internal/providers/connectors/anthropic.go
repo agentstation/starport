@@ -440,6 +440,23 @@ func (s *anthropicStream) Recv() (*ChatStreamChunk, error) {
 				}
 			}
 
+			// An "error" event is a provider rejection inside the 200
+			// stream. It must fail the stream, never convert into an
+			// empty chunk.
+			if event.Type == sseEventError {
+				s.closed = true
+				apiErr := &APIError{
+					StatusCode: http.StatusBadGateway,
+					Message:    string(data),
+				}
+				if event.Error != nil {
+					apiErr.StatusCode = anthropicStreamErrorStatus(event.Error.Type)
+					apiErr.Type = event.Error.Type
+					apiErr.Message = event.Error.Message
+				}
+				return nil, apiErr
+			}
+
 			// Convert to OpenAI format
 			return s.convertToOpenAIChunk(&event), nil
 		}
@@ -518,4 +535,29 @@ type anthropicStreamEvent struct {
 		StopReason string `json:"stop_reason,omitempty"`
 	} `json:"delta,omitempty"`
 	Usage *anthropicUsage `json:"usage,omitempty"`
+	Error *struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+// anthropicStreamErrorStatus recovers the HTTP status Anthropic documents
+// for each in-stream error type.
+func anthropicStreamErrorStatus(errorType string) int {
+	switch errorType {
+	case "invalid_request_error":
+		return http.StatusBadRequest
+	case "authentication_error":
+		return http.StatusUnauthorized
+	case permissionErrorType:
+		return http.StatusForbidden
+	case "not_found_error":
+		return http.StatusNotFound
+	case "rate_limit_error":
+		return http.StatusTooManyRequests
+	case "overloaded_error":
+		return 529
+	default:
+		return http.StatusBadGateway
+	}
 }
