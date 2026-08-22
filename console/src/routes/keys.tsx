@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
+  accessMessage,
   ApiError,
   createKey,
   createProviderKey,
@@ -32,7 +33,7 @@ import {
   type ProviderCatalogEntry,
 } from "@/lib/api";
 import { formatCount, formatNanoUSD, formatRelativeTime } from "@/lib/format";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/keys")({
   component: KeysPage,
@@ -766,9 +767,12 @@ function ByokModal({
         ) : providerKeys.error ? (
           <p className="text-sm text-text-3">
             {providerKeys.error instanceof ApiError &&
-            providerKeys.error.needsKey
+            providerKeys.error.forbidden
               ? "Provider keys are self-managed: only requests authenticated with this key can view or change them."
-              : `Failed to load provider keys: ${providerKeys.error.message}`}
+              : providerKeys.error instanceof ApiError &&
+                  providerKeys.error.unauthorized
+                ? accessMessage(providerKeys.error, "keys:read")
+                : `Failed to load provider keys: ${providerKeys.error.message}`}
           </p>
         ) : (providerKeys.data ?? []).length === 0 ? (
           <p className="text-sm text-text-3">No provider keys attached.</p>
@@ -908,7 +912,7 @@ type ModalState =
   | null;
 
 function KeysPage() {
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<ModalState>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
@@ -920,7 +924,7 @@ function KeysPage() {
   const keys = useQuery({
     queryKey: ["keys"],
     queryFn: listKeys,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 
@@ -946,7 +950,7 @@ function KeysPage() {
       ),
   });
 
-  if (!hasKey) {
+  if (!keyUsable) {
     return (
       <div className="flex flex-col gap-4">
         <Header />
@@ -960,7 +964,7 @@ function KeysPage() {
     if (keys.error instanceof ApiError && keys.error.needsKey) {
       body = (
         <p className="text-base text-text-3">
-          Key management needs an admin-scoped key.
+          {accessMessage(keys.error, "admin")}
         </p>
       );
     } else {

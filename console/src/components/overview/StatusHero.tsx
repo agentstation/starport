@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { healthReady, listModels, systemInfo } from "@/lib/api";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 // StatusHero is the gateway identity strip: readiness, origin, version,
 // storage, uptime, and model count.
@@ -12,17 +12,17 @@ export function StatusHero() {
     refetchInterval: 30_000,
     retry: false,
   });
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const info = useQuery({
     queryKey: ["system-info"],
     queryFn: systemInfo,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const models = useQuery({
     queryKey: ["models"],
     queryFn: listModels,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 

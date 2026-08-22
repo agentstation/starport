@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
 import { ConnectCard } from "@/components/overview/ConnectCard";
-import { ApiError, listModels, listProviderCatalog } from "@/lib/api";
+import { accessMessage, ApiError, listModels, listProviderCatalog } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
 import {
   authorIdsOf,
@@ -14,7 +14,7 @@ import {
   type ModelsSearch,
   providerOf,
 } from "@/lib/modelFilter";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 // Filter state lives in the URL so a filtered view survives reload and
 // pastes as a link. Empty params are dropped from the search string.
@@ -69,7 +69,7 @@ function FilterSelect({
 const SEARCH_DEBOUNCE_MS = 200;
 
 function ModelsPage() {
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const searchRef = useRef<HTMLInputElement>(null);
@@ -92,13 +92,13 @@ function ModelsPage() {
   const models = useQuery({
     queryKey: ["models"],
     queryFn: listModels,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const catalog = useQuery({
     queryKey: ["provider-catalog"],
     queryFn: listProviderCatalog,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const providerNames = useMemo(
@@ -187,7 +187,7 @@ function ModelsPage() {
     [all, search],
   );
 
-  if (!hasKey) {
+  if (!keyUsable) {
     return (
       <div className="flex flex-col gap-4">
         <Header />
@@ -257,7 +257,7 @@ function ModelsPage() {
       {models.error ? (
         <p className="text-base text-text-3">
           {models.error instanceof ApiError && models.error.needsKey
-            ? "Your API key was rejected. Update it in Settings."
+            ? accessMessage(models.error, "models:read")
             : `Failed to load models: ${models.error.message}`}
         </p>
       ) : models.isPending ? (

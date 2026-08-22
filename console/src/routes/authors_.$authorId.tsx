@@ -15,7 +15,7 @@ import {
   type ProviderRuntimeStatus,
 } from "@/lib/api";
 import { formatContext } from "@/lib/format";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/authors_/$authorId")({
   component: AuthorDetailPage,
@@ -71,28 +71,28 @@ function ModelRow({
 
 function AuthorDetailPage() {
   const { authorId } = Route.useParams();
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
 
   const author = useQuery({
     queryKey: ["author", authorId],
     queryFn: () => getAuthor(authorId),
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const models = useQuery({
     queryKey: ["models"],
     queryFn: listModels,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   const status = useQuery({
     queryKey: ["provider-status"],
     queryFn: providerStatus,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 
-  if (!hasKey) {
+  if (!keyUsable) {
     return (
       <div className="flex flex-col gap-4">
         <BackLink />

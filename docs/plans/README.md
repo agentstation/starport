@@ -26,7 +26,7 @@
 ## Order
 
 The catalog, performance, and brand campaign is the one active plan.
-Its cleanup task (CP20) deletes both plans, both proof roots, and this
+Its cleanup task (CP21) deletes both plans, both proof roots, and this
 index when the campaign's final pull request merges.
 
 ## Proposed

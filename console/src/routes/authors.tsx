@@ -11,20 +11,20 @@ import {
 } from "@/components/authors/AuthorCard";
 import { ConnectCard } from "@/components/overview/ConnectCard";
 import { listAuthors, listModels } from "@/lib/api";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 
 export const Route = createFileRoute("/authors")({
   component: AuthorsPage,
 });
 
 function AuthorsPage() {
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const [query, setQuery] = useState("");
 
   const authors = useQuery({
     queryKey: ["authors"],
     queryFn: listAuthors,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
   // The authors list endpoint leaves `models` empty, so counts come
@@ -32,7 +32,7 @@ function AuthorsPage() {
   const models = useQuery({
     queryKey: ["models"],
     queryFn: listModels,
-    enabled: hasKey,
+    enabled: keyUsable,
     retry: false,
   });
 
@@ -53,7 +53,7 @@ function AuthorsPage() {
     [authors.data, trimmed, counts],
   );
 
-  if (!hasKey) {
+  if (!keyUsable) {
     return (
       <div className="flex flex-col gap-4">
         <Header count={0} />

@@ -13,6 +13,24 @@ export function setApiKey(key: string): void {
   } else {
     localStorage.removeItem(KEY_STORAGE);
   }
+  keyRejected = false;
+  for (const listener of keyListeners) listener();
+}
+
+// keyRejected records that the gateway refused the stored key outright. The
+// key is minted by the gateway and lives only in this browser, so a restart or
+// a new deployment leaves a stored key that no longer authenticates. Tracking
+// the rejection lets the console ask for a new key instead of reporting the
+// failure as a missing permission.
+let keyRejected = false;
+
+export function isApiKeyRejected(): boolean {
+  return keyRejected;
+}
+
+function recordKeyOutcome(rejected: boolean): void {
+  if (keyRejected === rejected) return;
+  keyRejected = rejected;
   for (const listener of keyListeners) listener();
 }
 
@@ -42,9 +60,25 @@ export class ApiError extends Error {
     return this.status === 403;
   }
 
+  // needsKey reports that the request was denied for a credential reason, so
+  // the caller should render a locked state instead of a failure. It does not
+  // say which reason; use `unauthorized` and `forbidden` for that, or
+  // accessMessage to phrase it.
   get needsKey(): boolean {
     return this.status === 401 || this.status === 403;
   }
+}
+
+// accessMessage phrases a denied request from its actual cause. A 401 means
+// the gateway did not accept the key at all, which a stale key from a previous
+// gateway process produces; a 403 means the key authenticated but lacks the
+// scope the route requires. Reporting the first as the second sends the reader
+// looking for a permission they already have.
+export function accessMessage(error: ApiError, scope: string): string {
+  if (error.unauthorized) {
+    return "Your API key was not accepted. Set a current key in Settings → Connection.";
+  }
+  return `Your API key lacks the ${scope} scope.`;
 }
 
 async function parseError(response: Response): Promise<ApiError> {
@@ -78,7 +112,14 @@ export async function request<T>(
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
-  if (!response.ok) throw await parseError(response);
+  if (!response.ok) {
+    const error = await parseError(response);
+    // Only an outright rejection invalidates the stored key. A 403 proves the
+    // key authenticated, so it must not send the console back to the prompt.
+    if (key && error.unauthorized) recordKeyOutcome(true);
+    throw error;
+  }
+  if (key) recordKeyOutcome(false);
   if (response.status === 204) return null as T;
   return response.json() as Promise<T>;
 }

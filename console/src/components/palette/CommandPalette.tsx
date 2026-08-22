@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { listAuthors, listModels, listProviderCatalog } from "@/lib/api";
 import { appliedTheme, setTheme } from "@/lib/theme";
-import { useHasApiKey } from "@/lib/useApiKey";
+import { useApiKeyUsable } from "@/lib/useApiKey";
 import {
   KIND_LABELS,
   searchPalette,
@@ -39,7 +39,7 @@ const PAGES: { path: string; label: string }[] = [
 // cache keys with the pages.
 export function CommandPalette() {
   const navigate = useNavigate();
-  const hasKey = useHasApiKey();
+  const keyUsable = useApiKeyUsable();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -60,7 +60,7 @@ export function CommandPalette() {
     };
   }, []);
 
-  const enabled = open && hasKey;
+  const enabled = open && keyUsable;
   const models = useQuery({
     queryKey: ["models"],
     queryFn: listModels,
