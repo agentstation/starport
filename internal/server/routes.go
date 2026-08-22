@@ -43,82 +43,96 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 	mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(selectProtocol(openRouterProtocol))
 
-		// Apply authentication middleware
-		r.Use(s.requireAPIKey)
-		r.Use(s.rateLimit)
-		r.Use(s.enforceBudgets)
-
-		// Chat completions with routing
-		r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.OpenRouterChat.Create)
-
-		// Embeddings
-		r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.OpenRouterEmbeddings.Create)
-
-		// Models with enhanced metadata
-		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.OpenRouterModels.List)
-		r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.OpenRouterModels.Get)
-		r.With(s.requireAnyScope("models:read")).Get("/models/{model}/endpoints", s.controllers.OpenRouterModels.GetEndpoints)
-
-		// Providers metadata
-		r.With(s.requireAnyScope("models:read")).Get("/providers", s.controllers.Providers.List)
-
-		// Catalog freshness and changes
-		r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Metadata)
-		r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
-
-		// Key management endpoints
-		r.Route("/keys/{key_id}/provider-keys", func(r chi.Router) {
-			r.Use(s.requireKeyOwnership) // Additional middleware to verify key ownership
-
-			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/", s.controllers.ProviderKeys.List)
-			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/", s.controllers.ProviderKeys.Create)
-			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/{provider}", s.controllers.ProviderKeys.Get)
-			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Put("/{provider}", s.controllers.ProviderKeys.Update)
-			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Delete("/{provider}", s.controllers.ProviderKeys.Delete)
-			r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/{provider}/validate", s.controllers.ProviderKeys.Validate)
+		// Catalog logos: bundled brand marks served without credentials so
+		// plain <img> tags render identity. Grouped separately to stay
+		// outside the API-key middleware below.
+		r.Group(func(r chi.Router) {
+			r.Get("/logos/{kind}/{id}.svg", s.controllers.Logos.Get)
 		})
 
-		// Usage endpoints
-		r.Route("/keys/{key_id}/usage", func(r chi.Router) {
-			r.Use(s.requireKeyOwnership)
+		// Every other route requires an API key.
+		r.Group(func(r chi.Router) {
+			// Apply authentication middleware
+			r.Use(s.requireAPIKey)
+			r.Use(s.rateLimit)
+			r.Use(s.enforceBudgets)
 
-			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/provider-keys", s.controllers.ProviderKeys.GetUsage)
-			r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
-		})
+			// Chat completions with routing
+			r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.OpenRouterChat.Create)
 
-		// Preset management: any authenticated key reads, writes need the
-		// presets:write scope (the admin wildcard scope satisfies it).
-		r.Route("/presets", func(r chi.Router) {
-			r.Get("/", s.controllers.Presets.List)
-			r.Get("/{name}", s.controllers.Presets.Get)
-			r.With(s.requireAnyScope("presets:write")).Post("/", s.controllers.Presets.Create)
-			r.With(s.requireAnyScope("presets:write")).Put("/{name}", s.controllers.Presets.Update)
-			r.With(s.requireAnyScope("presets:write")).Delete("/{name}", s.controllers.Presets.Delete)
-		})
+			// Embeddings
+			r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.OpenRouterEmbeddings.Create)
 
-		// Request activity for the authenticated key
-		r.With(s.requireAnyScope("activity:read")).Get("/activity", s.controllers.Activity.List)
+			// Models with enhanced metadata
+			r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.OpenRouterModels.List)
+			r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.OpenRouterModels.Get)
+			r.With(s.requireAnyScope("models:read")).Get("/models/{model}/endpoints", s.controllers.OpenRouterModels.GetEndpoints)
 
-		// Admin endpoints (requires admin privileges)
-		r.Route("/admin", func(r chi.Router) {
-			r.Use(s.requireAdmin)
+			// Providers metadata
+			r.With(s.requireAnyScope("models:read")).Get("/providers", s.controllers.Providers.List)
 
-			// API key management
-			r.Route("/keys", func(r chi.Router) {
-				r.Get("/", s.controllers.Admin.ListKeys)
-				r.Post("/", s.controllers.Admin.CreateKey)
-				r.Get("/{key_id}", s.controllers.Admin.GetKey)
-				r.Put("/{key_id}", s.controllers.Admin.UpdateKey)
-				r.Delete("/{key_id}", s.controllers.Admin.DeleteKey)
+			// Catalog authors
+			r.With(s.requireAnyScope("models:read")).Get("/authors", s.controllers.Authors.List)
+			r.With(s.requireAnyScope("models:read")).Get("/authors/{author}", s.controllers.Authors.Get)
+
+			// Catalog freshness and changes
+			r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Metadata)
+			r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
+
+			// Key management endpoints
+			r.Route("/keys/{key_id}/provider-keys", func(r chi.Router) {
+				r.Use(s.requireKeyOwnership) // Additional middleware to verify key ownership
+
+				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/", s.controllers.ProviderKeys.List)
+				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/", s.controllers.ProviderKeys.Create)
+				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/{provider}", s.controllers.ProviderKeys.Get)
+				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Put("/{provider}", s.controllers.ProviderKeys.Update)
+				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Delete("/{provider}", s.controllers.ProviderKeys.Delete)
+				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/{provider}/validate", s.controllers.ProviderKeys.Validate)
 			})
 
-			// System information
-			r.Get("/info", s.controllers.Admin.SystemInfo)
-			r.Get("/metrics", s.controllers.Admin.Metrics)
-			r.Get("/activity", s.controllers.Activity.AdminList)
-			r.Get("/providers", s.controllers.ProviderOperations.Status)
-			r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
-			r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
+			// Usage endpoints
+			r.Route("/keys/{key_id}/usage", func(r chi.Router) {
+				r.Use(s.requireKeyOwnership)
+
+				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/provider-keys", s.controllers.ProviderKeys.GetUsage)
+				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
+			})
+
+			// Preset management: any authenticated key reads, writes need the
+			// presets:write scope (the admin wildcard scope satisfies it).
+			r.Route("/presets", func(r chi.Router) {
+				r.Get("/", s.controllers.Presets.List)
+				r.Get("/{name}", s.controllers.Presets.Get)
+				r.With(s.requireAnyScope("presets:write")).Post("/", s.controllers.Presets.Create)
+				r.With(s.requireAnyScope("presets:write")).Put("/{name}", s.controllers.Presets.Update)
+				r.With(s.requireAnyScope("presets:write")).Delete("/{name}", s.controllers.Presets.Delete)
+			})
+
+			// Request activity for the authenticated key
+			r.With(s.requireAnyScope("activity:read")).Get("/activity", s.controllers.Activity.List)
+
+			// Admin endpoints (requires admin privileges)
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(s.requireAdmin)
+
+				// API key management
+				r.Route("/keys", func(r chi.Router) {
+					r.Get("/", s.controllers.Admin.ListKeys)
+					r.Post("/", s.controllers.Admin.CreateKey)
+					r.Get("/{key_id}", s.controllers.Admin.GetKey)
+					r.Put("/{key_id}", s.controllers.Admin.UpdateKey)
+					r.Delete("/{key_id}", s.controllers.Admin.DeleteKey)
+				})
+
+				// System information
+				r.Get("/info", s.controllers.Admin.SystemInfo)
+				r.Get("/metrics", s.controllers.Admin.Metrics)
+				r.Get("/activity", s.controllers.Activity.AdminList)
+				r.Get("/providers", s.controllers.ProviderOperations.Status)
+				r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
+				r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
+			})
 		})
 	})
 
@@ -172,6 +186,9 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   GET  /api/v1/models/{model}             - Get model details with metadata
 //   GET  /api/v1/models/{model}/endpoints   - List provider endpoints for model
 //   GET  /api/v1/providers                  - List available providers
+//   GET  /api/v1/authors                    - List catalog authors
+//   GET  /api/v1/authors/{author}           - Get catalog author details
+//   GET  /api/v1/logos/{kind}/{id}.svg      - Catalog identity mark (public, cached)
 //   GET  /api/v1/activity                   - List request activity for the authenticated key
 //
 // Preset Management:

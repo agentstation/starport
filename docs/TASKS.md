@@ -7,6 +7,15 @@ Last Updated: 2026-08-21
 
 ### Active Work
 
+- **Catalog, performance, and brand campaign (CP)** —
+  [durable plan](plans/catalog-performance-plan.html). Make the catalog
+  a traversable provider/model/author graph with logos and detail
+  pages, retool the composer, measure and publish the per-request
+  gateway overhead (`x-starport-overhead-ms`), sweep the brand
+  (STARPORT wordmark, API Keys, TTFT), fix the four gateway defects
+  from Design Review No. 2, and cut the SPA over as the only console.
+  Absorbs CM13–CM15. Status lives in the plan ledger; CP0 (baseline,
+  proof root, research corpus, red verifier) is done.
 - **Console modernization (CM)** —
   [durable plan](plans/console-modernization-plan.html). Rebuild the
   embedded console as a React SPA on the modern verified stack (Vite 8,

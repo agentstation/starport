@@ -1,0 +1,994 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "anthropic/claude-fable-5",
+      "canonical_slug": "anthropic/claude-fable-5",
+      "name": "Claude Fable 5",
+      "object": "model",
+      "created": 1780790400,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "1e-05",
+        "completion": "5e-05",
+        "currency": "USD"
+      },
+      "context_length": 1000000,
+      "description": "Claude model for creative writing, analysis, and controlled agent workflows",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "reasoning_effort",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-fable"
+      },
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-fable-5",
+          "context_length": 1000000,
+          "max_completion_tokens": 128000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "1e-05",
+            "completion": "5e-05",
+            "cache_read": "1e-06",
+            "cache_write": "1.25e-05",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-haiku-4-5-20251001",
+      "canonical_slug": "anthropic/claude-haiku-4-5-20251001",
+      "name": "Claude Haiku 4.5",
+      "object": "model",
+      "created": 1760486400,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "1e-06",
+        "completion": "5e-06",
+        "currency": "USD"
+      },
+      "context_length": 200000,
+      "description": "Fast Claude model for responsive assistance, classification, and lightweight agents",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 200000,
+        "max_completion_tokens": 64000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-haiku"
+      },
+      "knowledge_cutoff": "2025-02-28",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-haiku-4-5-20251001",
+          "context_length": 200000,
+          "max_completion_tokens": 64000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "1e-06",
+            "completion": "5e-06",
+            "cache_read": "1.0000000000000001e-07",
+            "cache_write": "1.25e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-opus-4-1-20250805",
+      "canonical_slug": "anthropic/claude-opus-4-1-20250805",
+      "name": "Claude Opus 4.1",
+      "object": "model",
+      "created": 1754352000,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "1.5e-05",
+        "completion": "7.5e-05",
+        "currency": "USD"
+      },
+      "context_length": 200000,
+      "description": "Flagship Claude model for deep reasoning, coding, and long-horizon agents",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 200000,
+        "max_completion_tokens": 32000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-opus"
+      },
+      "knowledge_cutoff": "2025-03-31",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-opus-4-1-20250805",
+          "context_length": 200000,
+          "max_completion_tokens": 32000,
+          "availability": "unknown",
+          "lifecycle": "deprecated",
+          "pricing": {
+            "prompt": "1.5e-05",
+            "completion": "7.5e-05",
+            "cache_read": "1.5e-06",
+            "cache_write": "1.875e-05",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-opus-4-5-20251101",
+      "canonical_slug": "anthropic/claude-opus-4-5-20251101",
+      "name": "Claude Opus 4.5",
+      "object": "model",
+      "created": 1763942400,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "5e-06",
+        "completion": "2.5e-05",
+        "currency": "USD"
+      },
+      "context_length": 200000,
+      "description": "Flagship Claude model for deep reasoning, coding, and long-horizon agents",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 200000,
+        "max_completion_tokens": 64000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "reasoning_effort",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-opus"
+      },
+      "knowledge_cutoff": "2025-05-01",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-opus-4-5-20251101",
+          "context_length": 200000,
+          "max_completion_tokens": 64000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "5e-06",
+            "completion": "2.5e-05",
+            "cache_read": "5e-07",
+            "cache_write": "6.25e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-opus-4-6",
+      "canonical_slug": "anthropic/claude-opus-4-6",
+      "name": "Claude Opus 4.6",
+      "object": "model",
+      "created": 1770163200,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "5e-06",
+        "completion": "2.5e-05",
+        "currency": "USD"
+      },
+      "context_length": 1000000,
+      "description": "High-end Claude for difficult coding, planning, and slower expert reasoning",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "reasoning_effort",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-opus"
+      },
+      "knowledge_cutoff": "2025-05-31",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-opus-4-6",
+          "context_length": 1000000,
+          "max_completion_tokens": 128000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "5e-06",
+            "completion": "2.5e-05",
+            "cache_read": "5e-07",
+            "cache_write": "6.25e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-opus-4-7",
+      "canonical_slug": "anthropic/claude-opus-4-7",
+      "name": "Claude Opus 4.7",
+      "object": "model",
+      "created": 1776124800,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "5e-06",
+        "completion": "2.5e-05",
+        "currency": "USD"
+      },
+      "context_length": 1000000,
+      "description": "Stronger Opus tier for advanced software work and high-stakes reasoning",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "reasoning_effort",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-opus"
+      },
+      "knowledge_cutoff": "2026-01-31",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-opus-4-7",
+          "context_length": 1000000,
+          "max_completion_tokens": 128000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "5e-06",
+            "completion": "2.5e-05",
+            "cache_read": "5e-07",
+            "cache_write": "6.25e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-opus-4-8",
+      "canonical_slug": "anthropic/claude-opus-4-8",
+      "name": "Claude Opus 4.8",
+      "object": "model",
+      "created": 1779926400,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "5e-06",
+        "completion": "2.5e-05",
+        "currency": "USD"
+      },
+      "context_length": 1000000,
+      "description": "Top Claude Opus tier for the hardest reasoning, coding, and long-horizon agents",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "reasoning_effort",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-opus"
+      },
+      "knowledge_cutoff": "2026-01-01",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-opus-4-8",
+          "context_length": 1000000,
+          "max_completion_tokens": 128000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "5e-06",
+            "completion": "2.5e-05",
+            "cache_read": "5e-07",
+            "cache_write": "6.25e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-sonnet-4-5-20250929",
+      "canonical_slug": "anthropic/claude-sonnet-4-5-20250929",
+      "name": "Claude Sonnet 4.5",
+      "object": "model",
+      "created": 1759104000,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "3e-06",
+        "completion": "1.5e-05",
+        "currency": "USD"
+      },
+      "context_length": 1000000,
+      "description": "Balanced Claude model for coding, analysis, agent workflows, and cost control",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 64000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-sonnet"
+      },
+      "knowledge_cutoff": "2025-07-31",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-sonnet-4-5-20250929",
+          "context_length": 1000000,
+          "max_completion_tokens": 64000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "3e-06",
+            "completion": "1.5e-05",
+            "cache_read": "3e-07",
+            "cache_write": "3.75e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-sonnet-4-6",
+      "canonical_slug": "anthropic/claude-sonnet-4-6",
+      "name": "Claude Sonnet 4.6",
+      "object": "model",
+      "created": 1771286400,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "3e-06",
+        "completion": "1.5e-05",
+        "currency": "USD"
+      },
+      "context_length": 1000000,
+      "description": "Claude workhorse for coding agents, careful analysis, and production cost control",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "reasoning_effort",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-sonnet"
+      },
+      "knowledge_cutoff": "2025-08-31",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-sonnet-4-6",
+          "context_length": 1000000,
+          "max_completion_tokens": 128000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "3e-06",
+            "completion": "1.5e-05",
+            "cache_read": "3e-07",
+            "cache_write": "3.75e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "canonical_slug": "anthropic/claude-sonnet-5",
+      "name": "Claude Sonnet 5",
+      "object": "model",
+      "created": 1782691200,
+      "owned_by": "anthropic",
+      "pricing": {
+        "prompt": "2e-06",
+        "completion": "1e-05",
+        "currency": "USD"
+      },
+      "context_length": 1000000,
+      "description": "Everyday Claude agent model for coding, planning, browsing, and general work",
+      "architecture": {
+        "input_modalities": [
+          "image",
+          "pdf",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "reasoning_effort",
+        "temperature",
+        "top_p",
+        "top_k",
+        "max_tokens",
+        "stop",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      ],
+      "lineage": {
+        "family": "claude-sonnet"
+      },
+      "knowledge_cutoff": "2026-01-31",
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "anthropic",
+          "provider_name": "Anthropic",
+          "provider_model_id": "claude-sonnet-5",
+          "context_length": 1000000,
+          "max_completion_tokens": 128000,
+          "availability": "unknown",
+          "lifecycle": "unknown",
+          "pricing": {
+            "prompt": "2e-06",
+            "completion": "1e-05",
+            "cache_read": "2.0000000000000002e-07",
+            "cache_write": "2.5e-06",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "groq/compound",
+      "canonical_slug": "groq/compound",
+      "name": "Compound",
+      "object": "model",
+      "created": 1756944000,
+      "owned_by": "groq",
+      "context_length": 131072,
+      "description": "General-purpose chat model for instruction following, writing, and analysis",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 8192
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop",
+        "seed"
+      ],
+      "authors": [
+        {
+          "id": "groq",
+          "name": "Groq"
+        }
+      ],
+      "lineage": {
+        "family": "groq"
+      },
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "groq/compound",
+          "context_length": 131072,
+          "max_completion_tokens": 8192,
+          "availability": "unknown",
+          "lifecycle": "active"
+        }
+      ]
+    },
+    {
+      "id": "groq/compound-mini",
+      "canonical_slug": "groq/compound-mini",
+      "name": "Compound Mini",
+      "object": "model",
+      "created": 1756944000,
+      "owned_by": "groq",
+      "context_length": 131072,
+      "description": "Efficient model for low-latency assistance, extraction, and routine automation",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 8192
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop",
+        "seed"
+      ],
+      "authors": [
+        {
+          "id": "groq",
+          "name": "Groq"
+        }
+      ],
+      "lineage": {
+        "family": "groq"
+      },
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "groq/compound-mini",
+          "context_length": 131072,
+          "max_completion_tokens": 8192,
+          "availability": "unknown",
+          "lifecycle": "active"
+        }
+      ]
+    },
+    {
+      "id": "openai/whisper-large-v3",
+      "canonical_slug": "openai/whisper-large-v3",
+      "name": "openai/whisper-large-v3",
+      "object": "model",
+      "created": 1699228800,
+      "owned_by": "openai",
+      "pricing": {
+        "prompt": "",
+        "completion": "",
+        "currency": "USD"
+      },
+      "context_length": 448,
+      "description": "Whisper is a general-purpose speech recognition model. It is trained on a large dataset of diverse audio and is also a multi-task model that can perform multilingual speech recognition as well as speech translation and language identification.",
+      "architecture": {
+        "input_modalities": [
+          "audio",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 448,
+        "max_completion_tokens": 448
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "openai",
+          "name": "OpenAI"
+        }
+      ],
+      "tags": [
+        "stt"
+      ],
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "whisper-large-v3",
+          "context_length": 448,
+          "max_completion_tokens": 448,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai/whisper-large-v3-turbo",
+      "canonical_slug": "openai/whisper-large-v3-turbo",
+      "name": "openai/whisper-large-v3-turbo",
+      "object": "model",
+      "created": 1783800913,
+      "owned_by": "openai",
+      "pricing": {
+        "prompt": "0.00051",
+        "completion": "0.00051",
+        "currency": "USD"
+      },
+      "context_length": 448,
+      "description": "Whisper is a state-of-the-art model for automatic speech recognition (ASR) and speech translation, proposed in the paper \"Robust Speech Recognition via Large-Scale Weak Supervision\" by Alec Radford et al. from OpenAI. Trained on \u003e5M hours of labeled data, Whisper demonstrates a strong ability to generalise to many datasets and domains in a zero-shot setting. Whisper large-v3-turbo is a finetuned version of a pruned Whisper large-v3. In other words, it's the exact same model, except that the number of decoding layers have reduced from 32 to 4. As a result, the model is way faster, at the expense of a minor quality degradation.",
+      "architecture": {
+        "input_modalities": [
+          "audio",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 448,
+        "max_completion_tokens": 448
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "openai",
+          "name": "OpenAI"
+        }
+      ],
+      "tags": [
+        "stt"
+      ],
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "whisper-large-v3-turbo",
+          "context_length": 448,
+          "max_completion_tokens": 448,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "prompt": "0.00051",
+            "completion": "0.00051",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sdaia/allam-2-7b",
+      "canonical_slug": "sdaia/allam-2-7b",
+      "name": "ALLaM-2-7b",
+      "object": "model",
+      "created": -62135596800,
+      "owned_by": "sdaia",
+      "context_length": 4096,
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 4096,
+        "max_completion_tokens": 4096
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop",
+        "seed"
+      ],
+      "authors": [
+        {
+          "id": "sdaia",
+          "name": "SDAIA"
+        }
+      ],
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "allam-2-7b",
+          "context_length": 4096,
+          "max_completion_tokens": 4096,
+          "availability": "unknown",
+          "lifecycle": "active"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# Golden files are byte-compared in tests. Keep LF on every platform so a
+# Windows checkout does not convert them to CRLF and break the comparison.
+*.golden.json text eol=lf

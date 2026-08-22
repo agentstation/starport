@@ -1131,7 +1131,7 @@ function KeysPage() {
 function Header() {
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">Keys</h1>
+      <h1 className="text-xl font-semibold tracking-[-0.01em]">API Keys</h1>
       <p className="mt-1 text-sm text-text-3">
         Gateway keys for your apps, plus per-key provider credentials (BYOK).
       </p>

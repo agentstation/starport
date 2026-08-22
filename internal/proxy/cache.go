@@ -397,6 +397,17 @@ func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error)
 	return resp.(*ModelsResponse), nil
 }
 
+// ListAuthors delegates to the wrapped service. Author projections read
+// one immutable catalog snapshot, so a response cache adds no value.
+func (s *cachedService) ListAuthors(ctx context.Context) (*AuthorsResponse, error) {
+	return s.service.ListAuthors(ctx)
+}
+
+// GetAuthor delegates to the wrapped service.
+func (s *cachedService) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error) {
+	return s.service.GetAuthor(ctx, authorID)
+}
+
 // ListProviders with caching
 func (s *cachedService) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	if !s.cacheConfig.EnableProviderCache {

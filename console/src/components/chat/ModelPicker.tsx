@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Brain, Check, Eye, Star, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { listModels, listPresets, type Model } from "@/lib/api";
-import { formatContext, formatPricePerM } from "@/lib/format";
+import { listModels, listPresets, listProviderCatalog, type Model } from "@/lib/api";
+import { formatContext, formatPricePerM, providerLabel } from "@/lib/format";
 
 // ModelPicker is the chat model popover (DESIGN.md): search, pinned
 // models first, presets, then provider groups. Rows show capability
@@ -91,6 +91,12 @@ export function ModelPicker({
     staleTime: 60_000,
     retry: false,
   });
+  const catalog = useQuery({
+    queryKey: ["provider-catalog"],
+    queryFn: listProviderCatalog,
+    staleTime: 60_000,
+    retry: false,
+  });
 
   const sections = useMemo<Section[]>(() => {
     const needle = query.trim().toLowerCase();
@@ -127,11 +133,17 @@ export function ModelPicker({
     const result: Section[] = [];
     if (pinned.length) result.push({ label: "Pinned", items: pinned });
     if (presetItems.length) result.push({ label: "Presets", items: presetItems });
+    const names = new Map(
+      (catalog.data ?? []).map((entry) => [entry.id, entry.name]),
+    );
     for (const provider of [...byProvider.keys()].sort()) {
-      result.push({ label: provider, items: byProvider.get(provider) ?? [] });
+      result.push({
+        label: providerLabel(provider, names.get(provider)),
+        items: byProvider.get(provider) ?? [],
+      });
     }
     return result;
-  }, [models.data, presets.data, favorites, query]);
+  }, [models.data, presets.data, catalog.data, favorites, query]);
 
   const flat = useMemo(() => sections.flatMap((section) => section.items), [sections]);
 
