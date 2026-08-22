@@ -115,12 +115,14 @@
 <header id="overview">
   <h1>Starport console modernization</h1>
   <p id="status-line">
-    Status: <code data-plan-status="active">active</code> ·
+    Status: <code data-plan-status="superseded">superseded(catalog-performance-plan)</code> ·
     Owner: this plan ·
     Created: 2026-08-21 ·
     Baseline: main @ 2818e74 ·
     Proof root: <code>proof/console-modernization/</code> ·
-    Next action: execute CM13 (command palette)
+    Next action: none — CM0–CM12 are done; CM13 continues as CP12, the CM14
+    cutover as CP18–CP19, and the CM15 cleanup as CP20 in
+    <code>catalog-performance-plan.html</code>
   </p>
 
   <section id="outcome">
@@ -336,9 +338,9 @@
         <tr id="CM10" data-status="done"><td>CM10</td><td>Chat: thread shell, composer with bottom-bar model picker.</td><td><code>done</code></td><td>CM-V14 and CM-V15 pass (verifier: 17 passed). Legacy localStorage contract carried over (8 real threads load, per-thread models persist); live streamed reply with stats, stop-mid-stream keeps partial output, reasoning effort gated per model, gateway error messages surfaced once; dark and light screenshots. proof/console-modernization/cm10.md</td></tr>
         <tr id="CM11" data-status="done"><td>CM11</td><td>Chat: streaming messages, metadata line, reasoning, code blocks.</td><td><code>done</code></td><td>CM-V16 passes (verifier: 18 passed). Streamdown + code/math/mermaid plugins bundled (air-gapped); live-verified table/code/math/mermaid rendering with copy controls, reasoning fold with measured time, metadata line incl. cache hit/miss and cost, live tok/s, hover copy/retry/edit, scroll pill; stop-mid-stream preserves partial content and partial reasoning marked stopped. proof/console-modernization/cm11.md</td></tr>
         <tr id="CM12" data-status="done"><td>CM12</td><td>Chat: comparison mode.</td><td><code>done</code></td><td>CM-V17 passes (verifier: 19 passed). Compare.tsx seam reusing CM11 Markdown/ReasoningFold/MetadataLine; composer chips with 2–4 attach, stay-open picker, duplicate guard; live fan-out with per-column stats, per-column stop (column isolation held), per-column retry, error branch, continue-with-this-model collapsed into a saved thread; comparisons never persisted; dark and light screenshots. proof/console-modernization/cm12.md</td></tr>
-        <tr id="CM13" data-status="todo"><td>CM13</td><td>Command palette and keyboard-first polish.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="CM14" data-status="todo"><td>CM14</td><td>Cutover: serve the new console, delete the legacy static console, re-point parity conditions, CI gate.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="CM15" data-status="todo"><td>CM15</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CM13" data-status="deferred"><td>CM13</td><td>Command palette and keyboard-first polish.</td><td><code>deferred(absorbed by CP12)</code></td><td>Successor task CP12 in catalog-performance-plan.html owns the palette.</td></tr>
+        <tr id="CM14" data-status="deferred"><td>CM14</td><td>Cutover: serve the new console, delete the legacy static console, re-point parity conditions, CI gate.</td><td><code>deferred(absorbed by CP18–CP19)</code></td><td>Successor tasks CP18–CP19 own the cutover and legacy deletion.</td></tr>
+        <tr id="CM15" data-status="deferred"><td>CM15</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>deferred(CP20 owns cleanup)</code></td><td>Successor task CP20 deletes both plans and proof roots after the final merge.</td></tr>
       </tbody>
     </table>
   </section>
