@@ -120,7 +120,7 @@
     Created: 2026-08-21 ·
     Baseline: main @ 7e71726 ·
     Proof root: <code>proof/catalog-performance/</code> ·
-    Next action: CP20 — Development-runtime catalog refresh defect: chunked generation payload and the 401/403 split, then CP21 plan cleanup
+    Next action: CP21 — Plan cleanup: delete both plans, both proof roots, and the index
   </p>
 
   <section id="outcome">
@@ -290,8 +290,8 @@
         <tr id="CP17" data-status="done"><td>CP17</td><td>D: Failure normalization — streaming 429 not an empty 200; never cache empty completions</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp17.md">cp17.md</a> — stream codecs surface in-stream error frames, router reads first event during establishment, cache refuses empty completions; live burst 429 honest, CPV20, 12 new contract tests with fail-before evidence</td></tr>
         <tr id="CP18" data-status="done"><td>CP18</td><td>E: Console cutover — SPA default, legacy static removed, verifier green and wired into CI (absorbs CM14)</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp18.md">cp18.md</a> — SPA only console, Next/Title/Theme config removed, legacy assets deleted, CM 21/21 + CPV 20/20 + ORP 16/16, both verifiers wired into CI, live: / serves SPA, /static/* 404</td></tr>
         <tr id="CP19" data-status="done"><td>CP19</td><td>E: Campaign cleanup — flag removal, dead code, docs (absorbs CM15)</td><td><code>done</code></td><td>deadcode 43 unreachable to 0; build, vet, and <code>go test ./...</code> (40 packages) clean; CPV 20/20, CM 21/21, ORP 16/16; lint 0 issues; live activity records keep <code>latency_ms</code>, <code>ttft_ms</code>, and <code>overhead_ms</code>; <a href="proof/catalog-performance/cp19.md">cp19.md</a></td></tr>
-        <tr id="CP20" data-status="in_progress"><td>CP20</td><td>E: Development-runtime catalog refresh defect — chunk the generation payload; split 401 from 403 in the console</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="CP21" data-status="pending"><td>CP21</td><td>Cleanup after the final pull request merges: archive or delete this plan, proof root, index entry</td><td><code>pending</code></td><td></td></tr>
+        <tr id="CP20" data-status="done"><td>CP20</td><td>E: Development-runtime catalog refresh defect — chunk the generation payload; split 401 from 403 in the console</td><td><code>done</code></td><td><a href="proof/catalog-performance/cp20.md">cp20.md</a> — refresh in <code>starport dev</code> goes 500 to <b>HTTP 200 in 4.65s</b> (423 models, 12 providers, 104 authors); 45 content-addressed chunks replace one 11 MB value; <code>/api/v1/catalog/changes</code> reachable for the first time in dev; 6 Go tests (one against a real in-memory Badger, with a vacuity guard) + 6 console tests; CPV 20/20, CM 21/21, ORP 16/16, CDP 19/19; PR #179</td></tr>
+        <tr id="CP21" data-status="in_progress"><td>CP21</td><td>Cleanup after the final pull request merges: archive or delete this plan, proof root, index entry</td><td><code>in_progress</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -558,6 +558,7 @@ verifiers are green in CI, and CP21 waits on the final merge.</code></pre>
       </thead>
       <tbody>
         <tr><td>2026-08-21</td><td>meta</td><td>authored</td><td>Plan authored from Design Review No. 2 (published artifact + research corpus). No implementation started by this step.</td></tr>
+        <tr><td>2026-08-22</td><td>CP20</td><td>done</td><td>PR #179. Chunked generation payload and the console 401/403 split. Every ledger row except the cleanup task is now terminal.</td></tr>
         <tr><td>2026-08-22</td><td>CP20</td><td>added</td><td>Added ahead of cleanup after a live report: the console Refresh catalog button failed for every catalog under <code>starport dev</code>. Cleanup renumbered to CP21.</td></tr>
       </tbody>
     </table>
