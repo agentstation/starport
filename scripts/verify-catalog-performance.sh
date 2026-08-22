@@ -55,7 +55,8 @@ check CPV07 "provider detail route exists in the SPA" \
     'console/src/routes/providers.$providerId.tsx' \
     'console/src/routes/providers/$providerId.tsx'
 check CPV08 "model detail route exists in the SPA" \
-  either_file 'console/src/routes/models.$modelId.tsx' \
+  either_file 'console/src/routes/models_.$modelId.tsx' \
+    'console/src/routes/models.$modelId.tsx' \
     'console/src/routes/models/$modelId.tsx'
 check CPV09 "author list and detail routes exist in the SPA" \
   bash -c 'test -f console/src/routes/authors.tsx &&

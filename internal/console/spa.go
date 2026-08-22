@@ -109,6 +109,7 @@ func (h *SPAHandler) Assets(w http.ResponseWriter, r *http.Request) {
 var spaPagePaths = append(
 	PagePaths[:len(PagePaths):len(PagePaths)],
 	"/providers/*",
+	"/models/*",
 )
 
 // Register mounts the SPA page routes and hashed assets on the router.
