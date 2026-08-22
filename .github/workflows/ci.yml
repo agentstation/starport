@@ -163,6 +163,8 @@ jobs:
         run: |
           bash scripts/verify-starmap-ownership.sh
           bash scripts/verify-v1-architecture.sh
+          bash scripts/test-dependency-direction-verifier.sh
+          bash scripts/verify-dependency-direction.sh
           bash scripts/verify-catalog-driven-providers.sh
           bash scripts/verify-package-layout.sh
           bash scripts/verify-readme-quickstart.sh
