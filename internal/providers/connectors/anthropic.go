@@ -234,8 +234,8 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 	for _, msg := range req.Messages {
 		if msg.Role == RoleSystem {
 			// Anthropic uses a separate system field
-			if strContent, ok := msg.Content.(string); ok {
-				system = strContent
+			if text := contentText(msg.Content); text != "" {
+				system = text
 			}
 			continue
 		}
@@ -247,25 +247,35 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 		// Handle content
 		if strContent, ok := msg.Content.(string); ok {
 			anthropicMsg["content"] = strContent
-		} else if parts, ok := msg.Content.([]ContentPart); ok {
+		} else if parts, err := ParseMessageContent(msg.Content); err == nil {
 			// Handle multimodal content
 			var content []map[string]any
 			for _, part := range parts {
-				if part.Type == contentTypeText {
-					content = append(content, map[string]any{
-						wireTypeToken:   contentTypeText,
-						contentTypeText: part.Text,
-					})
-				} else if part.Type == "image_url" && part.ImageURL != nil {
-					content = append(content, map[string]any{
-						wireTypeToken: "image",
-						"source": map[string]any{
-							wireTypeToken: "base64",
-							"media_type":  "image/jpeg",      // TODO: detect from URL
-							"data":        part.ImageURL.URL, // Assuming base64 data
-						},
-					})
+				if part.ImageURL != nil {
+					if mediaType, data, ok := parseImageDataURL(part.ImageURL.URL); ok {
+						content = append(content, map[string]any{
+							wireTypeToken: "image",
+							"source": map[string]any{
+								wireTypeToken: "base64",
+								"media_type":  mediaType,
+								"data":        data,
+							},
+						})
+					} else {
+						content = append(content, map[string]any{
+							wireTypeToken: "image",
+							"source": map[string]any{
+								wireTypeToken: "url",
+								"url":         part.ImageURL.URL,
+							},
+						})
+					}
+					continue
 				}
+				content = append(content, map[string]any{
+					wireTypeToken:   contentTypeText,
+					contentTypeText: part.Text,
+				})
 			}
 			anthropicMsg["content"] = content
 		}

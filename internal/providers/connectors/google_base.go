@@ -132,9 +132,41 @@ func (c *googleBaseConnector) handleError(resp *http.Response) error {
 	}
 }
 
+// geminiParts converts one message's content into Gemini parts. Text
+// parts map to text; data-URL images become inline data; remote image
+// URLs pass through as file data so the provider reports its own
+// contract error instead of the gateway guessing.
+func geminiParts(content MessageContent) []map[string]any {
+	parts, err := ParseMessageContent(content)
+	if err != nil || len(parts) == 0 {
+		return []map[string]any{{contentTypeText: ""}}
+	}
+	result := make([]map[string]any, 0, len(parts))
+	for _, part := range parts {
+		if part.ImageURL != nil {
+			if mediaType, data, ok := parseImageDataURL(part.ImageURL.URL); ok {
+				result = append(result, map[string]any{
+					"inline_data": map[string]any{
+						"mime_type": mediaType,
+						"data":      data,
+					},
+				})
+			} else {
+				result = append(result, map[string]any{
+					"file_data": map[string]any{"file_uri": part.ImageURL.URL},
+				})
+			}
+			continue
+		}
+		result = append(result, map[string]any{contentTypeText: part.Text})
+	}
+	return result
+}
+
 // convertToGeminiRequest converts OpenAI format to Gemini format
 func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[string]any {
 	var contents []map[string]any
+	var systemText string
 
 	for _, msg := range req.Messages {
 		var role string
@@ -145,29 +177,35 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 			role = wireModelToken
 		case RoleSystem:
 			// Gemini doesn't have system role, prepend to first user message
+			if text := contentText(msg.Content); text != "" {
+				if systemText != "" {
+					systemText += "\n\n"
+				}
+				systemText += text
+			}
 			continue
 		default:
 			role = RoleUser
 		}
 
-		content := map[string]any{
-			"role": role,
-			"parts": []map[string]any{
-				{contentTypeText: msg.Content.(string)},
-			},
-		}
-		contents = append(contents, content)
+		contents = append(contents, map[string]any{
+			"role":  role,
+			"parts": geminiParts(msg.Content),
+		})
 	}
 
 	// Handle system message by prepending to first user message
-	for i, msg := range req.Messages {
-		if msg.Role == RoleSystem && i+1 < len(req.Messages) {
-			systemText := msg.Content.(string)
-			if len(contents) > 0 && contents[0]["role"] == RoleUser {
-				parts := contents[0]["parts"].([]map[string]any)
-				parts[0][contentTypeText] = systemText + "\n\n" + parts[0][contentTypeText].(string)
-			}
-			break
+	if systemText != "" && len(contents) > 0 && contents[0]["role"] == RoleUser {
+		parts := contents[0]["parts"].([]map[string]any)
+		if existing, ok := parts[0][contentTypeText].(string); ok {
+			parts[0][contentTypeText] = systemText + "\n\n" + existing
+		} else {
+			// The first part is an image; the system text gets its own
+			// leading text part.
+			contents[0]["parts"] = append(
+				[]map[string]any{{contentTypeText: systemText}},
+				parts...,
+			)
 		}
 	}
 
