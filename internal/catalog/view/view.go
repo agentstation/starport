@@ -21,6 +21,52 @@ type ModelInfo struct {
 	Architecture        *ModelArchitecture `json:"architecture,omitempty"`
 	TopProvider         *TopProviderInfo   `json:"top_provider,omitempty"`
 	SupportedParameters []string           `json:"supported_parameters,omitempty"`
+
+	// Definition-level catalog facts
+	Authors         []ModelAuthorInfo `json:"authors,omitempty"`
+	Tags            []string          `json:"tags,omitempty"`
+	Lineage         *ModelLineageInfo `json:"lineage,omitempty"`
+	KnowledgeCutoff string            `json:"knowledge_cutoff,omitempty"`
+	OpenWeights     *bool             `json:"open_weights,omitempty"`
+
+	// Offerings lists every routable provider offering for this model.
+	Offerings []ModelOfferingInfo `json:"offerings,omitempty"`
+}
+
+// ModelAuthorInfo names one catalog author of a model.
+type ModelAuthorInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
+// ModelLineageInfo describes canonical model-family relationships.
+type ModelLineageInfo struct {
+	Family string `json:"family,omitempty"`
+	Root   string `json:"root,omitempty"`
+	Parent string `json:"parent,omitempty"`
+}
+
+// ModelOfferingInfo is one provider's routable offering of a model.
+type ModelOfferingInfo struct {
+	Provider            string               `json:"provider"`
+	ProviderName        string               `json:"provider_name,omitempty"`
+	ProviderModelID     string               `json:"provider_model_id"`
+	ContextLength       *int                 `json:"context_length,omitempty"`
+	MaxCompletionTokens *int                 `json:"max_completion_tokens,omitempty"`
+	Availability        string               `json:"availability,omitempty"`
+	Lifecycle           string               `json:"lifecycle,omitempty"`
+	Pricing             *OfferingPricingInfo `json:"pricing,omitempty"`
+}
+
+// OfferingPricingInfo carries every token price dimension of one offering
+// as decimal per-token strings.
+type OfferingPricingInfo struct {
+	Prompt     string `json:"prompt,omitempty"`
+	Completion string `json:"completion,omitempty"`
+	Reasoning  string `json:"reasoning,omitempty"`
+	CacheRead  string `json:"cache_read,omitempty"`
+	CacheWrite string `json:"cache_write,omitempty"`
+	Currency   string `json:"currency,omitempty"`
 }
 
 // ModelPricing represents model pricing information
@@ -55,6 +101,18 @@ type ProviderInfo struct {
 	RequiresAuth     bool                  `json:"requires_auth"`
 	AuthDescription  string                `json:"auth_description,omitempty"`
 	CredentialFields []CredentialFieldInfo `json:"credential_fields,omitempty"`
+	Headquarters     string                `json:"headquarters,omitempty"`
+	Policies         *ProviderPolicyInfo   `json:"policies,omitempty"`
+}
+
+// ProviderPolicyInfo summarizes the provider's published data policies.
+type ProviderPolicyInfo struct {
+	PrivacyPolicyURL  string `json:"privacy_policy_url,omitempty"`
+	TermsOfServiceURL string `json:"terms_of_service_url,omitempty"`
+	RetainsData       *bool  `json:"retains_data,omitempty"`
+	TrainsOnData      *bool  `json:"trains_on_data,omitempty"`
+	Retention         string `json:"retention,omitempty"`
+	Moderated         *bool  `json:"moderated,omitempty"`
 }
 
 // CredentialFieldInfo is the catalog-declared inference credential field a

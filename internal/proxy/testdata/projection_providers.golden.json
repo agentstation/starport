@@ -25,7 +25,16 @@
         "kind": "secret",
         "required": true
       }
-    ]
+    ],
+    "headquarters": "San Francisco, CA, USA",
+    "policies": {
+      "privacy_policy_url": "https://www.anthropic.com/privacy",
+      "terms_of_service_url": "https://www.anthropic.com/terms",
+      "retains_data": true,
+      "trains_on_data": false,
+      "retention": "API inputs and outputs are automatically deleted within 30 days unless required for policy enforcement or legal compliance",
+      "moderated": true
+    }
   },
   {
     "id": "groq",
@@ -48,6 +57,15 @@
         "kind": "secret",
         "required": true
       }
-    ]
+    ],
+    "headquarters": "Mountain View, CA, USA",
+    "policies": {
+      "privacy_policy_url": "https://groq.com/privacy-policy/",
+      "terms_of_service_url": "https://groq.com/terms-of-use/",
+      "retains_data": false,
+      "trains_on_data": false,
+      "retention": "Input prompts and context are not retained; data is processed for immediate response generation and then discarded",
+      "moderated": true
+    }
   }
 ]

@@ -188,5 +188,42 @@ func openRouterModel(model proxy.ModelInfo) openrouter.Model {
 			MaxCompletionTokens: model.TopProvider.MaxCompletionTokens,
 		}
 	}
+	for _, author := range model.Authors {
+		converted.Authors = append(converted.Authors, openrouter.ModelAuthor{ID: author.ID, Name: author.Name})
+	}
+	converted.Tags = append([]string(nil), model.Tags...)
+	if model.Lineage != nil {
+		converted.Lineage = &openrouter.ModelLineage{
+			Family: model.Lineage.Family, Root: model.Lineage.Root, Parent: model.Lineage.Parent,
+		}
+	}
+	converted.KnowledgeCutoff = model.KnowledgeCutoff
+	converted.OpenWeights = model.OpenWeights
+	for _, offering := range model.Offerings {
+		converted.Offerings = append(converted.Offerings, openRouterOffering(offering))
+	}
+	return converted
+}
+
+func openRouterOffering(offering proxy.ModelOfferingInfo) openrouter.ModelOffering {
+	converted := openrouter.ModelOffering{
+		Provider:            offering.Provider,
+		ProviderName:        offering.ProviderName,
+		ProviderModelID:     offering.ProviderModelID,
+		ContextLength:       offering.ContextLength,
+		MaxCompletionTokens: offering.MaxCompletionTokens,
+		Availability:        offering.Availability,
+		Lifecycle:           offering.Lifecycle,
+	}
+	if offering.Pricing != nil {
+		converted.Pricing = &openrouter.OfferingPricing{
+			Prompt:     offering.Pricing.Prompt,
+			Completion: offering.Pricing.Completion,
+			Reasoning:  offering.Pricing.Reasoning,
+			CacheRead:  offering.Pricing.CacheRead,
+			CacheWrite: offering.Pricing.CacheWrite,
+			Currency:   offering.Pricing.Currency,
+		}
+	}
 	return converted
 }

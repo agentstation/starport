@@ -1,6 +1,7 @@
 package view
 
 import (
+	"sort"
 	"strconv"
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
@@ -61,10 +62,27 @@ func enrichModelInfo(
 		}
 	}
 	model.SupportedParameters = supportedModelParameters(definition)
+	model.Authors = modelAuthors(snapshot, definition)
+	if len(definition.Metadata.Tags) > 0 {
+		tags := make([]string, 0, len(definition.Metadata.Tags))
+		for _, tag := range definition.Metadata.Tags {
+			tags = append(tags, string(tag))
+		}
+		model.Tags = tags
+	}
+	model.Lineage = modelLineage(definition)
+	if cutoff := definition.Metadata.KnowledgeCutoff; cutoff != nil && !cutoff.IsZero() {
+		model.KnowledgeCutoff = cutoff.Format("2006-01-02")
+	}
+	if definition.Weights.Open != nil {
+		open := *definition.Weights.Open
+		model.OpenWeights = &open
+	}
 	routes := snapshot.RoutesForDefinition(definition.ID)
 	if len(routes) == 0 {
 		return
 	}
+	model.Offerings = modelOfferings(snapshot, routes)
 	offering, err := snapshot.Offering(routes[0])
 	if err != nil {
 		return
@@ -85,6 +103,90 @@ func enrichModelInfo(
 		if offering.Pricing.Tokens.Output != nil {
 			model.Pricing.Completion = formatTokenPrice(offering.Pricing.Tokens.Output)
 		}
+	}
+}
+
+func modelAuthors(
+	snapshot *runtimecatalog.RoutableSnapshot,
+	definition starmapcatalogs.ModelDefinition,
+) []ModelAuthorInfo {
+	if len(definition.AuthorIDs) == 0 {
+		return nil
+	}
+	authors := make([]ModelAuthorInfo, 0, len(definition.AuthorIDs))
+	for _, authorID := range definition.AuthorIDs {
+		info := ModelAuthorInfo{ID: string(authorID)}
+		if author, err := snapshot.Catalog().Author(authorID); err == nil {
+			info.Name = author.Name
+		}
+		authors = append(authors, info)
+	}
+	return authors
+}
+
+func modelLineage(definition starmapcatalogs.ModelDefinition) *ModelLineageInfo {
+	lineage := definition.Lineage
+	if lineage.Family == "" && lineage.Root == nil && lineage.Parent == nil {
+		return nil
+	}
+	info := &ModelLineageInfo{Family: lineage.Family}
+	if lineage.Root != nil {
+		info.Root = string(*lineage.Root)
+	}
+	if lineage.Parent != nil {
+		info.Parent = string(*lineage.Parent)
+	}
+	return info
+}
+
+func modelOfferings(
+	snapshot *runtimecatalog.RoutableSnapshot,
+	routes []runtimecatalog.Route,
+) []ModelOfferingInfo {
+	offerings := make([]ModelOfferingInfo, 0, len(routes))
+	for _, route := range routes {
+		offering, err := snapshot.Offering(route)
+		if err != nil {
+			continue
+		}
+		info := ModelOfferingInfo{
+			Provider:        string(offering.ProviderID),
+			ProviderModelID: string(offering.ProviderModelID),
+			Availability:    string(offering.Availability),
+			Lifecycle:       string(offering.Lifecycle),
+		}
+		if provider, err := snapshot.Catalog().Provider(offering.ProviderID); err == nil {
+			info.ProviderName = provider.Name
+		}
+		if offering.Limits != nil {
+			contextLength := boundedModelInt(offering.Limits.ContextWindow)
+			maxCompletion := boundedModelInt(offering.Limits.OutputTokens)
+			info.ContextLength = &contextLength
+			info.MaxCompletionTokens = &maxCompletion
+		}
+		info.Pricing = offeringPricing(offering.Pricing)
+		offerings = append(offerings, info)
+	}
+	sort.Slice(offerings, func(left, right int) bool {
+		if offerings[left].Provider != offerings[right].Provider {
+			return offerings[left].Provider < offerings[right].Provider
+		}
+		return offerings[left].ProviderModelID < offerings[right].ProviderModelID
+	})
+	return offerings
+}
+
+func offeringPricing(pricing *starmapcatalogs.ModelPricing) *OfferingPricingInfo {
+	if pricing == nil || pricing.Tokens == nil {
+		return nil
+	}
+	return &OfferingPricingInfo{
+		Prompt:     formatTokenPrice(pricing.Tokens.Input),
+		Completion: formatTokenPrice(pricing.Tokens.Output),
+		Reasoning:  formatTokenPrice(pricing.Tokens.Reasoning),
+		CacheRead:  formatTokenPrice(pricing.Tokens.CacheRead),
+		CacheWrite: formatTokenPrice(pricing.Tokens.CacheWrite),
+		Currency:   pricing.Currency.String(),
 	}
 }
 

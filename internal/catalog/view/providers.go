@@ -39,6 +39,10 @@ func Providers(
 		if provider.StatusPageURL != nil {
 			info.URL = *provider.StatusPageURL
 		}
+		if provider.Headquarters != nil {
+			info.Headquarters = *provider.Headquarters
+		}
+		info.Policies = providerPolicies(provider)
 		capabilities := make(map[string]struct{})
 		for _, providerRoute := range snapshot.RoutesForProvider(route.ProviderID) {
 			info.Models = append(info.Models, providerRoute.ID())
@@ -54,6 +58,43 @@ func Providers(
 		providers = append(providers, info)
 	}
 	return providers
+}
+
+// providerPolicies summarizes the provider's published privacy,
+// retention, and governance policies. A provider with no policy facts
+// projects to nil.
+func providerPolicies(provider starmapcatalogs.Provider) *ProviderPolicyInfo {
+	if provider.PrivacyPolicy == nil &&
+		provider.RetentionPolicy == nil &&
+		provider.GovernancePolicy == nil {
+		return nil
+	}
+	info := &ProviderPolicyInfo{}
+	if privacy := provider.PrivacyPolicy; privacy != nil {
+		if privacy.PrivacyPolicyURL != nil {
+			info.PrivacyPolicyURL = *privacy.PrivacyPolicyURL
+		}
+		if privacy.TermsOfServiceURL != nil {
+			info.TermsOfServiceURL = *privacy.TermsOfServiceURL
+		}
+		info.RetainsData = copyBool(privacy.RetainsData)
+		info.TrainsOnData = copyBool(privacy.TrainsOnData)
+	}
+	if retention := provider.RetentionPolicy; retention != nil && retention.Details != nil {
+		info.Retention = *retention.Details
+	}
+	if governance := provider.GovernancePolicy; governance != nil {
+		info.Moderated = copyBool(governance.Moderated)
+	}
+	return info
+}
+
+func copyBool(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	copied := *value
+	return &copied
 }
 
 // inferenceCredentialFields projects the catalog's inference credential
