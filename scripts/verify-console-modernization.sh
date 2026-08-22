@@ -2,8 +2,7 @@
 # Guard for the console modernization campaign
 # (docs/plans/console-modernization-plan.html). Each condition asserts one
 # capability of the modernized console. It reports every condition and
-# exits nonzero while any condition fails. The script stays red until the
-# CM14 cutover; CM14 adds it to CI as a required gate.
+# exits nonzero while any condition fails. CI runs it as a required gate.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -62,8 +61,11 @@ check CM-V17 "chat has a comparison mode component" \
   grep_q 'compare' console/src/components/chat
 check CM-V18 "console embeds the SPA build and serves its page fallback" \
   grep_q 'go:embed all:dist' internal/console/spa.go
+# The catalog-performance campaign (CP12) shipped the palette under
+# components/palette/, superseding the components/command/ location this
+# plan proposed.
 check CM-V19 "command palette component exists" \
-  test -f console/src/components/command/CommandPalette.tsx
+  test -f console/src/components/palette/CommandPalette.tsx
 check CM-V20 "DESIGN.md states the one-accent law" \
   grep_q 'One accent' DESIGN.md
 check CM-V21 "legacy static console is deleted" \

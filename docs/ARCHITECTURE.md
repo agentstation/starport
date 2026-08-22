@@ -133,7 +133,7 @@ starport/
 ├── internal/ratelimit/        # atomic rate-limit policy state and repository
 ├── internal/presets/          # preset model and versioned repository
 ├── internal/usage/            # request records, usage aggregation, and repository
-├── internal/console/          # embedded web console (static assets and handler)
+├── internal/console/          # embedded web console (single-page app build and handler)
 ├── internal/storage/          # KVStore adapter interface and implementations
 ├── internal/config/           # environment/.env config loading and validation
 ├── internal/setup/            # safe first-run configuration and identity creation
@@ -480,8 +480,9 @@ Health and the optional web console:
 GET /health/live
 GET /health/ready
 GET /            # console pages, when the console is enabled:
-GET /chat        #   /, /chat, /models, /providers, /keys, /settings
-GET /static/*    # embedded console assets
+GET /chat        #   /, /chat, /presets, /models, /providers, /authors,
+                 #   /keys, /usage, /settings, and their detail routes
+GET /assets/*    # embedded hashed console build assets
 ```
 
 ## Release Verification

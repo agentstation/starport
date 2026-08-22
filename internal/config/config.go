@@ -204,13 +204,7 @@ type CacheConfig struct {
 
 // ConsoleConfig defines settings for the embedded web console
 type ConsoleConfig struct {
-	Enabled bool   `env:"ENABLED,default=true"`
-	Title   string `env:"TITLE,default=Starport Console"`
-	Theme   string `env:"THEME,default=dark"`
-	// Next serves the modernized single-page console instead of the
-	// legacy static console. The CM14 cutover in
-	// docs/plans/console-modernization-plan.html removes this flag.
-	Next bool `env:"NEXT,default=false"`
+	Enabled bool `env:"ENABLED,default=true"`
 }
 
 // Validate performs validation on the configuration
@@ -247,11 +241,6 @@ func (c *Config) Validate() error {
 
 	// Validate logging config
 	if err := c.Logging.Validate(); err != nil {
-		return err
-	}
-
-	// Validate console config
-	if err := c.Console.Validate(); err != nil {
 		return err
 	}
 

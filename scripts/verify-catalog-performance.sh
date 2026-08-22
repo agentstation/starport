@@ -2,8 +2,7 @@
 # Guard for the catalog, performance, and brand campaign
 # (docs/plans/catalog-performance-plan.html). Each condition asserts one
 # capability the campaign delivers. It reports every condition and exits
-# nonzero while any condition fails. The script stays red until the CP18
-# cutover; CP18 adds it to CI as a required gate.
+# nonzero while any condition fails. CI runs it as a required gate.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

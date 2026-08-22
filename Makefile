@@ -74,7 +74,7 @@ console-build: ## Build the embedded SPA console when pnpm is available
 	@if command -v pnpm >/dev/null 2>&1; then \
 		pnpm -C console install --frozen-lockfile && pnpm -C console build; \
 	else \
-		echo "pnpm not found; skipping console build (the binary serves a console-not-built notice behind STARPORT_CONSOLE_NEXT)"; \
+		echo "pnpm not found; skipping console build (the binary serves a console-not-built notice)"; \
 	fi
 
 .PHONY: build-race

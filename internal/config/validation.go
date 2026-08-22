@@ -310,18 +310,3 @@ func (c *LoggingConfig) Validate() error {
 
 	return nil
 }
-
-// Validate validates ConsoleConfig
-func (c *ConsoleConfig) Validate() error {
-	// Validate theme
-	if c.Theme != "light" && c.Theme != "dark" {
-		return fmt.Errorf("invalid theme: %s (must be 'light' or 'dark')", c.Theme)
-	}
-
-	// Title cannot be empty
-	if c.Title == "" {
-		return fmt.Errorf("console title cannot be empty")
-	}
-
-	return nil
-}

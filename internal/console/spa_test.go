@@ -34,7 +34,7 @@ func newSPARouter(t *testing.T, dist fstest.MapFS) *chi.Mux {
 
 func TestSPAHandlerServesIndexForEveryPagePath(t *testing.T) {
 	router := newSPARouter(t, builtDist())
-	for _, path := range PagePaths {
+	for _, path := range []string{"/", "/chat", "/presets", "/models", "/providers", "/keys", "/usage", "/settings"} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, request)
