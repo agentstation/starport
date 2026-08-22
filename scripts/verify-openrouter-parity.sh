@@ -35,13 +35,14 @@ check ORP-V04 "GET /api/v1/activity route is registered" \
 check ORP-V05 "admin activity route is registered" \
   grep_q 'admin.*activity\|activity.*requireAdmin' internal/server/routes.go
 check ORP-V06 "console serves a /usage page" \
-  grep_q '"/usage"' internal/console/handler.go
+  bash -c 'grep -q '"/usage"' internal/console/spa.go &&
+    test -f console/src/routes/usage.tsx' 
 check ORP-V07 "catalog snapshot metadata route is registered" \
   grep_q '/catalog' internal/server/routes.go
 check ORP-V08 "catalog refresh endpoint exists" \
   grep_q 'catalog/refresh' internal/server/routes.go
 check ORP-V09 "console catalog button calls the catalog refresh endpoint" \
-  grep_q 'catalog/refresh' internal/console/static/js
+  grep_q 'catalog/refresh' console/src
 check ORP-V10 "preset routes are registered" \
   grep_q 'presets' internal/server/routes.go
 check ORP-V11 "@preset/ request references resolve" \
@@ -55,7 +56,7 @@ check ORP-V14 "admin key API accepts allowed_models" \
 check ORP-V15 "budget exhaustion has a 402 regression test" \
   grep_q 'TestSpendBudgetExhaustionReturns402' internal/server
 check ORP-V16 "chat page has a comparison mode" \
-  grep_q 'setCompareMode' internal/console/static/js
+  test -f console/src/components/chat/Compare.tsx
 
 printf 'Summary: %d passed, %d failed\n' "$pass" "$fail"
 test "$fail" -eq 0

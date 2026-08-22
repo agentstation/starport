@@ -7,11 +7,7 @@ import (
 
 // validConsoleConfig returns a valid ConsoleConfig for testing
 func validConsoleConfig() ConsoleConfig {
-	return ConsoleConfig{
-		Enabled: false,
-		Title:   "Test Chat",
-		Theme:   "light",
-	}
+	return ConsoleConfig{Enabled: false}
 }
 
 func TestConfig_Validate(t *testing.T) {

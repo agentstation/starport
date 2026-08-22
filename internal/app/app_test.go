@@ -297,7 +297,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 			MaxSize: 100, MaxBackups: 3, MaxAge: 7,
 		},
 		Cache:   config.CacheConfig{Enabled: false},
-		Console: config.ConsoleConfig{Title: "Starport", Theme: "light"},
+		Console: config.ConsoleConfig{},
 	}
 }
 

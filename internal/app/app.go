@@ -394,21 +394,11 @@ func (b *runtimeBuilder) openConsole() error {
 	if !b.config.Console.Enabled {
 		return nil
 	}
-	if b.config.Console.Next {
-		spa, err := console.NewSPAHandler(&log.Logger)
-		if err != nil {
-			return fmt.Errorf("open console: %w", err)
-		}
-		b.console = spa
-		return nil
-	}
-	handler, err := console.NewHandler(&log.Logger, console.Config{
-		Title: b.config.Console.Title, Theme: b.config.Console.Theme,
-	})
+	spa, err := console.NewSPAHandler(&log.Logger)
 	if err != nil {
 		return fmt.Errorf("open console: %w", err)
 	}
-	b.console = handler
+	b.console = spa
 	return nil
 }
 
