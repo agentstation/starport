@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/agentstation/starport/internal/usage"
 	"github.com/go-chi/chi/v5"
@@ -246,10 +247,10 @@ func TestAdminKeySetsLimitsAndExpiry(t *testing.T) {
 
 	var created struct {
 		Key struct {
-			ID            string           `json:"id"`
-			AllowedModels []string         `json:"allowed_models"`
-			Limits        *identity.Limits `json:"limits"`
-			ExpiresAt     string           `json:"expires_at"`
+			ID            string         `json:"id"`
+			AllowedModels []string       `json:"allowed_models"`
+			Limits        *limits.Limits `json:"limits"`
+			ExpiresAt     string         `json:"expires_at"`
 		} `json:"key"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))

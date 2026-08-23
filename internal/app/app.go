@@ -20,18 +20,19 @@ import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
 	"github.com/agentstation/starport/internal/proxy"
-	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/tokenize"
 	"github.com/agentstation/starport/internal/usage"
 )
@@ -139,6 +140,7 @@ type runtimeBuilder struct {
 	config       *config.Config
 	factories    runtimeFactories
 	identities   identity.Repository
+	tenants      tenant.Repository
 	providerKeys byok.ProviderKeys
 	rateLimits   ratelimit.Repository
 	usageRecords usage.Repository
@@ -252,6 +254,16 @@ func (b *runtimeBuilder) openConcepts() error {
 		resolutionFailureIDs(startupFailures),
 	)
 
+	b.tenants, err = tenant.Open(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open tenant repository: %w", err)
+	}
+	// Every gateway API key resolves to a tenant, so the canonical tenant has
+	// to exist before the first key is read. The call is idempotent and safe
+	// against a concurrent boot.
+	if _, err := b.tenants.EnsureDefault(context.Background()); err != nil {
+		return fmt.Errorf("ensure the default tenant: %w", err)
+	}
 	b.identities, err = identity.Open(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open identity repository: %w", err)

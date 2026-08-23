@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/usage"
@@ -120,7 +121,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		Description   string            `json:"description,omitempty"`
 		Scopes        []string          `json:"scopes,omitempty"`
 		AllowedModels []string          `json:"allowed_models,omitempty"`
-		Limits        *identity.Limits  `json:"limits,omitempty"`
+		Limits        *limits.Limits    `json:"limits,omitempty"`
 		ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
 		Metadata      map[string]string `json:"metadata,omitempty"`
 	}
@@ -258,7 +259,7 @@ func (h *AdminController) keyUsage(ctx context.Context, apiKey identity.APIKey) 
 
 // budgetUsage shapes one budget's current-window consumption.
 func budgetUsage(
-	budget *identity.Budget,
+	budget *limits.Budget,
 	totalsByInterval map[string]usage.Totals,
 	used func(usage.Totals) int64,
 ) map[string]any {
@@ -286,10 +287,10 @@ func isKeyValidationError(err error) bool {
 		errors.Is(err, identity.ErrInvalidScope) ||
 		errors.Is(err, identity.ErrInvalidModel) ||
 		errors.Is(err, identity.ErrInvalidExpiration) ||
-		errors.Is(err, identity.ErrInvalidRequestLimit) ||
-		errors.Is(err, identity.ErrInvalidRequestWindow) ||
-		errors.Is(err, identity.ErrInvalidBudgetLimit) ||
-		errors.Is(err, identity.ErrInvalidBudgetInterval)
+		errors.Is(err, limits.ErrInvalidRequestLimit) ||
+		errors.Is(err, limits.ErrInvalidRequestWindow) ||
+		errors.Is(err, limits.ErrInvalidBudgetLimit) ||
+		errors.Is(err, limits.ErrInvalidBudgetInterval)
 }
 
 // UpdateKey handles PUT /api/v1/admin/keys/{key_id}
@@ -315,7 +316,7 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		Name          *string           `json:"name,omitempty"`
 		Scopes        []string          `json:"scopes,omitempty"`
 		AllowedModels []string          `json:"allowed_models,omitempty"`
-		Limits        *identity.Limits  `json:"limits,omitempty"`
+		Limits        *limits.Limits    `json:"limits,omitempty"`
 		ExpiresAt     *time.Time        `json:"expires_at,omitempty"`
 		Metadata      map[string]string `json:"metadata,omitempty"`
 		Active        *bool             `json:"active,omitempty"`

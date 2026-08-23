@@ -1,4 +1,7 @@
-package identity
+// Package limits owns the request-rate and consumption vocabulary that
+// bounds what a holder may spend. Both a gateway API key and a tenant hold
+// limits, so the vocabulary lives here rather than inside either owner.
+package limits
 
 import "errors"
 
@@ -15,9 +18,9 @@ const (
 )
 
 var (
-	// ErrInvalidRequestLimit reports a non-positive per-key request limit.
+	// ErrInvalidRequestLimit reports a non-positive request limit.
 	ErrInvalidRequestLimit = errors.New("request limit must be positive")
-	// ErrInvalidRequestWindow reports a non-positive per-key request window.
+	// ErrInvalidRequestWindow reports a non-positive request window.
 	ErrInvalidRequestWindow = errors.New("request window seconds must be positive")
 	// ErrInvalidBudgetLimit reports a non-positive budget limit.
 	ErrInvalidBudgetLimit = errors.New("budget limit must be positive")
@@ -25,10 +28,10 @@ var (
 	ErrInvalidBudgetInterval = errors.New("budget interval must be day, week, or month")
 )
 
-// Limits carries the per-key request-rate override and consumption
-// budgets. A nil field leaves that dimension unlimited by the key.
+// Limits carries the request-rate override and the consumption budgets of
+// one holder. A nil field leaves that dimension unlimited by this holder.
 type Limits struct {
-	// Requests overrides the global request window for this key.
+	// Requests overrides the global request window for this holder.
 	Requests *RequestLimit `json:"requests,omitempty"`
 	// Spend bounds integer nano-USD spend inside one fixed UTC interval.
 	Spend *Budget `json:"spend,omitempty"`
@@ -36,7 +39,7 @@ type Limits struct {
 	Tokens *Budget `json:"tokens,omitempty"`
 }
 
-// RequestLimit is one per-key request-rate override.
+// RequestLimit is one request-rate override.
 type RequestLimit struct {
 	Limit         int64 `json:"limit"`
 	WindowSeconds int64 `json:"window_seconds"`

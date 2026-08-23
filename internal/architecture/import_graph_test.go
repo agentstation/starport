@@ -28,6 +28,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../inference",
 		"../failure",
 		"../identity",
+		"../tenant",
+		"../limits",
 		"../credentials",
 		"../ratelimit",
 		"../presets",
@@ -44,6 +46,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
 		"github.com/agentstation/starport/internal/identity",
+		"github.com/agentstation/starport/internal/tenant",
+		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
@@ -82,8 +86,11 @@ func TestImportGraphArchitecture(t *testing.T) {
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/response/cache"],
 		"github.com/agentstation/starport/internal/inference",
 	)
+	// A repository-owning concept reaches durable storage and the shared
+	// limits vocabulary, and nothing else inside the module.
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/identity",
+		"github.com/agentstation/starport/internal/tenant",
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
@@ -91,8 +98,12 @@ func TestImportGraphArchitecture(t *testing.T) {
 	} {
 		assertOnlyInternalImports(t, packages[packagePath],
 			"github.com/agentstation/starport/internal/storage",
+			"github.com/agentstation/starport/internal/limits",
 		)
 	}
+	// Limits is the vocabulary both a gateway API key and a tenant hold. It
+	// stays a leaf so neither owner can reach the other through it.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits"])
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
