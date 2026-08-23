@@ -11,7 +11,6 @@ import (
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
-	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -37,12 +36,9 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 		}
 		return nil, fmt.Errorf("plan embedding route: %w", err)
 	}
-	strategy := keyring.OperatorFirst
-	if req.APIKeyConfig != nil {
-		strategy = req.APIKeyConfig.CredentialStrategy
-	}
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, req.TenantID, runtime, r.userKeys, r.credentialGate,
+		req.APIKeyConfig.credentialStrategy(), req.TenantID,
+		runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
 		return nil, err

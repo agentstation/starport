@@ -37,7 +37,7 @@ func NewProviderKeysController(providerKeys keyring.ProviderKeys, usageRecords u
 // to the gateway API key that happened to carry the request, so deleting a key
 // never strands the credentials its tenant applied.
 func (h *ProviderKeysController) tenantScope(ctx context.Context) string {
-	return keyring.UserScope(requestctx.TenantIDOrDefault(ctx))
+	return keyring.TenantScope(requestctx.TenantIDOrDefault(ctx))
 }
 
 func (h *ProviderKeysController) requireProviderKeys(w http.ResponseWriter) bool {

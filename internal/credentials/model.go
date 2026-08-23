@@ -35,8 +35,14 @@ type ProviderKey struct {
 	UpdatedAt           time.Time        `json:"updated_at"`
 }
 
-// IsGlobal reports whether the credential is gateway-wide.
-func (k ProviderKey) IsGlobal() bool { return k.Scope == "*" }
+// GatewayScope is the scope of a credential the operator applies once for the
+// whole deployment. Every other scope names one tenant.
+const GatewayScope = "*"
+
+// IsGateway reports whether the operator owns this credential for the whole
+// deployment. A credential at any other scope belongs to one tenant, which is
+// the only kind this gateway calls BYOK.
+func (k ProviderKey) IsGateway() bool { return k.Scope == GatewayScope }
 
 // Validate checks provider-credential invariants.
 func (k ProviderKey) Validate() error {

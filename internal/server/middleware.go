@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/requestctx"
+	"github.com/agentstation/starport/internal/tenant"
 )
 
 // Context key type for middleware values.
@@ -104,16 +106,29 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 	})
 }
 
+// TenantReader reads one account by ID. The middleware holds this single
+// method rather than the tenant repository, so the HTTP seam never learns how
+// an account is stored or gains the power to write one.
+type TenantReader interface {
+	GetByID(ctx context.Context, id string) (tenant.Record, error)
+}
+
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
 	identities identity.Repository
+	tenants    TenantReader
 }
 
-// NewAuthMiddleware creates a new authentication middleware
-func NewAuthMiddleware(identities identity.Repository) *AuthMiddleware {
-	return &AuthMiddleware{
-		identities: identities,
+// NewAuthMiddleware creates a new authentication middleware. The tenant reader
+// is optional: without it a request still authenticates and runs under the
+// default credential policy, because a key is a valid identity whether or not
+// the deployment can read the account behind it.
+func NewAuthMiddleware(identities identity.Repository, tenants ...TenantReader) *AuthMiddleware {
+	middleware := &AuthMiddleware{identities: identities}
+	if len(tenants) > 0 {
+		middleware.tenants = tenants[0]
 	}
+	return middleware
 }
 
 // RequireAPIKey validates API key authentication
@@ -161,10 +176,34 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		ctx = requestctx.WithAPIKeyModel(ctx, &apiKeyModel)
 		// The key authenticates. The tenant behind it decides what the request
 		// may reach, so both travel and neither stands in for the other.
-		ctx = requestctx.WithTenantID(ctx, apiKeyModel.EffectiveTenantID())
+		tenantID := apiKeyModel.EffectiveTenantID()
+		ctx = requestctx.WithTenantID(ctx, tenantID)
+		if record, ok := m.readTenant(ctx, tenantID); ok {
+			ctx = requestctx.WithTenantRecord(ctx, record)
+		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// readTenant loads the account behind an authenticated key. A missing or
+// unreadable account never fails the request: the key authenticated, and the
+// governing policy falls back to the default. Refusing here would take a
+// working deployment offline for a storage fault that has a safe default.
+func (m *AuthMiddleware) readTenant(ctx context.Context, tenantID string) (*tenant.Tenant, bool) {
+	if m.tenants == nil || tenantID == "" {
+		return nil, false
+	}
+	record, err := m.tenants.GetByID(ctx, tenantID)
+	if err != nil {
+		if !errors.Is(err, tenant.ErrNotFound) {
+			log.Error().Err(err).Str("tenant_id", tenantID).
+				Msg("Failed to read the account behind an authenticated key")
+		}
+		return nil, false
+	}
+	governing := record.Tenant
+	return &governing, true
 }
 
 // RequireKeyOwnership validates that the user owns the API key they're trying to manage

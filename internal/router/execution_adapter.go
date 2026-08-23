@@ -41,7 +41,7 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 	}
 	strategy, tenantID := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, tenantID, runtime, r.userKeys, r.credentialGate,
+		strategy, tenantID, runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
 		if owned {
@@ -255,7 +255,7 @@ func bindSelectedEndpoint(
 			StreamURL: route.Endpoint.StreamURL,
 		},
 		selected.material,
-		selected.source == keyring.CredentialSourceOperator,
+		selected.source == keyring.SourceEnvironment,
 	)
 	if err != nil {
 		return routing.Route{}, failure.New(

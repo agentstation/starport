@@ -30,10 +30,10 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 	require.NoError(t, err)
 
 	for tenant, secret := range map[string]string{"tenant-a": "secret-a", "tenant-b": "secret-b"} {
-		_, err := manager.AddKey(ctx, UserScope(tenant), string(provider.ID), map[string]string{"api-key": secret}, nil, false, 0)
+		_, err := manager.AddKey(ctx, TenantScope(tenant), string(provider.ID), map[string]string{"api-key": secret}, nil, false, 0)
 		require.NoError(t, err)
 	}
-	_, err = manager.AddGlobalKey(ctx, string(provider.ID), map[string]string{"api-key": "global-secret"}, nil, nil)
+	_, err = manager.AddGatewayKey(ctx, string(provider.ID), map[string]string{"api-key": "global-secret"}, nil, nil)
 	require.NoError(t, err)
 
 	var wait sync.WaitGroup
@@ -44,7 +44,7 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			for range 100 {
-				material, resolveErr := manager.ResolveUserMaterial(ctx, UserScope(tenant), provider)
+				material, resolveErr := manager.ResolveStoredMaterial(ctx, TenantScope(tenant), provider)
 				if resolveErr != nil {
 					errors <- resolveErr
 					return
@@ -63,7 +63,7 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 		require.NoError(t, resolveErr)
 	}
 
-	missing, err := manager.GetKeys(ctx, UserScope("missing"), string(provider.ID))
+	missing, err := manager.GetKeys(ctx, TenantScope("missing"), string(provider.ID))
 	require.NoError(t, err)
 	require.Empty(t, missing, "an exact tenant lookup must not merge global material")
 }
@@ -101,7 +101,7 @@ func TestListKeys(t *testing.T) {
 	// Skip validation
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
-	scope := "user:test-key"
+	scope := TenantScope("test-key")
 
 	// Add multiple keys with proper format
 	keys := map[string]map[string]string{
@@ -132,7 +132,7 @@ func TestListKeys(t *testing.T) {
 	}
 
 	// Test with non-existent scope
-	keyList2, err := manager.ListKeys(ctx, "user:non-existent")
+	keyList2, err := manager.ListKeys(ctx, TenantScope("non-existent"))
 	assert.NoError(t, err)
 	assert.Len(t, keyList2, 0)
 
@@ -141,8 +141,8 @@ func TestListKeys(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestGlobalKeyOperations tests all global key operations
-func TestGlobalKeyOperations(t *testing.T) {
+// TestGatewayKeyOperations tests all gateway key operations
+func TestGatewayKeyOperations(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
 	masterKey, _ := credentials.GenerateMasterKey()
@@ -153,40 +153,40 @@ func TestGlobalKeyOperations(t *testing.T) {
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
 	// Test adding global key with empty provider
-	_, err = manager.AddGlobalKey(ctx, "", map[string]string{"api-key": "sk-test"}, nil, nil)
+	_, err = manager.AddGatewayKey(ctx, "", map[string]string{"api-key": "sk-test"}, nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "provider is required")
 
 	// Test getting global key with empty provider
-	_, err = manager.GetGlobalKey(ctx, "")
+	_, err = manager.GetGatewayKey(ctx, "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "provider is required")
 
 	// Test deleting global key with empty provider
-	err = manager.DeleteGlobalKey(ctx, "")
+	err = manager.DeleteGatewayKey(ctx, "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "provider is required")
 
 	// Test with invalid key
-	_, err = manager.AddGlobalKey(ctx, "openai", map[string]string{}, nil, nil)
+	_, err = manager.AddGatewayKey(ctx, "openai", map[string]string{}, nil, nil)
 	assert.Error(t, err)
 
 	// Test getting non-existent global key
-	_, err = manager.GetGlobalKey(ctx, "non-existent")
+	_, err = manager.GetGatewayKey(ctx, "non-existent")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrKeyNotFound)
 
 	// Test deleting non-existent global key
-	err = manager.DeleteGlobalKey(ctx, "non-existent")
+	err = manager.DeleteGatewayKey(ctx, "non-existent")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "key not found")
 }
 
-func TestListGlobalKeysReadsCanonicalRecord(t *testing.T) {
+func TestListGatewayKeysReadsCanonicalRecord(t *testing.T) {
 	ctx, _, manager := newProviderCredentialFixture(t)
 	addGlobalProviderCredential(t, ctx, manager)
 
-	keys, err := manager.ListGlobalKeys(ctx)
+	keys, err := manager.ListGatewayKeys(ctx)
 	require.NoError(t, err)
 	require.Len(t, keys, 1)
 	assert.Equal(t, "openai", keys[0].Provider)
@@ -204,16 +204,16 @@ func TestProviderCredentialRepositoryContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{credentials.StorageKey("*", "openai")}, storageKeys)
 
-	providerKey, err := manager.GetGlobalKey(ctx, "openai")
+	providerKey, err := manager.GetGatewayKey(ctx, "openai")
 	require.NoError(t, err)
 	assert.Equal(t, "openai", providerKey.Provider)
 
-	updated, err := manager.UpdateGlobalKey(ctx, "openai", nil, map[string]any{"region": "test"}, nil)
+	updated, err := manager.UpdateGatewayKey(ctx, "openai", nil, map[string]any{"region": "test"}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]any{"region": "test"}, updated.Config)
 
-	require.NoError(t, manager.DeleteGlobalKey(ctx, "openai"))
-	_, err = manager.GetGlobalKey(ctx, "openai")
+	require.NoError(t, manager.DeleteGatewayKey(ctx, "openai"))
+	_, err = manager.GetGatewayKey(ctx, "openai")
 	assert.ErrorIs(t, err, ErrKeyNotFound)
 }
 
@@ -231,7 +231,7 @@ func newProviderCredentialFixture(t *testing.T) (context.Context, *storage.MockS
 
 func addGlobalProviderCredential(t *testing.T, ctx context.Context, manager ProviderKeys) {
 	t.Helper()
-	_, err := manager.AddGlobalKey(ctx, "openai", map[string]string{"api-key": "sk-test"}, nil, nil)
+	_, err := manager.AddGatewayKey(ctx, "openai", map[string]string{"api-key": "sk-test"}, nil, nil)
 	require.NoError(t, err)
 }
 
@@ -251,7 +251,7 @@ func TestRecordUsageErrors(t *testing.T) {
 		CompletionTokens: 50,
 	}
 
-	err = manager.RecordUsage(ctx, "user:non-existent", "openai", usage)
+	err = manager.RecordUsage(ctx, TenantScope("non-existent"), "openai", usage)
 	assert.ErrorIs(t, err, ErrKeyNotFound)
 }
 
@@ -341,7 +341,7 @@ func TestGetKeysWithErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "scope and provider are required")
 
 	// Test with empty provider
-	_, err = manager.GetKeys(ctx, "user:test-key", "")
+	_, err = manager.GetKeys(ctx, TenantScope("test-key"), "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "scope and provider are required")
 }
@@ -358,7 +358,7 @@ func TestUpdateKeyEdgeCases(t *testing.T) {
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
 	// Add initial key
-	scope := "user:test-key"
+	scope := TenantScope("test-key")
 	provider := "openai"
 	_, err = manager.AddKey(ctx, scope, provider, map[string]string{"api-key": "sk-initial"}, nil, false, 0)
 	require.NoError(t, err)

@@ -119,9 +119,9 @@ func (m *keyManager) GetKey(ctx context.Context, scope, provider string) (*crede
 	return keys[0], nil
 }
 
-// GetKeys retrieves provider keys from one exact scope. Global credentials are
-// managed through the explicit global-key methods and are never merged into a
-// tenant lookup.
+// GetKeys retrieves provider keys from one exact scope. A gateway credential
+// is managed through the explicit gateway-key methods and is never merged into
+// a tenant lookup; credential order across scopes belongs to the router.
 func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*credentials.ProviderKey, error) {
 	if scope == "" || provider == "" {
 		return nil, ErrScopeAndProviderRequired
@@ -142,7 +142,7 @@ func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*cr
 	}
 
 	// Sort by priority (lower number = higher priority)
-	// Global keys typically have higher priority values (lower precedence)
+	// Gateway keys typically have higher priority values (lower precedence)
 	sort.Slice(keys, func(i, j int) bool {
 		return keys[i].Priority < keys[j].Priority
 	})
@@ -150,9 +150,9 @@ func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*cr
 	return keys, nil
 }
 
-// ResolveUserMaterial decrypts and validates one exact tenant record against
+// ResolveStoredMaterial decrypts and validates one exact tenant record against
 // the provider contract from the leased runtime generation.
-func (m *keyManager) ResolveUserMaterial(
+func (m *keyManager) ResolveStoredMaterial(
 	ctx context.Context,
 	scope string,
 	provider catalogs.Provider,
@@ -271,8 +271,8 @@ func (m *keyManager) DeleteKey(ctx context.Context, scope, provider string) erro
 	return nil
 }
 
-// AddGlobalKey adds a gateway-wide key for a provider
-func (m *keyManager) AddGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+// AddGatewayKey adds a gateway-wide key for a provider
+func (m *keyManager) AddGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
@@ -293,54 +293,54 @@ func (m *keyManager) AddGlobalKey(ctx context.Context, provider string, key map[
 		return nil, fmt.Errorf("failed to encrypt key: %w", err)
 	}
 
-	// Create global key as a ProviderKey with scope = "*"
-	globalKey := &credentials.ProviderKey{
-		Scope:               "*",
+	// Create the gateway key as a ProviderKey at GatewayScope
+	gatewayKey := &credentials.ProviderKey{
+		Scope:               GatewayScope,
 		Provider:            provider,
 		EncryptedCredential: encryptedKey,
 		Config:              config,
 		RateLimit:           rateLimit,
-		Priority:            100, // Lower priority than user keys
+		Priority:            100, // Lower priority than a tenant BYOK key
 		CreatedAt:           time.Now(),
 		UpdatedAt:           time.Now(),
 	}
 
 	// Validate model
-	if err := globalKey.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid global key: %w", err)
+	if err := gatewayKey.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid gateway key: %w", err)
 	}
 
-	created, err := m.repository.Create(ctx, *globalKey)
+	created, err := m.repository.Create(ctx, *gatewayKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to store global key: %w", err)
+		return nil, fmt.Errorf("failed to store gateway key: %w", err)
 	}
 
 	log.Info().
 		Str("provider", provider).
-		Msg("Global provider key set")
+		Msg("Gateway provider key set")
 
 	return &created.Key, nil
 }
 
-// GetGlobalKey retrieves the global key for a provider
-func (m *keyManager) GetGlobalKey(ctx context.Context, provider string) (*credentials.ProviderKey, error) {
+// GetGatewayKey retrieves the gateway key for a provider
+func (m *keyManager) GetGatewayKey(ctx context.Context, provider string) (*credentials.ProviderKey, error) {
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
 
-	record, err := m.repository.Get(ctx, "*", provider)
+	record, err := m.repository.Get(ctx, GatewayScope, provider)
 	if err != nil {
 		if errors.Is(err, credentials.ErrNotFound) {
 			return nil, ErrKeyNotFound
 		}
-		return nil, fmt.Errorf("failed to get global key: %w", err)
+		return nil, fmt.Errorf("failed to get gateway key: %w", err)
 	}
 
 	return &record.Key, nil
 }
 
-// UpdateGlobalKey updates an existing global provider key
-func (m *keyManager) UpdateGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+// UpdateGatewayKey updates an existing gateway provider key
+func (m *keyManager) UpdateGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
 	var encryptedKey string
 	if len(key) > 0 {
 		if err := m.ValidateKey(ctx, provider, key, config); err != nil {
@@ -359,55 +359,55 @@ func (m *keyManager) UpdateGlobalKey(ctx context.Context, provider string, key m
 		}
 		encryptedKey = encrypted
 	}
-	updated, err := m.updateCredential(ctx, "*", provider, func(globalKey *credentials.ProviderKey) error {
+	updated, err := m.updateCredential(ctx, GatewayScope, provider, func(gatewayKey *credentials.ProviderKey) error {
 		if encryptedKey != "" {
-			globalKey.EncryptedCredential = encryptedKey
+			gatewayKey.EncryptedCredential = encryptedKey
 		}
 		if config != nil {
-			globalKey.Config = config
+			gatewayKey.Config = config
 		}
 		if rateLimit != nil {
-			globalKey.RateLimit = rateLimit
+			gatewayKey.RateLimit = rateLimit
 		}
-		globalKey.UpdatedAt = time.Now()
-		return globalKey.Validate()
+		gatewayKey.UpdatedAt = time.Now()
+		return gatewayKey.Validate()
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to store global key: %w", err)
+		return nil, fmt.Errorf("failed to store gateway key: %w", err)
 	}
 
 	log.Info().
 		Str("provider", provider).
-		Msg("Global provider key updated")
+		Msg("Gateway provider key updated")
 
 	return updated, nil
 }
 
-// DeleteGlobalKey removes a global key
-func (m *keyManager) DeleteGlobalKey(ctx context.Context, provider string) error {
+// DeleteGatewayKey removes a gateway key
+func (m *keyManager) DeleteGatewayKey(ctx context.Context, provider string) error {
 	if provider == "" {
 		return ErrProviderRequired
 	}
 
-	if err := m.repository.Delete(ctx, "*", provider, 0); err != nil {
+	if err := m.repository.Delete(ctx, GatewayScope, provider, 0); err != nil {
 		if errors.Is(err, credentials.ErrNotFound) {
 			return ErrKeyNotFound
 		}
-		return fmt.Errorf("failed to delete global key: %w", err)
+		return fmt.Errorf("failed to delete gateway key: %w", err)
 	}
 
 	log.Info().
 		Str("provider", provider).
-		Msg("Global provider key deleted")
+		Msg("Gateway provider key deleted")
 
 	return nil
 }
 
-// ListGlobalKeys lists all global keys
-func (m *keyManager) ListGlobalKeys(ctx context.Context) ([]*credentials.ProviderKey, error) {
-	records, err := m.repository.ListScope(ctx, "*", providerCredentialScanLimit)
+// ListGatewayKeys lists all gateway keys
+func (m *keyManager) ListGatewayKeys(ctx context.Context) ([]*credentials.ProviderKey, error) {
+	records, err := m.repository.ListScope(ctx, GatewayScope, providerCredentialScanLimit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list global keys: %w", err)
+		return nil, fmt.Errorf("failed to list gateway keys: %w", err)
 	}
 	keys := providerKeysFromRecords(records)
 	sort.Slice(keys, func(i, j int) bool { return keys[i].Provider < keys[j].Provider })

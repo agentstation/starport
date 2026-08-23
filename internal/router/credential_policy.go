@@ -14,19 +14,21 @@ import (
 	"github.com/agentstation/starport/internal/routing"
 )
 
-// UserCredentialResolver resolves one exact tenant record against the
-// provider contract retained by the request's runtime generation.
-type UserCredentialResolver interface {
-	ResolveUserMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error)
+// StoredCredentialResolver resolves one exact stored record against the
+// provider contract retained by the request's runtime generation. One
+// resolver serves both stored planes: the scope decides whether the record is
+// the operator's gateway credential or the tenant's own.
+type StoredCredentialResolver interface {
+	ResolveStoredMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error)
 }
 
 type credentialPolicy struct {
-	runtime  connectors.RuntimeLease
-	userKeys UserCredentialResolver
-	gate     OperatorCredentialGate
-	tenantID string
-	sources  []keyring.CredentialSource
-	states   map[string]credentialRouteState
+	runtime    connectors.RuntimeLease
+	storedKeys StoredCredentialResolver
+	gate       OperatorCredentialGate
+	tenantID   string
+	sources    []keyring.CredentialSource
+	states     map[string]credentialRouteState
 }
 
 type credentialRouteState struct {
@@ -43,32 +45,62 @@ func newCredentialPolicy(
 	strategy keyring.Strategy,
 	tenantID string,
 	runtime connectors.RuntimeLease,
-	userKeys UserCredentialResolver,
+	storedKeys StoredCredentialResolver,
 	gate OperatorCredentialGate,
 ) (*credentialPolicy, error) {
 	parsedStrategy, err := keyring.ParseStrategy(string(strategy))
 	if err != nil {
 		return nil, failure.New(failure.Validation, "The provider credential strategy is invalid.", false, failure.ProviderDetails{}, err)
 	}
-	sources := parsedStrategy.Sources()
-	if userKeys == nil && parsedStrategy == keyring.OperatorFirst {
-		sources = []keyring.CredentialSource{keyring.CredentialSourceOperator}
-	}
 	return &credentialPolicy{
-		runtime: runtime, userKeys: userKeys, gate: gate, tenantID: tenantID,
-		sources: sources, states: make(map[string]credentialRouteState),
+		runtime: runtime, storedKeys: storedKeys, gate: gate, tenantID: tenantID,
+		sources: reachableSources(parsedStrategy, tenantID, storedKeys),
+		states:  make(map[string]credentialRouteState),
 	}, nil
+}
+
+// reachableSources drops the planes this deployment cannot read at all, so the
+// policy never spends an attempt on a source that has no store behind it.
+// A strategy is never widened here: a tenant on BYOKOnly whose BYOK plane is
+// unreachable resolves to no source and gets the not-configured failure, and
+// never falls through to an operator credential.
+func reachableSources(
+	strategy keyring.Strategy,
+	tenantID string,
+	storedKeys StoredCredentialResolver,
+) []keyring.CredentialSource {
+	reachable := make([]keyring.CredentialSource, 0, 3)
+	for _, source := range strategy.Sources() {
+		switch source {
+		case keyring.SourceGateway:
+			if storedKeys == nil {
+				continue
+			}
+		case keyring.SourceBYOK:
+			if storedKeys == nil || tenantID == "" {
+				continue
+			}
+		}
+		reachable = append(reachable, source)
+	}
+	return reachable
 }
 
 func credentialRequestPolicy(request *Request) (keyring.Strategy, string) {
 	if request == nil {
 		return keyring.OperatorFirst, ""
 	}
-	strategy := keyring.OperatorFirst
-	if request.APIKeyConfig != nil {
-		strategy = request.APIKeyConfig.CredentialStrategy
+	return request.APIKeyConfig.credentialStrategy(), request.TenantID
+}
+
+// credentialStrategy reports the effective strategy the HTTP seam already
+// resolved against the account's. A request that arrived without a key config
+// runs under the default.
+func (c *APIKeyConfig) credentialStrategy() keyring.Strategy {
+	if c == nil || c.CredentialStrategy == "" {
+		return keyring.OperatorFirst
 	}
-	return strategy, request.TenantID
+	return c.CredentialStrategy
 }
 
 func (p *credentialPolicy) resolve(
@@ -84,29 +116,17 @@ func (p *credentialPolicy) resolve(
 	var material credentials.Material
 	var err error
 	switch source {
-	case keyring.CredentialSourceOperator:
+	case keyring.SourceEnvironment:
 		material, err = p.runtime.ResolveMaterial(ctx, route.ProviderID)
-	case keyring.CredentialSourceUser:
-		if p.userKeys == nil || p.tenantID == "" {
-			err = keyring.ErrKeyNotFound
-			break
-		}
-		snapshot := p.runtime.Snapshot()
-		if snapshot == nil || snapshot.Catalog() == nil {
-			err = errors.New("runtime catalog is unavailable")
-			break
-		}
-		provider, lookupErr := snapshot.Catalog().Provider(catalogs.ProviderID(route.ProviderID))
-		if lookupErr != nil {
-			err = lookupErr
-			break
-		}
-		material, err = p.userKeys.ResolveUserMaterial(ctx, keyring.UserScope(p.tenantID), provider)
+	case keyring.SourceGateway:
+		material, err = p.resolveStored(ctx, keyring.GatewayScope, route.ProviderID)
+	case keyring.SourceBYOK:
+		material, err = p.resolveStored(ctx, keyring.TenantScope(p.tenantID), route.ProviderID)
 	default:
 		err = errors.New("unsupported credential source")
 	}
 	if err == nil {
-		if source == keyring.CredentialSourceOperator && p.gate != nil &&
+		if source == keyring.SourceEnvironment && p.gate != nil &&
 			!p.gate.OperatorMaterialReady(route.ProviderID, material.Version()) {
 			providerFailure := failure.New(
 				failure.Authentication,
@@ -142,15 +162,40 @@ func (p *credentialPolicy) resolve(
 	return credentialSelection{}, providerFailure, execution.AttemptActionStop
 }
 
+// resolveStored reads one stored plane. The gateway plane and the BYOK plane
+// differ only in their scope, so they share this path and cannot drift apart
+// in how they look a provider up or how they fail.
+func (p *credentialPolicy) resolveStored(
+	ctx context.Context,
+	scope string,
+	providerID string,
+) (credentials.Material, error) {
+	if p.storedKeys == nil {
+		return credentials.Material{}, keyring.ErrKeyNotFound
+	}
+	snapshot := p.runtime.Snapshot()
+	if snapshot == nil || snapshot.Catalog() == nil {
+		return credentials.Material{}, errors.New("runtime catalog is unavailable")
+	}
+	provider, err := snapshot.Catalog().Provider(catalogs.ProviderID(providerID))
+	if err != nil {
+		return credentials.Material{}, err
+	}
+	return p.storedKeys.ResolveStoredMaterial(ctx, scope, provider)
+}
+
+// credentialEvidence reports who paid for the attempt. An environment
+// credential and a gateway credential are both the operator's, so they record
+// the same owner and differ only in where the operator put them.
 func credentialEvidence(
 	source keyring.CredentialSource,
 	material credentials.Material,
 ) execution.CredentialEvidence {
 	owner := execution.CredentialOwner("")
 	switch source {
-	case keyring.CredentialSourceOperator:
+	case keyring.SourceEnvironment, keyring.SourceGateway:
 		owner = execution.CredentialOwnerOperator
-	case keyring.CredentialSourceUser:
+	case keyring.SourceBYOK:
 		owner = execution.CredentialOwnerTenant
 	}
 	return execution.CredentialEvidence{

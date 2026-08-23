@@ -68,32 +68,32 @@ func (m *mockKeyManager) ValidateKey(ctx context.Context, provider string, key m
 	return nil
 }
 
-func (m *mockKeyManager) AddGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+func (m *mockKeyManager) AddGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
 	return &credentials.ProviderKey{
 		Scope:    "*",
 		Provider: provider,
 	}, nil
 }
 
-func (m *mockKeyManager) GetGlobalKey(ctx context.Context, provider string) (*credentials.ProviderKey, error) {
+func (m *mockKeyManager) GetGatewayKey(ctx context.Context, provider string) (*credentials.ProviderKey, error) {
 	return &credentials.ProviderKey{
 		Scope:    "*",
 		Provider: provider,
 	}, nil
 }
 
-func (m *mockKeyManager) UpdateGlobalKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+func (m *mockKeyManager) UpdateGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
 	return &credentials.ProviderKey{
 		Scope:    "*",
 		Provider: provider,
 	}, nil
 }
 
-func (m *mockKeyManager) DeleteGlobalKey(ctx context.Context, provider string) error {
+func (m *mockKeyManager) DeleteGatewayKey(ctx context.Context, provider string) error {
 	return nil
 }
 
-func (m *mockKeyManager) ListGlobalKeys(ctx context.Context) ([]*credentials.ProviderKey, error) {
+func (m *mockKeyManager) ListGatewayKeys(ctx context.Context) ([]*credentials.ProviderKey, error) {
 	return []*credentials.ProviderKey{
 		{
 			Scope:    "*",
@@ -102,7 +102,7 @@ func (m *mockKeyManager) ListGlobalKeys(ctx context.Context) ([]*credentials.Pro
 	}, nil
 }
 
-func (m *mockKeyManager) ResolveUserMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error) {
+func (m *mockKeyManager) ResolveStoredMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error) {
 	return credentials.Material{}, nil
 }
 
