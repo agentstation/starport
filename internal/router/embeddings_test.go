@@ -39,15 +39,15 @@ func TestRouteEmbeddingsUsesRequestCredentialPolicy(t *testing.T) {
 		operator: embeddingTestMaterial("operator"),
 	}
 	registry := &embeddingTestRegistry{runtime: runtime}
-	userKeys := &embeddingUserResolver{material: embeddingTestMaterial("user")}
-	modelRouter := New(registry, WithCatalog(plane), WithUserCredentials(userKeys))
+	storedKeys := &embeddingUserResolver{material: embeddingTestMaterial("user")}
+	modelRouter := New(registry, WithCatalog(plane), WithStoredCredentials(storedKeys))
 
 	response, err := modelRouter.RouteEmbeddings(t.Context(), &EmbeddingRequest{
 		EmbeddingsRequest: &connectors.EmbeddingsRequest{Model: "author/embed", Input: "hello"},
 		TenantID:          "tenant-a",
 		APIKeyConfig: &APIKeyConfig{
 			AllowedModels: []string{"author/embed"}, AllowedProviders: []string{"acme"},
-			CredentialStrategy: keyring.UserFirst,
+			CredentialStrategy: keyring.BYOKFirst,
 		},
 	})
 	require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestRouteEmbeddingsUsesRequestCredentialPolicy(t *testing.T) {
 	require.Equal(t, []float32{0.25, 0.75}, response.Response.Data[0].Vector)
 	require.Equal(t, 2, response.Attempts)
 	require.Equal(t, int64(2), providerCalls.Load())
-	require.Equal(t, int64(1), userKeys.calls.Load())
+	require.Equal(t, int64(1), storedKeys.calls.Load())
 	require.Equal(t, int64(1), runtime.operatorCalls.Load())
 }
 
@@ -69,13 +69,13 @@ func TestRouteEmbeddingsUserOnlyNeverProbesOperatorMaterial(t *testing.T) {
 	modelRouter := New(
 		&embeddingTestRegistry{runtime: runtime},
 		WithCatalog(plane),
-		WithUserCredentials(&embeddingUserResolver{err: keyring.ErrKeyNotFound}),
+		WithStoredCredentials(&embeddingUserResolver{err: keyring.ErrKeyNotFound}),
 	)
 
 	_, err := modelRouter.RouteEmbeddings(t.Context(), &EmbeddingRequest{
 		EmbeddingsRequest: &connectors.EmbeddingsRequest{Model: "author/embed", Input: "hello"},
 		TenantID:          "tenant-a",
-		APIKeyConfig:      &APIKeyConfig{CredentialStrategy: keyring.UserOnly},
+		APIKeyConfig:      &APIKeyConfig{CredentialStrategy: keyring.BYOKOnly},
 	})
 	require.Error(t, err)
 	require.Zero(t, runtime.operatorCalls.Load())
@@ -146,9 +146,12 @@ func (r *embeddingTestRegistry) AcquireRuntime() (connectors.RuntimeLease, error
 }
 
 type embeddingTestRuntime struct {
-	snapshot      *runtimecatalog.RoutableSnapshot
-	connector     connectors.Connector
-	operator      credentials.Material
+	snapshot  *runtimecatalog.RoutableSnapshot
+	connector connectors.Connector
+	operator  credentials.Material
+	// operatorErr is how a deployment with no environment credential for this
+	// provider behaves. A zero value keeps the environment plane available.
+	operatorErr   error
 	operatorCalls atomic.Int64
 }
 
@@ -162,6 +165,9 @@ func (r *embeddingTestRuntime) Get(provider string) connectors.Connector {
 func (*embeddingTestRuntime) RequiresAuthentication(string) bool { return false }
 func (r *embeddingTestRuntime) ResolveMaterial(context.Context, string) (credentials.Material, error) {
 	r.operatorCalls.Add(1)
+	if r.operatorErr != nil {
+		return credentials.Material{}, r.operatorErr
+	}
 	return r.operator, nil
 }
 func (*embeddingTestRuntime) Release() {}
@@ -172,7 +178,7 @@ type embeddingUserResolver struct {
 	calls    atomic.Int64
 }
 
-func (r *embeddingUserResolver) ResolveUserMaterial(
+func (r *embeddingUserResolver) ResolveStoredMaterial(
 	context.Context,
 	string,
 	catalogs.Provider,

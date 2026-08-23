@@ -22,6 +22,10 @@ const (
 	// TenantID stores the account the request runs under. It is distinct from
 	// APIKeyID: many keys can belong to one tenant.
 	TenantID Key = "tenant_id"
+	// TenantRecord stores the account behind the authenticated key. It is the
+	// operator's governing record: the credential strategy the request may run
+	// under, and the limits it spends against.
+	TenantRecord Key = "tenant_record"
 )
 
 // WithAPIKey stores the raw API key in the context.
@@ -59,6 +63,31 @@ func TenantIDOrDefault(ctx context.Context) string {
 		return apiKey.EffectiveTenantID()
 	}
 	return tenant.DefaultID
+}
+
+// WithTenantRecord stores the account behind the authenticated key.
+func WithTenantRecord(ctx context.Context, value *tenant.Tenant) context.Context {
+	return context.WithValue(ctx, TenantRecord, value)
+}
+
+// GetTenantRecord returns the account behind the authenticated key. It is
+// absent when the deployment could not read the account, which is not an
+// authentication failure: the key is still valid and the request falls back to
+// the default governing policy.
+func GetTenantRecord(ctx context.Context) (*tenant.Tenant, bool) {
+	value, ok := ctx.Value(TenantRecord).(*tenant.Tenant)
+	return value, ok && value != nil
+}
+
+// TenantCredentialStrategyOrDefault returns the credential policy the
+// operator set for this request's account. It is the ceiling a per-request
+// strategy may narrow and may never widen, so an unreadable account resolves
+// to the default rather than to no policy at all.
+func TenantCredentialStrategyOrDefault(ctx context.Context) tenant.CredentialStrategy {
+	if record, ok := GetTenantRecord(ctx); ok {
+		return record.EffectiveCredentialStrategy()
+	}
+	return tenant.StrategyOperatorFirst
 }
 
 // GetAPIKey returns the raw API key from the context.

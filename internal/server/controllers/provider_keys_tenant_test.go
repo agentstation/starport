@@ -61,7 +61,7 @@ func TestProviderCredentialScopeFollowsTheTenant(t *testing.T) {
 	listProviderKeysAs(t, manager, "acme", "STARPORT_laptop")
 
 	require.Len(t, manager.scopes, 2)
-	assert.Equal(t, keyring.UserScope("acme"), manager.scopes[0])
+	assert.Equal(t, keyring.TenantScope("acme"), manager.scopes[0])
 	assert.Equal(t, manager.scopes[0], manager.scopes[1],
 		"two keys in one tenant must read one credential scope")
 	assert.NotContains(t, manager.scopes[0], "STARPORT_",
@@ -79,7 +79,7 @@ func TestProviderCredentialScopeSeparatesTenants(t *testing.T) {
 	require.Len(t, manager.scopes, 2)
 	assert.NotEqual(t, manager.scopes[0], manager.scopes[1],
 		"two tenants must not share a credential scope")
-	assert.Equal(t, keyring.UserScope("globex"), manager.scopes[1])
+	assert.Equal(t, keyring.TenantScope("globex"), manager.scopes[1])
 }
 
 // TestProviderCredentialScopeFallsBackToTheDefaultTenant covers the request that
@@ -98,5 +98,5 @@ func TestProviderCredentialScopeFallsBackToTheDefaultTenant(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	require.Len(t, manager.scopes, 1)
-	assert.Equal(t, keyring.UserScope(tenant.DefaultID), manager.scopes[0])
+	assert.Equal(t, keyring.TenantScope(tenant.DefaultID), manager.scopes[0])
 }

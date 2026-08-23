@@ -61,7 +61,7 @@ type modelRouter struct {
 	executor       *execution.Executor
 	outcomes       execution.OutcomePublisher
 	credentialGate OperatorCredentialGate
-	userKeys       UserCredentialResolver
+	storedKeys     StoredCredentialResolver
 
 	// Advanced routing features
 	config                       Config
@@ -91,10 +91,11 @@ func WithAvailability(tracker *availability.Tracker) Option {
 	}
 }
 
-// WithUserCredentials supplies the tenant-scoped inference credential plane.
-func WithUserCredentials(resolver UserCredentialResolver) Option {
+// WithStoredCredentials supplies the stored inference credential planes: the
+// operator's gateway credential and every tenant's own.
+func WithStoredCredentials(resolver StoredCredentialResolver) Option {
 	return func(r *modelRouter) {
-		r.userKeys = resolver
+		r.storedKeys = resolver
 	}
 }
 
@@ -206,7 +207,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 	strategy, tenantID := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, tenantID, runtime, r.userKeys, r.credentialGate,
+		strategy, tenantID, runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
 		return nil, err

@@ -210,9 +210,9 @@ runtime_generation_replacement_is_atomic() {
     TestRuntimeGenerationDrainsConnectors
 }
 
-byok_policy_is_noninterfering() {
+credential_strategy_order_is_exact() {
   starport_tests "./internal/providers/keyring ./internal/execution" \
-    TestBYOKStrategyOrderAndUserOnlyNoninterference
+    TestStrategyOrdersAllThreeSources
 }
 
 test -d "$STARPORT_ROOT/internal" || {
@@ -260,8 +260,8 @@ run_check CDP-V17 'verified remote provider generations activate without rebuild
   verified_remote_provider_activates
 run_check CDP-V18 'runtime replacement is atomic and drains old connectors' \
   runtime_generation_replacement_is_atomic
-run_check CDP-V19 'BYOK order and user-only noninterference are exact' \
-  byok_policy_is_noninterfering
+run_check CDP-V19 'credential strategy source order is exact' \
+  credential_strategy_order_is_exact
 
 printf 'Summary: %d passed, %d failed\n' "$passed" "$failed"
 test "$failed" -eq 0

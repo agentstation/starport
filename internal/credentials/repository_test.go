@@ -20,7 +20,7 @@ func TestProviderCredentialRepositoryContract(t *testing.T) {
 		require.NoError(t, err)
 		suffix := uuid.NewString()
 		key := ProviderKey{
-			Scope:               "user:" + suffix,
+			Scope:               "tenant:" + suffix,
 			Provider:            "provider/example-" + suffix,
 			EncryptedCredential: "encrypted-value",
 			Config:              map[string]any{"region": "test"},

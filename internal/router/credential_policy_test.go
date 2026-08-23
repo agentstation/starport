@@ -22,7 +22,7 @@ func TestUserOnlySkipsOperatorResolution(t *testing.T) {
 	messages := make([]string, 0, 2)
 	for _, operatorErr := range []error{nil, errors.New("operator material exists")} {
 		runtime := &credentialPolicyRuntime{operatorErr: operatorErr}
-		policy, err := newCredentialPolicy(keyring.UserOnly, "tenant-a", runtime, nil, nil)
+		policy, err := newCredentialPolicy(keyring.BYOKOnly, "tenant-a", runtime, nil, nil)
 		require.NoError(t, err)
 		_, providerFailure, action := policy.resolve(t.Context(), route)
 		require.NotNil(t, providerFailure)

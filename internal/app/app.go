@@ -375,7 +375,7 @@ func (b *runtimeBuilder) buildGateway() error {
 		router.WithAvailability(availabilityOwner),
 		router.WithOutcomePublisher(b.application.providerStates),
 		router.WithOperatorCredentialGate(b.application.providerStates),
-		router.WithUserCredentials(b.providerKeys),
+		router.WithStoredCredentials(b.providerKeys),
 	)
 	proxyOptions := make([]proxy.Option, 0, 2)
 	// Codecs build once here and serve every request concurrently.

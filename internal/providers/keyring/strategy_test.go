@@ -8,14 +8,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBYOKStrategyOrderAndUserOnlyNoninterference(t *testing.T) {
+func TestStrategyOrdersAllThreeSources(t *testing.T) {
 	tests := []struct {
 		strategy Strategy
 		want     []CredentialSource
 	}{
-		{strategy: OperatorFirst, want: []CredentialSource{CredentialSourceOperator, CredentialSourceUser}},
-		{strategy: UserFirst, want: []CredentialSource{CredentialSourceUser, CredentialSourceOperator}},
-		{strategy: UserOnly, want: []CredentialSource{CredentialSourceUser}},
+		{
+			strategy: OperatorFirst,
+			want: []CredentialSource{
+				SourceEnvironment, SourceGateway, SourceBYOK,
+			},
+		},
+		{
+			strategy: BYOKFirst,
+			want: []CredentialSource{
+				SourceBYOK, SourceEnvironment, SourceGateway,
+			},
+		},
+		{strategy: BYOKOnly, want: []CredentialSource{SourceBYOK}},
 	}
 	for _, test := range tests {
 		t.Run(string(test.strategy), func(t *testing.T) {
@@ -27,7 +37,14 @@ func TestBYOKStrategyOrderAndUserOnlyNoninterference(t *testing.T) {
 	withOperator := UnavailableFailure("acme", errors.New("operator material exists"))
 	require.Equal(t, withoutOperator.Kind(), withOperator.Kind())
 	require.Equal(t, withoutOperator.SafeMessage(), withOperator.SafeMessage())
-	require.NotContains(t, UserOnly.Sources(), CredentialSourceOperator)
+	// byok_only is the whole of the deny story: it withholds both operator
+	// planes, because an environment credential and a gateway credential are
+	// the same operator's money.
+	require.NotContains(t, BYOKOnly.Sources(), SourceEnvironment)
+	require.NotContains(t, BYOKOnly.Sources(), SourceGateway)
+	require.False(t, BYOKOnly.AllowsOperatorCredentials())
+	require.True(t, OperatorFirst.AllowsOperatorCredentials())
+	require.True(t, BYOKFirst.AllowsOperatorCredentials())
 
 	for _, terminal := range []string{"permission", "validation", "timeout", "canceled", "internal"} {
 		t.Run(terminal, func(t *testing.T) {

@@ -92,6 +92,28 @@ func (h *BaseHandler) getAPIKeyID(ctx context.Context) string {
 	return ""
 }
 
+// writeCredentialStrategyError separates a malformed strategy from a forbidden
+// one. A value the gateway cannot parse is the caller's mistake and answers
+// 400. A value the gateway understands but the account is not permitted to use
+// answers 403, because the caller is authenticated and the operator withheld
+// the credential deliberately.
+func (h *BaseHandler) writeCredentialStrategyError(w http.ResponseWriter, err error) {
+	if errors.Is(err, keyring.ErrStrategyWidens) {
+		h.writePermissionDenied(w,
+			"This account may use only its own provider credentials.")
+		return
+	}
+	h.writeInvalidRequest(w, "Invalid provider credential strategy")
+}
+
+func (h *BaseHandler) writePermissionDenied(w http.ResponseWriter, message string) {
+	if h.protocol == ProtocolOpenRouter {
+		openrouter.WriteError(w, http.StatusForbidden, message, map[string]any{openRouterErrorTypeField: errorTypePermission})
+		return
+	}
+	openai.WriteError(w, http.StatusForbidden, errorTypePermission, message, nil)
+}
+
 func (h *BaseHandler) writeInvalidRequest(w http.ResponseWriter, message string) {
 	if h.protocol == ProtocolOpenRouter {
 		openrouter.WriteError(w, http.StatusBadRequest, message, map[string]any{openRouterErrorTypeField: errorTypeInvalidRequest})
@@ -107,7 +129,16 @@ func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) (*proxy.APIKey
 		return nil, nil
 	}
 
-	strategy, err := keyring.StrategyFromMetadata(apiKey.Metadata)
+	// The operator sets the account's strategy. The key may narrow it, so a
+	// tenant denied every operator credential cannot buy one back by putting a
+	// wider value in its own key metadata.
+	governing, err := keyring.ParseStrategy(
+		string(requestctx.TenantCredentialStrategyOrDefault(ctx)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	strategy, err := keyring.EffectiveStrategy(governing, apiKey.Metadata)
 	if err != nil {
 		return nil, err
 	}

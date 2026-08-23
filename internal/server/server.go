@@ -114,7 +114,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		usage:              dependencies.Usage,
 		providerOperations: dependencies.ProviderOperations,
 	}
-	s.auth = NewAuthMiddleware(s.identities)
+	s.auth = NewAuthMiddleware(s.identities, s.tenants)
 
 	handlerConfig := controllers.Config{
 		Service:            s.service,

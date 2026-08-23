@@ -20,7 +20,7 @@ import (
 
 func TestTenantOnlyBindsEndpointFromTenantMaterial(t *testing.T) {
 	fixture := newEndpointBindingFixture(t)
-	response, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.UserOnly))
+	response, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.BYOKOnly))
 	require.NoError(t, err)
 	require.Equal(t, "acme/opaque/model@001", response.ModelUsed)
 	require.Equal(t, []string{
@@ -32,7 +32,7 @@ func TestTenantOnlyBindsEndpointFromTenantMaterial(t *testing.T) {
 
 func TestOperatorAndTenantBindingsDoNotCross(t *testing.T) {
 	fixture := newEndpointBindingFixture(t)
-	_, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.UserOnly))
+	_, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.BYOKOnly))
 	require.NoError(t, err)
 	_, err = fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.OperatorFirst))
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func newEndpointBindingFixture(t *testing.T) *endpointBindingFixture {
 		profile, "tenant", "https://tenant.example", "tenant-project",
 	)}
 	adapter := &endpointBindingRegistry{registry: runtimeRegistry}
-	fixture.router = New(adapter, WithCatalog(plane), WithUserCredentials(user))
+	fixture.router = New(adapter, WithCatalog(plane), WithStoredCredentials(user))
 	return fixture
 }
 

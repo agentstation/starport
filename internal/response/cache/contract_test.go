@@ -106,7 +106,7 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 		"allowed models":       func(value *ChatIdentity) { value.Policy.Tenant.AllowedModels = []string{"openai/gpt-4.2"} },
 		"allowed providers":    func(value *ChatIdentity) { value.Policy.Tenant.AllowedProviders = []string{"anthropic"} },
 		"tenant tier":          func(value *ChatIdentity) { value.Policy.Tenant.RateLimitTier = "enterprise" },
-		"credential strategy":  func(value *ChatIdentity) { value.Policy.Tenant.CredentialStrategy = "user_only" },
+		"credential strategy":  func(value *ChatIdentity) { value.Policy.Tenant.CredentialStrategy = "byok_only" },
 	}
 	for name, mutate := range variants {
 		t.Run(name, func(t *testing.T) {

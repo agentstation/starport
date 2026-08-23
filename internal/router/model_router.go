@@ -45,7 +45,8 @@ type Request struct {
 	// API key configuration (for provider restrictions)
 	APIKeyConfig *APIKeyConfig
 
-	// TenantID selects the exact user-scoped provider credential record.
+	// TenantID selects the account whose BYOK credential record the request
+	// may read. It is never a gateway API key ID.
 	TenantID string
 
 	// Request metadata for routing decisions
@@ -95,7 +96,8 @@ type APIKeyConfig struct {
 	// Rate limit tier
 	RateLimitTier string
 
-	// CredentialStrategy selects request-bound operator and tenant credential order.
+	// CredentialStrategy is the effective credential order for this request,
+	// already resolved against the account's governing strategy by the caller.
 	CredentialStrategy keyring.Strategy
 }
 
