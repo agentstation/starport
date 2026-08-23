@@ -7,8 +7,9 @@ Last Updated: 2026-08-22
 
 ### Active Work
 
-No durable plan is active. The catalog, performance, and brand campaign
-closed on 2026-08-22; see Recently Completed.
+| Plan | Prefix | Status | Notes |
+|------|--------|--------|-------|
+| [Auth and Onboarding](plans/auth-and-onboarding-plan.html) | AON | `active` | Separates the three credential ideas — gateway API keys, gateway-wide provider credentials, and tenant-owned BYOK — behind a new `internal/tenant` seam with a canonical `default` tenant. Adds a gateway authentication mode with a `--no-auth` flag, a config field, an admin console switch, and a non-loopback tripwire. Adds a local admin token, one-time launch tickets, and signed console sessions so `starport dev` opens the console without putting a gateway key in the browser. Gate: `scripts/verify-auth-onboarding.sh`, terminal at 20 conditions. |
 
 ### Proposed Work
 
