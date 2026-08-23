@@ -9,7 +9,7 @@ Last Updated: 2026-08-22
 
 | Plan | Prefix | Status | Notes |
 |------|--------|--------|-------|
-| [Auth and Onboarding](plans/auth-and-onboarding-plan.html) | AON | `active` | Separates the three credential ideas — gateway API keys, gateway-wide provider credentials, and tenant-owned BYOK — behind a new `internal/tenant` seam with a canonical `default` tenant. Adds a gateway authentication mode with a `--no-auth` flag, a config field, an admin console switch, and a non-loopback tripwire. Adds a local admin token, one-time launch tickets, and signed console sessions so `starport dev` opens the console without putting a gateway key in the browser. Gate: `scripts/verify-auth-onboarding.sh`, terminal at 20 conditions. |
+| [Auth and Onboarding](plans/auth-and-onboarding-plan.html) | AON | `active` | Separates four ideas the product currently blurs: a gateway API key, which only authenticates; an environment credential; a gateway credential the operator applies once for the whole deployment; and BYOK, which is only a credential a tenant brings. Adds an `internal/tenant` seam with a canonical `default` tenant that carries the limits and credential strategy an operator uses to govern spend against a gateway credential, and renames `internal/providers/byok` to `internal/providers/keyring`. Adds a gateway authentication mode with a `--no-auth` flag, a config field, an admin console switch, and a non-loopback tripwire. Adds a local admin token, one-time launch tickets, and signed console sessions so `starport dev` opens the console without putting a gateway key in the browser. No data migration: nothing has shipped, so every rename is a clean break. Gate: `scripts/verify-auth-onboarding.sh`, terminal at 26 conditions. |
 
 ### Proposed Work
 

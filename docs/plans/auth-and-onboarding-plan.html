@@ -118,27 +118,63 @@
     Status: <code data-plan-status="active">active</code> &middot;
     Owner: this plan &middot;
     Created: 2026-08-23 &middot;
+    Revised: 2026-08-23 &middot;
     Baseline: main @ 1c2f9d2 &middot;
     Proof root: <code>docs/proof/auth-and-onboarding/</code> &middot;
-    Next action: AON1, add the <code>internal/tenant</code> seam and the canonical <code>default</code> tenant
+    Next action: AON1, add the <code>internal/tenant</code> seam, the shared
+    limits vocabulary, and the canonical <code>default</code> tenant
   </p>
 
   <section id="outcome">
     <h2>Outcome</h2>
     <blockquote>
       A gateway API key authenticates a request and owns nothing else. A
-      tenant owns API keys, provider credentials, and limits, and a
-      canonical <code>default</code> tenant exists from first boot.
-      Provider credentials live on the provider screens in two clearly
-      named planes: gateway credentials that the operator sets for the
-      whole deployment, and tenant credentials that a tenant brings.
-      Authentication is required unless an operator disables it through
-      the CLI, the config, or an admin console switch, and the gateway
-      refuses to serve unauthenticated on a non-loopback address without
-      an explicit second override. A new user starts the gateway, and the
-      CLI opens the console through a one-time launch ticket that becomes
-      a signed session, so the browser never holds the local admin token.
+      tenant owns API keys, limits, and a credential policy, and a canonical
+      <code>default</code> tenant exists from first boot. Provider
+      credentials have three named sources that the product never blurs:
+      the operator environment, gateway credentials that the operator
+      applies once for the whole deployment, and BYOK, which is only a
+      credential a tenant brings. The operator governs how much of a gateway
+      credential a tenant may spend through that tenant's limits.
+      Authentication is required unless an operator disables it through the
+      CLI, the config, or an admin console switch, and the gateway refuses
+      to serve unauthenticated on a non-loopback address without an explicit
+      second override. A new user starts the gateway, and the CLI opens the
+      console through a one-time launch ticket that becomes a signed
+      session, so the browser never holds the local admin token.
     </blockquote>
+  </section>
+
+  <section id="vocabulary">
+    <h2>Vocabulary</h2>
+    <p>The campaign fails if these four words stay interchangeable. Every
+      task, route, type, and console label below uses them in exactly this
+      sense.</p>
+    <table>
+      <thead>
+        <tr><th>Term</th><th>Who owns it</th><th>What it is</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Gateway API key</strong></td><td>a tenant</td><td>The
+          <code>STARPORT_</code> bearer token a client sends to Starport. It
+          authenticates and carries scopes. It is never a provider
+          credential and never a tenant identity.</td></tr>
+        <tr><td><strong>Environment credential</strong></td><td>the
+          operator</td><td>A provider key read from the process environment.
+          Read-only from every HTTP surface.</td></tr>
+        <tr><td><strong>Gateway credential</strong></td><td>the
+          operator</td><td>A provider key the operator applies through the
+          console or the admin API, stored encrypted at scope <code>*</code>,
+          serving the whole deployment. <strong>This is not BYOK.</strong></td></tr>
+        <tr><td><strong>BYOK</strong></td><td>a tenant</td><td>A provider key
+          a tenant brings, stored encrypted at scope
+          <code>tenant:&lt;id&gt;</code>, serving only that tenant. This is
+          the only thing the product calls BYOK.</td></tr>
+      </tbody>
+    </table>
+    <p>Environment and gateway credentials are both <em>operator
+      credentials</em>. That is the collective noun, and it is why the
+      resolution strategy keeps the name <code>operator_first</code>.</p>
   </section>
 
   <section id="progress">
@@ -179,7 +215,7 @@
           <rect x="10" y="162" width="320" height="52" rx="8" fill="none"
             stroke="currentColor"/>
           <text x="170" y="184" text-anchor="middle" font-size="12"
-            fill="currentColor">credentials scope "user:&lt;key_id&gt;"</text>
+            fill="currentColor">package byok, scope "user:&lt;key_id&gt;"</text>
           <text x="170" y="202" text-anchor="middle" font-size="11"
             fill="currentColor">console keys.tsx, /keys/{key_id}/provider-keys</text>
           <text x="170" y="234" text-anchor="middle" font-size="11"
@@ -206,17 +242,17 @@
           <text x="255" y="32" text-anchor="middle" font-size="12"
             fill="currentColor">tenant.Tenant</text>
           <text x="255" y="50" text-anchor="middle" font-size="11"
-            fill="currentColor">canonical "default"</text>
+            fill="currentColor">"default", limits, policy</text>
           <line x1="160" y1="36" x2="176" y2="36" stroke="currentColor"
             marker-end="url(#arrow-after)"/>
           <rect x="10" y="86" width="320" height="70" rx="8" fill="none"
             stroke="currentColor"/>
           <text x="170" y="106" text-anchor="middle" font-size="12"
-            fill="currentColor">credential planes on the provider screens</text>
+            fill="currentColor">providers/keyring: three named sources</text>
           <text x="170" y="124" text-anchor="middle" font-size="11"
-            fill="currentColor">operator env &rarr; gateway "*" &rarr; tenant:&lt;id&gt;</text>
+            fill="currentColor">environment &rarr; gateway "*" &rarr; BYOK tenant:&lt;id&gt;</text>
           <text x="170" y="146" text-anchor="middle" font-size="11"
-            fill="currentColor">/providers/{id}/credentials, /tenants/{id}/credentials</text>
+            fill="currentColor">/providers/{provider}/credentials, /tenants/{id}/byok</text>
           <line x1="170" y1="156" x2="170" y2="176" stroke="currentColor"
             marker-end="url(#arrow-after)"/>
           <rect x="10" y="178" width="320" height="62" rx="8" fill="none"
@@ -232,19 +268,21 @@
     </div>
     <p>The gateway API key keeps its name across both views. The change is
       that it stops being the tenant identity and stops owning provider
-      credentials.</p>
+      credentials. The package that holds provider credentials stops being
+      called <code>byok</code>, because two of the three sources it serves
+      are the operator's.</p>
   </section>
 </header>
 
 <main>
   <section id="scope">
     <h2>Scope</h2>
-    <p><strong>Owns:</strong> the tenant concept seam, provider credential
-      ownership and its HTTP surface, the gateway authentication mode and
-      its CLI, config, and console controls, the local admin token, launch
-      tickets and console sessions, the first-run experience, and the
-      console information architecture for keys, tenants, and provider
-      credentials.</p>
+    <p><strong>Owns:</strong> the tenant concept seam and its limits, the
+      three provider credential sources and their HTTP surface, the gateway
+      authentication mode and its CLI, config, and console controls, the
+      local admin token, launch tickets and console sessions, the first-run
+      experience, and the console information architecture for keys,
+      tenants, and provider credentials.</p>
     <p><strong>Does not own:</strong> catalog acquisition credentials,
       which Starmap owns; routing policy and price limits, which the
       OpenRouter parity work closed; and the response cache identity,
@@ -252,9 +290,9 @@
       contract.</p>
     <p><strong>Non-goals:</strong> user accounts, passwords, SSO, or
       OAuth; a hosted or remote control plane; an organization hierarchy
-      above the tenant; per-tenant billing or invoicing; and any
-      compatibility alias for the removed
-      <code>/api/v1/keys/{key_id}/provider-keys</code> routes.</p>
+      above the tenant; per-tenant billing or invoicing; any data
+      migration, because nothing has shipped; and any compatibility alias
+      for a removed route, storage scope, or strategy name.</p>
   </section>
 
   <section id="invariants">
@@ -263,10 +301,20 @@
       <li>A gateway API key authenticates a request. It never owns a
         provider credential, and no credential storage key contains an API
         key ID.</li>
-      <li>Provider credential resolution order is operator environment,
-        then gateway scope <code>*</code>, then tenant scope. The request
-        strategy selects which planes are eligible. It never reorders
-        them.</li>
+      <li>Provider credential resolution order is environment, then gateway
+        scope <code>*</code>, then BYOK scope
+        <code>tenant:&lt;id&gt;</code>. The strategy selects which sources
+        are eligible. It never reorders them.</li>
+      <li>The word BYOK names a tenant-brought credential and nothing else.
+        No type, route, package, log field, or console label applies it to
+        an environment or gateway credential.</li>
+      <li>An operator can apply a gateway credential for every provider the
+        catalog knows, without creating a gateway API key and without
+        touching a tenant.</li>
+      <li>A tenant's limits bound what that tenant spends against a gateway
+        credential. A tenant with no limits inherits no cap; a limit set on
+        a tenant is a ceiling that a key-level limit can lower and never
+        raise.</li>
       <li>Authentication is required by default. A build with no
         configuration serves no unauthenticated inference request.</li>
       <li>The gateway refuses to serve with authentication disabled on a
@@ -286,9 +334,9 @@
   <section id="verifier-contract">
     <h2>Verifier contract</h2>
     <p><code>scripts/verify-auth-onboarding.sh</code> holds conditions
-      <code>AON-V01</code> through <code>AON-V20</code> and prints
+      <code>AON-V01</code> through <code>AON-V26</code> and prints
       <code>Summary: N passed, M failed</code>. AON0 authors it red at
-      0 passed, 20 failed. The terminal state is 20 passed, 0 failed, and
+      0 passed, 26 failed. The terminal state is 26 passed, 0 failed, and
       the script runs in CI beside the other gates.</p>
     <table>
       <thead>
@@ -296,15 +344,16 @@
       </thead>
       <tbody>
         <tr><td>AON0</td><td>0</td></tr>
-        <tr><td>AON1</td><td>3</td></tr>
-        <tr><td>AON2</td><td>6</td></tr>
-        <tr><td>AON3</td><td>9</td></tr>
-        <tr><td>AON4</td><td>12</td></tr>
-        <tr><td>AON5</td><td>15</td></tr>
-        <tr><td>AON6</td><td>16</td></tr>
-        <tr><td>AON7</td><td>18</td></tr>
-        <tr><td>AON8</td><td>19</td></tr>
-        <tr><td>AON9</td><td>20</td></tr>
+        <tr><td>AON1</td><td>5</td></tr>
+        <tr><td>AON2</td><td>8</td></tr>
+        <tr><td>AON3</td><td>13</td></tr>
+        <tr><td>AON4</td><td>16</td></tr>
+        <tr><td>AON5</td><td>18</td></tr>
+        <tr><td>AON6</td><td>21</td></tr>
+        <tr><td>AON7</td><td>22</td></tr>
+        <tr><td>AON8</td><td>24</td></tr>
+        <tr><td>AON9</td><td>25</td></tr>
+        <tr><td>AON10</td><td>26</td></tr>
       </tbody>
     </table>
   </section>
@@ -316,19 +365,20 @@
         <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        <tr id="AON0" data-status="done"><td>AON0</td><td>Baseline: pin the baseline commit, create the proof root, author the verifier red at 20 failing conditions, capture fail-before evidence. No production behavior changes.</td><td><code>done</code></td><td>Baseline <code>1c2f9d2</code>. <code>scripts/verify-auth-onboarding.sh</code> reports <code>Summary: 0 passed, 20 failed</code>, exit 1. No Go or console source changed. <a href="../proof/auth-and-onboarding/aon0.md">AON0 evidence</a>.</td></tr>
-        <tr id="AON1" data-status="in_progress"><td>AON1</td><td>Add the <code>internal/tenant</code> concept seam: the tenant model, its repository, and the canonical <code>default</code> tenant.</td><td><code>in_progress</code></td><td></td></tr>
+        <tr id="AON0" data-status="done"><td>AON0</td><td>Baseline: pin the baseline commit, create the proof root, author the verifier red, capture fail-before evidence. No production behavior changes.</td><td><code>done</code></td><td>Baseline <code>1c2f9d2</code>. Authored at 20 conditions and re-authored at 26 by the 2026-08-23 revision. <code>scripts/verify-auth-onboarding.sh</code> reports <code>Summary: 0 passed, 26 failed</code>, exit 1. No Go or console source changed. <a href="../proof/auth-and-onboarding/aon0.md">AON0 evidence</a>.</td></tr>
+        <tr id="AON1" data-status="in_progress"><td>AON1</td><td>Add the <code>internal/tenant</code> concept seam and the shared <code>internal/limits</code> vocabulary: the tenant model with limits and a credential policy, its repository, and the canonical <code>default</code> tenant.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="AON2" data-status="todo"><td>AON2</td><td>Give <code>identity.APIKey</code> a tenant, and make the request tenant come from the key's tenant instead of the key ID.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON3" data-status="todo"><td>AON3</td><td>Re-scope provider credentials to <code>tenant:&lt;id&gt;</code> and gateway <code>*</code>, and wire the gateway plane into credential resolution.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON4" data-status="todo"><td>AON4</td><td>Replace the key-nested credential routes with provider-owned and tenant-owned credential routes.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON5" data-status="todo"><td>AON5</td><td>Add the gateway authentication mode: config, <code>--no-auth</code>, the non-loopback tripwire, and an unauthenticated capability endpoint.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON6" data-status="todo"><td>AON6</td><td>Add the admin authentication-mode switch and its console control.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON7" data-status="todo"><td>AON7</td><td>Add the local admin token and the <code>starport auth</code> command group.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON8" data-status="todo"><td>AON8</td><td>Add launch tickets, console sessions, browser open, and the first-run banner.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON9" data-status="todo"><td>AON9</td><td>Separate the three credential ideas in the console and add the tenants view.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON10" data-status="todo"><td>AON10</td><td>Update the quickstart, the operator guide, and the architecture document.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON11" data-status="todo"><td>AON11</td><td>Close the campaign: verifier terminal, full gate roster, CI job registered.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AON12" data-status="todo"><td>AON12</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON3" data-status="todo"><td>AON3</td><td>Rename <code>internal/providers/byok</code> to <code>internal/providers/keyring</code>, give the three credential sources honest names, move BYOK to <code>tenant:&lt;id&gt;</code>, and wire the gateway plane and the tenant credential policy into resolution.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON4" data-status="todo"><td>AON4</td><td>Replace the key-nested credential routes with operator-owned <code>/providers/{provider}/credentials</code> and tenant-owned <code>/tenants/{tenant_id}/byok</code>.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON5" data-status="todo"><td>AON5</td><td>Add tenant governance: admin tenant routes, and tenant limits enforced as a ceiling above key limits in the budget and rate-limit paths.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON6" data-status="todo"><td>AON6</td><td>Add the gateway authentication mode: config, <code>--no-auth</code>, the non-loopback tripwire, and an unauthenticated capability endpoint.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON7" data-status="todo"><td>AON7</td><td>Add the admin authentication-mode switch and its console control.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON8" data-status="todo"><td>AON8</td><td>Add the local admin token and the <code>starport auth</code> command group.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON9" data-status="todo"><td>AON9</td><td>Add launch tickets, console sessions, browser open, and the first-run banner.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON10" data-status="todo"><td>AON10</td><td>Separate the credential ideas in the console and add the tenants view.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON11" data-status="todo"><td>AON11</td><td>Update the quickstart, the operator guide, and the architecture document.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON12" data-status="todo"><td>AON12</td><td>Close the campaign: verifier terminal, full gate roster, CI job registered.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON13" data-status="todo"><td>AON13</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -345,12 +395,12 @@
         <code>scripts/verify-auth-onboarding.sh</code>.</li>
       <li><strong>Steps:</strong> 1. Pin the baseline at
         <code>1c2f9d2</code>. 2. Create the proof root. 3. Author the
-        verifier with 20 conditions that all fail. 4. Record the current
+        verifier with conditions that all fail. 4. Record the current
         behavior: every route requires a key, the tenant is the key ID,
         and the credential scope is <code>user:&lt;key_id&gt;</code>.</li>
       <li><strong>Acceptance:</strong>
         <code>scripts/verify-auth-onboarding.sh</code> prints
-        <code>Summary: 0 passed, 20 failed</code> and exits non-zero. No
+        <code>Summary: 0 passed, 26 failed</code> and exits non-zero. No
         Go or console source changes.</li>
       <li><strong>Fail-before:</strong> the verifier is red before any
         implementation task.</li>
@@ -358,33 +408,52 @@
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON1">AON1 Tenant seam</h3>
+    <h3 id="task-AON1">AON1 Tenant seam and shared limits</h3>
     <ul>
       <li><strong>Problem:</strong> Starport has no tenant concept. The
         gateway API key ID stands in for one, so limits, caps, and
-        credentials cannot outlive a key.</li>
+        credentials cannot outlive a key, and an operator has no place to
+        say how much of a gateway credential an account may spend.</li>
       <li><strong>Owning seam and paths:</strong> new
-        <code>internal/tenant/</code> package, modeled on
-        <code>internal/identity/</code>.</li>
-      <li><strong>Steps:</strong> 1. Define <code>tenant.Tenant</code>
-        with an ID, a name, optional limits, metadata, an active flag, and
-        timestamps. 2. Add a repository over the existing
-        <code>storage.KVStore</code> with a <code>tenant:v1:</code>
-        namespace and compare-and-swap writes, matching the identity
-        repository. 3. Add <code>EnsureDefault</code>, which creates the
-        canonical <code>default</code> tenant once and is safe to call on
-        every boot. 4. Call it from application composition in
-        <code>internal/app</code>. Nothing reads the tenant yet.</li>
-      <li><strong>Acceptance:</strong> a test creates the default tenant
-        on a cold store, a second call is a no-op with the same revision,
-        and a tenant ID that is not a valid name is rejected. The
-        canonical ID is the literal <code>default</code>, asserted by
-        test.</li>
+        <code>internal/limits/</code>, new <code>internal/tenant/</code>,
+        and the five files that name <code>identity.Limits</code>:
+        <code>internal/identity/limits.go</code>,
+        <code>internal/server/budget.go</code>,
+        <code>internal/server/controllers/admin.go</code>, and their
+        tests.</li>
+      <li><strong>Steps:</strong> 1. Extract <code>Limits</code>,
+        <code>RequestLimit</code>, and <code>Budget</code> from
+        <code>internal/identity</code> into a new
+        <code>internal/limits</code> package, so a tenant and a key can
+        both hold the same vocabulary without <code>identity</code>
+        becoming a dependency of <code>tenant</code>. Re-export nothing;
+        update the callers directly. 2. Define <code>tenant.Tenant</code>
+        with an ID, a name, <code>Limits</code>, a
+        <code>CredentialStrategy</code>, metadata, an active flag, and
+        timestamps. <code>CredentialStrategy</code> is the tenant-level
+        default that AON3 enforces, and it is how an operator says whether
+        this tenant may draw on a gateway credential at all. 3. Add a
+        repository over the existing <code>storage.KVStore</code> with a
+        <code>tenant:v1:</code> namespace and compare-and-swap writes,
+        matching the identity repository. 4. Add
+        <code>EnsureDefault</code>, which creates the canonical
+        <code>default</code> tenant once and is safe to call on every boot
+        and from concurrent processes. 5. Call it from application
+        composition in <code>internal/app</code>. Nothing reads the tenant
+        yet.</li>
+      <li><strong>Acceptance:</strong> a test creates the default tenant on
+        a cold store, a second call is a no-op with the same revision, and
+        a concurrent pair of calls yields one tenant. A tenant ID that is
+        not a valid name is rejected, and deleting <code>default</code> is
+        refused. The canonical ID is the literal <code>default</code>,
+        asserted by test. <code>go build ./...</code> proves the limits
+        extraction left no caller behind.</li>
       <li><strong>Fail-before:</strong> <code>AON-V01</code> through
-        <code>AON-V03</code> fail because
-        <code>internal/tenant</code> does not exist.</li>
+        <code>AON-V05</code> fail because neither
+        <code>internal/tenant</code> nor <code>internal/limits</code>
+        exists.</li>
       <li><strong>Verification:</strong>
-        <code>go test ./internal/tenant/... ./internal/app/...</code>,
+        <code>go test ./internal/tenant/... ./internal/limits/... ./internal/identity/... ./internal/server/... ./internal/app/...</code>,
         <code>bash scripts/verify-package-layout.sh</code>,
         <code>bash scripts/verify-dependency-direction.sh</code>,
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
@@ -403,20 +472,20 @@
         <code>internal/server/requestctx/</code>,
         <code>internal/server/controllers/base.go</code>.</li>
       <li><strong>Steps:</strong> 1. Add <code>TenantID</code> to
-        <code>identity.APIKey</code> and validate that it is non-empty.
-        2. Default it to <code>default</code> at issue time when the
-        caller names no tenant. 3. Read a stored key with an empty tenant
-        as <code>default</code>, so keys written before this task keep
-        working without a migration pass. 4. Put the tenant on the request
-        context in <code>RequireAPIKey</code>. 5. Make
-        <code>getTenantID</code> read the context tenant. 6. Decide the
-        tenant for an unauthenticated request in a single named place, so
-        AON5 has one seam to extend.</li>
+        <code>identity.APIKey</code>. 2. Resolve an unset tenant to
+        <code>default</code> in one named function. This is a permanent
+        contract, not a compatibility shim: a key that names no tenant
+        belongs to the canonical tenant, at issue time and at read time
+        alike. 3. Reject a key whose named tenant does not exist. 4. Put
+        the tenant on the request context in <code>RequireAPIKey</code>.
+        5. Make <code>getTenantID</code> read the context tenant. 6. Decide
+        the tenant for an unauthenticated request in a single named place,
+        so AON6 has one seam to extend.</li>
       <li><strong>Acceptance:</strong> two keys created under one tenant
-        produce the same request tenant. A key stored without a tenant
-        field resolves to <code>default</code>. Usage records keyed by the
-        API key ID still record the key ID, not the tenant, and a test
-        asserts both values are present and distinct.</li>
+        produce the same request tenant. A key naming an unknown tenant is
+        refused at issue time. Usage records keyed by the API key ID still
+        record the key ID, not the tenant, and a test asserts both values
+        are present and distinct.</li>
       <li><strong>Fail-before:</strong> a test asserting that two keys in
         one tenant share a tenant identity fails on the baseline.</li>
       <li><strong>Verification:</strong>
@@ -424,43 +493,59 @@
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON3">AON3 Credential planes</h3>
+    <h3 id="task-AON3">AON3 Three credential sources</h3>
     <ul>
-      <li><strong>Problem:</strong> the credential scope is
-        <code>"user:" + apiKeyID</code>, and the gateway-wide
-        <code>*</code> plane in <code>internal/providers/byok</code> has
-        no consumer. Deleting a gateway key strands its credentials.</li>
+      <li><strong>Problem:</strong> the package is named
+        <code>byok</code> but two of the three credential sources it serves
+        belong to the operator, so the code teaches the confusion the
+        console shows. The tenant scope is <code>"user:" + apiKeyID</code>,
+        so deleting a gateway key strands its credentials, and the
+        gateway-wide <code>*</code> plane has no consumer at all.</li>
       <li><strong>Owning seam and paths:</strong>
-        <code>internal/providers/byok/keys.go</code>,
-        <code>internal/providers/byok/provider_keys.go</code>,
-        <code>internal/credentials/model.go</code>,
+        <code>internal/providers/byok/</code>, renamed to
+        <code>internal/providers/keyring/</code>, and its 16 importers;
+        <code>internal/credentials/model.go</code>;
         <code>internal/router/credential_policy.go</code>.</li>
-      <li><strong>Steps:</strong> 1. Replace
-        <code>UserScope(tenantID)</code>'s <code>user:</code> prefix with
-        <code>tenant:</code>, and name the constant for the tenant plane.
-        2. Add a gateway plane constant for scope <code>*</code> and
-        rename the byok global-key methods to name the gateway plane.
-        3. Extend <code>byok.Strategy</code> so the source order is
-        operator, gateway, tenant, and keep the existing strategy names
-        working: <code>operator_first</code>, <code>user_first</code>, and
-        <code>user_only</code> gain a gateway position with recorded
-        semantics. 4. Wire the gateway plane into
-        <code>credentialPolicy.resolve</code>. 5. Add a one-shot
-        migration that rewrites <code>user:&lt;key_id&gt;</code> records
-        to <code>tenant:default</code>, and record a collision rule when
-        two keys hold a credential for the same provider.</li>
-      <li><strong>Acceptance:</strong> a stored gateway credential serves
-        a request that has no tenant credential. A tenant credential wins
-        over a gateway credential under <code>user_first</code>. A
-        provider with no credential in any plane still returns the
-        existing not-configured failure, not a panic. The migration test
-        starts from two <code>user:</code> records and ends with the
-        recorded collision outcome.</li>
+      <li><strong>Steps:</strong> 1. Rename the package directory and every
+        import. The package name is the header on this concept, and
+        <code>byok.GatewayScope</code> would be a contradiction.
+        2. Name the sources <code>SourceEnvironment</code>,
+        <code>SourceGateway</code>, and <code>SourceBYOK</code>, replacing
+        <code>operator</code> and <code>user</code>. 3. Replace
+        <code>UserScope(tenantID)</code> with
+        <code>TenantScope(tenantID)</code> returning
+        <code>tenant:&lt;id&gt;</code>, and name
+        <code>GatewayScope</code> for <code>*</code>. Rename the
+        <code>*Global*</code> methods to <code>*Gateway*</code>. 4. Rename
+        the strategy values to <code>operator_first</code> (unchanged, and
+        the vocabulary section says why), <code>byok_first</code>, and
+        <code>byok_only</code>, and add <code>gateway_denied</code> for a
+        tenant the operator does not want drawing on a gateway credential.
+        No alias for <code>user_first</code> or <code>user_only</code>.
+        5. Wire the gateway plane into <code>credentialPolicy.resolve</code>
+        between environment and BYOK. 6. Read the effective strategy from
+        the tenant, and let a per-request override narrow it and never
+        widen it. 7. Delete the <code>user:</code> scope outright. There is
+        no migration: nothing has shipped, so a pre-existing local record
+        under <code>user:</code> is simply unreachable, and the operator
+        re-applies the credential through AON4.</li>
+      <li><strong>Acceptance:</strong> a stored gateway credential serves a
+        request that has no BYOK credential. A BYOK credential wins over a
+        gateway credential under <code>byok_first</code>. A tenant set to
+        <code>gateway_denied</code> with no BYOK credential gets the
+        existing not-configured failure and never the gateway credential,
+        asserted by test. A per-request strategy that would widen the
+        tenant's is refused. A provider with no credential in any source
+        still returns the existing not-configured failure, not a panic.
+        <code>grep -r 'user:' internal/providers/keyring</code> finds no
+        scope construction.</li>
       <li><strong>Fail-before:</strong> a test that stores a scope
         <code>*</code> credential and expects a served request fails on
         the baseline, because no resolver consults that plane.</li>
       <li><strong>Verification:</strong>
-        <code>go test ./internal/providers/byok/... ./internal/router/... ./internal/credentials/...</code>,
+        <code>go test ./internal/providers/... ./internal/router/... ./internal/credentials/...</code>,
+        <code>bash scripts/verify-package-layout.sh</code>,
+        <code>bash scripts/verify-dependency-direction.sh</code>,
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
@@ -468,31 +553,40 @@
     <ul>
       <li><strong>Problem:</strong> the HTTP surface teaches the
         conflation. <code>/api/v1/keys/{key_id}/provider-keys</code> makes
-        a provider credential look like a property of a gateway key.</li>
+        a provider credential look like a property of a gateway key, and
+        there is no route at all by which an operator applies a credential
+        for the deployment.</li>
       <li><strong>Owning seam and paths:</strong>
         <code>internal/server/routes.go</code>,
         <code>internal/server/controllers/provider_keys.go</code>,
         <code>internal/server/dto/</code>.</li>
       <li><strong>Steps:</strong> 1. Add
-        <code>/api/v1/providers/{provider}/credentials</code> for the
-        gateway plane, under the <code>admin</code> scope. 2. Add
-        <code>/api/v1/tenants/{tenant_id}/credentials</code> and
-        <code>/api/v1/tenants/{tenant_id}/credentials/{provider}</code>
-        for the tenant plane, under the existing
-        <code>provider_keys:read</code> and
-        <code>provider_keys:write</code> scopes, and refuse a tenant that
-        is not the caller's tenant unless the caller holds
-        <code>admin</code>. 3. Keep the validate endpoint on both planes.
-        4. Move the usage comparison endpoints to the tenant path.
-        5. Delete the key-nested routes and their controller methods. Add
-        no alias, because the repository forbids compatibility paths
+        <code>/api/v1/providers/{provider}/credentials</code> with
+        <code>GET</code>, <code>PUT</code>, <code>DELETE</code>, and
+        <code>POST /validate</code>, under the <code>admin</code> scope.
+        This is the route that makes invariant 4 true: the operator applies
+        a gateway credential here, for any provider the catalog knows,
+        without creating a gateway API key. 2. Add
+        <code>/api/v1/tenants/{tenant_id}/byok</code> and
+        <code>/api/v1/tenants/{tenant_id}/byok/{provider}</code> under the
+        existing <code>provider_keys:read</code> and
+        <code>provider_keys:write</code> scopes. The path says
+        <code>byok</code> because only a tenant-brought credential lives
+        there. 3. Refuse a tenant that is not the caller's tenant unless
+        the caller holds <code>admin</code>, so an operator can also apply
+        a credential on a tenant's behalf. 4. Keep the validate endpoint on
+        both surfaces. 5. Move the usage comparison endpoints to the tenant
+        path. 6. Delete the key-nested routes and their controller methods.
+        Add no alias, because the repository forbids compatibility paths
         before the first release.</li>
       <li><strong>Acceptance:</strong> a request to a key-nested
-        credential path returns 404. A non-admin caller reading another
-        tenant's credentials receives 403. The gateway credential
-        endpoints reject a non-admin caller. No response body contains
-        decrypted credential material, asserted by the existing security
-        tests extended to the new paths.</li>
+        credential path returns 404. An admin caller with no gateway key
+        of its own applies a gateway credential for a catalog provider and
+        an inference request then resolves it. A non-admin caller reading
+        another tenant's BYOK receives 403. A non-admin caller reaches the
+        provider credential endpoints and receives 403. No response body
+        contains decrypted credential material, asserted by the existing
+        security tests extended to the new paths.</li>
       <li><strong>Fail-before:</strong> a test asserting 404 on
         <code>/api/v1/keys/{key_id}/provider-keys</code> fails on the
         baseline.</li>
@@ -503,7 +597,47 @@
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON5">AON5 Authentication mode</h3>
+    <h3 id="task-AON5">AON5 Tenant governance</h3>
+    <ul>
+      <li><strong>Problem:</strong> AON1 gives a tenant limits and AON3
+        makes it possible for a tenant to spend an operator's gateway
+        credential. Without enforcement, the operator has a field and no
+        control, and a tenant on a gateway credential is unbounded.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/server/budget.go</code>,
+        <code>internal/server/middleware.go</code>,
+        <code>internal/server/controllers/admin.go</code>,
+        <code>internal/server/routes.go</code>,
+        <code>internal/ratelimit/</code>.</li>
+      <li><strong>Steps:</strong> 1. Add admin tenant routes:
+        <code>GET</code> and <code>POST /api/v1/admin/tenants</code>, and
+        <code>GET</code>, <code>PUT</code>, <code>DELETE
+        /api/v1/admin/tenants/{tenant_id}</code>, with delete refusing
+        <code>default</code>. 2. Resolve the effective limit for a request
+        as the stricter of the tenant limit and the key limit, in one named
+        function, so no caller re-derives the rule. 3. Apply it in the
+        budget path and the rate-limit path. 4. Report which level bound
+        the request in the limit response headers and the failure body, so
+        an operator can tell a tenant cap from a key cap. 5. Keep the
+        resolution off the request hot path's storage: read the tenant from
+        the same cached lookup the key read uses.</li>
+      <li><strong>Acceptance:</strong> a key with a high limit under a
+        tenant with a low limit is bounded by the tenant, and the failure
+        names the tenant as the binding level. A key with a low limit under
+        a tenant with a high limit is bounded by the key. A tenant with no
+        limits leaves key behavior unchanged, asserted against the existing
+        budget tests. Deleting the <code>default</code> tenant returns 409.
+        The overhead benchmark shows no added storage read per request.</li>
+      <li><strong>Fail-before:</strong> a test that sets a tenant limit
+        below a key limit and expects the tenant to bind fails on the AON4
+        head, because nothing reads a tenant limit.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/server/... ./internal/ratelimit/...</code>,
+        <code>bash scripts/benchmark-overhead.sh</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON6">AON6 Authentication mode</h3>
     <ul>
       <li><strong>Problem:</strong> <code>routes.go</code> applies
         <code>requireAPIKey</code> unconditionally, so a local user cannot
@@ -515,7 +649,8 @@
         <code>internal/server/middleware.go</code>,
         <code>internal/server/routes.go</code>,
         <code>internal/cli/app.go</code>,
-        <code>internal/cli/development.go</code>.</li>
+        <code>internal/cli/development.go</code>,
+        <code>internal/app/app.go</code>.</li>
       <li><strong>Steps:</strong> 1. Add an auth mode with the values
         <code>required</code> and <code>disabled</code>, default
         <code>required</code>, readable from config and from a
@@ -524,31 +659,34 @@
         is disabled, skip the key check and set the request tenant to
         <code>default</code> through the AON2 seam. Admin routes still
         require the admin scope, which no unauthenticated request holds,
-        unless the operator also grants it explicitly. 3. Add the
-        non-loopback tripwire in config validation: a disabled mode with a
-        non-loopback bind address fails startup unless a second explicit
-        override flag is present. 4. Add an unauthenticated
-        <code>GET /api/v1/auth/mode</code> that returns the mode and
-        whether the console may change it. 5. Print the mode in the
-        <code>dev</code> and <code>serve</code> startup banner.</li>
+        unless the operator also grants it explicitly. 3. Relax
+        <code>app.requireIdentity</code>, which today refuses to start with
+        zero identities: that check is correct only when the mode is
+        <code>required</code>. 4. Add the non-loopback tripwire in config
+        validation: a disabled mode with a non-loopback bind address fails
+        startup unless a second explicit override flag is present. 5. Add
+        an unauthenticated <code>GET /api/v1/auth/mode</code> that returns
+        the mode and whether the console may change it. 6. Print the mode
+        in the <code>dev</code> and <code>serve</code> startup banner.</li>
       <li><strong>Acceptance:</strong> the default build 401s an
         unauthenticated inference request. With <code>--no-auth</code> on
-        a loopback bind, the same request succeeds and its usage record
-        carries the anonymous key ID and the <code>default</code> tenant.
-        With <code>--no-auth</code> on <code>0.0.0.0</code>, startup fails
-        with a message that names the override. With the override,
-        startup succeeds. <code>GET /api/v1/auth/mode</code> answers
-        without a key in both modes.</li>
+        a loopback bind and an empty identity store, the gateway starts and
+        the same request succeeds, and its usage record carries the
+        anonymous key ID and the <code>default</code> tenant. With
+        <code>--no-auth</code> on <code>0.0.0.0</code>, startup fails with
+        a message that names the override. With the override, startup
+        succeeds. <code>GET /api/v1/auth/mode</code> answers without a key
+        in both modes.</li>
       <li><strong>Fail-before:</strong> a test that starts the server with
         auth disabled fails to compile on the baseline, because no such
         option exists.</li>
       <li><strong>Verification:</strong>
-        <code>go test ./internal/config/... ./internal/server/... ./internal/cli/...</code>,
+        <code>go test ./internal/config/... ./internal/server/... ./internal/cli/... ./internal/app/...</code>,
         <code>bash scripts/verify-developer-experience.sh</code>,
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON6">AON6 Console authentication switch</h3>
+    <h3 id="task-AON7">AON7 Console authentication switch</h3>
     <ul>
       <li><strong>Problem:</strong> the mode is only reachable from the
         process that owns the bind address, and the request asks for a UI
@@ -562,7 +700,7 @@
         <code>PUT /api/v1/admin/auth/mode</code> under the
         <code>admin</code> scope. 2. Refuse the change when the request
         origin is not loopback, and refuse to disable authentication when
-        the bind address is not loopback, reusing the AON5 tripwire rule
+        the bind address is not loopback, reusing the AON6 tripwire rule
         rather than restating it. 3. Persist the mode so a restart keeps
         it, and record which source last set it, so the startup banner can
         say config, flag, or console. 4. Add the Settings control with an
@@ -575,7 +713,7 @@
         without a restart, and the mode survives a restart. A console test
         asserts the confirmation appears before the switch commits.</li>
       <li><strong>Fail-before:</strong> the endpoint returns 404 on the
-        AON5 head.</li>
+        AON6 head.</li>
       <li><strong>Verification:</strong>
         <code>go test ./internal/server/...</code>,
         <code>cd console &amp;&amp; npm test</code>,
@@ -583,7 +721,7 @@
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON7">AON7 Local admin token</h3>
+    <h3 id="task-AON8">AON8 Local admin token</h3>
     <ul>
       <li><strong>Problem:</strong> the only way into the console is to
         paste a gateway key, and there is no local operator credential
@@ -596,7 +734,7 @@
         rotation time, under the platform data directory with mode 0600.
         2. Auto-mint on first boot under a file lock, so two starts cannot
         race. 3. Compare in constant time. 4. Add a rotation freshness
-        rule: a never-rotated auto-minted token is stale, and AON5's
+        rule: a never-rotated auto-minted token is stale, and AON6's
         non-loopback tripwire refuses to expose it. 5. Add the
         <code>starport auth</code> command group with
         <code>token</code>, <code>status</code>, and
@@ -608,13 +746,13 @@
         never-rotated token fails startup with a message that names
         <code>starport auth rotate</code>.</li>
       <li><strong>Fail-before:</strong> <code>starport auth status</code>
-        does not exist on the AON6 head.</li>
+        does not exist on the AON7 head.</li>
       <li><strong>Verification:</strong>
         <code>go test ./internal/localauth/... ./internal/cli/...</code>,
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON8">AON8 Launch tickets and sessions</h3>
+    <h3 id="task-AON9">AON9 Launch tickets and sessions</h3>
     <ul>
       <li><strong>Problem:</strong> the console holds a long-lived gateway
         key in <code>localStorage</code>. A copied URL or a shared browser
@@ -651,19 +789,21 @@
         <code>starport dev</code> prints the URL and opens no
         browser.</li>
       <li><strong>Fail-before:</strong> <code>/launch</code> returns 404
-        on the AON7 head.</li>
+        on the AON8 head.</li>
       <li><strong>Verification:</strong>
         <code>go test ./internal/localauth/... ./internal/server/... ./internal/cli/...</code>,
         <code>cd console &amp;&amp; npm test</code>,
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON9">AON9 Console separation</h3>
+    <h3 id="task-AON10">AON10 Console separation</h3>
     <ul>
       <li><strong>Problem:</strong> the console teaches the conflation.
         <code>keys.tsx</code> holds a BYOK section keyed by the gateway
         key, and <code>ProviderDetail.tsx</code> sends the user to
-        <code>/keys</code> to attach a provider key to a gateway key.</li>
+        <code>/keys</code> to attach a provider key to a gateway key.
+        Nothing in the console distinguishes a credential the operator set
+        for the deployment from one a tenant brought.</li>
       <li><strong>Owning seam and paths:</strong>
         <code>console/src/routes/keys.tsx</code>,
         <code>console/src/components/providers/ProviderDetail.tsx</code>,
@@ -673,57 +813,71 @@
       <li><strong>Steps:</strong> 1. Delete the BYOK section from
         <code>keys.tsx</code>. The keys page lists gateway keys, their
         scopes, their limits, and their tenant, and nothing else.
-        2. Put both credential planes on the provider detail screen, named
-        as gateway credentials and tenant credentials, each with the
+        2. Put the operator credentials on the provider detail screen: the
+        environment credential read-only with the variable name and whether
+        it is set, and the gateway credential editable with the
         catalog-driven credential fields the current form already reads.
-        3. Replace the <code>ProviderDetail</code> fix-it copy and its
+        The screen says gateway credential and never says BYOK. 3. Replace
+        the <code>ProviderDetail</code> fix-it copy and its
         <code>/keys</code> link with a link to the credential panel on the
-        same screen. 4. Add a tenants route that lists tenants, their
-        keys, their limits, and their credentials. 5. Show the
-        authentication mode in the header when it is disabled, so a user
-        cannot mistake an open gateway for a secured one.</li>
+        same screen. 4. Add a tenants route that lists tenants, and per
+        tenant its keys, its limits, its credential strategy, and its BYOK
+        credentials. BYOK appears here and nowhere else. 5. Show which
+        source served a provider on the provider screen, so an operator can
+        see when a tenant is drawing on the deployment's credential.
+        6. Show the authentication mode in the header when it is disabled,
+        so a user cannot mistake an open gateway for a secured one.</li>
       <li><strong>Acceptance:</strong> the console source contains no link
         from a provider screen to <code>/keys</code> for credential
         purposes, asserted by the verifier. A console test opens the
-        provider screen and edits a gateway credential without visiting
-        the keys page. The keys page renders with no provider-credential
+        provider screen and applies a gateway credential without visiting
+        the keys page or naming a tenant. A console test finds the string
+        BYOK on the tenants screen and not on the providers or keys
+        screens. The keys page renders with no provider-credential
         query.</li>
       <li><strong>Fail-before:</strong> the verifier condition that
         forbids a credential link from a provider screen to
-        <code>/keys</code> fails on the AON8 head.</li>
+        <code>/keys</code> fails on the AON9 head.</li>
       <li><strong>Verification:</strong>
         <code>cd console &amp;&amp; npm test &amp;&amp; npm run build</code>,
         <code>bash scripts/verify-console-modernization.sh</code>,
         <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON10">AON10 Documentation</h3>
+    <h3 id="task-AON11">AON11 Documentation</h3>
     <ul>
       <li><strong>Problem:</strong> the quickstart teaches the old flow,
-        and no document states the credential planes or the
-        authentication mode.</li>
+        and no document states the credential sources or the
+        authentication mode. <code>docs/ARCHITECTURE.md</code> uses BYOK
+        for the whole credential subsystem in five places.</li>
       <li><strong>Owning seam and paths:</strong> <code>README.md</code>,
         <code>docs/OPERATOR-GUIDE.md</code>,
         <code>docs/ARCHITECTURE.md</code>, <code>CLAUDE.md</code>.</li>
       <li><strong>Steps:</strong> 1. Rewrite the quickstart around
         <code>starport dev</code>, the opened console, and the first key.
         2. Add an operator section for the authentication mode, the
-        tripwire, the local admin token, and rotation. 3. Add the
-        credential planes and the tenant seam to the architecture
-        document and to the repository instructions.</li>
+        tripwire, the local admin token, and rotation. 3. Add the three
+        credential sources, the tenant seam, and tenant limits to the
+        architecture document and to the repository instructions, and
+        correct every place that uses BYOK for an operator credential.
+        4. Replace the <code>internal/providers/byok</code> seam line in
+        <code>CLAUDE.md</code> with <code>internal/providers/keyring</code>
+        and state what it owns.</li>
       <li><strong>Acceptance:</strong> the quickstart commands run as
         written on a cold data directory.
         <code>scripts/verify-readme-quickstart.sh</code> and
-        <code>scripts/verify-doc-links.sh</code> pass.</li>
+        <code>scripts/verify-doc-links.sh</code> pass.
+        <code>grep -rn BYOK docs README.md CLAUDE.md</code> shows the word
+        only where a tenant brings the credential.</li>
       <li><strong>Fail-before:</strong> the quickstart verifier fails once
-        AON8 changes the first-run output.</li>
+        AON9 changes the first-run output.</li>
       <li><strong>Verification:</strong>
         <code>bash scripts/verify-readme-quickstart.sh</code>,
         <code>bash scripts/verify-doc-links.sh</code>,
         <code>bash scripts/test-doc-link-verifier.sh</code>.</li>
     </ul>
 
-    <h3 id="task-AON11">AON11 Campaign close</h3>
+    <h3 id="task-AON12">AON12 Campaign close</h3>
     <ul>
       <li><strong>Problem:</strong> a gate that no workflow runs cannot
         report a regression.</li>
@@ -732,11 +886,11 @@
         <code>.github/workflows/</code>, <code>CLAUDE.md</code>,
         <code>docs/TASKS.md</code>.</li>
       <li><strong>Steps:</strong> 1. Confirm the verifier is terminal at
-        20 passed. 2. Register it in CI beside the other gates. 3. Add it
+        26 passed. 2. Register it in CI beside the other gates. 3. Add it
         to the required-evidence list in <code>CLAUDE.md</code>. 4. Run
         the full gate roster and record the counts.</li>
       <li><strong>Acceptance:</strong>
-        <code>Summary: 20 passed, 0 failed</code>. The CI job runs the
+        <code>Summary: 26 passed, 0 failed</code>. The CI job runs the
         script. Every gate in the repository evidence list passes, and any
         skipped optional check is recorded as
         <code>UNVERIFIED</code>.</li>
@@ -747,14 +901,14 @@
         <code>autoreview --gate pre-pr --mode auto</code>.</li>
     </ul>
 
-    <h3 id="task-AON12">AON12 Cleanup</h3>
+    <h3 id="task-AON13">AON13 Cleanup</h3>
     <ul>
       <li><strong>Problem:</strong> a merged plan must not linger as a
         stale control plane.</li>
       <li><strong>Owning seam and paths:</strong> this plan file,
         <code>docs/proof/auth-and-onboarding/</code>, and the
         <code>docs/TASKS.md</code> entry.</li>
-      <li><strong>Steps:</strong> 1. Confirm the merge of the AON11 pull
+      <li><strong>Steps:</strong> 1. Confirm the merge of the AON12 pull
         request. 2. Delete the plan and the proof root. 3. Move the entry
         in <code>docs/TASKS.md</code> from Active Work to Recently
         Completed with the pull request range.</li>
@@ -780,6 +934,10 @@
         <tr><td>D2</td><td>2026-08-23</td><td>The canonical tenant ID is <code>default</code>.</td><td>No sample tenant ships. Nimbus uses <code>demo</code> in its audit fixtures; that name is a test value, not a product name, and Starport does not copy it.</td></tr>
         <tr><td>D3</td><td>2026-08-23</td><td>The authentication mode is settable from the CLI, the config, and an admin console switch.</td><td>The console switch is loopback-origin gated and carries an explicit lockout confirmation. Re-open if a remote console deployment makes the origin gate impractical.</td></tr>
         <tr><td>D4</td><td>2026-08-23</td><td>The console authenticates through a launch ticket and a signed session cookie, modeled on Nimbus.</td><td>The bearer-key path stays for API clients. The browser stops holding a long-lived gateway key. Re-open if a deployment needs a cookie-free console.</td></tr>
+        <tr><td>D5</td><td>2026-08-23</td><td>BYOK names a tenant-brought credential and nothing else. A credential the operator applies for the deployment is a gateway credential. <code>internal/providers/byok</code> is renamed to <code>internal/providers/keyring</code>, and the sources are <code>SourceEnvironment</code>, <code>SourceGateway</code>, and <code>SourceBYOK</code>.</td><td>16 importers change in AON3. The name <code>keyring</code> was chosen over <code>credentials</code> because eight files already import <code>internal/credentials</code> and would need an alias. Re-open only if a better single word for the three-source collection appears before AON3 lands.</td></tr>
+        <tr><td>D6</td><td>2026-08-23</td><td>The tenant owns the default credential strategy and the limits. A key-level or request-level value may narrow the tenant's, never widen it.</td><td>This is how an operator governs use of a gateway credential without a separate policy engine. It requires the AON1 limits extraction and the AON5 enforcement task. Re-open if a per-provider tenant policy proves necessary, which this shape does not express.</td></tr>
+        <tr><td>D7</td><td>2026-08-23</td><td>No data migration anywhere in this campaign. Nothing has shipped, so every storage rename is a clean break.</td><td>A pre-existing local <code>user:&lt;key_id&gt;</code> credential becomes unreachable and the operator re-applies it through AON4. This also removes the collision rule the first draft carried. Re-open only if the project ships before the campaign closes.</td></tr>
+        <tr><td>D8</td><td>2026-08-23</td><td>The shared limits vocabulary moves from <code>internal/identity</code> to a new <code>internal/limits</code>.</td><td>Both a tenant and a key hold limits, and <code>tenant</code> importing <code>identity</code> would invert the ownership direction. Five files change in AON1.</td></tr>
       </tbody>
     </table>
   </section>
@@ -799,8 +957,11 @@
       <li>Usage records keep the API key ID. The tenant is an added
         dimension, not a replacement.</li>
       <li>The gateway adds no measurable request overhead beyond the
-        published budget. The auth mode check must not add a storage
-        read per request.</li>
+        published budget. Neither the auth mode check nor the tenant limit
+        resolution may add a storage read per request.</li>
+      <li>Provider and model facts keep coming from one Starmap snapshot.
+        The provider credential screens read the catalog's credential
+        fields rather than a local provider table.</li>
     </ul>
   </section>
 
@@ -821,17 +982,18 @@ work commit, mark the task terminal with evidence, commit the plan
 update the same way, open the pull request, then advance to the next
 task. Decide rather than ask. Mark a wrong or already-satisfied task
 no-action with a one-line reason. Record a blocker and continue with the
-next eligible task. Binding constraints: the eight invariants in this
-plan, and the non-goals in its scope section. Add no compatibility alias
-for a removed route. Commit policy: one pull request per task, branch
-prefix codex/, no AI attribution, run
+next eligible task. Binding constraints: the eleven invariants in this
+plan, the vocabulary table, and the non-goals in its scope section. Add
+no compatibility alias and no data migration for a removed route,
+storage scope, or strategy name. Commit policy: one pull request per
+task, branch prefix codex/, no AI attribution, run
 `autoreview --gate pre-pr --mode auto` after final checks and commit and
 before each pull request with substantive code changes. Stop only at a
 valid stop state from the plans skill. Before you stop, update the
 ledger and the log, and record the next action in the status line. The
 goal is met when scripts/verify-auth-onboarding.sh reports
-`Summary: 20 passed, 0 failed`, that script runs in CI, the full
-evidence list in CLAUDE.md passes, and AON12 is the only non-terminal
+`Summary: 26 passed, 0 failed`, that script runs in CI, the full
+evidence list in CLAUDE.md passes, and AON13 is the only non-terminal
 row.</code></pre>
   </section>
 
@@ -847,6 +1009,7 @@ row.</code></pre>
         <tr><td>2026-08-23</td><td>meta</td><td>research</td><td>Mapped the coupling: <code>controllers/base.go:81</code> returns the API key ID as the tenant; <code>controllers/provider_keys.go</code> builds the credential scope as <code>"user:" + apiKeyID</code> at seven call sites; <code>router/credential_policy.go:104</code> resolves the same value at inference time. The gateway <code>*</code> plane exists in <code>byok/provider_keys.go:298,408</code> with no route and no consumer, and <code>credentials.ProviderKey.IsGlobal()</code> has no caller. <code>server/routes.go:27,56</code> applies <code>requireAPIKey</code> unconditionally; no auth-mode config field exists.</td></tr>
         <tr><td>2026-08-23</td><td>meta</td><td>authored</td><td>Plan authored at baseline <code>1c2f9d2</code> with 13 ledger rows and decisions D1 through D4. No implementation started by this step.</td></tr>
         <tr><td>2026-08-23</td><td>AON0</td><td>done</td><td>Created <code>docs/proof/auth-and-onboarding/</code> and authored <code>scripts/verify-auth-onboarding.sh</code> with 20 conditions. Fail-before run: <code>Summary: 0 passed, 20 failed</code>, exit 1, with AON-V06, AON-V12, and AON-V20 red because the baseline holds the behavior they forbid. <code>bash scripts/verify-doc-links.sh</code> passed. AON1 set in_progress.</td></tr>
+        <tr><td>2026-08-23</td><td>meta</td><td>revised</td><td>Full review against four corrections: no migration anywhere (D7), BYOK names only a tenant-brought credential (D5), the operator must be able to apply a credential (invariant 4, AON4 step 1), and the tenant route is <code>/tenants/{tenant_id}/byok</code>. The review added five more changes: a vocabulary table, the <code>internal/providers/byok</code> to <code>keyring</code> rename that the terminology forces, tenant limits and a tenant credential strategy in AON1 (D6, D8), a new AON5 that enforces them, and the <code>app.requireIdentity</code> relaxation that AON6 needs to start with zero identities. Ledger grew from 13 rows to 14 and the verifier from 20 conditions to 26; old AON5 through AON12 shifted by one. Verifier re-authored and re-run red at <code>Summary: 0 passed, 26 failed</code>.</td></tr>
       </tbody>
     </table>
   </section>
