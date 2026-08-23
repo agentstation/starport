@@ -519,9 +519,15 @@
         <code>*Global*</code> methods to <code>*Gateway*</code>. 4. Rename
         the strategy values to <code>operator_first</code> (unchanged, and
         the vocabulary section says why), <code>byok_first</code>, and
-        <code>byok_only</code>, and add <code>gateway_denied</code> for a
-        tenant the operator does not want drawing on a gateway credential.
-        No alias for <code>user_first</code> or <code>user_only</code>.
+        <code>byok_only</code>. <code>byok_only</code> is how an operator
+        denies a tenant every operator credential, which is the whole of
+        the deny story: an environment credential and a gateway credential
+        are both the operator's money, so a value that separated them would
+        express nothing an operator wants to say. No alias for
+        <code>user_first</code> or <code>user_only</code>. AON1 defines
+        these three values on the tenant, and <code>internal/router</code>
+        translates them into eligible scopes, so <code>keyring</code> never
+        imports the account model.
         5. Wire the gateway plane into <code>credentialPolicy.resolve</code>
         between environment and BYOK. 6. Read the effective strategy from
         the tenant, and let a per-request override narrow it and never
@@ -532,8 +538,8 @@
       <li><strong>Acceptance:</strong> a stored gateway credential serves a
         request that has no BYOK credential. A BYOK credential wins over a
         gateway credential under <code>byok_first</code>. A tenant set to
-        <code>gateway_denied</code> with no BYOK credential gets the
-        existing not-configured failure and never the gateway credential,
+        <code>byok_only</code> with no BYOK credential gets the existing
+        not-configured failure and never reaches an operator credential,
         asserted by test. A per-request strategy that would widen the
         tenant's is refused. A provider with no credential in any source
         still returns the existing not-configured failure, not a panic.
