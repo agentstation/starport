@@ -13,8 +13,8 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/failure"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 )
 
 func TestRouteEmbeddingsUsesRequestCredentialPolicy(t *testing.T) {
@@ -47,7 +47,7 @@ func TestRouteEmbeddingsUsesRequestCredentialPolicy(t *testing.T) {
 		TenantID:          "tenant-a",
 		APIKeyConfig: &APIKeyConfig{
 			AllowedModels: []string{"author/embed"}, AllowedProviders: []string{"acme"},
-			CredentialStrategy: byok.UserFirst,
+			CredentialStrategy: keyring.UserFirst,
 		},
 	})
 	require.NoError(t, err)
@@ -69,13 +69,13 @@ func TestRouteEmbeddingsUserOnlyNeverProbesOperatorMaterial(t *testing.T) {
 	modelRouter := New(
 		&embeddingTestRegistry{runtime: runtime},
 		WithCatalog(plane),
-		WithUserCredentials(&embeddingUserResolver{err: byok.ErrKeyNotFound}),
+		WithUserCredentials(&embeddingUserResolver{err: keyring.ErrKeyNotFound}),
 	)
 
 	_, err := modelRouter.RouteEmbeddings(t.Context(), &EmbeddingRequest{
 		EmbeddingsRequest: &connectors.EmbeddingsRequest{Model: "author/embed", Input: "hello"},
 		TenantID:          "tenant-a",
-		APIKeyConfig:      &APIKeyConfig{CredentialStrategy: byok.UserOnly},
+		APIKeyConfig:      &APIKeyConfig{CredentialStrategy: keyring.UserOnly},
 	})
 	require.Error(t, err)
 	require.Zero(t, runtime.operatorCalls.Load())

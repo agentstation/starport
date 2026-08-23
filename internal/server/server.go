@@ -12,7 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/presets"
-	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/controllers"
@@ -47,7 +47,7 @@ type Server struct {
 	service            proxy.Proxy
 	identities         identity.Repository
 	tenants            tenant.Repository
-	providerKeys       byok.ProviderKeys
+	providerKeys       keyring.ProviderKeys
 	rateLimits         ratelimit.Repository
 	usage              usage.Repository
 	providerOperations controllers.ProviderOperations
@@ -64,7 +64,7 @@ type Dependencies struct {
 	Service            proxy.Proxy
 	Identities         identity.Repository
 	Tenants            tenant.Repository
-	ProviderKeys       byok.ProviderKeys
+	ProviderKeys       keyring.ProviderKeys
 	RateLimits         ratelimit.Repository
 	ProviderOperations controllers.ProviderOperations
 	Console            console.PageServer

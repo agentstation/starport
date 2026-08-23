@@ -9,8 +9,8 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -25,7 +25,7 @@ type credentialPolicy struct {
 	userKeys UserCredentialResolver
 	gate     OperatorCredentialGate
 	tenantID string
-	sources  []byok.CredentialSource
+	sources  []keyring.CredentialSource
 	states   map[string]credentialRouteState
 }
 
@@ -36,23 +36,23 @@ type credentialRouteState struct {
 
 type credentialSelection struct {
 	material credentials.Material
-	source   byok.CredentialSource
+	source   keyring.CredentialSource
 }
 
 func newCredentialPolicy(
-	strategy byok.Strategy,
+	strategy keyring.Strategy,
 	tenantID string,
 	runtime connectors.RuntimeLease,
 	userKeys UserCredentialResolver,
 	gate OperatorCredentialGate,
 ) (*credentialPolicy, error) {
-	parsedStrategy, err := byok.ParseStrategy(string(strategy))
+	parsedStrategy, err := keyring.ParseStrategy(string(strategy))
 	if err != nil {
 		return nil, failure.New(failure.Validation, "The provider credential strategy is invalid.", false, failure.ProviderDetails{}, err)
 	}
 	sources := parsedStrategy.Sources()
-	if userKeys == nil && parsedStrategy == byok.OperatorFirst {
-		sources = []byok.CredentialSource{byok.CredentialSourceOperator}
+	if userKeys == nil && parsedStrategy == keyring.OperatorFirst {
+		sources = []keyring.CredentialSource{keyring.CredentialSourceOperator}
 	}
 	return &credentialPolicy{
 		runtime: runtime, userKeys: userKeys, gate: gate, tenantID: tenantID,
@@ -60,11 +60,11 @@ func newCredentialPolicy(
 	}, nil
 }
 
-func credentialRequestPolicy(request *Request) (byok.Strategy, string) {
+func credentialRequestPolicy(request *Request) (keyring.Strategy, string) {
 	if request == nil {
-		return byok.OperatorFirst, ""
+		return keyring.OperatorFirst, ""
 	}
-	strategy := byok.OperatorFirst
+	strategy := keyring.OperatorFirst
 	if request.APIKeyConfig != nil {
 		strategy = request.APIKeyConfig.CredentialStrategy
 	}
@@ -84,11 +84,11 @@ func (p *credentialPolicy) resolve(
 	var material credentials.Material
 	var err error
 	switch source {
-	case byok.CredentialSourceOperator:
+	case keyring.CredentialSourceOperator:
 		material, err = p.runtime.ResolveMaterial(ctx, route.ProviderID)
-	case byok.CredentialSourceUser:
+	case keyring.CredentialSourceUser:
 		if p.userKeys == nil || p.tenantID == "" {
-			err = byok.ErrKeyNotFound
+			err = keyring.ErrKeyNotFound
 			break
 		}
 		snapshot := p.runtime.Snapshot()
@@ -101,12 +101,12 @@ func (p *credentialPolicy) resolve(
 			err = lookupErr
 			break
 		}
-		material, err = p.userKeys.ResolveUserMaterial(ctx, byok.UserScope(p.tenantID), provider)
+		material, err = p.userKeys.ResolveUserMaterial(ctx, keyring.UserScope(p.tenantID), provider)
 	default:
 		err = errors.New("unsupported credential source")
 	}
 	if err == nil {
-		if source == byok.CredentialSourceOperator && p.gate != nil &&
+		if source == keyring.CredentialSourceOperator && p.gate != nil &&
 			!p.gate.OperatorMaterialReady(route.ProviderID, material.Version()) {
 			providerFailure := failure.New(
 				failure.Authentication,
@@ -143,14 +143,14 @@ func (p *credentialPolicy) resolve(
 }
 
 func credentialEvidence(
-	source byok.CredentialSource,
+	source keyring.CredentialSource,
 	material credentials.Material,
 ) execution.CredentialEvidence {
 	owner := execution.CredentialOwner("")
 	switch source {
-	case byok.CredentialSourceOperator:
+	case keyring.CredentialSourceOperator:
 		owner = execution.CredentialOwnerOperator
-	case byok.CredentialSourceUser:
+	case keyring.CredentialSourceUser:
 		owner = execution.CredentialOwnerTenant
 	}
 	return execution.CredentialEvidence{
@@ -160,7 +160,7 @@ func credentialEvidence(
 
 func (p *credentialPolicy) afterFailure(route routing.Route, providerFailure *failure.Failure) execution.AttemptAction {
 	if providerFailure == nil || providerFailure.StateScope() != failure.ScopeCredential ||
-		!byok.CanAdvance(providerFailure) {
+		!keyring.CanAdvance(providerFailure) {
 		return execution.AttemptActionDefault
 	}
 	if p.advance(route, providerFailure) {
@@ -189,7 +189,7 @@ func credentialResolutionFailure(providerID string, err error) (*failure.Failure
 		return failure.New(failure.Canceled, "The request was canceled.", false, details, err), false
 	case errors.Is(err, context.DeadlineExceeded):
 		return failure.New(failure.Timeout, "Provider credential resolution timed out.", false, details, err), false
-	case errors.Is(err, byok.ErrKeyNotFound), errors.Is(err, credentials.ErrProviderNotConfigured),
+	case errors.Is(err, keyring.ErrKeyNotFound), errors.Is(err, credentials.ErrProviderNotConfigured),
 		credentials.IsSourceError(err, credentials.SourceErrorNotConfigured):
 		return credentialUnavailable(providerID, err), true
 	case credentials.IsSourceError(err, credentials.SourceErrorDenied):
@@ -202,5 +202,5 @@ func credentialResolutionFailure(providerID string, err error) (*failure.Failure
 }
 
 func credentialUnavailable(providerID string, err error) *failure.Failure {
-	return byok.UnavailableFailure(providerID, err)
+	return keyring.UnavailableFailure(providerID, err)
 }

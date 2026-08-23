@@ -17,7 +17,7 @@ import (
 
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/limits"
-	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
@@ -148,7 +148,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
 		return
 	}
-	if _, err := byok.ParseStrategy(req.Metadata[byok.StrategyMetadataKey]); err != nil {
+	if _, err := keyring.ParseStrategy(req.Metadata[keyring.StrategyMetadataKey]); err != nil {
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 		return
 	}
@@ -377,7 +377,7 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		apiKey.ExpiresAt = req.ExpiresAt
 	}
 	if req.Metadata != nil {
-		if _, err := byok.ParseStrategy(req.Metadata[byok.StrategyMetadataKey]); err != nil {
+		if _, err := keyring.ParseStrategy(req.Metadata[keyring.StrategyMetadataKey]); err != nil {
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 			return
 		}

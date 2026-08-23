@@ -8,8 +8,8 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/inference"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -96,7 +96,7 @@ type APIKeyConfig struct {
 	RateLimitTier string
 
 	// CredentialStrategy selects request-bound operator and tenant credential order.
-	CredentialStrategy byok.Strategy
+	CredentialStrategy keyring.Strategy
 }
 
 // RequestMetadata contains information for routing decisions

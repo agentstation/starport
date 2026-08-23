@@ -1,4 +1,4 @@
-package byok
+package keyring
 
 import "context"
 

@@ -159,7 +159,7 @@ prohibited_provider_facts_are_absent() {
     "$STARPORT_ROOT/internal/app" \
     "$STARPORT_ROOT/internal/setup" \
     "$STARPORT_ROOT/internal/diagnosis" \
-    "$STARPORT_ROOT/internal/providers/byok" \
+    "$STARPORT_ROOT/internal/providers/keyring" \
     "$STARPORT_ROOT/internal/registry" &&
     no_production_go_match "$facts" \
       "$STARMAP_ROOT/internal/auth" \
@@ -189,7 +189,7 @@ synthetic_provider_inference_works() {
 }
 
 synthetic_provider_operator_surfaces_work() {
-  starport_tests "./internal/setup ./internal/diagnosis ./internal/providers/byok" \
+  starport_tests "./internal/setup ./internal/diagnosis ./internal/providers/keyring" \
     TestSyntheticCatalogProviderOperatorSurfaces
 }
 
@@ -211,7 +211,7 @@ runtime_generation_replacement_is_atomic() {
 }
 
 byok_policy_is_noninterfering() {
-  starport_tests "./internal/providers/byok ./internal/execution" \
+  starport_tests "./internal/providers/keyring ./internal/execution" \
     TestBYOKStrategyOrderAndUserOnlyNoninterference
 }
 

@@ -4,7 +4,7 @@ import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/presets"
-	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
@@ -34,7 +34,7 @@ type Controllers struct {
 // Config holds configuration for creating handlers
 type Config struct {
 	Service            proxy.Proxy
-	ProviderKeys       byok.ProviderKeys
+	ProviderKeys       keyring.ProviderKeys
 	Identities         identity.Repository
 	Tenants            tenant.Repository
 	Usage              usage.Repository

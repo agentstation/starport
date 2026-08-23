@@ -115,7 +115,7 @@ run_check O01 "active providers are the catalog and compiled primitive intersect
   starport_tests "./internal/app ./internal/catalog" \
   TestCatalogWideProviderActivation TestConfiguredProviderMissingCatalogFailsStartup
 run_check O02 "primitive registries own inference transport and authentication dispatch" \
-  starport_tests "./internal/architecture ./internal/providers/byok" \
+  starport_tests "./internal/architecture ./internal/providers/keyring" \
   TestStarportProductionHasNoProviderRoster \
   TestTransportAuthenticationRegistriesUsePrimitives \
   TestValidateKeyUsesCatalogCredentialContracts
@@ -137,11 +137,11 @@ run_check O07 "provider model IDs stay exact and opaque" \
 run_check O08 "connectors and current architecture contain no duplicate catalog ownership" \
   catalog_ownership_is_single_source
 run_check O09 "prompt cache and price behavior use exact offerings" \
-  starport_tests "./internal/proxy ./internal/providers/byok" \
+  starport_tests "./internal/proxy ./internal/providers/keyring" \
   TestOfferingCacheCapability TestOfferingPriceHasNoFallback
 run_check O10 "Starport has no provider-wide cache or sample-price tables" \
   no_starport_match '(supportedCacheControlProviders|getStandardCost|default.*Cost)' \
-  "$STARPORT_ROOT/internal/proxy" "$STARPORT_ROOT/internal/providers/byok"
+  "$STARPORT_ROOT/internal/proxy" "$STARPORT_ROOT/internal/providers/keyring"
 run_check O11 "Starmap owns provider acquisition auth and service facts" \
   starmap_tests "./pkg/catalogs ./acquisition ./internal/auth/... ./internal/embedded" \
   TestCatalogAcquisitionAuthContract TestCloudCredentialChainSelection \

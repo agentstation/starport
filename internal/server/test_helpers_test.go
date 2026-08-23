@@ -11,8 +11,8 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
@@ -104,14 +104,14 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		tb.Fatal(err)
 	}
 	catalog := client.CurrentCatalogState().Catalog
-	validator, err := byok.NewCatalogCredentialValidator(func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
+	validator, err := keyring.NewCatalogCredentialValidator(func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
 		provider, lookupErr := catalog.Provider(providerID)
 		return provider, lookupErr == nil
 	})
 	if err != nil {
 		tb.Fatal(err)
 	}
-	providerKeys, err := byok.NewProviderKeys(credentialsRepository, testConfig.masterKey, validator)
+	providerKeys, err := keyring.NewProviderKeys(credentialsRepository, testConfig.masterKey, validator)
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -23,8 +23,8 @@ import (
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
@@ -141,7 +141,7 @@ type runtimeBuilder struct {
 	factories    runtimeFactories
 	identities   identity.Repository
 	tenants      tenant.Repository
-	providerKeys byok.ProviderKeys
+	providerKeys keyring.ProviderKeys
 	rateLimits   ratelimit.Repository
 	usageRecords usage.Repository
 	presets      presets.Repository
@@ -291,7 +291,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
 	}
-	credentialValidator, err := byok.NewCatalogCredentialValidator(
+	credentialValidator, err := keyring.NewCatalogCredentialValidator(
 		func(providerID catalogs.ProviderID) (catalogs.Provider, bool) {
 			var snapshot *runtimecatalog.RoutableSnapshot
 			if b.application.registry != nil {
@@ -309,7 +309,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open provider credential validator: %w", err)
 	}
-	b.providerKeys, err = byok.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
+	b.providerKeys, err = keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
 	if err != nil {
 		return fmt.Errorf("open provider key service: %w", err)
 	}

@@ -11,7 +11,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -106,7 +106,7 @@ func (m *mockKeyManager) ResolveUserMaterial(context.Context, string, catalogs.P
 	return credentials.Material{}, nil
 }
 
-func (m *mockKeyManager) RecordUsage(ctx context.Context, scope string, provider string, usage *byok.Usage) error {
+func (m *mockKeyManager) RecordUsage(ctx context.Context, scope string, provider string, usage *keyring.Usage) error {
 	return nil
 }
 

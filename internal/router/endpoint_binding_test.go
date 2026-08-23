@@ -13,14 +13,14 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/registry"
 )
 
 func TestTenantOnlyBindsEndpointFromTenantMaterial(t *testing.T) {
 	fixture := newEndpointBindingFixture(t)
-	response, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(byok.UserOnly))
+	response, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.UserOnly))
 	require.NoError(t, err)
 	require.Equal(t, "acme/opaque/model@001", response.ModelUsed)
 	require.Equal(t, []string{
@@ -32,9 +32,9 @@ func TestTenantOnlyBindsEndpointFromTenantMaterial(t *testing.T) {
 
 func TestOperatorAndTenantBindingsDoNotCross(t *testing.T) {
 	fixture := newEndpointBindingFixture(t)
-	_, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(byok.UserOnly))
+	_, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.UserOnly))
 	require.NoError(t, err)
-	_, err = fixture.router.RouteWithFallback(t.Context(), fixture.request(byok.OperatorFirst))
+	_, err = fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.OperatorFirst))
 	require.NoError(t, err)
 	require.Equal(t, []string{
 		"https://tenant.example/projects/tenant-project/models/opaque/model@001/chat/completions",
@@ -97,7 +97,7 @@ func newEndpointBindingFixture(t *testing.T) *endpointBindingFixture {
 	return fixture
 }
 
-func (f *endpointBindingFixture) request(strategy byok.Strategy) *Request {
+func (f *endpointBindingFixture) request(strategy keyring.Strategy) *Request {
 	return &Request{
 		ChatRequest: &connectors.ChatRequest{
 			Model:    "author/model",

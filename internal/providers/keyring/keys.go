@@ -1,5 +1,5 @@
-// Package byok manages API keys for external LLM providers.
-package byok
+// Package keyring manages API keys for external LLM providers.
+package keyring
 
 import (
 	"context"
