@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/usage"
 )
@@ -39,7 +40,7 @@ func budgetTestRequest(apiKey *identity.APIKey) *http.Request {
 	return req.WithContext(ctx)
 }
 
-func budgetTestKey(limits *identity.Limits) *identity.APIKey {
+func budgetTestKey(limits *limits.Limits) *identity.APIKey {
 	return &identity.APIKey{
 		ID:     "key-budget",
 		Name:   "budget-key",
@@ -61,8 +62,8 @@ func TestSpendBudgetExhaustionReturns402(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	apiKey := budgetTestKey(&identity.Limits{
-		Spend: &identity.Budget{Limit: 1_000_000_000, Interval: identity.IntervalDay},
+	apiKey := budgetTestKey(&limits.Limits{
+		Spend: &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalDay},
 	})
 
 	rec := httptest.NewRecorder()
@@ -88,8 +89,8 @@ func TestTokenBudgetExhaustionReturns402(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	apiKey := budgetTestKey(&identity.Limits{
-		Tokens: &identity.Budget{Limit: 100_000, Interval: identity.IntervalMonth},
+	apiKey := budgetTestKey(&limits.Limits{
+		Tokens: &limits.Budget{Limit: 100_000, Interval: limits.IntervalMonth},
 	})
 
 	rec := httptest.NewRecorder()
@@ -114,9 +115,9 @@ func TestBudgetWithinLimitAllowsAndReportsRemaining(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	apiKey := budgetTestKey(&identity.Limits{
-		Spend:  &identity.Budget{Limit: 1_000_000_000, Interval: identity.IntervalDay},
-		Tokens: &identity.Budget{Limit: 1_000, Interval: identity.IntervalWeek},
+	apiKey := budgetTestKey(&limits.Limits{
+		Spend:  &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalDay},
+		Tokens: &limits.Budget{Limit: 1_000, Interval: limits.IntervalWeek},
 	})
 
 	rec := httptest.NewRecorder()
@@ -139,8 +140,8 @@ func TestBudgetStorageErrorFailsOpen(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	apiKey := budgetTestKey(&identity.Limits{
-		Spend: &identity.Budget{Limit: 1, Interval: identity.IntervalDay},
+	apiKey := budgetTestKey(&limits.Limits{
+		Spend: &limits.Budget{Limit: 1, Interval: limits.IntervalDay},
 	})
 
 	rec := httptest.NewRecorder()

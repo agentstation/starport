@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/agentstation/starport/internal/limits"
 )
 
 // APIKey is one gateway authentication identity.
@@ -15,7 +17,7 @@ type APIKey struct {
 	Hash          string         `json:"hash"`
 	Scopes        []string       `json:"scopes"`
 	AllowedModels []string       `json:"allowed_models,omitempty"`
-	Limits        *Limits        `json:"limits,omitempty"`
+	Limits        *limits.Limits        `json:"limits,omitempty"`
 	Metadata      map[string]any `json:"metadata,omitempty"`
 	Active        bool           `json:"active"`
 	CreatedAt     time.Time      `json:"created_at"`

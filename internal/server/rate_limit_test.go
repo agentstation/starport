@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
@@ -115,8 +116,8 @@ func TestPerKeyRequestLimitOverridesGlobal(t *testing.T) {
 		Name:   "limited",
 		Scopes: []string{"*"},
 		Active: true,
-		Limits: &identity.Limits{
-			Requests: &identity.RequestLimit{Limit: 1, WindowSeconds: 60},
+		Limits: &limits.Limits{
+			Requests: &limits.RequestLimit{Limit: 1, WindowSeconds: 60},
 		},
 	}
 
@@ -153,8 +154,8 @@ func TestPerKeyRequestLimitAppliesWhenGlobalDisabled(t *testing.T) {
 		Name:   "explicit",
 		Scopes: []string{"*"},
 		Active: true,
-		Limits: &identity.Limits{
-			Requests: &identity.RequestLimit{Limit: 1, WindowSeconds: 60},
+		Limits: &limits.Limits{
+			Requests: &limits.RequestLimit{Limit: 1, WindowSeconds: 60},
 		},
 	}
 

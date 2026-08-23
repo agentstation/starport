@@ -13,6 +13,8 @@ import (
 
 	"github.com/agentstation/uuidkey"
 	"github.com/google/uuid"
+
+	"github.com/agentstation/starport/internal/limits"
 )
 
 const gatewayKeyPrefix = "STARPORT"
@@ -29,7 +31,7 @@ type IssueRequest struct {
 	Name          string
 	Scopes        []string
 	AllowedModels []string
-	Limits        *Limits
+	Limits        *limits.Limits
 	Metadata      map[string]any
 	ExpiresAt     *time.Time
 }

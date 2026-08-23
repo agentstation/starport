@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/usage"
 )
@@ -16,9 +17,9 @@ import (
 // tokens for the token budget; reset is the Unix time the fixed UTC
 // window ends.
 //
-//nolint:gosec // These are HTTP header names, not credentials.
-//
 // #nosec G101 -- HTTP header names, not credentials.
+//
+//nolint:gosec // These are HTTP header names, not credentials.
 const (
 	headerBudgetSpendLimit      = "X-Starport-Budget-Spend-Limit"
 	headerBudgetSpendRemaining  = "X-Starport-Budget-Spend-Remaining"
@@ -67,7 +68,7 @@ func (s *Server) allowBudget(
 	w http.ResponseWriter,
 	r *http.Request,
 	apiKey *identity.APIKey,
-	budget *identity.Budget,
+	budget *limits.Budget,
 	dimension string,
 	now time.Time,
 	used func(usage.Totals) int64,
