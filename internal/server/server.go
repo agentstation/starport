@@ -16,6 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/controllers"
+	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -26,6 +27,8 @@ var (
 	ErrServiceRequired = errors.New("gateway service is required")
 	// ErrIdentitiesRequired reports an absent identity repository.
 	ErrIdentitiesRequired = errors.New("identity repository is required")
+	// ErrTenantsRequired reports an absent tenant repository.
+	ErrTenantsRequired = errors.New("tenant repository is required")
 	// ErrProviderKeysRequired reports an absent provider-key service.
 	ErrProviderKeysRequired = errors.New("provider key service is required")
 	// ErrRateLimitsRequired reports an absent rate-limit repository.
@@ -43,6 +46,7 @@ type Server struct {
 	// Ready application dependencies
 	service            proxy.Proxy
 	identities         identity.Repository
+	tenants            tenant.Repository
 	providerKeys       byok.ProviderKeys
 	rateLimits         ratelimit.Repository
 	usage              usage.Repository
@@ -59,6 +63,7 @@ type Server struct {
 type Dependencies struct {
 	Service            proxy.Proxy
 	Identities         identity.Repository
+	Tenants            tenant.Repository
 	ProviderKeys       byok.ProviderKeys
 	RateLimits         ratelimit.Repository
 	ProviderOperations controllers.ProviderOperations
@@ -85,6 +90,9 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	if dependencies.Identities == nil {
 		return nil, ErrIdentitiesRequired
 	}
+	if dependencies.Tenants == nil {
+		return nil, ErrTenantsRequired
+	}
 	if dependencies.ProviderKeys == nil {
 		return nil, ErrProviderKeysRequired
 	}
@@ -100,6 +108,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		cfg:                config,
 		service:            dependencies.Service,
 		identities:         dependencies.Identities,
+		tenants:            dependencies.Tenants,
 		providerKeys:       dependencies.ProviderKeys,
 		rateLimits:         dependencies.RateLimits,
 		usage:              dependencies.Usage,
@@ -111,6 +120,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Service:            s.service,
 		ProviderKeys:       s.providerKeys,
 		Identities:         s.identities,
+		Tenants:            s.tenants,
 		Usage:              dependencies.Usage,
 		ProviderOperations: s.providerOperations,
 		Catalog:            dependencies.Catalog,

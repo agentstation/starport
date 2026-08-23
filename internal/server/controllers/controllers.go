@@ -6,6 +6,7 @@ import (
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/proxy"
+	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -35,6 +36,7 @@ type Config struct {
 	Service            proxy.Proxy
 	ProviderKeys       byok.ProviderKeys
 	Identities         identity.Repository
+	Tenants            tenant.Repository
 	Usage              usage.Repository
 	ProviderOperations ProviderOperations
 	Catalog            CatalogOperations
@@ -59,7 +61,7 @@ func NewControllers(cfg Config) *Controllers {
 		Logos:                NewLogosController(cfg.Service),
 		ProviderKeys:         NewProviderKeysController(cfg.ProviderKeys, cfg.Usage),
 		Activity:             NewActivityController(cfg.Usage),
-		Admin:                NewAdminController(cfg.Identities, cfg.Usage),
+		Admin:                NewAdminController(cfg.Identities, cfg.Tenants, cfg.Usage),
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:              NewCatalogController(cfg.Catalog),
 		Presets:              NewPresetsController(cfg.Presets),

@@ -47,6 +47,7 @@ type Repository interface {
 	Create(context.Context, Tenant) (Record, error)
 	EnsureDefault(context.Context) (Record, error)
 	GetByID(context.Context, string) (Record, error)
+	Exists(context.Context, string) (bool, error)
 	List(context.Context, int, int) ([]Record, error)
 	Update(context.Context, Tenant, uint64) (Record, error)
 	Delete(context.Context, string, uint64) error
@@ -139,6 +140,18 @@ func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {
 		return Record{}, fmt.Errorf("%w: tenant ID does not match its key", ErrCorruptRecord)
 	}
 	return Record{Revision: stored.Revision, Tenant: stored.Tenant}, nil
+}
+
+// Exists reports whether a tenant is present. A caller that only needs the
+// answer should not have to distinguish ErrNotFound from a storage failure.
+func (r *repository) Exists(ctx context.Context, id string) (bool, error) {
+	if _, err := r.GetByID(ctx, id); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *repository) List(ctx context.Context, limit, offset int) ([]Record, error) {
