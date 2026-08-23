@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auth and Onboarding</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Auth and Onboarding</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="active">active</code> &middot;
+    Owner: this plan &middot;
+    Created: 2026-08-23 &middot;
+    Baseline: main @ 1c2f9d2 &middot;
+    Proof root: <code>docs/proof/auth-and-onboarding/</code> &middot;
+    Next action: AON1, add the <code>internal/tenant</code> seam and the canonical <code>default</code> tenant
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      A gateway API key authenticates a request and owns nothing else. A
+      tenant owns API keys, provider credentials, and limits, and a
+      canonical <code>default</code> tenant exists from first boot.
+      Provider credentials live on the provider screens in two clearly
+      named planes: gateway credentials that the operator sets for the
+      whole deployment, and tenant credentials that a tenant brings.
+      Authentication is required unless an operator disables it through
+      the CLI, the config, or an admin console switch, and the gateway
+      refuses to serve unauthenticated on a non-loopback address without
+      an explicit second override. A new user starts the gateway, and the
+      CLI opens the console through a one-time launch ticket that becomes
+      a signed session, so the browser never holds the local admin token.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 340 250" role="img" aria-label="Before diagram">
+          <defs>
+            <marker id="arrow-before" viewBox="0 0 8 8" refX="7" refY="4"
+              markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <rect x="10" y="10" width="320" height="52" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="32" text-anchor="middle" font-size="12"
+            fill="currentColor">identity.APIKey</text>
+          <text x="170" y="50" text-anchor="middle" font-size="11"
+            fill="currentColor">no tenant field</text>
+          <line x1="170" y1="62" x2="170" y2="84" stroke="currentColor"
+            marker-end="url(#arrow-before)"/>
+          <rect x="10" y="86" width="320" height="52" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="108" text-anchor="middle" font-size="12"
+            fill="currentColor">tenant identity = API key ID</text>
+          <text x="170" y="126" text-anchor="middle" font-size="11"
+            fill="currentColor">controllers/base.go getTenantID</text>
+          <line x1="170" y1="138" x2="170" y2="160" stroke="currentColor"
+            marker-end="url(#arrow-before)"/>
+          <rect x="10" y="162" width="320" height="52" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="184" text-anchor="middle" font-size="12"
+            fill="currentColor">credentials scope "user:&lt;key_id&gt;"</text>
+          <text x="170" y="202" text-anchor="middle" font-size="11"
+            fill="currentColor">console keys.tsx, /keys/{key_id}/provider-keys</text>
+          <text x="170" y="234" text-anchor="middle" font-size="11"
+            fill="currentColor">scope "*" exists, no route, no consumer</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 340 250" role="img" aria-label="After diagram">
+          <defs>
+            <marker id="arrow-after" viewBox="0 0 8 8" refX="7" refY="4"
+              markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <rect x="10" y="10" width="150" height="52" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="85" y="32" text-anchor="middle" font-size="12"
+            fill="currentColor">identity.APIKey</text>
+          <text x="85" y="50" text-anchor="middle" font-size="11"
+            fill="currentColor">authenticates only</text>
+          <rect x="180" y="10" width="150" height="52" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="255" y="32" text-anchor="middle" font-size="12"
+            fill="currentColor">tenant.Tenant</text>
+          <text x="255" y="50" text-anchor="middle" font-size="11"
+            fill="currentColor">canonical "default"</text>
+          <line x1="160" y1="36" x2="176" y2="36" stroke="currentColor"
+            marker-end="url(#arrow-after)"/>
+          <rect x="10" y="86" width="320" height="70" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="106" text-anchor="middle" font-size="12"
+            fill="currentColor">credential planes on the provider screens</text>
+          <text x="170" y="124" text-anchor="middle" font-size="11"
+            fill="currentColor">operator env &rarr; gateway "*" &rarr; tenant:&lt;id&gt;</text>
+          <text x="170" y="146" text-anchor="middle" font-size="11"
+            fill="currentColor">/providers/{id}/credentials, /tenants/{id}/credentials</text>
+          <line x1="170" y1="156" x2="170" y2="176" stroke="currentColor"
+            marker-end="url(#arrow-after)"/>
+          <rect x="10" y="178" width="320" height="62" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="198" text-anchor="middle" font-size="12"
+            fill="currentColor">auth mode: required (default) | disabled</text>
+          <text x="170" y="216" text-anchor="middle" font-size="11"
+            fill="currentColor">local admin token &rarr; launch ticket &rarr; session cookie</text>
+          <text x="170" y="232" text-anchor="middle" font-size="11"
+            fill="currentColor">non-loopback tripwire guards both</text>
+        </svg>
+      </figure>
+    </div>
+    <p>The gateway API key keeps its name across both views. The change is
+      that it stops being the tenant identity and stops owning provider
+      credentials.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns:</strong> the tenant concept seam, provider credential
+      ownership and its HTTP surface, the gateway authentication mode and
+      its CLI, config, and console controls, the local admin token, launch
+      tickets and console sessions, the first-run experience, and the
+      console information architecture for keys, tenants, and provider
+      credentials.</p>
+    <p><strong>Does not own:</strong> catalog acquisition credentials,
+      which Starmap owns; routing policy and price limits, which the
+      OpenRouter parity work closed; and the response cache identity,
+      which reads the tenant value this plan changes but keeps its own
+      contract.</p>
+    <p><strong>Non-goals:</strong> user accounts, passwords, SSO, or
+      OAuth; a hosted or remote control plane; an organization hierarchy
+      above the tenant; per-tenant billing or invoicing; and any
+      compatibility alias for the removed
+      <code>/api/v1/keys/{key_id}/provider-keys</code> routes.</p>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <ol>
+      <li>A gateway API key authenticates a request. It never owns a
+        provider credential, and no credential storage key contains an API
+        key ID.</li>
+      <li>Provider credential resolution order is operator environment,
+        then gateway scope <code>*</code>, then tenant scope. The request
+        strategy selects which planes are eligible. It never reorders
+        them.</li>
+      <li>Authentication is required by default. A build with no
+        configuration serves no unauthenticated inference request.</li>
+      <li>The gateway refuses to serve with authentication disabled on a
+        non-loopback bind address unless the operator passes a second,
+        explicit override.</li>
+      <li>The console never receives the local admin token. It receives a
+        one-time launch ticket or a signed session cookie.</li>
+      <li>Rotating the local admin token invalidates every live console
+        session.</li>
+      <li>The canonical tenant ID is <code>default</code>. No sample or
+        demonstration tenant ships.</li>
+      <li>Catalog acquisition credentials stay separate from inference
+        credentials at every seam this plan touches.</li>
+    </ol>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-auth-onboarding.sh</code> holds conditions
+      <code>AON-V01</code> through <code>AON-V20</code> and prints
+      <code>Summary: N passed, M failed</code>. AON0 authors it red at
+      0 passed, 20 failed. The terminal state is 20 passed, 0 failed, and
+      the script runs in CI beside the other gates.</p>
+    <table>
+      <thead>
+        <tr><th>After task</th><th>Expected passing</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>AON0</td><td>0</td></tr>
+        <tr><td>AON1</td><td>3</td></tr>
+        <tr><td>AON2</td><td>6</td></tr>
+        <tr><td>AON3</td><td>9</td></tr>
+        <tr><td>AON4</td><td>12</td></tr>
+        <tr><td>AON5</td><td>15</td></tr>
+        <tr><td>AON6</td><td>16</td></tr>
+        <tr><td>AON7</td><td>18</td></tr>
+        <tr><td>AON8</td><td>19</td></tr>
+        <tr><td>AON9</td><td>20</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="AON0" data-status="done"><td>AON0</td><td>Baseline: pin the baseline commit, create the proof root, author the verifier red at 20 failing conditions, capture fail-before evidence. No production behavior changes.</td><td><code>done</code></td><td>Baseline <code>1c2f9d2</code>. <code>scripts/verify-auth-onboarding.sh</code> reports <code>Summary: 0 passed, 20 failed</code>, exit 1. No Go or console source changed. <a href="../proof/auth-and-onboarding/aon0.md">AON0 evidence</a>.</td></tr>
+        <tr id="AON1" data-status="in_progress"><td>AON1</td><td>Add the <code>internal/tenant</code> concept seam: the tenant model, its repository, and the canonical <code>default</code> tenant.</td><td><code>in_progress</code></td><td></td></tr>
+        <tr id="AON2" data-status="todo"><td>AON2</td><td>Give <code>identity.APIKey</code> a tenant, and make the request tenant come from the key's tenant instead of the key ID.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON3" data-status="todo"><td>AON3</td><td>Re-scope provider credentials to <code>tenant:&lt;id&gt;</code> and gateway <code>*</code>, and wire the gateway plane into credential resolution.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON4" data-status="todo"><td>AON4</td><td>Replace the key-nested credential routes with provider-owned and tenant-owned credential routes.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON5" data-status="todo"><td>AON5</td><td>Add the gateway authentication mode: config, <code>--no-auth</code>, the non-loopback tripwire, and an unauthenticated capability endpoint.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON6" data-status="todo"><td>AON6</td><td>Add the admin authentication-mode switch and its console control.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON7" data-status="todo"><td>AON7</td><td>Add the local admin token and the <code>starport auth</code> command group.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON8" data-status="todo"><td>AON8</td><td>Add launch tickets, console sessions, browser open, and the first-run banner.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON9" data-status="todo"><td>AON9</td><td>Separate the three credential ideas in the console and add the tenants view.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON10" data-status="todo"><td>AON10</td><td>Update the quickstart, the operator guide, and the architecture document.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON11" data-status="todo"><td>AON11</td><td>Close the campaign: verifier terminal, full gate roster, CI job registered.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AON12" data-status="todo"><td>AON12</td><td>Cleanup after the final pull request merges: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <h3 id="task-AON0">AON0 Baseline</h3>
+    <ul>
+      <li><strong>Problem:</strong> the plan needs a pinned baseline, a red
+        verifier, and recorded fail-before evidence.</li>
+      <li><strong>Owning seam and paths:</strong> this plan,
+        <code>docs/proof/auth-and-onboarding/</code>, and
+        <code>scripts/verify-auth-onboarding.sh</code>.</li>
+      <li><strong>Steps:</strong> 1. Pin the baseline at
+        <code>1c2f9d2</code>. 2. Create the proof root. 3. Author the
+        verifier with 20 conditions that all fail. 4. Record the current
+        behavior: every route requires a key, the tenant is the key ID,
+        and the credential scope is <code>user:&lt;key_id&gt;</code>.</li>
+      <li><strong>Acceptance:</strong>
+        <code>scripts/verify-auth-onboarding.sh</code> prints
+        <code>Summary: 0 passed, 20 failed</code> and exits non-zero. No
+        Go or console source changes.</li>
+      <li><strong>Fail-before:</strong> the verifier is red before any
+        implementation task.</li>
+      <li><strong>Verification:</strong>
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON1">AON1 Tenant seam</h3>
+    <ul>
+      <li><strong>Problem:</strong> Starport has no tenant concept. The
+        gateway API key ID stands in for one, so limits, caps, and
+        credentials cannot outlive a key.</li>
+      <li><strong>Owning seam and paths:</strong> new
+        <code>internal/tenant/</code> package, modeled on
+        <code>internal/identity/</code>.</li>
+      <li><strong>Steps:</strong> 1. Define <code>tenant.Tenant</code>
+        with an ID, a name, optional limits, metadata, an active flag, and
+        timestamps. 2. Add a repository over the existing
+        <code>storage.KVStore</code> with a <code>tenant:v1:</code>
+        namespace and compare-and-swap writes, matching the identity
+        repository. 3. Add <code>EnsureDefault</code>, which creates the
+        canonical <code>default</code> tenant once and is safe to call on
+        every boot. 4. Call it from application composition in
+        <code>internal/app</code>. Nothing reads the tenant yet.</li>
+      <li><strong>Acceptance:</strong> a test creates the default tenant
+        on a cold store, a second call is a no-op with the same revision,
+        and a tenant ID that is not a valid name is rejected. The
+        canonical ID is the literal <code>default</code>, asserted by
+        test.</li>
+      <li><strong>Fail-before:</strong> <code>AON-V01</code> through
+        <code>AON-V03</code> fail because
+        <code>internal/tenant</code> does not exist.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/tenant/... ./internal/app/...</code>,
+        <code>bash scripts/verify-package-layout.sh</code>,
+        <code>bash scripts/verify-dependency-direction.sh</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON2">AON2 Key belongs to a tenant</h3>
+    <ul>
+      <li><strong>Problem:</strong>
+        <code>BaseHandler.getTenantID</code> returns the API key ID, so
+        every downstream tenant decision is really a key decision.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/identity/model.go</code>,
+        <code>internal/identity/issuer.go</code>,
+        <code>internal/identity/repository.go</code>,
+        <code>internal/server/middleware.go</code>,
+        <code>internal/server/requestctx/</code>,
+        <code>internal/server/controllers/base.go</code>.</li>
+      <li><strong>Steps:</strong> 1. Add <code>TenantID</code> to
+        <code>identity.APIKey</code> and validate that it is non-empty.
+        2. Default it to <code>default</code> at issue time when the
+        caller names no tenant. 3. Read a stored key with an empty tenant
+        as <code>default</code>, so keys written before this task keep
+        working without a migration pass. 4. Put the tenant on the request
+        context in <code>RequireAPIKey</code>. 5. Make
+        <code>getTenantID</code> read the context tenant. 6. Decide the
+        tenant for an unauthenticated request in a single named place, so
+        AON5 has one seam to extend.</li>
+      <li><strong>Acceptance:</strong> two keys created under one tenant
+        produce the same request tenant. A key stored without a tenant
+        field resolves to <code>default</code>. Usage records keyed by the
+        API key ID still record the key ID, not the tenant, and a test
+        asserts both values are present and distinct.</li>
+      <li><strong>Fail-before:</strong> a test asserting that two keys in
+        one tenant share a tenant identity fails on the baseline.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/identity/... ./internal/server/...</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON3">AON3 Credential planes</h3>
+    <ul>
+      <li><strong>Problem:</strong> the credential scope is
+        <code>"user:" + apiKeyID</code>, and the gateway-wide
+        <code>*</code> plane in <code>internal/providers/byok</code> has
+        no consumer. Deleting a gateway key strands its credentials.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/providers/byok/keys.go</code>,
+        <code>internal/providers/byok/provider_keys.go</code>,
+        <code>internal/credentials/model.go</code>,
+        <code>internal/router/credential_policy.go</code>.</li>
+      <li><strong>Steps:</strong> 1. Replace
+        <code>UserScope(tenantID)</code>'s <code>user:</code> prefix with
+        <code>tenant:</code>, and name the constant for the tenant plane.
+        2. Add a gateway plane constant for scope <code>*</code> and
+        rename the byok global-key methods to name the gateway plane.
+        3. Extend <code>byok.Strategy</code> so the source order is
+        operator, gateway, tenant, and keep the existing strategy names
+        working: <code>operator_first</code>, <code>user_first</code>, and
+        <code>user_only</code> gain a gateway position with recorded
+        semantics. 4. Wire the gateway plane into
+        <code>credentialPolicy.resolve</code>. 5. Add a one-shot
+        migration that rewrites <code>user:&lt;key_id&gt;</code> records
+        to <code>tenant:default</code>, and record a collision rule when
+        two keys hold a credential for the same provider.</li>
+      <li><strong>Acceptance:</strong> a stored gateway credential serves
+        a request that has no tenant credential. A tenant credential wins
+        over a gateway credential under <code>user_first</code>. A
+        provider with no credential in any plane still returns the
+        existing not-configured failure, not a panic. The migration test
+        starts from two <code>user:</code> records and ends with the
+        recorded collision outcome.</li>
+      <li><strong>Fail-before:</strong> a test that stores a scope
+        <code>*</code> credential and expects a served request fails on
+        the baseline, because no resolver consults that plane.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/providers/byok/... ./internal/router/... ./internal/credentials/...</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON4">AON4 Credential routes</h3>
+    <ul>
+      <li><strong>Problem:</strong> the HTTP surface teaches the
+        conflation. <code>/api/v1/keys/{key_id}/provider-keys</code> makes
+        a provider credential look like a property of a gateway key.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/server/routes.go</code>,
+        <code>internal/server/controllers/provider_keys.go</code>,
+        <code>internal/server/dto/</code>.</li>
+      <li><strong>Steps:</strong> 1. Add
+        <code>/api/v1/providers/{provider}/credentials</code> for the
+        gateway plane, under the <code>admin</code> scope. 2. Add
+        <code>/api/v1/tenants/{tenant_id}/credentials</code> and
+        <code>/api/v1/tenants/{tenant_id}/credentials/{provider}</code>
+        for the tenant plane, under the existing
+        <code>provider_keys:read</code> and
+        <code>provider_keys:write</code> scopes, and refuse a tenant that
+        is not the caller's tenant unless the caller holds
+        <code>admin</code>. 3. Keep the validate endpoint on both planes.
+        4. Move the usage comparison endpoints to the tenant path.
+        5. Delete the key-nested routes and their controller methods. Add
+        no alias, because the repository forbids compatibility paths
+        before the first release.</li>
+      <li><strong>Acceptance:</strong> a request to a key-nested
+        credential path returns 404. A non-admin caller reading another
+        tenant's credentials receives 403. The gateway credential
+        endpoints reject a non-admin caller. No response body contains
+        decrypted credential material, asserted by the existing security
+        tests extended to the new paths.</li>
+      <li><strong>Fail-before:</strong> a test asserting 404 on
+        <code>/api/v1/keys/{key_id}/provider-keys</code> fails on the
+        baseline.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/server/...</code>,
+        <code>bash scripts/verify-v1-architecture.sh</code>,
+        <code>bash scripts/verify-openrouter-parity.sh</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON5">AON5 Authentication mode</h3>
+    <ul>
+      <li><strong>Problem:</strong> <code>routes.go</code> applies
+        <code>requireAPIKey</code> unconditionally, so a local user cannot
+        try the gateway without first creating a key, and an operator
+        cannot run it behind their own front door.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/config/config.go</code>,
+        <code>internal/config/validation.go</code>,
+        <code>internal/server/middleware.go</code>,
+        <code>internal/server/routes.go</code>,
+        <code>internal/cli/app.go</code>,
+        <code>internal/cli/development.go</code>.</li>
+      <li><strong>Steps:</strong> 1. Add an auth mode with the values
+        <code>required</code> and <code>disabled</code>, default
+        <code>required</code>, readable from config and from a
+        <code>--no-auth</code> flag on <code>serve</code> and
+        <code>dev</code>. 2. In <code>RequireAPIKey</code>, when the mode
+        is disabled, skip the key check and set the request tenant to
+        <code>default</code> through the AON2 seam. Admin routes still
+        require the admin scope, which no unauthenticated request holds,
+        unless the operator also grants it explicitly. 3. Add the
+        non-loopback tripwire in config validation: a disabled mode with a
+        non-loopback bind address fails startup unless a second explicit
+        override flag is present. 4. Add an unauthenticated
+        <code>GET /api/v1/auth/mode</code> that returns the mode and
+        whether the console may change it. 5. Print the mode in the
+        <code>dev</code> and <code>serve</code> startup banner.</li>
+      <li><strong>Acceptance:</strong> the default build 401s an
+        unauthenticated inference request. With <code>--no-auth</code> on
+        a loopback bind, the same request succeeds and its usage record
+        carries the anonymous key ID and the <code>default</code> tenant.
+        With <code>--no-auth</code> on <code>0.0.0.0</code>, startup fails
+        with a message that names the override. With the override,
+        startup succeeds. <code>GET /api/v1/auth/mode</code> answers
+        without a key in both modes.</li>
+      <li><strong>Fail-before:</strong> a test that starts the server with
+        auth disabled fails to compile on the baseline, because no such
+        option exists.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/config/... ./internal/server/... ./internal/cli/...</code>,
+        <code>bash scripts/verify-developer-experience.sh</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON6">AON6 Console authentication switch</h3>
+    <ul>
+      <li><strong>Problem:</strong> the mode is only reachable from the
+        process that owns the bind address, and the request asks for a UI
+        control.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/server/controllers/admin.go</code>,
+        <code>internal/server/routes.go</code>,
+        <code>console/src/routes/settings.tsx</code>,
+        <code>console/src/lib/api.ts</code>.</li>
+      <li><strong>Steps:</strong> 1. Add
+        <code>PUT /api/v1/admin/auth/mode</code> under the
+        <code>admin</code> scope. 2. Refuse the change when the request
+        origin is not loopback, and refuse to disable authentication when
+        the bind address is not loopback, reusing the AON5 tripwire rule
+        rather than restating it. 3. Persist the mode so a restart keeps
+        it, and record which source last set it, so the startup banner can
+        say config, flag, or console. 4. Add the Settings control with an
+        explicit confirmation that names the consequence: enabling
+        authentication ends the current console session until a key or a
+        launch ticket is presented.</li>
+      <li><strong>Acceptance:</strong> a non-admin caller receives 403. A
+        non-loopback origin receives 403. Disabling and re-enabling
+        through the endpoint changes the behavior of an inference request
+        without a restart, and the mode survives a restart. A console test
+        asserts the confirmation appears before the switch commits.</li>
+      <li><strong>Fail-before:</strong> the endpoint returns 404 on the
+        AON5 head.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/server/...</code>,
+        <code>cd console &amp;&amp; npm test</code>,
+        <code>bash scripts/verify-console-modernization.sh</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON7">AON7 Local admin token</h3>
+    <ul>
+      <li><strong>Problem:</strong> the only way into the console is to
+        paste a gateway key, and there is no local operator credential
+        that the CLI and the server share.</li>
+      <li><strong>Owning seam and paths:</strong> new
+        <code>internal/localauth/</code> package,
+        <code>internal/cli/</code>.</li>
+      <li><strong>Steps:</strong> 1. Store a token record with a version,
+        the token, a generation counter, an issue time, a scope, and a
+        rotation time, under the platform data directory with mode 0600.
+        2. Auto-mint on first boot under a file lock, so two starts cannot
+        race. 3. Compare in constant time. 4. Add a rotation freshness
+        rule: a never-rotated auto-minted token is stale, and AON5's
+        non-loopback tripwire refuses to expose it. 5. Add the
+        <code>starport auth</code> command group with
+        <code>token</code>, <code>status</code>, and
+        <code>rotate</code>.</li>
+      <li><strong>Acceptance:</strong> a cold data directory mints one
+        token, and a concurrent second start reads the same token, proven
+        by a parallel test. The file mode is 0600. Rotation increments the
+        generation and sets the rotation time. A non-loopback bind with a
+        never-rotated token fails startup with a message that names
+        <code>starport auth rotate</code>.</li>
+      <li><strong>Fail-before:</strong> <code>starport auth status</code>
+        does not exist on the AON6 head.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/localauth/... ./internal/cli/...</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON8">AON8 Launch tickets and sessions</h3>
+    <ul>
+      <li><strong>Problem:</strong> the console holds a long-lived gateway
+        key in <code>localStorage</code>. A copied URL or a shared browser
+        profile leaks it, and there is no way to revoke one console
+        session.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/localauth/</code>,
+        <code>internal/server/middleware.go</code>,
+        <code>internal/server/routes.go</code>,
+        <code>internal/cli/development.go</code>,
+        <code>console/src/lib/api.ts</code>, and a new console launch
+        route.</li>
+      <li><strong>Steps:</strong> 1. Mint a one-time short-lived launch
+        ticket, authenticated by the local admin token. 2. Serve
+        <code>/launch?lt=&lt;ticket&gt;</code>, which consumes the ticket
+        and sets a signed <code>starport_session</code> cookie. 3. Accept
+        the session cookie in <code>RequireAPIKey</code> beside the bearer
+        key, and give it the tenant and scopes the local operator holds.
+        4. Invalidate every live session when the admin token rotates.
+        5. Add <code>starport ui</code> and
+        <code>starport auth url [--open] [--copy]</code>. 6. Make
+        <code>starport dev</code> open the console, with
+        <code>--no-open</code>, and suppress the open when
+        <code>CI</code> or <code>NO_BROWSER</code> is set or stdout is not
+        a terminal. 7. Add the first-run banner behind a stamp file, so it
+        prints once. 8. Log only a short ticket prefix, never the ticket
+        or the token.</li>
+      <li><strong>Acceptance:</strong> a ticket works once. A second use
+        returns 401. An expired ticket returns 401. The session cookie
+        authenticates a console API call with no bearer key present.
+        Rotating the admin token makes an existing session cookie fail.
+        The gateway key never appears in a response body, a redirect URL,
+        or a log line, asserted by test. With <code>CI=1</code>,
+        <code>starport dev</code> prints the URL and opens no
+        browser.</li>
+      <li><strong>Fail-before:</strong> <code>/launch</code> returns 404
+        on the AON7 head.</li>
+      <li><strong>Verification:</strong>
+        <code>go test ./internal/localauth/... ./internal/server/... ./internal/cli/...</code>,
+        <code>cd console &amp;&amp; npm test</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON9">AON9 Console separation</h3>
+    <ul>
+      <li><strong>Problem:</strong> the console teaches the conflation.
+        <code>keys.tsx</code> holds a BYOK section keyed by the gateway
+        key, and <code>ProviderDetail.tsx</code> sends the user to
+        <code>/keys</code> to attach a provider key to a gateway key.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>console/src/routes/keys.tsx</code>,
+        <code>console/src/components/providers/ProviderDetail.tsx</code>,
+        <code>console/src/routes/providers.tsx</code>,
+        <code>console/src/routes/settings.tsx</code>, a new tenants
+        route, and <code>console/src/lib/api.ts</code>.</li>
+      <li><strong>Steps:</strong> 1. Delete the BYOK section from
+        <code>keys.tsx</code>. The keys page lists gateway keys, their
+        scopes, their limits, and their tenant, and nothing else.
+        2. Put both credential planes on the provider detail screen, named
+        as gateway credentials and tenant credentials, each with the
+        catalog-driven credential fields the current form already reads.
+        3. Replace the <code>ProviderDetail</code> fix-it copy and its
+        <code>/keys</code> link with a link to the credential panel on the
+        same screen. 4. Add a tenants route that lists tenants, their
+        keys, their limits, and their credentials. 5. Show the
+        authentication mode in the header when it is disabled, so a user
+        cannot mistake an open gateway for a secured one.</li>
+      <li><strong>Acceptance:</strong> the console source contains no link
+        from a provider screen to <code>/keys</code> for credential
+        purposes, asserted by the verifier. A console test opens the
+        provider screen and edits a gateway credential without visiting
+        the keys page. The keys page renders with no provider-credential
+        query.</li>
+      <li><strong>Fail-before:</strong> the verifier condition that
+        forbids a credential link from a provider screen to
+        <code>/keys</code> fails on the AON8 head.</li>
+      <li><strong>Verification:</strong>
+        <code>cd console &amp;&amp; npm test &amp;&amp; npm run build</code>,
+        <code>bash scripts/verify-console-modernization.sh</code>,
+        <code>bash scripts/verify-auth-onboarding.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON10">AON10 Documentation</h3>
+    <ul>
+      <li><strong>Problem:</strong> the quickstart teaches the old flow,
+        and no document states the credential planes or the
+        authentication mode.</li>
+      <li><strong>Owning seam and paths:</strong> <code>README.md</code>,
+        <code>docs/OPERATOR-GUIDE.md</code>,
+        <code>docs/ARCHITECTURE.md</code>, <code>CLAUDE.md</code>.</li>
+      <li><strong>Steps:</strong> 1. Rewrite the quickstart around
+        <code>starport dev</code>, the opened console, and the first key.
+        2. Add an operator section for the authentication mode, the
+        tripwire, the local admin token, and rotation. 3. Add the
+        credential planes and the tenant seam to the architecture
+        document and to the repository instructions.</li>
+      <li><strong>Acceptance:</strong> the quickstart commands run as
+        written on a cold data directory.
+        <code>scripts/verify-readme-quickstart.sh</code> and
+        <code>scripts/verify-doc-links.sh</code> pass.</li>
+      <li><strong>Fail-before:</strong> the quickstart verifier fails once
+        AON8 changes the first-run output.</li>
+      <li><strong>Verification:</strong>
+        <code>bash scripts/verify-readme-quickstart.sh</code>,
+        <code>bash scripts/verify-doc-links.sh</code>,
+        <code>bash scripts/test-doc-link-verifier.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-AON11">AON11 Campaign close</h3>
+    <ul>
+      <li><strong>Problem:</strong> a gate that no workflow runs cannot
+        report a regression.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>scripts/verify-auth-onboarding.sh</code>,
+        <code>.github/workflows/</code>, <code>CLAUDE.md</code>,
+        <code>docs/TASKS.md</code>.</li>
+      <li><strong>Steps:</strong> 1. Confirm the verifier is terminal at
+        20 passed. 2. Register it in CI beside the other gates. 3. Add it
+        to the required-evidence list in <code>CLAUDE.md</code>. 4. Run
+        the full gate roster and record the counts.</li>
+      <li><strong>Acceptance:</strong>
+        <code>Summary: 20 passed, 0 failed</code>. The CI job runs the
+        script. Every gate in the repository evidence list passes, and any
+        skipped optional check is recorded as
+        <code>UNVERIFIED</code>.</li>
+      <li><strong>Fail-before:</strong> not applicable. This task records
+        a terminal state.</li>
+      <li><strong>Verification:</strong> the full evidence list in
+        <code>CLAUDE.md</code>, then
+        <code>autoreview --gate pre-pr --mode auto</code>.</li>
+    </ul>
+
+    <h3 id="task-AON12">AON12 Cleanup</h3>
+    <ul>
+      <li><strong>Problem:</strong> a merged plan must not linger as a
+        stale control plane.</li>
+      <li><strong>Owning seam and paths:</strong> this plan file,
+        <code>docs/proof/auth-and-onboarding/</code>, and the
+        <code>docs/TASKS.md</code> entry.</li>
+      <li><strong>Steps:</strong> 1. Confirm the merge of the AON11 pull
+        request. 2. Delete the plan and the proof root. 3. Move the entry
+        in <code>docs/TASKS.md</code> from Active Work to Recently
+        Completed with the pull request range.</li>
+      <li><strong>Acceptance:</strong> the repository holds no reference
+        to <code>auth-and-onboarding-plan</code> except the completed
+        entry in <code>docs/TASKS.md</code>.</li>
+      <li><strong>Fail-before:</strong> not applicable, because the ledger
+        row records the merge.</li>
+      <li><strong>Verification:</strong>
+        <code>grep -rn "auth-and-onboarding" .</code> returns only the
+        completed task entry.</li>
+    </ul>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Date</th><th>Decision</th><th>Consequence and re-open condition</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>D1</td><td>2026-08-23</td><td>Adopt both a tenant identity and the gateway <code>*</code> credential plane, rather than one of the two.</td><td>Credentials get two named owners: the deployment and the tenant. Re-open only if the tenant seam proves unnecessary after AON4.</td></tr>
+        <tr><td>D2</td><td>2026-08-23</td><td>The canonical tenant ID is <code>default</code>.</td><td>No sample tenant ships. Nimbus uses <code>demo</code> in its audit fixtures; that name is a test value, not a product name, and Starport does not copy it.</td></tr>
+        <tr><td>D3</td><td>2026-08-23</td><td>The authentication mode is settable from the CLI, the config, and an admin console switch.</td><td>The console switch is loopback-origin gated and carries an explicit lockout confirmation. Re-open if a remote console deployment makes the origin gate impractical.</td></tr>
+        <tr><td>D4</td><td>2026-08-23</td><td>The console authenticates through a launch ticket and a signed session cookie, modeled on Nimbus.</td><td>The bearer-key path stays for API clients. The browser stops holding a long-lived gateway key. Re-open if a deployment needs a cookie-free console.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="patterns">
+    <h2>Patterns to preserve</h2>
+    <ul>
+      <li>Query-string credentials stay unsupported. URLs get logged. The
+        launch ticket is the one exception, and it is single-use and
+        short-lived.</li>
+      <li>Credential material stays encrypted at rest and never appears in
+        a response body, a log line, or an error message.</li>
+      <li>Catalog acquisition credentials stay separate from inference
+        credentials.</li>
+      <li>The 401 and 403 split from the console key work stays intact. A
+        missing key is 401. A key without a scope is 403.</li>
+      <li>Usage records keep the API key ID. The tenant is an added
+        dimension, not a replacement.</li>
+      <li>The gateway adds no measurable request overhead beyond the
+        published budget. The auth mode check must not add a storage
+        read per request.</li>
+    </ul>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/auth-and-onboarding-plan.html to completion. This is
+a whole-plan goal, not a single-task goal. Read the plan fully, then
+read: CLAUDE.md, docs/TASKS.md, docs/ARCHITECTURE.md, and
+docs/OPERATOR-GUIDE.md. Work in /Users/jack/src/github.com/agentstation/starport
+on a branch per task named codex/aon&lt;N&gt;-&lt;slug&gt;, cut from main.
+Chat history is not progress state. Resume from the status ledger, the
+execution log, and git state. If compaction happens, continue from the
+plan and git state rather than restarting. Loop: keep one task
+in_progress, implement at the owning seam, capture fail-before evidence,
+run the verification commands, commit the work, write the proof file
+under docs/proof/auth-and-onboarding/, append the execution log with the
+work commit, mark the task terminal with evidence, commit the plan
+update the same way, open the pull request, then advance to the next
+task. Decide rather than ask. Mark a wrong or already-satisfied task
+no-action with a one-line reason. Record a blocker and continue with the
+next eligible task. Binding constraints: the eight invariants in this
+plan, and the non-goals in its scope section. Add no compatibility alias
+for a removed route. Commit policy: one pull request per task, branch
+prefix codex/, no AI attribution, run
+`autoreview --gate pre-pr --mode auto` after final checks and commit and
+before each pull request with substantive code changes. Stop only at a
+valid stop state from the plans skill. Before you stop, update the
+ledger and the log, and record the next action in the status line. The
+goal is met when scripts/verify-auth-onboarding.sh reports
+`Summary: 20 passed, 0 failed`, that script runs in CI, the full
+evidence list in CLAUDE.md passes, and AON12 is the only non-terminal
+row.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-23</td><td>meta</td><td>research</td><td>Mapped the coupling: <code>controllers/base.go:81</code> returns the API key ID as the tenant; <code>controllers/provider_keys.go</code> builds the credential scope as <code>"user:" + apiKeyID</code> at seven call sites; <code>router/credential_policy.go:104</code> resolves the same value at inference time. The gateway <code>*</code> plane exists in <code>byok/provider_keys.go:298,408</code> with no route and no consumer, and <code>credentials.ProviderKey.IsGlobal()</code> has no caller. <code>server/routes.go:27,56</code> applies <code>requireAPIKey</code> unconditionally; no auth-mode config field exists.</td></tr>
+        <tr><td>2026-08-23</td><td>meta</td><td>authored</td><td>Plan authored at baseline <code>1c2f9d2</code> with 13 ledger rows and decisions D1 through D4. No implementation started by this step.</td></tr>
+        <tr><td>2026-08-23</td><td>AON0</td><td>done</td><td>Created <code>docs/proof/auth-and-onboarding/</code> and authored <code>scripts/verify-auth-onboarding.sh</code> with 20 conditions. Fail-before run: <code>Summary: 0 passed, 20 failed</code>, exit 1, with AON-V06, AON-V12, and AON-V20 red because the baseline holds the behavior they forbid. <code>bash scripts/verify-doc-links.sh</code> passed. AON1 set in_progress.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>
