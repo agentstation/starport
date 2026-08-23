@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,18 @@ func newAdminTestController(t *testing.T) (*AdminController, identity.Repository
 	require.NoError(t, err)
 	usageRecords, err := usage.Open(storage.NewMockStore(), usage.Options{})
 	require.NoError(t, err)
-	return NewAdminController(repository, usageRecords), repository
+	return NewAdminController(repository, newAdminTestTenants(t), usageRecords), repository
+}
+
+// newAdminTestTenants returns a tenant repository holding the canonical tenant,
+// which is what every key issued without an explicit tenant resolves to.
+func newAdminTestTenants(t *testing.T) tenant.Repository {
+	t.Helper()
+	tenants, err := tenant.Open(storage.NewMockStore())
+	require.NoError(t, err)
+	_, err = tenants.EnsureDefault(context.Background())
+	require.NoError(t, err)
+	return tenants
 }
 
 func createAdminTestIdentity(t *testing.T, repository identity.Repository, apiKey identity.APIKey) {
@@ -365,4 +377,71 @@ func withChiURLParam(req *http.Request, key, value string) *http.Request {
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add(key, value)
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+}
+
+// createKeyRequest posts one key-creation body and returns the recorder.
+func createKeyRequest(t *testing.T, handler *AdminController, body map[string]any) *httptest.ResponseRecorder {
+	t.Helper()
+	encoded, err := json.Marshal(body)
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/keys", bytes.NewReader(encoded))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.CreateKey(recorder, request)
+	return recorder
+}
+
+// TestAdminCreateKeyReportsTheOwningTenant proves the account a key belongs to
+// is visible on the wire. Without it an operator cannot tell which tenant's
+// limits and credentials a key will resolve to.
+func TestAdminCreateKeyReportsTheOwningTenant(t *testing.T) {
+	handler, _ := newAdminTestController(t)
+
+	recorder := createKeyRequest(t, handler, map[string]any{
+		"name":   "Default-Tenant-Key",
+		"scopes": []string{"chat:write"},
+	})
+	require.Equal(t, http.StatusCreated, recorder.Code)
+
+	var response map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	keyInfo, ok := response["key"].(map[string]any)
+	require.True(t, ok)
+	// A key that names no account belongs to the canonical one, and the
+	// response says so rather than leaving the field empty.
+	assert.Equal(t, tenant.DefaultID, keyInfo["tenant_id"])
+}
+
+// TestAdminCreateKeyRefusesAnUnknownTenant is the AON2 acceptance case at the
+// HTTP boundary. Naming an account that does not exist is the caller's mistake,
+// so it answers 400 rather than 500 and stores nothing.
+func TestAdminCreateKeyRefusesAnUnknownTenant(t *testing.T) {
+	handler, identities := newAdminTestController(t)
+
+	recorder := createKeyRequest(t, handler, map[string]any{
+		"name":      "Ghost-Key",
+		"tenant_id": "does-not-exist",
+		"scopes":    []string{"chat:write"},
+	})
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+
+	records, err := identities.List(context.Background(), 10, 0)
+	require.NoError(t, err)
+	assert.Empty(t, records, "a refused creation must store no key")
+}
+
+// TestAdminCreateKeyRefusesAMalformedTenantID guards the credential storage
+// key. A tenant ID becomes part of a credential scope, so a separator or a
+// wildcard inside one must never reach storage.
+func TestAdminCreateKeyRefusesAMalformedTenantID(t *testing.T) {
+	handler, _ := newAdminTestController(t)
+
+	for _, tenantID := range []string{"acme corp", "acme/eu", "*", "tenant:acme"} {
+		recorder := createKeyRequest(t, handler, map[string]any{
+			"name":      "Bad-Key",
+			"tenant_id": tenantID,
+			"scopes":    []string{"chat:write"},
+		})
+		assert.Equalf(t, http.StatusBadRequest, recorder.Code, "tenant %q", tenantID)
+	}
 }

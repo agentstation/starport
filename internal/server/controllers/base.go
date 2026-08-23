@@ -77,10 +77,17 @@ func (h *BaseHandler) getAPIKey(ctx context.Context) string {
 	return ""
 }
 
-// getTenantID extracts the authenticated tenant identity from the context.
+// getTenantID extracts the account the request runs under. Many keys can
+// belong to one tenant, so this is not the API key ID.
 func (h *BaseHandler) getTenantID(ctx context.Context) string {
-	if tenantID, ok := requestctx.GetAPIKeyID(ctx); ok {
-		return tenantID
+	return requestctx.TenantIDOrDefault(ctx)
+}
+
+// getAPIKeyID extracts the authenticated key. Usage attribution and per-key
+// limits read this, not the tenant.
+func (h *BaseHandler) getAPIKeyID(ctx context.Context) string {
+	if keyID, ok := requestctx.GetAPIKeyID(ctx); ok {
+		return keyID
 	}
 	return ""
 }

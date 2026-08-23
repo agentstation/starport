@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/tenant"
 )
 
 // Key is the typed context key used for server request metadata.
@@ -18,6 +19,9 @@ const (
 	APIKeyID Key = "api_key_id"
 	// APIKeyModel stores the authenticated API key model.
 	APIKeyModel Key = "api_key_model" // #nosec G101 - context key name, not a credential.
+	// TenantID stores the account the request runs under. It is distinct from
+	// APIKeyID: many keys can belong to one tenant.
+	TenantID Key = "tenant_id"
 )
 
 // WithAPIKey stores the raw API key in the context.
@@ -33,6 +37,28 @@ func WithAPIKeyID(ctx context.Context, value string) context.Context {
 // WithAPIKeyModel stores the API key model in the context.
 func WithAPIKeyModel(ctx context.Context, value *identity.APIKey) context.Context {
 	return context.WithValue(ctx, APIKeyModel, value)
+}
+
+// WithTenantID stores the request tenant in the context.
+func WithTenantID(ctx context.Context, value string) context.Context {
+	return context.WithValue(ctx, TenantID, value)
+}
+
+// TenantIDOrDefault returns the account the request runs under, falling back
+// to the canonical tenant when no authenticated identity set one.
+//
+// This is the single place that decides the tenant of a request that carries
+// no key. An unauthenticated gateway still has to attribute usage, apply
+// limits, and select credentials, and it attributes all of them to the default
+// tenant.
+func TenantIDOrDefault(ctx context.Context) string {
+	if value, ok := ctx.Value(TenantID).(string); ok && value != "" {
+		return value
+	}
+	if apiKey, ok := GetAPIKeyModel(ctx); ok && apiKey != nil {
+		return apiKey.EffectiveTenantID()
+	}
+	return tenant.DefaultID
 }
 
 // GetAPIKey returns the raw API key from the context.

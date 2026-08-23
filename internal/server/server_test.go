@@ -51,7 +51,7 @@ func TestNewRequiresReadyDependencies(t *testing.T) {
 	config := &Config{Port: 8080}
 	ready := newTestServer(t, config)
 	base := Dependencies{
-		Service: ready.service, Identities: ready.identities,
+		Service: ready.service, Identities: ready.identities, Tenants: ready.tenants,
 		ProviderKeys: ready.providerKeys, RateLimits: ready.rateLimits,
 		ProviderOperations: ready.providerOperations,
 	}
@@ -62,6 +62,7 @@ func TestNewRequiresReadyDependencies(t *testing.T) {
 	}{
 		{"service", func(value *Dependencies) { value.Service = nil }, ErrServiceRequired},
 		{"identities", func(value *Dependencies) { value.Identities = nil }, ErrIdentitiesRequired},
+		{"tenants", func(value *Dependencies) { value.Tenants = nil }, ErrTenantsRequired},
 		{"provider keys", func(value *Dependencies) { value.ProviderKeys = nil }, ErrProviderKeysRequired},
 		{"rate limits", func(value *Dependencies) { value.RateLimits = nil }, ErrRateLimitsRequired},
 		{"provider operations", func(value *Dependencies) { value.ProviderOperations = nil }, ErrProviderOperationsRequired},

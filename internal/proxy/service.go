@@ -62,8 +62,14 @@ type ChatCompletionRequest struct {
 	Preset string
 
 	// Internal fields
-	APIKey       string               `json:"-"`
-	TenantID     string               `json:"-"`
+	APIKey string `json:"-"`
+	// TenantID is the account the request runs under. Credential selection,
+	// response cache scope, and tenant limits read this.
+	TenantID string `json:"-"`
+	// KeyID is the gateway API key that authenticated the request. Usage
+	// attribution and per-key limits read this. Many keys share one tenant, so
+	// the two values are distinct and neither substitutes for the other.
+	KeyID        string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
 	Protocol     string               `json:"-"` // Protocol surface that received the request
@@ -106,8 +112,14 @@ type EmbeddingsRequest struct {
 	Request inference.EmbeddingRequest
 
 	// Internal fields
-	APIKey       string               `json:"-"`
-	TenantID     string               `json:"-"`
+	APIKey string `json:"-"`
+	// TenantID is the account the request runs under. Credential selection,
+	// response cache scope, and tenant limits read this.
+	TenantID string `json:"-"`
+	// KeyID is the gateway API key that authenticated the request. Usage
+	// attribution and per-key limits read this. Many keys share one tenant, so
+	// the two values are distinct and neither substitutes for the other.
+	KeyID        string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
 	Protocol     string               `json:"-"` // Protocol surface that received the request

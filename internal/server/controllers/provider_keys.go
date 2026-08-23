@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -28,6 +30,14 @@ func NewProviderKeysController(providerKeys byok.ProviderKeys, usageRecords usag
 		providerKeys: providerKeys,
 		usageRecords: usageRecords,
 	}
+}
+
+// tenantScope returns the credential repository scope for the account this
+// request runs under. A credential a tenant brings belongs to the tenant, not
+// to the gateway API key that happened to carry the request, so deleting a key
+// never strands the credentials its tenant applied.
+func (h *ProviderKeysController) tenantScope(ctx context.Context) string {
+	return byok.UserScope(requestctx.TenantIDOrDefault(ctx))
 }
 
 func (h *ProviderKeysController) requireProviderKeys(w http.ResponseWriter) bool {
@@ -48,7 +58,7 @@ func (h *ProviderKeysController) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	apiKeyID := chi.URLParam(r, "key_id")
 
-	keys, err := h.providerKeys.ListKeys(ctx, "user:"+apiKeyID)
+	keys, err := h.providerKeys.ListKeys(ctx, h.tenantScope(ctx))
 	if err != nil {
 		log.Error().Err(err).Str("api_key_id", apiKeyID).Msg("Failed to list provider keys")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to list provider keys")
@@ -148,7 +158,7 @@ func (h *ProviderKeysController) Create(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Store the key
-	_, err := h.providerKeys.AddKey(ctx, "user:"+apiKeyID, req.Provider, credMap, req.Config, req.IsFallback, req.Priority)
+	_, err := h.providerKeys.AddKey(ctx, h.tenantScope(ctx), req.Provider, credMap, req.Config, req.IsFallback, req.Priority)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "Provider key already exists")
@@ -179,7 +189,7 @@ func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
 	apiKeyID := chi.URLParam(r, "key_id")
 	provider := chi.URLParam(r, providerField)
 
-	key, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
+	key, err := h.providerKeys.GetKey(ctx, h.tenantScope(ctx), provider)
 	if err != nil {
 		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
@@ -235,7 +245,7 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check if key exists
-	_, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
+	_, err := h.providerKeys.GetKey(ctx, h.tenantScope(ctx), provider)
 	if err != nil {
 		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
@@ -270,7 +280,7 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Update the key
-	_, err = h.providerKeys.UpdateKey(ctx, "user:"+apiKeyID, provider, credMap, req.Config, req.IsFallback, req.Priority)
+	_, err = h.providerKeys.UpdateKey(ctx, h.tenantScope(ctx), provider, credMap, req.Config, req.IsFallback, req.Priority)
 	if err != nil {
 		log.Error().Err(err).Str("api_key_id", apiKeyID).Str(providerField, provider).Msg("Failed to update provider key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to update provider key")
@@ -297,7 +307,7 @@ func (h *ProviderKeysController) Delete(w http.ResponseWriter, r *http.Request) 
 	apiKeyID := chi.URLParam(r, "key_id")
 	provider := chi.URLParam(r, providerField)
 
-	if err := h.providerKeys.DeleteKey(ctx, "user:"+apiKeyID, provider); err != nil {
+	if err := h.providerKeys.DeleteKey(ctx, h.tenantScope(ctx), provider); err != nil {
 		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
@@ -327,7 +337,7 @@ func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request
 	apiKeyID := chi.URLParam(r, "key_id")
 	provider := chi.URLParam(r, providerField)
 
-	_, err := h.providerKeys.GetKey(ctx, "user:"+apiKeyID, provider)
+	_, err := h.providerKeys.GetKey(ctx, h.tenantScope(ctx), provider)
 	if err != nil {
 		if errors.Is(err, byok.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")

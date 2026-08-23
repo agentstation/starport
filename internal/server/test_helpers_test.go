@@ -20,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/tenant"
 )
 
 type testServerConfig struct {
@@ -80,6 +81,16 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		option(&testConfig)
 	}
 
+	tenants, err := tenant.Open(testConfig.store)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	// Production composition ensures the canonical tenant before the first key
+	// is read, so a test server that skipped it would not be the real gateway.
+	if _, err := tenants.EnsureDefault(context.Background()); err != nil {
+		tb.Fatal(err)
+	}
+
 	identities, err := identity.Open(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)
@@ -123,7 +134,8 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter))
 
 	result, err := New(config, Dependencies{
-		Service: service, Identities: identities, ProviderKeys: providerKeys, RateLimits: rateLimits,
+		Service: service, Identities: identities, Tenants: tenants,
+		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
 	})
 	if err != nil {

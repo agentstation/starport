@@ -371,6 +371,10 @@ func InitializeIdentity(
 	if len(records) != 0 {
 		return identity.IssueResult{}, ErrAlreadyInitialized
 	}
+	// The initial key names no tenant, so it resolves to the canonical tenant at
+	// read time. Setup deliberately writes nothing but identity records, and the
+	// gateway ensures the canonical tenant at boot, so this path needs no tenant
+	// checker: it never accepts a caller-supplied account to check.
 	issuer, err := identity.NewIssuer(repository)
 	if err != nil {
 		return identity.IssueResult{}, fmt.Errorf("open identity issuer: %w", err)

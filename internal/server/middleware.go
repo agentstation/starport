@@ -159,6 +159,9 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		ctx := requestctx.WithAPIKey(r.Context(), apiKey)
 		ctx = requestctx.WithAPIKeyID(ctx, apiKeyModel.ID)
 		ctx = requestctx.WithAPIKeyModel(ctx, &apiKeyModel)
+		// The key authenticates. The tenant behind it decides what the request
+		// may reach, so both travel and neither stands in for the other.
+		ctx = requestctx.WithTenantID(ctx, apiKeyModel.EffectiveTenantID())
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

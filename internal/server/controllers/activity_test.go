@@ -197,7 +197,7 @@ func TestAdminMetricsReflectRecordedUsage(t *testing.T) {
 
 	identities, err := identity.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	handler := NewAdminController(identities, repository)
+	handler := NewAdminController(identities, newAdminTestTenants(t), repository)
 
 	recorder := httptest.NewRecorder()
 	handler.Metrics(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/metrics", nil))

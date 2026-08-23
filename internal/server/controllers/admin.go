@@ -19,6 +19,7 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -27,15 +28,26 @@ const systemInfoUnavailable = "unavailable"
 // AdminController handles administrative endpoints
 type AdminController struct {
 	identities   identity.Repository
+	tenants      tenant.Repository
 	issuer       *identity.Issuer
 	usageRecords usage.Repository
 }
 
-// NewAdminController creates a new admin controller
-func NewAdminController(identities identity.Repository, usageRecords usage.Repository) *AdminController {
-	issuer, _ := identity.NewIssuer(identities)
+// NewAdminController creates a new admin controller. The tenant repository
+// lets the issuer refuse a key that names an account that does not exist.
+func NewAdminController(
+	identities identity.Repository,
+	tenants tenant.Repository,
+	usageRecords usage.Repository,
+) *AdminController {
+	options := []identity.IssuerOption{}
+	if tenants != nil {
+		options = append(options, identity.WithTenantChecker(tenants))
+	}
+	issuer, _ := identity.NewIssuer(identities, options...)
 	return &AdminController{
 		identities:   identities,
+		tenants:      tenants,
 		issuer:       issuer,
 		usageRecords: usageRecords,
 	}
@@ -78,6 +90,9 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 	for _, record := range records {
 		apiKey := record.APIKey
 		apiKey.Hash = ""
+		// The listing reports the tenant the key actually runs under, so a
+		// caller never has to know that an unset value means the canonical one.
+		apiKey.TenantID = apiKey.EffectiveTenantID()
 		apiKeys = append(apiKeys, apiKey)
 	}
 
@@ -117,8 +132,11 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req struct {
-		Name          string            `json:"name"`
-		Description   string            `json:"description,omitempty"`
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		// TenantID names the owning account. An empty value issues the key to
+		// the canonical tenant.
+		TenantID      string            `json:"tenant_id,omitempty"`
 		Scopes        []string          `json:"scopes,omitempty"`
 		AllowedModels []string          `json:"allowed_models,omitempty"`
 		Limits        *limits.Limits    `json:"limits,omitempty"`
@@ -140,6 +158,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 
 	issued, err := h.issuer.Issue(ctx, identity.IssueRequest{
 		Name:          req.Name,
+		TenantID:      req.TenantID,
 		Scopes:        req.Scopes,
 		AllowedModels: req.AllowedModels,
 		Limits:        req.Limits,
@@ -163,6 +182,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 			"id":             apiKey.ID,
 			"key":            issued.Secret,
 			"name":           apiKey.Name,
+			"tenant_id":      apiKey.EffectiveTenantID(),
 			"scopes":         apiKey.Scopes,
 			"allowed_models": apiKey.AllowedModels,
 			"limits":         apiKey.Limits,
@@ -200,6 +220,7 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 	response := map[string]any{
 		"id":             apiKey.ID,
 		"name":           apiKey.Name,
+		"tenant_id":      apiKey.EffectiveTenantID(),
 		"scopes":         apiKey.Scopes,
 		"allowed_models": apiKey.AllowedModels,
 		"limits":         apiKey.Limits,
@@ -287,6 +308,10 @@ func isKeyValidationError(err error) bool {
 		errors.Is(err, identity.ErrInvalidScope) ||
 		errors.Is(err, identity.ErrInvalidModel) ||
 		errors.Is(err, identity.ErrInvalidExpiration) ||
+		// Naming an account that does not exist is the caller's mistake, not
+		// a gateway failure, so it answers 400 rather than 500.
+		errors.Is(err, identity.ErrUnknownTenant) ||
+		errors.Is(err, tenant.ErrInvalidID) ||
 		errors.Is(err, limits.ErrInvalidRequestLimit) ||
 		errors.Is(err, limits.ErrInvalidRequestWindow) ||
 		errors.Is(err, limits.ErrInvalidBudgetLimit) ||
