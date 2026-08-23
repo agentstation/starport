@@ -10,8 +10,8 @@ import (
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -37,7 +37,7 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 		}
 		return nil, fmt.Errorf("plan embedding route: %w", err)
 	}
-	strategy := byok.OperatorFirst
+	strategy := keyring.OperatorFirst
 	if req.APIKeyConfig != nil {
 		strategy = req.APIKeyConfig.CredentialStrategy
 	}

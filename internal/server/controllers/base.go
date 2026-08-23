@@ -12,7 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
-	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/requestctx"
 )
@@ -107,7 +107,7 @@ func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) (*proxy.APIKey
 		return nil, nil
 	}
 
-	strategy, err := byok.StrategyFromMetadata(apiKey.Metadata)
+	strategy, err := keyring.StrategyFromMetadata(apiKey.Metadata)
 	if err != nil {
 		return nil, err
 	}

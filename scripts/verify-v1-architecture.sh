@@ -65,7 +65,7 @@ check V06 'versioned concept repository contracts' sh -c '
 	grep -R -q -E --include="*_test.go" "^func TestProviderCredentialRepositoryContract" internal/credentials &&
 	grep -R -q -E --include="*_test.go" "^func TestRateLimitRepositoryContract" internal/ratelimit &&
 	grep -R -q -E --include="*_test.go" "^func TestPresetRepositoryContract" internal/presets &&
-	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "internal/storage" internal/server/controllers internal/server/middleware.go internal/console internal/providers/byok &&
+	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "internal/storage" internal/server/controllers internal/server/middleware.go internal/console internal/providers/keyring &&
 	go test ./internal/identity ./internal/credentials ./internal/ratelimit ./internal/presets -run "^Test(Identity|ProviderCredential|RateLimit|Preset)RepositoryContract$"
 '
 

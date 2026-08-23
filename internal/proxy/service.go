@@ -8,7 +8,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/inference"
-	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/keyring"
 )
 
 // Proxy defines the core proxy interface for LLM request handling.
@@ -230,7 +230,7 @@ type APIKeyRoutingConfig struct {
 	AllowedModels      []string
 	ModelOverrides     map[string]string
 	RateLimitTier      string
-	CredentialStrategy byok.Strategy
+	CredentialStrategy keyring.Strategy
 }
 
 // CacheCost represents the cost of cache operations

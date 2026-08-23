@@ -11,8 +11,8 @@ import (
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/stretchr/testify/require"
 )
@@ -22,11 +22,11 @@ func TestUserOnlySkipsOperatorResolution(t *testing.T) {
 	messages := make([]string, 0, 2)
 	for _, operatorErr := range []error{nil, errors.New("operator material exists")} {
 		runtime := &credentialPolicyRuntime{operatorErr: operatorErr}
-		policy, err := newCredentialPolicy(byok.UserOnly, "tenant-a", runtime, nil, nil)
+		policy, err := newCredentialPolicy(keyring.UserOnly, "tenant-a", runtime, nil, nil)
 		require.NoError(t, err)
 		_, providerFailure, action := policy.resolve(t.Context(), route)
 		require.NotNil(t, providerFailure)
-		require.Equal(t, byok.UnavailableFailure("acme", nil).Kind(), providerFailure.Kind())
+		require.Equal(t, keyring.UnavailableFailure("acme", nil).Kind(), providerFailure.Kind())
 		require.Equal(t, execution.AttemptActionFallbackRoute, action)
 		require.Zero(t, runtime.operatorCalls.Load())
 		messages = append(messages, providerFailure.SafeMessage())
@@ -38,7 +38,7 @@ func TestCredentialResolutionTerminalFailureStopsWithoutProviderHealth(t *testin
 	runtime := &credentialPolicyRuntime{
 		operatorErr: credentials.NewSourceError(credentials.SourceErrorDenied, "test"),
 	}
-	policy, err := newCredentialPolicy(byok.OperatorFirst, "tenant-a", runtime, nil, nil)
+	policy, err := newCredentialPolicy(keyring.OperatorFirst, "tenant-a", runtime, nil, nil)
 	require.NoError(t, err)
 
 	_, providerFailure, action := policy.resolve(t.Context(), routing.Route{
@@ -51,7 +51,7 @@ func TestCredentialResolutionTerminalFailureStopsWithoutProviderHealth(t *testin
 
 func TestCredentialPolicyPublishesExactSelectedMaterialVersion(t *testing.T) {
 	runtime := &credentialPolicyRuntime{}
-	policy, err := newCredentialPolicy(byok.OperatorFirst, "tenant-a", runtime, nil, nil)
+	policy, err := newCredentialPolicy(keyring.OperatorFirst, "tenant-a", runtime, nil, nil)
 	require.NoError(t, err)
 	route := routing.Route{
 		CatalogGenerationID: "generation-1",
@@ -86,7 +86,7 @@ func TestCredentialPolicySkipsRejectedOperatorMaterialVersion(t *testing.T) {
 	runtime := &credentialPolicyRuntime{}
 	gate := rejectingCredentialGate{providerID: "acme", version: "test"}
 	policy, err := newCredentialPolicy(
-		byok.OperatorFirst, "tenant-a", runtime, nil, gate,
+		keyring.OperatorFirst, "tenant-a", runtime, nil, gate,
 	)
 	require.NoError(t, err)
 	_, providerFailure, action := policy.resolve(t.Context(), routing.Route{

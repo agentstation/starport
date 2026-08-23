@@ -12,7 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starport/internal/providers/byok"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/usage"
@@ -20,12 +20,12 @@ import (
 
 // ProviderKeysController handles provider key management endpoints
 type ProviderKeysController struct {
-	providerKeys byok.ProviderKeys
+	providerKeys keyring.ProviderKeys
 	usageRecords usage.Repository
 }
 
 // NewProviderKeysController creates a new provider keys controller
-func NewProviderKeysController(providerKeys byok.ProviderKeys, usageRecords usage.Repository) *ProviderKeysController {
+func NewProviderKeysController(providerKeys keyring.ProviderKeys, usageRecords usage.Repository) *ProviderKeysController {
 	return &ProviderKeysController{
 		providerKeys: providerKeys,
 		usageRecords: usageRecords,
@@ -37,7 +37,7 @@ func NewProviderKeysController(providerKeys byok.ProviderKeys, usageRecords usag
 // to the gateway API key that happened to carry the request, so deleting a key
 // never strands the credentials its tenant applied.
 func (h *ProviderKeysController) tenantScope(ctx context.Context) string {
-	return byok.UserScope(requestctx.TenantIDOrDefault(ctx))
+	return keyring.UserScope(requestctx.TenantIDOrDefault(ctx))
 }
 
 func (h *ProviderKeysController) requireProviderKeys(w http.ResponseWriter) bool {
@@ -191,7 +191,7 @@ func (h *ProviderKeysController) Get(w http.ResponseWriter, r *http.Request) {
 
 	key, err := h.providerKeys.GetKey(ctx, h.tenantScope(ctx), provider)
 	if err != nil {
-		if errors.Is(err, byok.ErrKeyNotFound) {
+		if errors.Is(err, keyring.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
@@ -247,7 +247,7 @@ func (h *ProviderKeysController) Update(w http.ResponseWriter, r *http.Request) 
 	// Check if key exists
 	_, err := h.providerKeys.GetKey(ctx, h.tenantScope(ctx), provider)
 	if err != nil {
-		if errors.Is(err, byok.ErrKeyNotFound) {
+		if errors.Is(err, keyring.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
@@ -308,7 +308,7 @@ func (h *ProviderKeysController) Delete(w http.ResponseWriter, r *http.Request) 
 	provider := chi.URLParam(r, providerField)
 
 	if err := h.providerKeys.DeleteKey(ctx, h.tenantScope(ctx), provider); err != nil {
-		if errors.Is(err, byok.ErrKeyNotFound) {
+		if errors.Is(err, keyring.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}
@@ -339,7 +339,7 @@ func (h *ProviderKeysController) Validate(w http.ResponseWriter, r *http.Request
 
 	_, err := h.providerKeys.GetKey(ctx, h.tenantScope(ctx), provider)
 	if err != nil {
-		if errors.Is(err, byok.ErrKeyNotFound) {
+		if errors.Is(err, keyring.ErrKeyNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider key not found")
 			return
 		}

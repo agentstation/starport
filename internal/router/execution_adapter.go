@@ -14,8 +14,8 @@ import (
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
-	"github.com/agentstation/starport/internal/providers/byok"
 	"github.com/agentstation/starport/internal/providers/connectors"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -255,7 +255,7 @@ func bindSelectedEndpoint(
 			StreamURL: route.Endpoint.StreamURL,
 		},
 		selected.material,
-		selected.source == byok.CredentialSourceOperator,
+		selected.source == keyring.CredentialSourceOperator,
 	)
 	if err != nil {
 		return routing.Route{}, failure.New(
