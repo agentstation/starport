@@ -49,8 +49,13 @@ const (
 	IntervalMonth = "month"
 )
 
-// AggregateAllKeys addresses the gateway-wide aggregate scope.
-const AggregateAllKeys = ""
+// Aggregate scope kinds. They are storage-key segments, so they never change
+// without a schema version.
+const (
+	scopeKindGateway = "all"
+	scopeKindKey     = "key"
+	scopeKindTenant  = "tenant"
+)
 
 var (
 	// ErrRepositoryRequired reports an absent usage storage adapter.
@@ -59,14 +64,70 @@ var (
 	ErrInvalidQuery = errors.New("invalid usage query")
 	// ErrInvalidInterval reports an unknown aggregate interval.
 	ErrInvalidInterval = errors.New("invalid usage interval")
+	// ErrInvalidScope reports an aggregate scope that names no subject.
+	ErrInvalidScope = errors.New("invalid usage scope")
 	// ErrCorruptRecord reports invalid durable usage data.
 	ErrCorruptRecord = errors.New("usage record is invalid")
 )
 
-// Query selects records. An empty KeyID selects every key (admin scope);
-// callers own that authorization decision.
+// Scope selects which counter set an aggregate query reads. The gateway keeps
+// one set per key, one per account, and one for the whole deployment, because
+// an account cap and a key cap meter different populations: the account total
+// is the sum over every key it holds, so neither can be derived from the other.
+//
+// It is comparable, so a caller may use it as a map key.
+type Scope struct {
+	kind string
+	id   string
+}
+
+// KeyScope addresses the counters for one gateway API key.
+func KeyScope(keyID string) Scope { return Scope{kind: scopeKindKey, id: keyID} }
+
+// TenantScope addresses the counters for one account: every key it holds.
+func TenantScope(tenantID string) Scope { return Scope{kind: scopeKindTenant, id: tenantID} }
+
+// GatewayScope addresses the counters for the whole deployment.
+func GatewayScope() Scope { return Scope{kind: scopeKindGateway} }
+
+// String names the scope for a log field.
+func (s Scope) String() string {
+	if s.kind == scopeKindGateway || s.kind == "" {
+		return scopeKindGateway
+	}
+	return s.kind + ":" + s.id
+}
+
+// valid reports whether the scope names a readable counter set. A key or
+// account scope without a subject would silently read the wrong counters, so
+// it is an error rather than a fallback.
+func (s Scope) valid() bool {
+	switch s.kind {
+	case scopeKindGateway:
+		return true
+	case scopeKindKey, scopeKindTenant:
+		return s.id != ""
+	}
+	return false
+}
+
+// storageSegment is the scope's counter-key segment.
+func (s Scope) storageSegment() string {
+	if s.kind == scopeKindGateway {
+		return scopeKindGateway
+	}
+	return s.kind + ":" + encodeSegment(s.id)
+}
+
+// Query selects records. An empty KeyID selects every key and an empty TenantID
+// every account (admin scope); callers own that authorization decision.
 type Query struct {
-	KeyID    string
+	KeyID string
+	// TenantID selects one account's records across every key it holds.
+	// Records are keyed by gateway API key, so a query that names only an
+	// account scans the record namespace and filters. That cost belongs to
+	// reporting: budget enforcement reads the aggregate counters instead.
+	TenantID string
 	Model    string
 	Provider string
 	Status   string
@@ -97,9 +158,9 @@ type Repository interface {
 	Put(context.Context, Record) error
 	// List returns records newest-first.
 	List(context.Context, Query) (Page, error)
-	// Totals reads the aggregate counters for one key (or
-	// AggregateAllKeys) in the window containing at.
-	Totals(ctx context.Context, keyID, interval string, at time.Time) (Totals, error)
+	// Totals reads the aggregate counters for one scope in the window
+	// containing at.
+	Totals(ctx context.Context, scope Scope, interval string, at time.Time) (Totals, error)
 }
 
 // Options configure a repository.
@@ -158,7 +219,14 @@ func (r *repository) accumulate(ctx context.Context, record Record) error {
 		{counterTokens, record.Tokens.Total},
 		{counterSpend, spend},
 	}
-	for _, scope := range []string{record.KeyID, AggregateAllKeys} {
+	// A record advances one counter set per population that can cap it. The
+	// account set is skipped for a record written before account attribution
+	// existed: counting it under no account is worse than not counting it.
+	scopes := []Scope{KeyScope(record.KeyID), GatewayScope()}
+	if record.TenantID != "" {
+		scopes = append(scopes, TenantScope(record.TenantID))
+	}
+	for _, scope := range scopes {
 		for _, interval := range []string{IntervalDay, IntervalWeek, IntervalMonth} {
 			start, end := window(interval, record.Timestamp)
 			for _, counter := range counters {
@@ -238,9 +306,12 @@ func (r *repository) List(ctx context.Context, query Query) (Page, error) {
 	return page, nil
 }
 
-func (r *repository) Totals(ctx context.Context, keyID, interval string, at time.Time) (Totals, error) {
+func (r *repository) Totals(ctx context.Context, scope Scope, interval string, at time.Time) (Totals, error) {
 	if !validInterval(interval) {
 		return Totals{}, fmt.Errorf("%w: %q", ErrInvalidInterval, interval)
+	}
+	if !scope.valid() {
+		return Totals{}, fmt.Errorf("%w: %q", ErrInvalidScope, scope.String())
 	}
 	start, _ := window(interval, at)
 	totals := Totals{}
@@ -252,7 +323,7 @@ func (r *repository) Totals(ctx context.Context, keyID, interval string, at time
 		{counterTokens, &totals.Tokens},
 		{counterSpend, &totals.SpendNanoUSD},
 	} {
-		data, err := r.store.Get(ctx, aggregateKey(keyID, interval, start, counter.name))
+		data, err := r.store.Get(ctx, aggregateKey(scope, interval, start, counter.name))
 		if errors.Is(err, storage.ErrNotFound) {
 			continue
 		}
@@ -334,6 +405,9 @@ func trimToTimeRange(ordered []parsedKey, since, until time.Time) []parsedKey {
 }
 
 func matches(record Record, query Query) bool {
+	if query.TenantID != "" && record.TenantID != query.TenantID {
+		return false
+	}
 	if query.Model != "" && record.ModelUsed != query.Model && record.ModelRequested != query.Model {
 		return false
 	}
@@ -381,12 +455,9 @@ func recordKeyNanos(key string) (int64, bool) {
 	return nanos, true
 }
 
-func aggregateKey(keyID, interval string, start time.Time, counter string) string {
-	scope := "all"
-	if keyID != AggregateAllKeys {
-		scope = "key:" + encodeSegment(keyID)
-	}
-	return aggregatePrefix + scope + ":" + interval + ":" + strconv.FormatInt(start.Unix(), 10) + ":" + counter
+func aggregateKey(scope Scope, interval string, start time.Time, counter string) string {
+	return aggregatePrefix + scope.storageSegment() + ":" + interval + ":" +
+		strconv.FormatInt(start.Unix(), 10) + ":" + counter
 }
 
 func encodeSegment(value string) string {

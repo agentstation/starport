@@ -452,22 +452,36 @@ GET  /api/v1/models/{model}/endpoints
 GET  /api/v1/providers
 ```
 
-Provider-key and admin surfaces:
+Provider credentials. The operator applies one credential for the whole
+deployment; a tenant brings its own. The two never share a path, because they
+differ in who owns the credential:
 
 ```text
-GET    /api/v1/keys/{key_id}/provider-keys
-POST   /api/v1/keys/{key_id}/provider-keys
-GET    /api/v1/keys/{key_id}/provider-keys/{provider}
-PUT    /api/v1/keys/{key_id}/provider-keys/{provider}
-DELETE /api/v1/keys/{key_id}/provider-keys/{provider}
-POST   /api/v1/keys/{key_id}/provider-keys/{provider}/validate
-GET    /api/v1/keys/{key_id}/usage/provider-keys
-GET    /api/v1/keys/{key_id}/usage/comparison
+GET    /api/v1/providers/{provider}/credentials
+PUT    /api/v1/providers/{provider}/credentials
+DELETE /api/v1/providers/{provider}/credentials
+POST   /api/v1/providers/{provider}/credentials/validate
+GET    /api/v1/tenants/{tenant_id}/byok
+GET    /api/v1/tenants/{tenant_id}/byok/{provider}
+PUT    /api/v1/tenants/{tenant_id}/byok/{provider}
+DELETE /api/v1/tenants/{tenant_id}/byok/{provider}
+POST   /api/v1/tenants/{tenant_id}/byok/{provider}/validate
+```
+
+Account usage and admin surfaces:
+
+```text
+GET    /api/v1/tenants/{tenant_id}/usage/providers
 GET    /api/v1/admin/keys/
 POST   /api/v1/admin/keys/
 GET    /api/v1/admin/keys/{key_id}
 PUT    /api/v1/admin/keys/{key_id}
 DELETE /api/v1/admin/keys/{key_id}
+GET    /api/v1/admin/tenants
+POST   /api/v1/admin/tenants
+GET    /api/v1/admin/tenants/{tenant_id}
+PUT    /api/v1/admin/tenants/{tenant_id}
+DELETE /api/v1/admin/tenants/{tenant_id}
 GET    /api/v1/admin/info
 GET    /api/v1/admin/metrics
 GET    /api/v1/admin/providers

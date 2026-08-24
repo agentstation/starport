@@ -153,10 +153,6 @@ func (s *Server) requireAPIKey(next http.Handler) http.Handler {
 	return s.auth.RequireAPIKey(next)
 }
 
-func (s *Server) requireKeyOwnership(next http.Handler) http.Handler {
-	return s.auth.RequireKeyOwnership(next)
-}
-
 func (s *Server) requireTenantAccess(next http.Handler) http.Handler {
 	return s.auth.RequireTenantAccess(next)
 }

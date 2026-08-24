@@ -182,7 +182,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 			"id":             apiKey.ID,
 			"key":            issued.Secret,
 			"name":           apiKey.Name,
-			"tenant_id":      apiKey.EffectiveTenantID(),
+			fieldTenantID:    apiKey.EffectiveTenantID(),
 			"scopes":         apiKey.Scopes,
 			"allowed_models": apiKey.AllowedModels,
 			"limits":         apiKey.Limits,
@@ -220,7 +220,7 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 	response := map[string]any{
 		"id":             apiKey.ID,
 		"name":           apiKey.Name,
-		"tenant_id":      apiKey.EffectiveTenantID(),
+		fieldTenantID:    apiKey.EffectiveTenantID(),
 		"scopes":         apiKey.Scopes,
 		"allowed_models": apiKey.AllowedModels,
 		"limits":         apiKey.Limits,
@@ -246,7 +246,7 @@ func (h *AdminController) keyUsage(ctx context.Context, apiKey identity.APIKey) 
 	windows := map[string]any{}
 	totalsByInterval := map[string]usage.Totals{}
 	for _, interval := range []string{usage.IntervalDay, usage.IntervalWeek, usage.IntervalMonth} {
-		totals, err := h.usageRecords.Totals(ctx, apiKey.ID, interval, now)
+		totals, err := h.usageRecords.Totals(ctx, usage.KeyScope(apiKey.ID), interval, now)
 		if err != nil {
 			log.Error().Err(err).Str("key_id", apiKey.ID).Str("interval", interval).
 				Msg("Failed to read key usage totals")
@@ -475,8 +475,8 @@ func (h *AdminController) Metrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	now := time.Now().UTC()
 
+	// No key and no account: deployment metrics sample every request.
 	sample, err := h.usageRecords.List(ctx, usage.Query{
-		KeyID: usage.AggregateAllKeys,
 		Since: now.Add(-metricsSampleWindow),
 		Limit: usage.MaxListLimit,
 	})
@@ -587,7 +587,7 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 func (h *AdminController) metricsWindows(ctx context.Context, now time.Time) map[string]any {
 	windows := map[string]any{}
 	for _, interval := range []string{usage.IntervalDay, usage.IntervalWeek, usage.IntervalMonth} {
-		totals, err := h.usageRecords.Totals(ctx, usage.AggregateAllKeys, interval, now)
+		totals, err := h.usageRecords.Totals(ctx, usage.GatewayScope(), interval, now)
 		if err != nil {
 			log.Error().Err(err).Str("interval", interval).Msg("Failed to read usage totals")
 			windows[interval] = map[string]any{fieldError: systemInfoUnavailable}

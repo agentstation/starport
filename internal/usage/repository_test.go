@@ -162,17 +162,17 @@ func TestAggregateCountersAccumulate(t *testing.T) {
 		require.NoError(t, repository.Put(ctx, testRecord("key-b", "req-3", testBase)))
 
 		for _, interval := range []string{IntervalDay, IntervalWeek, IntervalMonth} {
-			totals, err := repository.Totals(ctx, "key-a", interval, testBase)
+			totals, err := repository.Totals(ctx, KeyScope("key-a"), interval, testBase)
 			require.NoError(t, err)
 			require.Equal(t, Totals{Requests: 2, Tokens: 200, SpendNanoUSD: 2_000_000}, totals, interval)
 		}
 
-		all, err := repository.Totals(ctx, AggregateAllKeys, IntervalDay, testBase)
+		all, err := repository.Totals(ctx, GatewayScope(), IntervalDay, testBase)
 		require.NoError(t, err)
 		require.Equal(t, Totals{Requests: 3, Tokens: 350, SpendNanoUSD: 3_250_000}, all)
 
 		// A different window is empty.
-		empty, err := repository.Totals(ctx, "key-a", IntervalDay, testBase.AddDate(0, 0, -2))
+		empty, err := repository.Totals(ctx, KeyScope("key-a"), IntervalDay, testBase.AddDate(0, 0, -2))
 		require.NoError(t, err)
 		require.Equal(t, Totals{}, empty)
 	})
@@ -195,7 +195,7 @@ func TestCostlessRecordCarriesReasonNotZero(t *testing.T) {
 		require.Nil(t, page.Records[0].Cost)
 		require.Equal(t, CostReasonNoPricing, page.Records[0].CostUnavailableReason)
 
-		totals, err := repository.Totals(ctx, "key-a", IntervalDay, testBase)
+		totals, err := repository.Totals(ctx, KeyScope("key-a"), IntervalDay, testBase)
 		require.NoError(t, err)
 		require.Equal(t, Totals{Requests: 1, Tokens: 150}, totals)
 	})
@@ -217,7 +217,7 @@ func TestRetentionTTLApplied(t *testing.T) {
 		require.LessOrEqual(t, ttl, retention)
 
 		start, end := window(IntervalDay, record.Timestamp)
-		counterTTL, err := store.GetTTL(ctx, aggregateKey(record.KeyID, IntervalDay, start, "requests"))
+		counterTTL, err := store.GetTTL(ctx, aggregateKey(KeyScope(record.KeyID), IntervalDay, start, "requests"))
 		require.NoError(t, err)
 		require.Greater(t, counterTTL, time.Duration(0))
 		require.LessOrEqual(t, counterTTL, time.Until(end.Add(retention))+time.Minute)
@@ -241,6 +241,75 @@ func TestPutRejectsInvalidRecords(t *testing.T) {
 	noKey := testRecord("", "req-1", testBase)
 	require.ErrorIs(t, repository.Put(ctx, noKey), ErrInvalidRecord)
 
-	_, err = repository.Totals(ctx, "key-a", "hour", testBase)
+	_, err = repository.Totals(ctx, KeyScope("key-a"), "hour", testBase)
 	require.ErrorIs(t, err, ErrInvalidInterval)
+
+	// A scope that names no subject reads no counter set. Answering it with
+	// the gateway total would report every account's spend as one account's.
+	_, err = repository.Totals(ctx, TenantScope(""), IntervalDay, testBase)
+	require.ErrorIs(t, err, ErrInvalidScope)
+}
+
+// TestAccountCounterSumsEveryKeyItHolds proves the storage guarantee the
+// account meter rests on. An account cap has to count every key the account
+// holds, and a key counter cannot answer for it: two keys under one account
+// each stay well under their own totals while the account total is their sum.
+func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := context.Background()
+		repository, err := Open(store, Options{})
+		require.NoError(t, err)
+
+		for _, spec := range []struct{ keyID, requestID, tenantID string }{
+			{"key-a", "req-1", "acme"},
+			{"key-b", "req-2", "acme"},
+			{"key-c", "req-3", "globex"},
+		} {
+			record := testRecord(spec.keyID, spec.requestID, testBase)
+			record.TenantID = spec.tenantID
+			require.NoError(t, repository.Put(ctx, record))
+		}
+
+		perKey, err := repository.Totals(ctx, KeyScope("key-a"), IntervalDay, testBase)
+		require.NoError(t, err)
+		require.Equal(t, Totals{Requests: 1, Tokens: 150, SpendNanoUSD: 1_250_000}, perKey)
+
+		account, err := repository.Totals(ctx, TenantScope("acme"), IntervalDay, testBase)
+		require.NoError(t, err)
+		require.Equal(t, Totals{Requests: 2, Tokens: 300, SpendNanoUSD: 2_500_000}, account,
+			"the account total must be the sum over every key it holds")
+
+		other, err := repository.Totals(ctx, TenantScope("globex"), IntervalDay, testBase)
+		require.NoError(t, err)
+		require.Equal(t, Totals{Requests: 1, Tokens: 150, SpendNanoUSD: 1_250_000}, other,
+			"one account's traffic must not reach another account's counter")
+	})
+}
+
+// TestListByAccountSpansEveryKey covers the per-provider rollup's read path:
+// records are key-indexed, so an account query has to scan and filter rather
+// than address a namespace, and it must still return every key's records.
+func TestListByAccountSpansEveryKey(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := context.Background()
+		repository, err := Open(store, Options{})
+		require.NoError(t, err)
+
+		for _, spec := range []struct{ keyID, requestID, tenantID string }{
+			{"key-a", "req-1", "acme"},
+			{"key-b", "req-2", "acme"},
+			{"key-c", "req-3", "globex"},
+		} {
+			record := testRecord(spec.keyID, spec.requestID, testBase)
+			record.TenantID = spec.tenantID
+			require.NoError(t, repository.Put(ctx, record))
+		}
+
+		page, err := repository.List(ctx, Query{TenantID: "acme"})
+		require.NoError(t, err)
+		require.Len(t, page.Records, 2)
+
+		keys := []string{page.Records[0].KeyID, page.Records[1].KeyID}
+		require.ElementsMatch(t, []string{"key-a", "key-b"}, keys)
+	})
 }

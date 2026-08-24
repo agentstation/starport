@@ -25,6 +25,7 @@ type Controllers struct {
 	ProviderCredentials  *ProviderCredentialsController
 	Activity             *ActivityController
 	Admin                *AdminController
+	Tenants              *TenantsController
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
 	Presets              *PresetsController
@@ -62,6 +63,7 @@ func NewControllers(cfg Config) *Controllers {
 		ProviderCredentials:  NewProviderCredentialsController(cfg.ProviderKeys),
 		Activity:             NewActivityController(cfg.Usage),
 		Admin:                NewAdminController(cfg.Identities, cfg.Tenants, cfg.Usage),
+		Tenants:              NewTenantsController(cfg.Tenants, cfg.Identities),
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:              NewCatalogController(cfg.Catalog),
 		Presets:              NewPresetsController(cfg.Presets),

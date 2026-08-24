@@ -206,33 +206,6 @@ func (m *AuthMiddleware) readTenant(ctx context.Context, tenantID string) (*tena
 	return &governing, true
 }
 
-// RequireKeyOwnership validates that the user owns the API key they're trying to manage
-func (m *AuthMiddleware) RequireKeyOwnership(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get authenticated key ID from context
-		authKeyID, ok := requestctx.GetAPIKeyID(r.Context())
-		if !ok {
-			writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Not authenticated")
-			return
-		}
-
-		// Get key ID from URL
-		urlKeyID := chi.URLParam(r, "key_id")
-		if urlKeyID == "" {
-			writeProtocolError(w, r, http.StatusBadRequest, "invalid_request_error", "Missing key ID")
-			return
-		}
-
-		// Check ownership
-		if authKeyID != urlKeyID {
-			writeProtocolError(w, r, http.StatusForbidden, "permission_error", "Access denied")
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
 // RequireTenantAccess guards a route addressed by account. A caller reaches
 // its own account, and an operator holding admin reaches any account, because
 // applying a credential on a tenant's behalf is a support operation an

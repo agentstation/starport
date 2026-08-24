@@ -33,8 +33,14 @@ const (
 	// usageCurrency is the only cost currency Starmap pricing reports.
 	usageCurrency = "USD"
 
-	// usageAnonymousKeyID records requests that carried no tenant identity.
+	// usageAnonymousKeyID records requests that carried no key identity.
 	usageAnonymousKeyID = "anonymous"
+
+	// usageAnonymousTenantID records requests that carried no account. A
+	// record has to name an account so the account meter counts it; naming it
+	// "anonymous" keeps unauthenticated traffic out of a real account's total
+	// while leaving it visible in its own.
+	usageAnonymousTenantID = "anonymous"
 )
 
 // UsageRecorder persists one usage record. The concept-owned repository in
@@ -110,7 +116,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 	start := time.Now()
 	response, err := s.Proxy.ProcessChatCompletion(ctx, req)
 
-	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.Protocol, req.Request.Model, start)
+	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.TenantID, req.Protocol, req.Request.Model, start)
 	applyOutcome(&record, err)
 	var snapshot *runtimecatalog.RoutableSnapshot
 	if response != nil {
@@ -135,7 +141,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	start := time.Now()
 	stream, err := s.Proxy.ProcessChatCompletionStream(ctx, req)
 
-	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.Protocol, req.Request.Model, start)
+	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.TenantID, req.Protocol, req.Request.Model, start)
 	record.Streaming = true
 	if err != nil {
 		applyOutcome(&record, err)
@@ -160,7 +166,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 	start := time.Now()
 	response, err := s.Proxy.ProcessEmbeddings(ctx, req)
 
-	record := baseUsageRecord(usage.OperationEmbeddings, req.RequestID, req.KeyID, req.Protocol, req.Request.Model, start)
+	record := baseUsageRecord(usage.OperationEmbeddings, req.RequestID, req.KeyID, req.TenantID, req.Protocol, req.Request.Model, start)
 	applyOutcome(&record, err)
 	var snapshot *runtimecatalog.RoutableSnapshot
 	if response != nil {
@@ -288,19 +294,24 @@ func findStreamEvidence(stream ChatCompletionStreamResponse) router.StreamEviden
 	return nil
 }
 
-// Usage is attributed to the gateway API key, not to the tenant. A tenant's
-// consumption is the sum of its keys, and an operator needs to see which key
-// spent what.
-func baseUsageRecord(operation, requestID, keyID, protocol, modelRequested string, start time.Time) usage.Record {
+// A record names both the gateway API key and the account behind it. An
+// operator needs to see which key spent what, and an account-wide cap needs
+// the sum over every key the account holds; neither identity answers for the
+// other, so both travel with the record.
+func baseUsageRecord(operation, requestID, keyID, tenantID, protocol, modelRequested string, start time.Time) usage.Record {
 	if requestID == "" {
 		requestID = fallbackRequestID()
 	}
 	if keyID == "" {
 		keyID = usageAnonymousKeyID
 	}
+	if tenantID == "" {
+		tenantID = usageAnonymousTenantID
+	}
 	return usage.Record{
 		RequestID:      requestID,
 		KeyID:          keyID,
+		TenantID:       tenantID,
 		Timestamp:      start,
 		Protocol:       protocol,
 		Operation:      operation,
