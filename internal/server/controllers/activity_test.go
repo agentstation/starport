@@ -244,7 +244,10 @@ func TestAdminMetricsReflectRecordedUsage(t *testing.T) {
 	assert.Equal(t, int64(1), response.Providers["groq"].Requests)
 }
 
-func TestProviderKeyUsageAggregates(t *testing.T) {
+// TestActivityByProviderAggregates covers the per-key, per-provider rollup.
+// The grouping names the provider that answered, never the credential source
+// that paid, because a usage record does not carry one.
+func TestActivityByProviderAggregates(t *testing.T) {
 	repository := newActivityTestRepository(t)
 	base := time.Now().Add(-time.Minute)
 	priced := activityTestRecord("key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusOK, base)
@@ -255,13 +258,13 @@ func TestProviderKeyUsageAggregates(t *testing.T) {
 	foreign := activityTestRecord("key-b", "req-4", "openai/gpt-4o", "openai", usage.StatusOK, base.Add(3*time.Second))
 	seedActivityRecords(t, repository, priced, unpriced, other, foreign)
 
-	controller := NewProviderKeysController(nil, repository)
+	controller := NewActivityController(repository)
 
 	router := chi.NewRouter()
-	router.Get("/api/v1/keys/{key_id}/usage/provider-keys", controller.GetUsage)
+	router.Get("/api/v1/keys/{key_id}/usage/providers", controller.ByProvider)
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/keys/key-a/usage/provider-keys", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/keys/key-a/usage/providers", nil))
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	var response struct {
@@ -292,9 +295,4 @@ func TestProviderKeyUsageAggregates(t *testing.T) {
 	groq := response.Data[byProvider["groq"]]
 	assert.Equal(t, int64(1), groq.Requests)
 	assert.Equal(t, int64(1_000_000), groq.SpendNanoUSD)
-
-	// The legacy comparison endpoint is retired loudly, not silently.
-	recorder = httptest.NewRecorder()
-	controller.GetUsageComparison(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/keys/key-a/usage/comparison", nil))
-	require.Equal(t, http.StatusGone, recorder.Code)
 }

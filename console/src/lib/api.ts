@@ -330,6 +330,10 @@ export type KeyLimits = {
 export type GatewayKey = {
   id: string;
   name?: string;
+  // tenant_id names the account the key belongs to. Anything the account
+  // owns — its BYOK credentials, its limits — is addressed by this and never
+  // by the key ID.
+  tenant_id?: string;
   scopes?: string[];
   allowed_models?: string[];
   limits?: KeyLimits | null;
@@ -373,8 +377,13 @@ export type CreatedKey = {
   key?: GatewayKey & { key?: string };
 };
 
-export type ProviderKeySummary = {
+// ProviderCredentialSummary reports that a credential is stored, never what
+// it is. The gateway holds only the encrypted value, so no read surface can
+// return one.
+export type ProviderCredentialSummary = {
   provider: string;
+  has_credentials?: boolean;
+  config?: Record<string, unknown> | null;
   created_at?: string;
   last_used?: string;
   usage_count?: number;
@@ -522,47 +531,61 @@ export function deleteKey(keyId: string): Promise<unknown> {
   });
 }
 
-// --- Per-key BYOK provider credentials ---
+// --- BYOK: the provider credentials one tenant brings for itself ---
+//
+// These are addressed by tenant, never by gateway API key. A tenant's
+// credentials outlive any key it rotates, and a second key in the same tenant
+// reaches the same set. The deployment-wide credential an operator applies is
+// a separate plane on the provider itself and is not BYOK.
 
-export async function listProviderKeys(
-  keyId: string,
-): Promise<ProviderKeySummary[]> {
-  const body = await request<{ provider_keys?: ProviderKeySummary[] }>(
-    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys`,
-  );
-  return body?.provider_keys ?? [];
+// DEFAULT_TENANT_ID is the canonical account every deployment has from first
+// boot. A key that names no account runs under it.
+export const DEFAULT_TENANT_ID = "default";
+
+function byokPath(tenantId: string, provider?: string): string {
+  const base = `/api/v1/tenants/${encodeURIComponent(tenantId)}/byok`;
+  return provider ? `${base}/${encodeURIComponent(provider)}` : base;
 }
 
-export function createProviderKey(
-  keyId: string,
+export async function listBYOKCredentials(
+  tenantId: string,
+): Promise<ProviderCredentialSummary[]> {
+  const body = await request<{ credentials?: ProviderCredentialSummary[] }>(
+    byokPath(tenantId),
+  );
+  return body?.credentials ?? [];
+}
+
+// putBYOKCredential applies or rotates one provider's credential. PUT is an
+// upsert, so the caller states what the credential should be without first
+// asking whether one is already stored.
+export function putBYOKCredential(
+  tenantId: string,
+  provider: string,
   body: {
-    provider: string;
     credentials: Record<string, string>;
     config?: Record<string, string>;
   },
 ): Promise<unknown> {
-  return request<unknown>(
-    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys`,
-    { method: "POST", body },
-  );
+  return request<unknown>(byokPath(tenantId, provider), {
+    method: "PUT",
+    body,
+  });
 }
 
-export function deleteProviderKey(
-  keyId: string,
+export function deleteBYOKCredential(
+  tenantId: string,
   provider: string,
 ): Promise<unknown> {
-  return request<unknown>(
-    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys/${encodeURIComponent(provider)}`,
-    { method: "DELETE" },
-  );
+  return request<unknown>(byokPath(tenantId, provider), { method: "DELETE" });
 }
 
-export function validateProviderKey(
-  keyId: string,
+export function validateBYOKCredential(
+  tenantId: string,
   provider: string,
 ): Promise<{ valid?: boolean }> {
   return request<{ valid?: boolean }>(
-    `/api/v1/keys/${encodeURIComponent(keyId)}/provider-keys/${encodeURIComponent(provider)}/validate`,
+    `${byokPath(tenantId, provider)}/validate`,
     { method: "POST" },
   );
 }

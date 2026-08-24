@@ -233,6 +233,57 @@ func (m *AuthMiddleware) RequireKeyOwnership(next http.Handler) http.Handler {
 	})
 }
 
+// RequireTenantAccess guards a route addressed by account. A caller reaches
+// its own account, and an operator holding admin reaches any account, because
+// applying a credential on a tenant's behalf is a support operation an
+// operator has to be able to perform. Nothing else passes.
+//
+// An operator naming an account that does not exist gets 404 rather than a
+// silent write into a scope no tenant owns.
+func (m *AuthMiddleware) RequireTenantAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKeyModel, ok := requestctx.GetAPIKeyModel(r.Context())
+		if !ok || apiKeyModel == nil {
+			writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Not authenticated")
+			return
+		}
+
+		urlTenantID := chi.URLParam(r, "tenant_id")
+		if urlTenantID == "" {
+			writeProtocolError(w, r, http.StatusBadRequest, "invalid_request_error", "Missing tenant ID")
+			return
+		}
+
+		if urlTenantID == requestctx.TenantIDOrDefault(r.Context()) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if !apiKeyModel.HasScope("admin") {
+			writeProtocolError(w, r, http.StatusForbidden, "permission_error", "Access denied")
+			return
+		}
+
+		// Without a tenant reader the deployment cannot tell a real account
+		// from a typo, and the same rule as elsewhere applies: a key is a
+		// valid identity whether or not accounts are readable.
+		if m.tenants != nil {
+			if _, err := m.tenants.GetByID(r.Context(), urlTenantID); err != nil {
+				if errors.Is(err, tenant.ErrNotFound) {
+					writeProtocolError(w, r, http.StatusNotFound, "not_found_error", "Tenant not found")
+					return
+				}
+				log.Error().Err(err).Str("tenant_id", urlTenantID).
+					Msg("Failed to read the account named by a credential route")
+				writeProtocolError(w, r, http.StatusInternalServerError, "api_error", "Failed to read tenant")
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // RequireAdmin validates admin privileges
 func (m *AuthMiddleware) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

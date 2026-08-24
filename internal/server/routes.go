@@ -79,24 +79,44 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Metadata)
 			r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
 
-			// Key management endpoints
-			r.Route("/keys/{key_id}/provider-keys", func(r chi.Router) {
-				r.Use(s.requireKeyOwnership) // Additional middleware to verify key ownership
+			// Gateway credentials: the operator applies one provider
+			// credential for the whole deployment. This needs the admin
+			// scope and no gateway API key of the operator's own, because
+			// a deployment credential is not a property of any key.
+			r.Route("/providers/{provider}/credentials", func(r chi.Router) {
+				r.Use(s.requireAdmin)
 
-				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/", s.controllers.ProviderKeys.List)
-				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/", s.controllers.ProviderKeys.Create)
-				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/{provider}", s.controllers.ProviderKeys.Get)
-				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Put("/{provider}", s.controllers.ProviderKeys.Update)
-				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Delete("/{provider}", s.controllers.ProviderKeys.Delete)
-				r.With(s.requireAnyScope("provider_keys:write", "keys:write")).Post("/{provider}/validate", s.controllers.ProviderKeys.Validate)
+				r.Get("/", s.controllers.ProviderCredentials.GatewayGet)
+				r.Put("/", s.controllers.ProviderCredentials.GatewayPut)
+				r.Delete("/", s.controllers.ProviderCredentials.GatewayDelete)
+				r.Post("/validate", s.controllers.ProviderCredentials.GatewayValidate)
 			})
 
-			// Usage endpoints
+			// BYOK: a credential one tenant brings for itself. The path says
+			// byok because only a tenant-brought credential lives here.
+			//
+			// The admin scope appears in each scope list because an operator
+			// supporting a tenant reaches the tenant's plane by holding admin,
+			// not by holding the tenant's own provider scopes. Only "*" is a
+			// wildcard in a key's scope set, so admin has to be named here.
+			r.Route("/tenants/{tenant_id}/byok", func(r chi.Router) {
+				r.Use(s.requireTenantAccess)
+
+				r.With(s.requireAnyScope("provider_keys:read", "admin")).Get("/", s.controllers.ProviderCredentials.BYOKList)
+				r.With(s.requireAnyScope("provider_keys:read", "admin")).Get("/{provider}", s.controllers.ProviderCredentials.BYOKGet)
+				r.With(s.requireAnyScope("provider_keys:write", "admin")).Put("/{provider}", s.controllers.ProviderCredentials.BYOKPut)
+				r.With(s.requireAnyScope("provider_keys:write", "admin")).Delete("/{provider}", s.controllers.ProviderCredentials.BYOKDelete)
+				r.With(s.requireAnyScope("provider_keys:write", "admin")).Post("/{provider}/validate", s.controllers.ProviderCredentials.BYOKValidate)
+			})
+
+			// Per-provider usage for one gateway API key. Usage records are
+			// key-indexed and this endpoint reports one key's spend grouped
+			// by the provider that served each request, so it stays under
+			// the key. It is not a credential route.
 			r.Route("/keys/{key_id}/usage", func(r chi.Router) {
 				r.Use(s.requireKeyOwnership)
 
-				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/provider-keys", s.controllers.ProviderKeys.GetUsage)
-				r.With(s.requireAnyScope("provider_keys:read", "keys:read")).Get("/comparison", s.controllers.ProviderKeys.GetUsageComparison)
+				r.With(s.requireAnyScope("activity:read", "keys:read")).Get("/providers", s.controllers.Activity.ByProvider)
 			})
 
 			// Preset management: any authenticated key reads, writes need the
@@ -198,12 +218,21 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   PUT    /api/v1/presets/{name}   - Update preset, revision-checked (presets:write)
 //   DELETE /api/v1/presets/{name}   - Delete preset (presets:write)
 //
-// Provider Key Management:
-//   GET    /api/v1/keys/{key_id}/provider-keys           - List provider keys
-//   POST   /api/v1/keys/{key_id}/provider-keys           - Create provider key
-//   GET    /api/v1/keys/{key_id}/provider-keys/{provider} - Get provider key
-//   PUT    /api/v1/keys/{key_id}/provider-keys/{provider} - Update provider key
-//   DELETE /api/v1/keys/{key_id}/provider-keys/{provider} - Delete provider key
+// Provider Credentials, operator plane (admin):
+//   GET    /api/v1/providers/{provider}/credentials          - Read the deployment credential
+//   PUT    /api/v1/providers/{provider}/credentials          - Apply or rotate it
+//   DELETE /api/v1/providers/{provider}/credentials          - Remove it
+//   POST   /api/v1/providers/{provider}/credentials/validate - Check it against the catalog schema
+//
+// Provider Credentials, tenant plane (BYOK):
+//   GET    /api/v1/tenants/{tenant_id}/byok                       - List the tenant's own credentials
+//   GET    /api/v1/tenants/{tenant_id}/byok/{provider}            - Read one
+//   PUT    /api/v1/tenants/{tenant_id}/byok/{provider}            - Apply or rotate one
+//   DELETE /api/v1/tenants/{tenant_id}/byok/{provider}            - Remove one
+//   POST   /api/v1/tenants/{tenant_id}/byok/{provider}/validate   - Check one against the catalog schema
+//
+// Per-Key Usage:
+//   GET    /api/v1/keys/{key_id}/usage/providers - One key's spend grouped by serving provider
 //
 // Admin API:
 //   GET    /api/v1/admin/keys              - List all API keys

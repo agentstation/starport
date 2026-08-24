@@ -76,8 +76,11 @@ check AON-V16 "the key-nested credential routes are gone" \
   absent 'provider-keys' internal/server/routes.go
 
 # --- AON5: tenant governance ---
+# The condition names the controller symbol and not the path. AON4 mounts the
+# BYOK plane at /tenants/{tenant_id}/byok, so a path match would report this
+# condition green before a single admin tenant route exists.
 check AON-V17 "admin tenant routes are registered" \
-  grep_q '/tenants' internal/server/routes.go
+  grep_q 'Admin.ListTenants' internal/server/routes.go
 check AON-V18 "the budget path resolves a tenant limit" \
   grep_q 'Tenant' internal/server/budget.go
 

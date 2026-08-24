@@ -18,15 +18,16 @@ import {
   accessMessage,
   ApiError,
   createKey,
-  createProviderKey,
+  putBYOKCredential,
   deleteKey,
-  deleteProviderKey,
+  DEFAULT_TENANT_ID,
+  deleteBYOKCredential,
   getKeyDetail,
   listKeys,
   listProviderCatalog,
-  listProviderKeys,
+  listBYOKCredentials,
   updateKey,
-  validateProviderKey,
+  validateBYOKCredential,
   type BudgetUsage,
   type GatewayKey,
   type KeyLimits,
@@ -639,7 +640,7 @@ function DeleteKeyModal({
   );
 }
 
-// --- BYOK provider keys ---
+// --- BYOK: the provider credentials a tenant brings ---
 
 function ByokModal({
   apiKey,
@@ -655,9 +656,12 @@ function ByokModal({
     null,
   );
 
-  const providerKeys = useQuery({
-    queryKey: ["provider-keys", apiKey.id],
-    queryFn: () => listProviderKeys(apiKey.id),
+  // BYOK belongs to the account, not to this key. Every key in the account
+  // reaches the same credentials, and rotating this one leaves them in place.
+  const tenantId = apiKey.tenant_id || DEFAULT_TENANT_ID;
+  const byok = useQuery({
+    queryKey: ["byok", tenantId],
+    queryFn: () => listBYOKCredentials(tenantId),
     retry: false,
   });
   const catalog = useQuery({
@@ -682,7 +686,7 @@ function ByokModal({
 
   const say = (text: string, error = false) => setNotice({ text, error });
   const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: ["provider-keys", apiKey.id] });
+    queryClient.invalidateQueries({ queryKey: ["byok", tenantId] });
 
   const attach = useMutation({
     mutationFn: () => {
@@ -694,30 +698,31 @@ function ByokModal({
         if (field.kind === "secret") credentials[field.id] = value;
         else config[field.id] = value;
       }
-      return createProviderKey(apiKey.id, {
-        provider,
+      return putBYOKCredential(tenantId, provider, {
         credentials,
         ...(Object.keys(config).length > 0 ? { config } : {}),
       });
     },
     onSuccess: async () => {
       setValues({});
-      say(`Attached ${provider} key`);
+      say(`Applied ${provider} credential`);
       await refresh();
     },
     onError: (error) =>
       say(
-        `Attach failed: ${error instanceof Error ? error.message : error}`,
+        `Apply failed: ${error instanceof Error ? error.message : error}`,
         true,
       ),
   });
 
   const validate = useMutation({
-    mutationFn: (target: string) => validateProviderKey(apiKey.id, target),
+    mutationFn: (target: string) => validateBYOKCredential(tenantId, target),
     onSuccess: (result, target) => {
       const valid = result?.valid !== false;
       say(
-        valid ? `${target} key is valid` : `${target} key is invalid`,
+        valid
+          ? `${target} credential is valid`
+          : `${target} credential is invalid`,
         !valid,
       );
     },
@@ -729,9 +734,9 @@ function ByokModal({
   });
 
   const detach = useMutation({
-    mutationFn: (target: string) => deleteProviderKey(apiKey.id, target),
+    mutationFn: (target: string) => deleteBYOKCredential(tenantId, target),
     onSuccess: async (_result, target) => {
-      say(`Removed ${target} key`);
+      say(`Removed ${target} credential`);
       await refresh();
     },
     onError: (error) =>
@@ -754,31 +759,33 @@ function ByokModal({
     >
       <div className="flex flex-col gap-4">
         <p className="text-sm text-text-3">
-          Requests authenticated with this gateway key use these provider
-          credentials instead of the operator&apos;s.
+          Credentials this account brings for itself. They belong to the{" "}
+          <span className="font-mono text-text-2">{tenantId}</span> account, not
+          to this key, so every key in the account uses them and rotating a key
+          leaves them in place.
         </p>
         {notice && (
           <p className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
             {notice.text}
           </p>
         )}
-        {providerKeys.isPending ? (
-          <p className="text-sm text-text-3">Loading provider keys…</p>
-        ) : providerKeys.error ? (
+        {byok.isPending ? (
+          <p className="text-sm text-text-3">Loading credentials…</p>
+        ) : byok.error ? (
           <p className="text-sm text-text-3">
-            {providerKeys.error instanceof ApiError &&
-            providerKeys.error.forbidden
-              ? "Provider keys are self-managed: only requests authenticated with this key can view or change them."
-              : providerKeys.error instanceof ApiError &&
-                  providerKeys.error.unauthorized
-                ? accessMessage(providerKeys.error, "keys:read")
-                : `Failed to load provider keys: ${providerKeys.error.message}`}
+            {byok.error instanceof ApiError && byok.error.forbidden
+              ? `Only a key in the ${tenantId} account, or an operator, can view or change its credentials.`
+              : byok.error instanceof ApiError && byok.error.unauthorized
+                ? accessMessage(byok.error, "provider_keys:read")
+                : `Failed to load credentials: ${byok.error.message}`}
           </p>
-        ) : (providerKeys.data ?? []).length === 0 ? (
-          <p className="text-sm text-text-3">No provider keys attached.</p>
+        ) : (byok.data ?? []).length === 0 ? (
+          <p className="text-sm text-text-3">
+            This account brings no provider credentials.
+          </p>
         ) : (
           <div className="flex flex-col divide-y divide-border-1 rounded-sm border border-border-1">
-            {(providerKeys.data ?? []).map((row) => (
+            {(byok.data ?? []).map((row) => (
               <div
                 key={row.provider}
                 className="flex h-10 items-center gap-3 px-3"
@@ -806,7 +813,7 @@ function ByokModal({
                   type="button"
                   onClick={() => detach.mutate(row.provider)}
                   disabled={detach.isPending}
-                  aria-label={`Remove ${row.provider} key`}
+                  aria-label={`Remove ${row.provider} credential`}
                   className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
                 >
                   <Trash2 className="size-3.5" />
@@ -815,9 +822,7 @@ function ByokModal({
             ))}
           </div>
         )}
-        {!(
-          providerKeys.error instanceof ApiError && providerKeys.error.needsKey
-        ) && (
+        {!(byok.error instanceof ApiError && byok.error.needsKey) && (
         <div className="flex flex-col gap-2 border-t border-border-1 pt-4">
           <span className="text-xs font-medium text-text-2">
             Attach a provider credential

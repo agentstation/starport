@@ -157,6 +157,10 @@ func (s *Server) requireKeyOwnership(next http.Handler) http.Handler {
 	return s.auth.RequireKeyOwnership(next)
 }
 
+func (s *Server) requireTenantAccess(next http.Handler) http.Handler {
+	return s.auth.RequireTenantAccess(next)
+}
+
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return s.auth.RequireAdmin(next)
 }
