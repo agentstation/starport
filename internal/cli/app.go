@@ -47,6 +47,12 @@ const (
 	flagAllowRemoteNoAuth = "allow-remote-no-auth"
 )
 
+// jsonOutputUsage is what every --json flag says it does. The commands own
+// separate flag constants because each names its own flag, but they describe
+// one behaviour and a reader comparing two help screens should see one
+// sentence.
+const jsonOutputUsage = "Write machine-readable JSON"
+
 // GatewayOptions carries the gateway decisions a command line can make. They
 // are decisions, not configuration: everything else the gateway reads comes
 // from the environment and the configuration file, and these exist because an
@@ -280,6 +286,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	}
 	configCommand := newConfigCommand(deps, usageError)
 	doctor := newDoctorCommand(deps, usageError)
+	auth := newAuthCommand(deps, usageError)
 
 	root := &urfavecli.Command{
 		Name:            "starport",
@@ -289,7 +296,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Writer:          deps.Stdout,
 		ErrWriter:       deps.Stderr,
 		OnUsageError:    usageError,
-		Commands:        []*urfavecli.Command{initialize, development, serve, doctor, configCommand, version, man, help},
+		Commands:        []*urfavecli.Command{initialize, development, serve, auth, doctor, configCommand, version, man, help},
 		HideHelpCommand: true,
 		ConfigureShellCompletionCommand: configureCompletionCommand(
 			completion,

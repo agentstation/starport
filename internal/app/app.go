@@ -21,6 +21,7 @@ import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
@@ -49,6 +50,15 @@ var (
 	ErrCredentialsRequired = errors.New("provider credential master key is required")
 	// ErrIdentityRequired reports empty gateway identity storage.
 	ErrIdentityRequired = errors.New("gateway identity is required; run \"starport init\"")
+	// ErrLocalTokenPathRequired reports a configuration with nowhere to keep this
+	// machine's local admin token. The loader derives the path from the platform
+	// paths, so an empty value means the configuration did not come from the
+	// loader, and guessing a path here would put a credential somewhere the CLI
+	// never looks.
+	ErrLocalTokenPathRequired = errors.New("a local admin token path is required")
+	// ErrLocalTokenExposed reports a gateway that would serve a never-rotated
+	// local admin token on an address the network can reach.
+	ErrLocalTokenExposed = errors.New("the local admin token has never been rotated")
 	// ErrProviderCatalogChanged reports a credential result that was resolved
 	// from a catalog generation that is no longer current.
 	ErrProviderCatalogChanged = errors.New("provider catalog changed during reconciliation")
@@ -285,6 +295,9 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err := requireIdentity(context.Background(), b.identities, b.auth.setting.Mode); err != nil {
 		return err
 	}
+	if err := b.resolveLocalToken(context.Background()); err != nil {
+		return err
+	}
 	credentialRepository, err := credentials.Open(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open provider credential repository: %w", err)
@@ -513,6 +526,45 @@ func (b *runtimeBuilder) resolveAuthMode(ctx context.Context) error {
 		setting = authmode.Setting{Mode: authmode.Required, Source: authmode.SourceDefault}
 	}
 	b.auth = authRuntime{setting: setting, store: store}
+	return nil
+}
+
+// resolveLocalToken mints this machine's local admin token if it does not exist
+// yet, and refuses to start when serving it would expose it.
+//
+// Minting at startup rather than on first use is what makes the credential
+// available to an operator who has just installed Starport: the file is there
+// before they need it, and `starport auth token` prints the same value the
+// gateway is holding. Two gateways starting at once take a file lock and agree
+// on one token, so the value an operator reads is the value both processes
+// accept.
+func (b *runtimeBuilder) resolveLocalToken(ctx context.Context) error {
+	if b.config.Security.LocalTokenPath == "" {
+		return ErrLocalTokenPathRequired
+	}
+	store, err := localauth.NewStore(b.config.Security.LocalTokenPath)
+	if err != nil {
+		return fmt.Errorf("open the local admin token: %w", err)
+	}
+	token, minted, err := store.LoadOrMint(ctx, time.Now())
+	if err != nil {
+		return fmt.Errorf("read the local admin token: %w", err)
+	}
+	// The refusal is here rather than in configuration validation because it
+	// depends on what is on disk: the same configuration is safe with a rotated
+	// token and unsafe with a first-boot one, and validation does not read files.
+	if !localauth.AllowsExposure(b.config.Server.Host, token) {
+		return fmt.Errorf(
+			"%w and this gateway binds %s: the first-boot token was printed to this machine's "+
+				"terminal, so it is safe only where it was born. Run %q and start again",
+			ErrLocalTokenExposed, b.config.Server.Host, localauth.RotateCommand,
+		)
+	}
+	log.Info().
+		Str("token_file", store.Path()).
+		Uint64("generation", token.Generation).
+		Bool("minted", minted).
+		Msg("Local admin token ready")
 	return nil
 }
 

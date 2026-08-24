@@ -12,10 +12,14 @@ const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
 
 // Paths contains the platform-owned files and directories that Starport uses.
 type Paths struct {
-	ConfigDir      string `json:"config_dir"`
-	ConfigFile     string `json:"config_file"`
-	DataDir        string `json:"data_dir"`
-	BadgerDir      string `json:"badger_dir"`
+	ConfigDir  string `json:"config_dir"`
+	ConfigFile string `json:"config_file"`
+	DataDir    string `json:"data_dir"`
+	BadgerDir  string `json:"badger_dir"`
+	// LocalTokenFile holds this machine's local admin token. It sits in the
+	// data directory rather than beside the configuration file, because it is
+	// state this machine generated and not a decision an operator wrote down.
+	LocalTokenFile string `json:"local_token_file"`
 }
 
 // PlatformPaths resolves the current user's Starport paths.
@@ -45,5 +49,6 @@ func PathsForConfigDir(configDir string) Paths {
 		ConfigFile:     filepath.Join(configDir, "config.env"),
 		DataDir:        dataDir,
 		BadgerDir:      filepath.Join(dataDir, "badger"),
+		LocalTokenFile: filepath.Join(dataDir, "local-admin-token.json"),
 	}
 }
