@@ -135,35 +135,48 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 
 			// Admin endpoints (requires admin privileges)
 			r.Route("/admin", func(r chi.Router) {
-				r.Use(s.requireAdmin)
+				// The authentication switch. It is the only write that
+				// can open the gateway, so the controller adds two
+				// guards the admin scope does not supply: the request
+				// has to come from this machine, and the resulting
+				// gateway has to be one an unauthenticated caller
+				// cannot reach from the network. It carries its own
+				// guard rather than the group's because an already
+				// open gateway issues no key that could hold admin,
+				// and a switch nobody can reach is a switch stuck on.
+				r.With(s.requireSwitchAccess).Put("/auth/mode", s.controllers.Auth.SetMode)
 
-				// API key management
-				r.Route("/keys", func(r chi.Router) {
-					r.Get("/", s.controllers.Admin.ListKeys)
-					r.Post("/", s.controllers.Admin.CreateKey)
-					r.Get("/{key_id}", s.controllers.Admin.GetKey)
-					r.Put("/{key_id}", s.controllers.Admin.UpdateKey)
-					r.Delete("/{key_id}", s.controllers.Admin.DeleteKey)
+				r.Group(func(r chi.Router) {
+					r.Use(s.requireAdmin)
+
+					// API key management
+					r.Route("/keys", func(r chi.Router) {
+						r.Get("/", s.controllers.Admin.ListKeys)
+						r.Post("/", s.controllers.Admin.CreateKey)
+						r.Get("/{key_id}", s.controllers.Admin.GetKey)
+						r.Put("/{key_id}", s.controllers.Admin.UpdateKey)
+						r.Delete("/{key_id}", s.controllers.Admin.DeleteKey)
+					})
+
+					// Account management. An account owns limits, the
+					// credential strategy, and the keys issued under it, so
+					// it is a separate plane from key management above.
+					r.Route("/tenants", func(r chi.Router) {
+						r.Get("/", s.controllers.Tenants.List)
+						r.Post("/", s.controllers.Tenants.Create)
+						r.Get("/{tenant_id}", s.controllers.Tenants.Get)
+						r.Put("/{tenant_id}", s.controllers.Tenants.Update)
+						r.Delete("/{tenant_id}", s.controllers.Tenants.Delete)
+					})
+
+					// System information
+					r.Get("/info", s.controllers.Admin.SystemInfo)
+					r.Get("/metrics", s.controllers.Admin.Metrics)
+					r.Get("/activity", s.controllers.Activity.AdminList)
+					r.Get("/providers", s.controllers.ProviderOperations.Status)
+					r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
+					r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
 				})
-
-				// Account management. An account owns limits, the
-				// credential strategy, and the keys issued under it, so
-				// it is a separate plane from key management above.
-				r.Route("/tenants", func(r chi.Router) {
-					r.Get("/", s.controllers.Tenants.List)
-					r.Post("/", s.controllers.Tenants.Create)
-					r.Get("/{tenant_id}", s.controllers.Tenants.Get)
-					r.Put("/{tenant_id}", s.controllers.Tenants.Update)
-					r.Delete("/{tenant_id}", s.controllers.Tenants.Delete)
-				})
-
-				// System information
-				r.Get("/info", s.controllers.Admin.SystemInfo)
-				r.Get("/metrics", s.controllers.Admin.Metrics)
-				r.Get("/activity", s.controllers.Activity.AdminList)
-				r.Get("/providers", s.controllers.ProviderOperations.Status)
-				r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
-				r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
 			})
 		})
 	})
@@ -263,3 +276,4 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   GET    /api/v1/admin/activity          - List request activity across keys
 //   GET    /api/v1/admin/providers         - Provider runtime status
 //   POST   /api/v1/admin/providers/refresh - Reconcile provider credentials
+//   PUT    /api/v1/admin/auth/mode        - Require or stop requiring a gateway API key

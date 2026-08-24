@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/storage"
@@ -22,7 +23,7 @@ import (
 func unauthenticatedConfig(scopes ...string) *Config {
 	return &Config{
 		Port: 8080, Host: "127.0.0.1",
-		AuthMode:              AuthModeDisabled,
+		AuthMode:              authmode.Disabled,
 		UnauthenticatedScopes: scopes,
 	}
 }
@@ -52,7 +53,7 @@ func TestDisabledAuthenticationServesInferenceWithoutAKey(t *testing.T) {
 // production and behave differently in a mode operators actually run.
 func TestDisabledAuthenticationMetersTheAnonymousIdentity(t *testing.T) {
 	middleware := NewAuthMiddleware(nil)
-	middleware.AllowUnauthenticated(nil)
+	middleware.Govern(authmode.NewPolicy(authmode.Setting{Mode: authmode.Disabled}), nil)
 
 	resolved, status := authenticate(t, middleware, "")
 
@@ -84,7 +85,7 @@ func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	require.NoError(t, err)
 
 	middleware := NewAuthMiddleware(identities, tenants)
-	middleware.AllowUnauthenticated(nil)
+	middleware.Govern(authmode.NewPolicy(authmode.Setting{Mode: authmode.Disabled}), nil)
 
 	resolved, status := authenticate(t, middleware, issued.Secret)
 
@@ -137,10 +138,10 @@ func TestAuthModeRouteAnswersWithoutAKey(t *testing.T) {
 	tests := []struct {
 		name   string
 		config *Config
-		want   string
+		want   authmode.Mode
 	}{
-		{name: "required", config: &Config{Port: 8080, Host: "127.0.0.1"}, want: AuthModeRequired},
-		{name: "disabled", config: unauthenticatedConfig(), want: AuthModeDisabled},
+		{name: "required", config: &Config{Port: 8080, Host: "127.0.0.1"}, want: authmode.Required},
+		{name: "disabled", config: unauthenticatedConfig(), want: authmode.Disabled},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -151,8 +152,11 @@ func TestAuthModeRouteAnswersWithoutAKey(t *testing.T) {
 			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 			var body controllers.AuthModeResponse
 			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
-			assert.Equal(t, test.want, body.Mode)
+			assert.Equal(t, string(test.want), body.Mode)
+			// httptest gives the request a non-loopback RemoteAddr, which is
+			// the case AON7 refuses. The read still answers.
 			assert.False(t, body.CanChange)
+			assert.NotEmpty(t, body.Reason)
 		})
 	}
 }

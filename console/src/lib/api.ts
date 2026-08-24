@@ -502,6 +502,33 @@ export function refreshCatalog(): Promise<CatalogRefreshReport> {
   });
 }
 
+// AuthMode is what the gateway does with a missing key: "required" refuses the
+// request, "disabled" serves it as the anonymous identity. It is a gateway
+// setting, not a console preference — every client of this deployment sees it.
+export type AuthMode = {
+  mode: "required" | "disabled";
+  // source names what set the running mode: default, config, flag, or console.
+  // A mode set by config or a flag is fixed for the process, and the console
+  // says which one to edit rather than offering a control that would fail.
+  source: "default" | "config" | "flag" | "console";
+  can_change: boolean;
+  reason?: string;
+};
+
+// readAuthMode is deliberately unauthenticated. A console with no key needs to
+// know whether it has to go get one, and asking that question with a key it
+// does not have would answer 401.
+export function readAuthMode(): Promise<AuthMode> {
+  return request<AuthMode>("/api/v1/auth/mode");
+}
+
+export function setAuthMode(mode: AuthMode["mode"]): Promise<AuthMode> {
+  return request<AuthMode>("/api/v1/admin/auth/mode", {
+    method: "PUT",
+    body: { mode },
+  });
+}
+
 export async function listKeys(): Promise<GatewayKey[]> {
   const body = await request<{ keys?: GatewayKey[] }>("/api/v1/admin/keys");
   return body?.keys ?? [];

@@ -3,6 +3,8 @@ package server
 
 import (
 	"time"
+
+	"github.com/agentstation/starport/internal/authmode"
 )
 
 // Config holds server configuration
@@ -36,43 +38,34 @@ type Config struct {
 	RateLimitRequestsPerWindow int64         `env:"RATE_LIMIT_REQUESTS_PER_WINDOW,default=0"`
 	RateLimitWindow            time.Duration `env:"RATE_LIMIT_WINDOW,default=1m"`
 
-	// AuthMode selects whether a request must carry a gateway API key. The
-	// empty value means AuthModeRequired. The operator's word for this
-	// decision lives in the configuration package; the HTTP seam carries the
-	// resolved string because it does not read operator configuration.
-	AuthMode string
+	// AuthMode selects whether a request must carry a gateway API key. It is
+	// the mode the gateway starts under; the console can change the running
+	// mode afterwards, and the middleware reads the live policy rather than
+	// this field.
+	AuthMode authmode.Mode
 
-	// UnauthenticatedScopes lists the scopes a request holds while AuthMode is
-	// AuthModeDisabled. An empty list means identity.DefaultAnonymousScopes.
+	// AuthModeSource names where AuthMode came from, so the startup banner and
+	// the console can say which thing an operator has to change.
+	AuthModeSource authmode.Source
+
+	// AuthModeStore persists a mode the console sets, so the change outlives
+	// the process that accepted it. A nil store means the mode cannot be
+	// changed at runtime, and the switch reports that rather than accepting a
+	// change it would forget.
+	AuthModeStore authmode.Repository
+
+	// UnauthenticatedScopes lists the scopes a request holds while the running
+	// mode is disabled. An empty list means identity.DefaultAnonymousScopes.
 	UnauthenticatedScopes []string
+
+	// AllowRemoteNoAuth is the operator's acknowledgment that an
+	// unauthenticated gateway may bind an address the network can reach. It is
+	// the same acknowledgment startup validation reads, and the runtime switch
+	// reads it for the same reason.
+	AllowRemoteNoAuth bool
 
 	// CORS configuration
 	CORS CORSConfig
-}
-
-// The authentication modes the HTTP seam understands. They mirror the operator
-// vocabulary in the configuration package by value, and a test pins the two
-// sets equal so the mirror cannot drift.
-const (
-	AuthModeRequired = "required"
-	AuthModeDisabled = "disabled"
-)
-
-// authenticationDisabled reports whether the gateway serves requests that
-// carry no gateway API key. Any value other than AuthModeDisabled requires a
-// key, so a mode this seam does not recognize fails closed.
-func (c *Config) authenticationDisabled() bool {
-	return c != nil && c.AuthMode == AuthModeDisabled
-}
-
-// authMode is the mode the gateway reports and logs. It resolves the unset and
-// unrecognized cases the same way authenticationDisabled does, so what an
-// operator reads always matches what the middleware does.
-func (s *Server) authMode() string {
-	if s.cfg.authenticationDisabled() {
-		return AuthModeDisabled
-	}
-	return AuthModeRequired
 }
 
 // CORSConfig holds CORS configuration

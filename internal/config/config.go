@@ -10,6 +10,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/credentials"
 )
 
@@ -29,6 +30,28 @@ type Config struct {
 	providerEnvironment  environmentLookup
 	credentialResolver   *credentials.Resolver
 	credentialResolverMu *sync.Mutex
+
+	// authModeFromFlag records that a command-line flag, and not the
+	// environment, stated the authentication mode. It is unexported so the
+	// environment cannot set it, which is the whole point: it separates the
+	// two sources that write the same field.
+	authModeFromFlag bool
+}
+
+// AuthModeSource names where the stated authentication mode came from, or
+// SourceUnset when nobody stated one. Startup passes it to authmode.Resolve,
+// which decides whether a mode an operator stored from the console applies.
+func (c *Config) AuthModeSource() authmode.Source {
+	switch {
+	case c == nil:
+		return authmode.SourceUnset
+	case c.authModeFromFlag:
+		return authmode.SourceFlag
+	case c.Security.AuthMode != "":
+		return authmode.SourceConfig
+	default:
+		return authmode.SourceUnset
+	}
 }
 
 // CredentialSourcesConfig defines direct inference secret-source lifecycle.
@@ -172,30 +195,22 @@ type RateLimitingConfig struct {
 	WindowSize               time.Duration `env:"WINDOW_SIZE,default=1m"`
 }
 
-// AuthMode selects whether a request must carry a gateway API key. It is the
-// operator's word for the decision, and it is the same word the gateway
-// reports at GET /api/v1/auth/mode.
-type AuthMode string
+// AuthMode selects whether a request must carry a gateway API key.
+//
+// The type is an alias and not a second spelling. A configuration value, a
+// command-line flag, and the console switch all state the same decision, and
+// internal/authmode owns it so the three cannot drift apart.
+type AuthMode = authmode.Mode
 
 const (
 	// AuthModeRequired refuses every request that carries no valid gateway
 	// API key. It is the default, and the zero value resolves to it.
-	AuthModeRequired AuthMode = "required"
+	AuthModeRequired = authmode.Required
 	// AuthModeDisabled serves every request without checking for a key. The
 	// key check does not run at all, so a request carrying a key is treated
 	// exactly like one that carries none.
-	AuthModeDisabled AuthMode = "disabled"
+	AuthModeDisabled = authmode.Disabled
 )
-
-// Effective returns the mode the gateway runs under. An unset value is
-// required: the state an operator reaches by not deciding has to be the safe
-// one.
-func (m AuthMode) Effective() AuthMode {
-	if m == "" {
-		return AuthModeRequired
-	}
-	return m
-}
 
 // SecurityConfig defines security settings
 type SecurityConfig struct {
@@ -209,8 +224,11 @@ type SecurityConfig struct {
 	APIKeyHeader       string `env:"API_KEY_HEADER,default=Authorization"`
 	EnableRateLimiting bool   `env:"ENABLE_RATE_LIMITING,default=true"`
 
-	// AuthMode selects whether the gateway requires a gateway API key.
-	AuthMode AuthMode `env:"AUTH_MODE,default=required"`
+	// AuthMode selects whether the gateway requires a gateway API key. It
+	// carries no default, so an unset value stays empty and startup can tell
+	// "the operator said required" from "the operator said nothing". Only the
+	// second yields to a mode an operator stored from the console.
+	AuthMode AuthMode `env:"AUTH_MODE"`
 	// AllowRemoteNoAuth is the second, explicit acknowledgment that an
 	// unauthenticated gateway may bind an address the network can reach.
 	// Without it, startup refuses that combination; see the tripwire in

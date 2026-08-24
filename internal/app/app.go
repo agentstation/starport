@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/availability"
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -147,6 +148,16 @@ type runtimeBuilder struct {
 	presets      presets.Repository
 	gateway      proxy.Proxy
 	console      console.PageServer
+	auth         authRuntime
+}
+
+// authRuntime is the resolved authentication mode and the store that keeps a
+// console change. The two travel together because a mode nobody can persist is
+// a mode the console must not offer to change: accepting a switch that a
+// restart silently undoes is worse than refusing it.
+type authRuntime struct {
+	setting authmode.Setting
+	store   authmode.Repository
 }
 
 func (b *runtimeBuilder) compose() error {
@@ -268,7 +279,10 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open identity repository: %w", err)
 	}
-	if err := requireIdentity(context.Background(), b.identities, b.config.Security.AuthMode); err != nil {
+	if err := b.resolveAuthMode(context.Background()); err != nil {
+		return err
+	}
+	if err := requireIdentity(context.Background(), b.identities, b.auth.setting.Mode); err != nil {
 		return err
 	}
 	credentialRepository, err := credentials.Open(b.application.store)
@@ -415,7 +429,7 @@ func (b *runtimeBuilder) openConsole() error {
 }
 
 func (b *runtimeBuilder) openHTTPServer() error {
-	httpServer, err := b.factories.newServer(serverConfig(b.config), server.Dependencies{
+	httpServer, err := b.factories.newServer(serverConfig(b.config, b.auth), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, Tenants: b.tenants,
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
@@ -448,8 +462,8 @@ func (b *runtimeBuilder) openHTTPServer() error {
 // With authentication disabled the same empty store is the expected state:
 // there is nothing to authenticate, and an operator trying Starport for the
 // first time has not issued a key yet. That is the whole point of the mode.
-func requireIdentity(ctx context.Context, identities identity.Repository, mode config.AuthMode) error {
-	if mode.Effective() == config.AuthModeDisabled {
+func requireIdentity(ctx context.Context, identities identity.Repository, mode authmode.Mode) error {
+	if mode.Effective() == authmode.Disabled {
 		return nil
 	}
 	records, err := identities.List(ctx, 1, 0)
@@ -459,6 +473,46 @@ func requireIdentity(ctx context.Context, identities identity.Repository, mode c
 	if len(records) == 0 {
 		return ErrIdentityRequired
 	}
+	return nil
+}
+
+// resolveAuthMode decides the authentication mode this process runs in, from
+// what the operator stated and what a previous console change stored.
+//
+// It runs before requireIdentity because the two answer one question in
+// sequence: what mode is this, and given that mode is this gateway reachable.
+// Reading the raw configuration value here instead would judge a deployment by
+// a mode it is not running in.
+func (b *runtimeBuilder) resolveAuthMode(ctx context.Context) error {
+	store, err := authmode.Open(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open authentication mode repository: %w", err)
+	}
+	var persisted authmode.Setting
+	record, err := store.Get(ctx)
+	switch {
+	case err == nil:
+		persisted = record.Setting
+	case errors.Is(err, authmode.ErrNotFound):
+		// Nothing stored is the ordinary first-boot state.
+	default:
+		return fmt.Errorf("read the stored authentication mode: %w", err)
+	}
+
+	setting := authmode.Resolve(b.config.Security.AuthMode, b.config.AuthModeSource(), persisted).Effective()
+	// A stored "disabled" is validated against this process's bind address and
+	// not the one it was stored on. An operator who disabled authentication on
+	// a laptop and redeployed the same data directory behind a public address
+	// would otherwise carry an open gateway across with it. A stated mode is
+	// not repaired here, because startup validation already refused it.
+	if setting.Mode == authmode.Disabled && setting.Source == authmode.SourceConsole &&
+		!authmode.AllowsDisabled(b.config.Server.Host, b.config.Security.AllowRemoteNoAuth) {
+		log.Warn().
+			Str("bind_host", b.config.Server.Host).
+			Msg("Ignoring the stored disabled authentication mode: the bind address is not loopback")
+		setting = authmode.Setting{Mode: authmode.Required, Source: authmode.SourceDefault}
+	}
+	b.auth = authRuntime{setting: setting, store: store}
 	return nil
 }
 
@@ -747,7 +801,7 @@ func openStorage(cfg config.StorageConfig) (storage.KVStore, error) {
 	return storage.Open(cfg.RuntimeStorage())
 }
 
-func serverConfig(cfg *config.Config) *server.Config {
+func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {
 	allowedOrigins := splitCommaSeparated(cfg.Security.AllowedOrigins)
 	if !cfg.Security.EnableCORS {
 		allowedOrigins = nil
@@ -767,7 +821,10 @@ func serverConfig(cfg *config.Config) *server.Config {
 		IdleTimeout: cfg.Server.IdleTimeout, RequestTimeout: requestTimeout,
 		ShutdownTimeout: cfg.Server.ShutdownTimeout, MaxRequestSize: maxRequestSize,
 		MaxHeaderBytes:             cfg.Server.MaxHeaderBytes,
-		AuthMode:                   string(cfg.Security.AuthMode.Effective()),
+		AuthMode:                   auth.setting.Effective().Mode,
+		AuthModeSource:             auth.setting.Effective().Source,
+		AuthModeStore:              auth.store,
+		AllowRemoteNoAuth:          cfg.Security.AllowRemoteNoAuth,
 		UnauthenticatedScopes:      cfg.Security.UnauthenticatedScopes,
 		EnableRateLimiting:         cfg.Security.EnableRateLimiting,
 		RateLimitRequestsPerWindow: int64(cfg.RateLimiting.DefaultRequestsPerMinute),

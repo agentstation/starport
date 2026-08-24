@@ -7,6 +7,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/agentstation/starport/internal/authmode"
 )
 
 var hostnameRegex = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
@@ -231,9 +233,7 @@ func (c *RateLimitingConfig) Validate() error {
 
 // Validate validates SecurityConfig
 func (c *SecurityConfig) Validate() error {
-	switch c.AuthMode.Effective() {
-	case AuthModeRequired, AuthModeDisabled:
-	default:
+	if !c.AuthMode.Valid() {
 		return fmt.Errorf("invalid auth mode: %s (want %q or %q)",
 			c.AuthMode, AuthModeRequired, AuthModeDisabled)
 	}
@@ -287,10 +287,7 @@ func (c *Config) validateAuthenticationExposure() error {
 	if c.Security.AuthMode.Effective() != AuthModeDisabled {
 		return nil
 	}
-	if c.Security.AllowRemoteNoAuth {
-		return nil
-	}
-	if isLoopbackHost(c.Server.Host) {
+	if authmode.AllowsDisabled(c.Server.Host, c.Security.AllowRemoteNoAuth) {
 		return nil
 	}
 	return fmt.Errorf(
@@ -298,27 +295,6 @@ func (c *Config) validateAuthenticationExposure() error {
 			"pass --allow-remote-no-auth (or set STARPORT_SECURITY_ALLOW_REMOTE_NO_AUTH=true) "+
 			"to serve an unauthenticated gateway to the network",
 		c.Server.Host)
-}
-
-// isLoopbackHost reports whether a bind address reaches only this machine.
-//
-// An empty host is not loopback: an empty address binds every interface, which
-// is the exposure the tripwire exists to catch. A name other than localhost is
-// not loopback either, because deciding otherwise would need a DNS lookup whose
-// answer can change after startup, and a resolver is the wrong thing to trust
-// with this question.
-func isLoopbackHost(host string) bool {
-	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
-	if host == "" {
-		return false
-	}
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
-	}
-	return false
 }
 
 // Validate validates LoggingConfig

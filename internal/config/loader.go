@@ -91,8 +91,14 @@ type Override func(*Config)
 // DisableAuthentication turns off the gateway API key check. It carries the
 // same weight as STARPORT_SECURITY_AUTH_MODE=disabled, including the exposure
 // tripwire that refuses a non-loopback bind address.
+// It also records that a flag, not the environment, decided: the two write the
+// same field, and a mode an operator stored from the console yields to either,
+// so startup has to be able to name which one it is honoring.
 func DisableAuthentication() Override {
-	return func(cfg *Config) { cfg.Security.AuthMode = AuthModeDisabled }
+	return func(cfg *Config) {
+		cfg.Security.AuthMode = AuthModeDisabled
+		cfg.authModeFromFlag = true
+	}
 }
 
 // AllowRemoteWithoutAuthentication acknowledges that an unauthenticated

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/presets"
@@ -45,9 +46,19 @@ type Config struct {
 	Presets            presets.Repository
 	ServiceName        string
 	Version            string
-	AuthMode           string
-	AuthModeCanChange  bool
-	Console            console.PageServer
+	// AuthPolicy is the running authentication mode. It is a pointer to the
+	// live policy and not a copy of the mode, because the console can change
+	// the mode while the router stands.
+	AuthPolicy *authmode.Policy
+	// AuthModeStore persists a console change so it outlives the process. A nil
+	// store leaves the mode readable and refuses to change it.
+	AuthModeStore authmode.Repository
+	// AuthModeBindHost and AllowRemoteNoAuth are the two values the exposure
+	// tripwire reads. They travel together because either alone answers the
+	// wrong question.
+	AuthModeBindHost  string
+	AllowRemoteNoAuth bool
+	Console           console.PageServer
 }
 
 // NewControllers creates a new controller collection
@@ -70,7 +81,7 @@ func NewControllers(cfg Config) *Controllers {
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:              NewCatalogController(cfg.Catalog),
 		Presets:              NewPresetsController(cfg.Presets),
-		Auth:                 NewAuthController(cfg.AuthMode, cfg.AuthModeCanChange),
+		Auth:                 NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
 		Console:              cfg.Console,
 	}
 
