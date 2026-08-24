@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/presets"
@@ -57,6 +58,11 @@ type Server struct {
 
 	// Middleware
 	auth *AuthMiddleware
+
+	// authPolicy is the running authentication mode. It is the server's copy
+	// of one shared value: the middleware reads it per request and the console
+	// switch writes it, so a change reaches traffic without a restart.
+	authPolicy *authmode.Policy
 }
 
 // Dependencies contains ready application ports for the HTTP adapter.
@@ -114,10 +120,12 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		usage:              dependencies.Usage,
 		providerOperations: dependencies.ProviderOperations,
 	}
+	s.authPolicy = authmode.NewPolicy(authmode.Setting{
+		Mode:   config.AuthMode,
+		Source: config.AuthModeSource,
+	})
 	s.auth = NewAuthMiddleware(s.identities, s.tenants)
-	if config.authenticationDisabled() {
-		s.auth.AllowUnauthenticated(config.UnauthenticatedScopes)
-	}
+	s.auth.Govern(s.authPolicy, config.UnauthenticatedScopes)
 
 	handlerConfig := controllers.Config{
 		Service:            s.service,
@@ -130,7 +138,10 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Presets:            dependencies.Presets,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
-		AuthMode:           s.authMode(),
+		AuthPolicy:         s.authPolicy,
+		AuthModeStore:      config.AuthModeStore,
+		AuthModeBindHost:   config.Host,
+		AllowRemoteNoAuth:  config.AllowRemoteNoAuth,
 		Console:            dependencies.Console,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
@@ -165,6 +176,29 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return s.auth.RequireAdmin(next)
 }
 
+// requireSwitchAccess guards the authentication switch.
+//
+// It is the admin scope whenever there is a key to hold. When authentication
+// is disabled there is none: the gateway resolves every request to the
+// anonymous identity, which holds no admin scope on purpose, so requiring one
+// would make the switch a one-way door — an operator could open the gateway
+// and never close it again without editing configuration and restarting.
+//
+// What remains in that state is the controller's own guard, which is stricter
+// than the admin scope in the direction that matters: the request has to come
+// from this machine. So an open gateway can be locked from the machine that
+// runs it, and cannot be opened further from anywhere else.
+func (s *Server) requireSwitchAccess(next http.Handler) http.Handler {
+	guarded := s.requireAdmin(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.authPolicy.Disabled() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		guarded.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) requireAnyScope(scopes ...string) func(http.Handler) http.Handler {
 	return s.auth.RequireAnyScope(scopes...)
 }
@@ -182,7 +216,8 @@ func (s *Server) Start() error {
 	log.Info().
 		Int("port", s.cfg.Port).
 		Str("host", s.cfg.Host).
-		Str("auth_mode", s.authMode()).
+		Str("auth_mode", string(s.authPolicy.Current().Mode)).
+		Str("auth_mode_source", string(s.authPolicy.Current().Source)).
 		Msg("starting HTTP server")
 
 	if s.controllers.Console != nil {

@@ -181,13 +181,13 @@ func TestDefaultCatalogFactorySelectsVerifiedRemoteRuntime(t *testing.T) {
 
 func TestServerConfigCredentialsFollowOriginScope(t *testing.T) {
 	cfg := validProductionConfig(t)
-	require.False(t, serverConfig(cfg).CORS.AllowCredentials)
+	require.False(t, serverConfig(cfg, authRuntime{}).CORS.AllowCredentials)
 
 	cfg.Security.AllowedOrigins = "https://console.example.com"
-	require.True(t, serverConfig(cfg).CORS.AllowCredentials)
+	require.True(t, serverConfig(cfg, authRuntime{}).CORS.AllowCredentials)
 
 	cfg.Security.EnableCORS = false
-	require.False(t, serverConfig(cfg).CORS.AllowCredentials)
+	require.False(t, serverConfig(cfg, authRuntime{}).CORS.AllowCredentials)
 }
 
 func TestNewBuildsReadyProductionDependencies(t *testing.T) {

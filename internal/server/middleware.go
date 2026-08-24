@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/tenant"
@@ -117,10 +118,16 @@ type TenantReader interface {
 type AuthMiddleware struct {
 	identities identity.Repository
 	tenants    TenantReader
-	// anonymous is the identity every request runs as while the operator has
-	// authentication disabled. Nil means a key is required, which is what a
-	// zero-valued middleware has to mean.
-	anonymous *identity.APIKey
+	// policy is the live authentication mode. It is read once per request, not
+	// once per router build, because the console can change the mode without a
+	// restart and "disabled" must not come to mean "disabled at boot". A nil
+	// policy reports required, which is what a zero-valued middleware has to
+	// mean.
+	policy *authmode.Policy
+	// anonymous is the identity a request runs as while the mode is disabled.
+	// The scope set is the operator's and does not change at runtime, so it is
+	// resolved once.
+	anonymous identity.APIKey
 }
 
 // NewAuthMiddleware creates a new authentication middleware. The tenant reader
@@ -135,22 +142,22 @@ func NewAuthMiddleware(identities identity.Repository, tenants ...TenantReader) 
 	return middleware
 }
 
-// AllowUnauthenticated stops requiring a gateway API key and runs every
-// request as the anonymous identity holding the given scopes. An empty scope
-// list means identity.DefaultAnonymousScopes.
+// Govern binds the live authentication policy and the identity a request runs
+// as while that policy is disabled. An empty scope list means
+// identity.DefaultAnonymousScopes.
 //
-// The operator turns this on; nothing in a request can. Calling it is the
-// whole of the decision, which is why it is a separate method and not a field
-// a caller could set by accident.
-func (m *AuthMiddleware) AllowUnauthenticated(scopes []string) {
-	anonymous := identity.Anonymous(scopes)
-	m.anonymous = &anonymous
+// The operator decides both; nothing in a request can. Passing them together
+// is the point: a policy without an anonymous identity would disable the key
+// check and leave every downstream seam without a subject to meter.
+func (m *AuthMiddleware) Govern(policy *authmode.Policy, scopes []string) {
+	m.policy = policy
+	m.anonymous = identity.Anonymous(scopes)
 }
 
 // RequireAPIKey validates API key authentication
 func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if m.anonymous != nil {
+		if m.policy.Disabled() {
 			next.ServeHTTP(w, r.WithContext(m.anonymousContext(r.Context())))
 			return
 		}
@@ -220,9 +227,10 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 // making it optional, so a stale or mistyped key cannot quietly move a caller
 // onto another account's limits and credentials.
 func (m *AuthMiddleware) anonymousContext(ctx context.Context) context.Context {
-	ctx = requestctx.WithAPIKeyID(ctx, m.anonymous.ID)
-	ctx = requestctx.WithAPIKeyModel(ctx, m.anonymous)
-	tenantID := m.anonymous.EffectiveTenantID()
+	anonymous := m.anonymous
+	ctx = requestctx.WithAPIKeyID(ctx, anonymous.ID)
+	ctx = requestctx.WithAPIKeyModel(ctx, &anonymous)
+	tenantID := anonymous.EffectiveTenantID()
 	ctx = requestctx.WithTenantID(ctx, tenantID)
 	if record, ok := m.readTenant(ctx, tenantID); ok {
 		ctx = requestctx.WithTenantRecord(ctx, record)

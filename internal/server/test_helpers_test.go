@@ -7,6 +7,7 @@ import (
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/presets"
@@ -132,6 +133,17 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	}
 	// Match production composition: preset references resolve before routing.
 	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter))
+
+	// Production always composes an authentication-mode store, and whether one
+	// exists changes what the switch answers, so the test server composes one
+	// too. A test that wants the storage-less answer clears it explicitly.
+	if config.AuthModeStore == nil {
+		modes, storeErr := authmode.Open(testConfig.store)
+		if storeErr != nil {
+			tb.Fatal(storeErr)
+		}
+		config.AuthModeStore = modes
+	}
 
 	result, err := New(config, Dependencies{
 		Service: service, Identities: identities, Tenants: tenants,

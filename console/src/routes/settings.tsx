@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Download, Eye, EyeOff, Monitor, Moon, Sun, Trash2 } from "lucide-react";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
+import { AuthModeControl } from "@/components/settings/AuthModeControl";
 import { GhostButton, INPUT_CLASS, PrimaryButton } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -150,6 +151,20 @@ function ConnectionSection() {
           "No key set. Locked pages stay locked until one is saved."
         )}
       </p>
+    </Section>
+  );
+}
+
+// Authentication is a gateway setting and not a browser one, which is why it
+// sits directly under Connection: the key above is what this browser presents,
+// and the switch below is whether the gateway asks anyone for one.
+function AuthenticationSection() {
+  return (
+    <Section
+      title="Authentication"
+      description="Whether this gateway requires an API key. It applies to every client of this deployment, and it can only be changed from the machine running the gateway."
+    >
+      <AuthModeControl />
     </Section>
   );
 }
@@ -339,6 +354,7 @@ function SettingsPage() {
       </div>
       <div className="max-w-2xl">
         <ConnectionSection />
+        <AuthenticationSection />
         <AppearanceSection />
         <ChatDataSection />
         <AboutSection />
