@@ -14,7 +14,7 @@ func newConfigCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 	jsonFlag := func() urfavecli.Flag {
 		return &urfavecli.BoolFlag{
 			Name:  configFormatJSON,
-			Usage: "Write machine-readable JSON",
+			Usage: jsonOutputUsage,
 		}
 	}
 	show := &urfavecli.Command{
@@ -101,7 +101,7 @@ func newDoctorCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 			},
 			&urfavecli.BoolFlag{
 				Name:  doctorFormatJSON,
-				Usage: "Write machine-readable JSON",
+				Usage: jsonOutputUsage,
 			},
 		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {

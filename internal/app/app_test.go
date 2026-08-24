@@ -299,6 +299,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 		Security: config.SecurityConfig{
 			MasterKey:      strings.Repeat("k", 32),
 			AllowedOrigins: "*", EnableCORS: true,
+			LocalTokenPath: filepath.Join(t.TempDir(), "local-admin-token.json"),
 		},
 		Logging: config.LoggingConfig{
 			Level: "info", Format: "json", Output: "stdout",

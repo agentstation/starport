@@ -239,6 +239,16 @@ type SecurityConfig struct {
 	// tenant scope and never admin. An operator who wants the admin plane
 	// open without a key has to name "admin" here.
 	UnauthenticatedScopes []string `env:"UNAUTHENTICATED_SCOPES"`
+	// LocalTokenPath is the file holding this machine's local admin token.
+	//
+	// It carries no environment tag on purpose. The gateway reads it from here
+	// and the CLI reads it from Paths, and both derive from one function, so
+	// the two cannot disagree about where the credential lives. A second knob
+	// for this one file would make disagreeing possible, and a CLI that rotates
+	// a token the running gateway never reads is worse than no command at all.
+	// An operator who needs the file elsewhere moves everything with
+	// STARPORT_CONFIG_DIR.
+	LocalTokenPath string `json:"local_token_path"`
 }
 
 // LoggingConfig defines logging settings

@@ -176,6 +176,7 @@ func defaultConfig(paths Paths) *Config {
 		Storage: StorageConfig{
 			Badger: BadgerConfig{Path: paths.BadgerDir},
 		},
+		Security: SecurityConfig{LocalTokenPath: paths.LocalTokenFile},
 	}
 }
 
