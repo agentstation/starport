@@ -88,8 +88,20 @@ func TestAuthStatusNeverPrintsTheSecret(t *testing.T) {
 		output.Reset()
 		require.NoError(t, runAuth(t, deps, args...))
 		assert.NotContains(t, output.String(), secret, "`auth %s` leaked the token", strings.Join(args, " "))
-		assert.Contains(t, output.String(), paths.LocalTokenFile)
 	}
+
+	// The file is named in both forms, but only the text form names it
+	// literally: JSON escapes a Windows path's separators, so a substring
+	// assertion there would be asserting the encoding rather than the path.
+	output.Reset()
+	require.NoError(t, runAuth(t, deps, "status"))
+	assert.Contains(t, output.String(), paths.LocalTokenFile)
+
+	output.Reset()
+	require.NoError(t, runAuth(t, deps, "status", "--json"))
+	var decoded authStatusView
+	require.NoError(t, json.Unmarshal([]byte(output.String()), &decoded))
+	assert.Equal(t, paths.LocalTokenFile, decoded.TokenFile)
 }
 
 // TestAuthStatusReportsTheExposureAnswer is why an operator runs the command
