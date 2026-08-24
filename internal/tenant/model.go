@@ -43,8 +43,10 @@ const (
 type Tenant struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	// Limits is the ceiling for every key this tenant holds. A key limit may
-	// lower it and never raise it. A nil value sets no tenant-level ceiling.
+	// Limits is the account-wide cap. It meters the sum over every key this
+	// tenant holds, so it is not a per-key ceiling: a key limit bounds one
+	// key and never raises or lowers what the account may spend in total. A
+	// request satisfies both meters. A nil value sets no account-wide cap.
 	Limits *limits.Limits `json:"limits,omitempty"`
 	// CredentialStrategy is the default provider credential policy for every
 	// request this tenant makes. An empty value reads as StrategyOperatorFirst.

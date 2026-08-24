@@ -142,7 +142,7 @@ const providerUsageWindow = 30 * 24 * time.Hour
 const providerUsageMaxPages = 30
 
 // providerUsageSummary aggregates one provider's recorded usage for one
-// gateway key.
+// account.
 type providerUsageSummary struct {
 	Provider            string       `json:"provider"`
 	Requests            int64        `json:"requests"`
@@ -152,18 +152,22 @@ type providerUsageSummary struct {
 	RequestsWithoutCost int64        `json:"requests_without_cost"`
 }
 
-// ByProvider handles GET /api/v1/keys/{key_id}/usage/providers. It groups
-// one key's recorded requests by the provider that served them. The
-// grouping is by provider and not by credential: a record names which
+// ByProvider handles GET /api/v1/tenants/{tenant_id}/usage/providers. It
+// groups one account's recorded requests by the provider that served them.
+// The grouping is by provider and not by credential: a record names which
 // provider answered, never which of the three credential sources paid.
+//
+// The rollup totals an account and not a key because spend is an account
+// question: an account holds many keys, and a per-key answer cannot be summed
+// by a caller that does not know which keys the account holds.
 func (h *ActivityController) ByProvider(w http.ResponseWriter, r *http.Request) {
 	if h.usageRecords == nil {
-		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, "Usage accounting is not configured")
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, usageNotConfiguredMessage)
 		return
 	}
 
 	ctx := r.Context()
-	apiKeyID := chi.URLParam(r, "key_id")
+	tenantID := chi.URLParam(r, fieldTenantID)
 	until := time.Now().UTC()
 	since := until.Add(-providerUsageWindow)
 
@@ -172,13 +176,13 @@ func (h *ActivityController) ByProvider(w http.ResponseWriter, r *http.Request) 
 	cursor := ""
 	for page := 0; page < providerUsageMaxPages; page++ {
 		result, err := h.usageRecords.List(ctx, usage.Query{
-			KeyID:  apiKeyID,
-			Since:  since,
-			Limit:  usage.MaxListLimit,
-			Cursor: cursor,
+			TenantID: tenantID,
+			Since:    since,
+			Limit:    usage.MaxListLimit,
+			Cursor:   cursor,
 		})
 		if err != nil {
-			log.Error().Err(err).Str("api_key_id", apiKeyID).Msg("Failed to aggregate provider usage")
+			log.Error().Err(err).Str(fieldTenantID, tenantID).Msg("Failed to aggregate provider usage")
 			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to aggregate provider usage")
 			return
 		}

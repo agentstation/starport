@@ -29,7 +29,7 @@ func (s stubUsageTotals) List(context.Context, usage.Query) (usage.Page, error) 
 	return usage.Page{}, nil
 }
 
-func (s stubUsageTotals) Totals(context.Context, string, string, time.Time) (usage.Totals, error) {
+func (s stubUsageTotals) Totals(context.Context, usage.Scope, string, time.Time) (usage.Totals, error) {
 	return s.totals, s.err
 }
 

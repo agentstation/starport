@@ -92,7 +92,7 @@ func (h *ProviderCredentialsController) BYOKValidate(w http.ResponseWriter, r *h
 // byokScope names the account the route addresses. RequireTenantAccess has
 // already decided the caller may reach it.
 func byokScope(r *http.Request) string {
-	return keyring.TenantScope(chi.URLParam(r, "tenant_id"))
+	return keyring.TenantScope(chi.URLParam(r, fieldTenantID))
 }
 
 // --- the shared implementations ---
