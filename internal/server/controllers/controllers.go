@@ -29,6 +29,7 @@ type Controllers struct {
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
 	Presets              *PresetsController
+	Auth                 *AuthController
 	Console              console.PageServer
 }
 
@@ -44,6 +45,8 @@ type Config struct {
 	Presets            presets.Repository
 	ServiceName        string
 	Version            string
+	AuthMode           string
+	AuthModeCanChange  bool
 	Console            console.PageServer
 }
 
@@ -67,6 +70,7 @@ func NewControllers(cfg Config) *Controllers {
 		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:              NewCatalogController(cfg.Catalog),
 		Presets:              NewPresetsController(cfg.Presets),
+		Auth:                 NewAuthController(cfg.AuthMode, cfg.AuthModeCanChange),
 		Console:              cfg.Console,
 	}
 

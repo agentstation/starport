@@ -115,6 +115,9 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		providerOperations: dependencies.ProviderOperations,
 	}
 	s.auth = NewAuthMiddleware(s.identities, s.tenants)
+	if config.authenticationDisabled() {
+		s.auth.AllowUnauthenticated(config.UnauthenticatedScopes)
+	}
 
 	handlerConfig := controllers.Config{
 		Service:            s.service,
@@ -127,6 +130,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Presets:            dependencies.Presets,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
+		AuthMode:           s.authMode(),
 		Console:            dependencies.Console,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
@@ -178,6 +182,7 @@ func (s *Server) Start() error {
 	log.Info().
 		Int("port", s.cfg.Port).
 		Str("host", s.cfg.Host).
+		Str("auth_mode", s.authMode()).
 		Msg("starting HTTP server")
 
 	if s.controllers.Console != nil {

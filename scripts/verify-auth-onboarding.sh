@@ -95,8 +95,12 @@ check AON-V21 "startup validation holds the non-loopback tripwire" \
   grep_q 'loopback' internal/config/validation.go
 
 # --- AON7: the console authentication switch ---
+# The condition names the write handler and not the path. AON6 already mounts
+# the public GET /auth/mode, so a path match would report this condition green
+# two tasks before the console can change anything. What AON7 owns is the
+# admin write, so the symbol is Auth.SetMode.
 check AON-V22 "the admin authentication-mode route is registered" \
-  grep_q 'auth/mode' internal/server/routes.go
+  grep_q 'Auth.SetMode' internal/server/routes.go
 
 # --- AON8: the local admin token ---
 check AON-V23 "internal/localauth owns the local admin token" \

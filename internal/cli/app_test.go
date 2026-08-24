@@ -99,7 +99,7 @@ func TestVersionFlagUsesInjectedOutput(t *testing.T) {
 func TestServeUsesInjectedRunner(t *testing.T) {
 	deps, _, _ := testDependencies()
 	called := false
-	deps.RunServer = func(context.Context) error {
+	deps.RunServer = func(context.Context, GatewayOptions) error {
 		called = true
 		return nil
 	}
@@ -119,7 +119,7 @@ func TestDevPrintsGatewayKeyOnce(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	runs := 0
 	closes := 0
-	deps.StartDevelopment = func(context.Context) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:8080", APIKey: "development-key",
 			Run: func(context.Context) error {
@@ -153,7 +153,7 @@ func TestDevClosesSessionWhenCredentialOutputFails(t *testing.T) {
 	deps.Stdout = failingWriter{err: outputErr}
 	closeCalls := 0
 	runCalls := 0
-	deps.StartDevelopment = func(context.Context) (DevelopmentSession, error) {
+	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 		return DevelopmentSession{
 			URL: "http://127.0.0.1:8080", APIKey: "development-key",
 			Run: func(context.Context) error {
@@ -519,7 +519,7 @@ func TestDoctorPassesProbeOptionAndWritesJSON(t *testing.T) {
 func TestRunReturnsServerFailure(t *testing.T) {
 	serverErr := errors.New("server failed")
 	deps, _, _ := testDependencies()
-	deps.RunServer = func(context.Context) error { return serverErr }
+	deps.RunServer = func(context.Context, GatewayOptions) error { return serverErr }
 	err := Run(context.Background(), []string{"starport", "serve"}, deps)
 	if !errors.Is(err, serverErr) {
 		t.Fatalf("run error = %v, want %v", err, serverErr)
@@ -531,7 +531,7 @@ func TestRunReturnsServerFailure(t *testing.T) {
 
 func TestServerExitCoderRemainsRuntimeFailure(t *testing.T) {
 	deps, _, _ := testDependencies()
-	deps.RunServer = func(context.Context) error {
+	deps.RunServer = func(context.Context, GatewayOptions) error {
 		return urfavecli.Exit("server dependency failed", 42)
 	}
 	err := Run(context.Background(), []string{"starport", "serve"}, deps)
@@ -581,8 +581,8 @@ func testDependencies() (Dependencies, *bytes.Buffer, *bytes.Buffer) {
 			GitCommit: "abc123", GitBranch: "test", GoVersion: "go1.26.5",
 			OS: "testos", Arch: "testarch",
 		},
-		RunServer: func(context.Context) error { return nil },
-		StartDevelopment: func(context.Context) (DevelopmentSession, error) {
+		RunServer: func(context.Context, GatewayOptions) error { return nil },
+		StartDevelopment: func(context.Context, GatewayOptions) (DevelopmentSession, error) {
 			return DevelopmentSession{
 				URL: "http://127.0.0.1:8080", APIKey: "development-key",
 				Run:   func(context.Context) error { return nil },

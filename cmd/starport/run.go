@@ -57,8 +57,11 @@ func runContext(
 		Stdin: stdin, Stdout: stdout, Stderr: stderr,
 		Build: buildInformation(), RunServer: server,
 		StartDevelopment: development, Initialize: initializer,
-		LoadConfig: config.LoadWithDefaults, ResolvePaths: config.PlatformPaths,
-		Diagnose: diagnosis.Run,
+		LoadConfig: func(loadCtx context.Context) (*config.Config, error) {
+			return config.LoadWithDefaults(loadCtx)
+		},
+		ResolvePaths: config.PlatformPaths,
+		Diagnose:     diagnosis.Run,
 	})
 	if err == nil {
 		return 0
@@ -92,8 +95,11 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 	return initialized, err
 }
 
-func startDevelopment(ctx context.Context) (starportcli.DevelopmentSession, error) {
-	cfg, err := config.LoadDevelopment(ctx)
+func startDevelopment(
+	ctx context.Context,
+	options starportcli.GatewayOptions,
+) (starportcli.DevelopmentSession, error) {
+	cfg, err := config.LoadDevelopment(ctx, configOverrides(options)...)
 	if err != nil {
 		return starportcli.DevelopmentSession{}, fmt.Errorf("load development configuration: %w", err)
 	}
@@ -103,8 +109,23 @@ func startDevelopment(ctx context.Context) (starportcli.DevelopmentSession, erro
 	}
 	return starportcli.DevelopmentSession{
 		URL: runtime.URL(), APIKey: runtime.APIKey(),
-		Run: runtime.Run, Close: runtime.Close,
+		AuthDisabled: cfg.Security.AuthMode.Effective() == config.AuthModeDisabled,
+		Run:          runtime.Run, Close: runtime.Close,
 	}, nil
+}
+
+// configOverrides translates command line decisions into configuration
+// overrides. The translation happens once, here, so both commands reach the
+// loader through the same path and meet the same validation.
+func configOverrides(options starportcli.GatewayOptions) []config.Override {
+	var overrides []config.Override
+	if options.DisableAuth {
+		overrides = append(overrides, config.DisableAuthentication())
+	}
+	if options.AllowRemoteNoAuth {
+		overrides = append(overrides, config.AllowRemoteWithoutAuthentication())
+	}
+	return overrides
 }
 
 func initializeConfiguredStorage(
@@ -172,8 +193,8 @@ func rollbackConfiguredIdentity(
 	return nil
 }
 
-func runServer(ctx context.Context) error {
-	cfg, err := config.LoadWithDefaults(ctx)
+func runServer(ctx context.Context, options starportcli.GatewayOptions) error {
+	cfg, err := config.LoadWithDefaults(ctx, configOverrides(options)...)
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}

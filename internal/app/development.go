@@ -49,9 +49,16 @@ func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, erro
 	if err != nil {
 		return nil, fmt.Errorf("open development storage: %w", err)
 	}
-	issued, err := setup.InitializeIdentity(ctx, store, developmentIdentityName)
-	if err != nil {
-		return nil, errors.Join(err, store.Close())
+	// A key is issued only when one is needed. With authentication disabled
+	// the session has nothing to print and nothing to paste, and minting a key
+	// anyway would teach the wrong thing about the mode it is running in.
+	var apiKey string
+	if cfg.Security.AuthMode.Effective() != config.AuthModeDisabled {
+		issued, err := setup.InitializeIdentity(ctx, store, developmentIdentityName)
+		if err != nil {
+			return nil, errors.Join(err, store.Close())
+		}
+		apiKey = issued.Secret
 	}
 
 	claimed := false
@@ -71,7 +78,7 @@ func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, erro
 	return &Development{
 		application: application,
 		url:         "http://" + net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
-		apiKey:      issued.Secret,
+		apiKey:      apiKey,
 	}, nil
 }
 
