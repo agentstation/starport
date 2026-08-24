@@ -117,6 +117,10 @@ type TenantReader interface {
 type AuthMiddleware struct {
 	identities identity.Repository
 	tenants    TenantReader
+	// anonymous is the identity every request runs as while the operator has
+	// authentication disabled. Nil means a key is required, which is what a
+	// zero-valued middleware has to mean.
+	anonymous *identity.APIKey
 }
 
 // NewAuthMiddleware creates a new authentication middleware. The tenant reader
@@ -131,9 +135,26 @@ func NewAuthMiddleware(identities identity.Repository, tenants ...TenantReader) 
 	return middleware
 }
 
+// AllowUnauthenticated stops requiring a gateway API key and runs every
+// request as the anonymous identity holding the given scopes. An empty scope
+// list means identity.DefaultAnonymousScopes.
+//
+// The operator turns this on; nothing in a request can. Calling it is the
+// whole of the decision, which is why it is a separate method and not a field
+// a caller could set by accident.
+func (m *AuthMiddleware) AllowUnauthenticated(scopes []string) {
+	anonymous := identity.Anonymous(scopes)
+	m.anonymous = &anonymous
+}
+
 // RequireAPIKey validates API key authentication
 func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if m.anonymous != nil {
+			next.ServeHTTP(w, r.WithContext(m.anonymousContext(r.Context())))
+			return
+		}
+
 		// Extract API key from headers. Query-string credentials are intentionally
 		// unsupported because URLs are commonly logged by proxies and clients.
 		apiKey := extractAPIKey(r)
@@ -184,6 +205,29 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// anonymousContext furnishes the request with the same identity every
+// authenticated request carries, minus the key. Rate limits, budgets, usage
+// records, and scope checks all read the context and none of them learn that
+// authentication was off, so an unauthenticated deployment is metered and
+// governed exactly like an authenticated one.
+//
+// It deliberately does not call requestctx.WithAPIKey: there is no secret, and
+// putting a made-up one in the context would let a downstream reader believe a
+// key was presented. A request that did present a key is treated no
+// differently — disabling authentication turns the check off rather than
+// making it optional, so a stale or mistyped key cannot quietly move a caller
+// onto another account's limits and credentials.
+func (m *AuthMiddleware) anonymousContext(ctx context.Context) context.Context {
+	ctx = requestctx.WithAPIKeyID(ctx, m.anonymous.ID)
+	ctx = requestctx.WithAPIKeyModel(ctx, m.anonymous)
+	tenantID := m.anonymous.EffectiveTenantID()
+	ctx = requestctx.WithTenantID(ctx, tenantID)
+	if record, ok := m.readTenant(ctx, tenantID); ok {
+		ctx = requestctx.WithTenantRecord(ctx, record)
+	}
+	return ctx
 }
 
 // readTenant loads the account behind an authenticated key. A missing or

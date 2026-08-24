@@ -81,18 +81,40 @@ func (l *Loader) WithPaths(paths Paths) *Loader {
 	return l
 }
 
-// Load resolves configuration sources, applies defaults, and validates the result.
-func (l *Loader) Load(ctx context.Context) (*Config, error) {
-	return l.load(ctx, nil)
+// Override is one decision a caller made outside the environment, applied
+// after configuration sources are read and before validation runs. A command
+// line flag is the reason it exists: a flag has to meet exactly the same
+// validation an environment value meets, or the checks that read it prove
+// nothing about the flag.
+type Override func(*Config)
+
+// DisableAuthentication turns off the gateway API key check. It carries the
+// same weight as STARPORT_SECURITY_AUTH_MODE=disabled, including the exposure
+// tripwire that refuses a non-loopback bind address.
+func DisableAuthentication() Override {
+	return func(cfg *Config) { cfg.Security.AuthMode = AuthModeDisabled }
+}
+
+// AllowRemoteWithoutAuthentication acknowledges that an unauthenticated
+// gateway may bind an address the network can reach. Alone it changes nothing;
+// it only lifts the tripwire that DisableAuthentication would otherwise trip.
+func AllowRemoteWithoutAuthentication() Override {
+	return func(cfg *Config) { cfg.Security.AllowRemoteNoAuth = true }
+}
+
+// Load resolves configuration sources, applies defaults and any overrides, and
+// validates the result.
+func (l *Loader) Load(ctx context.Context, overrides ...Override) (*Config, error) {
+	return l.load(ctx, nil, overrides)
 }
 
 // LoadDevelopment reads process settings, applies the guarded development
-// runtime contract, and validates the result.
-func (l *Loader) LoadDevelopment(ctx context.Context) (*Config, error) {
-	return l.load(ctx, func(cfg *Config) { cfg.ConfigureDevelopmentRuntime() })
+// runtime contract and any overrides, and validates the result.
+func (l *Loader) LoadDevelopment(ctx context.Context, overrides ...Override) (*Config, error) {
+	return l.load(ctx, func(cfg *Config) { cfg.ConfigureDevelopmentRuntime() }, overrides)
 }
 
-func (l *Loader) load(ctx context.Context, prepare func(*Config)) (*Config, error) {
+func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Override) (*Config, error) {
 	paths, err := l.resolvePaths()
 	if err != nil {
 		return nil, newLoadFailure("configuration paths could not be resolved", err)
@@ -115,6 +137,13 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config)) (*Config, erro
 	}
 	if prepare != nil {
 		prepare(cfg)
+	}
+	// Overrides land last so an explicit flag beats both the environment and
+	// the development contract, and first so validation still judges them.
+	for _, override := range overrides {
+		if override != nil {
+			override(cfg)
+		}
 	}
 
 	if err := resolveConfiguredPaths(cfg, paths); err != nil {
@@ -202,12 +231,12 @@ func resolvePath(base, value string) (string, error) {
 }
 
 // LoadWithDefaults loads configuration from the standard sources.
-func LoadWithDefaults(ctx context.Context) (*Config, error) {
-	return NewLoader().Load(ctx)
+func LoadWithDefaults(ctx context.Context, overrides ...Override) (*Config, error) {
+	return NewLoader().Load(ctx, overrides...)
 }
 
 // LoadDevelopment loads process environment settings without a configuration
 // file and applies the guarded development runtime contract.
-func LoadDevelopment(ctx context.Context) (*Config, error) {
-	return NewLoader().WithEnvFiles().LoadDevelopment(ctx)
+func LoadDevelopment(ctx context.Context, overrides ...Override) (*Config, error) {
+	return NewLoader().WithEnvFiles().LoadDevelopment(ctx, overrides...)
 }

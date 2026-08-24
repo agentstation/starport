@@ -18,27 +18,48 @@ var (
 )
 
 // DevelopmentStarter creates one isolated local gateway session.
-type DevelopmentStarter func(context.Context) (DevelopmentSession, error)
+type DevelopmentStarter func(context.Context, GatewayOptions) (DevelopmentSession, error)
 
 // DevelopmentSession contains one ephemeral gateway and its one-time key.
 type DevelopmentSession struct {
 	URL    string
 	APIKey string
-	Run    func(context.Context) error
-	Close  func(context.Context) error
+	// AuthDisabled reports that the session serves requests without a gateway
+	// API key. It is what makes an empty APIKey legitimate rather than a bug.
+	AuthDisabled bool
+	Run          func(context.Context) error
+	Close        func(context.Context) error
 }
 
+// validate rejects a session no one could use.
+//
+// The key rule is an equivalence, not two independent checks: a session that
+// requires a key must carry one to print, and a session that requires none
+// must not have minted one. Either mismatch means the runtime and the mode
+// disagree, and printing a key the gateway ignores — or printing none when one
+// is needed — leaves the operator with no way to make the first request.
 func (session DevelopmentSession) validate() error {
-	if session.URL == "" || session.APIKey == "" || session.Run == nil || session.Close == nil {
+	if session.URL == "" || session.Run == nil || session.Close == nil {
+		return ErrDevelopmentSessionInvalid
+	}
+	if session.AuthDisabled != (session.APIKey == "") {
 		return ErrDevelopmentSessionInvalid
 	}
 	return nil
 }
 
 func writeDevelopmentResult(writer io.Writer, session DevelopmentSession) error {
+	if session.AuthDisabled {
+		_, err := fmt.Fprintf(
+			writer,
+			"Starport development gateway\nURL: %s\nAuthentication: disabled (no gateway API key required)\n",
+			session.URL,
+		)
+		return err
+	}
 	_, err := fmt.Fprintf(
 		writer,
-		"Starport development gateway\nURL: %s\nGateway API key (shown once): %s\n",
+		"Starport development gateway\nURL: %s\nAuthentication: required\nGateway API key (shown once): %s\n",
 		session.URL,
 		session.APIKey,
 	)

@@ -268,7 +268,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open identity repository: %w", err)
 	}
-	if err := requireIdentity(context.Background(), b.identities); err != nil {
+	if err := requireIdentity(context.Background(), b.identities, b.config.Security.AuthMode); err != nil {
 		return err
 	}
 	credentialRepository, err := credentials.Open(b.application.store)
@@ -440,7 +440,18 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	return nil
 }
 
-func requireIdentity(ctx context.Context, identities identity.Repository) error {
+// requireIdentity refuses to start a gateway no one can reach. A deployment
+// that requires a gateway API key and holds none serves 401 to every request,
+// which is a misconfiguration worth failing on rather than a state worth
+// running in.
+//
+// With authentication disabled the same empty store is the expected state:
+// there is nothing to authenticate, and an operator trying Starport for the
+// first time has not issued a key yet. That is the whole point of the mode.
+func requireIdentity(ctx context.Context, identities identity.Repository, mode config.AuthMode) error {
+	if mode.Effective() == config.AuthModeDisabled {
+		return nil
+	}
 	records, err := identities.List(ctx, 1, 0)
 	if err != nil {
 		return fmt.Errorf("list gateway identities: %w", err)
@@ -756,6 +767,8 @@ func serverConfig(cfg *config.Config) *server.Config {
 		IdleTimeout: cfg.Server.IdleTimeout, RequestTimeout: requestTimeout,
 		ShutdownTimeout: cfg.Server.ShutdownTimeout, MaxRequestSize: maxRequestSize,
 		MaxHeaderBytes:             cfg.Server.MaxHeaderBytes,
+		AuthMode:                   string(cfg.Security.AuthMode.Effective()),
+		UnauthenticatedScopes:      cfg.Security.UnauthenticatedScopes,
 		EnableRateLimiting:         cfg.Security.EnableRateLimiting,
 		RateLimitRequestsPerWindow: int64(cfg.RateLimiting.DefaultRequestsPerMinute),
 		RateLimitWindow:            cfg.RateLimiting.WindowSize,

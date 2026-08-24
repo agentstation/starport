@@ -231,6 +231,12 @@ func (c *RateLimitingConfig) Validate() error {
 
 // Validate validates SecurityConfig
 func (c *SecurityConfig) Validate() error {
+	switch c.AuthMode.Effective() {
+	case AuthModeRequired, AuthModeDisabled:
+	default:
+		return fmt.Errorf("invalid auth mode: %s (want %q or %q)",
+			c.AuthMode, AuthModeRequired, AuthModeDisabled)
+	}
 	if c.MasterKey != "" && len(c.MasterKey) < 32 {
 		return fmt.Errorf("master key must be at least 32 bytes")
 	}
@@ -266,6 +272,53 @@ func (c *SecurityConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// validateAuthenticationExposure refuses the one combination that turns a
+// convenience into an open gateway: no key required, on an address the network
+// can reach. Disabling authentication is a local-development affordance, and a
+// bind address is the only evidence the gateway has about who can reach it.
+//
+// The refusal is not absolute. An operator running Starport behind their own
+// authenticating front door has a real reason to bind 0.0.0.0 without a key
+// check, so a second, explicit acknowledgment lifts it. Two deliberate acts,
+// not one flag with a surprising reach.
+func (c *Config) validateAuthenticationExposure() error {
+	if c.Security.AuthMode.Effective() != AuthModeDisabled {
+		return nil
+	}
+	if c.Security.AllowRemoteNoAuth {
+		return nil
+	}
+	if isLoopbackHost(c.Server.Host) {
+		return nil
+	}
+	return fmt.Errorf(
+		"authentication is disabled and the server binds %q, which is not a loopback address; "+
+			"pass --allow-remote-no-auth (or set STARPORT_SECURITY_ALLOW_REMOTE_NO_AUTH=true) "+
+			"to serve an unauthenticated gateway to the network",
+		c.Server.Host)
+}
+
+// isLoopbackHost reports whether a bind address reaches only this machine.
+//
+// An empty host is not loopback: an empty address binds every interface, which
+// is the exposure the tripwire exists to catch. A name other than localhost is
+// not loopback either, because deciding otherwise would need a DNS lookup whose
+// answer can change after startup, and a resolver is the wrong thing to trust
+// with this question.
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	if host == "" {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 // Validate validates LoggingConfig

@@ -42,8 +42,25 @@ var (
 	ErrDiagnoserRequired = errors.New("diagnoser is required")
 )
 
+const (
+	flagNoAuth            = "no-auth"
+	flagAllowRemoteNoAuth = "allow-remote-no-auth"
+)
+
+// GatewayOptions carries the gateway decisions a command line can make. They
+// are decisions, not configuration: everything else the gateway reads comes
+// from the environment and the configuration file, and these exist because an
+// operator has to be able to make them for one run without editing either.
+type GatewayOptions struct {
+	// DisableAuth serves requests without a gateway API key.
+	DisableAuth bool
+	// AllowRemoteNoAuth acknowledges an unauthenticated gateway on an address
+	// the network can reach. It lifts a startup refusal and nothing else.
+	AllowRemoteNoAuth bool
+}
+
 // ServerRunner starts the gateway and blocks until it stops.
-type ServerRunner func(context.Context) error
+type ServerRunner func(context.Context, GatewayOptions) error
 
 // Initializer creates local state and returns the new gateway credential once.
 type Initializer func(context.Context, InitOptions) (InitResult, error)
@@ -98,11 +115,25 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Aliases:      []string{"server"},
 		Usage:        "Run the LLM gateway server",
 		OnUsageError: usageError,
+		Flags: []urfavecli.Flag{
+			&urfavecli.BoolFlag{
+				Name:  flagNoAuth,
+				Usage: "Serve requests without a gateway API key",
+			},
+			&urfavecli.BoolFlag{
+				Name:  flagAllowRemoteNoAuth,
+				Usage: "Allow --no-auth on an address the network can reach",
+			},
+		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if err := rejectArguments(cmd); err != nil {
 				return err
 			}
-			if err := deps.RunServer(ctx); err != nil {
+			options := GatewayOptions{
+				DisableAuth:       cmd.Bool(flagNoAuth),
+				AllowRemoteNoAuth: cmd.Bool(flagAllowRemoteNoAuth),
+			}
+			if err := deps.RunServer(ctx, options); err != nil {
 				return runtimeFailure{cause: err}
 			}
 			return nil
@@ -112,11 +143,19 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Name:         "dev",
 		Usage:        "Run an isolated local development gateway",
 		OnUsageError: usageError,
+		Flags: []urfavecli.Flag{
+			&urfavecli.BoolFlag{
+				Name:  flagNoAuth,
+				Usage: "Serve requests without a gateway API key",
+			},
+		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if err := rejectArguments(cmd); err != nil {
 				return err
 			}
-			session, err := deps.StartDevelopment(ctx)
+			// The development gateway binds loopback and nothing else, so the
+			// remote acknowledgment has no meaning here and no flag offers it.
+			session, err := deps.StartDevelopment(ctx, GatewayOptions{DisableAuth: cmd.Bool(flagNoAuth)})
 			if err != nil {
 				return runtimeFailure{cause: err}
 			}

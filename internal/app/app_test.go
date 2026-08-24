@@ -26,11 +26,19 @@ import (
 func TestRuntimeRequiresNamedIdentity(t *testing.T) {
 	identities, err := identity.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	require.ErrorIs(t, requireIdentity(context.Background(), identities), ErrIdentityRequired)
+	require.ErrorIs(t, requireIdentity(context.Background(), identities, ""), ErrIdentityRequired)
+	require.ErrorIs(t,
+		requireIdentity(context.Background(), identities, config.AuthModeRequired),
+		ErrIdentityRequired)
+
+	// An empty identity store is the expected state of a gateway that requires
+	// no key, and refusing to start there would make the mode unusable for the
+	// operator it exists for.
+	require.NoError(t, requireIdentity(context.Background(), identities, config.AuthModeDisabled))
 
 	_, err = identities.Create(context.Background(), testIdentity())
 	require.NoError(t, err)
-	require.NoError(t, requireIdentity(context.Background(), identities))
+	require.NoError(t, requireIdentity(context.Background(), identities, config.AuthModeRequired))
 }
 
 func TestProductionCompositionFailsClosed(t *testing.T) {

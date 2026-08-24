@@ -172,6 +172,31 @@ type RateLimitingConfig struct {
 	WindowSize               time.Duration `env:"WINDOW_SIZE,default=1m"`
 }
 
+// AuthMode selects whether a request must carry a gateway API key. It is the
+// operator's word for the decision, and it is the same word the gateway
+// reports at GET /api/v1/auth/mode.
+type AuthMode string
+
+const (
+	// AuthModeRequired refuses every request that carries no valid gateway
+	// API key. It is the default, and the zero value resolves to it.
+	AuthModeRequired AuthMode = "required"
+	// AuthModeDisabled serves every request without checking for a key. The
+	// key check does not run at all, so a request carrying a key is treated
+	// exactly like one that carries none.
+	AuthModeDisabled AuthMode = "disabled"
+)
+
+// Effective returns the mode the gateway runs under. An unset value is
+// required: the state an operator reaches by not deciding has to be the safe
+// one.
+func (m AuthMode) Effective() AuthMode {
+	if m == "" {
+		return AuthModeRequired
+	}
+	return m
+}
+
 // SecurityConfig defines security settings
 type SecurityConfig struct {
 	MasterKey          string `env:"MASTER_KEY" secret:"true"`
@@ -183,6 +208,19 @@ type SecurityConfig struct {
 	JWTSecret          string `env:"JWT_SECRET" secret:"true"`
 	APIKeyHeader       string `env:"API_KEY_HEADER,default=Authorization"`
 	EnableRateLimiting bool   `env:"ENABLE_RATE_LIMITING,default=true"`
+
+	// AuthMode selects whether the gateway requires a gateway API key.
+	AuthMode AuthMode `env:"AUTH_MODE,default=required"`
+	// AllowRemoteNoAuth is the second, explicit acknowledgment that an
+	// unauthenticated gateway may bind an address the network can reach.
+	// Without it, startup refuses that combination; see the tripwire in
+	// validation.go.
+	AllowRemoteNoAuth bool `env:"ALLOW_REMOTE_NO_AUTH,default=false"`
+	// UnauthenticatedScopes lists the scopes a request holds while AuthMode
+	// is disabled. An empty list means the built-in default, which is every
+	// tenant scope and never admin. An operator who wants the admin plane
+	// open without a key has to name "admin" here.
+	UnauthenticatedScopes []string `env:"UNAUTHENTICATED_SCOPES"`
 }
 
 // LoggingConfig defines logging settings
@@ -244,5 +282,7 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	return nil
+	// Exposure is the one decision no single section can make: it reads the
+	// authentication mode against the bind address.
+	return c.validateAuthenticationExposure()
 }

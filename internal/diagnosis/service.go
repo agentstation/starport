@@ -62,7 +62,10 @@ type dependencies struct {
 // Run performs production diagnosis without constructing the server.
 func Run(ctx context.Context, options Options) Report {
 	service := service{dependencies: dependencies{
-		loadConfig: config.LoadWithDefaults, resolvePaths: config.PlatformPaths,
+		loadConfig: func(loadCtx context.Context) (*config.Config, error) {
+			return config.LoadWithDefaults(loadCtx)
+		},
+		resolvePaths:   config.PlatformPaths,
 		openStorage:    storage.OpenReadOnly,
 		transports:     connectors.ProductionTransportRegistry,
 		authentication: providerauth.ProductionRegistry,

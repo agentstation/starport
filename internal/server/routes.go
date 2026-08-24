@@ -43,11 +43,13 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 	mux.Route("/api/v1", func(r chi.Router) {
 		r.Use(selectProtocol(openRouterProtocol))
 
-		// Catalog logos: bundled brand marks served without credentials so
-		// plain <img> tags render identity. Grouped separately to stay
-		// outside the API-key middleware below.
+		// Served without credentials, and grouped separately to stay outside
+		// the API-key middleware below: bundled brand marks, so plain <img>
+		// tags render identity, and the authentication mode, so a client with
+		// no key can learn whether it needs one.
 		r.Group(func(r chi.Router) {
 			r.Get("/logos/{kind}/{id}.svg", s.controllers.Logos.Get)
+			r.Get("/auth/mode", s.controllers.Auth.Mode)
 		})
 
 		// Every other route requires an API key.
@@ -219,6 +221,7 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   GET  /api/v1/authors                    - List catalog authors
 //   GET  /api/v1/authors/{author}           - Get catalog author details
 //   GET  /api/v1/logos/{kind}/{id}.svg      - Catalog identity mark (public, cached)
+//   GET  /api/v1/auth/mode                  - Whether a gateway API key is required (public)
 //   GET  /api/v1/activity                   - List request activity for the authenticated key
 //
 // Preset Management:
