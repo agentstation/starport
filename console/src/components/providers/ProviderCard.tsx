@@ -29,8 +29,8 @@ export function CredentialPill({
     <span
       title={
         credential?.updated_at
-          ? `updated ${formatRelativeTime(credential.updated_at)}`
-          : undefined
+          ? `environment credential · updated ${formatRelativeTime(credential.updated_at)}`
+          : "environment credential"
       }
       className={`inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
         CREDENTIAL_TONES[state] ?? "bg-bg-raised text-text-3"

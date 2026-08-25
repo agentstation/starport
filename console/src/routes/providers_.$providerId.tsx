@@ -4,12 +4,13 @@ import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
+import { GatewayCredentialPanel } from "@/components/credentials/GatewayCredentialPanel";
 import {
   availableOfferings,
   CredentialPill,
 } from "@/components/providers/ProviderCard";
 import {
-  CredentialPanel,
+  EnvironmentCredentialPanel,
   HealthPanel,
   OfferingsTable,
   PolicyChips,
@@ -150,13 +151,19 @@ function ProviderDetailPage() {
       </div>
 
       {runtime && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <CredentialPanel
-            providerId={providerId}
-            credential={runtime.operator_credential}
-          />
+        <>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <EnvironmentCredentialPanel
+              providerId={providerId}
+              credential={runtime.operator_credential}
+            />
+            <GatewayCredentialPanel
+              providerId={providerId}
+              fields={entry?.credential_fields ?? []}
+            />
+          </div>
           <HealthPanel offerings={offerings} records={activity.data?.data} />
-        </div>
+        </>
       )}
 
       {runtime && <OfferingsTable providerId={providerId} offerings={offerings} />}

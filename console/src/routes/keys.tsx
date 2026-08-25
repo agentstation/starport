@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ConnectCard } from "@/components/overview/ConnectCard";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -18,22 +18,21 @@ import {
   accessMessage,
   ApiError,
   createKey,
-  putBYOKCredential,
-  deleteKey,
   DEFAULT_TENANT_ID,
-  deleteBYOKCredential,
+  deleteKey,
   getKeyDetail,
   listKeys,
-  listProviderCatalog,
-  listBYOKCredentials,
   updateKey,
-  validateBYOKCredential,
   type BudgetUsage,
   type GatewayKey,
   type KeyLimits,
-  type ProviderCatalogEntry,
 } from "@/lib/api";
-import { formatCount, formatNanoUSD, formatRelativeTime } from "@/lib/format";
+import {
+  formatCount,
+  formatNanoUSD,
+  formatRelativeTime,
+  formatWindow,
+} from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/keys")({
@@ -44,13 +43,6 @@ export const Route = createFileRoute("/keys")({
 // the credential family, enough tail to tell records apart.
 function truncateKeyId(id: string): string {
   return id.length > 20 ? `${id.slice(0, 13)}…${id.slice(-4)}` : id;
-}
-
-function formatWindow(seconds: number): string {
-  if (seconds === 60) return "min";
-  if (seconds === 3600) return "hr";
-  if (seconds === 86400) return "day";
-  return `${seconds}s`;
 }
 
 function utcTooltip(iso: string | undefined | null): string | undefined {
@@ -640,244 +632,6 @@ function DeleteKeyModal({
   );
 }
 
-// --- BYOK: the provider credentials a tenant brings ---
-
-function ByokModal({
-  apiKey,
-  onClose,
-}: {
-  apiKey: GatewayKey;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [provider, setProvider] = useState("");
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
-
-  // BYOK belongs to the account, not to this key. Every key in the account
-  // reaches the same credentials, and rotating this one leaves them in place.
-  const tenantId = apiKey.tenant_id || DEFAULT_TENANT_ID;
-  const byok = useQuery({
-    queryKey: ["byok", tenantId],
-    queryFn: () => listBYOKCredentials(tenantId),
-    retry: false,
-  });
-  const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
-    retry: false,
-  });
-
-  const providers = useMemo(
-    () =>
-      [...(catalog.data ?? [])].sort((a, b) =>
-        (a.name ?? a.id).localeCompare(b.name ?? b.id),
-      ),
-    [catalog.data],
-  );
-  const selected: ProviderCatalogEntry | undefined = providers.find(
-    (entry) => entry.id === provider,
-  );
-  // The credential form is catalog-driven: each provider declares its
-  // inference credential fields, so the console never assumes an "api key".
-  const fields = selected?.credential_fields ?? [];
-
-  const say = (text: string, error = false) => setNotice({ text, error });
-  const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: ["byok", tenantId] });
-
-  const attach = useMutation({
-    mutationFn: () => {
-      const credentials: Record<string, string> = {};
-      const config: Record<string, string> = {};
-      for (const field of fields) {
-        const value = values[field.id]?.trim();
-        if (!value) continue;
-        if (field.kind === "secret") credentials[field.id] = value;
-        else config[field.id] = value;
-      }
-      return putBYOKCredential(tenantId, provider, {
-        credentials,
-        ...(Object.keys(config).length > 0 ? { config } : {}),
-      });
-    },
-    onSuccess: async () => {
-      setValues({});
-      say(`Applied ${provider} credential`);
-      await refresh();
-    },
-    onError: (error) =>
-      say(
-        `Apply failed: ${error instanceof Error ? error.message : error}`,
-        true,
-      ),
-  });
-
-  const validate = useMutation({
-    mutationFn: (target: string) => validateBYOKCredential(tenantId, target),
-    onSuccess: (result, target) => {
-      const valid = result?.valid !== false;
-      say(
-        valid
-          ? `${target} credential is valid`
-          : `${target} credential is invalid`,
-        !valid,
-      );
-    },
-    onError: (error) =>
-      say(
-        `Validation failed: ${error instanceof Error ? error.message : error}`,
-        true,
-      ),
-  });
-
-  const detach = useMutation({
-    mutationFn: (target: string) => deleteBYOKCredential(tenantId, target),
-    onSuccess: async (_result, target) => {
-      say(`Removed ${target} credential`);
-      await refresh();
-    },
-    onError: (error) =>
-      say(
-        `Remove failed: ${error instanceof Error ? error.message : error}`,
-        true,
-      ),
-  });
-
-  const hasSecret = fields.some(
-    (field) => field.kind === "secret" && values[field.id]?.trim(),
-  );
-
-  return (
-    <Modal
-      title={`Provider keys · ${apiKey.name || truncateKeyId(apiKey.id)}`}
-      onClose={onClose}
-      wide
-      footer={<GhostButton onClick={onClose}>Close</GhostButton>}
-    >
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-text-3">
-          Credentials this account brings for itself. They belong to the{" "}
-          <span className="font-mono text-text-2">{tenantId}</span> account, not
-          to this key, so every key in the account uses them and rotating a key
-          leaves them in place.
-        </p>
-        {notice && (
-          <p className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
-            {notice.text}
-          </p>
-        )}
-        {byok.isPending ? (
-          <p className="text-sm text-text-3">Loading credentials…</p>
-        ) : byok.error ? (
-          <p className="text-sm text-text-3">
-            {byok.error instanceof ApiError && byok.error.forbidden
-              ? `Only a key in the ${tenantId} account, or an operator, can view or change its credentials.`
-              : byok.error instanceof ApiError && byok.error.unauthorized
-                ? accessMessage(byok.error, "provider_keys:read")
-                : `Failed to load credentials: ${byok.error.message}`}
-          </p>
-        ) : (byok.data ?? []).length === 0 ? (
-          <p className="text-sm text-text-3">
-            This account brings no provider credentials.
-          </p>
-        ) : (
-          <div className="flex flex-col divide-y divide-border-1 rounded-sm border border-border-1">
-            {(byok.data ?? []).map((row) => (
-              <div
-                key={row.provider}
-                className="flex h-10 items-center gap-3 px-3"
-              >
-                <span className="flex-1 font-mono text-sm text-text-1">
-                  {row.provider}
-                </span>
-                {row.created_at && (
-                  <span
-                    title={utcTooltip(row.created_at)}
-                    className="text-xs text-text-4"
-                  >
-                    {formatRelativeTime(row.created_at)}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => validate.mutate(row.provider)}
-                  disabled={validate.isPending}
-                  className="flex h-7 items-center rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2 disabled:opacity-50"
-                >
-                  validate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => detach.mutate(row.provider)}
-                  disabled={detach.isPending}
-                  aria-label={`Remove ${row.provider} credential`}
-                  className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        {!(byok.error instanceof ApiError && byok.error.needsKey) && (
-        <div className="flex flex-col gap-2 border-t border-border-1 pt-4">
-          <span className="text-xs font-medium text-text-2">
-            Attach a provider credential
-          </span>
-          <select
-            value={provider}
-            onChange={(event) => {
-              setProvider(event.target.value);
-              setValues({});
-            }}
-            aria-label="Provider"
-            className={SELECT_CLASS}
-          >
-            <option value="">select provider…</option>
-            {providers.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.name ?? entry.id}
-              </option>
-            ))}
-          </select>
-          {fields.map((field) => (
-            <input
-              key={field.id}
-              type={field.kind === "secret" ? "password" : "text"}
-              value={values[field.id] ?? ""}
-              onChange={(event) =>
-                setValues((prev) => ({ ...prev, [field.id]: event.target.value }))
-              }
-              placeholder={
-                field.default ? `${field.id} (${field.default})` : field.id
-              }
-              autoComplete="off"
-              aria-label={field.id}
-              className={`${INPUT_CLASS} font-mono`}
-            />
-          ))}
-          {provider && fields.length === 0 && (
-            <span className="text-xs text-text-4">
-              This provider declares no credential contract.
-            </span>
-          )}
-          <PrimaryButton
-            onClick={() => attach.mutate()}
-            disabled={!hasSecret || attach.isPending}
-          >
-            <Plus className="size-3.5" />
-            Attach
-          </PrimaryButton>
-        </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
 // --- Empty and locked states ---
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
@@ -913,7 +667,6 @@ type ModalState =
   | { kind: "secret"; secret: string }
   | { kind: "edit"; apiKey: GatewayKey }
   | { kind: "delete"; apiKey: GatewayKey }
-  | { kind: "byok"; apiKey: GatewayKey }
   | null;
 
 function KeysPage() {
@@ -991,6 +744,7 @@ function KeysPage() {
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
               <th className="px-4 py-2.5">Name</th>
               <th className="px-4 py-2.5">Key</th>
+              <th className="px-4 py-2.5">Account</th>
               <th className="px-4 py-2.5">Scopes</th>
               <th className="px-4 py-2.5">Limits</th>
               <th className="px-4 py-2.5">Status</th>
@@ -1019,6 +773,14 @@ function KeysPage() {
                   </span>
                 </td>
                 <td className="px-4 py-2">
+                  <Link
+                    to="/tenants"
+                    className="font-mono text-xs text-accent-link transition-colors duration-150 ease-standard hover:underline"
+                  >
+                    {apiKey.tenant_id || DEFAULT_TENANT_ID}
+                  </Link>
+                </td>
+                <td className="px-4 py-2">
                   <ScopePills scopes={apiKey.scopes ?? []} />
                 </td>
                 <td className="px-4 py-2">
@@ -1035,11 +797,6 @@ function KeysPage() {
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-1">
-                    <RowAction
-                      onClick={() => setModal({ kind: "byok", apiKey })}
-                    >
-                      byok
-                    </RowAction>
                     <RowAction
                       onClick={() => setModal({ kind: "edit", apiKey })}
                     >
@@ -1130,9 +887,6 @@ function KeysPage() {
           onError={(message) => say(message, true)}
         />
       )}
-      {modal?.kind === "byok" && (
-        <ByokModal apiKey={modal.apiKey} onClose={() => setModal(null)} />
-      )}
     </div>
   );
 }
@@ -1142,7 +896,8 @@ function Header() {
     <div>
       <h1 className="text-xl font-semibold tracking-[-0.01em]">API Keys</h1>
       <p className="mt-1 text-sm text-text-3">
-        Gateway keys for your apps, plus per-key provider credentials (BYOK).
+        Gateway keys for your apps. A key authenticates a caller and carries
+        its scopes and limits; it never holds a provider credential.
       </p>
     </div>
   );

@@ -27,6 +27,16 @@ export function formatNanoUSD(nanoUSD: number | undefined): string {
   return `$${dollars.toPrecision(2)}`;
 }
 
+// formatWindow names a rate-limit window the way a person would say it. Both
+// planes of limits — a key's and the account's — read the same seconds, so the
+// two say "req/min" identically rather than each inventing a spelling.
+export function formatWindow(seconds: number | undefined): string {
+  if (seconds === 60) return "min";
+  if (seconds === 3600) return "hr";
+  if (seconds === 86400) return "day";
+  return `${seconds}s`;
+}
+
 export function formatRelativeTime(iso: string | undefined): string {
   if (!iso) return "—";
   const then = new Date(iso).getTime();
