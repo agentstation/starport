@@ -122,6 +122,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 	if response != nil {
 		record.ModelUsed = response.Response.ModelUsed
 		record.Provider = response.ProviderUsed
+		record.CredentialSource = response.CredentialSource
 		record.Attempts = response.Attempts
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.CacheStatus = response.CacheStatus
@@ -172,6 +173,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 	if response != nil {
 		record.ModelUsed = response.ModelUsed
 		record.Provider = response.ProviderUsed
+		record.CredentialSource = response.CredentialSource
 		record.Attempts = response.Attempts
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.CacheStatus = response.CacheStatus
@@ -263,6 +265,7 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		var snapshot *runtimecatalog.RoutableSnapshot
 		if evidence := findStreamEvidence(s.stream); evidence != nil {
 			record.Provider = evidence.ProviderUsed()
+			record.CredentialSource = evidence.CredentialSourceUsed()
 			record.Attempts = evidence.AttemptCount()
 			record.RoutingMS = evidence.RoutingDuration().Milliseconds()
 			snapshot = evidence.CatalogSnapshot()

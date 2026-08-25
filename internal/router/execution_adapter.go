@@ -134,9 +134,33 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 // accounting.
 type StreamEvidence interface {
 	ProviderUsed() string
+	CredentialSourceUsed() string
 	AttemptCount() int
 	RoutingDuration() time.Duration
 	CatalogSnapshot() *runtimecatalog.RoutableSnapshot
+}
+
+// servedAttempt is the attempt that answered: the last one that was not
+// skipped by availability. The provider and the credential plane are read
+// from the same attempt on purpose, because a fallback can change both and a
+// record that mixed them would name a plane that never served that provider.
+func servedAttempt(evidence []execution.AttemptEvidence) (execution.AttemptEvidence, bool) {
+	for index := len(evidence) - 1; index >= 0; index-- {
+		if evidence[index].State == execution.StateSkipped {
+			continue
+		}
+		return evidence[index], true
+	}
+	return execution.AttemptEvidence{}, false
+}
+
+// credentialSourceUsed names the plane that paid for the served attempt.
+func credentialSourceUsed(evidence []execution.AttemptEvidence) string {
+	attempt, ok := servedAttempt(evidence)
+	if !ok {
+		return ""
+	}
+	return attempt.Credential.Source
 }
 
 // evidenceManagedStream decorates every routed stream with the evidence a
@@ -147,14 +171,15 @@ type evidenceManagedStream struct {
 }
 
 func (s *evidenceManagedStream) ProviderUsed() string {
-	evidence := s.Attempts()
-	for index := len(evidence) - 1; index >= 0; index-- {
-		if evidence[index].State == execution.StateSkipped {
-			continue
-		}
-		return evidence[index].Route.ProviderID
+	attempt, ok := servedAttempt(s.Attempts())
+	if !ok {
+		return ""
 	}
-	return ""
+	return attempt.Route.ProviderID
+}
+
+func (s *evidenceManagedStream) CredentialSourceUsed() string {
+	return credentialSourceUsed(s.Attempts())
 }
 
 func (s *evidenceManagedStream) AttemptCount() int { return len(s.Attempts()) }

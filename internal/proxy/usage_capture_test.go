@@ -286,12 +286,13 @@ func TestUsageCaptureFailureDoesNotFailRequest(t *testing.T) {
 // evidenceStream is a managed stream that carries route evidence like the
 // router's production stream wrapper.
 type evidenceStream struct {
-	events   []inference.StreamEvent
-	position int
-	snapshot *runtimecatalog.RoutableSnapshot
-	provider string
-	model    string
-	closed   bool
+	events     []inference.StreamEvent
+	position   int
+	snapshot   *runtimecatalog.RoutableSnapshot
+	provider   string
+	credential string
+	model      string
+	closed     bool
 }
 
 func (s *evidenceStream) Read() (*inference.StreamEvent, error) {
@@ -308,6 +309,7 @@ func (s *evidenceStream) Attempts() []execution.AttemptEvidence { return nil }
 func (s *evidenceStream) Committed() bool                       { return true }
 func (s *evidenceStream) ModelUsed() string                     { return s.model }
 func (s *evidenceStream) ProviderUsed() string                  { return s.provider }
+func (s *evidenceStream) CredentialSourceUsed() string          { return s.credential }
 func (s *evidenceStream) AttemptCount() int                     { return 1 }
 func (s *evidenceStream) RoutingDuration() time.Duration        { return 10 * time.Millisecond }
 func (s *evidenceStream) CatalogSnapshot() *runtimecatalog.RoutableSnapshot {
@@ -449,4 +451,63 @@ func TestStreamingCancellationRecordsCancelledStatus(t *testing.T) {
 	require.Equal(t, usage.StatusCancelled, records[0].Status)
 	require.True(t, records[0].Streaming)
 	require.True(t, stream.closed)
+}
+
+// TestUsageRecordCarriesTheServedCredentialSource proves the plane the router
+// chose survives the trip to the usage record. Everything an operator later
+// reads about who paid for a request is read off this field, and a record that
+// drops it is indistinguishable from one written before the gateway recorded
+// planes at all. The two paths are checked separately because a buffered
+// response and a stream carry the fact through different seams.
+func TestUsageRecordCarriesTheServedCredentialSource(t *testing.T) {
+	snapshot, routeID, _ := pricedTestSnapshot(t)
+
+	t.Run("buffered", func(t *testing.T) {
+		repository := &recordingUsageRepository{}
+		capture := NewUsageCapture(repository)
+		response := chatEvidenceResponse(routeID, snapshot, 10, 5)
+		response.CredentialSource = "byok"
+		service := capture.Wrap(&proxy{router: &usageEvidenceRouter{response: response}})
+
+		_, err := service.ProcessChatCompletion(context.Background(), usageChatRequest())
+		require.NoError(t, err)
+		capture.Flush()
+
+		records := repository.all()
+		require.Len(t, records, 1)
+		require.Equal(t, "byok", records[0].CredentialSource)
+	})
+
+	t.Run("streaming", func(t *testing.T) {
+		repository := &recordingUsageRepository{}
+		capture := NewUsageCapture(repository)
+		stream := &evidenceStream{
+			snapshot:   snapshot,
+			provider:   "test-provider",
+			credential: "gateway",
+			model:      routeID,
+			events: []inference.StreamEvent{
+				{Kind: inference.StreamUsage, Model: routeID, ModelUsed: routeID,
+					Usage: &inference.Usage{InputTokens: 10, OutputTokens: 5, TotalTokens: 15}},
+			},
+		}
+		service := capture.Wrap(&proxy{router: &usageEvidenceRouter{stream: stream}})
+
+		request := usageChatRequest()
+		request.Request.Stream = true
+		streamResponse, err := service.ProcessChatCompletionStream(context.Background(), request)
+		require.NoError(t, err)
+		for {
+			if _, readErr := streamResponse.Read(); readErr != nil {
+				require.ErrorIs(t, readErr, io.EOF)
+				break
+			}
+		}
+		require.NoError(t, streamResponse.Close())
+		capture.Flush()
+
+		records := repository.all()
+		require.Len(t, records, 1)
+		require.Equal(t, "gateway", records[0].CredentialSource)
+	})
 }

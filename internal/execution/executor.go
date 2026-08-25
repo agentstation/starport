@@ -263,6 +263,7 @@ func (s *session) succeed(evidenceIndex int, credential CredentialEvidence) {
 	evidence.State = StateSucceeded
 	evidence.FinishedAt = now
 	evidence.Duration = nonNegativeDuration(evidence.StartedAt, now)
+	evidence.Credential = credential
 	evidence.Transitions = append(evidence.Transitions, Transition{From: StateRunning, To: StateSucceeded, At: now})
 	if s.executor.availability != nil && credential.Owner != CredentialOwnerTenant {
 		s.executor.availability.RecordSuccess(evidence.Route, evidence.Duration)
@@ -289,6 +290,7 @@ func (s *session) fail(
 	evidence.FinishedAt = now
 	evidence.Duration = nonNegativeDuration(evidence.StartedAt, now)
 	evidence.Failure = providerFailure
+	evidence.Credential = credential
 	evidence.Transitions = append(evidence.Transitions, Transition{From: StateRunning, To: state, At: now})
 	s.lastFailure = providerFailure
 	s.publishOutcome(evidence.Route, credential, providerFailure)

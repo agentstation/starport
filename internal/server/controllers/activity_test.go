@@ -329,3 +329,29 @@ func TestActivityByProviderExcludesOtherAccounts(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 	assert.Empty(t, response.Data)
 }
+
+// TestActivityResponseNamesTheCredentialSource reads the raw JSON rather than
+// decoding into usage.Record, because decoding into the same struct that wrote
+// the record would pass even if the field never crossed the wire. The console
+// reads this key by name, so the key is the contract.
+func TestActivityResponseNamesTheCredentialSource(t *testing.T) {
+	repository := newActivityTestRepository(t)
+	record := activityTestRecord(
+		"key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusOK,
+		time.Now().Add(-time.Minute),
+	)
+	record.CredentialSource = "byok"
+	seedActivityRecords(t, repository, record)
+	controller := NewActivityController(repository)
+
+	recorder := httptest.NewRecorder()
+	controller.List(recorder, authenticatedActivityRequest("/api/v1/activity", "key-a"))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response struct {
+		Data []map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.Len(t, response.Data, 1)
+	assert.Equal(t, "byok", response.Data[0]["credential_source"])
+}

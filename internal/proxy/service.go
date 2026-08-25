@@ -86,10 +86,11 @@ type ChatCompletionResponse struct {
 	CacheCost   *CacheCost `json:"-"` // Cache pricing information
 
 	// Route evidence (not serialized)
-	ProviderUsed    string                           `json:"-"`
-	Attempts        int                              `json:"-"`
-	RoutingDuration time.Duration                    `json:"-"`
-	CatalogSnapshot *runtimecatalog.RoutableSnapshot `json:"-"`
+	ProviderUsed     string                           `json:"-"`
+	CredentialSource string                           `json:"-"`
+	Attempts         int                              `json:"-"`
+	RoutingDuration  time.Duration                    `json:"-"`
+	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
 }
 
 // ChatCompletionStreamResponse represents a streaming response
@@ -136,11 +137,12 @@ type EmbeddingsResponse struct {
 	CacheCost   *CacheCost `json:"-"` // Cache pricing information
 
 	// Route evidence (not serialized)
-	ModelUsed       string                           `json:"-"`
-	ProviderUsed    string                           `json:"-"`
-	Attempts        int                              `json:"-"`
-	RoutingDuration time.Duration                    `json:"-"`
-	CatalogSnapshot *runtimecatalog.RoutableSnapshot `json:"-"`
+	ModelUsed        string                           `json:"-"`
+	ProviderUsed     string                           `json:"-"`
+	CredentialSource string                           `json:"-"`
+	Attempts         int                              `json:"-"`
+	RoutingDuration  time.Duration                    `json:"-"`
+	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
 }
 
 // ModelsResponse represents a list of available models

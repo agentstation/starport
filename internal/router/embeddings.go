@@ -98,12 +98,13 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 	}
 
 	return &EmbeddingResponse{
-		Response:        result.Response,
-		ModelUsed:       result.Route.ID(),
-		ProviderUsed:    result.Route.ProviderID,
-		Attempts:        len(result.Attempts),
-		Metadata:        responseMetadata(result.Attempts, selectionReason(result.Attempts)),
-		CatalogSnapshot: runtime.Snapshot(),
+		Response:         result.Response,
+		ModelUsed:        result.Route.ID(),
+		ProviderUsed:     result.Route.ProviderID,
+		CredentialSource: credentialSourceUsed(result.Attempts),
+		Attempts:         len(result.Attempts),
+		Metadata:         responseMetadata(result.Attempts, selectionReason(result.Attempts)),
+		CatalogSnapshot:  runtime.Snapshot(),
 	}, nil
 }
 

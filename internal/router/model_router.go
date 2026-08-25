@@ -127,6 +127,11 @@ type Response struct {
 	// Provider that handled the request
 	ProviderUsed string `json:"provider_used"`
 
+	// CredentialSource names which credential plane paid for the attempt
+	// that answered: the operator's environment, the operator's applied
+	// gateway credential, the tenant's own BYOK, or no credential at all.
+	CredentialSource string `json:"credential_source,omitempty"`
+
 	// Number of attempts made
 	Attempts int `json:"attempts"`
 
@@ -148,12 +153,13 @@ type EmbeddingRequest struct {
 
 // EmbeddingResponse wraps one embedding result with route evidence.
 type EmbeddingResponse struct {
-	Response        inference.EmbeddingResponse
-	ModelUsed       string
-	ProviderUsed    string
-	Attempts        int
-	Metadata        *Metadata
-	CatalogSnapshot *runtimecatalog.RoutableSnapshot
+	Response         inference.EmbeddingResponse
+	ModelUsed        string
+	ProviderUsed     string
+	CredentialSource string
+	Attempts         int
+	Metadata         *Metadata
+	CatalogSnapshot  *runtimecatalog.RoutableSnapshot
 }
 
 // Metadata contains detailed routing information

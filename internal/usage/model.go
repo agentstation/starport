@@ -74,24 +74,31 @@ type Record struct {
 	ModelRequested string    `json:"model_requested,omitempty"`
 	ModelUsed      string    `json:"model_used,omitempty"`
 	Provider       string    `json:"provider,omitempty"`
-	Streaming      bool      `json:"streaming,omitempty"`
-	Status         string    `json:"status"`
-	StatusCode     int       `json:"status_code,omitempty"`
-	ErrorClass     string    `json:"error_class,omitempty"`
-	Tokens         Tokens    `json:"tokens"`
+	// CredentialSource names which credential plane paid for the request:
+	// `environment`, `gateway`, `byok`, or `anonymous` for a provider that
+	// accepted the call without one. It is what lets an operator see an
+	// account drawing on the deployment's credential rather than its own. It
+	// is empty on a record written before a route was chosen, and on one
+	// written before the gateway recorded the plane.
+	CredentialSource string `json:"credential_source,omitempty"`
+	Streaming        bool   `json:"streaming,omitempty"`
+	Status           string `json:"status"`
+	StatusCode       int    `json:"status_code,omitempty"`
+	ErrorClass       string `json:"error_class,omitempty"`
+	Tokens           Tokens `json:"tokens"`
 	// TokensEstimated marks counts the gateway synthesized with a
 	// tokenizer because the provider reported none.
-	TokensEstimated bool `json:"tokens_estimated,omitempty"`
-	LatencyMS      int64     `json:"latency_ms"`
-	RoutingMS      int64     `json:"routing_ms,omitempty"`
+	TokensEstimated bool  `json:"tokens_estimated,omitempty"`
+	LatencyMS       int64 `json:"latency_ms"`
+	RoutingMS       int64 `json:"routing_ms,omitempty"`
 	// OverheadMS is the gateway-added latency: total handling time
 	// minus upstream provider waits.
-	OverheadMS     int64     `json:"overhead_ms,omitempty"`
+	OverheadMS int64 `json:"overhead_ms,omitempty"`
 	// TTFTMS is the time from request start to the first stream event.
 	// Only streamed requests carry it.
-	TTFTMS         int64     `json:"ttft_ms,omitempty"`
-	Attempts       int       `json:"attempts,omitempty"`
-	CacheStatus    string    `json:"cache_status,omitempty"`
+	TTFTMS      int64  `json:"ttft_ms,omitempty"`
+	Attempts    int    `json:"attempts,omitempty"`
+	CacheStatus string `json:"cache_status,omitempty"`
 
 	// Cost is nil when no cost could be computed; CostUnavailableReason
 	// then names why.

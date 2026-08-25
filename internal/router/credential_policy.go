@@ -154,7 +154,14 @@ func (p *credentialPolicy) resolve(
 	if notConfigured {
 		if source, ok := p.runtime.(connectors.AnonymousMaterialSource); ok {
 			if material, exists := source.AnonymousMaterial(route.ProviderID); exists {
-				return credentialSelection{material: material}, nil, execution.AttemptActionDefault
+				// The attempt is credited to nobody, which is a different
+				// fact from an attempt whose credential went unrecorded. The
+				// owner stays empty so availability still counts the result:
+				// a keyless provider's health is the deployment's to see.
+				execution.RecordCredential(ctx, execution.CredentialEvidence{
+					Source: string(keyring.SourceAnonymous),
+				})
+				return credentialSelection{material: material, source: keyring.SourceAnonymous}, nil, execution.AttemptActionDefault
 			}
 		}
 		return credentialSelection{}, providerFailure, execution.AttemptActionFallbackRoute
@@ -184,9 +191,11 @@ func (p *credentialPolicy) resolveStored(
 	return p.storedKeys.ResolveStoredMaterial(ctx, scope, provider)
 }
 
-// credentialEvidence reports who paid for the attempt. An environment
-// credential and a gateway credential are both the operator's, so they record
-// the same owner and differ only in where the operator put them.
+// credentialEvidence reports who paid for the attempt, and out of which of
+// their planes. An environment credential and a gateway credential are both
+// the operator's, so they record the same owner; the source is what tells
+// them apart, and an operator needs it to see whether the deployment is
+// running on a shell variable or on a credential someone applied.
 func credentialEvidence(
 	source keyring.CredentialSource,
 	material credentials.Material,
@@ -199,7 +208,7 @@ func credentialEvidence(
 		owner = execution.CredentialOwnerTenant
 	}
 	return execution.CredentialEvidence{
-		Owner: owner, MaterialVersion: material.Version(),
+		Owner: owner, Source: string(source), MaterialVersion: material.Version(),
 	}
 }
 
