@@ -43,7 +43,12 @@ separately discovers deployment-owned inference credentials from the ordered
 profiles in that catalog. You do not select a provider with `starport init` or
 a provider-specific flag.
 
-### Terminal 1: start Starport
+Two kinds of credential appear below and they are not interchangeable. A
+**gateway API key** authenticates a client to Starport and carries its scopes
+and limits. A **provider credential** pays a provider. A gateway API key never
+pays a provider, and a provider credential never authenticates a client.
+
+### Terminal 1: start Starport and open the console
 
 Set one conventional provider credential. This example uses OpenAI:
 
@@ -53,14 +58,22 @@ starport dev
 ```
 
 The command starts an isolated gateway at `http://127.0.0.1:8080`. It uses
-in-memory state, creates no configuration files, and prints one temporary
-Starport gateway API key:
+in-memory state, creates no configuration files, prints one temporary Starport
+gateway API key, and opens the console in a browser:
 
 ```text
 Starport development gateway
 URL: http://127.0.0.1:8080
+Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
+Console (one-time sign-in link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
 ```
+
+The console link is not a key. It is spent the first time it is followed and
+exchanged for a browser session this machine issued, so nothing is pasted into
+the browser and no key is stored there. Add `--no-open` to print the link
+instead of opening a browser, which is what a machine reached over SSH needs.
+`starport ui` opens a new one at any time.
 
 Keep this terminal open.
 
@@ -99,9 +112,24 @@ credential and whether the account can use the selected offering. Starport
 records authentication, permission, quota, billing, rate-limit, and service
 failures in its scoped provider state.
 
+### Serve without a gateway API key
+
+Starport requires a gateway API key by default. To serve open — a workstation,
+a private container, a test rig — add `--no-auth` to `starport dev` or
+`starport serve`, or use the switch in the console under Settings. An open
+gateway can be closed again from the machine running it.
+
+Starport refuses `--no-auth` on an address the network can reach unless you
+also pass `--allow-remote-no-auth`. See
+[Authentication mode](docs/OPERATOR-GUIDE.md#authentication-mode).
+
+### Keep the gateway
+
 For persistent local or production state, run `starport init` once. The command
 creates a Starport master key and initial gateway identity. It does not select a
-provider or persist provider inference credentials. Then use `starport serve`.
+provider or persist provider inference credentials. Then use `starport serve`,
+and `starport ui` to open the console. Issue further gateway API keys in the
+console under Keys.
 See the [operator guide](docs/OPERATOR-GUIDE.md#initialize-persistent-state).
 
 Local Ollama inference needs no credential. Add each installed model to a

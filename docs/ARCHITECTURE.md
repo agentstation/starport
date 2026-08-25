@@ -23,7 +23,16 @@ Implemented:
 - Connector-owned HTTP-client construction for first-response-byte and connection-pool semantics.
 - Separate OpenAI `/v1` and OpenRouter `/api/v1` protocol adapters for chat, embeddings, models, errors, and streaming events.
 - Routing uses provider preferences, fallback chains, one attempt budget, and offering-level availability. It supports cost, latency, affinity, and restrictions.
-- BYOK provider-key management with encrypted credential storage, provider validation, fallback strategies, usage tracking, and admin/provider-key HTTP endpoints.
+- Provider inference credentials in three sources: the process environment, a
+  gateway credential the operator applies for the whole deployment, and the BYOK
+  a tenant brings for itself. Encrypted storage, provider validation, per-tenant
+  selection strategies, per-source usage attribution, and separate operator and
+  tenant HTTP endpoints.
+- Tenant accounts that own gateway API keys, account-wide limits, and the
+  default credential strategy. A gateway API key authenticates a request; the
+  tenant behind it bounds what that request may spend.
+- A gateway authentication mode the operator sets by flag, configuration, or
+  console switch, with a local admin token for first-run console access.
 - Starmap-backed model, provider, capability, context, and price discovery from one immutable generation.
 - Raw HTTP compatibility smoke checks and optional official OpenRouter SDK runners.
 - Usage accounting in `internal/usage`: the proxy writes one request record
@@ -96,7 +105,7 @@ graph TD
   Auth --> IdentityRepo["internal/identity repository"]
   RateLimit --> RateLimitRepo["internal/ratelimit repository"]
   Cache --> Storage
-  Server --> ProviderKeys["BYOK provider-key handlers"]
+  Server --> ProviderKeys["provider credential handlers"]
   ProviderKeys --> CredentialRepo["internal/credentials repository"]
   IdentityRepo --> Storage["internal/storage KVStore adapters"]
   RateLimitRepo --> Storage
@@ -122,13 +131,18 @@ starport/
 ├── internal/providers/state/  # safe adapter, credential, and offering state
 ├── internal/catalog/          # Starmap acquisition policy and derived routable generations
 ├── internal/registry/         # catalog-derived connector generations and adapter availability
-├── internal/providers/        # provider runtime composition and BYOK
+├── internal/providers/        # provider runtime composition and credential reconciliation
 ├── internal/providers/connectors/ # runtime leases, wire adapters, and provider HTTP policy
 ├── internal/providers/auth/   # request credential placement by catalog primitive
+├── internal/providers/keyring/ # provider credential sources, scopes, and selection strategies
 ├── internal/credentials/cloudchain/ # renewable cloud credential acquisition
 ├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
 ├── internal/identity/         # gateway identity model and versioned repository
+├── internal/tenant/           # account identity, account-wide limits, credential strategy
+├── internal/limits/           # request-rate and consumption vocabulary shared by key and tenant
+├── internal/authmode/         # whether the gateway requires a gateway API key
+├── internal/localauth/        # local admin token, launch tickets, and console sessions
 ├── internal/credentials/      # provider credentials, encryption, and repository
 ├── internal/ratelimit/        # atomic rate-limit policy state and repository
 ├── internal/presets/          # preset model and versioned repository
@@ -364,6 +378,54 @@ without its own expiry gets the configured remote refresh interval. Cache hits
 make no secret-store request. Each selected read owns and closes its client or
 idle HTTP resources.
 
+## Credentials and Tenants
+
+Starport holds two unrelated kinds of secret. A gateway API key authenticates a
+caller to Starport. A provider credential pays a provider. They never convert
+into each other, and no HTTP path returns one when asked for the other.
+
+`internal/providers/keyring` owns the provider credential vocabulary. Three
+sources can pay for one request, and two of the three belong to the operator:
+
+| Source | Owner | Where it lives | Applied by |
+| --- | --- | --- | --- |
+| `environment` | operator | the gateway process environment | a restart |
+| `gateway` | operator | encrypted storage at scope `*` | the console or the admin API |
+| `byok` | tenant | encrypted storage at scope `tenant:<id>` | the tenant |
+
+Only the third is BYOK. The word names a credential a tenant brought for
+itself, and nothing else. A credential the operator applies for the whole
+deployment is a gateway credential even though it is stored the same way,
+because the difference that matters is who owns the spend.
+
+A per-tenant strategy chooses the order. `operator_first` offers the
+environment credential, then the gateway credential, then the tenant's own.
+`byok_first` moves the tenant's own credential to the front and keeps the two
+operator sources adjacent behind it, because they are the same operator's
+money. `byok_only` narrows the request to the tenant's own credential and fails
+when it is absent.
+
+A gateway API key may name a strategy in its metadata. It can only narrow the
+account's: a key held by a `byok_only` tenant cannot ask for operator
+credentials, and a request that would widen the account's strategy is refused
+rather than quietly downgraded. A key that names none inherits the account's.
+
+Selection happens per attempt, not per request, so a refused credential falls
+through to the next source in the same request. The attempt that answered
+carries the source it spent into `usage.Record.credential_source`, which is how
+an operator reads which plane paid rather than only which provider served.
+
+`internal/tenant` owns the account behind a gateway API key: the account-wide
+limits, the default credential strategy, and the account's own BYOK scope.
+`internal/limits` owns the limit vocabulary itself, because both a key and a
+tenant hold limits and neither owns the other's. A request satisfies both
+meters. A key limit bounds one key; it never raises or lowers what the account
+may spend in total.
+
+Tenant outcomes stay tenant-local. A provider that refuses a tenant's BYOK marks
+nothing in the shared operator availability state, because one account's expired
+credential is not evidence about the deployment's.
+
 ## Routing
 
 The router accepts a `router.Request` with:
@@ -420,7 +482,15 @@ Implemented:
 - The credential repository encrypts provider keys with AES-256-GCM. `STARPORT_SECURITY_MASTER_KEY` supplies the production secret.
 - The encryption service uses Argon2id when it derives a key from a password value.
 - Rate limiting uses the authenticated API key ID, not the raw secret.
-- The BYOK repository isolates provider keys by API-key scope.
+- The credential repository isolates stored provider credentials by scope. The
+  operator's gateway credential is stored at `*`; a tenant's BYOK is stored at
+  `tenant:<id>` and no other tenant can read or spend it.
+- Disabling the gateway authentication mode requires a local listener. A
+  deployment bound to a routable address refuses the disabled mode unless the
+  operator states the exposure explicitly.
+- The local admin token is a file readable only by the account running the
+  gateway. It is not a gateway API key, holds no tenant, and never authenticates
+  an inference request.
 
 Still planned:
 
