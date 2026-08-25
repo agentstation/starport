@@ -94,6 +94,10 @@ type Dependencies struct {
 	LoadConfig       ConfigLoader
 	ResolvePaths     PathResolver
 	Diagnose         Diagnoser
+	// Desktop reaches the operator's machine. It is not validated: a machine
+	// with no browser and no clipboard still runs every command, because each
+	// one prints the link it would otherwise have handed over.
+	Desktop Desktop
 }
 
 // New creates the Starport root command.
@@ -139,6 +143,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 				DisableAuth:       cmd.Bool(flagNoAuth),
 				AllowRemoteNoAuth: cmd.Bool(flagAllowRemoteNoAuth),
 			}
+			greetOnce(cmd.Writer, deps)
 			if err := deps.RunServer(ctx, options); err != nil {
 				return runtimeFailure{cause: err}
 			}
@@ -153,6 +158,10 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			&urfavecli.BoolFlag{
 				Name:  flagNoAuth,
 				Usage: "Serve requests without a gateway API key",
+			},
+			&urfavecli.BoolFlag{
+				Name:  flagNoOpen,
+				Usage: "Print the console link instead of opening a browser",
 			},
 		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
@@ -173,6 +182,19 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			}
 			if err := writeDevelopmentResult(cmd.Writer, session); err != nil {
 				return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
+			}
+			greetOnce(cmd.Writer, deps)
+			if session.ConsoleURL != "" && !cmd.Bool(flagNoOpen) {
+				if reason := browserSuppressed(deps, cmd.Writer); reason != "" {
+					if _, err := fmt.Fprintf(cmd.Writer, "Did not open a browser: %s.\n", reason); err != nil {
+						return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
+					}
+				} else {
+					// The browser is opened beside the gateway rather than before
+					// it, because the listener is not up until Run is called and a
+					// browser that arrives first shows a connection error.
+					go openConsoleWhenReady(ctx, deps, session)
+				}
 			}
 			if err := session.Run(ctx); err != nil {
 				return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
@@ -287,6 +309,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	configCommand := newConfigCommand(deps, usageError)
 	doctor := newDoctorCommand(deps, usageError)
 	auth := newAuthCommand(deps, usageError)
+	ui := newUICommand(deps, usageError)
 
 	root := &urfavecli.Command{
 		Name:            "starport",
@@ -296,7 +319,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Writer:          deps.Stdout,
 		ErrWriter:       deps.Stderr,
 		OnUsageError:    usageError,
-		Commands:        []*urfavecli.Command{initialize, development, serve, auth, doctor, configCommand, version, man, help},
+		Commands:        []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, version, man, help},
 		HideHelpCommand: true,
 		ConfigureShellCompletionCommand: configureCompletionCommand(
 			completion,

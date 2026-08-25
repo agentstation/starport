@@ -86,12 +86,17 @@ type App struct {
 	providerReconciler *providers.Reconciler
 	providerStates     *providerstate.Store
 	availability       *availability.Tracker
-	newConnector       func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
-	lifecycle          []lifecycleEntry
-	runtimeWG          sync.WaitGroup
-	runtimeMu          sync.Mutex
-	closeOnce          sync.Once
-	closeErr           error
+	// localGate mints and redeems console launch tickets against this
+	// machine's local admin token. The runtime keeps it so a caller that owns
+	// the process — `starport dev` — can sign a browser in without reading the
+	// token file a second time and without the secret leaving this package.
+	localGate    *localauth.Gate
+	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
+	lifecycle    []lifecycleEntry
+	runtimeWG    sync.WaitGroup
+	runtimeMu    sync.Mutex
+	closeOnce    sync.Once
+	closeErr     error
 }
 
 // New creates the complete production runtime without starting background work.
@@ -159,6 +164,7 @@ type runtimeBuilder struct {
 	gateway      proxy.Proxy
 	console      console.PageServer
 	auth         authRuntime
+	gate         *localauth.Gate
 }
 
 // authRuntime is the resolved authentication mode and the store that keeps a
@@ -447,6 +453,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
+		LocalGate: b.gate,
 	})
 	if err != nil {
 		if httpServer != nil {
@@ -560,6 +567,12 @@ func (b *runtimeBuilder) resolveLocalToken(ctx context.Context) error {
 			ErrLocalTokenExposed, b.config.Server.Host, localauth.RotateCommand,
 		)
 	}
+	// The gate holds the token the gateway just read, so a launch ticket minted
+	// by the CLI from the same file verifies here. It is the only thing that
+	// keeps the secret after this function returns; nothing else in the runtime
+	// needs it, and the value is never logged.
+	b.gate = localauth.NewGate(token)
+	b.application.localGate = b.gate
 	log.Info().
 		Str("token_file", store.Path()).
 		Uint64("generation", token.Generation).

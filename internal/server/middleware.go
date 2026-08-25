@@ -16,6 +16,7 @@ import (
 
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/tenant"
 )
@@ -128,6 +129,10 @@ type AuthMiddleware struct {
 	// The scope set is the operator's and does not change at runtime, so it is
 	// resolved once.
 	anonymous identity.APIKey
+	// sessions verifies console sessions opened by `starport ui`. A nil gate
+	// means this gateway has no local admin token to check them against, so
+	// every session cookie is refused and only bearer keys authenticate.
+	sessions *localauth.Gate
 }
 
 // NewAuthMiddleware creates a new authentication middleware. The tenant reader
@@ -154,6 +159,16 @@ func (m *AuthMiddleware) Govern(policy *authmode.Policy, scopes []string) {
 	m.anonymous = identity.Anonymous(scopes)
 }
 
+// AcceptSessions binds the gate that verifies console sessions.
+//
+// It is separate from Govern because the two answer different questions. The
+// policy decides whether a credential is required at all; the gate decides
+// whether one particular kind of credential is genuine. A deployment can have
+// either without the other.
+func (m *AuthMiddleware) AcceptSessions(gate *localauth.Gate) {
+	m.sessions = gate
+}
+
 // RequireAPIKey validates API key authentication
 func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +181,20 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		// unsupported because URLs are commonly logged by proxies and clients.
 		apiKey := extractAPIKey(r)
 		if apiKey == "" {
-			writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Missing API key")
+			// A browser that was opened by `starport ui` carries a console session
+			// instead of a key. It is read only when no key was presented, because
+			// an Authorization header is something a caller chose to send and a
+			// cookie is something the browser attached on its own; the explicit
+			// credential decides.
+			ctx, err := m.sessionContext(r)
+			switch {
+			case err == nil:
+				next.ServeHTTP(w, r.WithContext(ctx))
+			case errors.Is(err, errNoSession):
+				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Missing API key")
+			default:
+				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", sessionRefusal)
+			}
 			return
 		}
 
@@ -236,6 +264,49 @@ func (m *AuthMiddleware) anonymousContext(ctx context.Context) context.Context {
 		ctx = requestctx.WithTenantRecord(ctx, record)
 	}
 	return ctx
+}
+
+// errNoSession reports a request that presented no console session at all, as
+// opposed to one that presented a session this gateway will not accept. The
+// two get different answers: the first caller has not signed in, and the second
+// has a cookie to replace.
+var errNoSession = errors.New("no console session was presented")
+
+// sessionRefusal is the answer to every unusable session, whatever made it
+// unusable. A session goes stale on its own — it expires, or `starport auth
+// rotate` invalidates it — so the message names the way back in rather than the
+// cause, and telling a caller which of the two it was would say whether their
+// cookie had ever been real.
+const sessionRefusal = "This console session is no longer valid. Run `starport ui` to open a new one"
+
+// sessionContext furnishes a request that arrived with a console session.
+//
+// The session runs as the local operator, holding every scope. Opening one
+// required reading a file only this machine's account can read, so the holder
+// is someone who can already run the CLI, read the database, and edit the
+// configuration; granting them less here would withhold no power and only send
+// them to a terminal to do the same work.
+//
+// It deliberately does not call requestctx.WithAPIKey. There is no gateway API
+// key in play, and putting the cookie there would hand a credential to every
+// downstream reader that treats that value as a bearer token to forward.
+func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error) {
+	cookie, err := r.Cookie(localauth.SessionCookie)
+	if err != nil || cookie.Value == "" {
+		return nil, errNoSession
+	}
+	if _, err := m.sessions.Verify(cookie.Value, time.Now()); err != nil {
+		return nil, err
+	}
+	operator := identity.LocalOperator()
+	ctx := requestctx.WithAPIKeyID(r.Context(), operator.ID)
+	ctx = requestctx.WithAPIKeyModel(ctx, &operator)
+	tenantID := operator.EffectiveTenantID()
+	ctx = requestctx.WithTenantID(ctx, tenantID)
+	if record, ok := m.readTenant(ctx, tenantID); ok {
+		ctx = requestctx.WithTenantRecord(ctx, record)
+	}
+	return ctx, nil
 }
 
 // readTenant loads the account behind an authenticated key. A missing or

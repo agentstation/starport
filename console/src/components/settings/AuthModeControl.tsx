@@ -7,7 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import {
   ApiError,
   getApiKey,
-  onKeyChange,
+  onCredentialChange,
   readAuthMode,
   setAuthMode,
   type AuthMode,
@@ -38,7 +38,7 @@ function consequence(next: AuthMode["mode"], hasKey: boolean): string {
 // console preference: what it changes, every client of this deployment sees.
 export function AuthModeControl() {
   const queryClient = useQueryClient();
-  const storedKey = useSyncExternalStore(onKeyChange, getApiKey);
+  const storedKey = useSyncExternalStore(onCredentialChange, getApiKey);
   const [pending, setPending] = useState<AuthMode["mode"] | null>(null);
   const [failure, setFailure] = useState("");
 

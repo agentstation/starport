@@ -20,6 +20,12 @@ type Paths struct {
 	// data directory rather than beside the configuration file, because it is
 	// state this machine generated and not a decision an operator wrote down.
 	LocalTokenFile string `json:"local_token_file"`
+	// WelcomeStampFile records that this machine has been told how to open the
+	// console. It exists so the greeting prints once: an operator who has run
+	// the gateway before is not a new operator, and a banner that repeats every
+	// start is one an experienced reader learns to skip past the day they
+	// needed it.
+	WelcomeStampFile string `json:"welcome_stamp_file"`
 }
 
 // PlatformPaths resolves the current user's Starport paths.
@@ -45,10 +51,11 @@ func PathsForConfigDir(configDir string) Paths {
 	configDir = filepath.Clean(configDir)
 	dataDir := filepath.Join(configDir, "data")
 	return Paths{
-		ConfigDir:      configDir,
-		ConfigFile:     filepath.Join(configDir, "config.env"),
-		DataDir:        dataDir,
-		BadgerDir:      filepath.Join(dataDir, "badger"),
-		LocalTokenFile: filepath.Join(dataDir, "local-admin-token.json"),
+		ConfigDir:        configDir,
+		ConfigFile:       filepath.Join(configDir, "config.env"),
+		DataDir:          dataDir,
+		BadgerDir:        filepath.Join(dataDir, "badger"),
+		LocalTokenFile:   filepath.Join(dataDir, "local-admin-token.json"),
+		WelcomeStampFile: filepath.Join(dataDir, "welcomed"),
 	}
 }

@@ -3,6 +3,14 @@
 
 const KEY_STORAGE = "starport.apiKey";
 
+// SESSION_MARKER is set beside the console session cookie by /launch. The
+// session itself is HttpOnly and unreadable here, which is the point: the
+// credential belongs to the gateway and the browser, and nothing in this file
+// can read it, forward it, or store it. The marker carries no secret and
+// authenticates nothing — it exists so the console can tell a signed-in shell
+// from a signed-out one without a request whose only purpose is to ask.
+const SESSION_MARKER = "starport_session_present";
+
 export function getApiKey(): string {
   return localStorage.getItem(KEY_STORAGE) ?? "";
 }
@@ -13,32 +21,69 @@ export function setApiKey(key: string): void {
   } else {
     localStorage.removeItem(KEY_STORAGE);
   }
-  keyRejected = false;
-  for (const listener of keyListeners) listener();
+  credentialRejected = false;
+  for (const listener of credentialListeners) listener();
 }
 
-// keyRejected records that the gateway refused the stored key outright. The
-// key is minted by the gateway and lives only in this browser, so a restart or
-// a new deployment leaves a stored key that no longer authenticates. Tracking
-// the rejection lets the console ask for a new key instead of reporting the
-// failure as a missing permission.
-let keyRejected = false;
-
-export function isApiKeyRejected(): boolean {
-  return keyRejected;
+// hasSession reports that this browser holds a console session, opened by
+// `starport ui` on the machine running the gateway.
+export function hasSession(): boolean {
+  return document.cookie
+    .split(";")
+    .some((entry) => entry.trim().startsWith(`${SESSION_MARKER}=`));
 }
 
-function recordKeyOutcome(rejected: boolean): void {
-  if (keyRejected === rejected) return;
-  keyRejected = rejected;
-  for (const listener of keyListeners) listener();
+// Credential is what this browser will present on the next request. The two
+// kinds are deliberately unalike: a session belongs to a person at this
+// machine and expires; a gateway API key belongs to a tenant and does not.
+export type Credential =
+  | { kind: "session" }
+  | { kind: "key"; value: string }
+  | { kind: "none" };
+
+// credential prefers a session over a stored key. A browser holding both got
+// the session more recently and from the machine itself, and sending a bearer
+// key beside it would meter the request against a tenant when the operator
+// signed in as the operator.
+export function credential(): Credential {
+  if (hasSession()) return { kind: "session" };
+  const key = getApiKey();
+  if (key) return { kind: "key", value: key };
+  return { kind: "none" };
 }
 
-const keyListeners = new Set<() => void>();
+export function hasCredential(): boolean {
+  return credential().kind !== "none";
+}
 
-export function onKeyChange(listener: () => void): () => void {
-  keyListeners.add(listener);
-  return () => keyListeners.delete(listener);
+// credentialRejected records that the gateway refused what this browser
+// presented. Both kinds go stale on their own: a session ends when it expires
+// or when `starport auth rotate` runs, and a key minted by one gateway process
+// means nothing to the next. Tracking the rejection lets the console offer a
+// way back in instead of reporting the failure as a missing permission.
+let credentialRejected = false;
+
+export function isCredentialRejected(): boolean {
+  return credentialRejected;
+}
+
+function recordCredentialOutcome(rejected: boolean): void {
+  if (credentialRejected === rejected) return;
+  credentialRejected = rejected;
+  for (const listener of credentialListeners) listener();
+}
+
+const credentialListeners = new Set<() => void>();
+
+export function onCredentialChange(listener: () => void): () => void {
+  credentialListeners.add(listener);
+  return () => credentialListeners.delete(listener);
+}
+
+// authorization names the credential to the gateway. A session sends no header
+// at all: the browser attaches its cookie, and this code cannot read it.
+function authorization(held: Credential): Record<string, string> {
+  return held.kind === "key" ? { Authorization: `Bearer ${held.value}` } : {};
 }
 
 // ApiError carries the HTTP status and the gateway's error message.
@@ -102,24 +147,24 @@ export async function request<T>(
     signal,
   }: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<T> {
-  const key = getApiKey();
+  const held = credential();
   const response = await fetch(path, {
     method,
     signal,
     headers: {
-      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      ...authorization(held),
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (!response.ok) {
     const error = await parseError(response);
-    // Only an outright rejection invalidates the stored key. A 403 proves the
-    // key authenticated, so it must not send the console back to the prompt.
-    if (key && error.unauthorized) recordKeyOutcome(true);
+    // Only an outright rejection invalidates the credential. A 403 proves it
+    // authenticated, so it must not send the console back to the prompt.
+    if (held.kind !== "none" && error.unauthorized) recordCredentialOutcome(true);
     throw error;
   }
-  if (key) recordKeyOutcome(false);
+  if (held.kind !== "none") recordCredentialOutcome(false);
   if (response.status === 204) return null as T;
   return response.json() as Promise<T>;
 }
@@ -737,12 +782,11 @@ export async function streamChat(
     onReasoning?: (text: string) => void;
   },
 ): Promise<ChatStreamMeta> {
-  const key = getApiKey();
   const response = await fetch("/api/v1/chat/completions", {
     method: "POST",
     signal,
     headers: {
-      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      ...authorization(credential()),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

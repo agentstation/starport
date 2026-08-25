@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"time"
 )
 
@@ -24,6 +26,11 @@ type DevelopmentStarter func(context.Context, GatewayOptions) (DevelopmentSessio
 type DevelopmentSession struct {
 	URL    string
 	APIKey string
+	// ConsoleURL signs one browser in to this session. It is a separate value
+	// from URL and from APIKey because it is a separate credential: it opens a
+	// console session and grants no gateway API key, and it is spent the first
+	// time it is followed.
+	ConsoleURL string
 	// AuthDisabled reports that the session serves requests without a gateway
 	// API key. It is what makes an empty APIKey legitimate rather than a bug.
 	AuthDisabled bool
@@ -57,13 +64,83 @@ func writeDevelopmentResult(writer io.Writer, session DevelopmentSession) error 
 		)
 		return err
 	}
-	_, err := fmt.Fprintf(
+	if _, err := fmt.Fprintf(
 		writer,
 		"Starport development gateway\nURL: %s\nAuthentication: required\nGateway API key (shown once): %s\n",
 		session.URL,
 		session.APIKey,
-	)
+	); err != nil {
+		return err
+	}
+	return writeDevelopmentConsole(writer, session)
+}
+
+// writeDevelopmentConsole names the console link when there is one.
+//
+// It is printed whether or not a browser is going to be opened. An operator on
+// a machine reached over SSH, or one whose browser did not come up, still needs
+// the link, and a session that opened something and said nothing leaves them
+// with no way to retry.
+func writeDevelopmentConsole(writer io.Writer, session DevelopmentSession) error {
+	if session.ConsoleURL == "" {
+		return nil
+	}
+	_, err := fmt.Fprintf(writer, "Console (one-time sign-in link): %s\n", session.ConsoleURL)
 	return err
+}
+
+const (
+	// gatewayWaitTimeout bounds the wait for a development gateway to listen.
+	// It is generous because the cost of waiting too long is a browser that
+	// opens late, and the cost of giving up too early is one that opens on a
+	// connection error the operator then has to reason about.
+	gatewayWaitTimeout = 15 * time.Second
+	gatewayWaitPoll    = 25 * time.Millisecond
+	gatewayDialTimeout = time.Second
+)
+
+// openConsoleWhenReady follows the console link once the gateway answers.
+//
+// The wait is a TCP dial rather than a fixed delay because the race is real and
+// short: the banner is printed before the listener is up, and a browser that
+// arrives first shows a connection error. A dial asks the smallest question
+// that settles it — no route, no protocol, and no credential.
+//
+// Nothing is printed here. This runs beside a gateway that owns the terminal,
+// and the link is already in the banner, so a browser that will not start
+// leaves the operator exactly where a printed complaint would have.
+func openConsoleWhenReady(ctx context.Context, deps Dependencies, session DevelopmentSession) {
+	if !waitForGateway(ctx, session.URL) {
+		return
+	}
+	_ = browserOpener(deps)(session.ConsoleURL)
+}
+
+func waitForGateway(ctx context.Context, rawURL string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	deadline := time.Now().Add(gatewayWaitTimeout)
+	// The dialer carries the context as well as the per-attempt timeout, so an
+	// operator who interrupts a starting gateway does not wait out a dial that
+	// has already stopped mattering.
+	dialer := net.Dialer{Timeout: gatewayDialTimeout}
+	for {
+		conn, err := dialer.DialContext(ctx, "tcp", parsed.Host)
+		if err == nil {
+			_ = conn.Close()
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(gatewayWaitPoll):
+		}
+	}
 }
 
 func closeDevelopmentSession(ctx context.Context, session DevelopmentSession, cause error) error {

@@ -8,8 +8,9 @@ import { GhostButton, INPUT_CLASS, PrimaryButton } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
   getApiKey,
+  hasSession,
   listModels,
-  onKeyChange,
+  onCredentialChange,
   setApiKey,
   systemInfo,
 } from "@/lib/api";
@@ -57,7 +58,8 @@ type KeyStatus =
 
 function ConnectionSection() {
   const queryClient = useQueryClient();
-  const storedKey = useSyncExternalStore(onKeyChange, getApiKey);
+  const storedKey = useSyncExternalStore(onCredentialChange, getApiKey);
+  const session = useSyncExternalStore(onCredentialChange, hasSession);
   const [draft, setDraft] = useState("");
   const [reveal, setReveal] = useState(false);
   const [status, setStatus] = useState<KeyStatus>({ kind: "idle" });
@@ -96,8 +98,16 @@ function ConnectionSection() {
   return (
     <Section
       title="Connection"
-      description="The console talks to the gateway that served this page. The key is stored in this browser's localStorage only."
+      description="The console talks to the gateway that served this page. A gateway API key is one way to reach it; a console session opened by `starport ui` is the other, and a session is preferred whenever this browser holds one."
     >
+      {session && (
+        <p className="mb-4 max-w-xl rounded-sm border border-border-2 bg-bg-raised px-3 py-2 text-sm text-text-2">
+          This browser holds a console session from <code className="font-mono text-xs">starport ui</code>.
+          It signs requests on its own, so no key below is needed or sent. Run{" "}
+          <code className="font-mono text-xs">starport auth rotate</code> on the gateway machine to end
+          every session at once.
+        </p>
+      )}
       <form
         className="flex max-w-xl gap-2"
         onSubmit={(event) => {
@@ -147,6 +157,8 @@ function ConnectionSection() {
               {maskKey(storedKey)}
             </code>
           </>
+        ) : session ? (
+          "No key set. This browser is using its console session instead."
         ) : (
           "No key set. Locked pages stay locked until one is saved."
         )}

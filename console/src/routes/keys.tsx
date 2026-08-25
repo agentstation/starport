@@ -34,7 +34,7 @@ import {
   type ProviderCatalogEntry,
 } from "@/lib/api";
 import { formatCount, formatNanoUSD, formatRelativeTime } from "@/lib/format";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/keys")({
   component: KeysPage,
@@ -917,7 +917,7 @@ type ModalState =
   | null;
 
 function KeysPage() {
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<ModalState>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(

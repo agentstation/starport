@@ -22,7 +22,7 @@ import {
   providerStatus,
 } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/providers_/$providerId")({
   component: ProviderDetailPage,
@@ -30,7 +30,7 @@ export const Route = createFileRoute("/providers_/$providerId")({
 
 function ProviderDetailPage() {
   const { providerId } = Route.useParams();
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
 
   const catalog = useQuery({
     queryKey: ["provider-catalog"],

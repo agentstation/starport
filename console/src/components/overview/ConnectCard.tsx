@@ -2,15 +2,20 @@ import { useState } from "react";
 
 import { Card, CardTitle } from "@/components/ui/Card";
 import { setApiKey } from "@/lib/api";
-import { useApiKeyRejected } from "@/lib/useApiKey";
+import { useGatewayAccessRejected } from "@/lib/useGatewayAccess";
 
-// ConnectCard collects the gateway API key. It covers both credential states:
-// no key stored yet, and a stored key the gateway has refused. The second is
-// routine in development, where each `starport dev` run mints a key that lives
-// only in memory, so a restart strands the key in this browser.
+// ConnectCard is what a reader with no working credential sees. It offers the
+// two ways in, in the order they should be tried: `starport ui` from the
+// machine running the gateway, which needs nothing pasted, and a gateway API
+// key for a browser that is somewhere else.
+//
+// It covers both unusable states — nothing stored yet, and something the
+// gateway has refused. The second is routine in development, where each
+// `starport dev` run mints a key that lives only in memory, so a restart
+// strands the key in this browser.
 export function ConnectCard() {
   const [draft, setDraft] = useState("");
-  const rejected = useApiKeyRejected();
+  const rejected = useGatewayAccessRejected();
   const save = () => {
     const key = draft.trim();
     if (key) setApiKey(key);
@@ -18,10 +23,16 @@ export function ConnectCard() {
   return (
     <Card>
       <CardTitle>{rejected ? "Reconnect" : "Connect"}</CardTitle>
-      <p className="mb-4 text-base text-text-3">
+      <p className="mb-3 text-base text-text-3">
         {rejected
-          ? "The gateway did not accept the key stored in this browser. A gateway restart mints a new key and prints it once to the terminal that started it. Paste the current key to reconnect."
-          : "Set your gateway API key to unlock the model catalog, chat, providers, and key management. The key stays in this browser."}
+          ? "The gateway did not accept what this browser presented. A console session expires, and a gateway restart mints a new API key, so either can go stale while the console still looks signed in."
+          : "The console needs a credential before it can read the catalog, chat, or manage providers."}
+      </p>
+      <p className="mb-4 text-base text-text-3">
+        On the machine running the gateway, run{" "}
+        <code className="rounded-sm bg-bg-2 px-1 font-mono text-sm text-text-2">starport ui</code>. It
+        opens a link that signs this browser in with a session, and nothing is pasted or stored here.
+        From anywhere else, paste a gateway API key below; it stays in this browser.
       </p>
       <form
         className="flex gap-2"

@@ -19,7 +19,7 @@ import {
   type ProviderRuntimeStatus,
 } from "@/lib/api";
 import { providerLabel } from "@/lib/format";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/providers")({
   component: ProvidersPage,
@@ -92,7 +92,7 @@ function CatalogOnly({
 }
 
 function ProvidersPage() {
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");

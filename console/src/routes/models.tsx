@@ -14,7 +14,7 @@ import {
   type ModelsSearch,
   providerOf,
 } from "@/lib/modelFilter";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 // Filter state lives in the URL so a filtered view survives reload and
 // pastes as a link. Empty params are dropped from the search string.
@@ -69,7 +69,7 @@ function FilterSelect({
 const SEARCH_DEBOUNCE_MS = 200;
 
 function ModelsPage() {
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const searchRef = useRef<HTMLInputElement>(null);

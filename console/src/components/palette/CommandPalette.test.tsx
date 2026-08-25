@@ -16,7 +16,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    getApiKey: () => "sk-test",
+    hasCredential: () => true,
     listModels: async () => [
       { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B" },
       { id: "meta/llama-3.1-8b-instruct", name: "Llama 3.1 8B" },
