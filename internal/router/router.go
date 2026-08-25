@@ -272,12 +272,13 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 
 	return &Response{
-		ChatResponse:    wireResponse,
-		ModelUsed:       result.Route.ID(),
-		ProviderUsed:    provider,
-		Attempts:        len(result.Attempts),
-		Metadata:        responseMetadata(result.Attempts, selectionReason(result.Attempts)),
-		CatalogSnapshot: runtime.Snapshot(),
+		ChatResponse:     wireResponse,
+		ModelUsed:        result.Route.ID(),
+		ProviderUsed:     provider,
+		CredentialSource: credentialSourceUsed(result.Attempts),
+		Attempts:         len(result.Attempts),
+		Metadata:         responseMetadata(result.Attempts, selectionReason(result.Attempts)),
+		CatalogSnapshot:  runtime.Snapshot(),
 	}, nil
 }
 

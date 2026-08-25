@@ -455,6 +455,10 @@ export type ActivityRecord = {
   model_requested?: string;
   model_used?: string;
   provider?: string;
+  // Which credential plane paid: environment, gateway, byok, or anonymous
+  // for a provider that accepted the call without one. A record written
+  // before the gateway recorded planes carries none.
+  credential_source?: string;
   streaming?: boolean;
   status?: string;
   status_code?: number;

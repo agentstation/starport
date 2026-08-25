@@ -69,14 +69,19 @@ type Transition struct {
 
 // AttemptEvidence records one provider invocation or availability skip.
 type AttemptEvidence struct {
-	Number      int
-	Route       routing.Route
-	Retry       int
-	State       State
-	StartedAt   time.Time
-	FinishedAt  time.Time
-	Duration    time.Duration
-	Failure     *failure.Failure
+	Number     int
+	Route      routing.Route
+	Retry      int
+	State      State
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Duration   time.Duration
+	Failure    *failure.Failure
+	// Credential names which credential plane paid for this attempt. It is
+	// evidence about the attempt in the same sense the route is, and a
+	// fallback can move between planes, so it is recorded per attempt rather
+	// than once per request. A skipped attempt carries none.
+	Credential  CredentialEvidence
 	Transitions []Transition
 }
 
@@ -94,7 +99,14 @@ const (
 // CredentialEvidence identifies one selected credential version without
 // exposing its values or source reference.
 type CredentialEvidence struct {
-	Owner           CredentialOwner
+	Owner CredentialOwner
+	// Source is the caller's name for the plane the credential came from.
+	// Execution never interprets it: the owner is what decides whether an
+	// attempt may move the shared availability state, and the source is
+	// carried only so an operator can later see which of the owner's planes
+	// answered. Splitting the two keeps the credential vocabulary with the
+	// package that owns it instead of mirroring it here.
+	Source          string
 	MaterialVersion string
 	Accepted        bool
 }

@@ -43,6 +43,11 @@ const (
 	SourceGateway CredentialSource = "gateway"
 	// SourceBYOK selects the credential the request's own tenant brought.
 	SourceBYOK CredentialSource = "byok"
+	// SourceAnonymous names an attempt a provider accepted with no credential
+	// at all. No strategy selects it and no plane holds it; it is here so that
+	// a record of what paid for a request can say "nothing did" instead of
+	// saying nothing, which is what an unrecorded request also says.
+	SourceAnonymous CredentialSource = "anonymous"
 )
 
 // Strategy defines request-bound inference credential order.

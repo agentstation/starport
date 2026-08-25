@@ -5,6 +5,7 @@ import { useMemo } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { GatewayCredentialPanel } from "@/components/credentials/GatewayCredentialPanel";
+import { ServedCredentialPanel } from "@/components/credentials/ServedCredentialPanel";
 import {
   availableOfferings,
   CredentialPill,
@@ -152,7 +153,7 @@ function ProviderDetailPage() {
 
       {runtime && (
         <>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <EnvironmentCredentialPanel
               providerId={providerId}
               credential={runtime.operator_credential}
@@ -161,6 +162,7 @@ function ProviderDetailPage() {
               providerId={providerId}
               fields={entry?.credential_fields ?? []}
             />
+            <ServedCredentialPanel records={activity.data?.data} />
           </div>
           <HealthPanel offerings={offerings} records={activity.data?.data} />
         </>

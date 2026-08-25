@@ -278,6 +278,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	// Retain the exact route that produced the canonical response.
 	proxyResp.Response.ModelUsed = result.ModelUsed
 	proxyResp.ProviderUsed = result.ProviderUsed
+	proxyResp.CredentialSource = result.CredentialSource
 	proxyResp.Attempts = result.Attempts
 	proxyResp.CatalogSnapshot = result.CatalogSnapshot
 	if result.Metadata != nil {
@@ -404,11 +405,12 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 		}
 	}
 	response := &EmbeddingsResponse{
-		Response:        result.Response,
-		ModelUsed:       result.ModelUsed,
-		ProviderUsed:    result.ProviderUsed,
-		Attempts:        result.Attempts,
-		CatalogSnapshot: result.CatalogSnapshot,
+		Response:         result.Response,
+		ModelUsed:        result.ModelUsed,
+		ProviderUsed:     result.ProviderUsed,
+		CredentialSource: result.CredentialSource,
+		Attempts:         result.Attempts,
+		CatalogSnapshot:  result.CatalogSnapshot,
 	}
 	if result.Metadata != nil {
 		response.RoutingDuration = result.Metadata.RoutingDuration
