@@ -13,6 +13,7 @@ import {
   HealthPanel,
   OfferingsTable,
   operatorEnvNames,
+  reachableSummary,
   policyChips,
   PolicyChips,
 } from "./ProviderDetail";
@@ -281,4 +282,66 @@ test("links each offering into the provider-filtered models list", () => {
   ).toBe("/models?provider=groq&q=llama-3.3-70b");
   expect(screen.getByText("rate limited")).toBeDefined();
   expect(screen.getByText("open")).toBeDefined();
+});
+
+// --- Reachability: an offering the planner drops stays healthy, so circuit
+// state alone cannot show it. These cover the case the signal exists for.
+
+test("counts only offerings a planning generation has judged", () => {
+  expect(
+    reachableSummary([
+      { provider_model_id: "a", routing: { state: "routable" } },
+      { provider_model_id: "b", routing: { state: "unroutable", reason: "operation_unsupported" } },
+      { provider_model_id: "c", routing: { state: "unknown" } },
+      { provider_model_id: "d" },
+    ]),
+  ).toEqual({ routable: 1, unroutable: 1, known: 2 });
+});
+
+test("reports how many advertised offerings are unroutable", () => {
+  render(
+    <HealthPanel
+      offerings={[
+        { provider_model_id: "a", state: "healthy", routing: { state: "routable" } },
+        {
+          provider_model_id: "b",
+          state: "healthy",
+          routing: { state: "unroutable", reason: "operation_unsupported" },
+        },
+      ]}
+      records={[]}
+    />,
+  );
+
+  const summary = screen.getByTestId("reachable-summary");
+  expect(summary.textContent).toContain("1 of 2");
+  expect(summary.textContent).toContain("1 advertised but unroutable");
+});
+
+test("stays silent when no planning generation has judged the offerings", () => {
+  render(
+    <HealthPanel
+      offerings={[{ provider_model_id: "a", state: "healthy" }]}
+      records={[]}
+    />,
+  );
+
+  expect(screen.queryByTestId("reachable-summary")).toBeNull();
+});
+
+test("names the filter that dropped an unroutable offering", () => {
+  render(
+    <OfferingsTable
+      providerId="groq"
+      offerings={[
+        {
+          provider_model_id: "llama-3.3-70b",
+          state: "healthy",
+          routing: { state: "unroutable", reason: "operation_unsupported" },
+        },
+      ]}
+    />,
+  );
+
+  expect(screen.getByText("unroutable \u00b7 operation unsupported")).toBeDefined();
 });

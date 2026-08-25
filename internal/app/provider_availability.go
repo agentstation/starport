@@ -25,5 +25,12 @@ func (p providerAvailabilityPublisher) PublishAvailability(snapshot availability
 			errs = append(errs, err)
 		}
 	}
+	// Withholding an offering removes its route, so the planning verdicts the
+	// operator reads must move with the availability generation that caused it.
+	if p.catalog != nil && p.states != nil {
+		if err := publishRouting(p.states, p.catalog.Current()); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	return errors.Join(errs...)
 }

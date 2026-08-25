@@ -55,13 +55,20 @@ function AdapterFault({ state }: { state: string }) {
   );
 }
 
-// An offering is available when its circuit admits attempts: healthy,
-// or half_open while it probes recovery. Open and unavailable reject.
+// An offering is available when a request can both reach it and be admitted.
+// The circuit answers admission: healthy, or half_open while it probes
+// recovery; open and unavailable reject. Routing answers reach: an offering the
+// planner drops never receives an attempt, so its circuit stays healthy forever
+// and counting it as available overstates what the provider serves. Routing
+// that no planning generation has judged yet stays unknown, and unknown does
+// not disqualify — only an explicit unroutable verdict does.
 export function availableOfferings(
   offerings: ProviderRuntimeStatus["offerings"],
 ): number {
   return (offerings ?? []).filter(
-    (offering) => offering.state === "healthy" || offering.state === "half_open",
+    (offering) =>
+      (offering.state === "healthy" || offering.state === "half_open") &&
+      offering.routing?.state !== "unroutable",
   ).length;
 }
 
