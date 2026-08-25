@@ -28,13 +28,20 @@ starport dev
 ```
 
 The command binds to `127.0.0.1`, uses in-memory storage, and creates no
-configuration file. It prints one temporary gateway API key:
+configuration file. It prints one temporary gateway API key and one console
+sign-in link, and opens the console in a browser:
 
 ```text
 Starport development gateway
 URL: http://127.0.0.1:8080
+Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
+Console (one-time sign-in link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
 ```
+
+Add `--no-open` to print the link without opening a browser. Add `--no-auth`
+to serve without a gateway API key; the banner then reports
+`Authentication: disabled` and prints no key.
 
 Keep the development process open. In a second terminal, set the printed key
 and check the gateway:
@@ -50,6 +57,98 @@ curl --fail-with-body \
 The model response contains the active Starmap catalog view. It does not prove
 that a provider accepts its resolved credential. The first inference attempt
 provides that evidence.
+
+## Authentication Mode
+
+Starport requires a gateway API key on every inference and management route by
+default. An operator can turn that requirement off for a deployment where it
+buys nothing: a workstation, a private container, a test rig.
+
+Four places can state the mode. The first that states it wins:
+
+| Source | How | Survives a restart |
+| --- | --- | --- |
+| `flag` | `--no-auth` on `starport serve` or `starport dev` | no |
+| `config` | `STARPORT_SECURITY_AUTH_MODE=disabled` | yes |
+| `console` | the switch under Settings | yes |
+| `default` | nothing stated | `required` |
+
+A flag or a configuration value fixes the mode for the process. The console
+switch is refused while either is set, and the refusal names the value to
+change, so an operator is never told only that they may not.
+
+```bash
+curl --fail-with-body http://127.0.0.1:8080/api/v1/auth/mode
+```
+
+That route needs no credential in either mode. It reports the mode, which of
+the four sources stated it, whether this caller may change it, and why not
+when they may not.
+
+### The exposure tripwire
+
+Starport refuses to start with authentication disabled on an address the
+network can reach. Loopback is exempt: a caller who is already on the machine
+gains nothing from a key. To run open on a reachable address, state it:
+
+```bash
+starport serve --no-auth --allow-remote-no-auth
+```
+
+A stored `disabled` mode is re-checked against the address this process binds.
+A data directory carried from a laptop to a public address does not carry an
+open gateway with it — the gateway falls back to `required` and warns, naming
+the bind host.
+
+The console switch enforces the same rule from the other side: it can be used
+only from the machine running the gateway. An open gateway can always be closed
+from that machine, and cannot be opened further from anywhere else.
+
+### The local admin token
+
+Issuing a gateway API key is itself an admin act, so a freshly installed
+gateway would have no first move. Starport breaks that circle with a token the
+machine gives itself. It is not a gateway API key:
+
+| | Gateway API key | Local admin token |
+| --- | --- | --- |
+| Belongs to | a tenant | nobody |
+| Proves | who you are | that you are on this machine |
+| Lives in | encrypted storage | one file, mode 0600 |
+| Prefix | `STARPORT_` | `starport_local_` |
+| Issued by | an admin act | the machine, on first start |
+| Revoked by | deleting the key | rotating the file |
+
+```bash
+starport auth status   # generation, age, and the exposure answer
+starport auth token    # print this machine's token
+starport auth url      # a one-time console sign-in link
+starport ui            # mint that link and open it
+```
+
+`starport ui` reads the token file rather than calling the gateway, so it
+produces a sign-in link whether the gateway is up, down, wedged, or refusing
+the operator. That is the case an operator reaches for it in.
+
+### Rotation
+
+```bash
+starport auth rotate
+```
+
+Rotation replaces the secret and increases the generation. Every key derived
+from the token changes with it, so every outstanding sign-in link and every
+live console session stops verifying at once. There is no session list to walk
+and nothing to clear.
+
+Rotate before you expose a gateway on a reachable address. The token printed
+at first start has been in a terminal, and a terminal is scrollback, a tmux
+buffer, a screen share, and a CI log. `starport auth status` reports whether
+this machine's token has ever been rotated.
+
+An unreadable token file is refused on every read path rather than replaced,
+because minting over it would discard a secret the operator may still hold.
+`starport auth rotate` is the deliberate exception: it repairs the file.
 
 ## Initialize Persistent State
 
@@ -384,27 +483,52 @@ Starmap owns the model catalog. Only offerings from the active Starmap
 generation and configured adapters are routable. A Starmap acquisition failure
 does not add a static model list.
 
-### Tenant provider credentials
+### The three provider credential sources
 
-An authenticated gateway identity can own an encrypted provider credential at
-`/api/v1/keys/{key_id}/provider-keys`. Set its
-`provider_credential_strategy` metadata to one of these exact values:
+A request can be paid for out of three places. Two of them are the operator's
+money and one is the account's. Only the last is BYOK.
 
-- `operator_first`: try deployment-owned material, then tenant material.
-- `user_first`: try tenant material, then deployment-owned material.
-- `user_only`: use only tenant material.
+| Source | Owner | Where it lives | Applied by |
+| --- | --- | --- | --- |
+| `environment` | the operator | this process's environment | starting the process |
+| `gateway` | the operator | encrypted storage, scope `*` | `PUT /api/v1/providers/{provider}/credentials`, or the provider screen |
+| `byok` | an account | encrypted storage, scope `tenant:<id>` | `PUT /api/v1/tenants/{tenant_id}/byok/{provider}`, or the account screen |
 
-The default is `operator_first`. Starport can advance to the next credential
-only when material is not configured or when the provider reports an
-authentication or rate-limit failure. Permission, invalid-material, timeout,
-cancellation, and internal failures are terminal. Each credential advance
-uses the existing total attempt budget. It does not create a provider-health
-failure or a hidden retry budget.
+A **gateway credential** is deployment-wide: every account a strategy permits
+can spend it. It is read-only from no route — an operator applies and rotates
+it over HTTP without restarting — and it is not BYOK. An **environment
+credential** cannot be changed over HTTP at all, because it lives in the
+process the operator started.
 
-`user_only` does not read or test deployment-owned material. Its external
-missing-credential error is the same whether deployment-owned material exists
-or not. Tenant credential lookup uses the exact authenticated gateway-key ID.
-It never merges a global stored record.
+`GET /api/v1/providers/status` reports the environment plane only. The console
+shows all three on the provider screen: what the environment holds, what the
+operator applied, and which plane actually paid over the last hour.
+
+### Choosing between them
+
+An account's `provider_credential_strategy` decides the order. Set it on the
+account, or on one gateway API key's metadata to narrow the account's:
+
+- `operator_first`: environment, then gateway, then the account's own BYOK.
+- `byok_first`: the account's own BYOK, then environment, then gateway.
+- `byok_only`: the account's own BYOK alone.
+
+The default is `operator_first`. `byok_only` is how an operator withholds the
+deployment's money from an account: it reads no operator plane and its external
+missing-credential error is the same whether an operator credential exists or
+not. A key may narrow its account's strategy and is refused if it would widen
+it, so stamping a key cannot buy back a plane the account was denied.
+
+Starport advances to the next source only when material is not configured or
+when the provider reports an authentication, permission, quota, billing, or
+rate-limit failure. Timeout, cancellation, and internal failures are terminal.
+Each advance uses the existing total attempt budget. It does not create a
+provider-health failure or a hidden retry budget, and an account's own BYOK
+failure never moves shared provider state.
+
+Every usage record names the source that paid, as `credential_source`. That is
+how an operator sees an account drawing on the deployment's credential rather
+than its own.
 
 Set `STARPORT_CATALOG_REFRESH_ON_START=true` to run Starmap acquisition before
 runtime activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later catalog

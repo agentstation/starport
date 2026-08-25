@@ -25,6 +25,12 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
   provider switches, endpoint tables, model lists, or price defaults.
 - Keep provider model IDs exact and opaque.
 - Keep catalog-acquisition credentials separate from inference credentials.
+- Keep gateway API keys separate from provider credentials. A gateway API key
+  authenticates a caller to Starport. A provider credential pays a provider.
+- Use BYOK only for a provider credential a tenant brings for itself. A
+  provider credential the operator applies for the whole deployment is a
+  gateway credential, and one read from the process environment is an
+  environment credential.
 - Keep Starmap acquisition, source, and sync option imports in
   `internal/catalog`. Application composition uses the catalog-owned refresh
   contract.
@@ -37,6 +43,15 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Put attempt state and retry budgets in `internal/execution`.
 - Put provider failure normalization in `internal/failure`.
 - Put request credential placement in `internal/providers/auth`.
+- Put the provider credential sources, their scopes, and the selection
+  strategies in `internal/providers/keyring`. It owns the words `environment`,
+  `gateway`, `byok`, and `anonymous`. No other package restates them.
+- Put account identity, account-wide limits, and the default credential
+  strategy in `internal/tenant`. Put the limit vocabulary itself in
+  `internal/limits`, which both a gateway API key and a tenant use.
+- Put the gateway authentication mode and its exposure rule in
+  `internal/authmode`. Put the local admin token, launch tickets, and console
+  sessions in `internal/localauth`.
 - Put cloud credential acquisition in `internal/credentials/cloudchain`.
 - Put safe provider runtime projections in `internal/providers/state`.
 - Put canonical response cache records in `internal/response/cache`.
