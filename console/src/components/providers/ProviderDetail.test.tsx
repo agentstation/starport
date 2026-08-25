@@ -9,7 +9,7 @@ import {
   activityStats,
   checkedEnvNames,
   circuitBreakdown,
-  CredentialPanel,
+  EnvironmentCredentialPanel,
   HealthPanel,
   OfferingsTable,
   operatorEnvNames,
@@ -78,7 +78,19 @@ test("renders nothing when no policy facts are declared", () => {
   expect(container.innerHTML).toBe("");
 });
 
-// --- Credential panel
+// --- Environment credential panel
+//
+// The panel reports one plane: the credential this gateway read from its own
+// process environment. It never links to the keys page, because a gateway API
+// key is not a provider credential and sending an operator there to fix a
+// provider is what taught them the two were the same thing. The credential
+// they can apply sits on this screen, in the panel beside it.
+
+// noKeysLink asserts the separation the whole screen exists to make. Any
+// anchor into /keys from this panel is the regression.
+function noKeysLink(container: HTMLElement): void {
+  expect(container.querySelector('a[href^="/keys"]')).toBeNull();
+}
 
 test("derives operator env names from the provider id", () => {
   expect(operatorEnvNames("groq")).toEqual([
@@ -92,28 +104,33 @@ test("derives operator env names from the provider id", () => {
 });
 
 test("states a usable credential without a fix-it path", () => {
-  render(
-    <CredentialPanel
+  const { container } = render(
+    <EnvironmentCredentialPanel
       providerId="groq"
       credential={{ state: "ready", usable: true }}
     />,
   );
 
-  expect(screen.getByText(/Operator credential is ready/)).toBeDefined();
-  expect(screen.queryByText("Manage API Keys")).toBeNull();
+  expect(screen.getByText(/Read from the gateway environment/)).toBeDefined();
+  noKeysLink(container);
 });
 
-test("offers env names and the API Keys path when unconfigured", () => {
-  render(<CredentialPanel providerId="groq" credential={undefined} />);
+test("names the variables to set and sends nobody to the keys page", () => {
+  const { container } = render(
+    <EnvironmentCredentialPanel providerId="groq" credential={undefined} />,
+  );
 
   expect(
-    screen.getByText("No operator credential is configured for this provider."),
+    screen.getByText(
+      "This gateway read no environment credential for this provider.",
+    ),
   ).toBeDefined();
   expect(screen.getByText("GROQ_API_KEY")).toBeDefined();
   expect(screen.getByText("STARPORT_GROQ_API_KEY")).toBeDefined();
-  expect(screen.getByText("Manage API Keys").closest("a")?.getAttribute("href")).toBe(
-    "/keys",
-  );
+  expect(
+    screen.getByText(/apply a gateway credential below/),
+  ).toBeDefined();
+  noKeysLink(container);
 });
 
 test("parses the server's checked-environment detail", () => {
@@ -126,7 +143,7 @@ test("parses the server's checked-environment detail", () => {
 
 test("prefers the server's checked env names over the derived guess", () => {
   render(
-    <CredentialPanel
+    <EnvironmentCredentialPanel
       providerId="google-ai-studio"
       credential={{
         state: "not_configured",
@@ -145,7 +162,7 @@ test("prefers the server's checked env names over the derived guess", () => {
 
 test("shows a source failure detail beneath the state line", () => {
   render(
-    <CredentialPanel
+    <EnvironmentCredentialPanel
       providerId="google-vertex"
       credential={{
         state: "unavailable",
@@ -162,17 +179,19 @@ test("shows a source failure detail beneath the state line", () => {
 });
 
 test("surfaces the failure reason for a broken credential", () => {
-  render(
-    <CredentialPanel
+  const { container } = render(
+    <EnvironmentCredentialPanel
       providerId="groq"
       credential={{ state: "invalid", usable: false, reason: "credential_rejected" }}
     />,
   );
 
   expect(
-    screen.getByText(/The operator credential is invalid \(credential rejected\)\./),
+    screen.getByText(
+      /The environment credential is invalid \(credential rejected\)\./,
+    ),
   ).toBeDefined();
-  expect(screen.getByText("Manage API Keys")).toBeDefined();
+  noKeysLink(container);
 });
 
 // --- Health math

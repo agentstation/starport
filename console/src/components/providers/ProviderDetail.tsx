@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { KeyRound } from "lucide-react";
 
 import type {
   ActivityRecord,
@@ -65,10 +64,15 @@ export function PolicyChips({ entry }: { entry: ProviderCatalogEntry | undefined
   );
 }
 
-// --- Credential panel: the operator credential state with a fix-it
-// path. Operator credentials come from the environment (README:
-// <PROVIDER>_API_KEY, then STARPORT_<PROVIDER>_API_KEY); callers can
-// also attach their own key to a gateway key on the API Keys page.
+// --- Environment credential panel: the provider credential this
+// deployment read from its own process environment (README:
+// <PROVIDER>_API_KEY, then STARPORT_<PROVIDER>_API_KEY).
+//
+// It is read-only from the console by construction: the value lives in the
+// process the operator started, and no HTTP route can change it. The panel
+// beside this one holds the credential the operator can apply, and neither is
+// a gateway API key: a gateway API key authenticates a caller and never pays
+// a provider.
 
 export function operatorEnvNames(providerId: string): [string, string] {
   const stem = providerId.toUpperCase().replaceAll("-", "_");
@@ -86,7 +90,7 @@ export function checkedEnvNames(detail: string | undefined): string[] {
     .filter(Boolean);
 }
 
-export function CredentialPanel({
+export function EnvironmentCredentialPanel({
   providerId,
   credential,
 }: {
@@ -105,11 +109,11 @@ export function CredentialPanel({
       className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
     >
       <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
-        Credential
+        Environment credential
       </h2>
       {usable ? (
         <p className="text-sm text-text-2">
-          Operator credential is ready
+          Read from the gateway environment
           {credential?.updated_at
             ? ` · updated ${formatRelativeTime(credential.updated_at)}`
             : ""}
@@ -119,8 +123,8 @@ export function CredentialPanel({
         <>
           <p className="text-sm text-text-2">
             {state === "not_configured"
-              ? "No operator credential is configured for this provider."
-              : `The operator credential is ${state.replaceAll("_", " ")}${
+              ? "This gateway read no environment credential for this provider."
+              : `The environment credential is ${state.replaceAll("_", " ")}${
                   credential?.reason
                     ? ` (${credential.reason.replaceAll("_", " ")})`
                     : ""
@@ -140,25 +144,17 @@ export function CredentialPanel({
                   <code className="font-mono text-xs text-text-2">{name}</code>
                 </span>
               ))}
-              . Set one in the gateway environment, or attach your own provider
-              key to a gateway key.
+              . Set one in the gateway environment, or apply a gateway
+              credential below.
             </p>
           ) : (
             <p className="text-sm text-text-3">
               Set{" "}
               <code className="font-mono text-xs text-text-2">{envName}</code> or{" "}
               <code className="font-mono text-xs text-text-2">{prefixedEnvName}</code>{" "}
-              in the gateway environment, or attach your own provider key to a
-              gateway key.
+              in the gateway environment, or apply a gateway credential below.
             </p>
           )}
-          <Link
-            to="/keys"
-            className="flex w-fit items-center gap-1.5 text-sm text-accent-link transition-colors duration-150 ease-standard hover:underline"
-          >
-            <KeyRound className="size-3.5" />
-            Manage API Keys
-          </Link>
         </>
       )}
     </section>

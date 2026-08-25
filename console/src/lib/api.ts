@@ -603,6 +603,51 @@ export function deleteKey(keyId: string): Promise<unknown> {
   });
 }
 
+// --- Gateway credentials: the provider credentials the operator applies ---
+//
+// These serve the whole deployment and belong to nobody. They are addressed by
+// provider alone, because there is exactly one per provider and no account
+// owns it. They are not BYOK, and no screen that shows them says BYOK.
+
+function gatewayCredentialPath(provider: string, suffix = ""): string {
+  return `/api/v1/providers/${encodeURIComponent(provider)}/credentials${suffix}`;
+}
+
+export function getGatewayCredential(
+  provider: string,
+): Promise<ProviderCredentialSummary> {
+  return request<ProviderCredentialSummary>(gatewayCredentialPath(provider));
+}
+
+// putGatewayCredential applies or rotates the deployment credential. PUT is an
+// upsert, so an operator rotating one does not first have to ask whether one is
+// already applied.
+export function putGatewayCredential(
+  provider: string,
+  body: {
+    credentials: Record<string, string>;
+    config?: Record<string, string>;
+  },
+): Promise<unknown> {
+  return request<unknown>(gatewayCredentialPath(provider), {
+    method: "PUT",
+    body,
+  });
+}
+
+export function deleteGatewayCredential(provider: string): Promise<unknown> {
+  return request<unknown>(gatewayCredentialPath(provider), { method: "DELETE" });
+}
+
+export function validateGatewayCredential(
+  provider: string,
+): Promise<{ valid?: boolean }> {
+  return request<{ valid?: boolean }>(
+    gatewayCredentialPath(provider, "/validate"),
+    { method: "POST" },
+  );
+}
+
 // --- BYOK: the provider credentials one tenant brings for itself ---
 //
 // These are addressed by tenant, never by gateway API key. A tenant's
@@ -659,6 +704,82 @@ export function validateBYOKCredential(
   return request<{ valid?: boolean }>(
     `${byokPath(tenantId, provider)}/validate`,
     { method: "POST" },
+  );
+}
+
+// --- Tenants: the accounts an operator governs ---
+
+// CredentialStrategy names which credential sources serve an account, and in
+// which order. It is the operator's lever for whether an account may draw on
+// the deployment's own provider credentials at all.
+export type CredentialStrategy =
+  | "operator_first"
+  | "byok_first"
+  | "byok_only";
+
+export const CREDENTIAL_STRATEGY_LABELS: Record<CredentialStrategy, string> = {
+  operator_first: "Operator credentials first, then this account's own",
+  byok_first: "This account's own credentials first, then the operator's",
+  byok_only: "This account's own credentials only",
+};
+
+// TenantLimits meters the sum over every key the account holds. It is not a
+// per-key ceiling: a key limit bounds one key, and a request satisfies both.
+export type TenantLimits = {
+  requests?: { limit?: number; window_seconds?: number } | null;
+  spend?: { limit?: number; interval?: string } | null;
+  tokens?: { limit?: number; interval?: string } | null;
+};
+
+export type Tenant = {
+  id: string;
+  name?: string;
+  limits?: TenantLimits | null;
+  credential_strategy?: CredentialStrategy;
+  metadata?: Record<string, unknown> | null;
+  active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export async function listTenants(): Promise<Tenant[]> {
+  const body = await request<{ tenants?: Tenant[] }>("/api/v1/admin/tenants");
+  return body?.tenants ?? [];
+}
+
+export function getTenant(tenantId: string): Promise<Tenant> {
+  return request<Tenant>(
+    `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}`,
+  );
+}
+
+export function createTenant(body: {
+  id: string;
+  name?: string;
+  credential_strategy?: CredentialStrategy;
+}): Promise<Tenant> {
+  return request<Tenant>("/api/v1/admin/tenants", { method: "POST", body });
+}
+
+export function updateTenant(
+  tenantId: string,
+  body: {
+    name?: string;
+    credential_strategy?: CredentialStrategy;
+    limits?: TenantLimits | null;
+    active?: boolean;
+  },
+): Promise<Tenant> {
+  return request<Tenant>(
+    `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}`,
+    { method: "PUT", body },
+  );
+}
+
+export function deleteTenant(tenantId: string): Promise<unknown> {
+  return request<unknown>(
+    `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}`,
+    { method: "DELETE" },
   );
 }
 

@@ -578,7 +578,7 @@ function ChatPage() {
   );
 
   return (
-    <div className="flex h-screen min-w-0">
+    <div className="flex h-[calc(100vh-var(--app-banner,0px))] min-w-0">
       {sidebarOpen && (
         <ThreadList
           conversations={conversations}

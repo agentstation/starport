@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
+  Building2,
   Key,
   LayoutDashboard,
   MessageSquare,
@@ -11,6 +12,7 @@ import {
   Search as SearchIcon,
   Server,
   Settings,
+  ShieldAlert,
   SlidersHorizontal,
   Sparkles,
   Sun,
@@ -19,6 +21,7 @@ import {
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
+import { readAuthMode } from "@/lib/api";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
 // Nav entries flip to implemented as their page tasks land (CM3–CM10).
@@ -29,6 +32,7 @@ const NAV = [
   { to: "/authors", label: "Authors", icon: Users, implemented: true },
   { to: "/providers", label: "Providers", icon: Server, implemented: true },
   { to: "/keys", label: "API Keys", icon: Key, implemented: true },
+  { to: "/tenants", label: "Accounts", icon: Building2, implemented: true },
   { to: "/usage", label: "Usage", icon: BarChart3, implemented: true },
   { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: true },
   { to: "/settings", label: "Settings", icon: Settings, implemented: true },
@@ -119,6 +123,47 @@ function GatewayStatus({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+// OpenGatewayBanner states the one gateway setting a person cannot infer from
+// the screen in front of them. With authentication off, every page looks
+// exactly as it does with a key — which is how an operator leaves a gateway
+// open and never notices. It rides above the content on every route rather
+// than living only in Settings, because the mistake is made everywhere else.
+function useOpenGateway(): boolean {
+  const { data } = useQuery({
+    queryKey: ["auth-mode"],
+    queryFn: readAuthMode,
+    retry: false,
+  });
+  return data?.mode === "disabled";
+}
+
+// BANNER_HEIGHT is stated once and consumed twice: the strip is exactly this
+// tall, and the chat route sizes its full-height column against it. A route
+// that assumes the whole viewport would otherwise overflow by the strip.
+const BANNER_HEIGHT = "2.25rem";
+
+function OpenGatewayBanner() {
+  return (
+    <div
+      role="status"
+      data-testid="auth-mode-banner"
+      className="flex h-9 items-center gap-2 border-b border-border-1 bg-warning-tint px-8 text-sm text-text-1"
+    >
+      <ShieldAlert aria-hidden="true" className="size-4 shrink-0 text-warning" />
+      <span>
+        Authentication is off. This gateway answers every request that reaches
+        it, with no API key.
+      </span>
+      <Link
+        to="/settings"
+        className="ml-auto shrink-0 text-accent-link transition-colors duration-150 ease-standard hover:underline"
+      >
+        Require a key
+      </Link>
+    </div>
+  );
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === "1",
@@ -128,6 +173,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [collapsed]);
 
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const openGateway = useOpenGateway();
 
   return (
     <div className="flex min-h-screen bg-bg-canvas text-text-1">
@@ -233,10 +279,16 @@ export function Shell({ children }: { children: ReactNode }) {
       </aside>
 
       <main
+        style={
+          {
+            "--app-banner": openGateway ? BANNER_HEIGHT : "0px",
+          } as React.CSSProperties
+        }
         className={`min-w-0 flex-1 transition-[margin] duration-150 ease-standard ${
           collapsed ? "ml-16" : "ml-60"
         }`}
       >
+        {openGateway && <OpenGatewayBanner />}
         {pathname === "/chat" ? (
           // Chat owns its full-height layout (thread sidebar + column).
           children
