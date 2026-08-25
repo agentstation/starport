@@ -23,6 +23,9 @@ var (
 	ErrCatalogRequired = errors.New("provider-state catalog is required")
 	// ErrAdapterProjectionIncomplete reports missing or duplicate adapter state.
 	ErrAdapterProjectionIncomplete = errors.New("provider adapter projection is incomplete")
+	// ErrRoutingProjectionIncomplete reports an unidentified or duplicate
+	// route-planning verdict.
+	ErrRoutingProjectionIncomplete = errors.New("provider routing projection is incomplete")
 )
 
 // AdapterState identifies compiled support for one catalog provider.
@@ -77,6 +80,26 @@ const (
 	ReasonRateLimited               ReasonCode = "rate_limited"
 	ReasonProviderUnavailable       ReasonCode = "provider_unavailable"
 	ReasonProviderTimeout           ReasonCode = "provider_timeout"
+	ReasonAdapterNotReady           ReasonCode = "adapter_not_ready"
+	ReasonOfferingUnavailable       ReasonCode = "offering_unavailable"
+	ReasonOperationUnsupported      ReasonCode = "operation_unsupported"
+)
+
+// RoutingState reports whether route planning can reach one offering. It is a
+// separate question from health: a healthy offering the planner cannot reach is
+// advertised and unusable, and an operator needs to see the difference.
+type RoutingState string
+
+// Routing states are a closed projection of the route planner's verdict.
+const (
+	// RoutingUnknown means no planning generation has covered this offering
+	// yet. It is the state before the runtime publishes its first route set.
+	RoutingUnknown RoutingState = "unknown"
+	// RoutingRoutable means the planner keeps a route for this offering.
+	RoutingRoutable RoutingState = "routable"
+	// RoutingUnroutable means the planner produced no route, and Reason names
+	// the filter that rejected it.
+	RoutingUnroutable RoutingState = "unroutable"
 )
 
 // AdapterObservation is the activation owner's safe projection.
@@ -128,11 +151,28 @@ type CredentialStatus struct {
 	UpdatedAt time.Time       `json:"updated_at,omitempty"`
 }
 
+// RoutingStatus is the route planner's safe verdict for one offering.
+type RoutingStatus struct {
+	State  RoutingState `json:"state"`
+	Reason ReasonCode   `json:"reason,omitempty"`
+}
+
 // OfferingStatus is the projected state of one exact opaque provider model ID.
+// State answers whether the offering is healthy; Routing answers whether a
+// request can reach it at all.
 type OfferingStatus struct {
 	ProviderModelID catalogs.ProviderModelID `json:"provider_model_id"`
 	State           availability.State       `json:"state"`
 	Reason          ReasonCode               `json:"reason,omitempty"`
+	Routing         RoutingStatus            `json:"routing"`
+}
+
+// RoutingObservation is the route planner's safe projection for one offering.
+type RoutingObservation struct {
+	ProviderID      catalogs.ProviderID
+	ProviderModelID catalogs.ProviderModelID
+	Routable        bool
+	Reason          ReasonCode
 }
 
 // ProviderStatus separates adapter, operator credential, and offering state.
@@ -174,6 +214,12 @@ type Store struct {
 	credentials          map[catalogs.ProviderID]credentialEntry
 	catalogOfferings     map[availability.Offering]OfferingStatus
 	offerings            map[availability.Offering]OfferingStatus
+
+	// routing is bound to routingGenerationID rather than to the offering
+	// records, so a catalog republish for the same generation cannot silently
+	// drop it and a republish for a new generation cannot silently keep it.
+	routingGenerationID string
+	routing             map[availability.Offering]RoutingStatus
 }
 
 // New creates an empty provider-state projection.
@@ -189,7 +235,76 @@ func newWithClock(source clock) *Store {
 		credentials:      make(map[catalogs.ProviderID]credentialEntry),
 		catalogOfferings: make(map[availability.Offering]OfferingStatus),
 		offerings:        make(map[availability.Offering]OfferingStatus),
+		routing:          make(map[availability.Offering]RoutingStatus),
 	}
+}
+
+// PublishRouting replaces the complete route-planning projection for one exact
+// catalog generation. A generation the store does not currently hold is stale
+// or premature, and the store keeps the verdicts it already has.
+func (s *Store) PublishRouting(generationID string, observations []RoutingObservation) error {
+	if s == nil || strings.TrimSpace(generationID) == "" {
+		return ErrCatalogRequired
+	}
+	routing := make(map[availability.Offering]RoutingStatus, len(observations))
+	for _, observation := range observations {
+		if observation.ProviderID == "" || observation.ProviderModelID == "" {
+			return ErrRoutingProjectionIncomplete
+		}
+		identity := availability.Offering{
+			ProviderID:      string(observation.ProviderID),
+			ProviderModelID: string(observation.ProviderModelID),
+		}
+		if _, duplicate := routing[identity]; duplicate {
+			return fmt.Errorf("%s/%s: %w",
+				observation.ProviderID, observation.ProviderModelID,
+				ErrRoutingProjectionIncomplete)
+		}
+		status := RoutingStatus{State: RoutingRoutable}
+		if !observation.Routable {
+			status = RoutingStatus{State: RoutingUnroutable, Reason: observation.Reason}
+		}
+		routing[identity] = status
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.catalogGenerationID != generationID {
+		return nil
+	}
+	if s.routingGenerationID == generationID && equalRouting(s.routing, routing) {
+		return nil
+	}
+	s.routingGenerationID = generationID
+	s.routing = routing
+	s.revision++
+	return nil
+}
+
+// routingStatusLocked reports the planning verdict bound to the current catalog
+// generation. Anything else is unknown rather than a stale claim.
+func (s *Store) routingStatusLocked(identity availability.Offering) RoutingStatus {
+	if s.routingGenerationID == "" || s.routingGenerationID != s.catalogGenerationID {
+		return RoutingStatus{State: RoutingUnknown}
+	}
+	status, exists := s.routing[identity]
+	if !exists {
+		return RoutingStatus{State: RoutingUnknown}
+	}
+	return status
+}
+
+func equalRouting(left, right map[availability.Offering]RoutingStatus) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for identity, status := range left {
+		other, exists := right[identity]
+		if !exists || other != status {
+			return false
+		}
+	}
+	return true
 }
 
 // PublishCatalog replaces the complete catalog and adapter projection.
@@ -494,9 +609,11 @@ func (s *Store) Snapshot() Snapshot {
 			OperatorCredential: credential,
 		}
 		for identity, offering := range s.offerings {
-			if identity.ProviderID == string(providerID) {
-				provider.Offerings = append(provider.Offerings, offering)
+			if identity.ProviderID != string(providerID) {
+				continue
 			}
+			offering.Routing = s.routingStatusLocked(identity)
+			provider.Offerings = append(provider.Offerings, offering)
 		}
 		sort.Slice(provider.Offerings, func(left, right int) bool {
 			return provider.Offerings[left].ProviderModelID < provider.Offerings[right].ProviderModelID

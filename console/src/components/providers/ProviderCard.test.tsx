@@ -169,6 +169,24 @@ test("counts circuit states that admit attempts as available", () => {
   expect(availableOfferings(undefined)).toBe(0);
 });
 
+// A healthy offering the route planner drops never receives an attempt, so its
+// circuit never opens. Counting it as available is how the card claimed every
+// Groq model worked while most of them could not be reached.
+test("excludes healthy offerings the route planner cannot reach", () => {
+  expect(
+    availableOfferings([
+      { provider_model_id: "a", state: "healthy", routing: { state: "routable" } },
+      {
+        provider_model_id: "b",
+        state: "healthy",
+        routing: { state: "unroutable", reason: "operation_unsupported" },
+      },
+      { provider_model_id: "c", state: "healthy", routing: { state: "unknown" } },
+      { provider_model_id: "d", state: "healthy" },
+    ]),
+  ).toBe(3);
+});
+
 test("ranks usable credentials first and missing credentials last", () => {
   expect(
     credentialRank(runtime({ operator_credential: { state: "ready", usable: true } })),

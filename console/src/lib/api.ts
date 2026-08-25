@@ -188,10 +188,15 @@ export type SystemMetrics = {
   spend?: { nano_usd?: number; requests_without_cost?: number };
 };
 
+// ProviderOfferingStatus answers two separate questions about one offering.
+// `state` is health. `routing` is whether a request can reach it at all: an
+// offering the catalog advertises but the route planner drops is healthy and
+// unusable, and `routing.reason` names the filter that dropped it.
 export type ProviderOfferingStatus = {
   provider_model_id: string;
   state?: string;
   reason?: string;
+  routing?: { state?: string; reason?: string };
 };
 
 export type ProviderRuntimeStatus = {

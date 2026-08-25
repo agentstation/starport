@@ -30,6 +30,47 @@ function CircuitChip({ state }: { state: string | undefined }) {
   );
 }
 
+// One routing vocabulary (internal/providers/state): routable offerings carry
+// a route, unroutable ones name the filter that dropped them, and unknown
+// means no planning generation has covered the offering yet.
+const ROUTING_TONES: Record<string, string> = {
+  routable: "bg-success-tint text-success",
+  unroutable: "bg-warning-tint text-warning",
+  unknown: "bg-bg-raised text-text-3",
+};
+
+function RoutingChip({ routing }: { routing: ProviderOfferingStatus["routing"] }) {
+  const state = routing?.state ?? "unknown";
+  const label =
+    state === "unroutable" && routing?.reason
+      ? `unroutable · ${routing.reason.replaceAll("_", " ")}`
+      : state;
+  return (
+    <span
+      className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
+        ROUTING_TONES[state] ?? "bg-bg-raised text-text-3"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
+// reachableSummary counts the offerings a request can actually reach. An
+// advertised offering the planner drops is the failure this answers: the
+// provider looks healthy while most of its catalog is unusable.
+export function reachableSummary(
+  offerings: ProviderOfferingStatus[],
+): { routable: number; unroutable: number; known: number } {
+  let routable = 0;
+  let unroutable = 0;
+  for (const offering of offerings) {
+    if (offering.routing?.state === "routable") routable += 1;
+    if (offering.routing?.state === "unroutable") unroutable += 1;
+  }
+  return { routable, unroutable, known: routable + unroutable };
+}
+
 // --- Policy chips: catalog-declared data-handling facts. Only declared
 // facts render — an absent field stays silent instead of guessing.
 
@@ -252,6 +293,24 @@ export function HealthPanel({
           <span className="text-sm text-text-3">No offerings reported.</span>
         )}
       </div>
+      {(() => {
+        const reach = reachableSummary(offerings);
+        if (reach.known === 0) return null;
+        return (
+          <p
+            data-testid="reachable-summary"
+            className={`text-sm ${reach.unroutable > 0 ? "text-warning" : "text-text-3"}`}
+          >
+            <span className="tabular-nums">
+              {formatCount(reach.routable)} of {formatCount(reach.known)}
+            </span>{" "}
+            offerings are reachable
+            {reach.unroutable > 0
+              ? `; ${formatCount(reach.unroutable)} advertised but unroutable.`
+              : "."}
+          </p>
+        );
+      })()}
       {stats && stats.requests > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Requests (1h)" value={formatCount(stats.requests)} />
@@ -294,6 +353,7 @@ export function OfferingsTable({
             <tr className="border-b border-border-1 text-left text-xs text-text-4">
               <th className="px-3 py-2 font-medium">Model</th>
               <th className="px-3 py-2 font-medium">Circuit</th>
+              <th className="px-3 py-2 font-medium">Routing</th>
               <th className="px-3 py-2 font-medium">Reason</th>
             </tr>
           </thead>
@@ -317,6 +377,9 @@ export function OfferingsTable({
                 </td>
                 <td className="px-3 py-2">
                   <CircuitChip state={offering.state} />
+                </td>
+                <td className="px-3 py-2">
+                  <RoutingChip routing={offering.routing} />
                 </td>
                 <td className="px-3 py-2 text-xs text-text-3">
                   {offering.reason ? offering.reason.replaceAll("_", " ") : "—"}
