@@ -1,6 +1,7 @@
 package localauth
 
 import (
+	"encoding/base64"
 	"net/url"
 	"strings"
 	"sync"
@@ -158,8 +159,8 @@ func TestTamperedValuesAreRefused(t *testing.T) {
 	require.True(t, found)
 
 	for name, tampered := range map[string]string{
-		"edited payload":   flipLast(payload) + "." + signature,
-		"edited signature": payload + "." + flipLast(signature),
+		"edited payload":   flipAByte(t, payload) + "." + signature,
+		"edited signature": payload + "." + flipAByte(t, signature),
 		"no signature":     payload,
 		"empty":            "",
 		"signature only":   "." + signature,
@@ -171,16 +172,21 @@ func TestTamperedValuesAreRefused(t *testing.T) {
 	}
 }
 
-func flipLast(value string) string {
-	if value == "" {
-		return "x"
-	}
-	last := value[len(value)-1]
-	replacement := byte('A')
-	if last == 'A' {
-		replacement = 'B'
-	}
-	return value[:len(value)-1] + string(replacement)
+// flipAByte edits what a base64url segment stands for, rather than the text of
+// the segment. The two are not the same edit: a 32-byte MAC encodes to 43
+// characters, and the last of them carries four bits of the MAC and two the
+// encoding does not use. Rewriting that character can leave the decoded bytes
+// identical, and the "tampered" value then verifies exactly as it should —
+// which made the edited-signature case fail once every sixteen runs, on
+// whichever platform drew the unlucky MAC. Flipping a decoded byte changes
+// what was signed every time.
+func flipAByte(t *testing.T, value string) string {
+	t.Helper()
+	raw, err := base64.RawURLEncoding.DecodeString(value)
+	require.NoError(t, err)
+	require.NotEmpty(t, raw)
+	raw[len(raw)-1] ^= 0xFF
+	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
 func TestAnExpiredSessionIsRefused(t *testing.T) {
