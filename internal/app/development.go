@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -88,6 +90,24 @@ func (runtime *Development) URL() string {
 		return ""
 	}
 	return runtime.url
+}
+
+// ConsoleURL returns a one-time link that signs one browser in to this
+// development gateway.
+//
+// The link is minted here rather than read from a file so it names this
+// session's address and this session's port. A development gateway picks both
+// at start, and a link that pointed at the configured gateway would sign the
+// operator in to a different process than the one they just started.
+func (runtime *Development) ConsoleURL() (string, error) {
+	if runtime == nil || runtime.application == nil {
+		return "", errors.New("development application is required")
+	}
+	ticket, err := runtime.application.localGate.MintTicket(time.Now())
+	if err != nil {
+		return "", fmt.Errorf("mint a console launch ticket: %w", err)
+	}
+	return localauth.LaunchURL(runtime.url, ticket)
 }
 
 // APIKey returns the one-time ephemeral gateway credential.

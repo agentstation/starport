@@ -15,7 +15,7 @@ import {
   type ProviderRuntimeStatus,
 } from "@/lib/api";
 import { formatContext } from "@/lib/format";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/authors_/$authorId")({
   component: AuthorDetailPage,
@@ -71,7 +71,7 @@ function ModelRow({
 
 function AuthorDetailPage() {
   const { authorId } = Route.useParams();
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
 
   const author = useQuery({
     queryKey: ["author", authorId],

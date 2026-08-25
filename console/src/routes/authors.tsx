@@ -11,14 +11,14 @@ import {
 } from "@/components/authors/AuthorCard";
 import { ConnectCard } from "@/components/overview/ConnectCard";
 import { listAuthors, listModels } from "@/lib/api";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/authors")({
   component: AuthorsPage,
 });
 
 function AuthorsPage() {
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
   const [query, setQuery] = useState("");
 
   const authors = useQuery({

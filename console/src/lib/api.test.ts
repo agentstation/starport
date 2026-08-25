@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
   accessMessage,
   ApiError,
-  isApiKeyRejected,
+  isCredentialRejected,
   request,
   setApiKey,
 } from "./api";
@@ -58,7 +58,7 @@ test("a 401 marks the stored key rejected", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => respond(401)));
 
   await expect(request("/api/v1/models")).rejects.toBeInstanceOf(ApiError);
-  expect(isApiKeyRejected()).toBe(true);
+  expect(isCredentialRejected()).toBe(true);
 });
 
 // A 403 proves the key authenticated, so it must not send the console back to
@@ -67,17 +67,17 @@ test("a 403 leaves the stored key usable", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => respond(403)));
 
   await expect(request("/api/v1/admin/info")).rejects.toBeInstanceOf(ApiError);
-  expect(isApiKeyRejected()).toBe(false);
+  expect(isCredentialRejected()).toBe(false);
 });
 
 test("a success clears an earlier rejection", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => respond(401)));
   await expect(request("/api/v1/models")).rejects.toBeInstanceOf(ApiError);
-  expect(isApiKeyRejected()).toBe(true);
+  expect(isCredentialRejected()).toBe(true);
 
   vi.stubGlobal("fetch", vi.fn(async () => respond(200)));
   await request("/api/v1/models");
-  expect(isApiKeyRejected()).toBe(false);
+  expect(isCredentialRejected()).toBe(false);
 });
 
 test("storing a new key clears the rejection", async () => {
@@ -85,7 +85,7 @@ test("storing a new key clears the rejection", async () => {
   await expect(request("/api/v1/models")).rejects.toBeInstanceOf(ApiError);
 
   setApiKey("starport-replacement-key");
-  expect(isApiKeyRejected()).toBe(false);
+  expect(isCredentialRejected()).toBe(false);
 });
 
 // Without a stored key a 401 says nothing about a key, so it must not set the
@@ -95,5 +95,5 @@ test("a 401 without a stored key does not mark a rejection", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => respond(401)));
 
   await expect(request("/api/v1/models")).rejects.toBeInstanceOf(ApiError);
-  expect(isApiKeyRejected()).toBe(false);
+  expect(isCredentialRejected()).toBe(false);
 });

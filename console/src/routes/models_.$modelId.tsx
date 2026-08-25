@@ -12,7 +12,7 @@ import {
 } from "@/components/models/ModelDetail";
 import { listModels, providerStatus } from "@/lib/api";
 import { formatContext } from "@/lib/format";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/models_/$modelId")({
   component: ModelDetailPage,
@@ -44,7 +44,7 @@ function CopyableId({ id }: { id: string }) {
 
 function ModelDetailPage() {
   const { modelId } = Route.useParams();
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
 
   const models = useQuery({
     queryKey: ["models"],

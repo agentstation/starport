@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
@@ -83,6 +84,11 @@ type Dependencies struct {
 	// Presets serves stored preset management. A nil repository degrades
 	// the preset endpoints to 503, loudly.
 	Presets presets.Repository
+	// LocalGate redeems console launch tickets and verifies console sessions
+	// against this machine's local admin token. A nil gate refuses every
+	// launch and every session cookie, which is the right answer for a
+	// gateway assembled without one: the bearer key path is unaffected.
+	LocalGate *localauth.Gate
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -126,6 +132,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	})
 	s.auth = NewAuthMiddleware(s.identities, s.tenants)
 	s.auth.Govern(s.authPolicy, config.UnauthenticatedScopes)
+	s.auth.AcceptSessions(dependencies.LocalGate)
 
 	handlerConfig := controllers.Config{
 		Service:            s.service,
@@ -143,6 +150,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		AuthModeBindHost:   config.Host,
 		AllowRemoteNoAuth:  config.AllowRemoteNoAuth,
 		Console:            dependencies.Console,
+		LocalGate:          dependencies.LocalGate,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

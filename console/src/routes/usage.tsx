@@ -34,7 +34,7 @@ import {
   formatRelativeTime,
   providerLabel,
 } from "@/lib/format";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 const PAGE_LIMIT = 200;
 // Pages fetched eagerly so the charts and counts cover the window, not
@@ -431,7 +431,7 @@ function Header() {
 }
 
 function UsagePage() {
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const scope = useActivityScope(keyUsable);

@@ -4,6 +4,7 @@ import (
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
@@ -31,6 +32,7 @@ type Controllers struct {
 	Catalog              *CatalogController
 	Presets              *PresetsController
 	Auth                 *AuthController
+	Launch               *LaunchController
 	Console              console.PageServer
 }
 
@@ -59,6 +61,9 @@ type Config struct {
 	AuthModeBindHost  string
 	AllowRemoteNoAuth bool
 	Console           console.PageServer
+	// LocalGate redeems console launch tickets. A nil gate refuses every
+	// launch, which is what a gateway with no local admin token should do.
+	LocalGate *localauth.Gate
 }
 
 // NewControllers creates a new controller collection
@@ -82,6 +87,7 @@ func NewControllers(cfg Config) *Controllers {
 		Catalog:              NewCatalogController(cfg.Catalog),
 		Presets:              NewPresetsController(cfg.Presets),
 		Auth:                 NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
+		Launch:               NewLaunchController(cfg.LocalGate),
 		Console:              cfg.Console,
 	}
 

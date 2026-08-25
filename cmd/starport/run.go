@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/agentstation/starport/internal/app"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
@@ -107,8 +109,16 @@ func startDevelopment(
 	if err != nil {
 		return starportcli.DevelopmentSession{}, err
 	}
+	// A console link that could not be minted is not a reason to refuse a
+	// gateway. The session still runs and still prints its URL, and the
+	// operator reaches the console the same way they would on any other
+	// deployment.
+	consoleURL, err := runtime.ConsoleURL()
+	if err != nil {
+		log.Warn().Err(err).Msg("Could not mint a console sign-in link for this development gateway")
+	}
 	return starportcli.DevelopmentSession{
-		URL: runtime.URL(), APIKey: runtime.APIKey(),
+		URL: runtime.URL(), APIKey: runtime.APIKey(), ConsoleURL: consoleURL,
 		AuthDisabled: cfg.Security.AuthMode.Effective() == config.AuthModeDisabled,
 		Run:          runtime.Run, Close: runtime.Close,
 	}, nil

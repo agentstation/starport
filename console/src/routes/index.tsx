@@ -7,7 +7,7 @@ import { ProvidersCard } from "@/components/overview/ProvidersCard";
 import { QuickstartCard } from "@/components/overview/QuickstartCard";
 import { StatsRow } from "@/components/overview/StatsRow";
 import { StatusHero } from "@/components/overview/StatusHero";
-import { useApiKeyUsable } from "@/lib/useApiKey";
+import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage,
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 // Overview is mission control for the local gateway: identity, endpoints,
 // quickstart, live metrics, provider posture, and the Starmap snapshot.
 function OverviewPage() {
-  const keyUsable = useApiKeyUsable();
+  const keyUsable = useGatewayAccess();
   return (
     <div className="flex flex-col gap-4">
       <StatusHero />

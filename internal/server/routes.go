@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/agentstation/starport/internal/localauth"
 )
 
 // registerRoutes registers all routes for the server
@@ -181,6 +183,11 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		})
 	})
 
+	// Console sign-in. It sits outside every authentication group on purpose:
+	// the launch ticket in the query string is the credential, and a caller
+	// holding one has by definition not got a session yet.
+	mux.Get(localauth.LaunchPath, s.controllers.Launch.Launch)
+
 	// Console pages and assets (optional feature)
 	if s.controllers.Console != nil {
 		s.controllers.Console.Register(mux)
@@ -217,6 +224,9 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 // Health Endpoints:
 //   GET /health/live            - Liveness probe
 //   GET /health/ready           - Readiness probe
+//
+// Console Sign-In:
+//   GET /launch?lt=<ticket>     - Spend a one-time launch ticket for a session
 //
 // OpenAI-Compatible API (v1):
 //   POST /v1/chat/completions   - Create chat completion
