@@ -113,9 +113,9 @@ func VerifySession(raw string, token Token, now time.Time) (Session, error) {
 // silently discards.
 func SessionCookies(value string, session Session, secure bool) []*http.Cookie {
 	return []*http.Cookie{
-		//nolint:gosec // G124 wants Secure unconditionally. The default deployment
-		// is loopback HTTP, where a Secure cookie is one the browser discards, so
-		// the flag follows the scheme that redeemed the ticket.
+		// #nosec G124 -- the rule wants Secure unconditionally. The default
+		// deployment is loopback HTTP, where a Secure cookie is one the browser
+		// discards, so the flag follows the scheme that redeemed the ticket.
 		{
 			Name:     SessionCookie,
 			Value:    value,
@@ -126,10 +126,10 @@ func SessionCookies(value string, session Session, secure bool) []*http.Cookie {
 			Secure:   secure,
 			SameSite: http.SameSiteLaxMode,
 		},
-		//nolint:gosec // G124 wants HttpOnly. The marker is deliberately readable:
-		// it carries no authority, and the console needs it to know not to prompt
-		// for a key. Forging it yields a rendered page and a gateway that refuses
-		// every call. The credential above stays HttpOnly.
+		// #nosec G124 -- the rule wants HttpOnly. The marker is deliberately
+		// readable: it carries no authority, and the console needs it to know not
+		// to prompt for a key. Forging it yields a rendered page and a gateway
+		// that refuses every call. The credential above stays HttpOnly.
 		{
 			Name:  SessionMarkerCookie,
 			Value: "1",
@@ -152,8 +152,8 @@ func SessionCookies(value string, session Session, secure bool) []*http.Cookie {
 // signed in.
 func ClearedSessionCookies(secure bool) []*http.Cookie {
 	expire := func(name string, httpOnly bool) *http.Cookie {
-		//nolint:gosec // G124 reads the attributes of a cookie being expired. The
-		// value is empty and Max-Age is negative; the attributes only have to
+		// #nosec G124 -- the rule reads the attributes of a cookie being expired.
+		// The value is empty and Max-Age is negative; the attributes only have to
 		// match the cookie being replaced for a browser to drop it.
 		return &http.Cookie{
 			Name:     name,
