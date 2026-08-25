@@ -82,6 +82,7 @@ bash scripts/verify-doc-links.sh
 bash scripts/test-doc-link-verifier.sh
 bash scripts/verify-openrouter-parity.sh
 bash scripts/verify-console-modernization.sh
+bash scripts/verify-auth-onboarding.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
@@ -106,6 +107,13 @@ that no workflow runs cannot report a regression.
 
 `scripts/verify-openrouter-parity.sh` guards the shipped OpenRouter parity
 surface (conditions `ORP-V01` through `ORP-V16`) and runs in CI.
+
+`scripts/verify-auth-onboarding.sh` guards the separation of the credential
+ideas: a gateway API key authenticates and owns nothing else, a provider
+credential comes from the environment, the gateway, or a tenant, only the
+tenant one is BYOK, authentication is required unless an operator disables it,
+and the console reaches the gateway without holding a gateway key. It is
+terminal at 26 conditions (`AON-V01` through `AON-V26`) and runs in CI.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.
