@@ -95,7 +95,7 @@ check CSG-V15 "the gateway key card no longer stands in for first contact" \
 # other direction -- "redesign in", "assign in", "catalog in the console" are
 # all sign-in to a pattern that never asks where the word starts.
 reserved_words_respected() {
-  ! grep -RniE '\b(sign|signed|log|logged)[ -]?in\b' \
+  ! grep -RniE '\b(sign|signed|signing|log|logged)[ -]?in\b' \
       --include='*.go' --include='*.ts' --include='*.tsx' --include='*.md' \
       --exclude='routeTree.gen.ts' \
       internal cmd console/src README.md docs/OPERATOR-GUIDE.md \

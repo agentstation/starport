@@ -75,6 +75,11 @@ the browser and no key is stored there. Add `--no-open` to print the link
 instead of opening a browser, which is what a machine reached over SSH needs.
 `starport ui` opens a new one at any time.
 
+A browser that reaches the console without a link is asked for this machine's
+local admin token instead. `starport auth token --copy` puts it on the
+clipboard of the machine running the gateway. Both ways in prove the same
+thing — that you are at that machine — and both end in the same session.
+
 Keep this terminal open.
 
 ### Terminal 2: call Starport

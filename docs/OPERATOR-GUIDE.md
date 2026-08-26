@@ -130,6 +130,44 @@ starport ui            # mint that link and open it
 produces a launch link whether the gateway is up, down, wedged, or refusing
 the operator. That is the case an operator reaches for it in.
 
+### Opening the console
+
+A console session is one thing: a signed, HttpOnly cookie the gateway issues
+and the browser cannot read. What differs is the grant that mints it. Three are
+registered, and the console session route accepts them by name:
+
+| Grant | Presents | Answers | Ships |
+| --- | --- | --- | --- |
+| `ticket` | a one-time launch ticket in the URL | where you are | yes |
+| `local-token` | the local admin token, pasted | where you are | yes |
+| `identity` | an identity provider assertion | who you are | registered, no provider |
+
+The first two are machine-local by construction. A launch ticket is minted from
+the token file by `starport ui` or printed at start, and the paste path compares
+the same token in constant time. Neither names a person, which is why neither
+borrows the vocabulary of identity. A browser that reaches the console with no
+session lands on a first-contact page that states whether the address it was
+served on is loopback, takes the token, and prints the two commands that avoid
+the paste:
+
+```bash
+starport auth token --copy   # the token, on this machine's clipboard
+starport auth url --open     # a launch link, opened here
+```
+
+The third grant is registered and refuses every request with
+`ErrIdentityProviderNotConfigured`. No provider ships. It exists so that an
+enterprise deployment adds a provider to a route that is already there, with
+its refusal already held by a contract test, rather than reopening the seam.
+It is also the only grant allowed to describe itself in the vocabulary of
+identity; no machine-local surface uses those words, and
+`scripts/verify-console-session-grants.sh` enforces that.
+
+For a deployment where the operator is not at the machine, the console takes a
+gateway API key instead. That is a different credential with different
+consequences: it authenticates a caller and is metered against a tenant, where
+the token above is the operator of the machine.
+
 ### Rotation
 
 ```bash
