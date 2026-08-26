@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console Session Grants</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(300px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Console Session Grants</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="active">active</code> &middot;
+    Owner: this plan &middot;
+    Created: 2026-08-25 &middot;
+    Baseline: main @ 20dd9b1 &middot;
+    Proof root: <code>docs/proof/console-session-grants/</code> &middot;
+    Next action: CSG1, name the grant seam in
+    <code>internal/localauth</code> and route ticket redemption through it,
+    so a second way in has somewhere to attach
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      A console session is minted by a named grant, and the grants are a
+      registered set rather than one hard-coded path. Two machine-local
+      grants ship: a one-time launch ticket and the local admin token the
+      reader pastes into a first-contact page. A third grant, an identity
+      provider, ships registered and inert, with a contract test that holds
+      its refusal, so an enterprise deployment adds a provider to an
+      existing route instead of reopening the seam. The words follow the
+      layering: a ticket and a token say <em>where you are</em>, an identity
+      provider says <em>who you are</em>, and only that third grant is
+      allowed to call itself signing in. A reader who starts the gateway and
+      opens the console by hand lands on one page that states its trust
+      scope, takes the token that <code>starport auth token</code> already
+      prints, and offers the exact command that opens the console without a
+      paste.
+    </blockquote>
+  </section>
+
+  <section id="vocabulary">
+    <h2>Vocabulary</h2>
+    <table>
+      <thead>
+        <tr><th>Term</th><th>Means</th><th>Never means</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Console session</td>
+          <td>The signed HttpOnly cookie that authorizes a console request.
+            Every grant produces this one thing.</td>
+          <td>An account. A session names no tenant.</td>
+        </tr>
+        <tr>
+          <td>Grant</td>
+          <td>A named, registered way to mint a console session. Three
+            exist: <code>ticket</code>, <code>local-token</code>,
+            <code>identity</code>.</td>
+          <td>A credential. A grant is the route, not the secret.</td>
+        </tr>
+        <tr>
+          <td>Launch ticket</td>
+          <td>A one-time machine-local grant the CLI hands the browser
+            through a URL.</td>
+          <td>A login. It proves reach, not identity.</td>
+        </tr>
+        <tr>
+          <td>Local admin token</td>
+          <td>The process-local secret <code>starport auth token</code>
+            prints, usable as a machine-local grant.</td>
+          <td>A gateway API key. It never authenticates an inference
+            request.</td>
+        </tr>
+        <tr>
+          <td>Identity grant</td>
+          <td>The registered seam a future identity provider fills. Inert in
+            this plan.</td>
+          <td>A shipped OAuth or OIDC integration.</td>
+        </tr>
+        <tr>
+          <td>Sign in</td>
+          <td>Copy reserved for the identity grant.</td>
+          <td>Anything a ticket or a pasted token does.</td>
+        </tr>
+        <tr>
+          <td>First contact</td>
+          <td>The page a reader with no session sees, outside the console
+            shell.</td>
+          <td>A card inside the shell. The shell needs a session to render
+            anything true.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts"></p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 340 210" role="img"
+          aria-label="One hard-coded path: the launch route redeems a ticket
+            and issues a session. The local admin token and a future identity
+            provider have no route.">
+          <g fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="12" y="16" width="150" height="34" rx="6"/>
+            <rect x="12" y="76" width="150" height="34" rx="6"
+              stroke-dasharray="4 3"/>
+            <rect x="12" y="136" width="150" height="34" rx="6"
+              stroke-dasharray="4 3"/>
+            <rect x="216" y="76" width="112" height="34" rx="6"/>
+            <path d="M162 33 H190 V93 H216"/>
+          </g>
+          <g fill="currentColor" font-size="10"
+            font-family="ui-monospace, monospace">
+            <text x="22" y="37">launch ticket</text>
+            <text x="22" y="97">local admin token</text>
+            <text x="22" y="157">identity provider</text>
+            <text x="226" y="97">session cookie</text>
+            <text x="172" y="103" font-size="9">no route</text>
+            <text x="172" y="163" font-size="9">no route</text>
+          </g>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 340 210" role="img"
+          aria-label="Three registered grants reach one minting path. Ticket
+            and local token are live; the identity grant is registered and
+            refuses until a provider is configured.">
+          <g fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="12" y="16" width="150" height="34" rx="6"/>
+            <rect x="12" y="76" width="150" height="34" rx="6"/>
+            <rect x="12" y="136" width="150" height="34" rx="6"
+              stroke-dasharray="4 3"/>
+            <rect x="196" y="76" width="60" height="34" rx="6"/>
+            <rect x="272" y="76" width="56" height="34" rx="6"/>
+            <path d="M162 33 H180 V93 H196"/>
+            <path d="M162 93 H196"/>
+            <path d="M162 153 H180 V93"/>
+            <path d="M256 93 H272"/>
+          </g>
+          <g fill="currentColor" font-size="10"
+            font-family="ui-monospace, monospace">
+            <text x="22" y="37">ticket</text>
+            <text x="22" y="97">local-token</text>
+            <text x="22" y="157">identity</text>
+            <text x="204" y="97">grants</text>
+            <text x="278" y="97">session</text>
+            <text x="22" y="185" font-size="9">registered, refuses:</text>
+            <text x="22" y="197" font-size="9">no provider configured</text>
+          </g>
+        </svg>
+      </figure>
+    </div>
+    <p>The shape of the change is one indirection, not three features.
+      <code>localauth.Gate</code> holds one grant per name and every grant
+      returns through the same <code>IssueSession</code> call, so a new grant
+      cannot invent its own cookie, its own TTL, or its own refusal text. The
+      identity grant is present in that map from the first commit and answers
+      a named refusal, which is what makes its absence a tested state instead
+      of a comment.</p>
+  </section>
+
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns:</strong> the grant seam in <code>internal/localauth</code>
+      and its three registrations; the HTTP route that accepts a pasted local
+      admin token; the console first-contact page and the routing that reaches
+      it without the shell; <code>--copy</code> and <code>--open</code> on the
+      auth CLI; the reservation of the words <em>sign in</em>; and
+      <code>scripts/verify-console-session-grants.sh</code>.</p>
+    <p><strong>Does not own:</strong> any OAuth or OIDC provider
+      implementation, a user directory, or a password login &mdash; the
+      identity grant ships inert on purpose. Gateway API keys, tenants,
+      provider credentials, and the authentication mode stay as the auth and
+      onboarding campaign left them;
+      <code>scripts/verify-auth-onboarding.sh</code> is terminal at 26
+      conditions and this plan does not add to it. Remote multi-user session
+      management, session revocation lists, and console SSO are out of
+      scope.</p>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <ol>
+      <li>Every grant mints a session through one function. No grant builds
+        its own cookie, TTL, or refusal text.</li>
+      <li>A session records the grant that minted it, so a log line and a test
+        can tell a ticket from a pasted token.</li>
+      <li>The local admin token and a gateway API key are never accepted at
+        the same field or the same route. A reader who pastes the wrong one
+        is told which one the field wants.</li>
+      <li>The console never persists the local admin token. It posts the value
+        once and keeps only the session cookie.</li>
+      <li>The words <em>sign in</em> appear only on the identity grant.</li>
+      <li>A first-contact surface states its trust scope in the page, not in
+        the documentation.</li>
+      <li>The identity grant is registered and refuses with a named reason.
+        Its refusal has a contract test.</li>
+      <li>The pasted-token grant obeys the same exposure rule as token
+        display: a non-loopback bind with an unrotated token refuses.</li>
+      <li>A refusal from any grant returns one message for every cause, as
+        <code>launchRefusal</code> already does.</li>
+      <li><code>scripts/verify-auth-onboarding.sh</code> stays at 26
+        conditions and keeps passing.</li>
+    </ol>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-console-session-grants.sh</code> holds conditions
+      <code>CSG-V01</code> through <code>CSG-V16</code> and prints
+      <code>Summary: N passed, M failed</code>. CSG0 authors it red at 0
+      passed, 16 failed. The terminal state is 16 passed, 0 failed, with the
+      script wired into CI beside the other gates and added to the evidence
+      list in <code>CLAUDE.md</code>.</p>
+    <table>
+      <thead>
+        <tr><th>After task</th><th>Expected passing</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CSG0</td><td>0</td></tr>
+        <tr><td>CSG1</td><td>4</td></tr>
+        <tr><td>CSG2</td><td>7</td></tr>
+        <tr><td>CSG3</td><td>9</td></tr>
+        <tr><td>CSG4</td><td>11</td></tr>
+        <tr><td>CSG5</td><td>12</td></tr>
+        <tr><td>CSG6</td><td>13</td></tr>
+        <tr><td>CSG7</td><td>15</td></tr>
+        <tr><td>CSG8</td><td>16</td></tr>
+        <tr><td>CSG9</td><td>16</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="CSG0" data-status="done"><td>CSG0</td><td>Baseline: pin the baseline commit, create the proof root, author the verifier red, capture fail-before evidence.</td><td><code>done</code></td><td>Baseline <code>20dd9b1</code>. <code>scripts/verify-console-session-grants.sh</code> reports <code>Summary: 0 passed, 16 failed</code>, exit 1, with CSG-V15 and CSG-V16 red because the baseline holds the behavior they forbid. <code>verify-auth-onboarding.sh</code> 26 passed, <code>verify-doc-links.sh</code> PASS. No Go or console source changed. <a href="../proof/console-session-grants/csg0.md">CSG0 evidence</a>.</td></tr>
+        <tr id="CSG1" data-status="in_progress"><td>CSG1</td><td>Name the grant seam in <code>internal/localauth</code> and route ticket redemption through it.</td><td><code>in_progress</code></td><td>&mdash;</td></tr>
+        <tr id="CSG2" data-status="todo"><td>CSG2</td><td>Add the local admin token grant with a constant-time compare and an attempt throttle.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG3" data-status="todo"><td>CSG3</td><td>Register the identity grant inert, with the refusal contract test.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG4" data-status="todo"><td>CSG4</td><td>Serve the local-token grant over HTTP at <code>POST /console/session</code>.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG5" data-status="todo"><td>CSG5</td><td>Reach the first-contact page without the console shell.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG6" data-status="todo"><td>CSG6</td><td>Add <code>--copy</code> to <code>starport auth token</code> and <code>auth url</code>, and <code>--open</code> to <code>auth url</code>.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG7" data-status="todo"><td>CSG7</td><td>Build the first-contact page: token field, copyable commands, trust readout.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG8" data-status="todo"><td>CSG8</td><td>Reserve the words <em>sign in</em> for the identity grant across CLI and console copy.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG9" data-status="todo"><td>CSG9</td><td>Wire the gate into CI, update the operator guide and README quickstart, record the entry in <code>docs/TASKS.md</code>.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG10" data-status="todo"><td>CSG10</td><td>Cleanup: delete this plan and its proof root when the final pull request merges.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <h3>CSG0 &mdash; Baseline</h3>
+    <p><strong>Problem.</strong> Nothing records what the tree looked like
+      before the seam existed, and no gate fails for the right reason.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>scripts/verify-console-session-grants.sh</code>,
+      <code>docs/proof/console-session-grants/</code>.</p>
+    <p><strong>Steps.</strong> Create the proof root. Author the verifier with
+      all 16 conditions. Run it red. Record the baseline behavior: navigating
+      to <code>http://127.0.0.1:8080</code> with no session renders
+      <code>ConnectCard</code> asking for a <code>STARPORT_…</code> key, while
+      <code>starport auth token</code> prints a value no field accepts.</p>
+    <p><strong>Acceptance.</strong>
+      <code>Summary: 0 passed, 16 failed</code>, exit 1. No Go or console
+      source changed.</p>
+    <p><strong>Fail-before.</strong> The run itself.</p>
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-console-session-grants.sh</code>,
+      <code>bash scripts/verify-doc-links.sh</code>.</p>
+
+    <h3>CSG1 &mdash; The grant seam</h3>
+    <p><strong>Problem.</strong> <code>Gate.Redeem</code> is the only path to
+      <code>IssueSession</code>. A second way in has nowhere to attach, so
+      each new one would copy the cookie handling and drift from it.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>internal/localauth/gate.go</code>,
+      <code>internal/localauth/grant.go</code> (new),
+      <code>internal/localauth/session.go</code>.</p>
+    <p><strong>Steps.</strong> Add a <code>GrantKind</code> with the three
+      names and a <code>Grant</code> interface whose one method turns a
+      request-supplied secret into a <code>Session</code> or a refusal.
+      Register grants on the <code>Gate</code> by kind. Move ticket redemption
+      behind the <code>ticket</code> registration without changing its
+      behavior. Carry the minting <code>GrantKind</code> in
+      <code>Session</code> and in the signed cookie payload, and reject a
+      cookie whose grant name is unknown.</p>
+    <p><strong>Acceptance.</strong> Ticket redemption keeps its current
+      behavior, proven by the existing launch tests. A session minted by a
+      ticket reports <code>GrantTicket</code>. An unregistered kind refuses
+      rather than panicking.</p>
+    <p><strong>Fail-before.</strong> A test asserting
+      <code>Session.Grant == GrantTicket</code> fails to compile against the
+      baseline.</p>
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/localauth/... ./internal/server/... -race</code>,
+      <code>bash scripts/verify-auth-onboarding.sh</code> still 26 passed,
+      verifier at 4.</p>
+
+    <h3>CSG2 &mdash; The local admin token grant</h3>
+    <p><strong>Problem.</strong> <code>starport auth token</code> prints a
+      credential the product accepts nowhere. The console field beside it
+      wants a different credential kind entirely.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>internal/localauth/grant_local_token.go</code> (new),
+      <code>internal/localauth/token.go</code>.</p>
+    <p><strong>Steps.</strong> Register a <code>local-token</code> grant that
+      compares the candidate with <code>Token.Authorizes</code>, which already
+      uses <code>subtle.ConstantTimeCompare</code>. Apply the same exposure
+      rule as token display: refuse on a non-loopback bind with an unrotated
+      token. Throttle failed attempts per process with a small fixed delay and
+      a cap, and log a refusal with no secret material. Refuse a value that
+      parses as a gateway API key with the message that names which credential
+      the route wants, so a reader who pastes a <code>STARPORT_…</code> key is
+      not left guessing.</p>
+    <p><strong>Acceptance.</strong> A correct token mints a session reporting
+      <code>GrantLocalToken</code>. A wrong token, an empty value, a rotated
+      token, and a gateway API key each refuse. The exposure refusal fires on
+      a non-loopback bind. Repeated failures are throttled.</p>
+    <p><strong>Fail-before.</strong> Each refusal test fails against a stub
+      grant that accepts everything.</p>
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/localauth/... -race</code>, verifier at 7.</p>
+
+    <h3>CSG3 &mdash; The identity grant, inert</h3>
+    <p><strong>Problem.</strong> An enterprise deployment will need a person's
+      identity, not a claim about reach. If that path is a future refactor, the
+      machine-local grants will grow into it by accident and take the word
+      <em>sign in</em> with them.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>internal/localauth/grant_identity.go</code> (new).</p>
+    <p><strong>Steps.</strong> Register an <code>identity</code> grant that
+      holds an optional provider and refuses with
+      <code>ErrIdentityProviderNotConfigured</code> when none is set. Give it
+      the same refusal shape as the others at the HTTP boundary. Document in
+      the package doc what a provider must supply: a subject, and the session
+      field that will carry it. Do not add a provider, a config key, or an
+      HTTP route for it.</p>
+    <p><strong>Acceptance.</strong> The grant is present in the registry and
+      refuses with the named error. A test asserts that the shipped build
+      configures no provider, so the inert state is deliberate rather than
+      accidental.</p>
+    <p><strong>Fail-before.</strong> Looking the grant up by name fails on the
+      CSG2 tree.</p>
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/localauth/... -race</code>, verifier at 9.</p>
+
+    <h3>CSG4 &mdash; The HTTP route</h3>
+    <p><strong>Problem.</strong> The grant exists in Go and the browser cannot
+      reach it.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>internal/server/controllers/console_session.go</code> (new),
+      <code>internal/server/routes.go</code>.</p>
+    <p><strong>Steps.</strong> Add <code>POST /console/session</code> taking
+      the token in a JSON body, invoking the <code>local-token</code> grant,
+      and setting cookies through <code>localauth.SessionCookies</code>, the
+      same call the launch controller uses. Return one refusal message for
+      every cause, matching <code>launchRefusal</code>. Log the grant kind and
+      the session expiry, never the candidate. Exempt the route from the
+      gateway API key middleware, as <code>/launch</code> already is.</p>
+    <p><strong>Acceptance.</strong> A correct token returns 204 with both
+      cookies set; the marker cookie is readable and the session cookie is
+      HttpOnly. A wrong token returns 401 with the shared message and clears
+      cookies. The route never accepts a gateway API key.</p>
+    <p><strong>Fail-before.</strong> The handler test 404s against CSG3.</p>
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/server/... -race</code>, verifier at 11.</p>
+
+    <h3>CSG5 &mdash; Reaching first contact</h3>
+    <p><strong>Problem.</strong> <code>console/src/routes/__root.tsx</code>
+      wraps every route in <code>&lt;Shell&gt;</code>. A reader with no session
+      gets navigation that leads nowhere and data panels that all answer
+      401.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>console/src/routes/__root.tsx</code>,
+      <code>console/src/routes/auth.tsx</code> (new),
+      <code>console/src/lib/useGatewayAccess.ts</code>.</p>
+    <p><strong>Steps.</strong> Split the root so the shell wraps the
+      application routes and the auth route renders bare. Redirect a reader
+      with no credential to <code>/auth</code>, and send a reader who has one
+      back to the route they asked for. Keep the redirect out of the render
+      path of any component that fetches.</p>
+    <p><strong>Acceptance.</strong> With no session, every route renders the
+      first-contact page and issues no authenticated fetch. With a session,
+      no route renders it.</p>
+    <p><strong>Fail-before.</strong> A router test asserting zero fetches on a
+      sessionless load fails against CSG4.</p>
+    <p><strong>Verification.</strong> <code>npm test</code>,
+      <code>npx tsc --noEmit</code>, verifier at 12.</p>
+
+    <h3>CSG6 &mdash; The auth CLI verbs</h3>
+    <p><strong>Problem.</strong> The page will show a command to copy. The
+      command should also copy itself, the way nimbus does, or the page is
+      telling the reader to do work the CLI could do.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>internal/cli/auth.go</code>,
+      <code>internal/cli/clipboard.go</code> (new).</p>
+    <p><strong>Steps.</strong> Add <code>--copy</code> to
+      <code>starport auth token</code> and <code>starport auth url</code>, and
+      <code>--open</code> to <code>starport auth url</code>. Reach the
+      clipboard through the platform command rather than a new dependency, and
+      print the value anyway when no clipboard exists, so
+      <code>--copy</code> never swallows it. Reject <code>--copy</code>
+      together with <code>--json</code>.</p>
+    <p><strong>Acceptance.</strong> Both flags appear in help. A copy failure
+      still prints the value and exits non-zero with a reason.
+      <code>--open</code> reuses the existing console-open path.</p>
+    <p><strong>Fail-before.</strong> A help-output test for the flags fails
+      against CSG5.</p>
+    <p><strong>Verification.</strong> <code>go test ./internal/cli/... </code>,
+      manual run of each flag, verifier at 13.</p>
+
+    <h3>CSG7 &mdash; The first-contact page</h3>
+    <p><strong>Problem.</strong> <code>ConnectCard</code> is a card in the
+      shell that asks for a gateway API key and mentions
+      <code>starport ui</code> in prose. It answers neither question a first
+      reader has: what is this asking me for, and what may it reach.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>console/src/components/auth/</code> (new),
+      <code>console/src/components/overview/ConnectCard.tsx</code>.</p>
+    <p><strong>Steps.</strong> Build the page: a password field for the local
+      admin token posting to <code>POST /console/session</code>; one-click
+      copyable command blocks for <code>starport auth token --copy</code> and
+      <code>starport auth url --open</code>; a literal trust readout naming
+      the bind address; and the gateway API key path kept for a remote browser
+      but placed behind a disclosure, labeled as the different credential it
+      is. Never write the pasted token to <code>localStorage</code> or
+      <code>sessionStorage</code>, and set <code>autocomplete="off"</code>.
+      Delete <code>ConnectCard</code> and its ten call sites, which the
+      <code>/auth</code> redirect makes unreachable.</p>
+    <p><strong>Acceptance.</strong> A correct token reaches the console. A
+      wrong one shows the refusal and keeps the reader on the page. The trust
+      readout renders the real bind address. No browser storage write occurs
+      on the token path.</p>
+    <p><strong>Fail-before.</strong> The storage assertion fails against the
+      gateway key field, which writes on submit today.</p>
+    <p><strong>Verification.</strong> <code>npm test</code>,
+      <code>npx tsc --noEmit</code>, a live run against the dev gateway,
+      verifier at 15.</p>
+
+    <h3>CSG8 &mdash; Reserve the words</h3>
+    <p><strong>Problem.</strong> If a ticket or a pasted token is described as
+      signing in, the word is spent before the thing it names exists.</p>
+    <p><strong>Owning seam and paths.</strong> console copy,
+      <code>internal/cli</code> output, <code>docs/</code>.</p>
+    <p><strong>Steps.</strong> Sweep the tree for <em>sign in</em>,
+      <em>sign-in</em>, and <em>login</em> on the machine-local paths and
+      replace each with what the path actually does. Leave the phrase attached
+      to the identity grant only. Encode the rule as a verifier condition so a
+      later change cannot quietly reuse it.</p>
+    <p><strong>Acceptance.</strong> The phrases appear only where the identity
+      grant is the subject.</p>
+    <p><strong>Fail-before.</strong> The condition is red against CSG7,
+      because <code>starport dev</code> prints
+      <code>Console (one-time sign-in link)</code> today.</p>
+    <p><strong>Verification.</strong> Verifier at 16,
+      <code>go test ./...</code>, <code>npm test</code>.</p>
+
+    <h3>CSG9 &mdash; Gate, docs, and status</h3>
+    <p><strong>Problem.</strong> A gate no workflow runs cannot report a
+      regression, and the operator guide still describes the ticket as the
+      only way in.</p>
+    <p><strong>Owning seam and paths.</strong>
+      <code>.github/workflows/ci.yml</code>, <code>CLAUDE.md</code>,
+      <code>docs/OPERATOR-GUIDE.md</code>, <code>README.md</code>,
+      <code>docs/TASKS.md</code>.</p>
+    <p><strong>Steps.</strong> Add the gate to CI and to the evidence list.
+      Document the three grants and which one an operator should expect at
+      each deployment tier. Update the quickstart so the paste path is
+      described beside the launch link. Record the entry in
+      <code>docs/TASKS.md</code>.</p>
+    <p><strong>Acceptance.</strong> The gate runs in CI.
+      <code>verify-readme-quickstart.sh</code> and
+      <code>verify-doc-links.sh</code> pass.</p>
+    <p><strong>Fail-before.</strong> Not applicable; documentation task.</p>
+    <p><strong>Verification.</strong> The full evidence list in
+      <code>CLAUDE.md</code>.</p>
+
+    <h3>CSG10 &mdash; Cleanup</h3>
+    <p><strong>Problem.</strong> A merged plan left in the tree reads as
+      active work.</p>
+    <p><strong>Steps.</strong> When CSG9 merges, delete
+      <code>docs/plans/console-session-grants-plan.html</code> and
+      <code>docs/proof/console-session-grants/</code>, and move the
+      <code>docs/TASKS.md</code> entry to Recently Completed naming the
+      durable gate rather than linking the deleted plan.</p>
+    <p><strong>Acceptance.</strong> Both paths are gone and
+      <code>verify-doc-links.sh</code> passes.</p>
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-doc-links.sh</code>.</p>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Decision</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>D1</td>
+          <td>The local admin token may cross the browser once, in a form
+            POST, and is never stored there.</td>
+          <td>The auth and onboarding outcome said the browser never holds
+            the token, and a paste field relaxes that. The alternative leaves
+            <code>starport auth token</code> printing a credential nothing
+            accepts, which is the asymmetry this plan exists to close. The
+            half of the property that matters is preserved: no long-lived
+            secret in browser storage, and the session cookie is what
+            persists. Invariant 8 keeps the relaxation loopback-shaped.</td>
+        </tr>
+        <tr>
+          <td>D2</td>
+          <td><em>Sign in</em> names only the identity grant.</td>
+          <td>A ticket and a token are claims about where you are. Calling
+            either one signing in spends the word a person's identity will
+            need, and teaches a reader that the gateway knows who they
+            are.</td>
+        </tr>
+        <tr>
+          <td>D3</td>
+          <td>The identity grant ships registered and inert rather than
+            absent.</td>
+          <td>A registered grant that refuses with a named reason is
+            testable, and adding a provider later becomes filling a slot. A
+            comment marking a future seam constrains nothing.</td>
+        </tr>
+        <tr>
+          <td>D4</td>
+          <td>Clipboard through the platform command, not a new module.</td>
+          <td>A cgo clipboard dependency would reach the release build of a
+            gateway for one convenience flag. Shelling out costs nothing when
+            unused, and printing on failure keeps the flag honest.</td>
+        </tr>
+        <tr>
+          <td>D5</td>
+          <td>First contact renders outside the console shell.</td>
+          <td>Every shell panel needs a session to say anything true. Shown
+            without one, the navigation leads nowhere and the panels answer
+            401, which reads as a broken gateway rather than a locked
+            one.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="patterns">
+    <h2>Patterns to preserve</h2>
+    <ul>
+      <li><code>launchRefusal</code>: one message for every cause. A refusal
+        that distinguishes an expired ticket from a wrong one is an oracle.
+        The new route copies this exactly.</li>
+      <li><code>SessionCookies</code>: the HttpOnly session cookie paired with
+        a readable marker that carries no authority. The console tests reach
+        for the marker; nothing may read the session.</li>
+      <li><code>Token.Authorizes</code>: constant-time comparison stays inside
+        <code>internal/localauth</code>. No caller compares token bytes.</li>
+      <li><code>AllowsExposure</code>: the rule that governs whether the
+        gateway will show the token also governs whether it will accept
+        it.</li>
+    </ul>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/console-session-grants-plan.html to completion. This
+is a whole-plan goal, not a single-task goal. Read the plan fully, then
+read: CLAUDE.md, docs/TASKS.md, docs/ARCHITECTURE.md, and
+docs/OPERATOR-GUIDE.md. Work in
+/Users/jack/src/github.com/agentstation/starport on a branch per task
+named codex/csg&lt;N&gt;-&lt;slug&gt;, cut from main. Chat history is not
+progress state. Resume from the status ledger, the execution log, and git
+state. If compaction happens, continue from the plan and git state rather
+than restarting. Loop: keep one task in_progress, implement at the owning
+seam, capture fail-before evidence, run the verification commands, commit
+the work, write the proof file under docs/proof/console-session-grants/,
+append the execution log with the work commit, mark the task terminal
+with evidence, commit the plan update the same way, open the pull
+request, then advance to the next task. Decide rather than ask. Mark a
+wrong or already-satisfied task no-action with a one-line reason. Record
+a blocker and continue with the next eligible task. Binding constraints:
+the ten invariants in this plan, the vocabulary table, and the non-goals
+in its scope section. Wire no OAuth or OIDC provider. Add no
+compatibility alias for a removed component or route. Commit policy: one
+pull request per task, branch prefix codex/, no AI attribution, run
+`autoreview --gate pre-pr --mode auto` after final checks and commit and
+before each pull request with substantive code changes. Stop only at a
+valid stop state from the plans skill. Before you stop, update the ledger
+and the log, and record the next action in the status line. The goal is
+met when scripts/verify-console-session-grants.sh reports
+`Summary: 16 passed, 0 failed`, that script runs in CI,
+scripts/verify-auth-onboarding.sh still reports 26 passed, the full
+evidence list in CLAUDE.md passes, and CSG10 is the only non-terminal
+row.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-25</td><td>meta</td><td>research</td><td>Mapped the asymmetry: <code>internal/localauth/gate.go</code> exposes <code>Redeem</code> as the only caller of <code>IssueSession</code>, so a pasted token has nowhere to attach. <code>internal/localauth/token.go</code> already holds <code>Token.Authorizes</code> with <code>subtle.ConstantTimeCompare</code>, the primitive a paste path needs. <code>console/src/routes/__root.tsx</code> wraps every route in <code>&lt;Shell&gt;</code>, and <code>ConnectCard</code> renders from ten routes asking for a <code>STARPORT_…</code> gateway API key, a different credential kind from the one the CLI prints. <code>internal/cli/auth.go</code> has <code>token</code>, <code>url</code>, <code>status</code>, and <code>rotate</code>, with no <code>--copy</code> or <code>--open</code>. Reference: nimbus serves a dedicated <code>/ui/auth</code> page with a token field, a copyable <code>nimbus auth token --copy</code> block, and a <code>Local-only · 127.0.0.1</code> footer.</td></tr>
+        <tr><td>2026-08-25</td><td>meta</td><td>authored</td><td>Plan authored at baseline <code>20dd9b1</code> with 11 ledger rows, 10 invariants, decisions D1 through D5, and a 16-condition verifier contract. No implementation started by this step.</td></tr>
+        <tr><td>2026-08-25</td><td>CSG0</td><td>done</td><td>Created <code>docs/proof/console-session-grants/</code> and authored <code>scripts/verify-console-session-grants.sh</code> with 16 conditions. Fail-before run: <code>Summary: 0 passed, 16 failed</code>, exit 1. Corrected two conditions while authoring: CSG-V09 first asserted the absence of <code>golang.org/x/oauth2</code> from <code>go.mod</code>, which is already present transitively through the cloud auth chain and would never have passed, so it now asserts the identity grant's refusal contract test; CSG-V03 tightened from <code>Grant </code> to <code>Grant GrantKind</code>. Live baseline against the dev gateway confirmed <code>POST /console/session</code> answers 404 while <code>starport auth token</code> prints a value nothing accepts. <code>verify-auth-onboarding.sh</code> 26 passed, <code>verify-doc-links.sh</code> PASS. CSG1 set in_progress.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</header>
+</body>
+</html>
