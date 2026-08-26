@@ -68,7 +68,7 @@ func callWithSession(
 
 func TestASessionAuthenticatesWithNoBearerKey(t *testing.T) {
 	token := sessionToken(t, 2)
-	middleware := sessionHarness(t, localauth.NewGate(token))
+	middleware := sessionHarness(t, localauth.NewGate(token, "127.0.0.1"))
 
 	status, seen, tenantID, carriedSecret := callWithSession(middleware, openSession(t, token))
 
@@ -89,7 +89,7 @@ func TestRotatingTheLocalTokenEndsALiveSession(t *testing.T) {
 	before := sessionToken(t, 2)
 	cookie := openSession(t, before)
 
-	middleware := sessionHarness(t, localauth.NewGate(sessionToken(t, 3)))
+	middleware := sessionHarness(t, localauth.NewGate(sessionToken(t, 3), "127.0.0.1"))
 	status, seen, _, _ := callWithSession(middleware, cookie)
 
 	assert.Equal(t, http.StatusUnauthorized, status)
@@ -101,7 +101,7 @@ func TestAnExpiredSessionStopsAuthenticating(t *testing.T) {
 	value, _, err := localauth.IssueSession(token, localauth.GrantTicket, time.Now().Add(-localauth.SessionTTL-time.Minute))
 	require.NoError(t, err)
 
-	status, seen, _, _ := callWithSession(sessionHarness(t, localauth.NewGate(token)), value)
+	status, seen, _, _ := callWithSession(sessionHarness(t, localauth.NewGate(token, "127.0.0.1")), value)
 
 	assert.Equal(t, http.StatusUnauthorized, status)
 	assert.Nil(t, seen)
@@ -118,7 +118,7 @@ func TestAnUnusableSessionSaysHowToOpenANewOne(t *testing.T) {
 	// The two refusals are deliberately different. A caller with no credential
 	// has not signed in; a caller with a stale cookie has one to replace, and
 	// only the second should be told to run `starport ui`.
-	middleware := sessionHarness(t, localauth.NewGate(sessionToken(t, 3)))
+	middleware := sessionHarness(t, localauth.NewGate(sessionToken(t, 3), "127.0.0.1"))
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -144,7 +144,7 @@ func TestAnExplicitKeyBeatsAnAmbientSession(t *testing.T) {
 	// the caller chose to send. When both arrive, the deliberate one decides —
 	// otherwise a stale session would silently override a key a client set.
 	token := sessionToken(t, 2)
-	middleware := sessionHarness(t, localauth.NewGate(token))
+	middleware := sessionHarness(t, localauth.NewGate(token, "127.0.0.1"))
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

@@ -571,7 +571,7 @@ func (b *runtimeBuilder) resolveLocalToken(ctx context.Context) error {
 	// by the CLI from the same file verifies here. It is the only thing that
 	// keeps the secret after this function returns; nothing else in the runtime
 	// needs it, and the value is never logged.
-	b.gate = localauth.NewGate(token)
+	b.gate = localauth.NewGate(token, b.config.Server.Host)
 	b.application.localGate = b.gate
 	log.Info().
 		Str("token_file", store.Path()).

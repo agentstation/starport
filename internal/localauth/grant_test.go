@@ -14,7 +14,7 @@ import (
 // would both have to guess, and every grant would look like every other.
 func TestATicketMintedSessionRecordsItsGrant(t *testing.T) {
 	token := testToken(t, 1)
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	now := time.Now()
 
 	ticket, err := gate.MintTicket(now)
@@ -41,7 +41,7 @@ func TestATicketMintedSessionRecordsItsGrant(t *testing.T) {
 // happens to compare equal to nothing.
 func TestASessionNamingAnUnknownGrantIsRefused(t *testing.T) {
 	token := testToken(t, 1)
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	now := time.Now()
 
 	forge := func(t *testing.T, grant GrantKind) string {
@@ -72,7 +72,7 @@ func TestASessionNamingAnUnknownGrantIsRefused(t *testing.T) {
 // error, so a kind this deployment does not offer is a value the gate returns
 // rather than a nil dereference in whatever asked for it.
 func TestAnUnregisteredGrantRefuses(t *testing.T) {
-	gate := NewGate(testToken(t, 1))
+	gate := NewGate(testToken(t, 1), "127.0.0.1")
 
 	_, err := gate.Grant(GrantKind("saml"))
 	require.ErrorIs(t, err, ErrGrantUnknown)
@@ -86,7 +86,7 @@ func TestAnUnregisteredGrantRefuses(t *testing.T) {
 // session and another in the log, and the mismatch would only surface in an
 // incident.
 func TestAGrantIsFiledUnderTheKindItClaims(t *testing.T) {
-	gate := NewGate(testToken(t, 1))
+	gate := NewGate(testToken(t, 1), "127.0.0.1")
 
 	for kind, grant := range gate.grants {
 		require.Equal(t, kind, grant.Kind())
