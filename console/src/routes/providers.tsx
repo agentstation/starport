@@ -3,7 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import {
   CatalogProviderCard,
   ProviderCard,
@@ -165,14 +164,6 @@ function ProvidersPage() {
     }
   };
 
-  if (!keyUsable) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Header />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   let body: ReactNode;
   if (status.error) {

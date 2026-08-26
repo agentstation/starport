@@ -5,7 +5,6 @@ import { ArrowLeft } from "lucide-react";
 import { authorLabel, AuthorLinks } from "@/components/authors/AuthorCard";
 import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { offeringAvailability } from "@/components/models/ModelDetail";
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import {
   ApiError,
   getAuthor,
@@ -92,14 +91,6 @@ function AuthorDetailPage() {
     retry: false,
   });
 
-  if (!keyUsable) {
-    return (
-      <div className="flex flex-col gap-4">
-        <BackLink />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   if (author.isPending) {
     return <p className="text-base text-text-3">Loading author…</p>;

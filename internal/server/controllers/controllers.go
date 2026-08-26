@@ -33,6 +33,7 @@ type Controllers struct {
 	Presets              *PresetsController
 	Auth                 *AuthController
 	Launch               *LaunchController
+	ConsoleSession       *ConsoleSessionController
 	Console              console.PageServer
 }
 
@@ -88,6 +89,7 @@ func NewControllers(cfg Config) *Controllers {
 		Presets:              NewPresetsController(cfg.Presets),
 		Auth:                 NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
 		Launch:               NewLaunchController(cfg.LocalGate),
+		ConsoleSession:       NewConsoleSessionController(cfg.LocalGate),
 		Console:              cfg.Console,
 	}
 

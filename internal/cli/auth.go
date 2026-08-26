@@ -46,10 +46,27 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 
 	token := &urfavecli.Command{
 		Name: "token", Usage: "Print this machine's local admin token",
-		OnUsageError: usageError, Flags: []urfavecli.Flag{jsonFlag()},
+		OnUsageError: usageError,
+		Flags: []urfavecli.Flag{
+			jsonFlag(),
+			&urfavecli.BoolFlag{
+				Name:  flagCopy,
+				Usage: "Copy the token to the clipboard instead of printing it",
+			},
+		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if err := rejectArguments(cmd); err != nil {
 				return err
+			}
+			// --json exists to be read by a program; --copy targets the desktop
+			// of the person typing. Honouring both would put a JSON document
+			// containing the secret on the clipboard, which is neither what the
+			// script wanted nor what the operator meant to paste.
+			if cmd.Bool(flagCopy) && cmd.Bool(authFormatJSON) {
+				return urfavecli.Exit(
+					fmt.Sprintf("%s does not accept --copy with --json", cmd.FullName()),
+					ExitCodeUsage,
+				)
 			}
 			store, err := openStore()
 			if err != nil {
@@ -62,6 +79,9 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 			current, _, err := store.LoadOrMint(ctx, time.Now())
 			if err != nil {
 				return runtimeFailure{cause: err}
+			}
+			if cmd.Bool(flagCopy) {
+				return copyAuthToken(ctx, cmd.Writer, deps, current)
 			}
 			if err := writeAuthToken(cmd.Writer, current, store.Path(), cmd.Bool(authFormatJSON)); err != nil {
 				return runtimeFailure{cause: fmt.Errorf("write the local admin token: %w", err)}
@@ -150,6 +170,32 @@ func writeAuthToken(writer io.Writer, token localauth.Token, path string, asJSON
 	}
 	_, err := fmt.Fprintln(writer, token.Secret)
 	return err
+}
+
+// copyAuthToken puts the secret on the clipboard instead of on the screen.
+//
+// Not printing is the point rather than a side effect. The local admin token
+// outlives the terminal it was printed in, so the run that succeeds leaves it in
+// a clipboard the operator will overwrite in a minute and out of a scrollback
+// they may screen-share tomorrow. `starport auth url --copy` prints its link
+// anyway because a launch ticket is dead in ninety seconds; this credential is
+// not.
+//
+// A machine with no clipboard command still gets the value. A flag that
+// swallowed the credential it was asked to hand over would be worse than one
+// that never existed. The command still exits non-zero, so a script cannot read
+// the fallback as a copy.
+func copyAuthToken(ctx context.Context, writer io.Writer, deps Dependencies, token localauth.Token) error {
+	if err := clipboardWriter(deps)(ctx, token.Secret); err != nil {
+		if _, printErr := fmt.Fprintln(writer, token.Secret); printErr != nil {
+			return runtimeFailure{cause: errors.Join(err, printErr)}
+		}
+		return runtimeFailure{cause: fmt.Errorf("copy the local admin token: %w", err)}
+	}
+	if _, err := fmt.Fprintln(writer, "Copied the local admin token to the clipboard."); err != nil {
+		return runtimeFailure{cause: err}
+	}
+	return nil
 }
 
 func writeAuthStatus(writer io.Writer, view authStatusView, asJSON bool) error {

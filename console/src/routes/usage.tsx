@@ -16,7 +16,6 @@ import {
   YAxis,
 } from "recharts";
 
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import { AXIS_TICK, CHART, ChartCard, ChartTip } from "@/components/ui/Chart";
 import { SidePanel } from "@/components/ui/SidePanel";
 import {
@@ -583,14 +582,6 @@ function UsagePage() {
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
-  if (!keyUsable) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Header />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   if (scope.data === "locked") {
     return (

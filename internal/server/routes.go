@@ -188,6 +188,13 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 	// holding one has by definition not got a session yet.
 	mux.Get(localauth.LaunchPath, s.controllers.Launch.Launch)
 
+	// The pasted-token way in, outside every authentication group for the same
+	// reason: the body carries the credential, and a caller presenting it has by
+	// definition not got a session yet. The path is written out rather than
+	// routed through a constant because this is its only use in Go; the console
+	// reaches it from TypeScript.
+	mux.Post("/console/session", s.controllers.ConsoleSession.Create)
+
 	// Console pages and assets (optional feature)
 	if s.controllers.Console != nil {
 		s.controllers.Console.Register(mux)
@@ -227,6 +234,7 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //
 // Console Sign-In:
 //   GET /launch?lt=<ticket>     - Spend a one-time launch ticket for a session
+//   POST /console/session       - Exchange a pasted local admin token for one
 //
 // OpenAI-Compatible API (v1):
 //   POST /v1/chat/completions   - Create chat completion
