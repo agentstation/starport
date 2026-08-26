@@ -4,7 +4,6 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { ByokPanel } from "@/components/credentials/ByokPanel";
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import {
   Field,
   GhostButton,
@@ -325,14 +324,6 @@ function TenantsPage() {
       }),
   });
 
-  if (!access) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Header />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   const rows = tenants.data ?? [];
   const keysFor = (tenantId: string) =>

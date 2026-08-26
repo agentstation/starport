@@ -4,7 +4,6 @@ import { Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ModelPicker } from "@/components/models/ModelPicker";
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import {
   Field,
   GhostButton,
@@ -598,14 +597,6 @@ function PresetsPage() {
   const reload = () =>
     queryClient.invalidateQueries({ queryKey: ["presets"] });
 
-  if (!keyUsable) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Header />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   let body: ReactNode;
   let canCreate = false;

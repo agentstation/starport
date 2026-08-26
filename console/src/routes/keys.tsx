@@ -3,7 +3,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import { CopyButton } from "@/components/ui/CopyButton";
 import {
   Field,
@@ -708,14 +707,6 @@ function KeysPage() {
       ),
   });
 
-  if (!keyUsable) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Header />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   let body: ReactNode;
   if (keys.error) {

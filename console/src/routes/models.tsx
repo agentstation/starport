@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import { accessMessage, ApiError, listModels, listProviderCatalog } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
 import {
@@ -187,14 +186,6 @@ function ModelsPage() {
     [all, search],
   );
 
-  if (!keyUsable) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Header />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-4">

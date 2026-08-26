@@ -9,7 +9,6 @@ import {
   modelCountsByAuthor,
   sortAuthors,
 } from "@/components/authors/AuthorCard";
-import { ConnectCard } from "@/components/overview/ConnectCard";
 import { listAuthors, listModels } from "@/lib/api";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -53,14 +52,6 @@ function AuthorsPage() {
     [authors.data, trimmed, counts],
   );
 
-  if (!keyUsable) {
-    return (
-      <div className="flex flex-col gap-4">
-        <Header count={0} />
-        <ConnectCard />
-      </div>
-    );
-  }
 
   let body: ReactNode;
   if (authors.error) {
