@@ -25,11 +25,29 @@ func (a *App) RefreshProviders(ctx context.Context) (providers.ReconcileReport, 
 }
 
 // ProviderStates returns one secret-free provider runtime projection.
+//
+// The routing verdicts refresh here rather than at each publish. The registry
+// replaces the runtime adapter set on its own schedule — when it opens, when a
+// connector registers, and when it closes — so no publish site in this package
+// observes every change to the routable snapshot. Deriving the verdicts against
+// whichever snapshot the control plane currently holds binds the projection to
+// the state the caller is about to read instead of to whichever publish
+// happened to run last.
 func (a *App) ProviderStates() providerstate.Snapshot {
 	if a == nil || a.providerStates == nil {
 		return providerstate.Snapshot{}
 	}
+	if err := a.publishProviderRouting(a.currentRoutableSnapshot()); err != nil {
+		log.Warn().Err(err).Msg("refresh provider routing projection")
+	}
 	return a.providerStates.Snapshot()
+}
+
+func (a *App) currentRoutableSnapshot() *runtimecatalog.RoutableSnapshot {
+	if a == nil || a.catalog == nil {
+		return nil
+	}
+	return a.catalog.Current()
 }
 
 func (a *App) publishProviderCatalogState() error {
@@ -61,7 +79,7 @@ func (a *App) publishProviderCatalogState() error {
 	); err != nil {
 		return err
 	}
-	return a.publishProviderRouting(snapshot)
+	return nil
 }
 
 // publishProviderRouting carries the route planner's verdicts into the provider
@@ -210,9 +228,6 @@ func (a *App) publishProviderRuntime(
 	}
 	if err := a.registry.Publish(candidate, snapshot); err != nil {
 		return errors.Join(err, candidate.Close())
-	}
-	if err := a.publishProviderRouting(snapshot); err != nil {
-		return err
 	}
 	a.config.Providers = config.CloneProvidersConfig(resolved)
 	return nil
