@@ -40,6 +40,10 @@ func NewGate(token Token, bindHost string) *Gate {
 	gate := &Gate{token: token, tickets: tickets, grants: map[GrantKind]Grant{}}
 	gate.register(ticketGrant{token: token, tickets: tickets})
 	gate.register(newLocalTokenGrant(token, bindHost))
+	// Registered with no provider, so asking for it answers
+	// ErrIdentityProviderNotConfigured rather than "no such grant". Nothing in
+	// this repository supplies one.
+	gate.register(newIdentityGrant(token))
 	return gate
 }
 
