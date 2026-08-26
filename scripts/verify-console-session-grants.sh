@@ -72,8 +72,8 @@ check CSG-V12 "the console has an auth route outside the shell" \
   test -f console/src/routes/auth.tsx
 
 # --- CSG6: the auth CLI verbs ---
-check CSG-V13 "starport auth can copy the token and open the console URL" \
-  grep_q '"copy"' internal/cli/auth.go
+check CSG-V13 "the auth CLI can put the local admin token on the clipboard" \
+  grep_q 'copyAuthToken' internal/cli/auth.go
 
 # --- CSG7: the first-contact page ---
 check CSG-V14 "the page states its trust scope in the page" \

@@ -64,6 +64,112 @@ func TestAuthTokenIsStableAcrossCalls(t *testing.T) {
 	assert.Equal(t, first, output.String())
 }
 
+// TestAuthTokenCopiesInsteadOfPrinting is the whole reason the flag exists. An
+// operator pastes this token into a browser once and then lives with it in the
+// scrollback; --copy is the path that keeps it out of there, and a copy that
+// also printed would defeat the flag entirely.
+func TestAuthTokenCopiesInsteadOfPrinting(t *testing.T) {
+	deps, output, paths := authDependencies(t)
+	var copied []string
+	deps.Desktop.CopyToClipboard = func(_ context.Context, text string) error {
+		copied = append(copied, text)
+		return nil
+	}
+
+	require.NoError(t, runAuth(t, deps, "token", "--copy"))
+
+	require.Len(t, copied, 1)
+	assert.NotContains(t, output.String(), copied[0], "--copy printed the secret it was asked to hide")
+	assert.Contains(t, output.String(), "Copied the local admin token to the clipboard.")
+
+	// What reached the clipboard has to be what a gateway reading the same file
+	// would accept. A flag that copies a value nothing honours is worse than no
+	// flag, because the failure surfaces in a browser rather than here.
+	store, err := localauth.NewStore(paths.LocalTokenFile)
+	require.NoError(t, err)
+	stored, err := store.Load(context.Background())
+	require.NoError(t, err)
+	assert.True(t, stored.Authorizes(copied[0]))
+}
+
+// TestAuthTokenWithoutCopyReachesNoClipboard is the other half: the default is
+// still a printed secret, and nothing leaves the process without being asked.
+func TestAuthTokenWithoutCopyReachesNoClipboard(t *testing.T) {
+	deps, _, _ := authDependencies(t)
+	deps.Desktop.CopyToClipboard = func(context.Context, string) error {
+		t.Error("the clipboard was written without --copy")
+		return nil
+	}
+
+	require.NoError(t, runAuth(t, deps, "token"))
+}
+
+// TestAuthTokenCopyFallsBackToPrintingAndStillFails covers the machine with no
+// clipboard command — a container, a host reached over SSH. The operator must
+// end up holding the token either way, and the exit status must still say the
+// copy did not happen so a script does not carry on as though it had.
+func TestAuthTokenCopyFallsBackToPrintingAndStillFails(t *testing.T) {
+	deps, output, paths := authDependencies(t)
+	deps.Desktop.CopyToClipboard = func(context.Context, string) error { return ErrNoClipboard }
+
+	err := runAuth(t, deps, "token", "--copy")
+
+	require.Error(t, err)
+	assert.Equal(t, ExitCodeRuntime, ExitCode(err))
+	assert.ErrorIs(t, err, ErrNoClipboard)
+
+	store, storeErr := localauth.NewStore(paths.LocalTokenFile)
+	require.NoError(t, storeErr)
+	stored, storeErr := store.Load(context.Background())
+	require.NoError(t, storeErr)
+	assert.Contains(t, output.String(), stored.Secret, "--copy swallowed the token it could not copy")
+}
+
+// TestAuthTokenRefusesCopyWithJSON keeps the two output modes apart. --json is
+// read by a program and --copy is read by a person, and the combination would
+// leave a JSON document holding the secret on the clipboard.
+func TestAuthTokenRefusesCopyWithJSON(t *testing.T) {
+	deps, output, _ := authDependencies(t)
+	deps.Desktop.CopyToClipboard = func(context.Context, string) error {
+		t.Error("a refused invocation still reached the clipboard")
+		return nil
+	}
+
+	err := runAuth(t, deps, "token", "--copy", "--json")
+
+	require.Error(t, err)
+	assert.Equal(t, ExitCodeUsage, ExitCode(err))
+	assert.Contains(t, err.Error(), "--copy with --json")
+	assert.NotContains(t, output.String(), localauth.TokenPrefix, "a refused invocation printed the secret")
+}
+
+// TestAuthHelpNamesTheDesktopVerbs is what the first-contact page depends on.
+// The page tells a reader to run a command; a flag that works but is invisible
+// in help is a flag nobody finds.
+//
+// The assertion is anchored rather than a substring, because a substring match
+// on "--copy" is also satisfied by "--copy-anything": it would report a renamed
+// flag as a present one, which is the exact mistake this test exists to catch.
+func TestAuthHelpNamesTheDesktopVerbs(t *testing.T) {
+	for _, testCase := range []struct {
+		args  []string
+		flags []string
+	}{
+		{args: []string{"token", "--help"}, flags: []string{"copy"}},
+		{args: []string{"url", "--help"}, flags: []string{"copy", "open"}},
+	} {
+		t.Run(testCase.args[0], func(t *testing.T) {
+			deps, output, _ := authDependencies(t)
+
+			require.NoError(t, runAuth(t, deps, testCase.args...))
+
+			for _, flag := range testCase.flags {
+				assert.Regexp(t, `(?m)^\s+--`+flag+`[\s,]`, output.String())
+			}
+		})
+	}
+}
+
 // TestAuthStatusOnAColdMachineIsNotAFailure matters because status is the first
 // command a confused operator runs. "Nothing here yet" is an answer; a non-zero
 // exit is a second problem to debug.
