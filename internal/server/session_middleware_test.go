@@ -30,7 +30,7 @@ func sessionHarness(t *testing.T, gate *localauth.Gate) *AuthMiddleware {
 // openSession mints a session cookie value the given token signed.
 func openSession(t *testing.T, token localauth.Token) string {
 	t.Helper()
-	value, _, err := localauth.IssueSession(token, time.Now())
+	value, _, err := localauth.IssueSession(token, localauth.GrantTicket, time.Now())
 	require.NoError(t, err)
 	return value
 }
@@ -98,7 +98,7 @@ func TestRotatingTheLocalTokenEndsALiveSession(t *testing.T) {
 
 func TestAnExpiredSessionStopsAuthenticating(t *testing.T) {
 	token := sessionToken(t, 2)
-	value, _, err := localauth.IssueSession(token, time.Now().Add(-localauth.SessionTTL-time.Minute))
+	value, _, err := localauth.IssueSession(token, localauth.GrantTicket, time.Now().Add(-localauth.SessionTTL-time.Minute))
 	require.NoError(t, err)
 
 	status, seen, _, _ := callWithSession(sessionHarness(t, localauth.NewGate(token)), value)

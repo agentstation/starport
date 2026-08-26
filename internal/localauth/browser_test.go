@@ -136,7 +136,7 @@ func TestATicketIsNotASession(t *testing.T) {
 	now := time.Now()
 	ticket, err := MintTicket(token, now)
 	require.NoError(t, err)
-	cookie, _, err := IssueSession(token, now)
+	cookie, _, err := IssueSession(token, GrantTicket, now)
 	require.NoError(t, err)
 
 	_, err = VerifySession(ticket, token, now)
@@ -153,7 +153,7 @@ func TestATicketIsNotASession(t *testing.T) {
 func TestTamperedValuesAreRefused(t *testing.T) {
 	token := testToken(t, 1)
 	now := time.Now()
-	cookie, _, err := IssueSession(token, now)
+	cookie, _, err := IssueSession(token, GrantTicket, now)
 	require.NoError(t, err)
 	payload, signature, found := strings.Cut(cookie, ".")
 	require.True(t, found)
@@ -192,7 +192,7 @@ func flipAByte(t *testing.T, value string) string {
 func TestAnExpiredSessionIsRefused(t *testing.T) {
 	token := testToken(t, 1)
 	now := time.Now()
-	cookie, session, err := IssueSession(token, now)
+	cookie, session, err := IssueSession(token, GrantTicket, now)
 	require.NoError(t, err)
 	assert.Equal(t, SessionTTL, session.ExpiresAt.Sub(session.IssuedAt))
 
@@ -210,7 +210,7 @@ func TestAnExpiredSessionIsRefused(t *testing.T) {
 func TestRotatingTheTokenInvalidatesEverySession(t *testing.T) {
 	first := testToken(t, 1)
 	now := time.Now()
-	cookie, _, err := IssueSession(first, now)
+	cookie, _, err := IssueSession(first, GrantTicket, now)
 	require.NoError(t, err)
 	require.NotNil(t, cookie)
 
@@ -224,7 +224,7 @@ func TestRotatingTheTokenInvalidatesEverySession(t *testing.T) {
 // signed-in shell without holding a credential.
 func TestSessionCookiesKeepTheSecretAwayFromScripts(t *testing.T) {
 	token := testToken(t, 1)
-	value, session, err := IssueSession(token, time.Now())
+	value, session, err := IssueSession(token, GrantTicket, time.Now())
 	require.NoError(t, err)
 
 	cookies := SessionCookies(value, session, false)
