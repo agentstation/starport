@@ -80,6 +80,31 @@ export function onCredentialChange(listener: () => void): () => void {
   return () => credentialListeners.delete(listener);
 }
 
+// SESSION_PATH exchanges a local admin token for a console session. It is the
+// only gateway route this file addresses by a literal path rather than through
+// `request`, and deliberately: `request` attaches whatever credential this
+// browser already holds, and the whole point of this call is that it holds
+// none.
+const SESSION_PATH = "/console/session";
+
+// openSession hands the gateway a token an operator pasted and, if it is the
+// one this gateway printed, comes back with a session.
+//
+// Nothing is stored here. The credential arrives as an HttpOnly cookie the
+// browser attaches on its own and this code cannot read, so a token that opens
+// a session never reaches localStorage, and closing the tab leaves nothing
+// behind but the cookie the gateway set.
+export async function openSession(token: string): Promise<void> {
+  const response = await fetch(SESSION_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!response.ok) throw await parseError(response);
+  credentialRejected = false;
+  for (const listener of credentialListeners) listener();
+}
+
 // authorization names the credential to the gateway. A session sends no header
 // at all: the browser attaches its cookie, and this code cannot read it.
 function authorization(held: Credential): Record<string, string> {

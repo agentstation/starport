@@ -9,7 +9,7 @@
     "build": "vite build && node -e \"require('node:fs').writeFileSync('../internal/console/dist/.gitkeep','')\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "pnpm build && pnpm typecheck"
+    "check": "pnpm build && pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@streamdown/code": "^1.1.1",
