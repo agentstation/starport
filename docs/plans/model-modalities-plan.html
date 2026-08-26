@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model modalities</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  .task p { margin: 0.3rem 0; }
+  .task ol { margin: 0.3rem 0 0.6rem; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Model modalities</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="proposed">proposed</code> ·
+    Owner: this plan ·
+    Created: 2026-08-26 ·
+    Baseline: starport main at 81778ed, starmap main at ce19e939 ·
+    Proof root: <code>docs/proof/model-modalities/</code> ·
+    Next action: MOD0 after approval
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      Starport reaches every model modality that Starmap records as a fact, or
+      Starport names the reason it does not. Starmap states the modalities of
+      each model and the operations of each offering. Starport accepts the
+      matching request, plans a route that serves it, returns the response, and
+      records the cost. Starport drops no content part in silence. No canonical
+      type takes a provider wire word.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 340 230" role="img" aria-label="Before diagram">
+          <rect x="8" y="8" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="32" text-anchor="middle" fill="currentColor"
+            font-size="12">starmap facts: text image audio video pdf</text>
+          <text x="170" y="52" text-anchor="middle" fill="currentColor"
+            font-size="12">operations: chat completions, embeddings</text>
+          <rect x="8" y="86" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="110" text-anchor="middle" fill="currentColor"
+            font-size="12">ContentKind: text, image</text>
+          <text x="170" y="130" text-anchor="middle" fill="currentColor"
+            font-size="12">codecs refuse every other part with 400</text>
+          <rect x="8" y="164" width="324" height="58" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="188" text-anchor="middle" fill="currentColor"
+            font-size="12">63 of 613 offerings carry no operation</text>
+          <text x="170" y="208" text-anchor="middle" fill="currentColor"
+            font-size="12">each one excluded as operation unsupported</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 340 230" role="img" aria-label="After diagram">
+          <rect x="8" y="8" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="32" text-anchor="middle" fill="currentColor"
+            font-size="12">starmap facts: same, plus audio token prices</text>
+          <text x="170" y="52" text-anchor="middle" fill="currentColor"
+            font-size="12">operations: plus five image and audio members</text>
+          <rect x="8" y="86" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="110" text-anchor="middle" fill="currentColor"
+            font-size="12">ContentKind: plus audio, document, video</text>
+          <text x="170" y="130" text-anchor="middle" fill="currentColor"
+            font-size="12">routing refuses a part the model cannot take</text>
+          <rect x="8" y="164" width="324" height="58" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="188" text-anchor="middle" fill="currentColor"
+            font-size="12">media offerings route, usage prices media</text>
+          <text x="170" y="208" text-anchor="middle" fill="currentColor"
+            font-size="12">async video moves to its own named plan</text>
+        </svg>
+      </figure>
+    </div>
+    <p>No seam moves. This plan widens three vocabularies. The content
+      vocabulary lives in <code>internal/inference</code>. The operation
+      vocabulary lives in Starmap. The unit vocabulary lives in
+      <code>internal/usage</code>.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+
+    <p><strong>Owns, the request path.</strong> The content vocabulary in
+      <code>internal/inference</code>. The content-part arms of both protocol
+      codecs. The connector adapters that carry a part to a provider. The
+      routing rule that matches a request modality against a model fact. The
+      cache eligibility rule and the request body limit for media.</p>
+
+    <p><strong>Owns, the media operations.</strong> The Starport routes,
+      scopes, and canonical types for the five media operations. Media units in
+      usage and cost. The console surfaces. One durable verifier.</p>
+
+    <p><strong>Owns, in Starmap.</strong> The audio token price fields. The
+      five media operation members. The offering derivation that emits
+      them.</p>
+
+    <p><strong>Does not own.</strong> The catalog data corrections that a new
+      fact-consistency rule demands. Starmap owns those, and they land in the
+      same Starmap pull request as the rule. The OpenRouter parity conditions
+      <code>ORP-V01</code> through <code>ORP-V16</code> also stay outside this
+      plan, and decision MOD-D5 states why.</p>
+
+    <p><strong>Non-goals.</strong> Four items sit outside this plan, and each
+      one now has a named owner. Asynchronous video generation belongs to
+      <a href="async-media-jobs-plan.html">the async media jobs plan</a>. A
+      files API belongs to <a href="files-api-plan.html">the files API
+      plan</a>, which MOD16 promotes and which the async plan then follows. The
+      OpenRouter document parser plugins belong to
+      <a href="document-parser-plan.html">the document parser plan</a>.
+      Reranking belongs to <a href="reranking-plan.html">the reranking
+      plan</a>, which depends on no other plan.</p>
+  </section>
+
+  <section id="promotion-gate">
+    <h2>Promotion gate</h2>
+    <p>Promote this plan to <code>active</code> only when every item holds.</p>
+    <ol>
+      <li>The owner approves the phase order A, then B, then C.</li>
+      <li>The owner approves the six decisions below.</li>
+      <li>The baseline commits and the proof root exist.</li>
+      <li>The goal block names real documents, paths, and gates.</li>
+      <li>The async media jobs plan exists and owns the video non-goal.</li>
+    </ol>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Invariant</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>I1</td><td>Starmap owns the modality fact and the operation fact. Starport adds no per-model or per-provider modality table.</td><td>A local table restates a fact that a catalog generation already binds, and the two then disagree.</td></tr>
+        <tr><td>I2</td><td>Starport refuses a content part that the canonical vocabulary does not name. The default arm of each codec keeps returning an error.</td><td>A silent drop sends a truncated prompt to a provider and bills the caller for it.</td></tr>
+        <tr><td>I3</td><td>A canonical type never takes a provider wire word. <code>ContentDocument</code> is the canonical name, and <code>file</code> is the wire word.</td><td><code>ContentImage</code> already differs from <code>image_url</code>, so the vocabulary stays independent of any one provider.</td></tr>
+        <tr><td>I4</td><td>Starport refuses a request whose modality the routed model does not accept. It names the modality, and it refuses before the provider call.</td><td>A provider 400 that Starport reports as its own hides which model refused and why.</td></tr>
+        <tr><td>I5</td><td>A media response carries a priced usage record or a recorded cost reason. Zero never stands in for an unknown cost.</td><td>A spend budget that counts an unknown cost as zero stops bounding the tenant.</td></tr>
+        <tr><td>I6</td><td><code>Connector</code> grows no method for a new operation. A new operation arrives as a narrow optional interface that the registry probes.</td><td>A method for each operation forces a stub into every provider that serves no media.</td></tr>
+        <tr><td>I7</td><td>Breaking changes stay direct. This plan adds no compatibility shim.</td><td>Starport has no release that needs a migration path.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Date</th><th>Decision</th><th>Consequence and re-open condition</th></tr></thead>
+      <tbody>
+        <tr><td>MOD-D1</td><td>2026-08-26</td><td>Stage the work as phase A for chat input, phase B for chat output, and phase C for the dedicated operations.</td><td>Each phase ships and verifies alone. Phase A closes the widest gap for the least work. The shipped catalog holds 164 image-input, 57 video-input, 53 pdf-input, and 46 audio-input offerings, against 42 image-output and 24 audio-output offerings. Re-open if a phase A measurement contradicts those counts.</td></tr>
+        <tr><td>MOD-D2</td><td>2026-08-26</td><td>The new Starmap operations mirror the OpenAI endpoint set: <code>images-generations</code>, <code>images-edits</code>, <code>audio-speech</code>, <code>audio-transcriptions</code>, and <code>audio-translations</code>.</td><td>One Starmap operation maps to one provider path and one Starport route, so the endpoint facts stay mechanical. The planner needs no modality lookup, but it does need the guard widening that decision MOD-D6 owns. Re-open if a provider serves two of these operations on one path.</td></tr>
+        <tr><td>MOD-D3</td><td>2026-08-26</td><td>The canonical document part is <code>ContentDocument</code>, and the wire word stays <code>file</code>.</td><td>The split follows <code>ContentImage</code>, which already differs from <code>image_url</code>. The Starmap <code>pdf</code> modality maps onto it. Re-open only if a provider ships a document part that is not a file.</td></tr>
+        <tr><td>MOD-D4</td><td>2026-08-26</td><td>Extend usage with media units now, rather than record a media turn as unpriced.</td><td>A media request reports a real cost from its first day. The cost is one usage schema change and one Starmap pricing addition in MOD8. Re-open if a provider reports no countable media unit.</td></tr>
+        <tr><td>MOD-D6</td><td>2026-08-26</td><td>Catalog data degrades and caller input fails closed. A snapshot skips an operation Starport does not name, and a request for one is refused.</td><td>The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation through, and <code>validateSnapshot</code> rejects the whole snapshot on one it does not know. A Starmap catalog change alone would then break chat and embeddings routing with no Starport deploy. The registry guard and both planner guards read one named operation set after this decision, so a later plan adds a member rather than edits a boolean chain. Re-open if an unknown operation must become a hard error.</td></tr>
+        <tr><td>MOD-D5</td><td>2026-08-26</td><td>The MMD gate guards the new OpenRouter media routes. <code>scripts/verify-openrouter-parity.sh</code> stays terminal at 16 conditions.</td><td>One gate owns the media surface, so the parity gate keeps its fixed count and its stated meaning. MOD16 records the split in <code>AGENTS.md</code>. Re-open if OpenRouter changes a route that ORP already guards.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-model-modalities.sh</code> reports every condition
+      and exits nonzero while any condition fails. It prints
+      <code>Summary: N passed, M failed</code>. The condition identifiers run
+      from <code>MMD-V01</code> to <code>MMD-V25</code>. MOD0 writes the
+      verifier red at 0 passed and 25 failed. Every task section below names
+      the conditions it turns green.</p>
+    <table>
+      <thead><tr><th>Phase</th><th>Tasks</th><th>Conditions</th><th>Cumulative passing</th></tr></thead>
+      <tbody>
+        <tr><td>A, multimodal chat input</td><td>MOD1 to MOD7</td><td>MMD-V01 to MMD-V10</td><td>10</td></tr>
+        <tr><td>B, non-text chat output</td><td>MOD8 to MOD11</td><td>MMD-V11 to MMD-V16</td><td>16</td></tr>
+        <tr><td>C, dedicated media operations</td><td>MOD12 to MOD15</td><td>MMD-V17 to MMD-V23</td><td>23</td></tr>
+        <tr><td>Close</td><td>MOD16</td><td>MMD-V24 to MMD-V25</td><td>25, terminal</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="MOD0" data-status="todo"><td>MOD0</td><td>Baseline. Pin both commits, create the proof root, write the verifier red at 25 conditions, capture fail-before evidence.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD1" data-status="todo"><td>MOD1</td><td>Phase A. Widen the canonical content vocabulary with audio, document, and video parts. Conditions MMD-V01 and MMD-V02.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD2" data-status="todo"><td>MOD2</td><td>Phase A. Decode and encode the new parts in both protocol codecs. Conditions MMD-V03 and MMD-V04.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD3" data-status="todo"><td>MOD3</td><td>Phase A. Carry the new parts through the connector adapters into each provider shape. Condition MMD-V05.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD4" data-status="todo"><td>MOD4</td><td>Phase A. Refuse a request whose modality the routed model does not accept. Conditions MMD-V06 and MMD-V07.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD5" data-status="todo"><td>MOD5</td><td>Phase A. Widen the response cache eligibility rule to every remote media input. Condition MMD-V08.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD6" data-status="todo"><td>MOD6</td><td>Phase A. Size the request body limit for media and state the limit in the refusal. Condition MMD-V09.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD7" data-status="todo"><td>MOD7</td><td>Phase A. Console: attach audio and documents, and show what the model accepts. Condition MMD-V10.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD8" data-status="todo"><td>MOD8</td><td>Phase B. Starmap: add audio token prices and release. Condition MMD-V11.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD9" data-status="todo"><td>MOD9</td><td>Phase B. Add output modalities and generated media to the canonical chat types. Condition MMD-V12.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD10" data-status="todo"><td>MOD10</td><td>Phase B. Carry generated media through both codecs and the cached stream replay. Conditions MMD-V13 and MMD-V14.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD11" data-status="todo"><td>MOD11</td><td>Phase B. Record and price media units in usage, cost, and the spend budget. Conditions MMD-V15 and MMD-V16.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD12" data-status="todo"><td>MOD12</td><td>Phase C. Starmap: five media operations, the offering derivation, the consistency rule, and a release. Conditions MMD-V17 and MMD-V18.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD13" data-status="todo"><td>MOD13</td><td>Phase C. Accept the media operations in the transport registry through narrow optional interfaces. Condition MMD-V19.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD14" data-status="todo"><td>MOD14</td><td>Phase C. Add the canonical media types, the eight routes, and the two scopes. Conditions MMD-V20 to MMD-V22.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD15" data-status="todo"><td>MOD15</td><td>Phase C. Console: make a media model visible, filterable, and usable. Condition MMD-V23.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD16" data-status="todo"><td>MOD16</td><td>Close. Documentation, the terminal gate in CI, and promotion of the async media jobs plan. Conditions MMD-V24 and MMD-V25.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD17" data-status="todo"><td>MOD17</td><td>Cleanup after the final pull request merges. Delete this plan and its proof root.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <div class="task">
+    <h3 id="task-MOD0">MOD0 Baseline</h3>
+
+    <p><strong>Problem.</strong> The plan needs a pinned baseline in each
+      repository. It also needs a red verifier and fail-before evidence.</p>
+
+    <p><strong>Seam.</strong> This plan,
+      <code>docs/proof/model-modalities/</code>, and
+      <code>scripts/verify-model-modalities.sh</code>.</p>
+    <ol>
+      <li>Record the baseline commit of each repository.</li>
+      <li>Create the proof root.</li>
+      <li>Write the verifier with all 25 conditions.</li>
+      <li>Send one chat request that holds an audio part and record the
+        refusal.</li>
+      <li>Send one chat request that holds a file part and record the
+        refusal.</li>
+      <li>Record the offering census from the shipped endpoint facts.</li>
+    </ol>
+
+    <p><strong>Acceptance.</strong> The verifier reports
+      <code>Summary: 0 passed, 25 failed</code>. This task changes no
+      production file.</p>
+
+    <p><strong>Fail-before.</strong> <code>mod0.md</code> holds both refusal
+      bodies and the census.</p>
+
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-model-modalities.sh</code>. Then
+      <code>go build ./...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD1">MOD1 Canonical content vocabulary</h3>
+
+    <p><strong>Problem.</strong> <code>inference.ContentKind</code> names text
+      and image alone. Audio, document, and video input have no canonical
+      value. The embedding types closed the same gap for embeddings.
+      <code>cloneMessage</code> deep-copies <code>part.Image</code> alone, so a
+      new pointer field would alias between clones.</p>
+
+    <p><strong>Seam.</strong> <code>internal/inference/types.go</code> and its
+      contract test.</p>
+    <ol>
+      <li>Add <code>ContentAudio</code>, <code>ContentDocument</code>, and
+        <code>ContentVideo</code>.</li>
+      <li>Add the <code>Audio</code>, <code>Document</code>, and
+        <code>Video</code> value types.</li>
+      <li>Give each type a URL field, an inline data field, and a format
+        field.</li>
+      <li>Add the matching pointer fields to <code>ContentPart</code>.</li>
+      <li>Extend <code>cloneMessage</code> to deep-copy each new pointer.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V01 and MMD-V02.</strong> A contract test builds
+      a message that holds one part of every kind. The test clones it, mutates
+      every clone field, and asserts the original stays unchanged. A second
+      test asserts every <code>ContentKind</code> constant has a clone arm.</p>
+
+    <p><strong>Fail-before.</strong> The clone test does not compile against
+      the current types.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/inference/...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD2">MOD2 Protocol codecs</h3>
+
+    <p><strong>Problem.</strong> Both codecs refuse every part that is not text
+      or image. <code>internal/protocol/openai/codec.go:466</code> and
+      <code>internal/protocol/openrouter/codec.go:633</code> return the same
+      error. A caller who sends the documented OpenRouter shape gets a 400 from
+      Starport rather than a response.</p>
+
+    <p><strong>Seam.</strong> <code>internal/protocol/openai</code>,
+      <code>internal/protocol/openrouter</code>, and both contract tests.</p>
+    <ol>
+      <li>Add the wire types for an audio part, a file part, and a video
+        part.</li>
+      <li>Decode the part types <code>input_audio</code>, <code>file</code>,
+        <code>input_file</code>, and <code>video_url</code>.</li>
+      <li>Encode the same parts, so an assistant message round-trips.</li>
+      <li>Keep the default arm returning an error.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V03 and MMD-V04.</strong> A table test
+      round-trips one request for each part kind through each codec. A negative
+      test asserts that an unknown part type returns an error that names the
+      index and the type. A third test asserts the documented field spellings
+      <code>input_audio.data</code>, <code>input_audio.format</code>,
+      <code>file.filename</code>, and <code>file.file_data</code>.</p>
+
+    <p><strong>Fail-before.</strong> The round-trip test fails with
+      <code>content[0].type "input_audio" is not supported</code>.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/protocol/...</code>. Then
+      <code>bash scripts/verify-openrouter-parity.sh</code> reports 16
+      passed.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD3">MOD3 Connector adapters</h3>
+
+    <p><strong>Problem.</strong> The adapter maps <code>ContentImage</code>
+      alone at
+      <code>internal/providers/connectors/inference_adapter.go:282</code>.
+      Every other kind reaches a provider as a bare type string with no
+      payload. Anthropic and Google AI Studio use content shapes that differ
+      from the OpenAI shape.</p>
+
+    <p><strong>Seam.</strong> <code>internal/providers/connectors</code> and
+      its contract test.</p>
+    <ol>
+      <li>Extend the shared wire content part.</li>
+      <li>Map each canonical kind in both directions for the OpenAI-shaped
+        transports.</li>
+      <li>Map each kind onto the Anthropic content shape.</li>
+      <li>Map each kind onto the Google AI Studio content shape.</li>
+      <li>Return a named error when a transport has no shape for a kind.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V05.</strong> The connector contract test
+      asserts that each transport keeps the payload of a part or returns the
+      named error. No transport drops a part in silence.</p>
+
+    <p><strong>Fail-before.</strong> A test that asserts the audio payload
+      survives the adapter fails, because the adapter copies the type string
+      alone.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/providers/...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD4">MOD4 Modality-aware routing</h3>
+
+    <p><strong>Problem.</strong> Nothing compares the modalities of a request
+      against the modalities of the model. Starport forwards an audio part to a
+      text-only model and reports the provider 400 as its own. Routing policy
+      belongs to Starport, and this rule makes the Starmap modality fact
+      useful.</p>
+
+    <p>Two functions in <code>internal/proxy/proxy.go</code> already read the
+      content parts, and both read them narrowly. The first,
+      <code>requestHasVision</code> at line 201, detects
+      <code>ContentImage</code> alone and sets the one capability string that
+      the planner matches. The second, <code>estimatePromptTokens</code> at
+      line 164, counts text and a flat image surcharge alone, so routing sees an
+      audio part and a document part as free.
+      Generalize both
+      here, rather than add a second capability mechanism beside them.</p>
+
+    <p><strong>Seam.</strong> <code>internal/proxy</code>,
+      <code>internal/routing</code>, <code>internal/router</code>, and
+      <code>internal/catalog</code>.</p>
+    <ol>
+      <li>Project model input modalities onto the route, and derive the request
+        set from its content parts.</li>
+      <li>Replace the image-only test in <code>requestHasVision</code> with
+        that modality set.</li>
+      <li>Replace the duplicate estimator in <code>internal/proxy</code> with
+        the <code>internal/tokenize</code> estimator.</li>
+      <li>Reject a route that does not accept every requested modality.</li>
+      <li>Apply the same test to every fallback model.</li>
+      <li>Return a 400 that names the modality when no route qualifies.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V06 and MMD-V07.</strong> A routing test sends
+      an audio part to a text-only model and asserts a 400 that names audio and
+      the model. A second test asserts that the planner drops a fallback model
+      that cannot accept the request. A third test asserts that a model that
+      accepts audio still routes. A fourth test asserts that one estimator
+      serves both the routing metadata and the usage path.</p>
+
+    <p><strong>Fail-before.</strong> The first test reaches the provider
+      today.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/proxy/... ./internal/routing/... ./internal/router/...</code>.
+      Then
+      <code>bash scripts/benchmark-overhead.sh</code> stays inside its
+      threshold.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD5">MOD5 Response cache eligibility</h3>
+
+    <p><strong>Problem.</strong> The cache refuses a request that holds an
+      image part, because a remote image URL can change without a new key. The
+      rule lives at
+      <code>internal/response/cache/identity.go:124</code>. Audio, document,
+      and video parts carry the same remote URL risk. Without a matching rule
+      Starport would cache a mutable audio input and replay a stale
+      response.</p>
+
+    <p><strong>Seam.</strong> <code>internal/response/cache</code> and its
+      contract test.</p>
+    <ol>
+      <li>Widen the eligibility error to name every remote media input.</li>
+      <li>Refuse a request that holds a remote URL of any media kind.</li>
+      <li>Keep an inline payload eligible, because its bytes belong to the
+        key.</li>
+      <li>Add the inline payload digest to the chat key.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V08.</strong> A cache test asserts that a remote
+      audio URL is ineligible for the same reason as a remote image URL. A
+      second test asserts that two requests whose inline audio bytes differ
+      produce different keys.</p>
+
+    <p><strong>Fail-before.</strong> A request that holds a remote audio URL
+      caches today.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/response/...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD6">MOD6 Request body limit for media</h3>
+
+    <p><strong>Problem.</strong> The server applies one body limit to every
+      route. Base64 grows a payload by one third, so one minute of audio or a
+      long document reaches that limit. A caller who attaches media gets a 413
+      that states no limit.</p>
+
+    <p>Two struct fields declare the 10485760 byte default.
+      <code>internal/config/config.go:85</code> holds the field that startup
+      decodes. <code>internal/server/config.go:30</code> repeats the tag, and
+      <code>internal/app/app.go:887</code> copies the value across. The
+      repeated tag never reads the environment, so a change to one default
+      leaves the other stale.</p>
+
+    <p><strong>Seam.</strong> <code>internal/config</code> and
+      <code>internal/server</code>.</p>
+    <ol>
+      <li>Raise the default body limit to a value that carries one attached
+        media file.</li>
+      <li>Return a 413 body that states the limit and the received size.</li>
+      <li>Document the setting in the operator guide.</li>
+      <li>Delete the dead tag in <code>internal/server/config.go</code>, or
+        assert both defaults agree.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V09.</strong> A server test posts a body above
+      the limit and asserts a 413 whose body states the limit in bytes. A
+      config test asserts the new default.</p>
+
+    <p><strong>Fail-before.</strong> The 413 body states no limit today.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/server/... ./internal/config/...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD7">MOD7 Console composer</h3>
+
+    <p><strong>Problem.</strong> The composer attaches images alone. The model
+      picker does not state which attachments the selected model accepts. A
+      reader can attach a file to a model that refuses it.</p>
+
+    <p><strong>Seam.</strong> <code>console/src/components/chat</code> and
+      <code>console/src/lib</code>.</p>
+    <ol>
+      <li>Accept audio and document attachments in the composer.</li>
+      <li>Encode each attachment into its documented part shape.</li>
+      <li>Read the input modalities of the model from the models API.</li>
+      <li>Enable each attachment control only for a model that accepts its
+        modality.</li>
+      <li>State the reason in the disabled control.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V10.</strong> A vitest asserts that the audio
+      control stays disabled for a text-only model and active for an audio
+      model. A second test asserts that an attached document produces the file
+      part shape.</p>
+
+    <p><strong>Fail-before.</strong> The test fails, because no audio control
+      exists.</p>
+
+    <p><strong>Verification.</strong>
+      <code>pnpm --dir console check</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD8">MOD8 Starmap audio token prices</h3>
+
+    <p><strong>Problem.</strong> Starmap token pricing covers input, output,
+      reasoning, cache read, and cache write. Audio tokens cost a different
+      rate at every provider that serves them. The vendored models.dev
+      snapshot records the fact on 74 models for input and 18 for output. MOD11 cannot
+      price an audio turn without the fields.</p>
+
+    <p><strong>Seam.</strong> Starmap
+      <code>pkg/catalogs/model_pricing.go</code>, the models.dev source
+      mapping, and the affected model files.</p>
+    <ol>
+      <li>Add an audio input price and an audio output price to the token
+        pricing type.</li>
+      <li>Map both fields from the models.dev source.</li>
+      <li>Extend the pricing validation.</li>
+      <li>Regenerate the catalog.</li>
+      <li>Release a Starmap version and raise the Starport dependency.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V11.</strong> A Starmap round-trip test carries
+      both fields through JSON and YAML. The regenerated catalog prices audio
+      on the models whose source records it. <code>mod8.md</code> states the
+      count.</p>
+
+    <p><strong>Fail-before.</strong> The round-trip test does not compile.</p>
+
+    <p><strong>Verification.</strong> In Starmap, <code>go test ./...</code>.
+      In Starport,
+      <code>bash scripts/verify-starmap-ownership.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD9">MOD9 Output modalities on the canonical chat types</h3>
+
+    <p><strong>Problem.</strong> <code>ChatRequest</code> cannot ask for a
+      non-text response. <code>ChoiceDelta</code> cannot carry a streamed audio
+      chunk. OpenRouter serves audio output through streaming alone, so the
+      delta field is not optional. MOD15 reads the <code>Modality</code>
+      type this task defines. MOD7 reads input modalities alone, so it needs
+      no type from this phase.</p>
+
+    <p><strong>Seam.</strong> <code>internal/inference/types.go</code> and its
+      contract test.</p>
+    <ol>
+      <li>Add the <code>Modality</code> type that names one output kind.</li>
+      <li>Add the output modality field and the audio output field to
+        <code>ChatRequest</code>.</li>
+      <li>Give the audio output field a voice field and a format field.</li>
+      <li>Add an audio field to <code>ChoiceDelta</code> with data and a
+        transcript.</li>
+      <li>Extend every <code>Clone</code> method to cover the new fields.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V12.</strong> A clone test covers each new
+      field. A second test asserts that an assistant message holding an image
+      part survives <code>ChatResponse.Clone</code> without an alias.</p>
+
+    <p><strong>Fail-before.</strong> The clone test does not compile.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/inference/...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD10">MOD10 Codecs carry generated media</h3>
+
+    <p><strong>Problem.</strong> Neither codec reads the output modality
+      request field, and neither writes generated media. The cached stream
+      replay path rebuilds a stream from message text alone at
+      <code>internal/response/cache/stream.go:96</code>. A cached response
+      holding an image part returns <code>ErrUnsupportedContent</code> instead
+      of a stream. Four live models serve this shape
+      today.</p>
+
+    <p><strong>Seam.</strong> Both protocol packages,
+      <code>internal/providers/connectors</code>, and
+      <code>internal/response/cache/stream.go</code>.</p>
+    <ol>
+      <li>Read the output modality field and the audio field from the
+        request.</li>
+      <li>Write a generated image into the assistant images field.</li>
+      <li>Write generated audio into the assistant audio field.</li>
+      <li>Write the streamed audio shape with data and a transcript.</li>
+      <li>Carry both through the connector adapters.</li>
+      <li>Replay a cached media response through the stream path without
+        loss.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V13 and MMD-V14.</strong> A contract test
+      asserts that a request setting an output modality reaches the connector
+      with the canonical field intact. A second test asserts that a response
+      holding an image part encodes to the documented images field. A third
+      test asserts that a cached response holding an image part replays with
+      the image.</p>
+
+    <p><strong>Fail-before.</strong> The decoder drops the output modality
+      field today.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/protocol/... ./internal/providers/... ./internal/response/...</code>.
+      Then <code>bash scripts/smoke-openrouter-sdks.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD11">MOD11 Media units in usage and cost</h3>
+
+    <p><strong>Problem.</strong> The canonical usage type and the usage record
+      count tokens alone. A generated image has no token count, so a media turn
+      records a cost of zero, which reads as free rather than unknown. A tenant
+      spend budget at <code>internal/limits/rules.go:65</code> bounds a media
+      turn only when Starport knows the cost.</p>
+
+    <p><strong>Seam.</strong> <code>internal/inference</code>,
+      <code>internal/usage</code>, <code>internal/proxy</code>, and the console
+      usage page.</p>
+    <ol>
+      <li>Add a generated image count and audio token counts to the canonical
+        usage type.</li>
+      <li>Carry the counts onto the usage record.</li>
+      <li>Price audio tokens from the MOD8 fields, and a generated image from
+        the Starmap image price.</li>
+      <li>Count each media kind in the <code>internal/tokenize</code>
+        estimator.</li>
+      <li>Add a cost reason for a media unit that the offering does not
+        price.</li>
+      <li>Show the media units on the console usage page.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V15 and MMD-V16.</strong> A repository test
+      asserts that a record with generated images and no image price carries
+      the new reason and no cost. A second test asserts that an audio turn
+      against a priced offering produces a nonzero cost. A third test asserts
+      that the spend budget counts a priced media turn.</p>
+
+    <p><strong>Fail-before.</strong> The first case records a cost of zero
+      today.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/usage/... ./internal/proxy/...</code>. Then
+      <code>pnpm --dir console check</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD12">MOD12 Starmap media operations</h3>
+
+    <p><strong>Problem.</strong> The Starmap operation type has two members,
+      and the chat completion test disqualifies a model that charges for
+      generated media. Together the two rules leave 63 of 613 shipped offerings
+      with no operation. Starport excludes each one as
+      <code>operation_unsupported</code>, so it never appears in
+      <code>/v1/models</code>. Starmap pull request 102 corrected a derivation
+      that read the pricing shape, and this task must not restore it.</p>
+
+    <p><strong>Seam.</strong> Starmap <code>pkg/catalogs</code>, the provider
+      files, and the regenerated endpoint facts.</p>
+    <ol>
+      <li>Add the five operations that decision MOD-D2 names.</li>
+      <li>Derive each one from the declared modality and the model tag.</li>
+      <li>Keep the derivation independent of the pricing shape.</li>
+      <li>Add a fact-consistency rule for each new operation.</li>
+      <li>Add the endpoint path of each provider that serves one.</li>
+      <li>Regenerate and release, and leave the Starport dependency
+        pinned.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V17 and MMD-V18.</strong>
+      <code>mod12.md</code> states the new census, the residual count of
+      offerings with no operation, and the reason for each residual. A Starmap
+      test cross-checks every published media operation against its canonical
+      definition.</p>
+
+    <p><strong>Fail-before.</strong> <code>mod0.md</code> records 63 offerings
+      with no operation.</p>
+
+    <p><strong>Verification.</strong> In Starmap, <code>go test ./...</code>.
+      In Starport,
+      <code>bash scripts/verify-starmap-ownership.sh</code> and
+      <code>bash scripts/verify-catalog-driven-providers.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD13">MOD13 Transport registry and optional interfaces</h3>
+
+    <p><strong>Problem.</strong> Three guards name chat completions and
+      embeddings and refuse everything else. One is the registry guard at
+      <code>transport_registry.go:57</code>. The other two are
+      <code>validateRequest</code> and <code>validateSnapshot</code> in
+      <code>internal/routing/planner.go</code>, and the second fails a whole
+      snapshot rather than one candidate. MOD12 holds the dependency pin for
+      this reason, because raising it first would break chat routing.</p>
+
+    <p><strong>Seam.</strong> <code>internal/providers/connectors</code>,
+      <code>internal/routing</code>, and <code>internal/router</code>.</p>
+    <ol>
+      <li>Replace all three hardcoded guards with one named operation
+        set.</li>
+      <li>Make a snapshot skip an operation the set omits, per decision
+        MOD-D6.</li>
+      <li>Raise the Starport dependency, now that the guards hold.</li>
+      <li>Define the narrow interfaces for image generation, speech, and
+        transcription.</li>
+      <li>Probe for the interface when a descriptor claims its operation, and
+        refuse one the transport cannot serve.</li>
+      <li>Implement each interface on the transports that serve media.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V19.</strong> A registry test asserts that a
+      descriptor claiming <code>audio-speech</code> on a transport with no
+      speech interface fails activation with a named error. The same test
+      asserts that <code>Connector</code> gained no method. A planner test
+      asserts that a candidate carrying an unnamed operation still routes a
+      chat request.</p>
+
+    <p><strong>Fail-before.</strong> The current guard drops a descriptor that
+      claims <code>images-generations</code>.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/providers/...</code>. Then
+      <code>bash scripts/verify-package-layout.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD14">MOD14 Media types, routes, and scopes</h3>
+
+    <p><strong>Problem.</strong> The dedicated operations have no canonical
+      type, no route, and no scope. Starport serves two protocol families that
+      expose them at different paths. The anonymous identity carries a fixed
+      scope list at <code>internal/identity/anonymous.go:24</code>, so a
+      deployment with authentication disabled would lose the new routes.</p>
+
+    <p><strong>Seam.</strong> <code>internal/inference</code>,
+      <code>internal/server</code>, both protocol packages, and
+      <code>internal/identity</code>.</p>
+    <ol>
+      <li>Add the canonical image, speech, and transcription types.</li>
+      <li>Register five OpenAI-compatible paths under <code>/v1</code>, and
+        three OpenRouter-compatible paths under <code>/api/v1</code>.</li>
+      <li>Add the <code>images:write</code> and <code>audio:write</code> scopes
+        beside <code>embeddings:write</code>.</li>
+      <li>Add both scopes to the anonymous identity and the operator
+        guide.</li>
+      <li>Read a transcription upload as multipart form data.</li>
+      <li>Hold the decoded upload bytes on the canonical request, so a retry
+        replays them.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V20 to MMD-V22.</strong> A route test asserts
+      that the server registers each path. The same test asserts a 403 for a
+      key without the scope, and a controller call with it. A codec test
+      asserts the
+      image response shape of each protocol family. A multipart test asserts
+      that an uploaded audio file reaches the canonical request with its
+      filename and bytes, and that a retry replays them. A fourth test asserts that an anonymous deployment
+      reaches both media routes.</p>
+
+    <p><strong>Fail-before.</strong> Every new path returns 404.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./...</code>,
+      <code>bash scripts/verify-openrouter-parity.sh</code>, and
+      <code>bash scripts/smoke-openrouter-sdks.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD15">MOD15 Console media surfaces</h3>
+
+    <p><strong>Problem.</strong> The models table filters on input modality
+      alone. A reader cannot find the models that MOD12 makes routable. Nothing
+      renders a generated image or plays generated audio.
+      <code>console/src/components/models/ModelsTable.tsx:43</code> filters the
+      badges through a fixed list of three modalities, which already omits
+      video.</p>
+
+    <p><strong>Seam.</strong> <code>console/src/lib/modelFilter.ts</code>,
+      <code>console/src/components/models</code>, and
+      <code>console/src/components/chat</code>.</p>
+    <ol>
+      <li>Add an output modality facet beside the input facet.</li>
+      <li>Show the served operations on the model detail page.</li>
+      <li>Drive the <code>ModelsTable</code> badges from the data, not a fixed
+        list.</li>
+      <li>Render a generated image in the chat transcript.</li>
+      <li>Play generated audio in the chat transcript.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V23.</strong> A vitest asserts that the output
+      facet selects an image-output model and excludes a text-only model. A
+      second test asserts that a message holding an image part renders an image
+      element.</p>
+
+    <p><strong>Fail-before.</strong> The facet test fails, because the filter
+      reads input modalities alone.</p>
+
+    <p><strong>Verification.</strong> <code>pnpm --dir console check</code>.
+      Then <code>bash scripts/verify-console-modernization.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD16">MOD16 Documentation, the terminal gate, and the follow-up plan</h3>
+
+    <p><strong>Problem.</strong> A gate that no workflow runs cannot report a
+      regression. A non-goal with no owner reads as an oversight.</p>
+
+    <p><strong>Seam.</strong> <code>scripts</code>,
+      <code>.github/workflows</code>, <code>AGENTS.md</code>,
+      <code>docs</code>, and <code>README.md</code>.</p>
+    <ol>
+      <li>Bring the verifier to 25 of 25 conditions.</li>
+      <li>Add the verifier to CI beside the other gates.</li>
+      <li>Add the verifier and its terminal count to the required evidence
+        list.</li>
+      <li>Record decision MOD-D5 in the same list.</li>
+      <li>Document the modality vocabulary and the operation set.</li>
+      <li>Promote the files API plan to active.</li>
+    </ol>
+
+    <p><strong>Acceptance, MMD-V24 and MMD-V25.</strong> The verifier reports
+      <code>Summary: 25 passed, 0 failed</code>. CI runs it.
+      <code>bash scripts/verify-doc-links.sh</code> passes.</p>
+
+    <p><strong>Fail-before.</strong> Not applicable. The condition count is the
+      measurement.</p>
+
+    <p><strong>Verification.</strong> Every command in the required evidence
+      list of <code>AGENTS.md</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-MOD17">MOD17 Cleanup</h3>
+
+    <p><strong>Problem.</strong> A merged plan must not stay as a stale control
+      plane.</p>
+
+    <p><strong>Seam.</strong> This plan,
+      <code>docs/proof/model-modalities/</code>, and
+      <code>docs/TASKS.md</code>.</p>
+    <ol>
+      <li>Confirm that the final pull request merged.</li>
+      <li>Delete this plan and its proof root.</li>
+      <li>Move the TASKS entry to Recently Completed.</li>
+      <li>Name the durable verifier and its terminal count in that entry.</li>
+      <li>Delete the merged <code>codex/</code> branches.</li>
+    </ol>
+
+    <p><strong>Acceptance.</strong> The repository holds no reference to the
+      plan slug. The TASKS entry names
+      <code>scripts/verify-model-modalities.sh</code>. The async media jobs
+      plan stays, and it holds status <code>active</code>.</p>
+
+    <p><strong>Fail-before.</strong> Not applicable. The ledger row records the
+      merge.</p>
+
+    <p><strong>Verification.</strong>
+      <code>git grep -l model-modalities</code> returns nothing. Then
+      <code>bash scripts/verify-doc-links.sh</code>.</p>
+    </div>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/model-modalities-plan.html to completion. This is a
+whole-plan goal, not a single-task goal. Read the plan fully, then read
+CLAUDE.md, docs/TASKS.md, docs/ARCHITECTURE.md, and, for MOD8 and MOD12,
+~/src/github.com/agentstation/starmap/CLAUDE.md.
+Work in /Users/jack/src/github.com/agentstation/starport on a branch named
+codex/model-modalities-&lt;task-id&gt;, one branch and one pull request per
+task. Chat history is not progress state. Resume from the status ledger,
+the execution log, and git state. If compaction happens, continue from the
+plan and git state rather than restarting. Loop: keep one task
+in_progress, implement at the owning seam, capture fail-before evidence,
+run the verification commands, commit the work per the commit policy,
+write the proof file to docs/proof/model-modalities/, append the execution
+log with the work commit, mark the task terminal with evidence, commit the
+plan update the same way, then advance to the next task. Decide rather
+than ask. Mark a wrong or already-satisfied task no-action with a one-line
+reason. Record a blocker and continue with the next eligible task. Binding
+constraints: invariants I1 through I7, decisions MOD-D1 through MOD-D6,
+and the non-goals. Asynchronous video generation belongs to
+docs/plans/async-media-jobs-plan.html. Reranking and a files API stay
+unowned. internal/protocol/openrouter already owns the document parser
+plugins as an unenforced gateway field. Commit policy: commit each
+task's work, then record the ledger transition as its own plan commit with
+the subject "plan: &lt;ID&gt; done (PR #N); &lt;NEXT&gt; in_progress". Run
+autoreview --gate pre-pr --mode auto before every pull request with
+substantive code changes. Run the repository technical-writing linter over
+this plan before every plan commit. Stop only at a valid stop state from
+the plans skill. Before you stop, update the ledger and the log, and
+record the next action in the status line. The goal is met when
+scripts/verify-model-modalities.sh reports "Summary: 25 passed, 0 failed",
+CI runs it, and every ledger row except MOD17 is terminal.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-26</td><td>meta</td><td>researched</td><td>Measured the gap in both repositories. Starport holds text and image content kinds alone. Both codecs refuse every other part at <code>openai/codec.go:466</code> and <code>openrouter/codec.go:633</code>. The connector adapter maps images alone at <code>inference_adapter.go:282</code>. The transport registry rejects any operation beyond chat and embeddings at <code>transport_registry.go:57</code>. Starmap already records text, audio, image, video, pdf, and embedding modalities, which matches the models.dev vocabulary. The Starmap operation type holds two members. Catalog census over 620 model files: input text 620, image 166, video 57, pdf 53, audio 46. Output text 528, image 43, embedding 38, audio 24, video 17. Endpoint census over 613 offerings: 512 chat completions, 38 embeddings, 63 with no operation. External sources read: the models.dev API over 7314 models, and the OpenRouter model list over 417 models with its documented endpoint set.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>authored</td><td>First draft written at status <code>proposed</code> after four owner decisions. No implementation started.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A full audit against the working tree found six missing tasks or steps, one undefined type reference, one wrong line citation, and one unowned gate question. Added MOD5 for cache eligibility (<code>internal/response/cache/identity.go:124</code>), MOD6 for the 10485760 byte body limit (<code>internal/config/config.go:85</code>), a cached stream replay step in MOD10 (<code>internal/response/cache/stream.go:96</code>), an anonymous scope step in MOD14 (<code>internal/identity/anonymous.go:24</code>), and a spend budget assertion in MOD11 (<code>internal/limits/limits.go:33</code>). MOD9 now defines the <code>Modality</code> type that MOD7 used without a definition. Corrected the OpenRouter codec citation from line 635 to line 633. Added decision MOD-D5 for gate ownership of the new OpenRouter routes. Assigned every condition to a task and moved the verifier from 24 to 25 conditions. Rewrote the prose for the repository strict technical-writing configuration, which the first draft failed at 69 diagnostics.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>Two independent second-model reviews read the plan against the working tree. Both found that <code>internal/proxy/proxy.go</code> holds the only capability gate that exists today, and that MOD4 named three seam packages without it. MOD4 now owns <code>requestHasVision</code> at line 201 and the duplicate token estimator at line 164, and MOD11 gives each media kind a cost in <code>internal/tokenize</code>. Both reviews reported the output census as overcounted. A recount rejected that finding: the reviews measured inputs across provider offerings and outputs across model definitions, while this plan counts offerings throughout. Five of the seven counts reproduce exactly, and the two image counts move to 164 and 42. Three smaller findings held: MOD6 now names both <code>MaxRequestSize</code> fields and the dead tag at <code>internal/server/config.go:30</code>, MOD10 states that the replay path returns <code>ErrUnsupportedContent</code> rather than text, and MOD15 owns the fixed modality list at <code>ModelsTable.tsx:43</code>. MOD14 states that the canonical request holds the decoded upload bytes, so a retry replays them. The conditions stay terminal at 25.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>resequenced</td><td>The owner decided to build the three items this plan had left unowned rather than defer them. <a href="reranking-plan.html">The reranking plan</a>, <a href="files-api-plan.html">the files API plan</a>, and <a href="document-parser-plan.html">the document parser plan</a> now own them. The earlier reasoning that reranking should wait for a catalogued offering was wrong, because the owner controls both repositories, so a missing offering is a task rather than a constraint. MOD16 now promotes the files API plan instead of the async media jobs plan, because the files plan builds the blob seam that task AMJ6 needs. The queue reads model modalities, then files, then async media jobs, then document parser, with reranking free to run beside them.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review checked every file citation in this plan against the working tree, and found three wrong facts. MOD11 cited <code>internal/limits/limits.go:33</code>, which holds the struct declaration alone, so it now cites <code>rules.go:65</code>, where <code>BudgetRules</code> lives. MOD4 said the estimator counts text alone, but <code>proxy.go:169</code> already adds a flat 85 tokens for an image part, so only audio and document are free. MOD8 claimed 115 models carry an audio input price, and the vendored models.dev snapshot holds 74. MOD9 also claimed MOD7 reads the <code>Modality</code> type this plan defines in phase B, which no MOD7 step does, so the stale clause is gone. MOD14 now documents its two scopes for an operator, matching the standard the files and reranking plans set.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>The owner asked for a proper resolution of the operation guard that four tasks across three plans all touch. Reading the tree found a defect rather than a merge conflict. The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation onto a route candidate, and <code>validateSnapshot</code> then rejects the whole snapshot on one it does not name. MOD12 raised the dependency before MOD13 widened the guard, so a catalog carrying the five new operations would have broken chat and embeddings routing with no Starport deploy. MOD12 now leaves the pin alone, and MOD13 raises it after all three guards read one named operation set. New decision MOD-D6 states the rule: catalog data degrades and caller input fails closed.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>
