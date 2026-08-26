@@ -220,8 +220,8 @@ func TestRotatingTheTokenInvalidatesEverySession(t *testing.T) {
 
 // TestSessionCookiesKeepTheSecretAwayFromScripts checks the pair the launch
 // route sets. The credential is HttpOnly so no script can read it; the marker
-// is readable and says nothing, which is what lets the console render a
-// signed-in shell without holding a credential.
+// is readable and says nothing, which is what lets the console render the
+// shell without holding a credential.
 func TestSessionCookiesKeepTheSecretAwayFromScripts(t *testing.T) {
 	token := testToken(t, 1)
 	value, session, err := IssueSession(token, GrantTicket, time.Now())
@@ -251,7 +251,7 @@ func TestSessionCookiesKeepTheSecretAwayFromScripts(t *testing.T) {
 
 // TestClearedSessionCookiesExpireBoth matters because the marker is what the
 // console believes. Clearing the credential and leaving the marker would give
-// a console that reports itself signed in while every request behind it fails.
+// a console that reports itself connected while every request behind it fails.
 func TestClearedSessionCookiesExpireBoth(t *testing.T) {
 	cleared := ClearedSessionCookies(false)
 	require.Len(t, cleared, 2)

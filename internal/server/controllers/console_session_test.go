@@ -50,7 +50,7 @@ func refusalMessage(t *testing.T, response *http.Response) string {
 // TestAPastedTokenOpensASession is the asymmetry this campaign closes, now
 // reachable from a browser. The two cookies have opposite jobs and the test
 // asserts both: the credential must be unreadable to scripts, and the marker
-// must be readable, or the console cannot render a signed-in shell without
+// must be readable, or the console cannot render the shell without
 // making a request whose only purpose is to ask whether the next one would
 // work.
 func TestAPastedTokenOpensASession(t *testing.T) {
@@ -132,7 +132,7 @@ func TestAGatewayAPIKeyIsToldWhichCredentialTheFieldWants(t *testing.T) {
 // TestARefusedPasteClearsAStaleSession covers the case an operator actually hits:
 // the token was rotated, the browser is still carrying a cookie from the old
 // one, and the paste fails. Leaving that cookie in place would let the console
-// keep rendering a signed-in shell while every request behind it is refused.
+// keep rendering the shell while every request behind it is refused.
 func TestARefusedPasteClearsAStaleSession(t *testing.T) {
 	controller := NewConsoleSessionController(
 		localauth.NewGate(launchToken(t, 3), "127.0.0.1"),
@@ -181,7 +181,7 @@ func TestAnUnrotatedTokenIsRefusedFromOffMachine(t *testing.T) {
 }
 
 // TestABuildWithNoLocalTokenRefusesRatherThan404s holds the shape the launch
-// route already has. A 404 would say this build has no console sign-in, which
+// route already has. A 404 would say this build mints no console session, which
 // is a different and false statement.
 func TestABuildWithNoLocalTokenRefusesRatherThan404s(t *testing.T) {
 	controller := NewConsoleSessionController(nil)

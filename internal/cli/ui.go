@@ -22,7 +22,7 @@ const (
 //
 // It reads the configuration for the address and the token file for the
 // secret, and it asks the running gateway for nothing. A command that had to
-// reach the gateway to produce a sign-in URL would fail in the one case where
+// reach the gateway to produce a launch URL would fail in the one case where
 // an operator needs it most: a gateway that is up but not letting them in.
 func launchURL(ctx context.Context, deps Dependencies) (string, error) {
 	cfg, err := deps.LoadConfig(ctx)

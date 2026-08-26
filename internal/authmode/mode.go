@@ -89,8 +89,8 @@ func (s Setting) Effective() Setting {
 // and it wins: a stored value that silently overrode an explicit
 // STARPORT_SECURITY_AUTH_MODE=required would turn a deployment's own statement
 // into a suggestion, and a stored value that overrode --no-auth would leave an
-// operator with no way to reach a gateway whose stored mode they cannot log in
-// to change. The stored value applies exactly when nobody stated anything,
+// operator with no way to open a gateway whose stored mode they cannot reach to
+// change. The stored value applies exactly when nobody stated anything,
 // which is the case a console change exists to serve.
 func Resolve(stated Mode, source Source, persisted Setting) Setting {
 	if source != SourceUnset {

@@ -268,7 +268,7 @@ func (m *AuthMiddleware) anonymousContext(ctx context.Context) context.Context {
 
 // errNoSession reports a request that presented no console session at all, as
 // opposed to one that presented a session this gateway will not accept. The
-// two get different answers: the first caller has not signed in, and the second
+// two get different answers: the first caller holds no session, and the second
 // has a cookie to replace.
 var errNoSession = errors.New("no console session was presented")
 

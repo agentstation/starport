@@ -16,14 +16,14 @@ const (
 
 	// SessionMarkerCookie tells the console that a session exists. It carries
 	// no secret and authenticates nothing — the gateway ignores it entirely.
-	// It exists so the console can render a signed-in shell without a request
+	// It exists so the console can render the shell without a request
 	// whose only purpose is to ask whether the next request would work.
 	SessionMarkerCookie = "starport_session_present"
 
 	// SessionTTL is how long one launch lasts. It is a working day rather than
 	// a month: the way back is `starport ui`, which costs a command and no
 	// credential handling, so a short life costs an operator almost nothing and
-	// bounds how long a borrowed laptop stays signed in.
+	// bounds how long a borrowed laptop keeps a live session.
 	SessionTTL = 12 * time.Hour
 
 	sessionPurpose = "starport.console-session.v1"
@@ -210,7 +210,7 @@ func SessionCookies(value string, session Session, secure bool) []*http.Cookie {
 			Value: "1",
 			Path:  "/",
 			// The marker expires with the session it describes, so a console
-			// that reads it is never told it is signed in by a cookie that
+			// that reads it is never told it holds a session by a cookie that
 			// outlived the credential.
 			Expires:  session.ExpiresAt,
 			MaxAge:   int(time.Until(session.ExpiresAt).Seconds()),
@@ -223,8 +223,8 @@ func SessionCookies(value string, session Session, secure bool) []*http.Cookie {
 
 // ClearedSessionCookies expire both cookies. The gateway sends them when it
 // refuses a session cookie it once issued, so a browser holding a cookie from
-// a rotated token stops presenting it and the console stops claiming to be
-// signed in.
+// a rotated token stops presenting it and the console stops claiming to hold
+// a session.
 func ClearedSessionCookies(secure bool) []*http.Cookie {
 	expire := func(name string, httpOnly bool) *http.Cookie {
 		// #nosec G124 -- the rule reads the attributes of a cookie being expired.

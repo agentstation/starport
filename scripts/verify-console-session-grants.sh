@@ -82,8 +82,29 @@ check CSG-V15 "the gateway key card no longer stands in for first contact" \
   test ! -f console/src/components/overview/ConnectCard.tsx
 
 # --- CSG8: the reserved words ---
+
+# reserved_words_respected reports that no machine-local surface spends the
+# words the identity grant owns. A launch ticket and a pasted token say where
+# you are; only an identity provider says who you are, and only it may call
+# that signing in. The exceptions are the files that own the reservation --
+# grant_identity.go and the line in grant.go that states it.
+#
+# The trailing word boundary is what makes the condition usable: without it,
+# every HMAC "signing key" and the phrase "catalog intersection" report as
+# logins. The leading one catches no line in the tree today and is here for the
+# other direction -- "redesign in", "assign in", "catalog in the console" are
+# all sign-in to a pattern that never asks where the word starts.
+reserved_words_respected() {
+  ! grep -RniE '\b(sign|signed|log|logged)[ -]?in\b' \
+      --include='*.go' --include='*.ts' --include='*.tsx' --include='*.md' \
+      --exclude='routeTree.gen.ts' \
+      internal cmd console/src README.md docs/OPERATOR-GUIDE.md \
+    | grep -vE 'internal/localauth/(grant_identity|grant)\.go' \
+    | grep -q .
+}
+
 check CSG-V16 "sign-in copy belongs to the identity grant alone" \
-  absent 'sign-in link' internal/cli
+  reserved_words_respected
 
 printf 'Summary: %d passed, %d failed\n' "$pass" "$fail"
 test "$fail" -eq 0

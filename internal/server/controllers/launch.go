@@ -73,7 +73,7 @@ func (c *LaunchController) Launch(w http.ResponseWriter, r *http.Request) {
 // refuse answers a ticket that did not work, and clears any session cookies the
 // browser is carrying. A refusal reached with a stale cookie almost always
 // means the token was rotated, and leaving the cookie in place would let the
-// console keep claiming to be signed in while every request behind it fails.
+// console keep claiming to hold a session while every request behind it fails.
 func (c *LaunchController) refuse(w http.ResponseWriter, r *http.Request, cause error) {
 	for _, cookie := range localauth.ClearedSessionCookies(requestIsSecure(r)) {
 		http.SetCookie(w, cookie)

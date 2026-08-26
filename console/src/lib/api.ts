@@ -7,8 +7,8 @@ const KEY_STORAGE = "starport.apiKey";
 // session itself is HttpOnly and unreadable here, which is the point: the
 // credential belongs to the gateway and the browser, and nothing in this file
 // can read it, forward it, or store it. The marker carries no secret and
-// authenticates nothing — it exists so the console can tell a signed-in shell
-// from a signed-out one without a request whose only purpose is to ask.
+// authenticates nothing — it exists so the console can tell a shell with a
+// session from first contact without a request whose only purpose is to ask.
 const SESSION_MARKER = "starport_session_present";
 
 export function getApiKey(): string {
@@ -43,8 +43,8 @@ export type Credential =
 
 // credential prefers a session over a stored key. A browser holding both got
 // the session more recently and from the machine itself, and sending a bearer
-// key beside it would meter the request against a tenant when the operator
-// signed in as the operator.
+// key beside it would meter the request against a tenant when the reader is
+// the operator of the machine.
 export function credential(): Credential {
   if (hasSession()) return { kind: "session" };
   const key = getApiKey();

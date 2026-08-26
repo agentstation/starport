@@ -42,7 +42,7 @@ func TestResolvePrecedence(t *testing.T) {
 		},
 		{
 			// The inverse matters more: a stored "required" beating --no-auth
-			// would strand an operator outside a gateway they cannot log in to
+			// would strand an operator outside a gateway they cannot reach to
 			// change.
 			name:       "a flag beats a stored mode",
 			stated:     Disabled,

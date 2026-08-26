@@ -183,15 +183,14 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		})
 	})
 
-	// Console sign-in. It sits outside every authentication group on purpose:
-	// the launch ticket in the query string is the credential, and a caller
-	// holding one has by definition not got a session yet.
+	// Console session grants. Both routes sit outside every authentication
+	// group on purpose: the request itself carries the credential — a ticket in
+	// the query string, a token in the body — and a caller presenting either
+	// has by definition no session yet.
 	mux.Get(localauth.LaunchPath, s.controllers.Launch.Launch)
 
-	// The pasted-token way in, outside every authentication group for the same
-	// reason: the body carries the credential, and a caller presenting it has by
-	// definition not got a session yet. The path is written out rather than
-	// routed through a constant because this is its only use in Go; the console
+	// The pasted-token grant. Its path is written out rather than routed
+	// through a constant because this is its only use in Go; the console
 	// reaches it from TypeScript.
 	mux.Post("/console/session", s.controllers.ConsoleSession.Create)
 
@@ -232,7 +231,7 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 //   GET /health/live            - Liveness probe
 //   GET /health/ready           - Readiness probe
 //
-// Console Sign-In:
+// Console Session Grants:
 //   GET /launch?lt=<ticket>     - Spend a one-time launch ticket for a session
 //   POST /console/session       - Exchange a pasted local admin token for one
 //

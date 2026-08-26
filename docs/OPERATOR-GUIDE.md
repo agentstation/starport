@@ -29,14 +29,14 @@ starport dev
 
 The command binds to `127.0.0.1`, uses in-memory storage, and creates no
 configuration file. It prints one temporary gateway API key and one console
-sign-in link, and opens the console in a browser:
+launch link, and opens the console in a browser:
 
 ```text
 Starport development gateway
 URL: http://127.0.0.1:8080
 Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
-Console (one-time sign-in link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
+Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
 ```
 
 Add `--no-open` to print the link without opening a browser. Add `--no-auth`
@@ -122,12 +122,12 @@ machine gives itself. It is not a gateway API key:
 ```bash
 starport auth status   # generation, age, and the exposure answer
 starport auth token    # print this machine's token
-starport auth url      # a one-time console sign-in link
+starport auth url      # a one-time console launch link
 starport ui            # mint that link and open it
 ```
 
 `starport ui` reads the token file rather than calling the gateway, so it
-produces a sign-in link whether the gateway is up, down, wedged, or refusing
+produces a launch link whether the gateway is up, down, wedged, or refusing
 the operator. That is the case an operator reaches for it in.
 
 ### Rotation
@@ -137,7 +137,7 @@ starport auth rotate
 ```
 
 Rotation replaces the secret and increases the generation. Every key derived
-from the token changes with it, so every outstanding sign-in link and every
+from the token changes with it, so every outstanding launch link and every
 live console session stops verifying at once. There is no session list to walk
 and nothing to clear.
 

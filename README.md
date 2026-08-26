@@ -66,7 +66,7 @@ Starport development gateway
 URL: http://127.0.0.1:8080
 Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
-Console (one-time sign-in link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
+Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
 ```
 
 The console link is not a key. It is spent the first time it is followed and
