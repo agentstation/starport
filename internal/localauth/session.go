@@ -52,6 +52,11 @@ type Session struct {
 	// Grant is the kind that minted this session. It is signed with the rest,
 	// so a browser cannot relabel its own admission.
 	Grant GrantKind
+	// Subject is who an identity provider said the caller is, and is empty for
+	// every other grant. The pairing is exact in both directions and enforced
+	// at issue and at verify: a grant that claims to know who you are has to
+	// say who, and a grant that only knows where you are may not claim more.
+	Subject string
 }
 
 // sessionPayload is the signed body of the cookie.
@@ -62,6 +67,10 @@ type sessionPayload struct {
 	ExpiresAt int64 `json:"e"`
 	// Grant is the kind that minted the session.
 	Grant GrantKind `json:"g"`
+	// Subject is omitted entirely for the machine-local grants rather than
+	// written empty, so their cookies do not carry a field that means nothing
+	// for them.
+	Subject string `json:"s,omitempty"`
 }
 
 // IssueSession mints the cookie value for a browser one grant admitted.
@@ -70,6 +79,29 @@ type sessionPayload struct {
 // package are its only callers, and a caller that reached it directly would be
 // minting a session no grant vouched for.
 func IssueSession(token Token, grant GrantKind, now time.Time) (string, Session, error) {
+	if grant == GrantIdentity {
+		// The identity grant carries a subject, and this entry point has no way
+		// to supply one. Refusing here is what makes the pairing structural
+		// rather than a rule every future caller has to remember.
+		return "", Session{}, ErrIdentitySubjectMissing
+	}
+	return issueSession(token, grant, "", now)
+}
+
+// issueIdentitySession mints a session for a person an identity provider named.
+// It is unexported because the identity grant is its only legitimate caller:
+// anything else reaching it would be asserting an identity no provider vouched
+// for.
+func issueIdentitySession(token Token, subject string, now time.Time) (string, Session, error) {
+	if subject == "" {
+		return "", Session{}, ErrIdentitySubjectMissing
+	}
+	return issueSession(token, GrantIdentity, subject, now)
+}
+
+func issueSession(
+	token Token, grant GrantKind, subject string, now time.Time,
+) (string, Session, error) {
 	if err := token.Validate(); err != nil {
 		return "", Session{}, err
 	}
@@ -80,11 +112,13 @@ func IssueSession(token Token, grant GrantKind, now time.Time) (string, Session,
 		IssuedAt:  now.UTC(),
 		ExpiresAt: now.Add(SessionTTL).UTC(),
 		Grant:     grant,
+		Subject:   subject,
 	}
 	payload, err := json.Marshal(sessionPayload{
 		IssuedAt:  session.IssuedAt.UnixMilli(),
 		ExpiresAt: session.ExpiresAt.UnixMilli(),
 		Grant:     session.Grant,
+		Subject:   session.Subject,
 	})
 	if err != nil {
 		return "", Session{}, fmt.Errorf("encode a console session: %w", err)
@@ -118,6 +152,17 @@ func VerifySession(raw string, token Token, now time.Time) (Session, error) {
 	if !knownGrantKind(record.Grant) {
 		return Session{}, fmt.Errorf("%w: %w: %s", ErrSessionMalformed, ErrGrantUnknown, record.Grant)
 	}
+	// The subject and the grant have to agree. A machine-local cookie carrying a
+	// subject would let a grant that only proves reach assert an identity, and an
+	// identity cookie without one names nobody. The subject is not echoed into
+	// the error: it identifies a person, and a refusal is a thing that gets
+	// logged.
+	if (record.Grant == GrantIdentity) != (record.Subject != "") {
+		return Session{}, fmt.Errorf(
+			"%w: the %s grant does not carry the subject it was issued with",
+			ErrSessionMalformed, record.Grant,
+		)
+	}
 	if !now.Before(time.UnixMilli(record.ExpiresAt)) {
 		return Session{}, ErrSessionExpired
 	}
@@ -125,6 +170,7 @@ func VerifySession(raw string, token Token, now time.Time) (Session, error) {
 		IssuedAt:  time.UnixMilli(record.IssuedAt).UTC(),
 		ExpiresAt: time.UnixMilli(record.ExpiresAt).UTC(),
 		Grant:     record.Grant,
+		Subject:   record.Subject,
 	}, nil
 }
 
