@@ -9,7 +9,7 @@ Last Updated: 2026-08-25
 
 | Plan | Outcome | Status | Gate |
 | --- | --- | --- | --- |
-| [Console Session Grants](plans/console-session-grants-plan.html) | A console session is minted by a named, registered grant. A launch ticket and a pasted local admin token ship; an identity provider grant ships registered and inert so an enterprise deployment fills a slot instead of reopening the seam. The console gets one first-contact page that states its trust scope. | active — CSG8 next | `scripts/verify-console-session-grants.sh` |
+| [Console Session Grants](plans/console-session-grants-plan.html) | A console session is minted by a named, registered grant. A launch ticket and a pasted local admin token ship; an identity provider grant ships registered and inert so an enterprise deployment fills a slot instead of reopening the seam. The console gets one first-contact page that states its trust scope. | active — CSG9 next | `scripts/verify-console-session-grants.sh` |
 
 ### Proposed Work
 
