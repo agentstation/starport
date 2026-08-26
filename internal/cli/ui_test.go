@@ -66,7 +66,7 @@ func TestUIPrintsALinkTheGatewayWillAccept(t *testing.T) {
 	require.NoError(t, err)
 	token, err := store.Load(context.Background())
 	require.NoError(t, err)
-	_, _, err = localauth.NewGate(token).Redeem(ticket, time.Now())
+	_, _, err = localauth.NewGate(token, "127.0.0.1").Redeem(ticket, time.Now())
 	assert.NoError(t, err, "the gateway should accept the link the CLI just printed")
 }
 

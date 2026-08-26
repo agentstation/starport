@@ -25,7 +25,7 @@ func testToken(t *testing.T, generation uint64) Token {
 // back.
 func TestATicketWorksOnce(t *testing.T) {
 	token := testToken(t, 1)
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	now := time.Now()
 	ticket, err := MintTicket(token, now)
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestATicketWorksOnce(t *testing.T) {
 // recorded would hand out two sessions for one ticket.
 func TestConcurrentRedemptionsSpendATicketOnce(t *testing.T) {
 	token := testToken(t, 1)
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	now := time.Now()
 	ticket, err := MintTicket(token, now)
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestConcurrentRedemptionsSpendATicketOnce(t *testing.T) {
 
 func TestAnExpiredTicketIsRefused(t *testing.T) {
 	token := testToken(t, 1)
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	now := time.Now()
 	ticket, err := MintTicket(token, now)
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestAnExpiredTicketIsRefused(t *testing.T) {
 // it guards nothing.
 func TestSpentTicketsAreForgottenOnceTheyExpire(t *testing.T) {
 	token := testToken(t, 1)
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	now := time.Now()
 	for range 32 {
 		ticket, err := MintTicket(token, now)
@@ -122,7 +122,7 @@ func TestRotatingTheTokenRefusesOutstandingTickets(t *testing.T) {
 	ticket, err := MintTicket(first, now)
 	require.NoError(t, err)
 
-	rotated := NewGate(testToken(t, 2))
+	rotated := NewGate(testToken(t, 2), "127.0.0.1")
 	_, _, err = rotated.Redeem(ticket, now)
 	assert.ErrorIs(t, err, ErrBadSignature)
 }
@@ -142,7 +142,7 @@ func TestATicketIsNotASession(t *testing.T) {
 	_, err = VerifySession(ticket, token, now)
 	assert.ErrorIs(t, err, ErrBadSignature, "a ticket must not authenticate as a session")
 
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	_, _, err = gate.Redeem(cookie, now)
 	assert.ErrorIs(t, err, ErrBadSignature, "a session must not spend as a ticket")
 }
@@ -278,7 +278,7 @@ func TestTicketPrefixIsTooShortToReplay(t *testing.T) {
 	assert.Len(t, prefix, TicketLogPrefixLength)
 	assert.True(t, strings.HasPrefix(ticket, prefix))
 
-	gate := NewGate(token)
+	gate := NewGate(token, "127.0.0.1")
 	_, _, err = gate.Redeem(prefix, now)
 	assert.ErrorIs(t, err, ErrBadSignature)
 }
@@ -338,7 +338,7 @@ func TestAZeroGateRefusesRatherThanPanics(t *testing.T) {
 // TestGateMintsTicketsItsOwnRedeemAccepts closes the loop for an in-process
 // launch, where `starport dev` has the gateway and never touches the file.
 func TestGateMintsTicketsItsOwnRedeemAccepts(t *testing.T) {
-	gate := NewGate(testToken(t, 1))
+	gate := NewGate(testToken(t, 1), "127.0.0.1")
 	now := time.Now()
 
 	ticket, err := gate.MintTicket(now)

@@ -40,7 +40,7 @@ func sessionCookie(response *http.Response) string {
 
 func TestALaunchLinkOpensASessionOnce(t *testing.T) {
 	token := launchToken(t, 2)
-	controller := NewLaunchController(localauth.NewGate(token))
+	controller := NewLaunchController(localauth.NewGate(token, "127.0.0.1"))
 	ticket, err := localauth.MintTicket(token, time.Now())
 	require.NoError(t, err)
 
@@ -61,7 +61,7 @@ func TestALaunchLinkOpensASessionOnce(t *testing.T) {
 
 func TestAnExpiredLaunchLinkOpensNothing(t *testing.T) {
 	token := launchToken(t, 2)
-	gate := localauth.NewGate(token)
+	gate := localauth.NewGate(token, "127.0.0.1")
 	minted := time.Now()
 	controller := &LaunchController{
 		gate: gate,
@@ -79,7 +79,7 @@ func TestAnExpiredLaunchLinkOpensNothing(t *testing.T) {
 func TestALaunchLinkFromAnotherTokenOpensNothing(t *testing.T) {
 	// Rotation is revocation: a link minted before `starport auth rotate` has
 	// to stop working, and it is the same code path as an outright forgery.
-	controller := NewLaunchController(localauth.NewGate(launchToken(t, 3)))
+	controller := NewLaunchController(localauth.NewGate(launchToken(t, 3), "127.0.0.1"))
 	ticket, err := localauth.MintTicket(launchToken(t, 2), time.Now())
 	require.NoError(t, err)
 
@@ -90,7 +90,7 @@ func TestALaunchLinkFromAnotherTokenOpensNothing(t *testing.T) {
 }
 
 func TestARefusalClearsAStaleSession(t *testing.T) {
-	controller := NewLaunchController(localauth.NewGate(launchToken(t, 2)))
+	controller := NewLaunchController(localauth.NewGate(launchToken(t, 2), "127.0.0.1"))
 
 	response := spend(t, controller, "not-a-ticket").Result()
 	defer response.Body.Close()
@@ -109,7 +109,7 @@ func TestARefusalClearsAStaleSession(t *testing.T) {
 }
 
 func TestARefusalNamesTheWayBackInAndNothingElse(t *testing.T) {
-	controller := NewLaunchController(localauth.NewGate(launchToken(t, 2)))
+	controller := NewLaunchController(localauth.NewGate(launchToken(t, 2), "127.0.0.1"))
 	ticket, err := localauth.MintTicket(launchToken(t, 9), time.Now())
 	require.NoError(t, err)
 

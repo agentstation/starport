@@ -31,10 +31,15 @@ type Gate struct {
 
 // NewGate returns a gate over one token. A zero Token yields a gate that
 // refuses everything, because an unvalidatable token signs nothing.
-func NewGate(token Token) *Gate {
+//
+// bindHost is the address the gateway serves on. It is the fallback origin for
+// a grant that judges where a caller is, used when the caller is in-process
+// and so has no remote address of its own.
+func NewGate(token Token, bindHost string) *Gate {
 	tickets := NewTickets()
 	gate := &Gate{token: token, tickets: tickets, grants: map[GrantKind]Grant{}}
 	gate.register(ticketGrant{token: token, tickets: tickets})
+	gate.register(newLocalTokenGrant(token, bindHost))
 	return gate
 }
 
