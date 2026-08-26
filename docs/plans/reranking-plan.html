@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model modalities</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  .task p { margin: 0.3rem 0; }
+  .task ol { margin: 0.3rem 0 0.6rem; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+
+<header id="overview">
+  <h1>Reranking</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="proposed">proposed</code> ·
+    Owner: this plan ·
+    Created: 2026-08-26 ·
+    Baseline: RNK0 pins both repositories ·
+    Proof root: <code>docs/proof/reranking/</code> ·
+    Next action: RNK0 after approval
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      A caller ranks a list of documents against one query through Starport, on
+      a model that Starmap catalogs. Starport routes the request to a provider
+      that serves the rerank operation, prices the turn from the Starmap price,
+      and counts it against the same limits every other operation obeys. A
+      rerank model never appears as a chat model.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 340 230" role="img" aria-label="Before diagram">
+          <rect x="8" y="8" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="32" text-anchor="middle" fill="currentColor"
+            font-size="12">ProviderOperation names two operations</text>
+          <text x="170" y="52" text-anchor="middle" fill="currentColor"
+            font-size="12">chat-completions and embeddings</text>
+          <rect x="8" y="86" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="110" text-anchor="middle" fill="currentColor"
+            font-size="12">rerank is a tag that disqualifies a model</text>
+          <text x="170" y="130" text-anchor="middle" fill="currentColor"
+            font-size="12">zero offerings carry it, so nothing routes</text>
+          <rect x="8" y="164" width="324" height="58" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="188" text-anchor="middle" fill="currentColor"
+            font-size="12">starport serves chat and embeddings routes</text>
+          <text x="170" y="208" text-anchor="middle" fill="currentColor"
+            font-size="12">a rerank caller gets 404</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 340 230" role="img" aria-label="After diagram">
+          <rect x="8" y="8" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="32" text-anchor="middle" fill="currentColor"
+            font-size="12">ProviderOperation names three operations</text>
+          <text x="170" y="52" text-anchor="middle" fill="currentColor"
+            font-size="12">rerank joins chat and embeddings</text>
+          <rect x="8" y="86" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="110" text-anchor="middle" fill="currentColor"
+            font-size="12">starmap catalogs rerank offerings and prices</text>
+          <text x="170" y="130" text-anchor="middle" fill="currentColor"
+            font-size="12">the tag still keeps them out of chat</text>
+          <rect x="8" y="164" width="324" height="58" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="188" text-anchor="middle" fill="currentColor"
+            font-size="12">POST /v1/rerank with a rerank:write scope</text>
+          <text x="170" y="208" text-anchor="middle" fill="currentColor"
+            font-size="12">priced per search unit, bounded by limits</text>
+        </svg>
+      </figure>
+    </div>
+    <p>No seam is new. Every change lands where the embeddings operation
+      already landed, which gives this plan a working precedent at each
+      step.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns, in Starmap.</strong> The third member of
+      <code>ProviderOperation</code>. The rerank endpoint facts. The rerank
+      offerings and their prices. The rule that keeps a rerank model out of the
+      chat completions view.</p>
+
+    <p><strong>Owns, in Starport.</strong> The canonical rerank request and
+      response. The transport descriptor and the connector adapter. The
+      <code>/v1/rerank</code> route, its codec, and the
+      <code>rerank:write</code> scope. The routing rule that sends a rerank
+      request only to a rerank offering.</p>
+
+    <p><strong>Owns, the money path.</strong> The search unit in the usage
+      record. The price a rerank turn draws from Starmap. The spend budget that
+      bounds it.</p>
+
+    <p><strong>Does not own.</strong> The content vocabulary and the media
+      operations.
+      <a href="model-modalities-plan.html">The model modalities plan</a> owns
+      both. A rerank request carries text alone, so this plan and that one
+      share no code and can run in either order.</p>
+
+    <p><strong>Non-goals.</strong> An OpenRouter rerank route, because
+      OpenRouter serves no rerank endpoint and parity has nothing to match. A
+      vector store or a retrieval pipeline, which rank documents a caller
+      already holds. Reranking inside a chat request, which would hide a
+      priced call inside another one.</p>
+  </section>
+
+  <section id="promotion-gate">
+    <h2>Promotion gate</h2>
+    <p>Promote this plan to <code>active</code> only when every item holds.</p>
+    <ol>
+      <li>The owner approves the five decisions below.</li>
+      <li>RNK0 confirms the request shapes and the billing bases against
+        live documentation.</li>
+      <li>RNK0 names at least one rerank provider that this deployment can
+        reach with a credential.</li>
+      <li>The baseline commits and the proof root exist.</li>
+      <li>The goal block names real documents, paths, and gates.</li>
+    </ol>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Invariant</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>R1</td><td>Starmap owns the rerank operation, the offerings, and the prices. Starport adds no local rerank model table.</td><td>A local table restates a fact that a catalog generation already binds, and the two then drift.</td></tr>
+        <tr><td>R2</td><td>The canonical rerank types carry no wire word. The codec owns every wire name.</td><td>The embedding types hold this line today, and a second shape that breaks it would leak a provider name into routing.</td></tr>
+        <tr><td>R3</td><td>A rerank model never appears in the chat completions view or the chat models list.</td><td><code>isChatCompletionModel</code> already disqualifies the tag. A caller that saw a reranker in the chat list would send it a request it cannot answer.</td></tr>
+        <tr><td>R4</td><td>The transport registry refuses a descriptor whose operation no member names.</td><td>The registry guard proves an operation reached the provider layer. The planner in <code>internal/routing</code> is a separate earlier gate with its own two hardcoded operation guards, so a silent third value would route nowhere.</td></tr>
+        <tr><td>R5</td><td>A rerank response references a document by its index in the request. Starport refuses a request that asks it to echo the documents.</td><td>A response that echoes documents multiplies the payload and lets a caller believe the gateway stored them. The Cohere shape carries a <code>return_documents</code> field, and accepting it while ignoring it would report a setting that took no effect.</td></tr>
+        <tr><td>R6</td><td>A rerank turn records usage and counts against a spend budget.</td><td>An operation that records nothing reads as free, and one tenant could then spend without bound.</td></tr>
+        <tr><td>R7</td><td>Starport refuses a rerank request whose model serves no rerank offering, before it reaches a provider.</td><td>Reporting a provider 400 as a Starport 400 hides the real cause from the caller.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Date</th><th>Decision</th><th>Consequence and re-open condition</th></tr></thead>
+      <tbody>
+        <tr><td>RNK-D1</td><td>2026-08-26</td><td>Serve the Cohere-compatible request shape at <code>POST /v1/rerank</code>, with <code>model</code>, <code>query</code>, <code>documents</code>, and <code>top_n</code>.</td><td>OpenAI publishes no rerank endpoint, and Jina, Voyage, and the open-source inference servers converged on this shape. A caller reaches Starport by changing a base URL. Re-open if OpenAI publishes a rerank endpoint that the ecosystem adopts.</td></tr>
+        <tr><td>RNK-D2</td><td>2026-08-26</td><td>Add <code>rerank</code> to <code>ProviderOperation</code> in Starmap, beside chat completions and embeddings.</td><td>Every layer that switches on an operation gains a third arm, and the transport registry guard proves each one. Re-open if a provider serves reranking through a chat route instead.</td></tr>
+        <tr><td>RNK-D3</td><td>2026-08-26</td><td>Add no OpenRouter rerank route.</td><td><code>scripts/verify-openrouter-parity.sh</code> stays terminal at 16 conditions, because the parity surface does not grow. Re-open if OpenRouter publishes a rerank endpoint.</td></tr>
+        <tr><td>RNK-D4</td><td>2026-08-26</td><td>Price a rerank turn per search unit, which is one query against a bounded document count.</td><td>The price matches how Cohere bills, so a Starport cost reconciles against a provider invoice. RNK0 records the billing basis of every reachable provider before this decision settles. Starmap states the unit definition beside the price, so <code>internal/usage</code> never reimplements a provider formula. Re-open if a reachable provider prices reranking per token instead.</td></tr>
+        <tr><td>RNK-D5</td><td>2026-08-26</td><td>Catalog the reachable rerank providers first, and let RNK0 name them.</td><td>The plan proves itself against a live provider rather than a documented one. A provider that this deployment cannot reach waits for a later catalog change. Re-open if no provider is reachable, which blocks the plan at RNK0.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-reranking.sh</code> reports every condition and
+      exits nonzero while any condition fails. It prints
+      <code>Summary: N passed, M failed</code>. The condition identifiers run
+      from <code>RNK-V01</code> to <code>RNK-V20</code>. RNK0 writes the
+      verifier red at 0 passed and 20 failed. Every task section below names
+      the conditions it turns green.</p>
+    <table>
+      <thead><tr><th>Phase</th><th>Tasks</th><th>Conditions</th><th>Cumulative passing</th></tr></thead>
+      <tbody>
+        <tr><td>A, the catalog fact</td><td>RNK1 and RNK2</td><td>RNK-V01 to RNK-V04</td><td>4</td></tr>
+        <tr><td>B, the request path</td><td>RNK3 to RNK6</td><td>RNK-V05 to RNK-V12</td><td>12</td></tr>
+        <tr><td>C, policy and money</td><td>RNK7 to RNK9</td><td>RNK-V13 to RNK-V18</td><td>18</td></tr>
+        <tr><td>Close</td><td>RNK10</td><td>RNK-V19 to RNK-V20</td><td>20, terminal</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="RNK0" data-status="todo"><td>RNK0</td><td>Baseline. Pin both commits, confirm the provider request shapes, name a reachable provider, create the proof root, write the verifier red at 20 conditions.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK1" data-status="todo"><td>RNK1</td><td>Phase A. Starmap: add the rerank operation and its endpoint facts, and hold the chat exclusion. Conditions RNK-V01 and RNK-V02.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK2" data-status="todo"><td>RNK2</td><td>Phase A. Starmap: catalog the rerank offerings and their prices, then release. Conditions RNK-V03 and RNK-V04.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK3" data-status="todo"><td>RNK3</td><td>Phase B. Canonical rerank request and response in <code>internal/inference</code>. Condition RNK-V05.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK4" data-status="todo"><td>RNK4</td><td>Phase B. Transport descriptor and connector adapter for the rerank operation. Conditions RNK-V06 and RNK-V07.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK5" data-status="todo"><td>RNK5</td><td>Phase B. The rerank codec, which owns every wire name. Conditions RNK-V08 and RNK-V09.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK6" data-status="todo"><td>RNK6</td><td>Phase B. The route, the controller, and the <code>rerank:write</code> scope. Conditions RNK-V10 to RNK-V12.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK7" data-status="todo"><td>RNK7</td><td>Phase C. Route a rerank request only to a rerank offering, and refuse the rest. Conditions RNK-V13 and RNK-V14.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK8" data-status="todo"><td>RNK8</td><td>Phase C. Search units in usage, the price, and the spend budget. Conditions RNK-V15 to RNK-V17.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK9" data-status="todo"><td>RNK9</td><td>Phase C. Console: make a rerank model visible and filterable. Condition RNK-V18.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK10" data-status="todo"><td>RNK10</td><td>Close. Documentation, the required evidence list, and the terminal gate in CI. Conditions RNK-V19 and RNK-V20.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK11" data-status="todo"><td>RNK11</td><td>Cleanup. Delete this plan when its final pull request merges.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <div class="task">
+    <h3 id="task-RNK0">RNK0 Baseline</h3>
+
+    <p><strong>Problem.</strong> The plan needs a pinned baseline in each
+      repository. It also needs the live provider request shapes, a named
+      reachable provider, a red verifier, and fail-before evidence. The shapes
+      below come from documentation read in 2026, and a provider can change
+      them.</p>
+
+    <p><strong>Seam.</strong> This plan,
+      <code>docs/proof/reranking/</code>, and
+      <code>scripts/verify-reranking.sh</code>.</p>
+    <ol>
+      <li>Record the baseline commit of each repository.</li>
+      <li>Read the Cohere, Jina, and Voyage rerank documentation, and record
+        every field difference.</li>
+      <li>Record the billing basis each provider uses, per unit or per
+        token.</li>
+      <li>Name every rerank provider this deployment can reach with a
+        credential.</li>
+      <li>Record the rerank offering census from the shipped catalog.</li>
+      <li>Create the proof root and write the verifier with all 20
+        conditions.</li>
+    </ol>
+
+    <p><strong>Acceptance.</strong> The verifier reports
+      <code>Summary: 0 passed, 20 failed</code>. <code>rnk0.md</code> names
+      each provider path, each field, each billing basis, the reachable
+      providers, and the date of the reading. This task changes no production file.</p>
+
+    <p><strong>Fail-before.</strong> <code>rnk0.md</code> records the census at
+      zero rerank offerings and the absent route.</p>
+
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-reranking.sh</code>. Then
+      <code>go build ./...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK1">RNK1 The Starmap rerank operation</h3>
+
+    <p><strong>Problem.</strong> <code>ProviderOperation</code> names two
+      members, chat completions and embeddings. A rerank endpoint has no
+      operation to carry it, so a catalog cannot state that a provider serves
+      one. The <code>rerank</code> tag exists, but it only disqualifies a model
+      from the chat completions view.</p>
+
+    <p><strong>Seam.</strong> <code>pkg/catalogs</code> in Starmap.</p>
+    <ol>
+      <li>Add <code>ProviderOperationRerank</code> with the wire value
+        <code>rerank</code>.</li>
+      <li>Accept the member wherever the package validates an operation.</li>
+      <li>Keep the chat completions view refusing a model that carries the
+        rerank tag.</li>
+      <li>Add the rerank path and endpoint type, including any
+        author-specific path.</li>
+      <li>Add a search unit field to <code>ModelOperationPricing</code>, which
+        today names none.</li>
+      <li>Open one Starmap pull request for this task.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V01 and RNK-V02.</strong> A test asserts that
+      the operation set holds three members and that each decodes from its wire
+      value. A second test asserts that a model carrying the rerank tag stays
+      out of the chat completions view. A third test asserts that every
+      provider with a rerank endpoint names a path.</p>
+
+    <p><strong>Fail-before.</strong> The constant does not exist, and a catalog
+      that names the operation fails to decode.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./pkg/catalogs/...</code>
+      in Starmap. Then <code>go build ./...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK2">RNK2 Rerank offerings and prices</h3>
+
+    <p><strong>Problem.</strong> The shipped catalog holds no rerank offering.
+      An operation without an offering routes nowhere, so RNK1 alone leaves the
+      route empty. A price is also missing, and an unpriced turn reads as free
+      to every limit.</p>
+
+    <p><strong>Seam.</strong> The Starmap catalog data and its generation.</p>
+    <ol>
+      <li>Catalog the rerank models each reachable provider serves.</li>
+      <li>Record the search unit price for each offering.</li>
+      <li>Record the maximum document count and the per-document token limit
+        each provider enforces.</li>
+      <li>Regenerate the immutable catalog.</li>
+      <li>Release a Starmap version with the operation and the offerings,
+        then raise the Starport dependency in <code>go.mod</code>.</li>
+      <li>Record the new census in the proof root.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V03 and RNK-V04.</strong> A test asserts that at
+      least one offering names the rerank operation. A second test asserts that
+      every rerank offering carries a search unit price. A third test asserts
+      that every rerank offering states a document limit.</p>
+
+    <p><strong>Fail-before.</strong> The census in <code>rnk0.md</code> reports
+      zero rerank offerings.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./...</code> in Starmap.
+      Then <code>bash scripts/verify-starmap-ownership.sh</code> in
+      Starport.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK3">RNK3 Canonical rerank types</h3>
+
+    <p><strong>Problem.</strong> <code>internal/inference</code> holds a
+      canonical chat request and a canonical embedding request. It holds no
+      rerank shape, so every layer below the codec would carry a provider
+      shape. The embedding types set the precedent that the canonical form
+      carries no wire word.</p>
+
+    <p><strong>Seam.</strong> <code>internal/inference</code>.</p>
+    <ol>
+      <li>Define the rerank request with a model, a query, and a document
+        list.</li>
+      <li>Give the request an optional result count and an optional per-document
+        token cap.</li>
+      <li>Define one result as an index into the request and a relevance
+        score.</li>
+      <li>Define the response as an ordered result list and a usage
+        record.</li>
+      <li>Refuse an empty document list and an empty query at construction.</li>
+      <li>Give the types no JSON tag that names a provider field.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V05.</strong> A test asserts that a result
+      references a document by index and holds no document copy. A second test
+      asserts that construction refuses an empty query and an empty document
+      list. A third test asserts that the package imports no protocol
+      package.</p>
+
+    <p><strong>Fail-before.</strong> No rerank type exists in the package.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/inference/...</code>. Then
+      <code>bash scripts/verify-dependency-direction.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK4">RNK4 Transport and connector</h3>
+
+    <p><strong>Problem.</strong> The transport registry refuses any operation
+      that is neither chat completions nor embeddings, at
+      <code>internal/providers/connectors/transport_registry.go:57</code>. That
+      guard is the one place that proves an operation reached the provider
+      layer. A connector also has no method that carries a rerank call.</p>
+
+    <p><strong>Seam.</strong> <code>internal/providers/connectors</code>.</p>
+    <ol>
+      <li>Accept the rerank operation in the registry guard.</li>
+      <li>Build the rerank transport descriptor from the Starmap endpoint
+        facts.</li>
+      <li>Add the rerank call to the connector contract beside the embedding
+        call.</li>
+      <li>Place the credential through <code>internal/providers/auth</code>,
+        unchanged.</li>
+      <li>Map a provider rerank error through
+        <code>internal/failure</code>.</li>
+      <li>Refuse a rerank call to a connector whose descriptor omits the
+        operation.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V06 and RNK-V07.</strong> A test asserts that
+      the registry accepts a rerank descriptor and still refuses an unknown
+      operation. A second test asserts that a connector without the rerank
+      operation returns a typed refusal rather than a request. A third test
+      asserts that a provider error normalizes to the same failure classes the
+      chat path uses.</p>
+
+    <p><strong>Fail-before.</strong> The registry rejects a rerank descriptor
+      as invalid.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/providers/...</code>. Then
+      <code>bash scripts/verify-catalog-driven-providers.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK5">RNK5 The rerank codec</h3>
+
+    <p><strong>Problem.</strong> No codec translates a rerank request. Without
+      one, either the canonical type gains wire tags or the controller writes
+      JSON by hand. Both outcomes break the rule that a codec owns every wire
+      name.</p>
+
+    <p><strong>Seam.</strong> <code>internal/protocol/openai</code>.</p>
+    <ol>
+      <li>Decode the request fields that RNK-D1 names.</li>
+      <li>Refuse a document list longer than the offering allows.</li>
+      <li>Refuse a request that asks Starport to echo the documents.</li>
+      <li>Report an unknown request field the way the chat codec reports
+        one.</li>
+      <li>Encode the response as an ordered result list with an index and a
+        score.</li>
+      <li>Encode the usage record and every failure through the shared
+        shapes.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V08 and RNK-V09.</strong> A round-trip test
+      decodes a recorded provider request and encodes a recorded provider
+      response without loss. A second test asserts that a request asking Starport
+      to echo the documents produces a typed refusal. A third test asserts
+      that a score outside zero through one fails decoding. A fourth test
+      asserts that the encoded response names no document text.</p>
+
+    <p><strong>Fail-before.</strong> No rerank codec exists.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/protocol/...</code>. Then
+      <code>bash scripts/verify-v1-architecture.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK6">RNK6 The route and the scope</h3>
+
+    <p><strong>Problem.</strong> A rerank caller reaches no route today. The
+      embeddings route at <code>internal/server/routes.go:37</code> shows the
+      shape to mirror, including its scope guard. The anonymous identity at
+      <code>internal/identity/anonymous.go:23</code> carries a fixed scope
+      list, so a deployment with authentication disabled would reach a new
+      route with no scope.</p>
+
+    <p><strong>Seam.</strong> <code>internal/server</code> and
+      <code>internal/identity</code>.</p>
+    <ol>
+      <li>Register <code>POST /v1/rerank</code> behind the
+        <code>rerank:write</code> scope.</li>
+      <li>Add the controller that joins the codec, the router, and the
+        connector.</li>
+      <li>Add <code>rerank:write</code> to the anonymous scope list.</li>
+      <li>Add the scope to the operator guide, which enumerates the
+        vocabulary.</li>
+      <li>Register no OpenRouter route, per decision RNK-D3.</li>
+      <li>Report a request for an uncatalogued model as a 404 before any
+        provider call.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V10 to RNK-V12.</strong> A server test asserts
+      that a key without the scope receives a 403 refusal. A key that carries
+      the scope succeeds. A second test asserts that the anonymous identity
+      reaches the route when an operator disables authentication. A third test
+      asserts that <code>/api/v1/rerank</code> stays absent.</p>
+
+    <p><strong>Fail-before.</strong> The route returns 404.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./internal/server/...
+      ./internal/identity/...</code>. Then
+      <code>bash scripts/verify-auth-onboarding.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK7">RNK7 Rerank routing</h3>
+
+    <p><strong>Problem.</strong> The planner builds a route from chat
+      capabilities. A rerank request that reached the chat planner would match
+      a chat model and send a request the provider refuses. Invariant R7 wants
+      that refusal inside Starport, with a message that names the real
+      cause.</p>
+
+    <p><strong>Seam.</strong> <code>internal/routing</code>, which holds its
+      own two-member <code>Operation</code> enum and two hardcoded guards, and
+      <code>internal/catalog</code>.</p>
+    <ol>
+      <li>Extend the enum and both guards in <code>planner.go</code>, then
+        project the operation onto the route candidate.</li>
+      <li>Filter candidates to the offerings that serve the operation.</li>
+      <li>Refuse a model with no rerank offering, before any attempt.</li>
+      <li>Keep fallback and retry behavior identical to the embeddings
+        path.</li>
+      <li>Carry the document limit onto the candidate, so RNK5 can enforce
+        it.</li>
+      <li>Report the refusal with the model identifier and the operation.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V13 and RNK-V14.</strong> A planner test asserts
+      that a chat-only model produces a typed refusal rather than a route. A
+      second test asserts that a model with two rerank offerings produces two
+      ordered candidates. A third test asserts that the refusal message names
+      the operation.</p>
+
+    <p><strong>Fail-before.</strong> The planner returns a chat candidate for a
+      rerank request.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./internal/routing/...
+      ./internal/catalog/...</code>. Then
+      <code>bash scripts/verify-dependency-direction.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK8">RNK8 Usage, price, and budget</h3>
+
+    <p><strong>Problem.</strong> The usage record counts prompt and completion
+      tokens. A rerank turn produces neither, so an unmodified record reports
+      zero and the turn reads as free. The package <code>internal/limits</code>
+      bounds spend, and a spend bound holds only when Starport knows the
+      cost.</p>
+
+    <p><strong>Seam.</strong> <code>internal/usage</code>,
+      <code>internal/limits</code>, and <code>internal/catalog</code>.</p>
+    <ol>
+      <li>Add the search unit count to the usage record.</li>
+      <li>Compute the count from the query and the document list.</li>
+      <li>Draw the unit price from the RNK2 offering price.</li>
+      <li>Add the resulting cost to the tenant spend total.</li>
+      <li>Refuse a request that would pass the spend bound, before the provider
+        call.</li>
+      <li>Report the count and the cost on the response usage block.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V15 to RNK-V17.</strong> A test asserts that a
+      recorded turn produces a nonzero search unit count and a nonzero cost. A
+      second test asserts that a tenant at its spend bound receives a refusal
+      before any provider call. A third test asserts that a turn on an unpriced
+      offering fails rather than reporting zero.</p>
+
+    <p><strong>Fail-before.</strong> A rerank turn records zero usage.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./internal/usage/...
+      ./internal/limits/...</code>. Then
+      <code>bash scripts/benchmark-overhead.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK9">RNK9 Console surface</h3>
+
+    <p><strong>Problem.</strong> The console models table shows chat and
+      embedding models. A rerank model would either appear with no way to tell
+      it apart, or stay hidden and leave an operator unable to confirm the
+      catalog. Neither outcome lets an operator verify what RNK2 shipped.</p>
+
+    <p><strong>Seam.</strong> <code>console/src</code>.</p>
+    <ol>
+      <li>Show the operation each model serves in the models table.</li>
+      <li>Filter the table by operation.</li>
+      <li>Show the search unit price and the document limit on a rerank
+        model.</li>
+      <li>Add <code>rerank:write</code> to the key form in
+        <code>console/src/routes/keys.tsx</code>.</li>
+      <li>Drive every label from the data, not a fixed list.</li>
+      <li>Keep a rerank model out of any chat model picker.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V18.</strong> A component test asserts that a
+      rerank model renders its operation, its price, and its limit. A second
+      test asserts that the chat picker omits it. A third test asserts that an
+      unknown operation still renders its own label.</p>
+
+    <p><strong>Fail-before.</strong> The table shows no operation column.</p>
+
+    <p><strong>Verification.</strong> <code>npm test</code> in
+      <code>console</code>. Then
+      <code>bash scripts/verify-console-modernization.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK10">RNK10 Documentation and the gate</h3>
+
+    <p><strong>Problem.</strong> A gate that no workflow runs cannot report a
+      regression. The required evidence list in <code>CLAUDE.md</code> is the
+      contract between the plan and CI. Documentation also has no rerank
+      page.</p>
+
+    <p><strong>Seam.</strong> <code>docs</code>, <code>README.md</code>,
+      <code>CLAUDE.md</code>, and the workflow files.</p>
+    <ol>
+      <li>Document the rerank route, its request, and its response.</li>
+      <li>Document the <code>rerank:write</code> scope beside the other
+        scopes.</li>
+      <li>State that Starmap owns the operation, the offerings, and the
+        prices.</li>
+      <li>Add the verifier to the required evidence list.</li>
+      <li>Add the verifier to the CI job that runs the other gates.</li>
+      <li>Update <code>docs/ARCHITECTURE.md</code> with the third
+        operation.</li>
+    </ol>
+
+    <p><strong>Acceptance, RNK-V19 and RNK-V20.</strong> The verifier reports
+      <code>Summary: 20 passed, 0 failed</code>. <code>verify-doc-links.sh</code>
+      passes. The CI workflow names the verifier, and the required evidence
+      list holds it.</p>
+
+    <p><strong>Fail-before.</strong> No workflow names the verifier.</p>
+
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-reranking.sh</code>. Then
+      <code>bash scripts/verify-doc-links.sh</code> and
+      <code>bash scripts/verify-developer-experience.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-RNK11">RNK11 Cleanup</h3>
+
+    <p><strong>Problem.</strong> A merged plan that stays in the tree reads as
+      active work. The plans skill requires deletion when the final pull
+      request merges.</p>
+
+    <p><strong>Seam.</strong> <code>docs/plans</code> and
+      <code>docs/TASKS.md</code>.</p>
+    <ol>
+      <li>Confirm every ledger row above is terminal.</li>
+      <li>Move the RNK row from active work to completed work in
+        <code>docs/TASKS.md</code>.</li>
+      <li>Delete this plan file.</li>
+      <li>Keep <code>docs/proof/reranking/</code> in the tree.</li>
+      <li>Run the documentation link verifier after the deletion.</li>
+      <li>Open one pull request that carries the deletion alone.</li>
+    </ol>
+
+    <p><strong>Acceptance.</strong> The plan file is absent.
+      <code>docs/TASKS.md</code> reports the outcome with its condition count.
+      <code>verify-doc-links.sh</code> passes with no reference to the deleted
+      file.</p>
+
+    <p><strong>Fail-before.</strong> The plan file exists and
+      <code>docs/TASKS.md</code> lists the work as active.</p>
+
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-doc-links.sh</code>. Then
+      <code>bash scripts/test-doc-link-verifier.sh</code>.</p>
+    </div>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/reranking-plan.html to completion. This is a
+whole-plan goal, not a single-task goal. Read the plan fully, then read
+CLAUDE.md, docs/TASKS.md, docs/ARCHITECTURE.md, and, for RNK1 and RNK2,
+~/src/github.com/agentstation/starmap/CLAUDE.md. This plan depends on no
+other plan and can run beside them.
+Work in /Users/jack/src/github.com/agentstation/starport on a branch named
+codex/reranking-&lt;task-id&gt;, one branch and one pull request per task.
+RNK1 and RNK2 open their pull requests in the starmap repository instead.
+Chat history is not progress state. Resume from the status ledger, the
+execution log, and git state. If compaction happens, continue from the
+plan and git state rather than restarting. Loop: keep one task
+in_progress, implement at the owning seam, capture fail-before evidence,
+run the verification commands, commit the work per the commit policy,
+write the proof file to docs/proof/reranking/, append the execution log
+with the work commit, mark the task terminal with evidence, commit the
+plan update the same way, then advance to the next task. Decide rather
+than ask. Mark a wrong or already-satisfied task no-action with a one-line
+reason. Record a blocker and continue with the next eligible task. Binding
+constraints: invariants R1 through R7, decisions RNK-D1 through RNK-D5,
+and the non-goals. An OpenRouter rerank route, a vector store, and
+reranking inside a chat request stay unowned. Commit policy: commit each
+task's work, then record the ledger transition as its own plan commit with
+the subject "plan: &lt;ID&gt; done (PR #N); &lt;NEXT&gt; in_progress". Run
+autoreview --gate pre-pr --mode auto before every pull request with
+substantive code changes. Run the repository technical-writing linter over
+this plan before every plan commit. Stop only at a valid stop state from
+the plans skill. Before you stop, update the ledger and the log, and
+record the next action in the status line. The goal is met when
+scripts/verify-reranking.sh reports "Summary: 20 passed, 0 failed", CI
+runs it, and every ledger row except RNK11 is terminal.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-26</td><td>meta</td><td>authored</td><td>Written at status <code>proposed</code> as the named owner of the reranking item that the model modalities plan and the async media jobs plan both left unowned. Measured starting position: <code>ProviderOperation</code> in Starmap names two members, the shipped catalog holds zero rerank offerings, the <code>rerank</code> tag appears once as a chat disqualifier at <code>offering_views.go:165</code>, and <code>transport_registry.go:57</code> refuses any third operation. The earlier reading that reranking should wait for a catalogued offering was wrong, because the owner controls both repositories, so a missing offering is a task rather than a constraint. RNK0 confirms the provider request shapes and the reachable providers against live documentation before any code lands.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>Two adversarial design reviews ran before approval, and every finding was checked against both trees before any edit. Three corrections landed. Invariant R4 overstated the transport registry guard, because <code>internal/routing/planner.go</code> holds a separate two-member enum and two hardcoded guards, and <code>validateSnapshot</code> fails a whole snapshot rather than one candidate, so RNK7 now names that seam. Decision RNK-D4 committed to a per-search-unit price before RNK0 verified the billing bases, so RNK0 now records the basis each provider uses. Invariant R5 dropped <code>return_documents</code> silently, which is the anti-pattern the plan itself forbids, so RNK5 refuses the field instead. Two smaller gaps closed: RNK2 now raises the Starport dependency in <code>go.mod</code>, which pins Starmap exactly, and RNK9 now names the console key form, which hardcodes four scopes.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>

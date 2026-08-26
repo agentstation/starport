@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model modalities</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  .task p { margin: 0.3rem 0; }
+  .task ol { margin: 0.3rem 0 0.6rem; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+
+<header id="overview">
+  <h1>Document parser</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="proposed">proposed</code> ·
+    Owner: this plan ·
+    Created: 2026-08-26 ·
+    Baseline: PLG0 pins both repositories ·
+    Proof root: <code>docs/proof/document-parser/</code> ·
+    Next action: FIL9 promotes this plan
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      A caller attaches a document to a chat request and names a parser
+      plugin. Starport extracts the text in process when the document carries
+      text, and routes a scanned document to an optical character recognition
+      model that Starmap catalogs. The extraction happens once for each
+      document, costs a stated price, and appears in the usage record.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 340 230" role="img" aria-label="Before diagram">
+          <rect x="8" y="8" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="32" text-anchor="middle" fill="currentColor"
+            font-size="12">the openrouter codec decodes a plugins field</text>
+          <text x="170" y="52" text-anchor="middle" fill="currentColor"
+            font-size="12">it reports the field as unenforced</text>
+          <rect x="8" y="86" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="110" text-anchor="middle" fill="currentColor"
+            font-size="12">a document reaches the provider unchanged</text>
+          <text x="170" y="130" text-anchor="middle" fill="currentColor"
+            font-size="12">a scanned page reads as an empty document</text>
+          <rect x="8" y="164" width="324" height="58" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="188" text-anchor="middle" fill="currentColor"
+            font-size="12">no operation names optical recognition</text>
+          <text x="170" y="208" text-anchor="middle" fill="currentColor"
+            font-size="12">no page price exists to charge</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 340 230" role="img" aria-label="After diagram">
+          <rect x="8" y="8" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="32" text-anchor="middle" fill="currentColor"
+            font-size="12">the codec decodes the file-parser plugin</text>
+          <text x="170" y="52" text-anchor="middle" fill="currentColor"
+            font-size="12">an unknown engine fails, never falls through</text>
+          <rect x="8" y="86" width="324" height="60" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="110" text-anchor="middle" fill="currentColor"
+            font-size="12">native extraction runs in process, no provider</text>
+          <text x="170" y="130" text-anchor="middle" fill="currentColor"
+            font-size="12">a scanned page routes to a catalogued OCR model</text>
+          <rect x="8" y="164" width="324" height="58" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="170" y="188" text-anchor="middle" fill="currentColor"
+            font-size="12">extraction caches by content hash and engine</text>
+          <text x="170" y="208" text-anchor="middle" fill="currentColor"
+            font-size="12">each page carries a price and a usage count</text>
+        </svg>
+      </figure>
+    </div>
+    <p>The plugin is a request option, not a route. It changes what the model
+      reads, and it never changes which model the router selects.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns, the plugin contract.</strong> The decode of the
+      <code>file-parser</code> plugin and its engine vocabulary. The typed
+      refusal for an unknown engine. The rule that ends the unenforced report
+      for the <code>plugins</code> field.</p>
+
+    <p><strong>Owns, the extraction path.</strong> In-process text extraction
+      for a document that carries text. The optical recognition operation in
+      Starmap, its offerings, and its per-page price. The route from a scanned
+      document to a catalogued recognition model.</p>
+
+    <p><strong>Owns, the accounting.</strong> The extraction cache keyed by
+      content hash and engine. The page count in the usage record. The price a
+      recognized page draws from Starmap.</p>
+
+    <p><strong>Does not own.</strong> The document content kind and its wire
+      word, which <a href="model-modalities-plan.html">the model modalities
+      plan</a> owns. Stored file bytes and their retention, which
+      <a href="files-api-plan.html">the files API plan</a> owns. This plan
+      reads a stored document through that seam rather than build its own.</p>
+
+    <p><strong>Non-goals.</strong> A layout model that returns bounding boxes,
+      because no caller asks for one. A translation engine, which is a
+      separate operation with a separate price. A parser for a format that no
+      catalogued model reads.</p>
+  </section>
+
+  <section id="promotion-gate">
+    <h2>Promotion gate</h2>
+    <p>Promote this plan to <code>active</code> only when every item
+      holds.</p>
+    <ol>
+      <li>The files API plan reports 22 of 22 conditions.</li>
+      <li>The owner accepts that this plan runs beside the async media jobs
+        plan, because PLG4 and AMJ4 both extend the same registry guard.</li>
+      <li>The owner approves the six decisions below.</li>
+      <li>PLG0 confirms the engine names against live documentation.</li>
+      <li>PLG0 names at least one reachable recognition provider.</li>
+      <li>The baseline commits and the proof root exist.</li>
+    </ol>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Invariant</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>P1</td><td>Starmap owns the recognition operation, its offerings, and its per-page price. Starport adds no local engine table.</td><td>An engine list inside Starport would restate a catalog fact, and the two would drift at the first provider change.</td></tr>
+        <tr><td>P2</td><td>Starport enforces every plugin it accepts, and refuses a plugin it does not enforce.</td><td>Accepting a field and ignoring it tells a caller that a setting took effect when nothing changed.</td></tr>
+        <tr><td>P3</td><td>The native engine runs in the Starport process and reaches no provider.</td><td>A caller chooses the native engine to avoid a per-page charge, so a hidden provider call would break that choice.</td></tr>
+        <tr><td>P4</td><td>One document extracts once for each content hash and engine pair, inside the cache window.</td><td>A retry, a fallback, and a multi-turn conversation would otherwise pay the page price again for identical bytes.</td></tr>
+        <tr><td>P5</td><td>A recognized page records usage and draws a price.</td><td>An operation that records nothing reads as free, and the spend bound then holds nothing back.</td></tr>
+        <tr><td>P6</td><td>A plugin changes what the model reads. It never changes which model the router selects.</td><td>A request option that moved the route would make the model choice depend on a field the caller set for another reason.</td></tr>
+        <tr><td>P7</td><td>The <code>transforms</code> field keeps its current drop-in behavior.</td><td>The OpenRouter parity surface already ships that behavior, and this plan changes one field rather than the whole option set.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <table>
+      <thead><tr><th>ID</th><th>Date</th><th>Decision</th><th>Consequence and re-open condition</th></tr></thead>
+      <tbody>
+        <tr><td>PLG-D1</td><td>2026-08-26</td><td>Extract native text in process first, then route a scanned document to a catalogued recognition model.</td><td>The owner chose this order. A text document costs nothing extra, and a scanned one costs a stated page price. Re-open if in-process extraction proves unreliable across common producers.</td></tr>
+        <tr><td>PLG-D2</td><td>2026-08-26</td><td>Add an optical recognition operation to <code>ProviderOperation</code> in Starmap, with a per-page price.</td><td>The transport registry guard proves the provider layer. The planner in <code>internal/routing</code> is a separate earlier gate that fails a whole snapshot on an operation it does not name. Re-open if every recognition provider serves the work through a chat route instead.</td></tr>
+        <tr><td>PLG-D3</td><td>2026-08-26</td><td>Key the extraction cache by the document content hash and the engine identifier, and hold the text in the key store.</td><td>Extracted text is small next to the document, so it fits the record store rather than the blob store. Re-open if an extraction result grows past the record size the store serves well.</td></tr>
+        <tr><td>PLG-D4</td><td>2026-08-26</td><td>Refuse an unknown engine with a typed error rather than fall back to a default.</td><td>A caller learns that the engine name is wrong instead of paying for an engine it did not choose. Re-open if a provider adds engines faster than the catalog records them.</td></tr>
+        <tr><td>PLG-D6</td><td>2026-08-26</td><td>Fail the whole turn when a page fails recognition, rather than send partial text to the chat model.</td><td>Partial text produces a confident answer built on a document the model never fully read, and the caller cannot see the gap. The caller retries or chooses another engine. Re-open if a caller asks for partial text behind an explicit request field.</td></tr>
+        <tr><td>PLG-D5</td><td>2026-08-26</td><td>Accept the plugin on the OpenRouter routes alone, because the OpenAI protocol has no plugins field.</td><td>The parity verifier stays terminal at 16 conditions, and this plan adds none. The unenforced record lives in <code>unenforcedGatewayFields</code> and the response header, so PLG7 changes the codec rather than the verifier. Re-open if OpenAI publishes an equivalent field.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-document-parser.sh</code> reports every condition
+      and exits nonzero while any condition fails. It prints
+      <code>Summary: N passed, M failed</code>. The condition identifiers run
+      from <code>PLG-V01</code> to <code>PLG-V20</code>. PLG0 writes the
+      verifier red at 0 passed and 20 failed. Every task section below names
+      the conditions it turns green.</p>
+    <table>
+      <thead><tr><th>Phase</th><th>Tasks</th><th>Conditions</th><th>Cumulative passing</th></tr></thead>
+      <tbody>
+        <tr><td>A, the plugin contract</td><td>PLG1 and PLG2</td><td>PLG-V01 to PLG-V05</td><td>5</td></tr>
+        <tr><td>B, the recognition path</td><td>PLG3 to PLG5</td><td>PLG-V06 to PLG-V13</td><td>13</td></tr>
+        <tr><td>C, money, parity, and console</td><td>PLG6 to PLG8</td><td>PLG-V14 to PLG-V18</td><td>18</td></tr>
+        <tr><td>Close</td><td>PLG9</td><td>PLG-V19 to PLG-V20</td><td>20, terminal</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="PLG0" data-status="todo"><td>PLG0</td><td>Baseline. Pin both commits, confirm the engine names, name a recognition provider, create the proof root, write the verifier red at 20 conditions.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG1" data-status="todo"><td>PLG1</td><td>Phase A. Decode the parser plugin and its engine vocabulary, and refuse an unknown engine. Conditions PLG-V01 to PLG-V03.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG2" data-status="todo"><td>PLG2</td><td>Phase A. In-process text extraction for a document that carries text. Conditions PLG-V04 and PLG-V05.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG3" data-status="todo"><td>PLG3</td><td>Phase B. Starmap: the recognition operation, its offerings, and its per-page price. Conditions PLG-V06 to PLG-V08.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG4" data-status="todo"><td>PLG4</td><td>Phase B. Route a scanned document to a catalogued recognition model. Conditions PLG-V09 to PLG-V11.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG5" data-status="todo"><td>PLG5</td><td>Phase B. The extraction cache keyed by content hash and engine. Conditions PLG-V12 and PLG-V13.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG6" data-status="todo"><td>PLG6</td><td>Phase C. Page counts in usage, the page price, and the spend bound. Conditions PLG-V14 and PLG-V15.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG7" data-status="todo"><td>PLG7</td><td>Phase C. End the unenforced report for the plugins field, and hold the transforms behavior. Conditions PLG-V16 and PLG-V17.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG8" data-status="todo"><td>PLG8</td><td>Phase C. Console: show the engine, the page count, and the extraction cost. Condition PLG-V18.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG9" data-status="todo"><td>PLG9</td><td>Close. Documentation, the required evidence list, and the terminal gate in CI. Conditions PLG-V19 and PLG-V20.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG10" data-status="todo"><td>PLG10</td><td>Cleanup. Delete this plan when its final pull request merges.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <div class="task">
+    <h3 id="task-PLG0">PLG0 Baseline</h3>
+
+    <p><strong>Problem.</strong> The plan needs a pinned baseline in each
+      repository, the live engine names, a named recognition provider, a red
+      verifier, and fail-before evidence. The engine names below come from
+      documentation read in 2026, and a vendor already replaced one of
+      them.</p>
+
+    <p><strong>Seam.</strong> This plan,
+      <code>docs/proof/document-parser/</code>, and
+      <code>scripts/verify-document-parser.sh</code>.</p>
+    <ol>
+      <li>Record the baseline commit of each repository.</li>
+      <li>Read the current OpenRouter parser documentation and record every
+        engine name.</li>
+      <li>Record the page price each engine states.</li>
+      <li>Name every recognition provider this deployment can reach with a
+        credential.</li>
+      <li>Record where the codec reports the plugins field as
+        unenforced.</li>
+      <li>Create the proof root and write the verifier with all 20
+        conditions.</li>
+    </ol>
+
+    <p><strong>Acceptance.</strong> The verifier reports
+      <code>Summary: 0 passed, 20 failed</code>. The file
+      <code>plg0.md</code> names each engine, each price, the reachable
+      providers, and the date of the reading. This task changes no production
+      file.</p>
+
+    <p><strong>Fail-before.</strong> The proof file records the unenforced
+      report and the empty recognition census.</p>
+
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-document-parser.sh</code>. Then
+      <code>go build ./...</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG1">PLG1 The plugin contract</h3>
+
+    <p><strong>Problem.</strong> The OpenRouter codec decodes
+      <code>plugins</code> as raw JSON at
+      <code>internal/protocol/openrouter/codec.go:51</code> and reports the
+      field as unenforced. A caller that names an engine gets no error and no
+      effect. Invariant P2 wants each accepted plugin enforced.</p>
+
+    <p><strong>Seam.</strong> <code>internal/protocol/openrouter</code>.</p>
+    <ol>
+      <li>Decode the <code>file-parser</code> plugin into a typed option.</li>
+      <li>Name the engine vocabulary that PLG0 recorded.</li>
+      <li>Refuse an unknown engine with a typed error.</li>
+      <li>Refuse a plugin identifier this plan does not enforce.</li>
+      <li>Default to the native engine when the plugin names none.</li>
+      <li>Carry the option onto the canonical request without a wire word.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V01 to PLG-V03.</strong> A round-trip test
+      decodes a recorded plugin payload without loss. A second test asserts
+      that an unknown engine name produces a typed refusal. A third test
+      asserts that an unknown plugin identifier produces a typed refusal
+      rather than silence.</p>
+
+    <p><strong>Fail-before.</strong> A request naming an unknown engine
+      succeeds and changes nothing.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/protocol/...</code>. Then
+      <code>bash scripts/verify-v1-architecture.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG2">PLG2 Native extraction</h3>
+
+    <p><strong>Problem.</strong> A document that already carries a text layer
+      needs no model and no page charge. Sending it to a recognition provider
+      would spend money for work the process can do. Invariant P3 requires
+      that this path reach no provider.</p>
+
+    <p><strong>Seam.</strong> <code>internal/document</code>.</p>
+    <ol>
+      <li>Extract the text layer from a document that carries one.</li>
+      <li>Report the page count alongside the text.</li>
+      <li>Report a document with no usable text layer as a scanned
+        document.</li>
+      <li>Bound the work by page count and by elapsed time.</li>
+      <li>Refuse a document whose declared type does not match its bytes.</li>
+      <li>Register <code>internal/document</code> in the import graph test,
+        and reach no network address from it.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V04 and PLG-V05.</strong> A table test extracts
+      text from recorded documents produced by several writers. A second test
+      asserts that a scanned document reports the scanned result rather than
+      empty text. A third test asserts that the package imports no provider or
+      transport package.</p>
+
+    <p><strong>Fail-before.</strong> The package does not exist.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./internal/document/...
+      ./internal/architecture/...</code>. Then
+      <code>bash scripts/verify-dependency-direction.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG3">PLG3 The Starmap recognition operation</h3>
+
+    <p><strong>Problem.</strong> No operation names optical character
+      recognition, so a catalog cannot state that a provider serves it. No
+      price names a page either, and the shipped prices count tokens. The
+      transport registry refuses any operation outside its known set.</p>
+
+    <p><strong>Seam.</strong> <code>pkg/catalogs</code> in Starmap, and the
+      catalog data.</p>
+    <ol>
+      <li>Add the recognition operation with its wire value.</li>
+      <li>Add the per-page price to the price shape.</li>
+      <li>Catalog the recognition models each reachable provider serves.</li>
+      <li>Record the page limit each provider enforces.</li>
+      <li>Regenerate the immutable catalog and release a version.</li>
+      <li>Open the Starmap pull requests for this task.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V06 to PLG-V08.</strong> A test asserts that
+      the operation decodes from its wire value. A second test asserts that
+      every recognition offering carries a per-page price. A third test
+      asserts that a price without a page component fails validation for that
+      operation.</p>
+
+    <p><strong>Fail-before.</strong> The census in <code>plg0.md</code>
+      reports no recognition offering.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./...</code> in Starmap.
+      Then <code>bash scripts/verify-starmap-ownership.sh</code> in
+      Starport.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG4">PLG4 The recognition path</h3>
+
+    <p><strong>Problem.</strong> A scanned document reaches the chat model as
+      an image or as nothing. PLG2 detects the case but has nowhere to send
+      it. Invariant P6 also forbids the parser from moving the chat route. The
+      recognition call stands beside the chat call instead of replacing it.
+      That call is provider time, so <code>x-starport-overhead-ms</code>
+      excludes it by contract and a caller sees unattributed latency.</p>
+
+    <p><strong>Seam.</strong> <code>internal/providers/connectors</code>,
+      <code>internal/routing</code>, whose planner holds two hardcoded
+      operation guards, <code>internal/failure</code>, and
+      <code>internal/proxy</code>.</p>
+    <ol>
+      <li>Accept the recognition operation in the transport registry
+        guard.</li>
+      <li>Add the recognition call to the connector contract.</li>
+      <li>Extend both planner guards, then plan a recognition route from the
+        offerings the named engine serves.</li>
+      <li>Send a scanned document to that route, then send its text to the
+        chat model.</li>
+      <li>Keep the chat route selection independent of the plugin.</li>
+      <li>Fail the whole turn when a page fails, per decision
+        PLG-D6.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V09 to PLG-V11.</strong> A test asserts that a
+      scanned document reaches a recognition offering and that its text
+      reaches the chat model. A second test asserts that the chat model choice
+      matches the choice the same request makes without a plugin. A third test
+      asserts that a recognition failure returns a typed error naming the
+      recognition step. A fourth test asserts that one failed page fails the
+      turn rather than sending partial text.</p>
+
+    <p><strong>Fail-before.</strong> A scanned document produces an empty
+      answer.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./internal/providers/...
+      ./internal/routing/... ./internal/proxy/...</code>. Then
+      <code>bash scripts/verify-catalog-driven-providers.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG5">PLG5 The extraction cache</h3>
+
+    <p><strong>Problem.</strong> A conversation resends the same document on
+      every turn, and a retry sends it again. Without a cache, each of those
+      pays the page price for identical bytes. Invariant P4 bounds the work to
+      one extraction for each content hash and engine pair.</p>
+
+    <p><strong>Seam.</strong> <code>internal/document</code> and its
+      repository.</p>
+    <ol>
+      <li>Hash the document bytes.</li>
+      <li>Key the cache by the hash, the engine, and the resolved
+        offering.</li>
+      <li>Include the catalog generation, as the response cache already
+        does.</li>
+      <li>Hold the text and the page count in the key store, for a configured
+        window.</li>
+      <li>Scope an entry to the tenant that paid, and skip it on a fresh
+        request.</li>
+      <li>Report a cache hit on the response, so a caller can see the
+        saving.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V12 and PLG-V13.</strong> A test asserts that a
+      second request with identical bytes runs no recognition call. A second
+      test asserts that another tenant sharing the same bytes gets its own
+      entry. A third test asserts that a hit records no page cost. A fourth test asserts
+      that a new catalog generation misses the cache.</p>
+
+    <p><strong>Fail-before.</strong> Two identical requests each call the
+      provider.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./internal/document/...
+      ./internal/response/cache/...</code>. Then
+      <code>bash scripts/verify-catalog-performance.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG6">PLG6 Pages, price, and budget</h3>
+
+    <p><strong>Problem.</strong> The usage record counts tokens. A recognized
+      page produces no token the record can hold, so an unmodified record
+      reports the work as free. The package <code>internal/limits</code>
+      bounds spend, and a spend bound holds only when Starport knows the
+      cost.</p>
+
+    <p><strong>Seam.</strong> <code>internal/usage</code>,
+      <code>internal/limits</code>, and <code>internal/catalog</code>.</p>
+    <ol>
+      <li>Add the recognized page count to the usage record.</li>
+      <li>Draw the page price from the PLG3 offering price.</li>
+      <li>Add the resulting cost to the tenant spend total.</li>
+      <li>Charge nothing for a page the native engine read.</li>
+      <li>Refuse a request that would pass the spend bound, before the
+        recognition call.</li>
+      <li>Report the page count, the extraction milliseconds, and the cost
+        on the usage block.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V14 and PLG-V15.</strong> A test asserts that a
+      recognized document produces a nonzero page count and a nonzero cost. A
+      second test asserts that a natively extracted document produces a page
+      count with no cost. A third test asserts that a tenant at its spend
+      bound receives a refusal before the recognition call. A fourth test
+      asserts that the usage block reports the extraction duration.</p>
+
+    <p><strong>Fail-before.</strong> An extraction records no usage.</p>
+
+    <p><strong>Verification.</strong> <code>go test ./internal/usage/...
+      ./internal/limits/...</code>. Then
+      <code>bash scripts/benchmark-overhead.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG7">PLG7 Parity and the unenforced report</h3>
+
+    <p><strong>Problem.</strong> The function
+      <code>unenforcedGatewayFields</code> always names <code>plugins</code>,
+      and the chat controller returns that name in the
+      <code>X-Starport-Unenforced-Provider-Fields</code> header. After PLG1
+      the record is wrong, and a wrong record is worse than a missing one.
+      Invariant P7 protects the drop-in behavior of
+      <code>transforms</code>.</p>
+
+    <p><strong>Seam.</strong> <code>internal/protocol/openrouter</code>,
+      <code>internal/server/controllers</code>, and the parity
+      documentation.</p>
+    <ol>
+      <li>Stop reporting the plugins field as unenforced.</li>
+      <li>Report each plugin identifier Starport enforces.</li>
+      <li>Drop the plugins arm from <code>unenforcedGatewayFields</code>
+        when every named plugin is one Starport enforces.</li>
+      <li>Leave <code>scripts/verify-openrouter-parity.sh</code> untouched at
+        16 conditions, per decision PLG-D5.</li>
+      <li>Assert that the transforms field still behaves as a drop-in
+        field.</li>
+      <li>Update the parity documentation to match.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V16 and PLG-V17.</strong> A codec test asserts
+      that a file-parser request names no unenforced field. A second test
+      asserts that an unknown plugin identifier still reports as unenforced. A
+      third test asserts that the transforms field behaves as it did before,
+      and the parity verifier still reports 16 conditions.</p>
+
+    <p><strong>Fail-before.</strong> The test at
+      <code>provider_prefs_test.go:90</code> still expects the plugins field
+      in the unenforced list after PLG1 landed.</p>
+
+    <p><strong>Verification.</strong>
+      <code>go test ./internal/protocol/openrouter/... ./internal/server/...</code>.
+      Then <code>bash scripts/verify-openrouter-parity.sh</code> and
+      <code>bash scripts/smoke-openrouter-sdks.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG8">PLG8 Console surface</h3>
+
+    <p><strong>Problem.</strong> An operator cannot see what an extraction
+      cost. A page charge that appears in no view reads as an unexplained
+      spend increase. The console already shows request cost, so extraction
+      belongs beside it.</p>
+
+    <p><strong>Seam.</strong> <code>console/src</code>.</p>
+    <ol>
+      <li>Show the engine each request used.</li>
+      <li>Show the page count and the extraction cost.</li>
+      <li>Mark a cache hit as a saving, and show the extraction
+        duration.</li>
+      <li>List the catalogued recognition models with their page price.</li>
+      <li>Drive every label from the data, not a fixed list.</li>
+      <li>Keep a recognition model out of any chat model picker.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V18.</strong> A component test asserts that a
+      recognized request renders its engine, page count, and cost. A second
+      test asserts that a cache hit renders as a saving. A third test asserts
+      that the chat picker omits a recognition model.</p>
+
+    <p><strong>Fail-before.</strong> The console shows no engine and no page
+      count.</p>
+
+    <p><strong>Verification.</strong> <code>npm test</code> in
+      <code>console</code>. Then
+      <code>bash scripts/verify-console-modernization.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG9">PLG9 Documentation and the gate</h3>
+
+    <p><strong>Problem.</strong> A gate that no workflow runs cannot report a
+      regression. The required evidence list in <code>CLAUDE.md</code> is the
+      contract between the plan and CI. Documentation also names no parser
+      plugin and no recognition operation.</p>
+
+    <p><strong>Seam.</strong> <code>docs</code>, <code>README.md</code>,
+      <code>CLAUDE.md</code>, and the workflow files.</p>
+    <ol>
+      <li>Document the parser plugin, its engines, and its refusals.</li>
+      <li>Document the page price and where a caller sees it.</li>
+      <li>State that Starmap owns the recognition operation and its
+        price.</li>
+      <li>State the concept seam rule for <code>internal/document</code>.</li>
+      <li>Add the verifier to the required evidence list.</li>
+      <li>Add the verifier to the CI job that runs the other gates.</li>
+    </ol>
+
+    <p><strong>Acceptance, PLG-V19 and PLG-V20.</strong> The verifier reports
+      <code>Summary: 20 passed, 0 failed</code>. The documentation link
+      verifier passes. The CI workflow names the verifier, and the required
+      evidence list holds it.</p>
+
+    <p><strong>Fail-before.</strong> No workflow names the verifier.</p>
+
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-document-parser.sh</code>. Then
+      <code>bash scripts/verify-doc-links.sh</code> and
+      <code>bash scripts/verify-developer-experience.sh</code>.</p>
+    </div>
+
+    <div class="task">
+    <h3 id="task-PLG10">PLG10 Cleanup</h3>
+
+    <p><strong>Problem.</strong> A merged plan that stays in the tree reads as
+      active work. The plans skill requires deletion when the final pull
+      request merges.</p>
+
+    <p><strong>Seam.</strong> <code>docs/plans</code> and
+      <code>docs/TASKS.md</code>.</p>
+    <ol>
+      <li>Confirm every ledger row above is terminal.</li>
+      <li>Move the PLG row to completed work in
+        <code>docs/TASKS.md</code>.</li>
+      <li>Delete this plan file.</li>
+      <li>Keep <code>docs/proof/document-parser/</code> in the tree.</li>
+      <li>Run the documentation link verifier after the deletion.</li>
+      <li>Open one pull request that carries the deletion alone.</li>
+    </ol>
+
+    <p><strong>Acceptance.</strong> The plan file is absent. The file
+      <code>docs/TASKS.md</code> reports the outcome with its condition count.
+      The documentation link verifier passes with no reference to the deleted
+      file.</p>
+
+    <p><strong>Fail-before.</strong> The plan file exists and
+      <code>docs/TASKS.md</code> lists the work as active.</p>
+
+    <p><strong>Verification.</strong>
+      <code>bash scripts/verify-doc-links.sh</code>. Then
+      <code>bash scripts/test-doc-link-verifier.sh</code>.</p>
+    </div>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/document-parser-plan.html to completion. This is a
+whole-plan goal, not a single-task goal. Read the plan fully, then read
+CLAUDE.md, docs/TASKS.md, docs/ARCHITECTURE.md, and, for PLG3,
+~/src/github.com/agentstation/starmap/CLAUDE.md. Do not start before the
+files API plan reports 22 of 22 conditions.
+Work in /Users/jack/src/github.com/agentstation/starport on a branch named
+codex/document-parser-&lt;task-id&gt;, one branch and one pull request per
+task. PLG3 opens its pull request in the starmap repository instead. Chat
+history is not progress state. Resume from the status ledger, the
+execution log, and git state. If compaction happens, continue from the
+plan and git state rather than restarting. Loop: keep one task
+in_progress, implement at the owning seam, capture fail-before evidence,
+run the verification commands, commit the work per the commit policy,
+write the proof file to docs/proof/document-parser/, append the execution
+log with the work commit, mark the task terminal with evidence, commit the
+plan update the same way, then advance to the next task. Decide rather
+than ask. Mark a wrong or already-satisfied task no-action with a one-line
+reason. Record a blocker and continue with the next eligible task. Binding
+constraints: invariants P1 through P7, decisions PLG-D1 through PLG-D6,
+and the non-goals. A layout model, a translation engine, and a parser for
+an uncatalogued format stay outside this plan. Commit policy: commit each
+task's work, then record the ledger transition as its own plan commit with
+the subject "plan: &lt;ID&gt; done (PR #N); &lt;NEXT&gt; in_progress". Run
+autoreview --gate pre-pr --mode auto before every pull request with
+substantive code changes. Run the repository technical-writing linter over
+this plan before every plan commit. Stop only at a valid stop state from
+the plans skill. Before you stop, update the ledger and the log, and
+record the next action in the status line. The goal is met when
+scripts/verify-document-parser.sh reports "Summary: 20 passed, 0 failed",
+CI runs it, and every ledger row except PLG10 is terminal.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-26</td><td>meta</td><td>authored</td><td>Written at status <code>proposed</code> as the named owner of the document parser item that the model modalities plan left unowned. Measured starting position: the OpenRouter codec decodes <code>plugins</code> as raw JSON at <code>codec.go:51</code> and reports the field as unenforced, no Starport package extracts text from a document, and <code>ProviderOperation</code> in Starmap names no recognition operation. The owner chose native extraction first and a catalogued recognition model second, which is why PLG2 lands before PLG3. Decision PLG-D5 keeps the parity verifier terminal at its current count, because the plugins condition changes meaning rather than count.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>Two adversarial design reviews ran before approval, and every finding was checked against the tree before any edit. PLG7 aimed at the wrong file. No parity condition records <code>plugins</code> as unenforced, because the record lives in <code>unenforcedGatewayFields</code> and the response header, so PLG7 and decision PLG-D5 now change the codec and leave the parity verifier untouched at 16 conditions. Decision PLG-D2 repeated the same overstatement invariant R4 made in the reranking plan, so PLG4 now names the two hardcoded planner guards. Three smaller gaps closed. The PLG5 cache key now carries the resolved offering and the catalog generation, as the response cache already does. New decision PLG-D6 fails a turn when a page fails, rather than send partial text. PLG6 now reports the extraction duration, which <code>x-starport-overhead-ms</code> excludes by contract.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review found three gaps. PLG2 creates <code>internal/document</code> and never registered it in the import graph test. PLG4 introduces a provider failure path and never named <code>internal/failure</code>. PLG1 also lets a caller name an engine, and PLG4 planned a route from any catalogued offering, so a caller could reach an engine it did not ask for. PLG4 now plans from the offerings the named engine serves. The promotion gate also records that this plan runs beside the async media jobs plan, because PLG4 and AMJ4 both extend the registry guard at <code>transport_registry.go:57</code>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>
