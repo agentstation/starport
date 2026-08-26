@@ -45,10 +45,13 @@ func TestRequestTimeout(t *testing.T) {
 }
 
 func TestConfigurableRequestTimeout(t *testing.T) {
-	// Create a custom handler that simulates a slow endpoint
+	// Create a custom handler that simulates a slow endpoint. It waits far
+	// longer than the configured timeout so the assertion below separates "the
+	// configured timeout fired" from "the handler happened to finish", with
+	// enough room that a loaded CI runner cannot blur the two.
 	slowHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(5 * time.Second):
 			w.WriteHeader(http.StatusOK)
 		case <-r.Context().Done():
 			return
@@ -79,8 +82,13 @@ func TestConfigurableRequestTimeout(t *testing.T) {
 	router.ServeHTTP(w, req)
 	elapsed := time.Since(start)
 
-	// Should timeout after ~100ms
-	assert.Less(t, elapsed, 150*time.Millisecond)
+	// The configured 100ms is what cut the request short, not the 5s handler.
+	// The bound is deliberately loose: the property under test is which timeout
+	// applied, and a margin tight enough to also measure scheduler latency turns
+	// a contract test into a flaky benchmark. It failed exactly that way on a
+	// macOS runner at 151.4ms.
+	assert.GreaterOrEqual(t, elapsed, 100*time.Millisecond)
+	assert.Less(t, elapsed, 2*time.Second)
 	assert.Equal(t, http.StatusGatewayTimeout, w.Code)
 }
 
