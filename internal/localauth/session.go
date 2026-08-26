@@ -38,14 +38,20 @@ var (
 	ErrSessionMalformed = errors.New("the console session is not a session record")
 )
 
-// Session is a browser that redeemed a launch ticket on this machine.
+// Session is a browser a grant admitted on this machine.
 //
-// It names no account for the same reason a ticket does not: the claim is
-// "this browser proved it could read the local admin token file", and the
-// identity that claim maps to is the gateway's decision, not the cookie's.
+// It names no account for the same reason a ticket does not: the two grants
+// that ship both claim "this browser proved it could reach something only a
+// process on this machine could hand it", and the identity that claim maps to
+// is the gateway's decision, not the cookie's. An identity grant would be the
+// one that changes that, which is why the session records which grant minted
+// it rather than treating them all as the same admission.
 type Session struct {
 	IssuedAt  time.Time
 	ExpiresAt time.Time
+	// Grant is the kind that minted this session. It is signed with the rest,
+	// so a browser cannot relabel its own admission.
+	Grant GrantKind
 }
 
 // sessionPayload is the signed body of the cookie.
@@ -54,17 +60,31 @@ type sessionPayload struct {
 	// gateway keeps no session table and a browser cannot extend its own stay.
 	IssuedAt  int64 `json:"i"`
 	ExpiresAt int64 `json:"e"`
+	// Grant is the kind that minted the session.
+	Grant GrantKind `json:"g"`
 }
 
-// IssueSession mints the cookie value for a browser that redeemed a ticket.
-func IssueSession(token Token, now time.Time) (string, Session, error) {
+// IssueSession mints the cookie value for a browser one grant admitted.
+//
+// It is unexported behavior in every sense that matters: the grants in this
+// package are its only callers, and a caller that reached it directly would be
+// minting a session no grant vouched for.
+func IssueSession(token Token, grant GrantKind, now time.Time) (string, Session, error) {
 	if err := token.Validate(); err != nil {
 		return "", Session{}, err
 	}
-	session := Session{IssuedAt: now.UTC(), ExpiresAt: now.Add(SessionTTL).UTC()}
+	if !knownGrantKind(grant) {
+		return "", Session{}, fmt.Errorf("%w: %s", ErrGrantUnknown, grant)
+	}
+	session := Session{
+		IssuedAt:  now.UTC(),
+		ExpiresAt: now.Add(SessionTTL).UTC(),
+		Grant:     grant,
+	}
 	payload, err := json.Marshal(sessionPayload{
 		IssuedAt:  session.IssuedAt.UnixMilli(),
 		ExpiresAt: session.ExpiresAt.UnixMilli(),
+		Grant:     session.Grant,
 	})
 	if err != nil {
 		return "", Session{}, fmt.Errorf("encode a console session: %w", err)
@@ -90,12 +110,21 @@ func VerifySession(raw string, token Token, now time.Time) (Session, error) {
 	if record.IssuedAt == 0 || record.ExpiresAt == 0 {
 		return Session{}, ErrSessionMalformed
 	}
+	// A grant name this binary does not register is refused rather than
+	// honoured. The signature only proves this machine's token minted the
+	// value; it says nothing about whether this version understands what the
+	// grant was allowed to do, and the safe reading of an unknown grant is not
+	// "the same as the ones I know".
+	if !knownGrantKind(record.Grant) {
+		return Session{}, fmt.Errorf("%w: %w: %s", ErrSessionMalformed, ErrGrantUnknown, record.Grant)
+	}
 	if !now.Before(time.UnixMilli(record.ExpiresAt)) {
 		return Session{}, ErrSessionExpired
 	}
 	return Session{
 		IssuedAt:  time.UnixMilli(record.IssuedAt).UTC(),
 		ExpiresAt: time.UnixMilli(record.ExpiresAt).UTC(),
+		Grant:     record.Grant,
 	}, nil
 }
 

@@ -120,9 +120,9 @@
     Created: 2026-08-25 &middot;
     Baseline: main @ 20dd9b1 &middot;
     Proof root: <code>docs/proof/console-session-grants/</code> &middot;
-    Next action: CSG1, name the grant seam in
-    <code>internal/localauth</code> and route ticket redemption through it,
-    so a second way in has somewhere to attach
+    Next action: CSG2, register the local admin token as a grant, so the
+    value <code>starport auth token</code> prints becomes a value the
+    product accepts
   </p>
 
   <section id="outcome">
@@ -312,9 +312,15 @@
       <li>The identity grant is registered and refuses with a named reason.
         Its refusal has a contract test.</li>
       <li>The pasted-token grant obeys the same exposure rule as token
-        display: a non-loopback bind with an unrotated token refuses.</li>
-      <li>A refusal from any grant returns one message for every cause, as
-        <code>launchRefusal</code> already does.</li>
+        display, read against the caller's address rather than the configured
+        bind: a request that did not come from this machine, presenting an
+        unrotated token, refuses.</li>
+      <li>A refusal from any grant returns one message for every wrong
+        secret, as <code>launchRefusal</code> already does. Presenting the
+        wrong <em>kind</em> of credential is the one exception: it is a
+        category error rather than a guess, naming it narrows no search
+        space, and leaving a reader to guess which of two credentials a field
+        wants is the confusion this campaign exists to remove.</li>
       <li><code>scripts/verify-auth-onboarding.sh</code> stays at 26
         conditions and keeps passing.</li>
     </ol>
@@ -355,8 +361,8 @@
       </thead>
       <tbody>
         <tr id="CSG0" data-status="done"><td>CSG0</td><td>Baseline: pin the baseline commit, create the proof root, author the verifier red, capture fail-before evidence.</td><td><code>done</code></td><td>Baseline <code>20dd9b1</code>. <code>scripts/verify-console-session-grants.sh</code> reports <code>Summary: 0 passed, 16 failed</code>, exit 1, with CSG-V15 and CSG-V16 red because the baseline holds the behavior they forbid. <code>verify-auth-onboarding.sh</code> 26 passed, <code>verify-doc-links.sh</code> PASS. No Go or console source changed. <a href="../proof/console-session-grants/csg0.md">CSG0 evidence</a>.</td></tr>
-        <tr id="CSG1" data-status="in_progress"><td>CSG1</td><td>Name the grant seam in <code>internal/localauth</code> and route ticket redemption through it.</td><td><code>in_progress</code></td><td>&mdash;</td></tr>
-        <tr id="CSG2" data-status="todo"><td>CSG2</td><td>Add the local admin token grant with a constant-time compare and an attempt throttle.</td><td><code>todo</code></td><td>&mdash;</td></tr>
+        <tr id="CSG1" data-status="done"><td>CSG1</td><td>Name the grant seam in <code>internal/localauth</code> and route ticket redemption through it.</td><td><code>done</code></td><td>Added <code>grant.go</code> with the three kinds and the <code>Grant</code> interface; <code>Gate</code> holds a registry keyed by each grant's own <code>Kind()</code>, and <code>Redeem</code> delegates to <code>MintSession(GrantTicket, …)</code>. <code>Session.Grant</code> is signed into the cookie, and a cookie naming an unregistered grant is refused. 4 contract tests in <code>grant_test.go</code>, passing under <code>-race</code>. Fail-before by compile and by a negative control that removes the <code>knownGrantKind</code> guard. Verifier <code>Summary: 4 passed, 12 failed</code>, matching the CSG1 target. <code>go test ./...</code>, <code>go vet ./...</code>, <code>make lint</code> (0 issues), <code>verify-auth-onboarding.sh</code> (26 passed), <code>verify-package-layout.sh</code>, <code>verify-dependency-direction.sh</code> (6 passed), <code>verify-v1-architecture.sh</code> (12 passed) all clean. <a href="../proof/console-session-grants/csg1.md">CSG1 evidence</a>.</td></tr>
+        <tr id="CSG2" data-status="in_progress"><td>CSG2</td><td>Add the local admin token grant with a constant-time compare and an attempt throttle.</td><td><code>in_progress</code></td><td>&mdash;</td></tr>
         <tr id="CSG3" data-status="todo"><td>CSG3</td><td>Register the identity grant inert, with the refusal contract test.</td><td><code>todo</code></td><td>&mdash;</td></tr>
         <tr id="CSG4" data-status="todo"><td>CSG4</td><td>Serve the local-token grant over HTTP at <code>POST /console/session</code>.</td><td><code>todo</code></td><td>&mdash;</td></tr>
         <tr id="CSG5" data-status="todo"><td>CSG5</td><td>Reach the first-contact page without the console shell.</td><td><code>todo</code></td><td>&mdash;</td></tr>
@@ -726,6 +732,7 @@ row.</code></pre>
         <tr><td>2026-08-25</td><td>meta</td><td>research</td><td>Mapped the asymmetry: <code>internal/localauth/gate.go</code> exposes <code>Redeem</code> as the only caller of <code>IssueSession</code>, so a pasted token has nowhere to attach. <code>internal/localauth/token.go</code> already holds <code>Token.Authorizes</code> with <code>subtle.ConstantTimeCompare</code>, the primitive a paste path needs. <code>console/src/routes/__root.tsx</code> wraps every route in <code>&lt;Shell&gt;</code>, and <code>ConnectCard</code> renders from ten routes asking for a <code>STARPORT_…</code> gateway API key, a different credential kind from the one the CLI prints. <code>internal/cli/auth.go</code> has <code>token</code>, <code>url</code>, <code>status</code>, and <code>rotate</code>, with no <code>--copy</code> or <code>--open</code>. Reference: nimbus serves a dedicated <code>/ui/auth</code> page with a token field, a copyable <code>nimbus auth token --copy</code> block, and a <code>Local-only · 127.0.0.1</code> footer.</td></tr>
         <tr><td>2026-08-25</td><td>meta</td><td>authored</td><td>Plan authored at baseline <code>20dd9b1</code> with 11 ledger rows, 10 invariants, decisions D1 through D5, and a 16-condition verifier contract. No implementation started by this step.</td></tr>
         <tr><td>2026-08-25</td><td>CSG0</td><td>done</td><td>Created <code>docs/proof/console-session-grants/</code> and authored <code>scripts/verify-console-session-grants.sh</code> with 16 conditions. Fail-before run: <code>Summary: 0 passed, 16 failed</code>, exit 1. Corrected two conditions while authoring: CSG-V09 first asserted the absence of <code>golang.org/x/oauth2</code> from <code>go.mod</code>, which is already present transitively through the cloud auth chain and would never have passed, so it now asserts the identity grant's refusal contract test; CSG-V03 tightened from <code>Grant </code> to <code>Grant GrantKind</code>. Live baseline against the dev gateway confirmed <code>POST /console/session</code> answers 404 while <code>starport auth token</code> prints a value nothing accepts. <code>verify-auth-onboarding.sh</code> 26 passed, <code>verify-doc-links.sh</code> PASS. CSG1 set in_progress.</td></tr>
+        <tr><td>2026-08-25</td><td>CSG1</td><td>done</td><td>Added <code>internal/localauth/grant.go</code>: <code>GrantKind</code> with the three names, a one-method <code>Grant</code> interface, and <code>ticketGrant</code>. <code>Gate</code> now holds <code>map[GrantKind]Grant</code> filed under each grant's own <code>Kind()</code>, exposes <code>Grant</code> and <code>MintSession</code>, and <code>Redeem</code> delegates rather than calling <code>IssueSession</code> itself. <code>Session</code> carries a signed <code>Grant</code>, and <code>VerifySession</code> refuses a cookie naming a kind this binary does not register &mdash; a valid signature proves only that this machine's token minted the value, not that this version understands what that grant was allowed to do. Only the ticket grant is registered; asking for the other two returns <code>ErrGrantUnknown</code>, which is the property that lets CSG3 ship the identity grant inert. Verifier <code>Summary: 4 passed, 12 failed</code>. The interface takes a <code>GrantRequest</code> rather than a bare claim: <code>internal/app/app.go:563</code> already checks <code>AllowsExposure</code> against the configured bind, but a reverse proxy in front of a loopback gateway defeats that check, so the paste grant has to read the caller's address instead. Invariants 8 and 9 were revised to match &mdash; 8 now names the caller's address, and 9 carves out the wrong-credential-kind case, which is a category error rather than a guess. Proof: <a href="../proof/console-session-grants/csg1.md">csg1.md</a>. CSG2 set in_progress.</td></tr>
       </tbody>
     </table>
   </section>
