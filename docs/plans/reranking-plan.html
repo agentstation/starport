@@ -306,7 +306,7 @@
         <tr id="RNK1" data-status="todo"><td>RNK1</td><td>Phase A. Starmap: add the rerank operation and its endpoint facts, and hold the chat exclusion. Conditions RNK-V01 and RNK-V02.</td><td><code>todo</code></td><td></td></tr>
         <tr id="RNK2" data-status="todo"><td>RNK2</td><td>Phase A. Starmap: catalog the rerank offerings and their prices, then release. Conditions RNK-V03 and RNK-V04.</td><td><code>todo</code></td><td></td></tr>
         <tr id="RNK3" data-status="todo"><td>RNK3</td><td>Phase B. Canonical rerank request and response in <code>internal/inference</code>. Condition RNK-V05.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="RNK4" data-status="todo"><td>RNK4</td><td>Phase B. Transport descriptor and connector adapter for the rerank operation. Conditions RNK-V06 and RNK-V07.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK4" data-status="todo"><td>RNK4</td><td>Phase B. Replace three hardcoded operation guards with one named set, raise the dependency, then add the rerank transport and connector. Conditions RNK-V06 and RNK-V07.</td><td><code>todo</code></td><td></td></tr>
         <tr id="RNK5" data-status="todo"><td>RNK5</td><td>Phase B. The rerank codec, which owns every wire name. Conditions RNK-V08 and RNK-V09.</td><td><code>todo</code></td><td></td></tr>
         <tr id="RNK6" data-status="todo"><td>RNK6</td><td>Phase B. The route, the controller, and the <code>rerank:write</code> scope. Conditions RNK-V10 to RNK-V12.</td><td><code>todo</code></td><td></td></tr>
         <tr id="RNK7" data-status="todo"><td>RNK7</td><td>Phase C. Route a rerank request only to a rerank offering, and refuse the rest. Conditions RNK-V13 and RNK-V14.</td><td><code>todo</code></td><td></td></tr>
@@ -479,8 +479,8 @@
     <p><strong>Seam.</strong> <code>internal/providers/connectors</code>,
       <code>internal/routing</code>, and <code>internal/router</code>.</p>
     <ol>
-      <li>Widen all three guards to one named set, then raise the Starmap
-        dependency, as decision RNK-D6 requires.</li>
+      <li>Introduce or extend the named operation set, then raise the
+        Starmap dependency, as decision RNK-D6 requires.</li>
       <li>Build the rerank transport descriptor from the Starmap endpoint
         facts.</li>
       <li>Add the rerank call to the connector contract beside the embedding
@@ -549,7 +549,7 @@
     <p><strong>Problem.</strong> A rerank caller reaches no route today. The
       embeddings route at <code>internal/server/routes.go:37</code> shows the
       shape to mirror, including its scope guard. The anonymous identity at
-      <code>internal/identity/anonymous.go:23</code> carries a fixed scope
+      <code>internal/identity/anonymous.go:21</code> carries a fixed scope
       list, so a deployment with authentication disabled would reach a new
       route with no scope.</p>
 
@@ -799,7 +799,8 @@ runs it, and every ledger row except RNK11 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>authored</td><td>Written at status <code>proposed</code> as the named owner of the reranking item that the model modalities plan and the async media jobs plan both left unowned. Measured starting position: <code>ProviderOperation</code> in Starmap names two members, the shipped catalog holds zero rerank offerings, the <code>rerank</code> tag appears once as a chat disqualifier at <code>offering_views.go:165</code>, and <code>transport_registry.go:57</code> refuses any third operation. The earlier reading that reranking should wait for a catalogued offering was wrong, because the owner controls both repositories, so a missing offering is a task rather than a constraint. RNK0 confirms the provider request shapes and the reachable providers against live documentation before any code lands.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>Two adversarial design reviews ran before approval, and every finding was checked against both trees before any edit. Three corrections landed. Invariant R4 overstated the transport registry guard, because <code>internal/routing/planner.go</code> holds a separate two-member enum and two hardcoded guards, and <code>validateSnapshot</code> fails a whole snapshot rather than one candidate, so RNK7 now names that seam. Decision RNK-D4 committed to a per-search-unit price before RNK0 verified the billing bases, so RNK0 now records the basis each provider uses. Invariant R5 dropped <code>return_documents</code> silently, which is the anti-pattern the plan itself forbids, so RNK5 refuses the field instead. Two smaller gaps closed: RNK2 now raises the Starport dependency in <code>go.mod</code>, which pins Starmap exactly, and RNK9 now names the console key form, which hardcodes four scopes.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>This plan carried the same guard defect the model modalities plan carried. RNK2 raised the Starmap dependency in phase A, and RNK7 fixed the planner in phase C, so a catalogued rerank offering would have broken chat routing in between. RNK2 now leaves the pin alone, and RNK4 widens all three guards before raising it. New decision RNK-D6 mirrors MOD-D6 and states that whichever plan lands first introduces the named operation set, because the two run beside each other.</td></tr>
-      </tbody>
+              <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found two defects here. The ledger row for RNK4 described the transport and the connector alone and omitted the guard replacement and the dependency raise, which is the ordering that keeps a catalog change from breaking chat routing. Step one of RNK4 also read as an unconditional widening, although decision RNK-D6 states that whichever of this plan and the model modalities plan lands first introduces the named set. Step one now reads introduce or extend. The anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code>.</td></tr>
+</tbody>
     </table>
   </section>
 </main>

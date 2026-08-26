@@ -120,7 +120,7 @@
     Status: <code data-plan-status="proposed">proposed</code> ·
     Owner: this plan ·
     Created: 2026-08-26 ·
-    Baseline: starport main at 81778ed, starmap main at ce19e939 ·
+    Baseline: starport main at 29a134c, starmap main at ce19e939 ·
     Proof root: <code>docs/proof/model-modalities/</code> ·
     Next action: MOD0 after approval
   </p>
@@ -318,10 +318,10 @@
         <tr id="MOD10" data-status="todo"><td>MOD10</td><td>Phase B. Carry generated media through both codecs and the cached stream replay. Conditions MMD-V13 and MMD-V14.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD11" data-status="todo"><td>MOD11</td><td>Phase B. Record and price media units in usage, cost, and the spend budget. Conditions MMD-V15 and MMD-V16.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD12" data-status="todo"><td>MOD12</td><td>Phase C. Starmap: five media operations, the offering derivation, the consistency rule, and a release. Conditions MMD-V17 and MMD-V18.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD13" data-status="todo"><td>MOD13</td><td>Phase C. Accept the media operations in the transport registry through narrow optional interfaces. Condition MMD-V19.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD13" data-status="todo"><td>MOD13</td><td>Phase C. Replace three hardcoded operation guards with one named set, raise the dependency, then add the narrow optional interfaces. Condition MMD-V19.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD14" data-status="todo"><td>MOD14</td><td>Phase C. Add the canonical media types, the eight routes, and the two scopes. Conditions MMD-V20 to MMD-V22.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD15" data-status="todo"><td>MOD15</td><td>Phase C. Console: make a media model visible, filterable, and usable. Condition MMD-V23.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD16" data-status="todo"><td>MOD16</td><td>Close. Documentation, the terminal gate in CI, and promotion of the async media jobs plan. Conditions MMD-V24 and MMD-V25.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD16" data-status="todo"><td>MOD16</td><td>Close. Documentation, the terminal gate in CI, and promotion of the files API plan. Conditions MMD-V24 and MMD-V25.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD17" data-status="todo"><td>MOD17</td><td>Cleanup after the final pull request merges. Delete this plan and its proof root.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
@@ -347,7 +347,8 @@
         refusal.</li>
       <li>Send one chat request that holds a file part and record the
         refusal.</li>
-      <li>Record the offering census from the shipped endpoint facts.</li>
+      <li>Record the offering census, and the three OpenRouter media paths
+        from live documentation.</li>
     </ol>
 
     <p><strong>Acceptance.</strong> The verifier reports
@@ -355,7 +356,7 @@
       production file.</p>
 
     <p><strong>Fail-before.</strong> <code>mod0.md</code> holds both refusal
-      bodies and the census.</p>
+      bodies, the census, and the three OpenRouter media paths.</p>
 
     <p><strong>Verification.</strong>
       <code>bash scripts/verify-model-modalities.sh</code>. Then
@@ -844,7 +845,7 @@
     <p><strong>Problem.</strong> The dedicated operations have no canonical
       type, no route, and no scope. Starport serves two protocol families that
       expose them at different paths. The anonymous identity carries a fixed
-      scope list at <code>internal/identity/anonymous.go:24</code>, so a
+      scope list at <code>internal/identity/anonymous.go:21</code>, so a
       deployment with authentication disabled would lose the new routes.</p>
 
     <p><strong>Seam.</strong> <code>internal/inference</code>,
@@ -852,8 +853,11 @@
       <code>internal/identity</code>.</p>
     <ol>
       <li>Add the canonical image, speech, and transcription types.</li>
-      <li>Register five OpenAI-compatible paths under <code>/v1</code>, and
-        three OpenRouter-compatible paths under <code>/api/v1</code>.</li>
+      <li>Register <code>/v1/images/generations</code>,
+        <code>/v1/images/edits</code>, <code>/v1/audio/speech</code>,
+        <code>/v1/audio/transcriptions</code>, and
+        <code>/v1/audio/translations</code>, and the three OpenRouter paths
+        MOD0 records.</li>
       <li>Add the <code>images:write</code> and <code>audio:write</code> scopes
         beside <code>embeddings:write</code>.</li>
       <li>Add both scopes to the anonymous identity and the operator
@@ -994,9 +998,10 @@ than ask. Mark a wrong or already-satisfied task no-action with a one-line
 reason. Record a blocker and continue with the next eligible task. Binding
 constraints: invariants I1 through I7, decisions MOD-D1 through MOD-D6,
 and the non-goals. Asynchronous video generation belongs to
-docs/plans/async-media-jobs-plan.html. Reranking and a files API stay
-unowned. internal/protocol/openrouter already owns the document parser
-plugins as an unenforced gateway field. Commit policy: commit each
+docs/plans/async-media-jobs-plan.html. A files API belongs to
+docs/plans/files-api-plan.html, which MOD16 promotes. Reranking belongs to
+docs/plans/reranking-plan.html, and the OpenRouter document parser plugins
+belong to docs/plans/document-parser-plan.html. Commit policy: commit each
 task's work, then record the ledger transition as its own plan commit with
 the subject "plan: &lt;ID&gt; done (PR #N); &lt;NEXT&gt; in_progress". Run
 autoreview --gate pre-pr --mode auto before every pull request with
@@ -1024,7 +1029,8 @@ CI runs it, and every ledger row except MOD17 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>resequenced</td><td>The owner decided to build the three items this plan had left unowned rather than defer them. <a href="reranking-plan.html">The reranking plan</a>, <a href="files-api-plan.html">the files API plan</a>, and <a href="document-parser-plan.html">the document parser plan</a> now own them. The earlier reasoning that reranking should wait for a catalogued offering was wrong, because the owner controls both repositories, so a missing offering is a task rather than a constraint. MOD16 now promotes the files API plan instead of the async media jobs plan, because the files plan builds the blob seam that task AMJ6 needs. The queue reads model modalities, then files, then async media jobs, then document parser, with reranking free to run beside them.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review checked every file citation in this plan against the working tree, and found three wrong facts. MOD11 cited <code>internal/limits/limits.go:33</code>, which holds the struct declaration alone, so it now cites <code>rules.go:65</code>, where <code>BudgetRules</code> lives. MOD4 said the estimator counts text alone, but <code>proxy.go:169</code> already adds a flat 85 tokens for an image part, so only audio and document are free. MOD8 claimed 115 models carry an audio input price, and the vendored models.dev snapshot holds 74. MOD9 also claimed MOD7 reads the <code>Modality</code> type this plan defines in phase B, which no MOD7 step does, so the stale clause is gone. MOD14 now documents its two scopes for an operator, matching the standard the files and reranking plans set.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>The owner asked for a proper resolution of the operation guard that four tasks across three plans all touch. Reading the tree found a defect rather than a merge conflict. The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation onto a route candidate, and <code>validateSnapshot</code> then rejects the whole snapshot on one it does not name. MOD12 raised the dependency before MOD13 widened the guard, so a catalog carrying the five new operations would have broken chat and embeddings routing with no Starport deploy. MOD12 now leaves the pin alone, and MOD13 raises it after all three guards read one named operation set. New decision MOD-D6 states the rule: catalog data degrades and caller input fails closed.</td></tr>
-      </tbody>
+              <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit of all five plans found four defects here. The ledger row for MOD16 named the async media jobs plan, while the task body, the files API status line, and the earlier log entry all name the files API plan. The ledger row for MOD13 described the narrow interfaces alone and omitted the guard replacement and the dependency raise that make the task safe. The goal block still read that reranking and a files API stay unowned, and that <code>internal/protocol/openrouter</code> owns the parser plugins, which the scope section had already corrected. MOD14 counted eight routes and named none, so MOD14 now names the five OpenAI paths and MOD0 records the three OpenRouter paths. The baseline moved to 29a134c, and the anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code>, which the other plans now share.</td></tr>
+</tbody>
     </table>
   </section>
 </main>
