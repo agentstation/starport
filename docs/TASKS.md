@@ -7,7 +7,9 @@ Last Updated: 2026-08-25
 
 ### Active Work
 
-No active durable plan exists.
+| Plan | Outcome | Status | Gate |
+| --- | --- | --- | --- |
+| [Console Session Grants](plans/console-session-grants-plan.html) | A console session is minted by a named, registered grant. A launch ticket and a pasted local admin token ship; an identity provider grant ships registered and inert so an enterprise deployment fills a slot instead of reopening the seam. The console gets one first-contact page that states its trust scope. | active — CSG0 next | `scripts/verify-console-session-grants.sh` |
 
 ### Proposed Work
 
