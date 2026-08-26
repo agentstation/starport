@@ -83,6 +83,7 @@ bash scripts/test-doc-link-verifier.sh
 bash scripts/verify-openrouter-parity.sh
 bash scripts/verify-console-modernization.sh
 bash scripts/verify-auth-onboarding.sh
+bash scripts/verify-console-session-grants.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
@@ -114,6 +115,14 @@ credential comes from the environment, the gateway, or a tenant, only the
 tenant one is BYOK, authentication is required unless an operator disables it,
 and the console reaches the gateway without holding a gateway key. It is
 terminal at 26 conditions (`AON-V01` through `AON-V26`) and runs in CI.
+
+`scripts/verify-console-session-grants.sh` guards how a console session is
+minted: one registered set of grants, two machine-local ones that ship (a
+launch ticket and the local admin token a reader pastes), an identity grant
+that is registered and inert, one first-contact page outside the shell that
+states its trust scope, and the words *sign in* reserved for the identity
+grant alone. It is terminal at 16 conditions (`CSG-V01` through `CSG-V16`) and
+runs in CI.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.

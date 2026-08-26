@@ -66,7 +66,7 @@ Starport development gateway
 URL: http://127.0.0.1:8080
 Authentication: required
 Gateway API key (shown once): replace-with-generated-gateway-key
-Console (one-time sign-in link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
+Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
 ```
 
 The console link is not a key. It is spent the first time it is followed and
@@ -74,6 +74,11 @@ exchanged for a browser session this machine issued, so nothing is pasted into
 the browser and no key is stored there. Add `--no-open` to print the link
 instead of opening a browser, which is what a machine reached over SSH needs.
 `starport ui` opens a new one at any time.
+
+A browser that reaches the console without a link is asked for this machine's
+local admin token instead. `starport auth token --copy` puts it on the
+clipboard of the machine running the gateway. Both ways in prove the same
+thing — that you are at that machine — and both end in the same session.
 
 Keep this terminal open.
 

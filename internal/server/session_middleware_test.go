@@ -84,8 +84,8 @@ func TestASessionAuthenticatesWithNoBearerKey(t *testing.T) {
 
 func TestRotatingTheLocalTokenEndsALiveSession(t *testing.T) {
 	// The operator's revocation story: `starport auth rotate` writes a new
-	// secret, and every browser signed in under the old one stops being signed
-	// in, with no session list to clear and no expiry to wait out.
+	// secret, and every browser holding a session from the old one stops
+	// holding one, with no session list to clear and no expiry to wait out.
 	before := sessionToken(t, 2)
 	cookie := openSession(t, before)
 
@@ -116,7 +116,7 @@ func TestAGatewayWithNoGateIgnoresSessionCookies(t *testing.T) {
 
 func TestAnUnusableSessionSaysHowToOpenANewOne(t *testing.T) {
 	// The two refusals are deliberately different. A caller with no credential
-	// has not signed in; a caller with a stale cookie has one to replace, and
+	// holds no session; a caller with a stale cookie has one to replace, and
 	// only the second should be told to run `starport ui`.
 	middleware := sessionHarness(t, localauth.NewGate(sessionToken(t, 3), "127.0.0.1"))
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

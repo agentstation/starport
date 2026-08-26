@@ -104,7 +104,7 @@ func TestARefusalClearsAStaleSession(t *testing.T) {
 	assert.ElementsMatch(t,
 		[]string{localauth.SessionCookie, localauth.SessionMarkerCookie},
 		cleared,
-		"a refused launch must not leave the console claiming to be signed in",
+		"a refused launch must not leave the console claiming to hold a session",
 	)
 }
 

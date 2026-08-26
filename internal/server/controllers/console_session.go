@@ -30,7 +30,7 @@ type ConsoleSessionController struct {
 
 // NewConsoleSessionController creates a controller over the running gateway's
 // local admin token. A nil gate leaves the route mounted and refusing, matching
-// the launch route: 404 would say this build has no console sign-in, and it
+// the launch route: 404 would say this build mints no console session, and it
 // does.
 func NewConsoleSessionController(gate *localauth.Gate) *ConsoleSessionController {
 	return &ConsoleSessionController{gate: gate}
@@ -106,8 +106,8 @@ func (c *ConsoleSessionController) Create(w http.ResponseWriter, r *http.Request
 //
 // Clearing matters here for the same reason it does on the launch route: a
 // refusal reached with a stale cookie almost always means the token was
-// rotated, and leaving the cookie would let the console keep claiming to be
-// signed in while every request behind it fails.
+// rotated, and leaving the cookie would let the console keep claiming to hold
+// a session while every request behind it fails.
 func (c *ConsoleSessionController) refuse(w http.ResponseWriter, r *http.Request, cause error) {
 	for _, cookie := range localauth.ClearedSessionCookies(requestIsSecure(r)) {
 		http.SetCookie(w, cookie)

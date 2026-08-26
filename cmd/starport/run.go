@@ -115,7 +115,7 @@ func startDevelopment(
 	// deployment.
 	consoleURL, err := runtime.ConsoleURL()
 	if err != nil {
-		log.Warn().Err(err).Msg("Could not mint a console sign-in link for this development gateway")
+		log.Warn().Err(err).Msg("Could not mint a console launch link for this development gateway")
 	}
 	return starportcli.DevelopmentSession{
 		URL: runtime.URL(), APIKey: runtime.APIKey(), ConsoleURL: consoleURL,

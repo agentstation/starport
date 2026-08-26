@@ -85,7 +85,7 @@ func writeDevelopmentConsole(writer io.Writer, session DevelopmentSession) error
 	if session.ConsoleURL == "" {
 		return nil
 	}
-	_, err := fmt.Fprintf(writer, "Console (one-time sign-in link): %s\n", session.ConsoleURL)
+	_, err := fmt.Fprintf(writer, "Console (one-time launch link): %s\n", session.ConsoleURL)
 	return err
 }
 
