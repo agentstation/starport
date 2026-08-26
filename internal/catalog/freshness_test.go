@@ -99,7 +99,7 @@ func TestCatalogMetadataExposesManifest(t *testing.T) {
 	require.NoError(t, generations.Commit(ctx, generation, ""))
 
 	state := runtimeTestState(t, generation)
-	snapshot := newRoutableSnapshot(state, 7, nil)
+	snapshot := newRoutableSnapshot(state, 7, nil, nil)
 	service := NewFreshnessService(staticSnapshotSource{snapshot}, generations)
 	service.now = func() time.Time { return generatedAt.Add(90 * time.Second) }
 
@@ -157,7 +157,7 @@ func TestDiffModelsAndPrices(t *testing.T) {
 	require.NoError(t, generations.Commit(ctx, generationBefore, ""))
 	require.NoError(t, generations.Commit(ctx, generationAfter, "gen-diff-1"))
 
-	snapshot := newRoutableSnapshot(runtimeTestState(t, generationAfter), 1, nil)
+	snapshot := newRoutableSnapshot(runtimeTestState(t, generationAfter), 1, nil, nil)
 	service := NewFreshnessService(staticSnapshotSource{snapshot}, generations)
 
 	diff, err := service.Changes(ctx)
@@ -220,7 +220,7 @@ func TestDiffSkipsProvenanceOnlyChange(t *testing.T) {
 	require.NoError(t, generations.Commit(ctx, generationBefore, ""))
 	require.NoError(t, generations.Commit(ctx, generationAfter, "gen-prov-1"))
 
-	snapshot := newRoutableSnapshot(runtimeTestState(t, generationAfter), 1, nil)
+	snapshot := newRoutableSnapshot(runtimeTestState(t, generationAfter), 1, nil, nil)
 	service := NewFreshnessService(staticSnapshotSource{snapshot}, generations)
 
 	diff, err := service.Changes(ctx)

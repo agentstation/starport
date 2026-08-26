@@ -47,8 +47,16 @@
     "models": [
       "groq/groq/compound",
       "groq/groq/compound-mini",
-      "groq/whisper-large-v3",
-      "groq/whisper-large-v3-turbo",
+      "groq/llama-3.1-8b-instant",
+      "groq/llama-3.3-70b-versatile",
+      "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+      "groq/meta-llama/llama-prompt-guard-2-22m",
+      "groq/meta-llama/llama-prompt-guard-2-86m",
+      "groq/openai/gpt-oss-120b",
+      "groq/openai/gpt-oss-20b",
+      "groq/openai/gpt-oss-safeguard-20b",
+      "groq/qwen/qwen3-32b",
+      "groq/qwen/qwen3.6-27b",
       "groq/allam-2-7b"
     ],
     "capabilities": [

@@ -58,6 +58,42 @@ func (r Route) SupportsPromptCache() bool {
 	return r.PromptCache != nil && *r.PromptCache
 }
 
+// RouteExclusion names the derivation filter that kept one catalog offering out
+// of the routable set. It is the route planner's own vocabulary. A caller that
+// reports operator state maps it into its own reason words.
+type RouteExclusion string
+
+// Route exclusions are a closed set, ordered the way the derivation applies
+// them. An offering carries the first exclusion that rejected it.
+const (
+	// RouteExclusionNone marks an offering that planning kept.
+	RouteExclusionNone RouteExclusion = ""
+	// RouteExclusionAdapterNotReady reports that the provider has no adapter
+	// able to carry a request, so none of its offerings can be reached.
+	RouteExclusionAdapterNotReady RouteExclusion = "adapter_not_ready"
+	// RouteExclusionCatalogRetired reports a retired offering lifecycle.
+	RouteExclusionCatalogRetired RouteExclusion = "catalog_retired"
+	// RouteExclusionCatalogUnavailable reports catalog-declared unavailability.
+	RouteExclusionCatalogUnavailable RouteExclusion = "catalog_unavailable"
+	// RouteExclusionOfferingUnavailable reports that the availability owner
+	// currently withholds this offering.
+	RouteExclusionOfferingUnavailable RouteExclusion = "offering_unavailable"
+	// RouteExclusionOperationUnsupported reports that the offering and the
+	// adapter share no operation with a usable endpoint. The offering exists in
+	// the catalog and is healthy, and no request can reach it.
+	RouteExclusionOperationUnsupported RouteExclusion = "operation_unsupported"
+)
+
+// OfferingRoutability is the planning verdict for one exact catalog offering.
+// The verdict set is total: every offering in the generation carries one, so a
+// caller can tell an advertised offering apart from a reachable one.
+type OfferingRoutability struct {
+	ProviderID      catalogs.ProviderID
+	ProviderModelID catalogs.ProviderModelID
+	Routable        bool
+	Exclusion       RouteExclusion
+}
+
 // RoutableSnapshot projects one Starmap generation and one runtime availability
 // revision into an immutable route set.
 type RoutableSnapshot struct {
@@ -68,12 +104,14 @@ type RoutableSnapshot struct {
 	catalogSequence      uint64
 	availabilityRevision uint64
 	routes               []Route
+	routability          []OfferingRoutability
 }
 
 func newRoutableSnapshot(
 	state starmap.CatalogState,
 	availabilityRevision uint64,
 	routes []Route,
+	routability []OfferingRoutability,
 ) *RoutableSnapshot {
 	return &RoutableSnapshot{
 		catalog:              state.Catalog,
@@ -83,7 +121,17 @@ func newRoutableSnapshot(
 		catalogSequence:      state.Sequence,
 		availabilityRevision: availabilityRevision,
 		routes:               cloneRoutes(routes),
+		routability:          append([]OfferingRoutability(nil), routability...),
 	}
+}
+
+// OfferingRoutability returns the planning verdict for every offering in the
+// generation, routable or not, sorted by provider and provider model ID.
+func (s *RoutableSnapshot) OfferingRoutability() []OfferingRoutability {
+	if s == nil {
+		return nil
+	}
+	return append([]OfferingRoutability(nil), s.routability...)
 }
 
 // GenerationID returns the Starmap generation used to derive this snapshot.

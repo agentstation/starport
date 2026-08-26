@@ -822,22 +822,20 @@
       ]
     },
     {
-      "id": "openai/whisper-large-v3",
-      "canonical_slug": "openai/whisper-large-v3",
-      "name": "openai/whisper-large-v3",
+      "id": "meta/llama-3.1-8b-instruct",
+      "canonical_slug": "meta/llama-3.1-8b-instruct",
+      "name": "Llama3 1",
       "object": "model",
-      "created": 1699228800,
-      "owned_by": "openai",
+      "created": -62135596800,
+      "owned_by": "meta",
       "pricing": {
-        "prompt": "",
-        "completion": "",
+        "prompt": "5.0000000000000004e-08",
+        "completion": "8e-08",
         "currency": "USD"
       },
-      "context_length": 448,
-      "description": "Whisper is a general-purpose speech recognition model. It is trained on a large dataset of diverse audio and is also a multi-task model that can perform multilingual speech recognition as well as speech translation and language identification.",
+      "context_length": 131072,
       "architecture": {
         "input_modalities": [
-          "audio",
           "text"
         ],
         "output_modalities": [
@@ -847,97 +845,615 @@
         "instruct_type": null
       },
       "top_provider": {
-        "context_length": 448,
-        "max_completion_tokens": 448
+        "context_length": 131072,
+        "max_completion_tokens": 131072
       },
       "supported_parameters": [
+        "tools",
+        "reasoning",
         "temperature",
         "top_p",
-        "max_tokens",
-        "stop"
+        "max_tokens"
       ],
       "authors": [
         {
-          "id": "openai",
-          "name": "OpenAI"
+          "id": "meta",
+          "name": "Meta"
         }
-      ],
-      "tags": [
-        "stt"
-      ],
-      "open_weights": true,
-      "offerings": [
-        {
-          "provider": "groq",
-          "provider_name": "Groq",
-          "provider_model_id": "whisper-large-v3",
-          "context_length": 448,
-          "max_completion_tokens": 448,
-          "availability": "unknown",
-          "lifecycle": "active",
-          "pricing": {
-            "currency": "USD"
-          }
-        }
-      ]
-    },
-    {
-      "id": "openai/whisper-large-v3-turbo",
-      "canonical_slug": "openai/whisper-large-v3-turbo",
-      "name": "openai/whisper-large-v3-turbo",
-      "object": "model",
-      "created": 1783800913,
-      "owned_by": "openai",
-      "pricing": {
-        "prompt": "0.00051",
-        "completion": "0.00051",
-        "currency": "USD"
-      },
-      "context_length": 448,
-      "description": "Whisper is a state-of-the-art model for automatic speech recognition (ASR) and speech translation, proposed in the paper \"Robust Speech Recognition via Large-Scale Weak Supervision\" by Alec Radford et al. from OpenAI. Trained on \u003e5M hours of labeled data, Whisper demonstrates a strong ability to generalise to many datasets and domains in a zero-shot setting. Whisper large-v3-turbo is a finetuned version of a pruned Whisper large-v3. In other words, it's the exact same model, except that the number of decoding layers have reduced from 32 to 4. As a result, the model is way faster, at the expense of a minor quality degradation.",
-      "architecture": {
-        "input_modalities": [
-          "audio",
-          "text"
-        ],
-        "output_modalities": [
-          "text"
-        ],
-        "tokenizer": "",
-        "instruct_type": null
-      },
-      "top_provider": {
-        "context_length": 448,
-        "max_completion_tokens": 448
-      },
-      "supported_parameters": [
-        "temperature",
-        "top_p",
-        "max_tokens",
-        "stop"
-      ],
-      "authors": [
-        {
-          "id": "openai",
-          "name": "OpenAI"
-        }
-      ],
-      "tags": [
-        "stt"
       ],
       "open_weights": false,
       "offerings": [
         {
           "provider": "groq",
           "provider_name": "Groq",
-          "provider_model_id": "whisper-large-v3-turbo",
-          "context_length": 448,
-          "max_completion_tokens": 448,
+          "provider_model_id": "llama-3.1-8b-instant",
+          "context_length": 131072,
+          "max_completion_tokens": 131072,
           "availability": "unknown",
           "lifecycle": "active",
           "pricing": {
-            "prompt": "0.00051",
-            "completion": "0.00051",
+            "prompt": "5.0000000000000004e-08",
+            "completion": "8e-08",
+            "cache_read": "2.5000000000000002e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "meta/llama-3.3-70b-instruct",
+      "canonical_slug": "meta/llama-3.3-70b-instruct",
+      "name": "Llama 3.3 70b Instruct Maas",
+      "object": "model",
+      "created": -62135596800,
+      "owned_by": "meta",
+      "pricing": {
+        "prompt": "5.9e-07",
+        "completion": "7.900000000000001e-07",
+        "currency": "USD"
+      },
+      "context_length": 131072,
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 32768
+      },
+      "supported_parameters": [
+        "tools",
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens"
+      ],
+      "authors": [
+        {
+          "id": "meta",
+          "name": "Meta"
+        }
+      ],
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "llama-3.3-70b-versatile",
+          "context_length": 131072,
+          "max_completion_tokens": 32768,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "prompt": "5.9e-07",
+            "completion": "7.900000000000001e-07",
+            "cache_read": "2.95e-07",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "meta/llama-4-scout-17b-16e-instruct",
+      "canonical_slug": "meta/llama-4-scout-17b-16e-instruct",
+      "name": "llama-4-scout-17b-16e-instruct",
+      "object": "model",
+      "created": 1743552000,
+      "owned_by": "meta",
+      "pricing": {
+        "prompt": "1.1e-07",
+        "completion": "3.4000000000000003e-07",
+        "currency": "USD"
+      },
+      "context_length": 131072,
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 8192
+      },
+      "supported_parameters": [
+        "tools",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "meta",
+          "name": "Meta"
+        }
+      ],
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "meta-llama/llama-4-scout-17b-16e-instruct",
+          "context_length": 131072,
+          "max_completion_tokens": 8192,
+          "availability": "unknown",
+          "lifecycle": "preview",
+          "pricing": {
+            "prompt": "1.1e-07",
+            "completion": "3.4000000000000003e-07",
+            "cache_read": "5.5e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "meta/llama-prompt-guard-2-22m",
+      "canonical_slug": "meta/llama-prompt-guard-2-22m",
+      "name": "Llama Prompt Guard 2 22M",
+      "object": "model",
+      "created": 1748476800,
+      "owned_by": "meta",
+      "pricing": {
+        "prompt": "3e-08",
+        "completion": "3e-08",
+        "currency": "USD"
+      },
+      "context_length": 512,
+      "description": "Safety model for policy screening, moderation, and risk-aware routing workflows",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 512,
+        "max_completion_tokens": 512
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop",
+        "seed"
+      ],
+      "authors": [
+        {
+          "id": "meta",
+          "name": "Meta"
+        }
+      ],
+      "lineage": {
+        "family": "llama"
+      },
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "meta-llama/llama-prompt-guard-2-22m",
+          "context_length": 512,
+          "max_completion_tokens": 512,
+          "availability": "unknown",
+          "lifecycle": "preview",
+          "pricing": {
+            "prompt": "3e-08",
+            "completion": "3e-08",
+            "cache_read": "1.5e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "meta/llama-prompt-guard-2-86m",
+      "canonical_slug": "meta/llama-prompt-guard-2-86m",
+      "name": "Prompt Guard 2 86M",
+      "object": "model",
+      "created": 1748476800,
+      "owned_by": "meta",
+      "pricing": {
+        "prompt": "4e-08",
+        "completion": "4e-08",
+        "currency": "USD"
+      },
+      "context_length": 512,
+      "description": "Safety model for policy screening, moderation, and risk-aware routing workflows",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 512,
+        "max_completion_tokens": 512
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop",
+        "seed"
+      ],
+      "authors": [
+        {
+          "id": "meta",
+          "name": "Meta"
+        }
+      ],
+      "lineage": {
+        "family": "llama"
+      },
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "meta-llama/llama-prompt-guard-2-86m",
+          "context_length": 512,
+          "max_completion_tokens": 512,
+          "availability": "unknown",
+          "lifecycle": "preview",
+          "pricing": {
+            "prompt": "4e-08",
+            "completion": "4e-08",
+            "cache_read": "2e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai/gpt-oss-120b",
+      "canonical_slug": "openai/gpt-oss-120b",
+      "name": "gpt-oss-120b",
+      "object": "model",
+      "created": 1754352000,
+      "owned_by": "openai",
+      "pricing": {
+        "prompt": "1.5e-07",
+        "completion": "6e-07",
+        "currency": "USD"
+      },
+      "context_length": 131072,
+      "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 65536
+      },
+      "supported_parameters": [
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "openai",
+          "name": "OpenAI"
+        }
+      ],
+      "lineage": {
+        "family": "gpt-oss"
+      },
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "openai/gpt-oss-120b",
+          "context_length": 131072,
+          "max_completion_tokens": 65536,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "prompt": "1.5e-07",
+            "completion": "6e-07",
+            "cache_read": "7.5e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai/gpt-oss-20b",
+      "canonical_slug": "openai/gpt-oss-20b",
+      "name": "openai/gpt-oss-20b",
+      "object": "model",
+      "created": 1754352000,
+      "owned_by": "openai",
+      "pricing": {
+        "prompt": "7.5e-08",
+        "completion": "3e-07",
+        "currency": "USD"
+      },
+      "context_length": 131072,
+      "description": "Open-weight GPT model for self-hosted reasoning and instruction-following workloads",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 65536
+      },
+      "supported_parameters": [
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "openai",
+          "name": "OpenAI"
+        }
+      ],
+      "tags": [
+        "chat",
+        "reasoning",
+        "reasoning_effort"
+      ],
+      "lineage": {
+        "family": "gpt-oss"
+      },
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "openai/gpt-oss-20b",
+          "context_length": 131072,
+          "max_completion_tokens": 65536,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "prompt": "7.5e-08",
+            "completion": "3e-07",
+            "cache_read": "3.75e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai/gpt-oss-safeguard-20b",
+      "canonical_slug": "openai/gpt-oss-safeguard-20b",
+      "name": "Safety GPT OSS 20B",
+      "object": "model",
+      "created": 1761696000,
+      "owned_by": "openai",
+      "pricing": {
+        "prompt": "7.5e-08",
+        "completion": "3e-07",
+        "currency": "USD"
+      },
+      "context_length": 131072,
+      "description": "Safety model for policy screening, moderation, and risk-aware routing workflows",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 65536
+      },
+      "supported_parameters": [
+        "tools",
+        "tool_choice",
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop",
+        "seed",
+        "response_format"
+      ],
+      "authors": [
+        {
+          "id": "openai",
+          "name": "OpenAI"
+        }
+      ],
+      "lineage": {
+        "family": "gpt-oss"
+      },
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "openai/gpt-oss-safeguard-20b",
+          "context_length": 131072,
+          "max_completion_tokens": 65536,
+          "availability": "unknown",
+          "lifecycle": "preview",
+          "pricing": {
+            "prompt": "7.5e-08",
+            "completion": "3e-07",
+            "cache_read": "3.75e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "qwen/qwen3-32b",
+      "canonical_slug": "qwen/qwen3-32b",
+      "name": "qwen3-32b",
+      "object": "model",
+      "created": 1745884800,
+      "owned_by": "qwen",
+      "pricing": {
+        "prompt": "2.9e-07",
+        "completion": "5.9e-07",
+        "currency": "USD"
+      },
+      "context_length": 131072,
+      "description": "Dense open Qwen model for self-hosted chat, reasoning, and coding",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 40960
+      },
+      "supported_parameters": [
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "qwen",
+          "name": "Qwen Team"
+        }
+      ],
+      "lineage": {
+        "family": "qwen"
+      },
+      "knowledge_cutoff": "2025-04-01",
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "qwen/qwen3-32b",
+          "context_length": 131072,
+          "max_completion_tokens": 40960,
+          "availability": "unknown",
+          "lifecycle": "preview",
+          "pricing": {
+            "prompt": "2.9e-07",
+            "completion": "5.9e-07",
+            "cache_read": "1.45e-07",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "qwen/qwen3.6-27b",
+      "canonical_slug": "qwen/qwen3.6-27b",
+      "name": "Qwen/Qwen3.6-27B",
+      "object": "model",
+      "created": 1776816000,
+      "owned_by": "qwen",
+      "pricing": {
+        "prompt": "6e-07",
+        "completion": "3e-06",
+        "currency": "USD"
+      },
+      "context_length": 131072,
+      "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+      "architecture": {
+        "input_modalities": [
+          "audio",
+          "image",
+          "text",
+          "video"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 131072,
+        "max_completion_tokens": 16384
+      },
+      "supported_parameters": [
+        "reasoning",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "qwen",
+          "name": "Qwen Team"
+        }
+      ],
+      "tags": [
+        "chat",
+        "reasoning",
+        "reasoning_effort",
+        "vision",
+        "vlm"
+      ],
+      "lineage": {
+        "family": "qwen"
+      },
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "qwen/qwen3.6-27b",
+          "context_length": 131072,
+          "max_completion_tokens": 16384,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "prompt": "6e-07",
+            "completion": "3e-06",
+            "cache_read": "3e-07",
             "currency": "USD"
           }
         }

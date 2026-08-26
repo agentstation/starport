@@ -318,25 +318,43 @@ func deriveRoutableSnapshot(
 	}
 
 	routes := make([]Route, 0)
+	routability := make([]OfferingRoutability, 0)
 	for _, provider := range state.Catalog.Providers().List() {
 		adapter, exists := adapters[provider.ID]
-		if !exists || !adapter.routable() {
-			continue
-		}
+		adapterReady := exists && adapter.routable()
 
 		offerings, err := state.Catalog.ProviderOfferings(provider.ID)
 		if err != nil {
 			return nil, fmt.Errorf("read Starmap offerings for %s: %w", provider.ID, err)
 		}
 		for _, offering := range offerings {
-			if !catalogOfferingRoutable(offering) {
-				continue
+			verdict := OfferingRoutability{
+				ProviderID:      provider.ID,
+				ProviderModelID: offering.ProviderModelID,
 			}
-			if _, blocked := unavailable[offering.Key()]; blocked {
-				continue
+			var operations []catalogs.ProviderOperation
+			var endpoints []catalogs.ProviderOfferingEndpoint
+			switch {
+			case !adapterReady:
+				verdict.Exclusion = RouteExclusionAdapterNotReady
+			case offering.Lifecycle == catalogs.OfferingLifecycleRetired:
+				verdict.Exclusion = RouteExclusionCatalogRetired
+			case offering.Availability == catalogs.OfferingAvailabilityUnavailable:
+				verdict.Exclusion = RouteExclusionCatalogUnavailable
+			default:
+				if _, blocked := unavailable[offering.Key()]; blocked {
+					verdict.Exclusion = RouteExclusionOfferingUnavailable
+					break
+				}
+				operations, endpoints = compatibleOfferingService(adapter, offering)
+				if len(operations) == 0 {
+					verdict.Exclusion = RouteExclusionOperationUnsupported
+					break
+				}
+				verdict.Routable = true
 			}
-			operations, endpoints := compatibleOfferingService(adapter, offering)
-			if len(operations) == 0 {
+			routability = append(routability, verdict)
+			if !verdict.Routable {
 				continue
 			}
 			routes = append(routes, Route{
@@ -351,6 +369,13 @@ func deriveRoutableSnapshot(
 		}
 	}
 
+	sort.Slice(routability, func(left, right int) bool {
+		if routability[left].ProviderID != routability[right].ProviderID {
+			return routability[left].ProviderID < routability[right].ProviderID
+		}
+		return routability[left].ProviderModelID < routability[right].ProviderModelID
+	})
+
 	sort.Slice(routes, func(left, right int) bool {
 		if routes[left].DefinitionID != routes[right].DefinitionID {
 			return routes[left].DefinitionID < routes[right].DefinitionID
@@ -361,7 +386,7 @@ func deriveRoutableSnapshot(
 		return routes[left].ProviderModelID < routes[right].ProviderModelID
 	})
 
-	return newRoutableSnapshot(state, availabilityRevision, routes), nil
+	return newRoutableSnapshot(state, availabilityRevision, routes, routability), nil
 }
 
 func compatibleOfferingService(
@@ -411,13 +436,6 @@ func copyBool(value *bool) *bool {
 	}
 	copyValue := *value
 	return &copyValue
-}
-
-func catalogOfferingRoutable(offering catalogs.ProviderOffering) bool {
-	if offering.Availability == catalogs.OfferingAvailabilityUnavailable {
-		return false
-	}
-	return offering.Lifecycle != catalogs.OfferingLifecycleRetired
 }
 
 func canonicalProviderID(source *catalogs.Catalog, providerID catalogs.ProviderID) catalogs.ProviderID {
