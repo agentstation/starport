@@ -241,7 +241,7 @@
     <p>Promote this plan to <code>active</code> only when every item holds.</p>
     <ol>
       <li>The owner approves the phase order A, then B, then C.</li>
-      <li>The owner approves the five decisions below.</li>
+      <li>The owner approves the six decisions below.</li>
       <li>The baseline commits and the proof root exist.</li>
       <li>The goal block names real documents, paths, and gates.</li>
       <li>The async media jobs plan exists and owns the video non-goal.</li>
@@ -270,9 +270,10 @@
       <thead><tr><th>ID</th><th>Date</th><th>Decision</th><th>Consequence and re-open condition</th></tr></thead>
       <tbody>
         <tr><td>MOD-D1</td><td>2026-08-26</td><td>Stage the work as phase A for chat input, phase B for chat output, and phase C for the dedicated operations.</td><td>Each phase ships and verifies alone. Phase A closes the widest gap for the least work. The shipped catalog holds 164 image-input, 57 video-input, 53 pdf-input, and 46 audio-input offerings, against 42 image-output and 24 audio-output offerings. Re-open if a phase A measurement contradicts those counts.</td></tr>
-        <tr><td>MOD-D2</td><td>2026-08-26</td><td>The new Starmap operations mirror the OpenAI endpoint set: <code>images-generations</code>, <code>images-edits</code>, <code>audio-speech</code>, <code>audio-transcriptions</code>, and <code>audio-translations</code>.</td><td>One Starmap operation maps to one provider path and one Starport route, so the endpoint facts stay mechanical and the route planner needs no modality lookup. Re-open if a provider serves two of these operations on one path.</td></tr>
+        <tr><td>MOD-D2</td><td>2026-08-26</td><td>The new Starmap operations mirror the OpenAI endpoint set: <code>images-generations</code>, <code>images-edits</code>, <code>audio-speech</code>, <code>audio-transcriptions</code>, and <code>audio-translations</code>.</td><td>One Starmap operation maps to one provider path and one Starport route, so the endpoint facts stay mechanical. The planner needs no modality lookup, but it does need the guard widening that decision MOD-D6 owns. Re-open if a provider serves two of these operations on one path.</td></tr>
         <tr><td>MOD-D3</td><td>2026-08-26</td><td>The canonical document part is <code>ContentDocument</code>, and the wire word stays <code>file</code>.</td><td>The split follows <code>ContentImage</code>, which already differs from <code>image_url</code>. The Starmap <code>pdf</code> modality maps onto it. Re-open only if a provider ships a document part that is not a file.</td></tr>
         <tr><td>MOD-D4</td><td>2026-08-26</td><td>Extend usage with media units now, rather than record a media turn as unpriced.</td><td>A media request reports a real cost from its first day. The cost is one usage schema change and one Starmap pricing addition in MOD8. Re-open if a provider reports no countable media unit.</td></tr>
+        <tr><td>MOD-D6</td><td>2026-08-26</td><td>Catalog data degrades and caller input fails closed. A snapshot skips an operation Starport does not name, and a request for one is refused.</td><td>The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation through, and <code>validateSnapshot</code> rejects the whole snapshot on one it does not know. A Starmap catalog change alone would then break chat and embeddings routing with no Starport deploy. The registry guard and both planner guards read one named operation set after this decision, so a later plan adds a member rather than edits a boolean chain. Re-open if an unknown operation must become a hard error.</td></tr>
         <tr><td>MOD-D5</td><td>2026-08-26</td><td>The MMD gate guards the new OpenRouter media routes. <code>scripts/verify-openrouter-parity.sh</code> stays terminal at 16 conditions.</td><td>One gate owns the media surface, so the parity gate keeps its fixed count and its stated meaning. MOD16 records the split in <code>AGENTS.md</code>. Re-open if OpenRouter changes a route that ORP already guards.</td></tr>
       </tbody>
     </table>
@@ -777,7 +778,8 @@
       <li>Keep the derivation independent of the pricing shape.</li>
       <li>Add a fact-consistency rule for each new operation.</li>
       <li>Add the endpoint path of each provider that serves one.</li>
-      <li>Regenerate, release, and raise the Starport dependency.</li>
+      <li>Regenerate and release, and leave the Starport dependency
+        pinned.</li>
     </ol>
 
     <p><strong>Acceptance, MMD-V17 and MMD-V18.</strong>
@@ -798,28 +800,35 @@
     <div class="task">
     <h3 id="task-MOD13">MOD13 Transport registry and optional interfaces</h3>
 
-    <p><strong>Problem.</strong> The transport registry rejects any operation
-      that is not chat completions or embeddings at
-      <code>internal/providers/connectors/transport_registry.go:57</code>. It
-      would drop the MOD12 operations at activation. A method for each
-      operation on <code>Connector</code> would force a stub into every
-      provider, which invariant I6 refuses.</p>
+    <p><strong>Problem.</strong> Three guards name chat completions and
+      embeddings and refuse everything else. One is the registry guard at
+      <code>transport_registry.go:57</code>. The other two are
+      <code>validateRequest</code> and <code>validateSnapshot</code> in
+      <code>internal/routing/planner.go</code>, and the second fails a whole
+      snapshot rather than one candidate. MOD12 holds the dependency pin for
+      this reason, because raising it first would break chat routing.</p>
 
-    <p><strong>Seam.</strong>
-      <code>internal/providers/connectors</code>.</p>
+    <p><strong>Seam.</strong> <code>internal/providers/connectors</code>,
+      <code>internal/routing</code>, and <code>internal/router</code>.</p>
     <ol>
-      <li>Accept the new operations in the registry guard.</li>
+      <li>Replace all three hardcoded guards with one named operation
+        set.</li>
+      <li>Make a snapshot skip an operation the set omits, per decision
+        MOD-D6.</li>
+      <li>Raise the Starport dependency, now that the guards hold.</li>
       <li>Define the narrow interfaces for image generation, speech, and
         transcription.</li>
-      <li>Probe for the interface when a descriptor claims its operation.</li>
-      <li>Refuse an operation that the transport cannot serve.</li>
+      <li>Probe for the interface when a descriptor claims its operation, and
+        refuse one the transport cannot serve.</li>
       <li>Implement each interface on the transports that serve media.</li>
     </ol>
 
     <p><strong>Acceptance, MMD-V19.</strong> A registry test asserts that a
       descriptor claiming <code>audio-speech</code> on a transport with no
       speech interface fails activation with a named error. The same test
-      asserts that <code>Connector</code> gained no method.</p>
+      asserts that <code>Connector</code> gained no method. A planner test
+      asserts that a candidate carrying an unnamed operation still routes a
+      chat request.</p>
 
     <p><strong>Fail-before.</strong> The current guard drops a descriptor that
       claims <code>images-generations</code>.</p>
@@ -983,7 +992,7 @@ log with the work commit, mark the task terminal with evidence, commit the
 plan update the same way, then advance to the next task. Decide rather
 than ask. Mark a wrong or already-satisfied task no-action with a one-line
 reason. Record a blocker and continue with the next eligible task. Binding
-constraints: invariants I1 through I7, decisions MOD-D1 through MOD-D5,
+constraints: invariants I1 through I7, decisions MOD-D1 through MOD-D6,
 and the non-goals. Asynchronous video generation belongs to
 docs/plans/async-media-jobs-plan.html. Reranking and a files API stay
 unowned. internal/protocol/openrouter already owns the document parser
@@ -1014,6 +1023,7 @@ CI runs it, and every ledger row except MOD17 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>Two independent second-model reviews read the plan against the working tree. Both found that <code>internal/proxy/proxy.go</code> holds the only capability gate that exists today, and that MOD4 named three seam packages without it. MOD4 now owns <code>requestHasVision</code> at line 201 and the duplicate token estimator at line 164, and MOD11 gives each media kind a cost in <code>internal/tokenize</code>. Both reviews reported the output census as overcounted. A recount rejected that finding: the reviews measured inputs across provider offerings and outputs across model definitions, while this plan counts offerings throughout. Five of the seven counts reproduce exactly, and the two image counts move to 164 and 42. Three smaller findings held: MOD6 now names both <code>MaxRequestSize</code> fields and the dead tag at <code>internal/server/config.go:30</code>, MOD10 states that the replay path returns <code>ErrUnsupportedContent</code> rather than text, and MOD15 owns the fixed modality list at <code>ModelsTable.tsx:43</code>. MOD14 states that the canonical request holds the decoded upload bytes, so a retry replays them. The conditions stay terminal at 25.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>resequenced</td><td>The owner decided to build the three items this plan had left unowned rather than defer them. <a href="reranking-plan.html">The reranking plan</a>, <a href="files-api-plan.html">the files API plan</a>, and <a href="document-parser-plan.html">the document parser plan</a> now own them. The earlier reasoning that reranking should wait for a catalogued offering was wrong, because the owner controls both repositories, so a missing offering is a task rather than a constraint. MOD16 now promotes the files API plan instead of the async media jobs plan, because the files plan builds the blob seam that task AMJ6 needs. The queue reads model modalities, then files, then async media jobs, then document parser, with reranking free to run beside them.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review checked every file citation in this plan against the working tree, and found three wrong facts. MOD11 cited <code>internal/limits/limits.go:33</code>, which holds the struct declaration alone, so it now cites <code>rules.go:65</code>, where <code>BudgetRules</code> lives. MOD4 said the estimator counts text alone, but <code>proxy.go:169</code> already adds a flat 85 tokens for an image part, so only audio and document are free. MOD8 claimed 115 models carry an audio input price, and the vendored models.dev snapshot holds 74. MOD9 also claimed MOD7 reads the <code>Modality</code> type this plan defines in phase B, which no MOD7 step does, so the stale clause is gone. MOD14 now documents its two scopes for an operator, matching the standard the files and reranking plans set.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>The owner asked for a proper resolution of the operation guard that four tasks across three plans all touch. Reading the tree found a defect rather than a merge conflict. The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation onto a route candidate, and <code>validateSnapshot</code> then rejects the whole snapshot on one it does not name. MOD12 raised the dependency before MOD13 widened the guard, so a catalog carrying the five new operations would have broken chat and embeddings routing with no Starport deploy. MOD12 now leaves the pin alone, and MOD13 raises it after all three guards read one named operation set. New decision MOD-D6 states the rule: catalog data degrades and caller input fails closed.</td></tr>
       </tbody>
     </table>
   </section>

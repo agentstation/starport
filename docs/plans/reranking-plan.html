@@ -235,7 +235,7 @@
     <h2>Promotion gate</h2>
     <p>Promote this plan to <code>active</code> only when every item holds.</p>
     <ol>
-      <li>The owner approves the five decisions below.</li>
+      <li>The owner approves the six decisions below.</li>
       <li>RNK0 confirms the request shapes and the billing bases against
         live documentation.</li>
       <li>RNK0 names at least one rerank provider that this deployment can
@@ -270,6 +270,7 @@
         <tr><td>RNK-D2</td><td>2026-08-26</td><td>Add <code>rerank</code> to <code>ProviderOperation</code> in Starmap, beside chat completions and embeddings.</td><td>Every layer that switches on an operation gains a third arm, and the transport registry guard proves each one. Re-open if a provider serves reranking through a chat route instead.</td></tr>
         <tr><td>RNK-D3</td><td>2026-08-26</td><td>Add no OpenRouter rerank route.</td><td><code>scripts/verify-openrouter-parity.sh</code> stays terminal at 16 conditions, because the parity surface does not grow. Re-open if OpenRouter publishes a rerank endpoint.</td></tr>
         <tr><td>RNK-D4</td><td>2026-08-26</td><td>Price a rerank turn per search unit, which is one query against a bounded document count.</td><td>The price matches how Cohere bills, so a Starport cost reconciles against a provider invoice. RNK0 records the billing basis of every reachable provider before this decision settles. Starmap states the unit definition beside the price, so <code>internal/usage</code> never reimplements a provider formula. Re-open if a reachable provider prices reranking per token instead.</td></tr>
+        <tr><td>RNK-D6</td><td>2026-08-26</td><td>Widen the three operation guards before raising the Starmap dependency, and mirror decision MOD-D6 of the model modalities plan.</td><td>The function <code>planningOperations</code> passes every Starmap operation through, and <code>validateSnapshot</code> then rejects the whole snapshot on one it does not know. Cataloguing a rerank offering would break chat routing on its own. This plan runs beside the model modalities plan, so whichever lands first introduces the named operation set and the other adds a member. Re-open if the two plans merge into one queue.</td></tr>
         <tr><td>RNK-D5</td><td>2026-08-26</td><td>Catalog the reachable rerank providers first, and let RNK0 name them.</td><td>The plan proves itself against a live provider rather than a documented one. A provider that this deployment cannot reach waits for a later catalog change. Re-open if no provider is reachable, which blocks the plan at RNK0.</td></tr>
       </tbody>
     </table>
@@ -410,7 +411,7 @@
         each provider enforces.</li>
       <li>Regenerate the immutable catalog.</li>
       <li>Release a Starmap version with the operation and the offerings,
-        then raise the Starport dependency in <code>go.mod</code>.</li>
+        and leave the Starport dependency pinned.</li>
       <li>Record the new census in the proof root.</li>
     </ol>
 
@@ -466,15 +467,20 @@
     <div class="task">
     <h3 id="task-RNK4">RNK4 Transport and connector</h3>
 
-    <p><strong>Problem.</strong> The transport registry refuses any operation
-      that is neither chat completions nor embeddings, at
-      <code>internal/providers/connectors/transport_registry.go:57</code>. That
-      guard is the one place that proves an operation reached the provider
-      layer. A connector also has no method that carries a rerank call.</p>
+    <p><strong>Problem.</strong> Three guards name chat completions and
+      embeddings and refuse everything else. One is the registry guard at
+      <code>transport_registry.go:57</code>, which proves an operation reached
+      the provider layer. The other two sit in
+      <code>internal/routing/planner.go</code>, and
+      <code>validateSnapshot</code> fails a whole snapshot rather than one
+      candidate. A connector also has no method that carries a rerank
+      call.</p>
 
-    <p><strong>Seam.</strong> <code>internal/providers/connectors</code>.</p>
+    <p><strong>Seam.</strong> <code>internal/providers/connectors</code>,
+      <code>internal/routing</code>, and <code>internal/router</code>.</p>
     <ol>
-      <li>Accept the rerank operation in the registry guard.</li>
+      <li>Widen all three guards to one named set, then raise the Starmap
+        dependency, as decision RNK-D6 requires.</li>
       <li>Build the rerank transport descriptor from the Starmap endpoint
         facts.</li>
       <li>Add the rerank call to the connector contract beside the embedding
@@ -767,7 +773,7 @@ with the work commit, mark the task terminal with evidence, commit the
 plan update the same way, then advance to the next task. Decide rather
 than ask. Mark a wrong or already-satisfied task no-action with a one-line
 reason. Record a blocker and continue with the next eligible task. Binding
-constraints: invariants R1 through R7, decisions RNK-D1 through RNK-D5,
+constraints: invariants R1 through R7, decisions RNK-D1 through RNK-D6,
 and the non-goals. An OpenRouter rerank route, a vector store, and
 reranking inside a chat request stay unowned. Commit policy: commit each
 task's work, then record the ledger transition as its own plan commit with
@@ -792,6 +798,7 @@ runs it, and every ledger row except RNK11 is terminal.</code></pre>
       <tbody>
         <tr><td>2026-08-26</td><td>meta</td><td>authored</td><td>Written at status <code>proposed</code> as the named owner of the reranking item that the model modalities plan and the async media jobs plan both left unowned. Measured starting position: <code>ProviderOperation</code> in Starmap names two members, the shipped catalog holds zero rerank offerings, the <code>rerank</code> tag appears once as a chat disqualifier at <code>offering_views.go:165</code>, and <code>transport_registry.go:57</code> refuses any third operation. The earlier reading that reranking should wait for a catalogued offering was wrong, because the owner controls both repositories, so a missing offering is a task rather than a constraint. RNK0 confirms the provider request shapes and the reachable providers against live documentation before any code lands.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>Two adversarial design reviews ran before approval, and every finding was checked against both trees before any edit. Three corrections landed. Invariant R4 overstated the transport registry guard, because <code>internal/routing/planner.go</code> holds a separate two-member enum and two hardcoded guards, and <code>validateSnapshot</code> fails a whole snapshot rather than one candidate, so RNK7 now names that seam. Decision RNK-D4 committed to a per-search-unit price before RNK0 verified the billing bases, so RNK0 now records the basis each provider uses. Invariant R5 dropped <code>return_documents</code> silently, which is the anti-pattern the plan itself forbids, so RNK5 refuses the field instead. Two smaller gaps closed: RNK2 now raises the Starport dependency in <code>go.mod</code>, which pins Starmap exactly, and RNK9 now names the console key form, which hardcodes four scopes.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>This plan carried the same guard defect the model modalities plan carried. RNK2 raised the Starmap dependency in phase A, and RNK7 fixed the planner in phase C, so a catalogued rerank offering would have broken chat routing in between. RNK2 now leaves the pin alone, and RNK4 widens all three guards before raising it. New decision RNK-D6 mirrors MOD-D6 and states that whichever plan lands first introduces the named operation set, because the two run beside each other.</td></tr>
       </tbody>
     </table>
   </section>
