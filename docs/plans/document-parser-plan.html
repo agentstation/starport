@@ -233,7 +233,7 @@
     <p>Promote this plan to <code>active</code> only when every item
       holds.</p>
     <ol>
-      <li>The model modalities plan reports 25 of 25 conditions, and the
+      <li>The model modalities plan reports 26 of 26 conditions, and the
         files API plan reports 22 of 22 conditions.</li>
       <li>The owner accepts that this plan runs beside the async media jobs
         plan, because MOD13 leaves both a one-member addition.</li>
@@ -304,7 +304,7 @@
         <tr id="PLG0" data-status="todo"><td>PLG0</td><td>Baseline. Pin both commits, confirm the engine names, name a recognition provider, create the proof root, write the verifier red at 20 conditions.</td><td><code>todo</code></td><td></td></tr>
         <tr id="PLG1" data-status="todo"><td>PLG1</td><td>Phase A. Decode the parser plugin and its engine vocabulary, and refuse an unknown engine. Conditions PLG-V01 to PLG-V03.</td><td><code>todo</code></td><td></td></tr>
         <tr id="PLG2" data-status="todo"><td>PLG2</td><td>Phase A. In-process text extraction for a document that carries text. Conditions PLG-V04 and PLG-V05.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="PLG3" data-status="todo"><td>PLG3</td><td>Phase B. Starmap: the recognition operation, its offerings, and its per-page price. Conditions PLG-V06 to PLG-V08.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG3" data-status="todo"><td>PLG3</td><td>Phase B. Starmap: the recognition operation, its offerings, and its per-page price, then the Starport dependency raise. Conditions PLG-V06 to PLG-V08.</td><td><code>todo</code></td><td></td></tr>
         <tr id="PLG4" data-status="todo"><td>PLG4</td><td>Phase B. Route a scanned document to a catalogued recognition model. Conditions PLG-V09 to PLG-V11.</td><td><code>todo</code></td><td></td></tr>
         <tr id="PLG5" data-status="todo"><td>PLG5</td><td>Phase B. The extraction cache keyed by content hash and engine. Conditions PLG-V12 and PLG-V13.</td><td><code>todo</code></td><td></td></tr>
         <tr id="PLG6" data-status="todo"><td>PLG6</td><td>Phase C. Page counts in usage, the page price, and the spend bound. Conditions PLG-V14 and PLG-V15.</td><td><code>todo</code></td><td></td></tr>
@@ -432,15 +432,16 @@
       price names a page either, and the shipped prices count tokens. The
       transport registry refuses any operation outside its known set.</p>
 
-    <p><strong>Seam.</strong> <code>pkg/catalogs</code> in Starmap, and the
-      catalog data.</p>
+    <p><strong>Seam.</strong> <code>pkg/catalogs</code> in Starmap, the
+      catalog data, and the Starport module dependency.</p>
     <ol>
       <li>Add the recognition operation with its wire value.</li>
       <li>Add the per-page price to the price shape.</li>
       <li>Catalog the recognition models each reachable provider serves.</li>
       <li>Record the page limit each provider enforces.</li>
-      <li>Regenerate the immutable catalog and release a version.</li>
-      <li>Open the Starmap pull requests for this task.</li>
+      <li>Regenerate the immutable catalog, release a version, and open
+        the Starmap pull requests for this task.</li>
+      <li>Raise the Starport dependency to the released version.</li>
     </ol>
 
     <p><strong>Acceptance, PLG-V06 to PLG-V08.</strong> A test asserts that
@@ -453,8 +454,8 @@
       reports no recognition offering.</p>
 
     <p><strong>Verification.</strong> <code>go test ./...</code> in Starmap.
-      Then <code>bash scripts/verify-starmap-ownership.sh</code> in
-      Starport.</p>
+      Then <code>bash scripts/verify-starmap-ownership.sh</code> and
+      <code>go build ./...</code> in Starport.</p>
     </div>
 
     <div class="task">
@@ -719,12 +720,13 @@
 whole-plan goal, not a single-task goal. Read the plan fully, then read
 CLAUDE.md, docs/TASKS.md, docs/ARCHITECTURE.md, and, for PLG3,
 ~/src/github.com/agentstation/starmap/CLAUDE.md. Do not start before the
-model modalities plan reports 25 of 25 conditions and the files API plan
+model modalities plan reports 26 of 26 conditions and the files API plan
 reports 22 of 22 conditions. PLG4 adds one member to the named operation
 set that MOD13 introduces.
 Work in /Users/jack/src/github.com/agentstation/starport on a branch named
 codex/document-parser-&lt;task-id&gt;, one branch and one pull request per
-task. PLG3 opens its pull request in the starmap repository instead. Chat
+task. PLG3 opens a starmap pull request first, then raises the Starport
+dependency in its own pull request. Chat
 history is not progress state. Resume from the status ledger, the
 execution log, and git state. If compaction happens, continue from the
 plan and git state rather than restarting. Loop: keep one task
@@ -763,6 +765,7 @@ CI runs it, and every ledger row except PLG10 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review found three gaps. PLG2 creates <code>internal/document</code> and never registered it in the import graph test. PLG4 introduces a provider failure path and never named <code>internal/failure</code>. PLG1 also lets a caller name an engine, and PLG4 planned a route from any catalogued offering, so a caller could reach an engine it did not ask for. PLG4 now plans from the offerings the named engine serves. The promotion gate also records that this plan runs beside the async media jobs plan, because PLG4 and AMJ4 both extend the registry guard at <code>transport_registry.go:57</code>.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>PLG4 extended the registry guard by hand, which put it in conflict with three tasks in other plans. MOD13 now replaces that guard with one named operation set, so PLG4 adds a member instead. The promotion gate records that the concurrency with the async media jobs plan is now a one-member addition on each side.</td></tr>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found three defects here. The promotion gate and the goal block required the files API plan alone, although PLG4 adds a member to the named operation set that MOD13 introduces and the scope section already depends on the model modalities plan for the document content kind. Both now require 25 of 25 conditions from that plan. The seam of PLG4 still described the planner as holding two hardcoded guards, and step three still planned to extend them, which contradicts step one and the MOD13 design that replaces all three guards with one named set. PLG4 now plans the route alone.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted one critical finding. PLG3 never raised the Starport dependency to the released catalog, so PLG4 planned a route from offerings the module could not read. PLG3 now raises it, and the goal records the two pull requests. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
 </tbody>
     </table>
   </section>

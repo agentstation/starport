@@ -233,7 +233,7 @@
     <h2>Promotion gate</h2>
     <p>Promote this plan to <code>active</code> only when every item holds.</p>
     <ol>
-      <li>The model modalities plan reports 25 of 25 conditions.</li>
+      <li>The model modalities plan reports 26 of 26 conditions.</li>
       <li>The files API plan reports 22 of 22 conditions.</li>
       <li>The owner approves the five decisions below.</li>
       <li>AMJ0 confirms the provider route shapes against live
@@ -698,7 +698,7 @@
 whole-plan goal, not a single-task goal. Read the plan fully, then read
 CLAUDE.md, docs/TASKS.md, docs/ARCHITECTURE.md, and, for AMJ3,
 ~/src/github.com/agentstation/starmap/CLAUDE.md. Do not start before the
-model modalities plan reports 25 of 25 conditions and the files API plan
+model modalities plan reports 26 of 26 conditions and the files API plan
 reports 22 of 22 conditions. AMJ6 stores its asset through internal/blob,
 which the files API plan builds.
 Work in /Users/jack/src/github.com/agentstation/starport on a branch named
@@ -742,6 +742,7 @@ CI runs it, and every ledger row except AMJ10 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review found three seam omissions against the concept boundaries. AMJ4 introduces a provider failure path and never named <code>internal/failure</code>, which owns failure normalization, so a video job would grow its own error taxonomy. AMJ7 adds an account-wide bound and never named <code>internal/tenant</code>, which owns the default, unlike FIL6, which does. AMJ5 also added a scope without documenting it for an operator. All three now match the standard the other plans set.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>AMJ4 extended the registry guard by hand, which put it in conflict with three tasks in other plans. MOD13 now replaces that guard with one named operation set, so AMJ4 adds a member instead.</td></tr>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found one defect here. AMJ5 described the submit, poll, content, and cancel routes without naming a path, so a route test had nothing exact to assert. AMJ5 now names <code>/v1/videos</code> and its three child paths. The audit confirmed that the promotion gate correctly requires both the model modalities plan and the files API plan, which is the standard the document parser plan now matches.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round changed no task here. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
 </tbody>
     </table>
   </section>

@@ -284,16 +284,16 @@
     <p><code>scripts/verify-model-modalities.sh</code> reports every condition
       and exits nonzero while any condition fails. It prints
       <code>Summary: N passed, M failed</code>. The condition identifiers run
-      from <code>MMD-V01</code> to <code>MMD-V25</code>. MOD0 writes the
-      verifier red at 0 passed and 25 failed. Every task section below names
+      from <code>MMD-V01</code> to <code>MMD-V26</code>. MOD0 writes the
+      verifier red at 0 passed and 26 failed. Every task section below names
       the conditions it turns green.</p>
     <table>
       <thead><tr><th>Phase</th><th>Tasks</th><th>Conditions</th><th>Cumulative passing</th></tr></thead>
       <tbody>
         <tr><td>A, multimodal chat input</td><td>MOD1 to MOD7</td><td>MMD-V01 to MMD-V10</td><td>10</td></tr>
         <tr><td>B, non-text chat output</td><td>MOD8 to MOD11</td><td>MMD-V11 to MMD-V16</td><td>16</td></tr>
-        <tr><td>C, dedicated media operations</td><td>MOD12 to MOD15</td><td>MMD-V17 to MMD-V23</td><td>23</td></tr>
-        <tr><td>Close</td><td>MOD16</td><td>MMD-V24 to MMD-V25</td><td>25, terminal</td></tr>
+        <tr><td>C, dedicated media operations</td><td>MOD12 to MOD15</td><td>MMD-V17 to MMD-V24</td><td>24</td></tr>
+        <tr><td>Close</td><td>MOD16</td><td>MMD-V25 to MMD-V26</td><td>26, terminal</td></tr>
       </tbody>
     </table>
   </section>
@@ -305,7 +305,7 @@
         <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        <tr id="MOD0" data-status="todo"><td>MOD0</td><td>Baseline. Pin both commits, create the proof root, write the verifier red at 25 conditions, capture fail-before evidence.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD0" data-status="todo"><td>MOD0</td><td>Baseline. Pin both commits, create the proof root, write the verifier red at 26 conditions, capture fail-before evidence.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD1" data-status="todo"><td>MOD1</td><td>Phase A. Widen the canonical content vocabulary with audio, document, and video parts. Conditions MMD-V01 and MMD-V02.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD2" data-status="todo"><td>MOD2</td><td>Phase A. Decode and encode the new parts in both protocol codecs. Conditions MMD-V03 and MMD-V04.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD3" data-status="todo"><td>MOD3</td><td>Phase A. Carry the new parts through the connector adapters into each provider shape. Condition MMD-V05.</td><td><code>todo</code></td><td></td></tr>
@@ -318,10 +318,10 @@
         <tr id="MOD10" data-status="todo"><td>MOD10</td><td>Phase B. Carry generated media through both codecs and the cached stream replay. Conditions MMD-V13 and MMD-V14.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD11" data-status="todo"><td>MOD11</td><td>Phase B. Record and price media units in usage, cost, and the spend budget. Conditions MMD-V15 and MMD-V16.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD12" data-status="todo"><td>MOD12</td><td>Phase C. Starmap: five media operations, the offering derivation, the consistency rule, and a release. Conditions MMD-V17 and MMD-V18.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD13" data-status="todo"><td>MOD13</td><td>Phase C. Replace three hardcoded operation guards with one named set, raise the dependency, then add the narrow optional interfaces. Condition MMD-V19.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD14" data-status="todo"><td>MOD14</td><td>Phase C. Add the canonical media types, the eight routes, and the two scopes. Conditions MMD-V20 to MMD-V22.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD15" data-status="todo"><td>MOD15</td><td>Phase C. Console: make a media model visible, filterable, and usable. Condition MMD-V23.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD16" data-status="todo"><td>MOD16</td><td>Close. Documentation, the terminal gate in CI, and promotion of the files API plan. Conditions MMD-V24 and MMD-V25.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD13" data-status="todo"><td>MOD13</td><td>Phase C. Replace three hardcoded operation guards with one named set, route to the offerings that serve an operation, raise the dependency, then add the narrow optional interfaces. Conditions MMD-V19 and MMD-V20.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD14" data-status="todo"><td>MOD14</td><td>Phase C. Add the canonical media types, the eight routes, and the two scopes. Conditions MMD-V21 to MMD-V23.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD15" data-status="todo"><td>MOD15</td><td>Phase C. Console: make a media model visible, filterable, and usable. Condition MMD-V24.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD16" data-status="todo"><td>MOD16</td><td>Close. Documentation, the terminal gate in CI, and promotion of the files API plan. Conditions MMD-V25 and MMD-V26.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD17" data-status="todo"><td>MOD17</td><td>Cleanup after the final pull request merges. Delete this plan and its proof root.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
@@ -342,7 +342,7 @@
     <ol>
       <li>Record the baseline commit of each repository.</li>
       <li>Create the proof root.</li>
-      <li>Write the verifier with all 25 conditions.</li>
+      <li>Write the verifier with all 26 conditions.</li>
       <li>Send one chat request that holds an audio part and record the
         refusal.</li>
       <li>Send one chat request that holds a file part and record the
@@ -352,7 +352,7 @@
     </ol>
 
     <p><strong>Acceptance.</strong> The verifier reports
-      <code>Summary: 0 passed, 25 failed</code>. This task changes no
+      <code>Summary: 0 passed, 26 failed</code>. This task changes no
       production file.</p>
 
     <p><strong>Fail-before.</strong> <code>mod0.md</code> holds both refusal
@@ -799,7 +799,7 @@
     </div>
 
     <div class="task">
-    <h3 id="task-MOD13">MOD13 Transport registry and optional interfaces</h3>
+    <h3 id="task-MOD13">MOD13 Operation set, media routing, and optional interfaces</h3>
 
     <p><strong>Problem.</strong> Three guards name chat completions and
       embeddings and refuse everything else. One is the registry guard at
@@ -810,29 +810,36 @@
       this reason, because raising it first would break chat routing.</p>
 
     <p><strong>Seam.</strong> <code>internal/providers/connectors</code>,
-      <code>internal/routing</code>, and <code>internal/router</code>.</p>
+      <code>internal/routing</code>, <code>internal/router</code>,
+      <code>internal/catalog</code>, and <code>internal/failure</code>.</p>
     <ol>
       <li>Replace all three hardcoded guards with one named operation
         set.</li>
-      <li>Make a snapshot skip an operation the set omits, per decision
-        MOD-D6.</li>
+      <li>Make a snapshot skip an operation the set omits, as decision
+        MOD-D6 requires.</li>
+      <li>Filter the route candidates to the offerings that serve the
+        requested operation.</li>
       <li>Raise the Starport dependency, now that the guards hold.</li>
       <li>Define the narrow interfaces for image generation, speech, and
-        transcription.</li>
+        transcription, and implement them on the media transports.</li>
       <li>Probe for the interface when a descriptor claims its operation, and
-        refuse one the transport cannot serve.</li>
-      <li>Implement each interface on the transports that serve media.</li>
+        map a media provider failure through <code>internal/failure</code>.</li>
     </ol>
 
-    <p><strong>Acceptance, MMD-V19.</strong> A registry test asserts that a
-      descriptor claiming <code>audio-speech</code> on a transport with no
-      speech interface fails activation with a named error. The same test
-      asserts that <code>Connector</code> gained no method. A planner test
-      asserts that a candidate carrying an unnamed operation still routes a
-      chat request.</p>
+    <p><strong>Acceptance, MMD-V19 and MMD-V20.</strong> A registry test
+      asserts that a descriptor claiming <code>audio-speech</code> on a
+      transport with no speech interface fails activation with a named error.
+      The same test asserts that <code>Connector</code> gained no method. A
+      planner test asserts that a candidate carrying an unnamed operation still
+      routes a chat request. A second planner test asserts that the planner
+      refuses an image generation request to a chat-only model before any
+      provider call. A failure test asserts that a media provider error normalizes to
+      the same classes the chat path uses.</p>
 
     <p><strong>Fail-before.</strong> The current guard drops a descriptor that
-      claims <code>images-generations</code>.</p>
+      claims <code>images-generations</code>. A planner test that asks for
+      image generation on a chat-only model returns a route rather than a
+      refusal.</p>
 
     <p><strong>Verification.</strong>
       <code>go test ./internal/providers/...</code>. Then
@@ -867,7 +874,7 @@
         replays them.</li>
     </ol>
 
-    <p><strong>Acceptance, MMD-V20 to MMD-V22.</strong> A route test asserts
+    <p><strong>Acceptance, MMD-V21 to MMD-V23.</strong> A route test asserts
       that the server registers each path. The same test asserts a 403 for a
       key without the scope, and a controller call with it. A codec test
       asserts the
@@ -905,7 +912,7 @@
       <li>Play generated audio in the chat transcript.</li>
     </ol>
 
-    <p><strong>Acceptance, MMD-V23.</strong> A vitest asserts that the output
+    <p><strong>Acceptance, MMD-V24.</strong> A vitest asserts that the output
       facet selects an image-output model and excludes a text-only model. A
       second test asserts that a message holding an image part renders an image
       element.</p>
@@ -927,7 +934,7 @@
       <code>.github/workflows</code>, <code>AGENTS.md</code>,
       <code>docs</code>, and <code>README.md</code>.</p>
     <ol>
-      <li>Bring the verifier to 25 of 25 conditions.</li>
+      <li>Bring the verifier to 26 of 26 conditions.</li>
       <li>Add the verifier to CI beside the other gates.</li>
       <li>Add the verifier and its terminal count to the required evidence
         list.</li>
@@ -936,8 +943,8 @@
       <li>Promote the files API plan to active.</li>
     </ol>
 
-    <p><strong>Acceptance, MMD-V24 and MMD-V25.</strong> The verifier reports
-      <code>Summary: 25 passed, 0 failed</code>. CI runs it.
+    <p><strong>Acceptance, MMD-V25 and MMD-V26.</strong> The verifier reports
+      <code>Summary: 26 passed, 0 failed</code>. CI runs it.
       <code>bash scripts/verify-doc-links.sh</code> passes.</p>
 
     <p><strong>Fail-before.</strong> Not applicable. The condition count is the
@@ -1009,7 +1016,7 @@ substantive code changes. Run the repository technical-writing linter over
 this plan before every plan commit. Stop only at a valid stop state from
 the plans skill. Before you stop, update the ledger and the log, and
 record the next action in the status line. The goal is met when
-scripts/verify-model-modalities.sh reports "Summary: 25 passed, 0 failed",
+scripts/verify-model-modalities.sh reports "Summary: 26 passed, 0 failed",
 CI runs it, and every ledger row except MOD17 is terminal.</code></pre>
   </section>
 
@@ -1030,6 +1037,7 @@ CI runs it, and every ledger row except MOD17 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review checked every file citation in this plan against the working tree, and found three wrong facts. MOD11 cited <code>internal/limits/limits.go:33</code>, which holds the struct declaration alone, so it now cites <code>rules.go:65</code>, where <code>BudgetRules</code> lives. MOD4 said the estimator counts text alone, but <code>proxy.go:169</code> already adds a flat 85 tokens for an image part, so only audio and document are free. MOD8 claimed 115 models carry an audio input price, and the vendored models.dev snapshot holds 74. MOD9 also claimed MOD7 reads the <code>Modality</code> type this plan defines in phase B, which no MOD7 step does, so the stale clause is gone. MOD14 now documents its two scopes for an operator, matching the standard the files and reranking plans set.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>The owner asked for a proper resolution of the operation guard that four tasks across three plans all touch. Reading the tree found a defect rather than a merge conflict. The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation onto a route candidate, and <code>validateSnapshot</code> then rejects the whole snapshot on one it does not name. MOD12 raised the dependency before MOD13 widened the guard, so a catalog carrying the five new operations would have broken chat and embeddings routing with no Starport deploy. MOD12 now leaves the pin alone, and MOD13 raises it after all three guards read one named operation set. New decision MOD-D6 states the rule: catalog data degrades and caller input fails closed.</td></tr>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit of all five plans found four defects here. The ledger row for MOD16 named the async media jobs plan, while the task body, the files API status line, and the earlier log entry all name the files API plan. The ledger row for MOD13 described the narrow interfaces alone and omitted the guard replacement and the dependency raise that make the task safe. The goal block still read that reranking and a files API stay unowned, and that <code>internal/protocol/openrouter</code> owns the parser plugins, which the scope section had already corrected. MOD14 counted eight routes and named none, so MOD14 now names the five OpenAI paths and MOD0 records the three OpenRouter paths. The baseline moved to 29a134c, and the anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code>, which the other plans now share.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted three findings. MOD13 now filters the route candidates by the requested operation under a new condition <code>MMD-V20</code>, which renumbers the phase C tail and raises the terminal count to 26. MOD13 also maps a media provider failure through <code>internal/failure</code>, which no task named before.</td></tr>
 </tbody>
     </table>
   </section>
