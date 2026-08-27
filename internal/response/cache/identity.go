@@ -14,8 +14,15 @@ import (
 	"github.com/agentstation/starport/internal/inference"
 )
 
-// SemanticKeyVersion identifies the canonical cache-identity encoding.
-const SemanticKeyVersion = 2
+// SemanticKeyVersion identifies the canonical cache-identity encoding. The
+// key payload embeds inference.ChatRequest, and a canonical type carries no
+// transport tag, so a field added to that struct reaches the hash even when
+// no caller sets it. Raise this constant in the same change: the entries a
+// running gateway holds keep their own prefix, and none of them is read back
+// under an encoding that did not write it.
+//
+// Version 3 added the output modality and audio output request fields.
+const SemanticKeyVersion = 3
 
 var (
 	// ErrIneligible reports a request whose identity is not cache-safe.
@@ -88,9 +95,10 @@ func ChatKey(identity ChatIdentity) (string, error) {
 	// Delivery format does not change the canonical completed result.
 	request.Stream = false
 	request.StreamOptions = inference.StreamOptions{}
+	request.OutputModalities = normalizeModalities(request.OutputModalities)
 	// Inline media reaches the key as a digest rather than as bytes. A
-	// request that carries no media folds nothing, so its key is the key it
-	// had before media parts existed and the deployed cache survives.
+	// request that carries no media folds nothing, so a text-only request
+	// pays none of the cost of the media rule.
 	digests := foldInlineMedia(&request)
 	payload := struct {
 		Version           int                   `json:"version"`
@@ -154,6 +162,29 @@ func commonEligibility(tenantID, generation string) error {
 		return fmt.Errorf("%w: %w", ErrIneligible, ErrGenerationRequired)
 	}
 	return nil
+}
+
+// normalizeModalities reduces an output modality list to the shortest spelling
+// that means the same thing. A caller that asks for text alone asks for what
+// every model already served, so that list drops out and the request keys as
+// the text request it is. The rest sort, because the field names a set: a
+// caller that lists audio before text wants the answer the other order
+// produced, and a cache that disagreed would pay a provider twice for it.
+func normalizeModalities(modalities []inference.Modality) []inference.Modality {
+	seen := make(map[inference.Modality]bool, len(modalities))
+	unique := make([]inference.Modality, 0, len(modalities))
+	for _, modality := range modalities {
+		if seen[modality] {
+			continue
+		}
+		seen[modality] = true
+		unique = append(unique, modality)
+	}
+	if len(unique) == 0 || (len(unique) == 1 && unique[0] == inference.ModalityText) {
+		return nil
+	}
+	sort.Slice(unique, func(i, j int) bool { return unique[i] < unique[j] })
+	return unique
 }
 
 func normalizePolicy(policy Policy) Policy {

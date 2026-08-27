@@ -20,6 +20,7 @@ const (
 // across connector implementations.
 const (
 	contentTypeText           = "text"
+	contentTypeImageURL       = "image_url"
 	finishReasonStop          = "stop"
 	objectChatCompletion      = "chat.completion"
 	objectChatCompletionChunk = "chat.completion.chunk"
@@ -73,6 +74,12 @@ type ChatRequest struct {
 	// OpenRouter reasoning configuration
 	Reasoning *ReasoningConfig `json:"reasoning,omitempty"`
 
+	// Modalities names what the caller will accept back. Absent means text.
+	Modalities []string `json:"modalities,omitempty"`
+
+	// Audio configures the spoken answer that Modalities asks for.
+	Audio *AudioConfig `json:"audio,omitempty"`
+
 	// ProviderOptions are provider-specific top-level wire extensions.
 	ProviderOptions map[string]any `json:"-"`
 
@@ -92,6 +99,34 @@ type Message struct {
 	Name       string         `json:"name,omitempty"`
 	ToolCalls  []ToolCall     `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
+
+	// Images carries generated pictures. A provider returns them beside the
+	// content rather than inside it, so they need their own field here.
+	Images []GeneratedImage `json:"images,omitempty"`
+
+	// Audio carries a spoken answer.
+	Audio *GeneratedAudio `json:"audio,omitempty"`
+}
+
+// AudioConfig selects the voice and container for a spoken answer.
+type AudioConfig struct {
+	Voice  string `json:"voice,omitempty"`
+	Format string `json:"format,omitempty"`
+}
+
+// GeneratedImage is one picture a model produced.
+type GeneratedImage struct {
+	Type     string    `json:"type"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+	Index    int       `json:"index,omitempty"`
+}
+
+// GeneratedAudio is a spoken answer. Data is raw base64 with no data URL
+// prefix, matching the audio input shape on the same wire.
+type GeneratedAudio struct {
+	Data       string `json:"data,omitempty"`
+	Transcript string `json:"transcript,omitempty"`
+	Format     string `json:"format,omitempty"`
 }
 
 // MessageContent can be a string or array of content parts for multimodal
@@ -233,11 +268,18 @@ type Usage struct {
 // PromptTokensDetails provides detailed prompt token counts
 type PromptTokensDetails struct {
 	CachedTokens int `json:"cached_tokens,omitempty"`
+	// AudioTokens counts the audio share of PromptTokens. It is a breakdown
+	// of that total rather than an addition to it, the way CachedTokens is,
+	// and a provider that meters audio at its own rate reports it here.
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // CompletionTokensDetails provides detailed token counts
 type CompletionTokensDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
+	// AudioTokens counts the audio share of CompletionTokens, and is a
+	// breakdown of that total rather than an addition to it.
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // ChatStreamChunk represents a chunk in a streaming response
@@ -265,6 +307,13 @@ type MessageDelta struct {
 	Content   string     `json:"content,omitempty"`
 	Reasoning string     `json:"reasoning,omitempty"`
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+
+	// Images arrive whole in one delta, because a provider sends a finished
+	// picture rather than a growing one.
+	Images []GeneratedImage `json:"images,omitempty"`
+
+	// Audio arrives in pieces, each chunk holding its own base64 run.
+	Audio *GeneratedAudio `json:"audio,omitempty"`
 }
 
 // EmbeddingsRequest represents an embeddings request

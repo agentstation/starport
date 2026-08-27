@@ -74,6 +74,25 @@ type Image struct {
 	Detail string
 }
 
+// AudioOutput asks the model to speak its answer. Voice names the provider's
+// voice, and Format names the container the caller wants back, such as "wav"
+// or "mp3". A provider that serves audio output requires both, so neither
+// carries a gateway default: an unset field stays unset on the wire and the
+// provider answers for it.
+type AudioOutput struct {
+	Voice  string
+	Format string
+}
+
+// AudioChunk is one streamed piece of a spoken answer. Data holds the audio
+// bytes for this chunk, and Transcript holds the text the model spoke in it.
+// A provider sends either or both in one chunk, so neither field implies the
+// other.
+type AudioChunk struct {
+	Data       []byte
+	Transcript string
+}
+
 // Audio describes an audio input. A caller sends either a URL or inline
 // Data, and Format names the container, such as "wav" or "mp3".
 type Audio struct {
@@ -227,10 +246,25 @@ type ChatRequest struct {
 	ParallelToolCalls *bool
 	Output            StructuredOutput
 	Reasoning         Reasoning
-	Stream            bool
-	StreamOptions     StreamOptions
-	User              string
-	Extensions        map[string]json.RawMessage
+	// OutputModalities names what the caller will accept back. Empty means
+	// text, which is what every model served before this field existed.
+	// A model that speaks its answer needs the caller to ask for audio, so
+	// this is a request field and not a routing hint.
+	//
+	// The response cache derives its key by serializing this struct, so a
+	// field added here changes the key of every request, including one that
+	// never sets it. internal/response/cache owns that consequence and
+	// answers for it by version, because a canonical type carries no
+	// transport tag that could hide the field instead.
+	OutputModalities []Modality
+	// AudioOutput configures the spoken answer OutputModalities asks for.
+	// Nil leaves the provider to choose, and a provider that requires a
+	// voice refuses the turn itself rather than take a gateway default.
+	AudioOutput   *AudioOutput
+	Stream        bool
+	StreamOptions StreamOptions
+	User          string
+	Extensions    map[string]json.RawMessage
 }
 
 // Usage reports normalized token counts. InputTokens includes cache reads
@@ -243,6 +277,17 @@ type Usage struct {
 	ReasoningTokens  int
 	CacheReadTokens  int
 	CacheWriteTokens int
+
+	// AudioInputTokens and AudioOutputTokens count the audio a provider
+	// metered at its own rate. Both are already inside InputTokens and
+	// OutputTokens, the way CacheReadTokens is: a cost that adds them again
+	// rather than reclassifying them bills the same audio twice.
+	AudioInputTokens  int
+	AudioOutputTokens int
+	// GeneratedImages counts the pictures the answer carries. It is the one
+	// output unit no token total can describe, because a provider prices a
+	// generated image per image and reports no tokens for it.
+	GeneratedImages int
 
 	// Estimated marks counts the gateway synthesized with a tokenizer
 	// because the provider reported no usage. Estimated counts never
@@ -301,10 +346,20 @@ const (
 
 // ChoiceDelta contains one streamed choice update.
 type ChoiceDelta struct {
-	Index        int
-	Role         Role
-	Text         string
-	Reasoning    string
+	Index     int
+	Role      Role
+	Text      string
+	Reasoning string
+	// Audio carries one chunk of a spoken answer. OpenRouter serves audio
+	// output through streaming alone, so a caller that never reads this
+	// field never receives the answer at all.
+	Audio *AudioChunk
+	// Media carries generated parts that arrive whole rather than in
+	// pieces. An image is the case that forces the field: a provider sends
+	// the finished picture in one delta, so there is nothing to accumulate
+	// and nothing Text could hold. Audio is the other case and keeps its
+	// own field, because a spoken answer does arrive in pieces.
+	Media        []ContentPart
 	ToolCalls    []ToolCall
 	LogProbs     []LogProb
 	FinishReason string
@@ -371,6 +426,8 @@ func (r ChatRequest) Clone() ChatRequest {
 	clone.ParallelToolCalls = clonePointer(r.ParallelToolCalls)
 	clone.Output.Schema = append(json.RawMessage(nil), r.Output.Schema...)
 	clone.Reasoning.MaxTokens = clonePointer(r.Reasoning.MaxTokens)
+	clone.OutputModalities = append([]Modality(nil), r.OutputModalities...)
+	clone.AudioOutput = clonePointer(r.AudioOutput)
 	clone.Extensions = cloneExtensions(r.Extensions)
 	return clone
 }
@@ -395,6 +452,15 @@ func (e StreamEvent) Clone() StreamEvent {
 		clone.Deltas[i] = delta
 		clone.Deltas[i].ToolCalls = append([]ToolCall(nil), delta.ToolCalls...)
 		clone.Deltas[i].LogProbs = cloneLogProbs(delta.LogProbs)
+		clone.Deltas[i].Media = cloneContent(delta.Media)
+		// Audio is the first pointer a delta carries. The struct copy above
+		// aliases it, and the chunk owns a byte slice, so a replayed or
+		// retried stream would share the bytes it is about to overwrite.
+		if delta.Audio != nil {
+			audio := *delta.Audio
+			audio.Data = append([]byte(nil), delta.Audio.Data...)
+			clone.Deltas[i].Audio = &audio
+		}
 	}
 	clone.Usage = clonePointer(e.Usage)
 	return clone
@@ -441,12 +507,22 @@ func cloneMessages(messages []Message) []Message {
 
 func cloneMessage(message Message) Message {
 	clone := message
-	clone.Content = make([]ContentPart, len(message.Content))
-	for i, part := range message.Content {
-		clone.Content[i] = cloneContentPart(part)
-	}
+	clone.Content = cloneContent(message.Content)
 	clone.ToolCalls = append([]ToolCall(nil), message.ToolCalls...)
 	return clone
+}
+
+// cloneContent returns a part list that shares no memory with its source. A
+// message holds one and so does a stream delta, and neither may hand a second
+// reader the bytes the first is about to overwrite. A nil list clones to an
+// empty one, which is what cloneMessage did before this helper existed and
+// what the response cache key already hashes.
+func cloneContent(parts []ContentPart) []ContentPart {
+	clones := make([]ContentPart, len(parts))
+	for i, part := range parts {
+		clones[i] = cloneContentPart(part)
+	}
+	return clones
 }
 
 // cloneContentPart returns a part that shares no memory with its source.

@@ -56,6 +56,45 @@ all_present() {
   return 0
 }
 
+# in_each reports that every term appears under every path, rather than under
+# any one of them. A condition that names two codecs needs this: all_present
+# ORs its paths, so one codec carrying the whole vocabulary satisfies it while
+# the other still drops the field.
+in_each() {
+  local terms=() paths=()
+  local seen=0 arg
+  for arg in "$@"; do
+    if [ "$arg" = "--" ]; then seen=1; continue; fi
+    if [ "$seen" -eq 0 ]; then terms+=("$arg"); else paths+=("$arg"); fi
+  done
+  local term path
+  for path in "${paths[@]}"; do
+    for term in "${terms[@]}"; do
+      grep -Rq -- "$term" "$path" || return 1
+    done
+  done
+  return 0
+}
+
+# unpriced_media_reason holds both halves of MMD-V15 as one condition. A
+# constant declared and never reached is a vocabulary entry, and a cost path
+# that names it without a test is a claim. Require the declaration at the seam
+# that owns cost reasons, the use at the seam that computes a cost, and a test.
+unpriced_media_reason() {
+  grep -q -- CostReasonMediaUnpriced internal/usage/model.go &&
+    grep -q -- CostReasonMediaUnpriced internal/proxy/usage_capture.go &&
+    grep -Rq --include='*_test.go' -- CostReasonMediaUnpriced internal/proxy
+}
+
+# priced_media_spend holds MMD-V16. A spend budget reads the cost on a record,
+# so the record has to carry the media count that produced the cost, and a test
+# has to show the spend counter move for such a record.
+priced_media_spend() {
+  grep -q -- 'json:"media,omitempty"' internal/usage/model.go &&
+    grep -q -- GeneratedImages internal/usage/model.go &&
+    grep -Rq --include='*_test.go' -- SpendNanoUSD internal/usage
+}
+
 # --- Phase A, multimodal chat input ---
 
 check MMD-V01 "the canonical content vocabulary names audio, document, and video parts" \
@@ -93,20 +132,46 @@ check MMD-V10 "the console audio control follows the model input modalities" \
 check MMD-V11 "Starmap prices audio input and audio output" \
   all_present audio_input audio_output -- internal/catalog
 
+# The first spelling of this condition asked for 'type Modality' and 'Audio'.
+# Phase A had already shipped both, as ContentAudio, so the condition held
+# before its own task ran. Name the symbols this task adds instead, and require
+# the clone sweep beside them: a field with no clone line aliases under retry.
 check MMD-V12 "the canonical chat types name an output modality and a delta audio chunk" \
-  all_present 'type Modality' 'Audio' -- internal/inference/types.go
+  all_present 'OutputModalities' '*AudioOutput' 'type AudioChunk' \
+  'assertNoSharedMemory' -- internal/inference
 
+# The first spelling of this condition asked for the exact tag json:"modalities"
+# and passed its two paths to all_present, which ORs them. It therefore missed
+# the shipped tag, which carries omitempty, and would have held for a tree where
+# one codec read the field and the other did not. Require both codecs to name
+# the field and to decode it.
 check MMD-V13 "both codecs read the output modality request field" \
-  all_present 'json:"modalities"' -- internal/protocol/openai internal/protocol/openrouter
+  in_each 'json:"modalities,omitempty"' 'decodeModalities' 'json:"audio,omitempty"' \
+  -- internal/protocol/openai internal/protocol/openrouter
 
+# The first spelling of this condition grepped one codec for the lowercase word
+# 'images', which the input path already carried. Require the encoder itself, in
+# both codecs, together with the audio half of the same answer.
 check MMD-V14 "a response holding an image part encodes to the documented field" \
-  all_present 'images' ContentImage -- internal/protocol/openai
+  in_each 'json:"images,omitempty"' 'encodeGeneratedImages' 'json:"audio,omitempty"' \
+  -- internal/protocol/openai internal/protocol/openrouter
 
+# The first spelling of this condition looked for the cost reason under
+# internal/inference. The cost-reason vocabulary belongs to internal/usage,
+# which owns the record the reason is written on, and a condition that names
+# the wrong seam holds nothing wherever the work correctly lands. Require the
+# reason where it is declared and a test that reaches it.
 check MMD-V15 "an unpriced media turn records a named cost reason and no cost" \
-  grep_q CostReasonMediaUnpriced internal/inference
+  unpriced_media_reason
 
+# The first spelling of this condition grepped internal/limits for MediaUnits.
+# internal/inference already owns that word, and one package owns a word here,
+# so the condition asked for a copy rather than for its own text. Its text says
+# spend, and a spend budget reads the cost on the record. Require the record to
+# carry the media count and a test to prove the spend counter moves.
 check MMD-V16 "the spend budget counts a priced media turn" \
-  grep_q MediaUnits internal/limits
+  priced_media_spend
+
 
 # --- Phase C, dedicated media operations ---
 

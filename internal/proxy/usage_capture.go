@@ -13,6 +13,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
+
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
@@ -127,9 +129,10 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.CacheStatus = response.CacheStatus
 		record.Tokens = usageTokens(response.Response.Usage)
+		record.Media = usageMedia(response.Response.Usage)
 		snapshot = response.CatalogSnapshot
 	}
-	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.CacheStatus)
+	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, record.CacheStatus)
 	if overheadMS, ok := OverheadMS(ctx); ok {
 		record.OverheadMS = overheadMS
 	}
@@ -146,7 +149,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	record.Streaming = true
 	if err != nil {
 		applyOutcome(&record, err)
-		record.Cost, record.CostUnavailableReason = usageCost(nil, "", record.Tokens, "")
+		record.Cost, record.CostUnavailableReason = usageCost(nil, "", record.Tokens, record.Media, "")
 		if overheadMS, ok := OverheadMS(ctx); ok {
 			record.OverheadMS = overheadMS
 		}
@@ -180,7 +183,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 		record.Tokens = usageTokens(response.Response.Usage)
 		snapshot = response.CatalogSnapshot
 	}
-	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.CacheStatus)
+	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, record.CacheStatus)
 	s.capture.submit(record)
 	return response, err
 }
@@ -198,6 +201,9 @@ type usageCaptureStream struct {
 	usage     *inference.Usage
 	modelUsed string
 	once      sync.Once
+
+	// generatedImages accumulates across deltas. No usage event reports it.
+	generatedImages int
 }
 
 func (s *usageCaptureStream) Read() (*inference.StreamEvent, error) {
@@ -210,6 +216,7 @@ func (s *usageCaptureStream) Read() (*inference.StreamEvent, error) {
 			latched := *event.Usage
 			s.usage = &latched
 		}
+		s.generatedImages += inference.StreamMediaUnits(event.Deltas).Images
 		if event.ModelUsed != "" {
 			s.modelUsed = event.ModelUsed
 		}
@@ -259,8 +266,14 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		record.ModelUsed = s.modelUsed
 		record.CacheStatus = s.GetCacheStatus()
 		if s.usage != nil {
-			record.Tokens = usageTokens(*s.usage)
-			record.TokensEstimated = s.usage.Estimated
+			latched := *s.usage
+			// A streamed answer reports its usage on one chunk and its
+			// pictures on others, so the count the deltas carry is the only
+			// count there is. Read latches it; the provider never sends it.
+			latched.GeneratedImages = s.generatedImages
+			record.Tokens = usageTokens(latched)
+			record.Media = usageMedia(latched)
+			record.TokensEstimated = latched.Estimated
 		}
 		var snapshot *runtimecatalog.RoutableSnapshot
 		if evidence := findStreamEvidence(s.stream); evidence != nil {
@@ -270,7 +283,7 @@ func (s *usageCaptureStream) finalize(terminal error) {
 			record.RoutingMS = evidence.RoutingDuration().Milliseconds()
 			snapshot = evidence.CatalogSnapshot()
 		}
-		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.CacheStatus)
+		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, record.CacheStatus)
 		if s.timer != nil {
 			record.OverheadMS = s.timer.OverheadMS()
 		}
@@ -398,7 +411,21 @@ func usageTokens(u inference.Usage) usage.Tokens {
 		Reasoning:  int64(u.ReasoningTokens),
 		CacheRead:  int64(u.CacheReadTokens),
 		CacheWrite: int64(u.CacheWriteTokens),
+		// The audio shares are already inside Input and Output. A cost
+		// reclassifies them out of the plain rates rather than adding them.
+		AudioInput:  int64(u.AudioInputTokens),
+		AudioOutput: int64(u.AudioOutputTokens),
 	}
+}
+
+// usageMedia carries the non-token units of one turn onto its record. It
+// returns nil for a text turn, which is what every record written before media
+// accounting existed reads back as.
+func usageMedia(u inference.Usage) *usage.Media {
+	if u.GeneratedImages == 0 {
+		return nil
+	}
+	return &usage.Media{GeneratedImages: int64(u.GeneratedImages)}
 }
 
 // usageCost derives one request's cost from the exact catalog snapshot that
@@ -407,6 +434,7 @@ func usageCost(
 	snapshot *runtimecatalog.RoutableSnapshot,
 	modelID string,
 	tokens usage.Tokens,
+	media *usage.Media,
 	cacheStatus string,
 ) (*usage.Cost, string) {
 	if cacheStatus == CacheStatusHit {
@@ -416,7 +444,13 @@ func usageCost(
 	if snapshot == nil || modelID == "" {
 		return nil, usage.CostReasonNoRoute
 	}
-	if tokens.Input == 0 && tokens.Output == 0 && tokens.Total == 0 {
+	var generatedImages int64
+	if media != nil {
+		generatedImages = media.GeneratedImages
+	}
+	// A generated image is metered per image, so a turn that produced one
+	// reported usage even when it reported no tokens at all.
+	if tokens.Input == 0 && tokens.Output == 0 && tokens.Total == 0 && generatedImages == 0 {
 		return nil, usage.CostReasonNoUsage
 	}
 	route, ok := snapshot.ResolveRoute(modelID)
@@ -424,15 +458,60 @@ func usageCost(
 		return nil, usage.CostReasonNoRoute
 	}
 	offering, err := snapshot.Offering(route)
-	if err != nil || offering.Pricing == nil || offering.Pricing.Tokens == nil {
+	if err != nil || offering.Pricing == nil {
 		return nil, usage.CostReasonNoPricing
 	}
-	prices := offering.Pricing.Tokens
+	// The media half decides first. A media unit the offering does not price
+	// withdraws the whole cost, because the token half of such a turn is the
+	// cheap half and reporting it alone reads as the bill.
+	mediaTotal, reason := mediaCost(offering.Pricing, tokens, generatedImages)
+	if reason != "" {
+		return nil, reason
+	}
+	tokenTotal, reason := tokenCost(offering.Pricing.Tokens, tokens)
+	if reason != "" {
+		return nil, reason
+	}
+	total := tokenTotal + mediaTotal
+	return &usage.Cost{NanoUSD: int64(math.Round(total * 1e9)), Currency: usageCurrency}, ""
+}
+
+// mediaCost prices the units no plain token rate describes. It answers with a
+// cost reason rather than a number when the offering prices none of them. A
+// picture billed as free and a spoken minute billed at the text rate are both
+// silent understatements, and providers charge many times the text rate for
+// audio, so a named gap is the honest answer.
+func mediaCost(pricing *starmapcatalogs.ModelPricing, tokens usage.Tokens, generatedImages int64) (float64, string) {
+	var total float64
+	if generatedImages > 0 {
+		if pricing.Operations == nil || pricing.Operations.ImageGen == nil {
+			return 0, usage.CostReasonMediaUnpriced
+		}
+		total += float64(generatedImages) * *pricing.Operations.ImageGen
+	}
+	audioPriced := pricing.Tokens != nil
+	if tokens.AudioInput > 0 && (!audioPriced || pricing.Tokens.AudioInput == nil) {
+		return 0, usage.CostReasonMediaUnpriced
+	}
+	if tokens.AudioOutput > 0 && (!audioPriced || pricing.Tokens.AudioOutput == nil) {
+		return 0, usage.CostReasonMediaUnpriced
+	}
+	return total, ""
+}
+
+// tokenCost prices the token half of one turn. It returns zero without a
+// reason when the turn reported no tokens, because an image-only answer is
+// priced entirely by mediaCost and an offering that generates pictures need
+// not publish a token rate at all.
+func tokenCost(prices *starmapcatalogs.ModelTokenPricing, tokens usage.Tokens) (float64, string) {
+	if tokens.Input == 0 && tokens.Output == 0 && tokens.Total == 0 {
+		return 0, ""
+	}
+	if prices == nil || (prices.Input == nil && prices.Output == nil) {
+		return 0, usage.CostReasonNoPricing
+	}
 	inputRate := modelTokenPrice(prices.Input)
 	outputRate := modelTokenPrice(prices.Output)
-	if prices.Input == nil && prices.Output == nil {
-		return nil, usage.CostReasonNoPricing
-	}
 	readRate := inputRate
 	if prices.CacheRead != nil {
 		readRate = modelTokenPrice(prices.CacheRead)
@@ -441,15 +520,26 @@ func usageCost(
 	if prices.CacheWrite != nil {
 		writeRate = modelTokenPrice(prices.CacheWrite)
 	}
-	uncachedInput := tokens.Input - tokens.CacheRead - tokens.CacheWrite
+	// Audio, cache reads, and cache writes are all shares of the totals rather
+	// than additions to them. Each one is subtracted from the plain share and
+	// added back at its own rate, so the same token is billed exactly once.
+	audioInputRate := modelTokenPrice(prices.AudioInput)
+	audioOutputRate := modelTokenPrice(prices.AudioOutput)
+	uncachedInput := tokens.Input - tokens.CacheRead - tokens.CacheWrite - tokens.AudioInput
 	if uncachedInput < 0 {
 		uncachedInput = 0
+	}
+	plainOutput := tokens.Output - tokens.AudioOutput
+	if plainOutput < 0 {
+		plainOutput = 0
 	}
 	total := float64(uncachedInput)*inputRate +
 		float64(tokens.CacheRead)*readRate +
 		float64(tokens.CacheWrite)*writeRate +
-		float64(tokens.Output)*outputRate
-	return &usage.Cost{NanoUSD: int64(math.Round(total * 1e9)), Currency: usageCurrency}, ""
+		float64(tokens.AudioInput)*audioInputRate +
+		float64(plainOutput)*outputRate +
+		float64(tokens.AudioOutput)*audioOutputRate
+	return total, ""
 }
 
 // fallbackRequestID mints a random identifier when the transport supplied

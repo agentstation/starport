@@ -84,7 +84,7 @@ func contentFromInference(part inference.ContentPart) (ContentPart, error) {
 		if part.Image == nil {
 			return ContentPart{}, fmt.Errorf("%w: image part carries no image", ErrInvalidMessageContent)
 		}
-		wire.Type = "image_url"
+		wire.Type = contentTypeImageURL
 		wire.ImageURL = &ImageURL{URL: part.Image.URL, Detail: part.Image.Detail}
 	case inference.ContentAudio:
 		if part.Audio == nil || len(part.Audio.Data) == 0 {
@@ -123,7 +123,7 @@ func contentToInference(part ContentPart) (inference.ContentPart, error) {
 	canonical := inference.ContentPart{Kind: inference.ContentText, Text: part.Text}
 	switch part.Type {
 	case "", contentTypeText, "input_text":
-	case "image_url", "input_image":
+	case contentTypeImageURL, "input_image":
 		if part.ImageURL == nil {
 			return inference.ContentPart{}, fmt.Errorf("%w: image_url part carries no image", ErrInvalidMessageContent)
 		}

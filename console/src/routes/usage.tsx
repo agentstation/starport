@@ -64,6 +64,10 @@ const COST_REASONS: Record<string, string> = {
   no_pricing: "no pricing",
   no_route: "no route",
   no_usage: "no usage",
+  // The turn produced a picture or a spoken answer the offering does not
+  // price. Its token half is priced, and showing that half alone would read
+  // as the bill, so the whole cost is withheld and named here instead.
+  media_unpriced: "media unpriced",
 };
 
 type UsageSearch = {
@@ -317,7 +321,12 @@ function RequestDetail({
       ["reasoning", tokens.reasoning],
       ["cache read", tokens.cache_read],
       ["cache write", tokens.cache_write],
+      ["audio in", tokens.audio_input],
+      ["audio out", tokens.audio_output],
     ] as const
+  ).filter(([, count]) => count);
+  const mediaParts = (
+    [["images", record.media?.generated_images]] as const
   ).filter(([, count]) => count);
   const at = record.timestamp ? new Date(record.timestamp) : null;
   return (
@@ -408,6 +417,13 @@ function RequestDetail({
             "—"
           )}
         </DetailRow>
+        {mediaParts.length > 0 && (
+          <DetailRow label="Media">
+            <span className="tabular-nums">
+              {mediaParts.map(([name, count]) => `${name} ${formatCount(count)}`).join(" · ")}
+            </span>
+          </DetailRow>
+        )}
       </dl>
     </SidePanel>
   );

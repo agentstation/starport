@@ -33,25 +33,54 @@ func (u MediaUnits) Total() int {
 func EstimateMediaUnits(messages []Message) MediaUnits {
 	var units MediaUnits
 	for _, message := range messages {
-		for _, part := range message.Content {
-			if part.Image != nil && part.Image.URL != "" {
-				units.Images++
-			}
-			if part.Audio != nil {
-				units.Audio++
-				units.InlineBytes += int64(len(part.Audio.Data))
-			}
-			if part.Document != nil {
-				units.Documents++
-				units.InlineBytes += int64(len(part.Document.Data))
-			}
-			if part.Video != nil {
-				units.Videos++
-				units.InlineBytes += int64(len(part.Video.Data))
-			}
-		}
+		units.addParts(message.Content)
 	}
 	return units
+}
+
+// ResponseMediaUnits counts the media the answer itself carries. A provider
+// reports no token count for a generated image, so this walk is the only
+// place the gateway learns how many it produced, and therefore the only place
+// a cost or a budget can learn it.
+func ResponseMediaUnits(choices []Choice) MediaUnits {
+	var units MediaUnits
+	for _, choice := range choices {
+		units.addParts(choice.Message.Content)
+	}
+	return units
+}
+
+// StreamMediaUnits counts the media one stream chunk carries. A streamed turn
+// reports its usage on one event and its pictures on others, so no single event
+// holds both and a caller has to add these up across the whole stream.
+func StreamMediaUnits(deltas []ChoiceDelta) MediaUnits {
+	var units MediaUnits
+	for _, delta := range deltas {
+		units.addParts(delta.Media)
+	}
+	return units
+}
+
+// addParts counts one part list. A part counts by the payload it carries
+// rather than by the kind it names, for the reason EstimateMediaUnits states.
+func (u *MediaUnits) addParts(parts []ContentPart) {
+	for _, part := range parts {
+		if part.Image != nil && part.Image.URL != "" {
+			u.Images++
+		}
+		if part.Audio != nil {
+			u.Audio++
+			u.InlineBytes += int64(len(part.Audio.Data))
+		}
+		if part.Document != nil {
+			u.Documents++
+			u.InlineBytes += int64(len(part.Document.Data))
+		}
+		if part.Video != nil {
+			u.Videos++
+			u.InlineBytes += int64(len(part.Video.Data))
+		}
+	}
 }
 
 // RequestMediaModalities lists the media modalities one message list carries,

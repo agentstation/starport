@@ -13,7 +13,13 @@ import (
 	"github.com/agentstation/starport/internal/inference"
 )
 
-const functionToolType = "function"
+const (
+	functionToolType = "function"
+	// contentTypeImageURL is the part type a generated image carries. It is
+	// the same word an image input uses, so a caller sends back what it
+	// received without translating.
+	contentTypeImageURL = "image_url"
+)
 
 // ChatRequest is the OpenAI chat-completions wire request.
 type ChatRequest struct {
@@ -42,6 +48,19 @@ type ChatRequest struct {
 	Store               *bool             `json:"store,omitempty"`
 	Metadata            map[string]string `json:"metadata,omitempty"`
 	ServiceTier         string            `json:"service_tier,omitempty"`
+
+	// Modalities names what the caller will accept back. Absent means text,
+	// which is what every model served before this field existed.
+	Modalities []string `json:"modalities,omitempty"`
+	// Audio configures the spoken answer that Modalities asks for.
+	Audio *AudioConfig `json:"audio,omitempty"`
+}
+
+// AudioConfig selects the voice and container for a spoken answer. A provider
+// that serves audio requires both, and neither carries a gateway default.
+type AudioConfig struct {
+	Voice  string `json:"voice,omitempty"`
+	Format string `json:"format,omitempty"`
 }
 
 // Message is one OpenAI chat message.
@@ -186,8 +205,10 @@ func DecodeChat(reader io.Reader) (inference.ChatRequest, error) {
 			FrequencyPenalty: wire.FrequencyPenalty, LogitBias: wire.LogitBias, Seed: wire.Seed,
 		},
 		Tools: tools, ToolChoice: toolChoice, ParallelToolCalls: wire.ParallelToolCalls, Output: output,
-		Reasoning: inference.Reasoning{Effort: inference.ReasoningEffort(wire.ReasoningEffort)},
-		Stream:    wire.Stream, User: wire.User, Extensions: extensions,
+		Reasoning:        inference.Reasoning{Effort: inference.ReasoningEffort(wire.ReasoningEffort)},
+		OutputModalities: decodeModalities(wire.Modalities),
+		AudioOutput:      decodeAudioConfig(wire.Audio),
+		Stream:           wire.Stream, User: wire.User, Extensions: extensions,
 		StreamOptions: inference.StreamOptions{IncludeUsage: wire.StreamOptions != nil && wire.StreamOptions.IncludeUsage},
 	}, nil
 }
@@ -243,6 +264,30 @@ type ResponseMessage struct {
 	Content   string     `json:"content"`
 	Refusal   *string    `json:"refusal,omitempty"`
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	// Images carries generated pictures. The field name comes from the
+	// shape the OpenAI-compatible providers that generate images already
+	// serve, so a client that reads one of them reads this gateway.
+	Images []GeneratedImage `json:"images,omitempty"`
+	// Audio carries a spoken answer. Content keeps the transcript beside
+	// it rather than going null, because a caller that cannot play audio
+	// still has the answer.
+	Audio *GeneratedAudio `json:"audio,omitempty"`
+}
+
+// GeneratedImage is one picture a model produced. It repeats the input part
+// shape, so a caller sends back what it received without translating.
+type GeneratedImage struct {
+	Type     string    `json:"type"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+	Index    int       `json:"index,omitempty"`
+}
+
+// GeneratedAudio is a spoken answer. Data is raw base64 with no data URL
+// prefix, matching the audio input shape on the same wire.
+type GeneratedAudio struct {
+	Data       string `json:"data,omitempty"`
+	Transcript string `json:"transcript,omitempty"`
+	Format     string `json:"format,omitempty"`
 }
 
 // Usage is OpenAI token accounting.
@@ -251,11 +296,21 @@ type Usage struct {
 	CompletionTokens       int                     `json:"completion_tokens"`
 	TotalTokens            int                     `json:"total_tokens"`
 	CompletionTokenDetails *CompletionTokenDetails `json:"completion_tokens_details,omitempty"`
+	PromptTokenDetails     *PromptTokenDetails     `json:"prompt_tokens_details,omitempty"`
+}
+
+// PromptTokenDetails breaks the prompt total down. A caller that asked for a
+// spoken turn reconciles its bill from the audio share, because a provider
+// charges audio at a rate the plain input rate does not describe.
+type PromptTokenDetails struct {
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // CompletionTokenDetails contains OpenAI reasoning-token accounting.
 type CompletionTokenDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens"`
+	// AudioTokens counts the audio share of CompletionTokens.
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // LogProbs contains output-token log probabilities.
@@ -287,6 +342,8 @@ func EncodeChat(response inference.ChatResponse) ChatResponse {
 			Message: ResponseMessage{
 				Role: string(choice.Message.Role), Content: messageText(choice.Message),
 				ToolCalls: encodeToolCalls(choice.Message.ToolCalls),
+				Images:    encodeGeneratedImages(choice.Message.Content),
+				Audio:     encodeGeneratedAudio(choice.Message.Content, messageText(choice.Message)),
 			},
 			FinishReason: choice.FinishReason,
 			LogProbs:     encodeLogProbs(choice.LogProbs),
@@ -347,6 +404,12 @@ type MessageDelta struct {
 	Role      string     `json:"role,omitempty"`
 	Content   string     `json:"content,omitempty"`
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	// Images arrive whole in one delta, because a provider sends a finished
+	// picture rather than a growing one.
+	Images []GeneratedImage `json:"images,omitempty"`
+	// Audio arrives in pieces, so each chunk holds its own base64 run and
+	// the transcript text that goes with it.
+	Audio *GeneratedAudio `json:"audio,omitempty"`
 }
 
 // EncodeStream converts one canonical stream event to an OpenAI chunk.
@@ -362,8 +425,11 @@ func EncodeStream(event inference.StreamEvent) StreamChunk {
 	}
 	for _, delta := range event.Deltas {
 		choice := StreamChoice{
-			Index:    delta.Index,
-			Delta:    MessageDelta{Role: string(delta.Role), Content: delta.Text, ToolCalls: encodeToolCalls(delta.ToolCalls)},
+			Index: delta.Index,
+			Delta: MessageDelta{
+				Role: string(delta.Role), Content: delta.Text, ToolCalls: encodeToolCalls(delta.ToolCalls),
+				Images: encodeGeneratedImages(delta.Media), Audio: encodeAudioChunk(delta.Audio),
+			},
 			LogProbs: encodeLogProbs(delta.LogProbs),
 		}
 		if delta.FinishReason != "" {
@@ -481,7 +547,7 @@ func decodeContent(raw json.RawMessage, allowCacheControl bool) ([]inference.Con
 		switch part.Type {
 		case "text", "input_text":
 			result[index] = inference.ContentPart{Kind: inference.ContentText, Text: part.Text}
-		case "image_url", "input_image":
+		case contentTypeImageURL, "input_image":
 			if part.ImageURL == nil || part.ImageURL.URL == "" {
 				return nil, fmt.Errorf("content[%d].image_url.url is required", index)
 			}
@@ -662,8 +728,14 @@ func encodeToolCalls(calls []inference.ToolCall) []ToolCall {
 
 func encodeUsage(usage inference.Usage) Usage {
 	result := Usage{PromptTokens: usage.InputTokens, CompletionTokens: usage.OutputTokens, TotalTokens: usage.TotalTokens}
-	if usage.ReasoningTokens > 0 {
-		result.CompletionTokenDetails = &CompletionTokenDetails{ReasoningTokens: usage.ReasoningTokens}
+	if usage.ReasoningTokens > 0 || usage.AudioOutputTokens > 0 {
+		result.CompletionTokenDetails = &CompletionTokenDetails{
+			ReasoningTokens: usage.ReasoningTokens,
+			AudioTokens:     usage.AudioOutputTokens,
+		}
+	}
+	if usage.AudioInputTokens > 0 {
+		result.PromptTokenDetails = &PromptTokenDetails{AudioTokens: usage.AudioInputTokens}
 	}
 	return result
 }
@@ -680,6 +752,68 @@ func encodeLogProbs(logProbs []inference.LogProb) *LogProbs {
 		}
 	}
 	return result
+}
+
+// decodeModalities reads the requested output modalities. An unknown word
+// passes through as written: the route planner owns what a model can serve, and
+// a codec that rejected a word here would answer a question it does not own.
+func decodeModalities(wire []string) []inference.Modality {
+	if len(wire) == 0 {
+		return nil
+	}
+	modalities := make([]inference.Modality, len(wire))
+	for index, name := range wire {
+		modalities[index] = inference.Modality(name)
+	}
+	return modalities
+}
+
+func decodeAudioConfig(wire *AudioConfig) *inference.AudioOutput {
+	if wire == nil {
+		return nil
+	}
+	return &inference.AudioOutput{Voice: wire.Voice, Format: wire.Format}
+}
+
+// encodeGeneratedImages writes every image part of a message or a delta.
+func encodeGeneratedImages(parts []inference.ContentPart) []GeneratedImage {
+	var images []GeneratedImage
+	for _, part := range parts {
+		if part.Kind != inference.ContentImage || part.Image == nil {
+			continue
+		}
+		images = append(images, GeneratedImage{
+			Type: contentTypeImageURL, ImageURL: &ImageURL{URL: part.Image.URL, Detail: part.Image.Detail},
+			Index: len(images),
+		})
+	}
+	return images
+}
+
+// encodeGeneratedAudio writes the first audio part of a completed message. The
+// transcript comes from the text part, which is where the canonical message
+// holds the words the model spoke.
+func encodeGeneratedAudio(parts []inference.ContentPart, transcript string) *GeneratedAudio {
+	for _, part := range parts {
+		if part.Kind != inference.ContentAudio || part.Audio == nil {
+			continue
+		}
+		return &GeneratedAudio{
+			Data:       base64.StdEncoding.EncodeToString(part.Audio.Data),
+			Transcript: transcript, Format: part.Audio.Format,
+		}
+	}
+	return nil
+}
+
+func encodeAudioChunk(chunk *inference.AudioChunk) *GeneratedAudio {
+	if chunk == nil {
+		return nil
+	}
+	return &GeneratedAudio{
+		Data:       base64.StdEncoding.EncodeToString(chunk.Data),
+		Transcript: chunk.Transcript,
+	}
 }
 
 func messageText(message inference.Message) string {

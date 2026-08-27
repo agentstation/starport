@@ -35,6 +35,18 @@ const (
 	imageTokens = 85
 )
 
+// Audio, document, and video parts carry no token count here, and that is a
+// decision rather than an omission. This estimator runs when a provider
+// reported no usage, and its output reaches a bill and a spend budget. No
+// published rate converts a second of audio or a page of a document into
+// tokens across providers, so any constant written here would be an invented
+// number in a real charge. An image is the exception: OpenAI documents its
+// base cost, and the constant above is that documented figure.
+//
+// The gap is reported rather than hidden. inference.EstimateMediaUnits counts
+// every kind, and the cost path names a media unit the offering does not
+// price instead of billing a turn that carries one as if it were text.
+
 // Estimator counts tokens with shared pre-built codecs. Create one with
 // NewEstimator at composition time; the zero value has no codecs and
 // falls back to a bytes-per-token heuristic.
@@ -84,12 +96,11 @@ func (e *Estimator) CountMessages(hint Hint, messages []inference.Message) int {
 		total += e.CountText(hint, message.Reasoning)
 		for _, part := range message.Content {
 			total += e.CountText(hint, part.Text)
-			if part.Image != nil && part.Image.URL != "" {
-				total += imageTokens
-			}
 		}
 	}
-	return total
+	// One shared walk counts the media parts, so a new content kind is
+	// counted where it is declared rather than once per caller.
+	return total + inference.EstimateMediaUnits(messages).Images*imageTokens
 }
 
 // codec selects the closest pre-built codec for the hint. Models outside
