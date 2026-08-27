@@ -123,7 +123,7 @@
     Created: 2026-08-26 ·
     Baseline: PLG0 pins both repositories ·
     Proof root: <code>docs/proof/document-parser/</code> ·
-    Next action: PLG0 confirms both repositories
+    Next action: PLG1 decodes the parser plugin
   </p>
 
   <section id="outcome">
@@ -298,8 +298,8 @@
         <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        <tr id="PLG0" data-status="todo"><td>PLG0</td><td>Baseline. Pin both commits, confirm the engine names, name a recognition provider, create the proof root, write the verifier red at 20 conditions.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="PLG1" data-status="todo"><td>PLG1</td><td>Phase A. Decode the parser plugin and its engine vocabulary, and refuse an unknown engine. Conditions PLG-V01 to PLG-V03.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG0" data-status="done"><td>PLG0</td><td>Baseline. Pin both commits, confirm the engine names, name a recognition provider, create the proof root, write the verifier red at 20 conditions.</td><td><code>done</code></td><td><code>bash scripts/verify-document-parser.sh</code> reports <code>Summary: 0 passed, 20 failed</code>. <code>go build ./...</code> clean. Proof <code>docs/proof/document-parser/plg0.md</code>. Work commit <code>2783d68</code>. No production file changed.</td></tr>
+        <tr id="PLG1" data-status="in_progress"><td>PLG1</td><td>Phase A. Decode the parser plugin and its engine vocabulary, and refuse an unknown engine. Conditions PLG-V01 to PLG-V03.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="PLG2" data-status="todo"><td>PLG2</td><td>Phase A. In-process text extraction for a document that carries text. Conditions PLG-V04 and PLG-V05.</td><td><code>todo</code></td><td></td></tr>
         <tr id="PLG3" data-status="todo"><td>PLG3</td><td>Phase B. Starmap: the recognition operation, its offerings, and its per-page price, then the Starport dependency raise. Conditions PLG-V06 to PLG-V08.</td><td><code>todo</code></td><td></td></tr>
         <tr id="PLG4" data-status="todo"><td>PLG4</td><td>Phase B. Route a scanned document to a catalogued recognition model. Conditions PLG-V09 to PLG-V11.</td><td><code>todo</code></td><td></td></tr>
@@ -765,6 +765,7 @@ CI runs it, and every ledger row except PLG10 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted one critical finding. PLG3 never raised the Starport dependency to the released catalog, so PLG4 planned a route from offerings the module could not read. PLG3 now raises it, and the goal records the two pull requests. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted one finding here. The plan carried the title of the model modalities plan. The decision table also listed PLG-D6 before PLG-D5.</td></tr>
         <tr><td>2026-08-27</td><td>meta</td><td>promoted</td><td>FIL9 promoted this plan from <code>proposed</code> to <code>active</code>. The files API plan closed its documentation and gate task, which was the stated precondition. PLG0 is the next action.</td></tr>
+        <tr><td>2026-08-27</td><td>PLG0</td><td>done</td><td>Baseline pinned at starport <code>42e8b57</code> and starmap <code>0414a3c</code>, with <code>go.mod</code> on <code>starmap v0.11.0</code>. OpenRouter states three engines today: <code>mistral-ocr</code> at two dollars for each 1,000 pages, <code>cloudflare-ai</code> free, and <code>native</code> charged as input tokens. The historical <code>pdf-text</code> engine is gone, which is the vendor replacement this task was told to check. Two of the three name a vendor Starport cannot route to: the catalog serves zero models under <code>mistral</code>, and <code>cloudflare</code> is not a provider at all. The enforced vocabulary is therefore <code>native</code> and <code>recognition</code>, and every other engine name draws a typed refusal, which is what decision PLG-D4 chose. The recognition census is empty because the operation does not exist: <code>ProviderOperation</code> names eight operations and none reads a document, and <code>ModelOperationPricing</code> holds ten prices and none is per page. The one reachable candidate for the first recognition offering is <code>google-ai-studio</code>. Work commit <code>2783d68</code>.</td></tr>
 </tbody>
     </table>
   </section>
