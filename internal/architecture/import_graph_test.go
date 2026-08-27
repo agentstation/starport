@@ -27,6 +27,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../availability",
 		"../blob",
 		"../files",
+		"../jobs",
 		"../inference",
 		"../failure",
 		"../identity",
@@ -48,6 +49,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/availability",
 		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/files",
+		"github.com/agentstation/starport/internal/jobs",
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
 		"github.com/agentstation/starport/internal/identity",
@@ -129,6 +131,14 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// meaning of a request decide what a stored file is.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/files"],
 		"github.com/agentstation/starport/internal/blob",
+		"github.com/agentstation/starport/internal/storage",
+	)
+	// Jobs owns work that outlives its request. It reaches the operation
+	// vocabulary and the record store, and nothing else. A dependency on
+	// execution or a provider connector would put the poll loop inside the
+	// record, and the seam exists to keep the two apart.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs"],
+		"github.com/agentstation/starport/internal/routing",
 		"github.com/agentstation/starport/internal/storage",
 	)
 	for _, packagePath := range []string{
