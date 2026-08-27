@@ -95,3 +95,44 @@ func (l *Limits) budget(dimension Dimension) *Budget {
 	}
 	return nil
 }
+
+// StoredBytesRule is one stored byte bound an upload must satisfy.
+type StoredBytesRule struct {
+	Scope Scope
+	Limit int64
+}
+
+// TightestStoredBytes reports the stored byte bound an upload must satisfy,
+// and whether one applies at all.
+//
+// Stored bytes resolve to the smaller of the two, which is the opposite of
+// what RequestRules does above, and for a reason the shapes of the two meters
+// give. A request rate meters two different populations, so both meters have
+// to run. Stored bytes meter one: a file belongs to an account, and a key
+// holds no bytes of its own. Both bounds therefore read the same counter, and
+// running the smaller one satisfies the larger by arithmetic.
+//
+// A key bound is an operator asking that this key not push the account past a
+// tighter number than the account's own. The returned scope names which holder
+// set the bound, so a refusal can name the owner an operator has to talk to.
+func TightestStoredBytes(tenantLimits, keyLimits *Limits) (StoredBytesRule, bool) {
+	var tightest StoredBytesRule
+	found := false
+	for _, holder := range []struct {
+		scope  Scope
+		limits *Limits
+	}{
+		{ScopeTenant, tenantLimits},
+		{ScopeKey, keyLimits},
+	} {
+		if holder.limits == nil || holder.limits.StoredBytes == nil {
+			continue
+		}
+		bound := *holder.limits.StoredBytes
+		if !found || bound < tightest.Limit {
+			tightest = StoredBytesRule{Scope: holder.scope, Limit: bound}
+			found = true
+		}
+	}
+	return tightest, found
+}

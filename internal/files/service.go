@@ -48,6 +48,17 @@ var (
 	ErrRetentionTooShort = errors.New("files: the requested retention is shorter than one hour")
 )
 
+// Meter bounds how many bytes one tenant keeps in storage at a time.
+//
+// This package names the primitive rather than importing the limit
+// vocabulary. A stored file knows its size and its owner, and nothing about
+// who set the bound or where the number came from. The storage meter in
+// internal/limits satisfies the contract.
+type Meter interface {
+	Reserve(ctx context.Context, holder string, size, bound int64) error
+	Release(ctx context.Context, holder string, size int64) error
+}
+
 // Service writes a file as two writes and keeps them consistent.
 //
 // The record comes first, then the bytes, then the commit. The order matters:
@@ -61,6 +72,7 @@ type Service struct {
 	now          func() time.Time
 	pendingGrace time.Duration
 	retention    time.Duration
+	meter        Meter
 }
 
 // Option changes one service setting.
@@ -94,6 +106,16 @@ func WithRetention(window time.Duration) Option {
 	}
 }
 
+// WithMeter bounds the bytes each tenant keeps. Without one the service stores
+// without counting, which is what a deployment that set no bound wants.
+func WithMeter(meter Meter) Option {
+	return func(s *Service) {
+		if meter != nil {
+			s.meter = meter
+		}
+	}
+}
+
 // NewService builds a file service over a record store and a byte store.
 func NewService(records Repository, blobs blob.Store, options ...Option) (*Service, error) {
 	if records == nil || blobs == nil {
@@ -117,6 +139,19 @@ type UploadRequest struct {
 	Tenant   string
 	Filename string
 	Purpose  Purpose
+
+	// Size is what the caller says the upload weighs, and the service claims
+	// it against the bound before it writes a byte. A claim after the write
+	// has already spent the storage it was supposed to protect.
+	//
+	// The service reconciles the claim against the real size once the write
+	// lands, so a caller that understated the upload gains nothing.
+	Size int64
+
+	// StoredBytesBound is the total this tenant may keep. Zero leaves the
+	// tenant unbounded, and the service still counts its bytes so a bound set
+	// later reads a true number.
+	StoredBytesBound int64
 
 	// Retention shortens the window this file gets. A zero value takes the
 	// window the deployment set. A longer one is refused rather than clamped,
@@ -157,17 +192,31 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 	if err != nil {
 		return File{}, err
 	}
+	tenant := strings.TrimSpace(request.Tenant)
+
+	// The claim goes in before anything is written. A bound checked after the
+	// write has already spent the storage it exists to protect.
+	held := max(request.Size, 0)
+	if err := s.reserve(ctx, tenant, held, request.StoredBytesBound); err != nil {
+		return File{}, err
+	}
+
 	pending := File{
 		ID:        newFileID(),
-		Tenant:    strings.TrimSpace(request.Tenant),
+		Tenant:    tenant,
 		Filename:  request.Filename,
 		Purpose:   request.Purpose,
+		Bytes:     held,
 		State:     FileStatePending,
 		CreatedAt: created,
 		ExpiresAt: expiresAt,
 		blobKey:   newBlobKey(),
 	}
+	// The pending record carries the claim, so every path that drops the
+	// record gives the same number back. A crash leaves the claim to the
+	// sweep, which reads it off the record it deletes.
 	if err := s.records.Create(ctx, pending); err != nil {
+		s.release(ctx, tenant, held)
 		return File{}, err
 	}
 
@@ -180,14 +229,58 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 		return File{}, fmt.Errorf("files: store the bytes: %w", putErr)
 	}
 
+	// The write knows what the upload really weighed. A caller that understated
+	// it pays the difference here, and one that overstated it gets the room
+	// back rather than holding storage nothing occupies.
+	if err := s.settle(ctx, &pending, info.Size, request.StoredBytesBound); err != nil {
+		s.discard(ctx, pending)
+		return File{}, err
+	}
+
 	committed := pending
-	committed.Bytes = info.Size
 	committed.State = FileStateReady
 	if err := s.records.Replace(ctx, committed); err != nil {
 		s.discard(ctx, pending)
 		return File{}, err
 	}
 	return committed, nil
+}
+
+// settle moves the claim from the declared size to the real one and records
+// the result on the pending file, so a later discard gives back what is held.
+func (s *Service) settle(ctx context.Context, pending *File, actual, bound int64) error {
+	switch delta := actual - pending.Bytes; {
+	case delta > 0:
+		if err := s.reserve(ctx, pending.Tenant, delta, bound); err != nil {
+			return err
+		}
+	case delta < 0:
+		s.release(ctx, pending.Tenant, -delta)
+	}
+	pending.Bytes = actual
+	return nil
+}
+
+// reserve claims bytes against the tenant bound. A service with no meter
+// stores without counting.
+func (s *Service) reserve(ctx context.Context, tenant string, size, bound int64) error {
+	if s.meter == nil || size <= 0 {
+		return nil
+	}
+	return s.meter.Reserve(ctx, tenant, size, bound)
+}
+
+// release gives bytes back and reports nothing.
+//
+// Every caller is already unwinding, and a failure here leaves the total too
+// high rather than too low. Too high refuses an upload the tenant could have
+// made, which an operator sees and can correct. Too low would let a tenant
+// past the bound the meter exists to hold.
+func (s *Service) release(ctx context.Context, tenant string, size int64) {
+	if s.meter == nil || size <= 0 {
+		return
+	}
+	_ = s.meter.Release(ctx, tenant, size)
 }
 
 // Get returns one readable file. A pending record reads as not found, because
@@ -353,7 +446,14 @@ func (s *Service) remove(ctx context.Context, file File) error {
 	if err := s.blobs.Delete(ctx, file.blobKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
 		return fmt.Errorf("files: delete the bytes: %w", err)
 	}
-	return s.records.Delete(ctx, file.Tenant, file.ID)
+	if err := s.records.Delete(ctx, file.Tenant, file.ID); err != nil {
+		return err
+	}
+	// The claim goes back only once both writes are gone. Releasing earlier
+	// would let a failure between the two leave the tenant credited for bytes
+	// a later sweep still has to find.
+	s.release(ctx, file.Tenant, file.Bytes)
+	return nil
 }
 
 // discard removes a file and reports nothing. The caller is already returning
@@ -362,6 +462,7 @@ func (s *Service) remove(ctx context.Context, file File) error {
 func (s *Service) discard(ctx context.Context, file File) {
 	_ = s.blobs.Delete(ctx, file.blobKey)
 	_ = s.records.Delete(ctx, file.Tenant, file.ID)
+	s.release(ctx, file.Tenant, file.Bytes)
 }
 
 // newFileID names a file the way a caller sees it. The prefix makes an

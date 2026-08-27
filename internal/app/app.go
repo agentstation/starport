@@ -23,6 +23,7 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
@@ -398,8 +399,16 @@ func (b *runtimeBuilder) openFileService() error {
 	if err != nil {
 		return fmt.Errorf("open file repository: %w", err)
 	}
+	// The meter counts every tenant's stored bytes whether or not a bound is
+	// set. A deployment that sets one later reads a true total rather than a
+	// zero over storage that is already full.
+	meter, err := limits.NewStorageMeter(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open stored byte meter: %w", err)
+	}
 	b.files, err = files.NewService(records, b.application.blobStore,
-		files.WithRetention(b.config.Files.RetentionWindow()))
+		files.WithRetention(b.config.Files.RetentionWindow()),
+		files.WithMeter(meter))
 	if err != nil {
 		return fmt.Errorf("open file service: %w", err)
 	}
