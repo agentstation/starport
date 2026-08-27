@@ -55,6 +55,10 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Put cloud credential acquisition in `internal/credentials/cloudchain`.
 - Put safe provider runtime projections in `internal/providers/state`.
 - Put canonical response cache records in `internal/response/cache`.
+- Put stored file records, purposes, retention, and the stored-byte bound in
+  `internal/files`. Put the bytes themselves in `internal/blob`, which owns the
+  `filesystem` and `objectstore` backends and names the selected one. No other
+  package names a backend, a bucket, or a storage path.
 - Make `internal/proxy` depend on `CacheManager` and
   `connectors.LeasingRegistry`, not concrete cache or registry adapters.
 - Put protocol codecs in `internal/protocol/openai` and
@@ -85,6 +89,7 @@ bash scripts/verify-console-modernization.sh
 bash scripts/verify-auth-onboarding.sh
 bash scripts/verify-console-session-grants.sh
 bash scripts/verify-model-modalities.sh
+bash scripts/verify-files-api.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
@@ -130,6 +135,12 @@ vocabulary, the operation set, the catalog projection that names what each
 offering serves, the eight dedicated media routes, the two media scopes, and
 the console facet that reads output modalities. It is terminal at 26 conditions
 (`MMD-V01` through `MMD-V26`) and runs in CI.
+
+`scripts/verify-files-api.sh` guards the file store: the five routes and their
+two scopes, the record and byte split across `internal/files` and
+`internal/blob`, both backends, the retention window, the stored-byte bound,
+the stored file reference a chat request carries, and the console file view. It
+is terminal at 22 conditions (`FIL-V01` through `FIL-V22`) and runs in CI.
 
 That gate owns the media surface alone. `scripts/verify-openrouter-parity.sh`
 keeps its own terminal count of 16 and its own stated meaning, so a new media
