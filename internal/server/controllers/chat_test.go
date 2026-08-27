@@ -126,9 +126,9 @@ func TestUnenforcedProviderFieldsHeader(t *testing.T) {
 	// forward plugins into the provider request body, where it turned a
 	// servable request into a provider rejection.
 	//
-	// The file-parser plugin runs here now, so this request names the one
-	// plugin the gateway enforces. The header still lists plugins, which is
-	// stale for that plugin and is what PLG7 removes.
+	// The file-parser plugin runs here now, so the header names the zdr field
+	// alone. A caller reads this header to learn what did not happen, and the
+	// document this request attached was read.
 	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
 		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],`+
 			`"plugins":[{"id":"file-parser"}],"provider":{"zdr":true}}`,
@@ -136,10 +136,23 @@ func TestUnenforcedProviderFieldsHeader(t *testing.T) {
 	recorder = httptest.NewRecorder()
 	controller.Create(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, "plugins,zdr",
+	require.Equal(t, "zdr",
 		recorder.Header().Get("X-Starport-Unenforced-Provider-Fields"))
 	require.Empty(t, service.lastChat.Request.Extensions,
 		"a gateway field must not travel to the provider as an extension")
+
+	// transforms still names work this gateway does not do, so it still
+	// reports. The two fields share a list, and enforcing one must not quiet
+	// the other.
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
+		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],`+
+			`"plugins":[{"id":"file-parser"}],"transforms":["middle-out"]}`,
+	))
+	recorder = httptest.NewRecorder()
+	controller.Create(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "transforms",
+		recorder.Header().Get("X-Starport-Unenforced-Provider-Fields"))
 
 	// A plugin this gateway does not run is a refusal at the route, not a
 	// header a caller has to know to read. Answering 200 here would bill the

@@ -130,16 +130,19 @@ func unenforcedProviderFields(prefs *ProviderPreferences) []string {
 // providers directly, so no upstream understands them. They follow the same
 // drop-in contract as the provider fields above: accept, do not forward, and
 // report the unkept promise.
+//
+// The plugins field is not one of them any more. This gateway enforces
+// file-parser, and it refuses every other identifier at the door, so a request
+// that reaches here with plugins named work that ran. Reporting it as unkept
+// would tell a caller its document was never read, which is the opposite of
+// what happened, and a wrong record is worse than a missing one.
 func unenforcedGatewayFields(wire *ChatRequest) []string {
 	if wire == nil {
 		return nil
 	}
-	fields := make([]string, 0, 2)
+	fields := make([]string, 0, 1)
 	if len(wire.Transforms) > 0 {
 		fields = append(fields, "transforms")
-	}
-	if len(wire.Plugins) > 0 {
-		fields = append(fields, "plugins")
 	}
 	if len(fields) == 0 {
 		return nil
