@@ -47,6 +47,19 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		r.With(s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.Media.Transcribe)
 		r.With(s.requireAnyScope("audio:write")).Post("/audio/translations", s.controllers.Media.Translate)
 
+		// Videos. A video generation outlives its request, so the caller gets
+		// an identifier and comes back to it. One scope covers the whole
+		// surface: the account that submits a job is the only account that can
+		// read it, so a separate read scope would name a capability no other
+		// caller can hold.
+		r.Route("/videos", func(r chi.Router) {
+			r.With(s.requireAnyScope("videos:write")).Post("/", s.controllers.Videos.Submit)
+			r.With(s.requireAnyScope("videos:write")).Get("/", s.controllers.Videos.List)
+			r.With(s.requireAnyScope("videos:write")).Get("/{video_id}", s.controllers.Videos.Get)
+			r.With(s.requireAnyScope("videos:write")).Get("/{video_id}/content", s.controllers.Videos.Content)
+			r.With(s.requireAnyScope("videos:write")).Post("/{video_id}/cancel", s.controllers.Videos.Cancel)
+		})
+
 		// Files. An upload writes bytes the gateway keeps, so it needs a
 		// scope of its own rather than the chat scope: a key that may send a
 		// prompt should not thereby be allowed to consume the deployment's
@@ -96,6 +109,17 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("images:write")).Post("/images", s.controllers.OpenRouterMedia.GenerateImages)
 			r.With(s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.OpenRouterMedia.Speech)
 			r.With(s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.OpenRouterMedia.Transcribe)
+
+			// Videos. The same four paths under this family's prefix, because
+			// a job identifier a caller polls has to be reachable from the
+			// family the caller submitted it through.
+			r.Route("/videos", func(r chi.Router) {
+				r.With(s.requireAnyScope("videos:write")).Post("/", s.controllers.OpenRouterVideos.Submit)
+				r.With(s.requireAnyScope("videos:write")).Get("/", s.controllers.OpenRouterVideos.List)
+				r.With(s.requireAnyScope("videos:write")).Get("/{video_id}", s.controllers.OpenRouterVideos.Get)
+				r.With(s.requireAnyScope("videos:write")).Get("/{video_id}/content", s.controllers.OpenRouterVideos.Content)
+				r.With(s.requireAnyScope("videos:write")).Post("/{video_id}/cancel", s.controllers.OpenRouterVideos.Cancel)
+			})
 
 			// Models with enhanced metadata
 			r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.OpenRouterModels.List)
@@ -278,6 +302,16 @@ func carriesOwnBodyBound(r *http.Request) bool {
 // OpenAI-Compatible API (v1):
 //   POST /v1/chat/completions   - Create chat completion
 //   POST /v1/embeddings         - Create embeddings
+//   POST /v1/images/generations - Generate images (images:write)
+//   POST /v1/images/edits       - Edit an image (images:write)
+//   POST /v1/audio/speech       - Synthesize speech (audio:write)
+//   POST /v1/audio/transcriptions - Transcribe audio (audio:write)
+//   POST /v1/audio/translations   - Translate audio to English (audio:write)
+//   POST   /v1/videos                  - Submit a video job (videos:write)
+//   GET    /v1/videos                  - List this account's video jobs (videos:write)
+//   GET    /v1/videos/{video_id}       - Read one job, polling while it can change
+//   GET    /v1/videos/{video_id}/content - Read the stored video bytes
+//   POST   /v1/videos/{video_id}/cancel  - Stop a job that has not ended
 //   POST   /v1/files                  - Upload a file (files:write)
 //   GET    /v1/files                  - List stored files (files:read)
 //   GET    /v1/files/{file_id}        - Read one file object (files:read)
@@ -289,6 +323,14 @@ func carriesOwnBodyBound(r *http.Request) bool {
 // OpenRouter-Compatible API (api/v1):
 //   POST /api/v1/chat/completions           - Create routed chat completion
 //   POST /api/v1/embeddings                 - Create embeddings
+//   POST /api/v1/images                     - Generate images (images:write)
+//   POST /api/v1/audio/speech               - Synthesize speech (audio:write)
+//   POST /api/v1/audio/transcriptions       - Transcribe audio (audio:write)
+//   POST   /api/v1/videos                   - Submit a video job (videos:write)
+//   GET    /api/v1/videos                   - List this account's video jobs
+//   GET    /api/v1/videos/{video_id}        - Read one job
+//   GET    /api/v1/videos/{video_id}/content - Read the stored video bytes
+//   POST   /api/v1/videos/{video_id}/cancel  - Stop a job that has not ended
 //   GET  /api/v1/models                     - List models with metadata
 //   GET  /api/v1/models/{model}             - Get model details with metadata
 //   GET  /api/v1/models/{model}/endpoints   - List provider endpoints for model

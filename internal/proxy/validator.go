@@ -145,6 +145,39 @@ func ValidateImagesRequest(req *ImagesRequest) error {
 	return nil
 }
 
+// ValidateVideoJobRequest checks one video generation submission.
+func ValidateVideoJobRequest(req *VideoSubmitRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	if req.Request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if req.Request.Prompt == "" {
+		return validationError("prompt", "prompt is required")
+	}
+	return nil
+}
+
+// ValidateVideoJobReference checks one poll or cancel of an accepted job. A
+// reference with no provider would plan a route to whichever provider the
+// catalog ranked first, and that provider never issued the identifier.
+func ValidateVideoJobReference(req *VideoJobRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	if req.Request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if req.Request.Provider == "" {
+		return validationError("provider", "provider is required")
+	}
+	if req.Request.ProviderJobID == "" {
+		return validationError("job", "an accepted job is required")
+	}
+	return nil
+}
+
 // ValidateSpeechRequest checks one text-to-speech request.
 func ValidateSpeechRequest(req *SpeechRequest) error {
 	if req == nil {

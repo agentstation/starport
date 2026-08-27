@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/agentstation/starport/internal/jobs"
 	routepkg "github.com/agentstation/starport/internal/router"
 )
 
@@ -33,6 +34,27 @@ func (unroutedMedia) RouteTranscription(
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
+func (unroutedMedia) RouteVideoSubmit(
+	context.Context,
+	*routepkg.VideoSubmitRequest,
+) (*routepkg.VideoJobResponse, error) {
+	return nil, routepkg.ErrNoModelsAvailable
+}
+
+func (unroutedMedia) RouteVideoPoll(
+	context.Context,
+	*routepkg.VideoJobRequest,
+) (*routepkg.VideoJobResponse, error) {
+	return nil, routepkg.ErrNoModelsAvailable
+}
+
+func (unroutedMedia) RouteVideoCancel(
+	context.Context,
+	*routepkg.VideoJobRequest,
+) (*routepkg.VideoJobResponse, error) {
+	return nil, routepkg.ErrNoModelsAvailable
+}
+
 // unsupportedMediaProxy answers the three media operations for a Proxy mock
 // that exercises a different path.
 type unsupportedMediaProxy struct{}
@@ -56,6 +78,33 @@ func (unsupportedMediaProxy) ProcessTranscription(
 	*TranscriptionRequest,
 ) (*TranscriptionResponse, error) {
 	return nil, errUnsupportedMedia
+}
+
+func (unsupportedMediaProxy) SubmitVideoJob(
+	context.Context,
+	*VideoSubmitRequest,
+) (*VideoJobAnswer, error) {
+	return nil, errUnsupportedMedia
+}
+
+func (unsupportedMediaProxy) PollVideoJob(
+	context.Context,
+	*VideoJobRequest,
+) (*VideoJobAnswer, error) {
+	return nil, errUnsupportedMedia
+}
+
+func (unsupportedMediaProxy) CancelVideoJob(
+	context.Context,
+	*VideoJobRequest,
+) (*VideoJobAnswer, error) {
+	return nil, errUnsupportedMedia
+}
+
+// VideoJobRunner answers no provider side, so a record store handed this mock
+// refuses to start work rather than starting work nothing serves.
+func (unsupportedMediaProxy) VideoJobRunner(*VideoSubmitRequest) jobs.Runner {
+	return nil
 }
 
 // errUnsupportedMedia is the answer a mock without a media path gives.

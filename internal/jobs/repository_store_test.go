@@ -30,6 +30,7 @@ func storedJob(t *testing.T, id, tenant string, created time.Time) jobs.Job {
 	job, err := jobs.New(
 		id,
 		tenant,
+		"deepinfra",
 		"black-forest-labs/FLUX-1-dev",
 		routing.OperationImagesGenerations,
 		created,

@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
@@ -162,6 +163,18 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
+	// The job store is part of production composition too. A route test that
+	// omitted it would read the unconfigured answer on every video path and
+	// prove nothing about the surface.
+	jobRecords, err := jobs.OpenRepository(testConfig.store)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	jobService, err := jobs.NewService(jobRecords)
+	if err != nil {
+		tb.Fatal(err)
+	}
+
 	// Match production composition: preset references resolve before routing.
 	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter))
 
@@ -180,7 +193,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		Service: service, Identities: identities, Tenants: tenants,
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
-		Files: fileService,
+		Files: fileService, Jobs: jobService,
 	})
 	if err != nil {
 		tb.Fatal(err)

@@ -126,7 +126,11 @@ type Job struct {
 	Tenant    string
 	Model     string
 	Operation routing.Operation
-	State     JobState
+	// Provider names who accepted the work. A poll carries an identifier only
+	// the accepting provider issued, so a record that did not name the provider
+	// could be polled at one that never saw the job.
+	Provider string
+	State    JobState
 	// Reason states why a failed job produced no asset. A caller that polls a
 	// failed job reads it, so JobStateFailed is the one state a record cannot
 	// reach without one.
@@ -144,8 +148,8 @@ type Job struct {
 // whole job. Keeping the field unexported is not enough on its own.
 func (j Job) String() string {
 	return fmt.Sprintf(
-		"job %s tenant %s model %s operation %s state %s",
-		j.ID, j.Tenant, j.Model, j.Operation, j.State,
+		"job %s tenant %s provider %s model %s operation %s state %s",
+		j.ID, j.Tenant, j.Provider, j.Model, j.Operation, j.State,
 	)
 }
 
@@ -158,6 +162,8 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: it names no tenant", ErrInvalidJob)
 	case strings.TrimSpace(j.Model) == "":
 		return fmt.Errorf("%w: it names no model", ErrInvalidJob)
+	case strings.TrimSpace(j.Provider) == "":
+		return fmt.Errorf("%w: it names no provider", ErrInvalidJob)
 	case strings.TrimSpace(string(j.Operation)) == "":
 		return fmt.Errorf("%w: it names no operation", ErrInvalidJob)
 	case j.CreatedAt.IsZero():
@@ -178,12 +184,13 @@ func (j Job) Validate() error {
 
 // New returns a queued job. A job starts queued because a provider has already
 // accepted it by the time a record exists.
-func New(id, tenant, model string, operation routing.Operation, now time.Time) (Job, error) {
+func New(id, tenant, provider, model string, operation routing.Operation, now time.Time) (Job, error) {
 	job := Job{
 		ID:        id,
 		Tenant:    tenant,
 		Model:     model,
 		Operation: operation,
+		Provider:  provider,
 		State:     JobStateQueued,
 		CreatedAt: now,
 	}

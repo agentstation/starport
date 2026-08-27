@@ -24,6 +24,7 @@ func DefaultAnonymousScopes() []string {
 		"embeddings:write",
 		"images:write",
 		"audio:write",
+		"videos:write",
 		"files:read",
 		"files:write",
 		"models:read",

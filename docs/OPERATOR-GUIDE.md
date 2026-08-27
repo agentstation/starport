@@ -317,6 +317,7 @@ Each route reads its own scope:
 - Embeddings need `embeddings:write`, `chat:write`, or wildcard scope.
 - Image generation and image edits need `images:write`.
 - Speech, transcription, and translation need `audio:write`.
+- Video jobs need `videos:write` on each of their five routes.
 
 A deployment with authentication disabled holds all of these, so the media
 routes answer an unauthenticated caller exactly as the chat route does.
