@@ -51,6 +51,16 @@ var (
 	// ErrTimeBudgetExceeded reports an extraction that ran past its elapsed
 	// time bound. A document can be small and still be expensive to read.
 	ErrTimeBudgetExceeded = errors.New("document extraction exceeded its time budget")
+	// ErrRecognitionFailed reports that the recognition engine did not return
+	// every page of a document. It lives beside the native engine's refusals
+	// because a caller reads one document vocabulary, not one per engine, and
+	// the two engines fail the same request for the same reason: the gateway
+	// was asked to turn a document into text and did not.
+	//
+	// The native engine never raises it. The seam that ordered the recognition
+	// read does, because it is the seam that knows how many pages the document
+	// holds and therefore whether the answer is the whole document.
+	ErrRecognitionFailed = errors.New("document recognition failed")
 )
 
 // Input is one document handed to the native engine.

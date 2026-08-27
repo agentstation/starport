@@ -61,6 +61,10 @@ var mediaInterfaces = []struct {
 		_, ok := c.(JobRunner)
 		return ok
 	}},
+	{catalogs.ProviderOperationDocumentsRecognition, "DocumentRecognizer", ErrTransportInterfaceMissing, func(c Connector) bool {
+		_, ok := c.(DocumentRecognizer)
+		return ok
+	}},
 }
 
 // requireMediaInterfaces refuses a transport that declares a media operation it
@@ -164,7 +168,13 @@ func ProductionTransportRegistry() (*TransportRegistry, error) {
 		},
 		TransportDescriptor{
 			EndpointType: catalogs.EndpointTypeGoogle,
-			Operations:   []catalogs.ProviderOperation{chat, embeddings},
+			// Recognition sits beside chat rather than at a path of its own.
+			// Gemini reads a scanned page through the same generate call, so
+			// the operation is a separate charge and a separate route over one
+			// wire protocol.
+			Operations: []catalogs.ProviderOperation{
+				chat, embeddings, catalogs.ProviderOperationDocumentsRecognition,
+			},
 			Factory: func(providerID catalogs.ProviderID, config ProviderConfig) (Connector, error) {
 				return newGoogleAIStudioConnector(string(providerID), config)
 			},

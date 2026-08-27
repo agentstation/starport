@@ -8,6 +8,11 @@ import (
 	"github.com/agentstation/starport/internal/inference"
 )
 
+// fieldMessages is the request field a refusal names when the fault is in the
+// conversation the caller sent, whatever produced it: an empty array, a
+// malformed part, or a document the gateway could not read.
+const fieldMessages = "messages"
+
 // ValidateChatCompletionRequest validates one canonical gateway chat request.
 func ValidateChatCompletionRequest(req *ChatCompletionRequest) error {
 	if req == nil {
@@ -18,7 +23,7 @@ func ValidateChatCompletionRequest(req *ChatCompletionRequest) error {
 		return validationError("model", "either 'model' or 'models' must be specified")
 	}
 	if len(request.Messages) == 0 {
-		return validationError("messages", "messages array cannot be empty")
+		return validationError(fieldMessages, "messages array cannot be empty")
 	}
 	if err := validateMessages(request.Messages); err != nil {
 		return err

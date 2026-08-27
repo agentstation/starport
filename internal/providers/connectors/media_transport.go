@@ -121,6 +121,31 @@ type TranscriptionResponse struct {
 	Usage    *MediaUsage `json:"usage,omitempty"`
 }
 
+// RecognitionRequest is one document-recognition call. It carries the whole
+// document rather than one page, because a provider that reads a document
+// reads its pages in order and this gateway carries no writer that could split
+// one container into many.
+type RecognitionRequest struct {
+	MediaTarget
+	Document UploadedFile
+	// Pages is the page count the native read produced. A transport reports
+	// its own answer against it, so a provider that stopped early is told
+	// apart from a document that ended.
+	Pages int
+}
+
+// RecognizedPage is the text one page carried.
+type RecognizedPage struct {
+	Number int    `json:"number"`
+	Text   string `json:"text"`
+}
+
+// RecognitionResponse is the text a provider read off a document's pages.
+type RecognitionResponse struct {
+	Pages []RecognizedPage `json:"pages"`
+	Usage *MediaUsage      `json:"usage,omitempty"`
+}
+
 // ImageGenerator is the narrow optional interface a transport implements to
 // serve images-generations and images-edits. Connector does not carry it. A
 // chat-only transport would have to answer a method it cannot perform, and the
@@ -138,6 +163,13 @@ type SpeechSynthesizer interface {
 // audio-translations.
 type Transcriber interface {
 	Transcribe(ctx context.Context, request *TranscriptionRequest) (*TranscriptionResponse, error)
+}
+
+// DocumentRecognizer is the narrow optional interface for
+// documents-recognition. A transport implements it when the provider reads
+// text off a page that carries none.
+type DocumentRecognizer interface {
+	RecognizeDocument(ctx context.Context, request *RecognitionRequest) (*RecognitionResponse, error)
 }
 
 // TransportLookup exposes one compiled transport by endpoint type. A caller
@@ -185,6 +217,19 @@ func TranscriberFor(
 	}
 	transcriber, implemented := transport.(Transcriber)
 	return transcriber, implemented
+}
+
+// DocumentRecognizerFor returns the recognition transport a route selected.
+func DocumentRecognizerFor(
+	connector Connector,
+	endpointType catalogs.EndpointType,
+) (DocumentRecognizer, bool) {
+	transport, found := selectTransport(connector, endpointType)
+	if !found {
+		return nil, false
+	}
+	recognizer, implemented := transport.(DocumentRecognizer)
+	return recognizer, implemented
 }
 
 func selectTransport(

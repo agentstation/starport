@@ -258,11 +258,18 @@ func routeMedia[Response any](
 // as they apply to a chat call, because they are properties of the key.
 func mediaPlanningRequest(policy mediaPolicy, preferLowestCost bool) routing.Request {
 	request := routing.Request{
-		Models: []string{policy.Model},
 		Optimization: routing.OptimizationPolicy{
 			PreferLowestCost:    preferLowestCost,
 			PreferLowestLatency: true,
 		},
+	}
+	// An unnamed model asks the planner for any offering that serves the
+	// operation. Only the gateway's own reads arrive that way: a caller always
+	// names a model, and every route a caller reaches refuses an empty one
+	// before planning. Naming no model is how a gateway-ordered read stays a
+	// catalog question rather than a table in this package.
+	if policy.Model != "" {
+		request.Models = []string{policy.Model}
 	}
 	if policy.APIKeyConfig != nil {
 		request.Tenant = routing.TenantPolicy{
