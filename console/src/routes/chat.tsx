@@ -20,6 +20,7 @@ import {
   listModels,
   streamChat,
 } from "@/lib/api";
+import type { Attachment, ContentPart } from "@/lib/attachments";
 import {
   DEFAULT_PARAMS,
   lastModel,
@@ -34,9 +35,9 @@ import {
   saveSidebarClosed,
   sidebarClosed,
   statsFromUsage,
+  turnAttachments,
   type ChatMessage,
   type ChatParams,
-  type ContentPart,
   type Conversation,
 } from "@/lib/chatStore";
 
@@ -93,8 +94,8 @@ function errorText(error: unknown): string {
 }
 
 // requestMessages builds the upstream message list: optional system
-// prompt plus every prior non-error turn (legacy behavior). Turns with
-// attached images become content-part arrays.
+// prompt plus every prior non-error turn (legacy behavior). A turn with
+// attached media becomes a content-part array.
 function requestMessages(
   conversation: Conversation,
 ): { role: string; content: string | ContentPart[] }[] {
@@ -313,7 +314,7 @@ function ChatPage() {
     compare.toggle(seedModel);
   }, [seedCompare, seedModel, compare]);
 
-  const send = (text: string, images?: string[]) => {
+  const send = (text: string, attachments?: Attachment[]) => {
     if (streamingId || compare.streaming) return;
     if (compare.active) {
       compare.send(text, newParams);
@@ -330,7 +331,7 @@ function ChatPage() {
       setNewParams({ ...DEFAULT_PARAMS });
     }
     setDrafts((previous) => ({ ...previous, [draftKey]: "" }));
-    sendTo(conversation, text, images);
+    sendTo(conversation, text, attachments);
   };
 
   // sendTo streams one exchange into the given conversation snapshot.
@@ -339,7 +340,7 @@ function ChatPage() {
   const sendTo = (
     conversation: Conversation,
     text: string,
-    images?: string[],
+    attachments?: Attachment[],
   ) => {
     const conversationId = conversation.id;
     const isFirstExchange = conversation.messages.length === 0;
@@ -348,7 +349,7 @@ function ChatPage() {
     const userMessage: ChatMessage = {
       role: "user",
       content: text,
-      ...(images?.length ? { images } : {}),
+      ...(attachments?.length ? { attachments } : {}),
     };
     const placeholder: ChatMessage = { role: "assistant", content: "" };
     updateConversation(conversationId, (current) => ({
@@ -362,7 +363,7 @@ function ChatPage() {
       model: conversation.model,
       messages: [
         ...requestMessages(conversation),
-        { role: "user", content: messageContent({ content: text, images }) },
+        { role: "user", content: messageContent({ content: text, attachments }) },
       ],
     };
     if (conversation.params.temperature !== null) {
@@ -516,7 +517,7 @@ function ChatPage() {
     sendTo(
       { ...active, messages: truncated, model: nextModel },
       prior.content,
-      prior.images,
+      turnAttachments(prior),
     );
   };
 
@@ -525,13 +526,14 @@ function ChatPage() {
   const editMessage = (index: number, text: string) => {
     if (!active || streamingId) return;
     // An edit revises the text; the turn's attachments carry over.
-    const images = active.messages[index]?.images;
+    const prior = active.messages[index];
+    const attachments = prior ? turnAttachments(prior) : [];
     const truncated = active.messages.slice(0, index);
     updateConversation(active.id, (conversation) => ({
       ...conversation,
       messages: truncated,
     }));
-    sendTo({ ...active, messages: truncated }, text, images);
+    sendTo({ ...active, messages: truncated }, text, attachments);
   };
 
   // Retry-with-model options: the thread's model first, then favorites.
