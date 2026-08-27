@@ -25,7 +25,28 @@ const (
 	ContentText ContentKind = "text"
 	// ContentImage identifies image content.
 	ContentImage ContentKind = "image"
+	// ContentAudio identifies audio content.
+	ContentAudio ContentKind = "audio"
+	// ContentDocument identifies document content, which Starmap records as
+	// the pdf modality.
+	ContentDocument ContentKind = "document"
+	// ContentVideo identifies video content.
+	ContentVideo ContentKind = "video"
 )
+
+// ContentKinds lists every modality a canonical message part can carry.
+// cloneMessage has one arm for each kind that owns a pointer, and the
+// contract test walks this list, so a new kind cannot ship without the
+// clone coverage that keeps one retry attempt from rewriting the next.
+func ContentKinds() []ContentKind {
+	return []ContentKind{
+		ContentText,
+		ContentImage,
+		ContentAudio,
+		ContentDocument,
+		ContentVideo,
+	}
+}
 
 // Image describes an image input.
 type Image struct {
@@ -33,11 +54,41 @@ type Image struct {
 	Detail string
 }
 
-// ContentPart is one typed part of a message.
+// Audio describes an audio input. A caller sends either a URL or inline
+// Data, and Format names the container, such as "wav" or "mp3".
+type Audio struct {
+	URL    string
+	Data   []byte
+	Format string
+}
+
+// Document describes a document input, such as a PDF. Filename is separate
+// from Format because both protocol families carry the caller's own name
+// beside the bytes, and a parser reports page numbers against it.
+type Document struct {
+	URL      string
+	Data     []byte
+	Format   string
+	Filename string
+}
+
+// Video describes a video input. A caller sends either a URL or inline
+// Data, and Format names the container, such as "mp4".
+type Video struct {
+	URL    string
+	Data   []byte
+	Format string
+}
+
+// ContentPart is one typed part of a message. Kind selects which payload
+// pointer carries the part, and the others stay nil.
 type ContentPart struct {
 	Kind         ContentKind
 	Text         string
 	Image        *Image
+	Audio        *Audio
+	Document     *Document
+	Video        *Video
 	CacheControl string
 }
 
@@ -372,13 +423,36 @@ func cloneMessage(message Message) Message {
 	clone := message
 	clone.Content = make([]ContentPart, len(message.Content))
 	for i, part := range message.Content {
-		clone.Content[i] = part
-		if part.Image != nil {
-			image := *part.Image
-			clone.Content[i].Image = &image
-		}
+		clone.Content[i] = cloneContentPart(part)
 	}
 	clone.ToolCalls = append([]ToolCall(nil), message.ToolCalls...)
+	return clone
+}
+
+// cloneContentPart returns a part that shares no memory with its source.
+// Every payload pointer needs an arm here: an aliased one would let a retry
+// attempt rewrite the media the next attempt is about to send.
+func cloneContentPart(part ContentPart) ContentPart {
+	clone := part
+	if part.Image != nil {
+		image := *part.Image
+		clone.Image = &image
+	}
+	if part.Audio != nil {
+		audio := *part.Audio
+		audio.Data = append([]byte(nil), part.Audio.Data...)
+		clone.Audio = &audio
+	}
+	if part.Document != nil {
+		document := *part.Document
+		document.Data = append([]byte(nil), part.Document.Data...)
+		clone.Document = &document
+	}
+	if part.Video != nil {
+		video := *part.Video
+		video.Data = append([]byte(nil), part.Video.Data...)
+		clone.Video = &video
+	}
 	return clone
 }
 
