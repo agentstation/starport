@@ -29,28 +29,36 @@ var (
 // transport can perform it. Without this table a media operation would reach
 // the wire and fail there, once per request, instead of once at startup.
 var mediaInterfaces = []struct {
-	operation   catalogs.ProviderOperation
-	name        string
+	operation catalogs.ProviderOperation
+	name      string
+	// missing is the error the row raises. A media call that fails inside its
+	// request and a job that can never be submitted are different answers to a
+	// caller, so the two rows name different errors rather than one.
+	missing     error
 	implemented func(Connector) bool
 }{
-	{catalogs.ProviderOperationImagesGenerations, "ImageGenerator", func(c Connector) bool {
+	{catalogs.ProviderOperationImagesGenerations, "ImageGenerator", ErrTransportInterfaceMissing, func(c Connector) bool {
 		_, ok := c.(ImageGenerator)
 		return ok
 	}},
-	{catalogs.ProviderOperationImagesEdits, "ImageGenerator", func(c Connector) bool {
+	{catalogs.ProviderOperationImagesEdits, "ImageGenerator", ErrTransportInterfaceMissing, func(c Connector) bool {
 		_, ok := c.(ImageGenerator)
 		return ok
 	}},
-	{catalogs.ProviderOperationAudioSpeech, "SpeechSynthesizer", func(c Connector) bool {
+	{catalogs.ProviderOperationAudioSpeech, "SpeechSynthesizer", ErrTransportInterfaceMissing, func(c Connector) bool {
 		_, ok := c.(SpeechSynthesizer)
 		return ok
 	}},
-	{catalogs.ProviderOperationAudioTranscriptions, "Transcriber", func(c Connector) bool {
+	{catalogs.ProviderOperationAudioTranscriptions, "Transcriber", ErrTransportInterfaceMissing, func(c Connector) bool {
 		_, ok := c.(Transcriber)
 		return ok
 	}},
-	{catalogs.ProviderOperationAudioTranslations, "Transcriber", func(c Connector) bool {
+	{catalogs.ProviderOperationAudioTranslations, "Transcriber", ErrTransportInterfaceMissing, func(c Connector) bool {
 		_, ok := c.(Transcriber)
+		return ok
+	}},
+	{catalogs.ProviderOperationVideosGenerations, "JobRunner", ErrJobsUnsupported, func(c Connector) bool {
+		_, ok := c.(JobRunner)
 		return ok
 	}},
 }
@@ -65,7 +73,7 @@ func requireMediaInterfaces(descriptor TransportDescriptor, connector Connector)
 			}
 			return fmt.Errorf(
 				"%w: %s declares %q without %s",
-				ErrTransportInterfaceMissing, descriptor.EndpointType, operation, required.name,
+				required.missing, descriptor.EndpointType, operation, required.name,
 			)
 		}
 	}
@@ -137,6 +145,7 @@ func ProductionTransportRegistry() (*TransportRegistry, error) {
 		catalogs.ProviderOperationAudioSpeech,
 		catalogs.ProviderOperationAudioTranscriptions,
 		catalogs.ProviderOperationAudioTranslations,
+		catalogs.ProviderOperationVideosGenerations,
 	}
 	return NewTransportRegistry(
 		TransportDescriptor{

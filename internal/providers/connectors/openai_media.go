@@ -161,7 +161,10 @@ func (c *OpenAICompatibleConnector) send(
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
+	// Any 2xx is a success. A submission that starts work rather than
+	// completing it answers 202, and a delete answers 204, so a check for 200
+	// alone would read two provider successes as failures.
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		defer func() { _ = resp.Body.Close() }()
 		return nil, handleError(resp)
 	}

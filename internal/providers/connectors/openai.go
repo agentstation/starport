@@ -78,6 +78,21 @@ func (c *OpenAIConnector) Transcribe(ctx context.Context, req *TranscriptionRequ
 	return c.OpenAICompatibleConnector.Transcribe(ctx, req, c.setHeaders, c.handleError)
 }
 
+// SubmitJob serves videos-generations.
+func (c *OpenAIConnector) SubmitJob(ctx context.Context, req *JobSubmission) (*ProviderJob, error) {
+	return c.OpenAICompatibleConnector.SubmitJob(ctx, req, c.setHeaders, c.handleError)
+}
+
+// PollJob reads one accepted video job.
+func (c *OpenAIConnector) PollJob(ctx context.Context, ref *ProviderJobRef) (*ProviderJob, error) {
+	return c.OpenAICompatibleConnector.PollJob(ctx, ref, c.setHeaders, c.handleError)
+}
+
+// CancelJob stops one accepted video job.
+func (c *OpenAIConnector) CancelJob(ctx context.Context, ref *ProviderJobRef) (*ProviderJob, error) {
+	return c.OpenAICompatibleConnector.CancelJob(ctx, ref, c.setHeaders, c.handleError)
+}
+
 // Close closes the connector
 func (c *OpenAIConnector) Close() error {
 	c.httpClient.CloseIdleConnections()

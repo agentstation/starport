@@ -166,8 +166,11 @@ func TestAnIllegalStateWriteFailsAtTheRepository(t *testing.T) {
 	revived.TerminalAt = time.Time{}
 	require.ErrorIs(t, records.Replace(ctx, revived), jobs.ErrIllegalTransition)
 
+	// The record itself is valid, so the transition check is what refuses it.
 	restated := completed
 	restated.State = jobs.JobStateFailed
+	restated.Reason = "the provider rejected the prompt"
+	require.NoError(t, restated.Validate())
 	require.ErrorIs(t, records.Replace(ctx, restated), jobs.ErrIllegalTransition)
 
 	// The refused writes changed nothing.
