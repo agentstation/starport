@@ -138,6 +138,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// execution or a provider connector would put the poll loop inside the
 	// record, and the seam exists to keep the two apart.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/jobs"],
+		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/routing",
 		"github.com/agentstation/starport/internal/storage",
 	)

@@ -93,6 +93,11 @@ func (c *OpenAIConnector) CancelJob(ctx context.Context, ref *ProviderJobRef) (*
 	return c.OpenAICompatibleConnector.CancelJob(ctx, ref, c.setHeaders, c.handleError)
 }
 
+// FetchJobAsset reads the finished output of one accepted video job.
+func (c *OpenAIConnector) FetchJobAsset(ctx context.Context, ref *JobAssetRef) (*JobAsset, error) {
+	return c.OpenAICompatibleConnector.FetchJobAsset(ctx, ref, c.setHeaders, c.handleError)
+}
+
 // Close closes the connector
 func (c *OpenAIConnector) Close() error {
 	c.httpClient.CloseIdleConnections()

@@ -55,6 +55,13 @@ func (unroutedMedia) RouteVideoCancel(
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
+func (unroutedMedia) RouteVideoContent(
+	context.Context,
+	*routepkg.VideoAssetRequest,
+) (*routepkg.VideoAssetResponse, error) {
+	return nil, routepkg.ErrNoModelsAvailable
+}
+
 // unsupportedMediaProxy answers the three media operations for a Proxy mock
 // that exercises a different path.
 type unsupportedMediaProxy struct{}
@@ -98,6 +105,13 @@ func (unsupportedMediaProxy) CancelVideoJob(
 	context.Context,
 	*VideoJobRequest,
 ) (*VideoJobAnswer, error) {
+	return nil, errUnsupportedMedia
+}
+
+func (unsupportedMediaProxy) FetchVideoAsset(
+	context.Context,
+	*VideoAssetRequest,
+) (*VideoAsset, error) {
 	return nil, errUnsupportedMedia
 }
 

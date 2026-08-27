@@ -51,6 +51,9 @@ type Proxy interface {
 	// CancelVideoJob asks the provider that accepted a job to stop it.
 	CancelVideoJob(ctx context.Context, req *VideoJobRequest) (*VideoJobAnswer, error)
 
+	// FetchVideoAsset reads the finished output of one accepted job.
+	FetchVideoAsset(ctx context.Context, req *VideoAssetRequest) (*VideoAsset, error)
+
 	// VideoJobRunner returns the provider side of one caller's video jobs,
 	// bound to the gateway identity the request carries. The record store
 	// drives a job through this value and names no transport itself.

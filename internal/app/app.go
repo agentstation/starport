@@ -433,15 +433,18 @@ func (b *runtimeBuilder) openFileService() error {
 	return nil
 }
 
-// openJobService opens the record store for work that outlives its request.
-// It needs no byte store yet: a job records where it got to, and the finished
-// asset is a separate fact this seam stores later.
+// openJobService joins the two stores one video job needs: the record
+// repository in the key-value store and the finished asset in the byte store.
+// It runs after openBlob for the same reason the file service does.
 func (b *runtimeBuilder) openJobService() error {
 	records, err := jobs.OpenRepository(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open job repository: %w", err)
 	}
-	b.jobs, err = jobs.NewService(records)
+	b.jobs, err = jobs.NewService(records,
+		jobs.WithAssetStore(b.application.blobStore),
+		jobs.WithRetention(b.config.Jobs.AssetRetentionWindow()),
+		jobs.WithAssetBound(b.config.Jobs.AssetBound()))
 	if err != nil {
 		return fmt.Errorf("open job service: %w", err)
 	}
@@ -721,6 +724,13 @@ func (a *App) Run(ctx context.Context) error {
 			a.fileSweepLoop(runCtx)
 		}()
 	}
+	if a.jobs != nil && a.config.Jobs.SweepEvery() > 0 {
+		a.runtimeWG.Add(1)
+		go func() {
+			defer a.runtimeWG.Done()
+			a.jobSweepLoop(runCtx)
+		}()
+	}
 	if a.catalogUpdates != nil {
 		if err := a.catalogUpdates.Start(runCtx); err != nil {
 			return errors.Join(
@@ -985,6 +995,40 @@ func (a *App) sweepFiles(ctx context.Context) {
 		Int("abandoned", result.Abandoned).
 		Int("resumed", result.Resumed).
 		Msg("file sweep reclaimed storage")
+}
+
+// jobSweepLoop reclaims expired job asset storage on an interval. It follows
+// the file sweep: one pass at startup, then one per tick.
+func (a *App) jobSweepLoop(ctx context.Context) {
+	interval := a.config.Jobs.SweepEvery()
+	a.sweepJobAssets(ctx)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.sweepJobAssets(ctx)
+		}
+	}
+}
+
+// sweepJobAssets runs one pass and reports what it reclaimed. A quiet pass logs
+// nothing, for the reason the file sweep gives.
+func (a *App) sweepJobAssets(ctx context.Context) {
+	result, err := a.jobs.Sweep(ctx)
+	if err != nil {
+		log.Warn().Err(err).
+			Int("reclaimed", result.Expired).
+			Msg("job asset sweep did not finish; the next pass retries the rest")
+	}
+	if result.Expired == 0 {
+		return
+	}
+	log.Info().
+		Int("expired", result.Expired).
+		Msg("job asset sweep reclaimed storage")
 }
 
 func (a *App) refreshCatalogLoop(ctx context.Context) {

@@ -329,6 +329,13 @@ func (s *cachedService) CancelVideoJob(ctx context.Context, req *VideoJobRequest
 	return s.service.CancelVideoJob(ctx, req)
 }
 
+// FetchVideoAsset reads one finished asset without caching it. The record store
+// holds the bytes after this call, and a second copy in the response cache would
+// hold a whole video for a window nothing sized.
+func (s *cachedService) FetchVideoAsset(ctx context.Context, req *VideoAssetRequest) (*VideoAsset, error) {
+	return s.service.FetchVideoAsset(ctx, req)
+}
+
 // VideoJobRunner binds the runner to this wrapper rather than to the service
 // behind it, so a job started through the deployment's gateway is polled and
 // stopped through the same one.

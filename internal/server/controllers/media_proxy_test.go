@@ -61,5 +61,12 @@ func (unsupportedMedia) CancelVideoJob(
 	return nil, errUnsupportedMedia
 }
 
+func (unsupportedMedia) FetchVideoAsset(
+	context.Context,
+	*proxy.VideoAssetRequest,
+) (*proxy.VideoAsset, error) {
+	return nil, errUnsupportedMedia
+}
+
 // errUnsupportedMedia is the answer a mock without a media path gives.
 var errUnsupportedMedia = errors.New("media operation is not part of this test")

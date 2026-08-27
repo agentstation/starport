@@ -49,6 +49,10 @@ type ModelRouter interface {
 
 	// RouteVideoCancel asks the provider that accepted a job to stop it.
 	RouteVideoCancel(ctx context.Context, req *VideoJobRequest) (*VideoJobResponse, error)
+
+	// RouteVideoContent reads the finished output of one accepted job from the
+	// provider that produced it.
+	RouteVideoContent(ctx context.Context, req *VideoAssetRequest) (*VideoAssetResponse, error)
 }
 
 // Request contains the original request plus routing preferences

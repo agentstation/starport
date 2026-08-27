@@ -138,6 +138,26 @@ type Job struct {
 	CreatedAt  time.Time
 	TerminalAt time.Time
 
+	// AssetKey names the stored bytes inside internal/blob. It is a Starport
+	// storage key and never a provider link. A provider serves a finished video
+	// from a URL that expires, so a caller holding a Starport identifier reads
+	// the bytes from Starport or reads nothing.
+	AssetKey string
+	// AssetBytes is how large the stored asset is. An operator sizes storage
+	// from the sum of these, and the content route states it as a length.
+	AssetBytes int64
+	// AssetContentType is the media type the content route serves the bytes
+	// with. A provider states it once, at the fetch, and nothing later guesses.
+	AssetContentType string
+	// AssetExpiresAt is when the retention window ends. The record stores the
+	// end rather than computing it, so a job keeps the window it was promised
+	// after an operator changes the setting.
+	AssetExpiresAt time.Time
+	// AssetExpiredAt is when the bytes went. The record stays behind it: a
+	// caller that comes back late reads a completed job whose asset expired,
+	// which is a different answer from a job that produced none.
+	AssetExpiredAt time.Time
+
 	providerJobID string
 }
 
@@ -178,6 +198,14 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: a failed job states no reason", ErrInvalidJob)
 	case j.State != JobStateFailed && strings.TrimSpace(j.Reason) != "":
 		return fmt.Errorf("%w: state %q states a failure reason", ErrInvalidJob, j.State)
+	case j.AssetKey != "" && j.State != JobStateCompleted:
+		return fmt.Errorf("%w: state %q holds a stored asset", ErrInvalidJob, j.State)
+	case j.AssetKey != "" && strings.TrimSpace(j.AssetContentType) == "":
+		return fmt.Errorf("%w: the stored asset names no media type", ErrInvalidJob)
+	case j.AssetKey != "" && j.AssetExpiresAt.IsZero():
+		return fmt.Errorf("%w: the stored asset states no retention window", ErrInvalidJob)
+	case j.AssetKey == "" && !j.AssetExpiredAt.IsZero():
+		return fmt.Errorf("%w: an expiry marker names no stored asset", ErrInvalidJob)
 	}
 	return nil
 }
@@ -255,3 +283,69 @@ func (j *Job) AdoptProviderJob(id string) error {
 // the only question anything outside this package has to ask about the
 // identifier, and it answers it without disclosing the value.
 func (j Job) HasProviderJob() bool { return j.providerJobID != "" }
+
+// StoreAsset records bytes this gateway now holds for a completed job.
+//
+// The window is a parameter rather than a setting this type reads, because the
+// record keeps the promise it was given. An operator who shortens the window
+// tomorrow shortens it for the jobs that start tomorrow.
+func (j *Job) StoreAsset(key, contentType string, size int64, expiresAt time.Time) error {
+	switch {
+	case j.State != JobStateCompleted:
+		return fmt.Errorf("%w: state %q produced no asset", ErrInvalidJob, j.State)
+	case strings.TrimSpace(key) == "":
+		return fmt.Errorf("%w: the stored asset has no key", ErrInvalidJob)
+	case strings.TrimSpace(contentType) == "":
+		return fmt.Errorf("%w: the stored asset names no media type", ErrInvalidJob)
+	case size < 0:
+		return fmt.Errorf("%w: the stored asset reports a negative size", ErrInvalidJob)
+	case expiresAt.IsZero():
+		return fmt.Errorf("%w: the stored asset states no retention window", ErrInvalidJob)
+	case j.AssetKey != "":
+		// A second fetch would spend the tenant's credential again and
+		// overwrite bytes a caller may be reading.
+		return fmt.Errorf("%w: %s already holds an asset", ErrInvalidJob, j.ID)
+	}
+	j.AssetKey = key
+	j.AssetContentType = contentType
+	j.AssetBytes = size
+	j.AssetExpiresAt = expiresAt
+	return nil
+}
+
+// ExpireAsset marks the stored bytes gone and keeps the record.
+//
+// The state does not move. A completed job stays completed after its asset
+// expires, because the work happened and the tenant paid for it. Only the
+// answer the content route gives changes.
+func (j *Job) ExpireAsset(now time.Time) error {
+	if j.AssetKey == "" {
+		return fmt.Errorf("%w: %s holds no asset to expire", ErrInvalidJob, j.ID)
+	}
+	if now.IsZero() {
+		return fmt.Errorf("%w: an expiry states no time", ErrInvalidJob)
+	}
+	if j.AssetExpiredAt.IsZero() {
+		j.AssetExpiredAt = now
+	}
+	return nil
+}
+
+// HasAsset reports whether this gateway holds readable bytes for the job.
+func (j Job) HasAsset() bool {
+	return j.AssetKey != "" && j.AssetExpiredAt.IsZero()
+}
+
+// AssetExpired reports whether the stored asset has passed its window. It reads
+// true both for an asset already swept away and for one whose window ended and
+// whose sweep has not yet run, so a read never serves bytes past the window the
+// caller was promised.
+func (j Job) AssetExpired(now time.Time) bool {
+	if j.AssetKey == "" {
+		return false
+	}
+	if !j.AssetExpiredAt.IsZero() {
+		return true
+	}
+	return !j.AssetExpiresAt.IsZero() && !now.Before(j.AssetExpiresAt)
+}

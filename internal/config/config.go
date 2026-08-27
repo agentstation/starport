@@ -26,6 +26,7 @@ type Config struct {
 	Logging           LoggingConfig      `env:",prefix=LOGGING_"`
 	Cache             CacheConfig        `env:",prefix=CACHE_"`
 	Files             FilesConfig        `env:",prefix=FILES_"`
+	Jobs              JobsConfig         `env:",prefix=JOBS_"`
 	Console           ConsoleConfig      `env:",prefix=CONSOLE_"`
 
 	providerEnvironment  environmentLookup

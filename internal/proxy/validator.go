@@ -178,6 +178,28 @@ func ValidateVideoJobReference(req *VideoJobRequest) error {
 	return nil
 }
 
+// ValidateVideoAssetReference checks one read of a finished job's asset. It
+// adds the stored bound to the reference checks: a read with no bound would let
+// the provider's answer size this deployment's storage.
+func ValidateVideoAssetReference(req *VideoAssetRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	if req.Request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if req.Request.Provider == "" {
+		return validationError("provider", "provider is required")
+	}
+	if req.Request.ProviderJobID == "" {
+		return validationError("job", "an accepted job is required")
+	}
+	if req.Request.MaxBytes <= 0 {
+		return validationError("bound", "a stored byte bound is required")
+	}
+	return nil
+}
+
 // ValidateSpeechRequest checks one text-to-speech request.
 func ValidateSpeechRequest(req *SpeechRequest) error {
 	if req == nil {
