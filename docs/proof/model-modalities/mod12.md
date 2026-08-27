@@ -106,29 +106,32 @@ and fail at the wire. The offering therefore declares the operation and
 publishes no route, which is the state the other 24 embedding offerings held
 before this task.
 
-## The pin stays where it is, and a gate proved why
+## The pin stays where it is, and a probe corrected the reason
 
-This task tried to raise the Starport dependency, so that condition MMD-V17
-could read the projection it names. The attempt reproduced the exact defect an
-earlier audit predicted, and the pin went back to `v0.9.0`.
+Step 6 of this task says to regenerate and release, and to leave the Starport
+dependency pinned. Condition MMD-V17 reads Starport's `internal/catalog`, and
+only the raised pin makes that question answerable. The condition therefore
+moves to MOD13, which raises the pin. A gate that names a seam one task cannot
+reach belongs to the task that can.
 
-`internal/registry` builds adapter availability from the catalog offerings
-rather than from the compiled transport registry. A raised pin therefore hands
-`audio-speech` to the Groq adapter. `compatibleOfferingService` keeps it, and
-the operation reaches a route. `validateSnapshot` in `internal/routing` then
-rejects the **whole snapshot**. It names two operations, and this is a third.
+An earlier audit predicted a stronger reason, and a probe refuted it. The audit
+expected a raised pin to hand `audio-speech` to the Groq adapter, reach a route,
+and make `validateSnapshot` in `internal/routing` reject the whole snapshot.
 
-The blast radius is chat and embeddings routing, for every provider that serves
-a media model, with no Starport deploy involved. A probe reproduced it on
-`deepinfra/Wan-AI/Wan2.6-T2I` before the revert.
+The production path does not do that. `internal/providers.Assess` intersects
+every offering operation with `TransportRegistry.Supports` before the operation
+reaches adapter availability. At `v0.10.0` the composed routes carry 512
+`chat-completions` and 38 `embeddings`, and no media operation. The full
+Starport suite is green at the raised pin.
 
-MOD13 raises the pin after all three guards read one named operation set. That
-ordering is what decision MOD-D6 states.
+The hazard is real in shape and latent in time. It fires the moment a compiled
+transport declares a media operation, which is what MOD13 step 5 does. MOD13
+therefore widens the three guards before it declares a media transport, and
+that ordering is what decision MOD-D6 states.
 
-Condition MMD-V17 moves to MOD13 with it. The condition reads Starport's
-`internal/catalog`, and only the raised pin makes its question answerable. A
-gate that names a seam one task cannot reach belongs to the task that can.
-MOD12 therefore closes on MMD-V18.
+A first probe reached the opposite conclusion by modelling `Registry.Register`,
+which recomputes operations from the catalog offerings with no transport
+filter. That method has no production caller. MOD13 owns the repair.
 
 ## Verification
 
