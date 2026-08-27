@@ -167,7 +167,8 @@ func (h *MediaController) serveTranscription(w http.ResponseWriter, r *http.Requ
 // parsing, so an oversized upload is refused rather than buffered.
 func (h *MediaController) parseUpload(w http.ResponseWriter, r *http.Request) (*multipart.Form, error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxMediaUploadBytes)
-	//nolint:gosec // G120: the line above bounds the body at maxMediaUploadBytes.
+	// #nosec G120 -- the line above bounds the body at maxMediaUploadBytes, so
+	// the parse below reads a bounded reader rather than an unbounded one.
 	if err := r.ParseMultipartForm(maxMediaMemoryBytes); err != nil {
 		return nil, err
 	}
