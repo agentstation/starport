@@ -123,7 +123,7 @@
     Created: 2026-08-26 ·
     Baseline: PLG0 pins both repositories ·
     Proof root: <code>docs/proof/document-parser/</code> ·
-    Next action: PLG9 documents the plugin and puts the gate in CI
+    Next action: PLG10 deletes this plan when its pull request merges
   </p>
 
   <section id="outcome">
@@ -307,8 +307,8 @@
         <tr id="PLG6" data-status="done"><td>PLG6</td><td>Phase C. Page counts in usage, the page price, and the spend bound. Conditions PLG-V14 and PLG-V15.</td><td><code>done</code></td><td>PLG-V14 and PLG-V15 pass. <code>verify-document-parser.sh</code> 15 passed, 5 failed. 22 new tests across <code>internal/limits</code>, <code>internal/usage</code>, <code>internal/catalog</code>, and <code>internal/proxy</code>. <code>go test ./...</code> exit 0. <code>make lint</code> 0 issues. <code>benchmark-overhead.sh</code> p50=0ms p99=0ms. Proof: <code>docs/proof/document-parser/plg6.md</code>.</td></tr>
         <tr id="PLG7" data-status="done"><td>PLG7</td><td>Phase C. End the unenforced report for the plugins field, and hold the transforms behavior. Conditions PLG-V16 and PLG-V17.</td><td><code>done</code></td><td>PLG-V16 and PLG-V17 pass. <code>verify-document-parser.sh</code> 17 passed, 3 failed. <code>verify-openrouter-parity.sh</code> 16 passed, 0 failed, and the file is unchanged. <code>smoke-openrouter-sdks.sh</code> PASS Python, TypeScript, Go. <code>go test ./...</code> exit 0. <code>make lint</code> 0 issues. Proof: <code>docs/proof/document-parser/plg7.md</code>.</td></tr>
         <tr id="PLG8" data-status="done"><td>PLG8</td><td>Phase C. Console: show the engine, the page count, and the extraction cost. Condition PLG-V18.</td><td><code>done</code></td><td>PLG-V18 passes. Gate reports 18 passed, 2 failed. <code>pnpm --dir console check</code> passes with 144 tests. Proof: <code>docs/proof/document-parser/plg8.md</code>.</td></tr>
-        <tr id="PLG9" data-status="in_progress"><td>PLG9</td><td>Close. Documentation, the required evidence list, and the terminal gate in CI. Conditions PLG-V19 and PLG-V20.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="PLG10" data-status="todo"><td>PLG10</td><td>Cleanup. Delete this plan when its final pull request merges.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="PLG9" data-status="done"><td>PLG9</td><td>Close. Documentation, the required evidence list, and the terminal gate in CI. Conditions PLG-V19 and PLG-V20.</td><td><code>done</code></td><td>Gate reports 20 passed, 0 failed. Documentation link verifier passes. Proof: <code>docs/proof/document-parser/plg9.md</code>.</td></tr>
+        <tr id="PLG10" data-status="in_progress"><td>PLG10</td><td>Cleanup. Delete this plan when its final pull request merges.</td><td><code>in_progress</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -776,6 +776,7 @@ CI runs it, and every ledger row except PLG10 is terminal.</code></pre>
         <tr><td>2026-08-27</td><td>PLG6</td><td>done</td><td>The usage record now carries the engine, the pages read each way, the milliseconds, and the recognized share of the cost. The catalog answers two page-price questions, because the bound runs before the planner chooses and the charge runs after. A probe found that the shipped catalog publishes no recognition route, so the parser reads a small consumer-defined price interface that a test can supply. PLG7 starts.</td></tr>
         <tr><td>2026-08-27</td><td>PLG7</td><td>done</td><td>The plugins arm leaves <code>unenforcedGatewayFields</code>. The decode path already refuses every identifier outside the enforced set, so no condition guards the drop. The plan asked for a test that an unknown plugin still reports as unenforced, and PLG1 had already replaced that report with a refusal, so the test asserts the refusal and the proof records the deviation. The parity verifier and the transforms behavior are untouched. PLG8 starts.</td></tr>
         <tr><td>2026-08-27</td><td>PLG8</td><td>done</td><td>Commit <code>8cf8a38</code>. The Documents route names the engine, the pages, the time, and the cost, and lists the recognition models with their page price. Three dropped facts are restored: the offering operations list, a page-only price, and the cached-read flag. One shared filter keeps a recognition-only model out of both pickers. PLG9 starts.</td></tr>
+        <tr><td>2026-08-27</td><td>PLG9</td><td>done</td><td>Commit <code>9d39b9c</code>. The gate runs in CI and the required evidence list names its terminal count of 20. The operator guide documents the plugin, its engines, its refusals, the page price and its owner, and the extraction cache. Every condition passes. PLG10 starts.</td></tr>
 </tbody>
     </table>
   </section>

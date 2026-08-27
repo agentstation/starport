@@ -740,6 +740,96 @@ first node holds alone.
 the console settings page shows the same value. A deployment with no file
 storage reports `not configured`.
 
+## Document Parsing
+
+A chat request attaches a document and names the `file-parser` plugin. Starport
+turns the document into text before the chat model sees it, so a model that
+reads no files still answers about one.
+
+```json
+{
+  "model": "openai/gpt-4.1",
+  "plugins": [{ "id": "file-parser", "pdf": { "engine": "native" } }],
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What is the amount due?" },
+        {
+          "type": "file",
+          "file": { "filename": "invoice.pdf", "file_id": "file_abc123" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+A part carries its bytes as `file_data` or names a stored file as `file_id`.
+The file store that `## File Storage` above configures owns the stored one.
+
+### The two engines
+
+| Engine | What it does | What it costs |
+| --- | --- | --- |
+| `native` | reads the text layer inside this process | nothing |
+| `recognition` | sends the page to a model that serves `documents-recognition` | one page price per page |
+
+A request that names no engine gets `native`. A request that names no plugin
+leaves the document to the chat model. That asks a different question, and it
+is not the same as asking for the native engine.
+
+The gateway refuses an engine outside those two names with HTTP 400, and the
+refusal carries both names. It refuses a plugin identifier outside
+`file-parser` the same way. OpenRouter publishes two more engine names that
+reach vendors this catalog does not serve. Accepting one of them and reading
+the page some other way would report work this deployment never did.
+
+The native engine reaches no network address. It refuses a document over 200
+pages, and it refuses an extraction that runs past 15 seconds. A document with
+no usable text layer reads as scanned, and a caller that wanted its contents
+asks again with `recognition`.
+
+### Where the page price comes from
+
+Starmap owns the `documents-recognition` operation and the price of one page.
+An offering that serves the operation publishes `page_input` beside its token
+prices, and `/api/v1/models` reports both. Starport publishes no page price of
+its own and holds no table of recognition vendors.
+
+An offering that serves recognition and publishes no page price does not
+project at all. A page that reaches such an offering records
+`cost_unavailable_reason`, which says the gateway lost its catalog rather than
+that the page was free.
+
+The spend budget refuses a document before the provider sees it. The gateway
+prices the pages against the lowest page price in the generation, because the
+planner chooses the offering afterward. A bound built on a higher price would
+refuse work the account could pay for.
+
+### What a reader sees
+
+The usage record names the engine and the pages the turn attached. It also
+names the pages a model recognized, the pages this process read, the
+milliseconds the reads took, and the recognized share of the cost. The share is
+also inside `cost`, because the spend budget meters that field alone.
+
+The console reads those fields at `/documents`. The page names the engine, the
+count, the time, and the cost of each document read. It also lists the
+recognition models this catalog reaches, with the price of one page at each.
+
+### The extraction cache
+
+One document reads once for each account, engine, and catalog generation inside
+a one-hour window. A turn that reused every attachment reports
+`extraction_cached`, which separates a page an earlier turn paid for from a page
+no provider ever charged for.
+
+The entries hold text rather than bytes. They live in the key-value store under
+the `extraction:` prefix, so a deployment on Valkey shares them across its
+processes. A cache this gateway cannot reach costs a second read and fails no
+turn.
+
 ## Video Jobs
 
 A video takes minutes, so a submission answers with a job identifier rather

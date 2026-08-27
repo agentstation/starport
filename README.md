@@ -304,6 +304,11 @@ Version 1 includes:
   providers, usage, presets, keys, files, and settings pages.
 - A file store at `/v1/files` that keeps a document for a later chat request.
   It writes to a local filesystem or an S3-compatible bucket.
+- A `file-parser` plugin that reads an attached document before the chat model
+  sees it. The `native` engine reads a text layer in process and charges
+  nothing. The `recognition` engine sends a scanned page to a catalog model
+  that serves `documents-recognition`, and the record reports what the pages
+  cost.
 - Tenant-safe response caching.
 - Badger storage for one process and Valkey storage for multiple processes.
 
