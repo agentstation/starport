@@ -81,8 +81,9 @@ two_engines_no_local_table() {
     -- internal/protocol/openrouter || return 1
   # A vendor engine name Starport cannot route to must not appear as an
   # accepted value. Accepting one and serving another vendor is the unkept
-  # promise invariant P2 forbids.
-  ! grep -Rq --include='*.go' -- 'mistral-ocr' internal/
+  # promise invariant P2 forbids. Test files are excluded on purpose: a test
+  # that drives the refusal has to name the vendor engine to refuse it.
+  ! grep -Rq --include='*.go' --exclude='*_test.go' -- 'mistral-ocr' internal/
 }
 
 # extraction_is_local holds PLG-V05. The native engine is the reason a

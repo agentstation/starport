@@ -131,6 +131,54 @@ type Document struct {
 // source for the same bytes.
 var ErrDocumentSourceConflict = errors.New("a document part names more than one source")
 
+// ParserEngine names how the gateway turns an attached document into text
+// before a model reads it. It is a canonical field rather than a wire field:
+// a caller names it on the OpenRouter family, and the router, the extraction
+// seam, and the usage record all read the same value.
+//
+// Two engines ship, and the boundary between them is who does the work.
+// The native engine runs in this process and reaches no provider, so a
+// document that already carries a text layer costs nothing. The recognition
+// engine sends a page to a model the catalog serves for that operation, so it
+// costs what the catalog says a page costs.
+//
+// A vendor engine name is deliberately absent. Accepting one and then routing
+// to a different vendor would report work this deployment did not do, so a
+// codec refuses every name outside this vocabulary rather than fall back.
+type ParserEngine string
+
+const (
+	// ParserEngineNative reads a document's own text layer in process.
+	ParserEngineNative ParserEngine = "native"
+	// ParserEngineRecognition sends a page to a catalogued model that reads
+	// text out of an image.
+	ParserEngineRecognition ParserEngine = "recognition"
+)
+
+// KnownParserEngines returns the engines this gateway runs, in the order a
+// refusal should list them. A caller reading the refusal needs the whole
+// vocabulary, not the one name it got wrong.
+func KnownParserEngines() []ParserEngine {
+	return []ParserEngine{ParserEngineNative, ParserEngineRecognition}
+}
+
+// Known reports whether the engine is one this gateway runs.
+func (e ParserEngine) Known() bool {
+	return e == ParserEngineNative || e == ParserEngineRecognition
+}
+
+// DocumentParser names the extraction a caller asked for. The zero value
+// means the caller asked for none, which is different from asking for the
+// native engine: a request that named no parser leaves an attached document
+// to whatever the chosen model does with it, and a request that named the
+// native engine gets extracted text whether or not the model reads documents.
+type DocumentParser struct {
+	Engine ParserEngine
+}
+
+// Requested reports whether the caller asked for an extraction.
+func (p DocumentParser) Requested() bool { return p.Engine != "" }
+
 // Validate refuses a document that names more than one source.
 //
 // A part naming none is not this rule's concern: a codec that decoded an empty
@@ -308,6 +356,16 @@ type ChatRequest struct {
 	StreamOptions StreamOptions
 	User          string
 	Extensions    map[string]json.RawMessage
+	// DocumentParser names the extraction the caller asked for before a
+	// model reads an attached document. The zero value asks for none.
+	//
+	// This field reaches the response cache key for the reason
+	// OutputModalities above states: the key serializes this struct, and a
+	// canonical type carries no transport tag that could hide a field. The
+	// same bytes parsed by two engines are two different inputs, so the
+	// key has to separate them. internal/response/cache answers for that by
+	// version.
+	DocumentParser DocumentParser
 }
 
 // Usage reports normalized token counts. InputTokens includes cache reads

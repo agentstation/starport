@@ -125,9 +125,13 @@ func TestUnenforcedProviderFieldsHeader(t *testing.T) {
 	// A top-level gateway field joins the same sorted list. Starport used to
 	// forward plugins into the provider request body, where it turned a
 	// servable request into a provider rejection.
+	//
+	// The file-parser plugin runs here now, so this request names the one
+	// plugin the gateway enforces. The header still lists plugins, which is
+	// stale for that plugin and is what PLG7 removes.
 	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
 		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],`+
-			`"plugins":[{"id":"web"}],"provider":{"zdr":true}}`,
+			`"plugins":[{"id":"file-parser"}],"provider":{"zdr":true}}`,
 	))
 	recorder = httptest.NewRecorder()
 	controller.Create(recorder, request)
@@ -136,6 +140,19 @@ func TestUnenforcedProviderFieldsHeader(t *testing.T) {
 		recorder.Header().Get("X-Starport-Unenforced-Provider-Fields"))
 	require.Empty(t, service.lastChat.Request.Extensions,
 		"a gateway field must not travel to the provider as an extension")
+
+	// A plugin this gateway does not run is a refusal at the route, not a
+	// header a caller has to know to read. Answering 200 here would bill the
+	// caller for an answer to a question it did not ask.
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
+		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],`+
+			`"plugins":[{"id":"web"}]}`,
+	))
+	recorder = httptest.NewRecorder()
+	controller.Create(recorder, request)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "file-parser",
+		"the refusal must name the plugin this gateway does run")
 
 	// Enforced-only requests carry no unenforced-fields header.
 	request = httptest.NewRequest(http.MethodPost, "/api/v1/chat/completions", bytes.NewBufferString(
