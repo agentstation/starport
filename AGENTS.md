@@ -84,6 +84,7 @@ bash scripts/verify-openrouter-parity.sh
 bash scripts/verify-console-modernization.sh
 bash scripts/verify-auth-onboarding.sh
 bash scripts/verify-console-session-grants.sh
+bash scripts/verify-model-modalities.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
@@ -123,6 +124,17 @@ that is registered and inert, one first-contact page outside the shell that
 states its trust scope, and the words *sign in* reserved for the identity
 grant alone. It is terminal at 16 conditions (`CSG-V01` through `CSG-V16`) and
 runs in CI.
+
+`scripts/verify-model-modalities.sh` guards the media surface: the modality
+vocabulary, the operation set, the catalog projection that names what each
+offering serves, the eight dedicated media routes, the two media scopes, and
+the console facet that reads output modalities. It is terminal at 26 conditions
+(`MMD-V01` through `MMD-V26`) and runs in CI.
+
+That gate owns the media surface alone. `scripts/verify-openrouter-parity.sh`
+keeps its own terminal count of 16 and its own stated meaning, so a new media
+route does not move it. Re-open the split when OpenRouter changes a route that
+the parity gate already guards.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.

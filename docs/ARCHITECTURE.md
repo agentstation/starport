@@ -507,6 +507,11 @@ OpenAI-compatible:
 ```text
 POST /v1/chat/completions
 POST /v1/embeddings
+POST /v1/images/generations
+POST /v1/images/edits
+POST /v1/audio/speech
+POST /v1/audio/transcriptions
+POST /v1/audio/translations
 GET  /v1/models
 GET  /v1/models/{model}
 ```
@@ -516,11 +521,51 @@ OpenRouter-compatible:
 ```text
 POST /api/v1/chat/completions
 POST /api/v1/embeddings
+POST /api/v1/images
+POST /api/v1/audio/speech
+POST /api/v1/audio/transcriptions
 GET  /api/v1/models
 GET  /api/v1/models/{model}
 GET  /api/v1/models/{model}/endpoints
 GET  /api/v1/providers
 ```
+
+OpenRouter publishes no image edit path and no translation path. Its media list
+is shorter rather than padded with paths its own clients cannot call.
+
+### Modalities and operations
+
+A modality names one payload family. It answers what a request carries and what
+a model accepts, so a route decision compares like with like.
+
+| Modality | Meaning |
+| --- | --- |
+| `text` | written or spoken language as characters |
+| `image` | a still picture |
+| `audio` | recorded sound |
+| `document` | a paged document, such as a PDF |
+| `video` | moving pictures |
+
+Starmap records a document as the `pdf` modality. `internal/catalog` owns that
+translation, and no other package restates it.
+
+An operation names one provider inference call. The values match the Starmap
+spelling exactly, because the catalog is the only source that names an
+operation. `internal/routing` holds the set this build can plan.
+
+| Operation | Meaning |
+| --- | --- |
+| `chat-completions` | generates chat completions |
+| `embeddings` | generates vector embeddings |
+| `images-generations` | generates an image from a prompt |
+| `images-edits` | generates an image from a prompt and a source image |
+| `audio-speech` | generates speech from text |
+| `audio-transcriptions` | writes recorded speech as text in its own language |
+| `audio-translations` | writes recorded speech as English text |
+
+A catalog fact that names an operation outside the set describes a gateway that
+has not shipped yet. The planner treats such a fact as inert rather than as
+corruption.
 
 Provider credentials. The operator applies one credential for the whole
 deployment; a tenant brings its own. The two never share a path, because they
