@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -85,10 +86,17 @@ func (h *FilesController) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = part.Close() }()
 
+	retention, err := uploadRetention(r)
+	if err != nil {
+		dto.WriteValidationError(w, expiresAfterSeconds, err.Error())
+		return
+	}
+
 	record, err := h.service.Upload(r.Context(), files.UploadRequest{
-		Tenant:   requestctx.TenantIDOrDefault(r.Context()),
-		Filename: header.Filename,
-		Purpose:  files.Purpose(strings.TrimSpace(r.FormValue("purpose"))),
+		Tenant:    requestctx.TenantIDOrDefault(r.Context()),
+		Filename:  header.Filename,
+		Purpose:   files.Purpose(strings.TrimSpace(r.FormValue("purpose"))),
+		Retention: retention,
 	}, part)
 	if err != nil {
 		h.writeError(w, "upload a file", err)
@@ -213,7 +221,9 @@ func (h *FilesController) writeError(w http.ResponseWriter, action string, err e
 		dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "No such File object")
 	case errors.Is(err, files.ErrInvalidPurpose):
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, acceptedPurposeMessage())
-	case errors.Is(err, files.ErrInvalidFile):
+	case errors.Is(err, files.ErrInvalidFile),
+		errors.Is(err, files.ErrRetentionTooLong),
+		errors.Is(err, files.ErrRetentionTooShort):
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 	default:
 		log.Error().Err(err).Str("action", action).Msg("file request failed")
@@ -232,6 +242,43 @@ func acceptedPurposeMessage() string {
 		names = append(names, strconv.Quote(string(purpose)))
 	}
 	return "The purpose is not one this gateway serves. It accepts " + strings.Join(names, " and ")
+}
+
+// The expiry form fields. OpenAI nests them, and a multipart form has no
+// nesting, so the bracket is part of the field name on the wire.
+const (
+	expiresAfterAnchor  = "expires_after[anchor]"
+	expiresAfterSeconds = "expires_after[seconds]"
+)
+
+// anchorCreatedAt is the only anchor this gateway serves. Upstream defines no
+// other one, and a gateway that accepted an unknown anchor would apply the
+// window from a moment the caller did not mean.
+const anchorCreatedAt = "created_at"
+
+// uploadRetention reads the window one upload asked for. An absent field takes
+// the window the deployment set.
+//
+// The service decides whether the window is allowed. This function only turns
+// two form fields into a duration, so the bound and its message stay in the one
+// package that owns retention.
+func uploadRetention(r *http.Request) (time.Duration, error) {
+	anchor := strings.TrimSpace(r.FormValue(expiresAfterAnchor))
+	raw := strings.TrimSpace(r.FormValue(expiresAfterSeconds))
+	if anchor == "" && raw == "" {
+		return 0, nil
+	}
+	if anchor != "" && anchor != anchorCreatedAt {
+		return 0, fmt.Errorf("the only anchor this gateway serves is %q", anchorCreatedAt)
+	}
+	if raw == "" {
+		return 0, errors.New("an expiry anchor needs a second count beside it")
+	}
+	seconds, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || seconds <= 0 {
+		return 0, errors.New("it must be a whole number of seconds above zero")
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 // storedFile maps one record onto the wire object.

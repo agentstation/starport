@@ -250,6 +250,42 @@ func TestFileUploadIsNotBoundByTheJSONRequestLimit(t *testing.T) {
 	require.Equal(t, float64(8192), decodeFileObject(t, recorder)["bytes"])
 }
 
+// TestUploadShortensItsRetentionWindow covers the wire half of FIL5. A
+// multipart form has no nesting, so the bracket is part of the field name.
+func TestUploadShortensItsRetentionWindow(t *testing.T) {
+	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20, MaxFileUploadSize: 1 << 20})
+	key := storeFileTestKey(t, server, "file-writer", "files:read", "files:write")
+
+	recorder := uploadFileWithFields(t, server, key, "report.txt", "bytes", map[string]string{
+		"purpose":                "user_data",
+		"expires_after[anchor]":  "created_at",
+		"expires_after[seconds]": "7200",
+	})
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	object := decodeFileObject(t, recorder)
+	created, _ := object["created_at"].(float64)
+	expires, _ := object["expires_at"].(float64)
+	require.Equal(t, float64(7200), expires-created)
+
+	// A window longer than the deployment allows is refused rather than
+	// clamped, and the refusal reaches the caller as a client error.
+	tooLong := uploadFileWithFields(t, server, key, "report.txt", "bytes", map[string]string{
+		"purpose":                "user_data",
+		"expires_after[anchor]":  "created_at",
+		"expires_after[seconds]": "31536000",
+	})
+	require.Equal(t, http.StatusBadRequest, tooLong.Code, tooLong.Body.String())
+
+	// An anchor this gateway does not serve would apply the window from a
+	// moment the caller did not mean.
+	badAnchor := uploadFileWithFields(t, server, key, "report.txt", "bytes", map[string]string{
+		"purpose":                "user_data",
+		"expires_after[anchor]":  "last_active_at",
+		"expires_after[seconds]": "7200",
+	})
+	require.Equal(t, http.StatusBadRequest, badAnchor.Code, badAnchor.Body.String())
+}
+
 func storeFileTestKey(t *testing.T, server *Server, id string, scopes ...string) string {
 	t.Helper()
 	return storeFileTestKeyForTenant(t, server, id, "", scopes...)
@@ -287,6 +323,27 @@ func uploadFile(t *testing.T, server *Server, key, filename, purpose, payload st
 	_, err = part.Write([]byte(payload))
 	require.NoError(t, err)
 	require.NoError(t, writer.WriteField("purpose", purpose))
+	require.NoError(t, writer.Close())
+	return doFileRequest(t, server, http.MethodPost, "/v1/files", key, body.Bytes(), writer.FormDataContentType())
+}
+
+// uploadFileWithFields posts an upload carrying arbitrary form fields.
+func uploadFileWithFields(
+	t *testing.T,
+	server *Server,
+	key, filename, payload string,
+	fields map[string]string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", filename)
+	require.NoError(t, err)
+	_, err = part.Write([]byte(payload))
+	require.NoError(t, err)
+	for name, value := range fields {
+		require.NoError(t, writer.WriteField(name, value))
+	}
 	require.NoError(t, writer.Close())
 	return doFileRequest(t, server, http.MethodPost, "/v1/files", key, body.Bytes(), writer.FormDataContentType())
 }

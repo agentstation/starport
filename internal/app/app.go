@@ -87,6 +87,7 @@ type App struct {
 	catalogFreshness   *runtimecatalog.FreshnessService
 	store              storage.KVStore
 	blobStore          blob.Store
+	files              *files.Service
 	cacheManager       *cache.Manager
 	transports         *connectors.TransportRegistry
 	authentication     *providerauth.Registry
@@ -397,10 +398,12 @@ func (b *runtimeBuilder) openFileService() error {
 	if err != nil {
 		return fmt.Errorf("open file repository: %w", err)
 	}
-	b.files, err = files.NewService(records, b.application.blobStore)
+	b.files, err = files.NewService(records, b.application.blobStore,
+		files.WithRetention(b.config.Files.RetentionWindow()))
 	if err != nil {
 		return fmt.Errorf("open file service: %w", err)
 	}
+	b.application.files = b.files
 	return nil
 }
 
@@ -654,6 +657,13 @@ func (a *App) Run(ctx context.Context) error {
 			a.providerReconcileLoop(runCtx)
 		}()
 	}
+	if a.files != nil && a.config.Files.SweepEvery() > 0 {
+		a.runtimeWG.Add(1)
+		go func() {
+			defer a.runtimeWG.Done()
+			a.fileSweepLoop(runCtx)
+		}()
+	}
 	if a.catalogUpdates != nil {
 		if err := a.catalogUpdates.Start(runCtx); err != nil {
 			return errors.Join(
@@ -876,6 +886,48 @@ func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogSta
 		resolutionFailureIDs(failures),
 	)
 	return nil
+}
+
+// fileSweepLoop reclaims expired and abandoned file storage on an interval.
+//
+// The pass runs once at startup, because a deployment that restarts more often
+// than the interval would otherwise never reclaim anything. Every later pass
+// waits for the tick.
+func (a *App) fileSweepLoop(ctx context.Context) {
+	interval := a.config.Files.SweepEvery()
+	a.sweepFiles(ctx)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.sweepFiles(ctx)
+		}
+	}
+}
+
+// sweepFiles runs one pass and reports what it reclaimed.
+//
+// A quiet pass logs nothing. An operator reading a log for the reason a disk
+// filled needs to see the passes that removed something, and a line every hour
+// saying zero would bury them.
+func (a *App) sweepFiles(ctx context.Context) {
+	result, err := a.files.Sweep(ctx)
+	if err != nil {
+		log.Warn().Err(err).
+			Int("reclaimed", result.Total()).
+			Msg("file sweep did not finish; the next pass retries the rest")
+	}
+	if result.Total() == 0 {
+		return
+	}
+	log.Info().
+		Int("expired", result.Expired).
+		Int("abandoned", result.Abandoned).
+		Int("resumed", result.Resumed).
+		Msg("file sweep reclaimed storage")
 }
 
 func (a *App) refreshCatalogLoop(ctx context.Context) {
