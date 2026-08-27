@@ -1170,6 +1170,83 @@ export function completeChat(
   });
 }
 
+// --- Video jobs ---
+
+// A video job outlives the request that started it. The gateway answers with a
+// Starport identifier and never a provider link, so a reader polls this
+// gateway and fetches the bytes from it.
+
+export const VIDEO_OPERATION = "videos-generations";
+
+export type VideoJob = {
+  id: string;
+  object?: string;
+  model: string;
+  provider?: string;
+  status: string;
+  created_at: number;
+  completed_at?: number;
+  // expires_at is the end of the retention window on the stored bytes. It is
+  // absent whenever this gateway holds none, which covers every unfinished job
+  // and every finished one whose bytes already went.
+  expires_at?: number;
+  error?: { message?: string };
+};
+
+// TERMINAL_JOB_STATES are the states a job never leaves. A poll of one of these
+// reads the same answer forever, so a page holding only these stops polling.
+export const TERMINAL_JOB_STATES = ["completed", "failed", "cancelled"];
+
+// A listing has no cursor, so the cap is what the gateway serves rather than a
+// page the reader can walk. Reaching it is reported as a floor the way a capped
+// file listing is.
+const VIDEO_PAGE_LIMIT = 100;
+
+export type VideoJobList = { jobs: VideoJob[]; capped: boolean };
+
+export async function listJobs(): Promise<VideoJobList> {
+  const body = await request<{ data?: VideoJob[] }>(
+    `/v1/videos?limit=${VIDEO_PAGE_LIMIT}`,
+  );
+  const jobs = body?.data ?? [];
+  return { jobs, capped: jobs.length >= VIDEO_PAGE_LIMIT };
+}
+
+export function submitJob(model: string, prompt: string): Promise<VideoJob> {
+  return request<VideoJob>("/v1/videos", { method: "POST", body: { model, prompt } });
+}
+
+export function cancelJob(jobID: string): Promise<VideoJob> {
+  return request<VideoJob>(`/v1/videos/${encodeURIComponent(jobID)}/cancel`, {
+    method: "POST",
+  });
+}
+
+// fetchJobAsset reads the stored bytes of one finished job.
+//
+// A player element cannot fetch these on its own. It sends no Authorization
+// header, and a reader holding a pasted gateway key rather than a console
+// session would get a refusal from a `src` pointing at the route. So the bytes
+// come through the same credential every other call uses, and the caller hands
+// the player an object URL over what this returns.
+//
+// This is why nothing calls it for a whole listing: a page that fetched every
+// asset would hold every video in memory. A reader asks for one at a time.
+export async function fetchJobAsset(jobID: string): Promise<Blob> {
+  const held = credential();
+  const response = await fetch(
+    `/v1/videos/${encodeURIComponent(jobID)}/content`,
+    { headers: authorization(held) },
+  );
+  if (!response.ok) {
+    const error = await parseError(response);
+    if (held.kind !== "none" && error.unauthorized) recordCredentialOutcome(true);
+    throw error;
+  }
+  if (held.kind !== "none") recordCredentialOutcome(false);
+  return response.blob();
+}
+
 // listActivity reads the authenticated key's own request log; key_id is
 // ignored there — only the admin listing can widen the scope.
 export function listActivity(filters: ActivityFilters): Promise<ActivityPage> {

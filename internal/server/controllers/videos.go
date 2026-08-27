@@ -276,6 +276,12 @@ func canonicalVideoJob(job jobs.Job) inference.VideoJob {
 	if !job.TerminalAt.IsZero() {
 		answer.CompletedUnix = job.TerminalAt.Unix()
 	}
+	// The window travels only while there are bytes behind it. A record keeps
+	// AssetExpiresAt after the sweep takes the asset, and reporting it then
+	// would tell a caller to come back for a video that is already gone.
+	if job.HasAsset() {
+		answer.ExpiresUnix = job.AssetExpiresAt.Unix()
+	}
 	return answer
 }
 

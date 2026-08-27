@@ -2,7 +2,9 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -124,6 +126,58 @@ func TestAnExpiredVideoAssetAnswersGone(t *testing.T) {
 	listed := videoRequest(server, http.MethodGet, "/v1/videos", key)
 	require.Equal(t, http.StatusOK, listed.Code, listed.Body.String())
 	require.Contains(t, listed.Body.String(), job.ID)
+}
+
+// TestAListedJobStatesWhetherItsBytesAreStillThere puts the retention window
+// on the answer a caller already reads.
+//
+// A reader with a page of finished jobs has to tell the ones it can still play
+// from the ones it can only read about. Without the window on the listing the
+// only way to ask is to fetch each asset and read the refusal, which spends a
+// request per row to learn the page is unplayable. The window is also the fact
+// an OpenAI client already expects on this object.
+//
+// The window travels only while there are bytes behind it. The record keeps
+// AssetExpiresAt after the sweep takes the asset, so reporting it then would
+// point a caller at a video that is already gone.
+func TestAListedJobStatesWhetherItsBytesAreStillThere(t *testing.T) {
+	store := storage.NewMockStore()
+	byteStore, err := blob.NewFilesystem(t.TempDir())
+	require.NoError(t, err)
+	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20},
+		withTestStore(store), withTestBlobStore(byteStore))
+
+	records, err := jobs.OpenRepository(store)
+	require.NoError(t, err)
+	window := time.Now().Add(time.Hour).Truncate(time.Second)
+	job := storedVideoJob(t, records, byteStore, "acme", window)
+
+	key := storeFileTestKeyForTenant(t, server, "video-window-owner", "acme", "videos:write")
+
+	held := decodeVideoJob(t, videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID, key))
+	require.Equal(t, "completed", held["status"])
+	require.Equal(t, float64(window.Unix()), held["expires_at"])
+
+	// Take the bytes the way the sweep does. The record stays and the window
+	// stops travelling with it.
+	stored, err := records.Get(t.Context(), "acme", job.ID)
+	require.NoError(t, err)
+	require.NoError(t, stored.ExpireAsset(time.Now()))
+	require.NoError(t, records.Replace(t.Context(), stored))
+
+	gone := decodeVideoJob(t, videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID, key))
+	require.Equal(t, "completed", gone["status"],
+		"the work happened, so the state does not move when the bytes go")
+	require.NotContains(t, gone, "expires_at")
+}
+
+// decodeVideoJob reads one job object off a recorded answer.
+func decodeVideoJob(t *testing.T, recorder *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	var wire map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &wire))
+	return wire
 }
 
 // TestVideoContentOfAJobWithNoAssetIsNotFound covers the third state. A running
