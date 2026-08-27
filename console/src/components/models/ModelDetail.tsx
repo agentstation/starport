@@ -12,6 +12,7 @@ import {
   formatPricePerM,
   providerLabel,
 } from "@/lib/format";
+import { operationsOf } from "@/lib/modelFilter";
 
 // --- Actions: Open in chat seeds the composer's model; Compare lands
 // in chat with compare mode seeded from the same model.
@@ -46,7 +47,7 @@ export function ModelActions({ modelId }: { modelId: string }) {
 // features routing cares about, and parameters the long tail.
 
 export type CapabilityTier = {
-  tier: "modalities" | "capabilities" | "parameters";
+  tier: "modalities" | "operations" | "capabilities" | "parameters";
   chips: string[];
 };
 
@@ -61,6 +62,12 @@ export function capabilityTiers(model: Model): CapabilityTier[] {
     ...outputs.map((modality) => `${modality} out`),
   ];
   if (modalities.length > 0) tiers.push({ tier: "modalities", chips: modalities });
+
+  // The operations say which path serves this model. Modalities alone leave
+  // that open: a model that emits a picture may serve it on the chat path or
+  // on the image path, and a caller has to pick one.
+  const operations = operationsOf(model);
+  if (operations.length > 0) tiers.push({ tier: "operations", chips: operations });
 
   const params = model.supported_parameters ?? [];
   const capabilities = CORE_CAPABILITIES.filter((capability) =>
@@ -91,6 +98,7 @@ export function capabilityTiers(model: Model): CapabilityTier[] {
 
 const TIER_TONES: Record<CapabilityTier["tier"], string> = {
   modalities: "bg-info-tint text-text-2",
+  operations: "bg-accent-tint text-accent",
   capabilities: "bg-success-tint text-success",
   parameters: "bg-bg-raised text-text-3",
 };

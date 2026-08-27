@@ -8,6 +8,7 @@ export type ModelsSearch = {
   author?: string;
   tag?: string;
   modality?: string;
+  output?: string;
   capability?: string;
 };
 
@@ -26,6 +27,23 @@ export function authorIdsOf(model: Model): string[] {
   if (declared.length > 0) return declared;
   const prefix = providerOf(model);
   return prefix ? [prefix] : [];
+}
+
+// outputModalitiesOf reads what a model produces. A catalog entry that
+// predates the field says nothing rather than claiming text, because a
+// missing fact and a text-only model are different answers.
+export function outputModalitiesOf(model: Model): string[] {
+  return model.architecture?.output_modalities ?? [];
+}
+
+// operationsOf lists every operation the model's offerings serve. A media
+// model reaches its own path, so this is what tells a reader which one.
+export function operationsOf(model: Model): string[] {
+  const seen = new Set<string>();
+  for (const offering of model.offerings ?? []) {
+    for (const operation of offering.operations ?? []) seen.add(operation);
+  }
+  return [...seen].sort();
 }
 
 export function hasCapability(model: Model, capability: string): boolean {
@@ -87,6 +105,9 @@ export function matches(model: Model, search: ModelsSearch): boolean {
     search.modality &&
     !(model.architecture?.input_modalities ?? []).includes(search.modality)
   ) {
+    return false;
+  }
+  if (search.output && !outputModalitiesOf(model).includes(search.output)) {
     return false;
   }
   if (search.capability && !hasCapability(model, search.capability)) return false;

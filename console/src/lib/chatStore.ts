@@ -5,7 +5,11 @@
 
 import type { ChatUsage } from "@/lib/api";
 import { attachmentPart } from "@/lib/attachments";
-import type { Attachment, ContentPart } from "@/lib/attachments";
+import type {
+  Attachment,
+  ContentPart,
+  GeneratedMedia,
+} from "@/lib/attachments";
 
 const STORAGE_KEY = "starport.chats";
 const LEGACY_STORAGE_KEY = "starport_chats";
@@ -64,6 +68,10 @@ export type ChatMessage = {
   // conversation still holds it, so the read path keeps it.
   images?: string[];
   reasoning?: string;
+  // Generated media on an assistant turn. A picture or a spoken answer
+  // arrives beside the text rather than inside it, so it is recorded here
+  // and not folded into content.
+  generated?: GeneratedMedia[];
   // The routed model that produced an assistant turn.
   model?: string;
   stats?: ChatStats;

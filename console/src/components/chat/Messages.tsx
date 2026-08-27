@@ -20,6 +20,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Streamdown, type ControlsConfig } from "streamdown";
 
 import type { Model } from "@/lib/api";
+import type { GeneratedMedia } from "@/lib/attachments";
 import { turnAttachments } from "@/lib/chatStore";
 import type { ChatMessage } from "@/lib/chatStore";
 import { formatCount, formatMs, formatNanoUSD } from "@/lib/format";
@@ -293,6 +294,42 @@ export function MetadataLine({
   );
 }
 
+// GeneratedMedia renders what the model produced beside its words. A
+// picture shows itself and a spoken answer gets a player, because the
+// alternative is a base64 blob in the transcript, which is not an answer a
+// reader can use. The transcript prints under the player, so a reader who
+// cannot listen still reads what the model said.
+export function GeneratedMediaList({ media }: { media: GeneratedMedia[] }) {
+  if (media.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {media.map((item, index) =>
+        item.kind === "image" ? (
+          <img
+            key={`${index}-${item.url.slice(-24)}`}
+            src={item.url}
+            alt={`Generated image ${index + 1}`}
+            className="max-h-96 max-w-full rounded-lg border border-border-1"
+          />
+        ) : (
+          <div key={`${index}-${item.url.slice(-24)}`} className="flex flex-col gap-1">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <audio
+              controls
+              src={item.url}
+              aria-label={`Generated audio ${index + 1}`}
+              className="w-full max-w-md"
+            />
+            {item.transcript && (
+              <p className="text-sm text-text-3">{item.transcript}</p>
+            )}
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
 export function AssistantMessage({
   message,
   streaming,
@@ -342,6 +379,7 @@ export function AssistantMessage({
       ) : !message.reasoning ? (
         <p className="text-text-3">Thinking…</p>
       ) : null}
+      {message.generated && <GeneratedMediaList media={message.generated} />}
       {!message.error && <MetadataLine message={message} model={modelRecord} />}
       {!streaming && (
         <div className="mt-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">

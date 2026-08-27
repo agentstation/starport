@@ -156,6 +156,7 @@ export function useCompare({
           model: meta.model || undefined,
           stats,
           ...(reasoningMs !== undefined ? { reasoningMs } : {}),
+          ...(meta.media.length > 0 ? { generated: meta.media } : {}),
         }));
       })
       .catch((error: unknown) => {

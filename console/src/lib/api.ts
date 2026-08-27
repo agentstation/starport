@@ -1,6 +1,8 @@
 // Gateway API client. All requests go to the gateway that served this
 // page (same origin), so the console works on any host the gateway binds.
 
+import type { GeneratedMedia } from "@/lib/attachments";
+
 const KEY_STORAGE = "starport.apiKey";
 
 // SESSION_MARKER is set beside the console session cookie by /launch. The
@@ -338,6 +340,7 @@ export type ModelOffering = {
   availability?: string;
   lifecycle?: string;
   pricing?: OfferingPricing;
+  operations?: string[];
 };
 
 export type Model = {
@@ -936,7 +939,22 @@ export type ChatStreamMeta = {
   cache: string;
   cacheAge: string;
   unenforced: string;
+  // media holds what the turn produced beside its text. It is empty for a
+  // text answer, which is most of them.
+  media: GeneratedMedia[];
 };
+
+// decodeBase64 returns the raw bytes of one base64 string, or an empty
+// string when the payload is unreadable. A malformed audio chunk drops that
+// chunk rather than failing the whole answer, because the text of the same
+// turn is already on screen.
+function decodeBase64(payload: string): string {
+  try {
+    return atob(payload);
+  } catch {
+    return "";
+  }
+}
 
 // streamChat posts to /api/v1/chat/completions with stream=true and
 // invokes callbacks per SSE delta. Resolves with the stream metadata.
@@ -974,14 +992,28 @@ export async function streamChat(
     cacheAge: response.headers.get("X-Cache-Age") ?? "",
     unenforced:
       response.headers.get("X-Starport-Unenforced-Provider-Fields") ?? "",
+    media: [],
   };
+
+  // A picture arrives whole in one delta. A spoken answer arrives in
+  // pieces, and each piece is base64 on its own, so the bytes are joined
+  // before they are re-encoded rather than the base64 strings.
+  let audioBytes = "";
+  let audioFormat = "";
+  let audioTranscript = "";
 
   type StreamEvent = {
     error?: { code?: number; message?: string };
     usage?: ChatUsage;
     model?: string;
     choices?: {
-      delta?: { content?: string; reasoning?: string; reasoning_content?: string };
+      delta?: {
+        content?: string;
+        reasoning?: string;
+        reasoning_content?: string;
+        images?: { image_url?: { url?: string } }[];
+        audio?: { data?: string; format?: string; transcript?: string };
+      };
     }[];
   };
 
@@ -1018,8 +1050,22 @@ export async function streamChat(
       if (!delta) continue;
       const reasoning = delta.reasoning_content ?? delta.reasoning;
       if (reasoning && onReasoning) onReasoning(reasoning);
+      for (const image of delta.images ?? []) {
+        const url = image.image_url?.url;
+        if (url) meta.media.push({ kind: "image", url });
+      }
+      if (delta.audio?.data) audioBytes += decodeBase64(delta.audio.data);
+      if (delta.audio?.format) audioFormat = delta.audio.format;
+      if (delta.audio?.transcript) audioTranscript += delta.audio.transcript;
       if (delta.content) onDelta(delta.content);
     }
+  }
+  if (audioBytes !== "") {
+    meta.media.push({
+      kind: "audio",
+      url: `data:audio/${audioFormat || "mp3"};base64,${btoa(audioBytes)}`,
+      transcript: audioTranscript || undefined,
+    });
   }
   return meta;
 }

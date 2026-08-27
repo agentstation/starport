@@ -454,6 +454,7 @@ function ChatPage() {
           model: meta.model || undefined,
           stats,
           ...(reasoningMs !== undefined ? { reasoningMs } : {}),
+          ...(meta.media.length > 0 ? { generated: meta.media } : {}),
         }));
         if (isFirstExchange) {
           const current = { ...conversation, id: conversationId };
