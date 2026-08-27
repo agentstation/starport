@@ -26,6 +26,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../execution",
 		"../availability",
 		"../blob",
+		"../files",
 		"../inference",
 		"../failure",
 		"../identity",
@@ -46,6 +47,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/execution",
 		"github.com/agentstation/starport/internal/availability",
 		"github.com/agentstation/starport/internal/blob",
+		"github.com/agentstation/starport/internal/files",
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
 		"github.com/agentstation/starport/internal/identity",
@@ -121,6 +123,14 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// start reading meaning into the bytes it holds. The owner of the key holds
 	// every meaning instead.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/blob"])
+	// Files owns the record that gives a stored object a name, an owner, and a
+	// lifetime. It reaches the two stores it writes to and nothing else. A
+	// dependency on routing, execution, or a protocol codec would let the
+	// meaning of a request decide what a stored file is.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/files"],
+		"github.com/agentstation/starport/internal/blob",
+		"github.com/agentstation/starport/internal/storage",
+	)
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
