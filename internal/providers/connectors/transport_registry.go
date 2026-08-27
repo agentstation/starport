@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+
+	"github.com/agentstation/starport/internal/routing"
 )
 
 var (
@@ -17,7 +19,58 @@ var (
 	// ErrTransportOperationUnsupported reports an operation that a compiled
 	// transport does not implement.
 	ErrTransportOperationUnsupported = errors.New("provider inference transport operation is unsupported")
+	// ErrTransportInterfaceMissing reports a descriptor that declares a media
+	// operation without the narrow interface that performs it.
+	ErrTransportInterfaceMissing = errors.New("provider inference transport is missing its declared media interface")
 )
+
+// mediaInterfaces names the narrow optional interface each media operation
+// needs. A descriptor declares an operation, and activation proves the compiled
+// transport can perform it. Without this table a media operation would reach
+// the wire and fail there, once per request, instead of once at startup.
+var mediaInterfaces = []struct {
+	operation   catalogs.ProviderOperation
+	name        string
+	implemented func(Connector) bool
+}{
+	{catalogs.ProviderOperationImagesGenerations, "ImageGenerator", func(c Connector) bool {
+		_, ok := c.(ImageGenerator)
+		return ok
+	}},
+	{catalogs.ProviderOperationImagesEdits, "ImageGenerator", func(c Connector) bool {
+		_, ok := c.(ImageGenerator)
+		return ok
+	}},
+	{catalogs.ProviderOperationAudioSpeech, "SpeechSynthesizer", func(c Connector) bool {
+		_, ok := c.(SpeechSynthesizer)
+		return ok
+	}},
+	{catalogs.ProviderOperationAudioTranscriptions, "Transcriber", func(c Connector) bool {
+		_, ok := c.(Transcriber)
+		return ok
+	}},
+	{catalogs.ProviderOperationAudioTranslations, "Transcriber", func(c Connector) bool {
+		_, ok := c.(Transcriber)
+		return ok
+	}},
+}
+
+// requireMediaInterfaces refuses a transport that declares a media operation it
+// cannot perform.
+func requireMediaInterfaces(descriptor TransportDescriptor, connector Connector) error {
+	for _, operation := range descriptor.Operations {
+		for _, required := range mediaInterfaces {
+			if required.operation != operation || required.implemented(connector) {
+				continue
+			}
+			return fmt.Errorf(
+				"%w: %s declares %q without %s",
+				ErrTransportInterfaceMissing, descriptor.EndpointType, operation, required.name,
+			)
+		}
+	}
+	return nil
+}
 
 // TransportFactory constructs one provider-scoped instance of a compiled wire
 // transport. Provider membership does not belong in a factory.
@@ -54,9 +107,11 @@ func NewTransportRegistry(descriptors ...TransportDescriptor) (*TransportRegistr
 		}
 		seen := make(map[catalogs.ProviderOperation]struct{}, len(descriptor.Operations))
 		for _, operation := range descriptor.Operations {
-			if operation != catalogs.ProviderOperationChatCompletions &&
-				operation != catalogs.ProviderOperationEmbeddings {
-				return nil, fmt.Errorf("%s operation %q is invalid", descriptor.EndpointType, operation)
+			if !routing.ServedOperations().Contains(routing.Operation(operation)) {
+				return nil, fmt.Errorf(
+					"%s operation %q is invalid, must be one of %s",
+					descriptor.EndpointType, operation, servedOperationNames(),
+				)
 			}
 			if _, exists := seen[operation]; exists {
 				return nil, fmt.Errorf("%s operation %q is duplicated", descriptor.EndpointType, operation)
@@ -73,10 +128,20 @@ func NewTransportRegistry(descriptors ...TransportDescriptor) (*TransportRegistr
 func ProductionTransportRegistry() (*TransportRegistry, error) {
 	chat := catalogs.ProviderOperationChatCompletions
 	embeddings := catalogs.ProviderOperationEmbeddings
+	// The OpenAI protocol is the one Starport compiles a media transport for.
+	// Every provider whose catalog endpoint speaks it reaches these operations,
+	// and no provider ID appears here.
+	media := []catalogs.ProviderOperation{
+		catalogs.ProviderOperationImagesGenerations,
+		catalogs.ProviderOperationImagesEdits,
+		catalogs.ProviderOperationAudioSpeech,
+		catalogs.ProviderOperationAudioTranscriptions,
+		catalogs.ProviderOperationAudioTranslations,
+	}
 	return NewTransportRegistry(
 		TransportDescriptor{
 			EndpointType: catalogs.EndpointTypeOpenAI,
-			Operations:   []catalogs.ProviderOperation{chat, embeddings},
+			Operations:   append([]catalogs.ProviderOperation{chat, embeddings}, media...),
 			Factory: func(providerID catalogs.ProviderID, config ProviderConfig) (Connector, error) {
 				return newOpenAIConnector(providerID, string(providerID), config)
 			},
@@ -186,6 +251,9 @@ func (r *TransportRegistry) NewProviderConnector(
 				closeTransportConnectors(transports),
 			)
 		}
+		if err := requireMediaInterfaces(descriptor, connector); err != nil {
+			return nil, errors.Join(err, connector.Close(), closeTransportConnectors(transports))
+		}
 		transports[endpointType] = connector
 	}
 	if len(transports) == 0 {
@@ -226,6 +294,13 @@ func (c *providerConnector) Embeddings(
 	return connector.Embeddings(ctx, request)
 }
 
+// Transport returns the compiled transport for one endpoint type, so a caller
+// can probe the exact transport a route selected for a narrow media interface.
+func (c *providerConnector) Transport(endpointType catalogs.EndpointType) (Connector, bool) {
+	connector, exists := c.transports[endpointType]
+	return connector, exists
+}
+
 func (c *providerConnector) Name() string { return string(c.providerID) }
 
 func (c *providerConnector) Close() error { return closeTransportConnectors(c.transports) }
@@ -249,4 +324,17 @@ func closeTransportConnectors(transports map[catalogs.EndpointType]Connector) er
 		}
 	}
 	return errors.Join(closeErrors...)
+}
+
+// servedOperationNames renders the planner's operation set for an error
+// message. A transport declares what it implements, and the planner names what
+// it can route, so a descriptor outside that set would compile a transport no
+// request could reach.
+func servedOperationNames() string {
+	operations := routing.ServedOperations().Members()
+	names := make([]string, 0, len(operations))
+	for _, operation := range operations {
+		names = append(names, string(operation))
+	}
+	return strings.Join(names, ", ")
 }

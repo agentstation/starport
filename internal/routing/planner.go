@@ -136,9 +136,7 @@ func validateRequest(request Request) error {
 	if request.RequiredContextTokens < 0 || request.EstimatedInputTokens < 0 || request.EstimatedOutputTokens < 0 {
 		return fmt.Errorf("%w: token counts must not be negative", ErrInvalidRequest)
 	}
-	switch request.Operation {
-	case "", OperationChatCompletions, OperationEmbeddings:
-	default:
+	if request.Operation != "" && !servedOperations.Contains(request.Operation) {
 		return fmt.Errorf("%w: unsupported operation %q", ErrInvalidRequest, request.Operation)
 	}
 	return nil
@@ -172,13 +170,17 @@ func validateSnapshot(snapshot Snapshot) error {
 		}
 		seenOperations := make(map[Operation]struct{}, len(candidate.Operations))
 		for _, operation := range candidate.Operations {
-			if operation != OperationChatCompletions && operation != OperationEmbeddings {
-				return fmt.Errorf("%w: route %q has invalid operation %q", ErrInvalidSnapshot, route.ID(), operation)
-			}
 			if _, exists := seenOperations[operation]; exists {
 				return fmt.Errorf("%w: route %q duplicates operation %q", ErrInvalidSnapshot, route.ID(), operation)
 			}
 			seenOperations[operation] = struct{}{}
+			if !servedOperations.Contains(operation) {
+				// Catalog facts arrive from a generation this build did not
+				// ship with. An operation the build cannot plan is inert, and
+				// the planner keeps every other route in the snapshot. Caller
+				// input still fails closed in validateRequest.
+				continue
+			}
 			if endpoint, exists := candidate.Endpoints[operation]; !exists || strings.TrimSpace(endpoint.Protocol) == "" || strings.TrimSpace(endpoint.URL) == "" {
 				return fmt.Errorf("%w: route %q has no endpoint for operation %q", ErrInvalidSnapshot, route.ID(), operation)
 			}
@@ -286,7 +288,7 @@ func rejectCandidate(
 	if candidate.Unhealthy {
 		return reject(RejectionUnhealthy, "runtime health disabled the offering")
 	}
-	if request.Operation != "" && !supportsOperation(candidate.Operations, request.Operation) {
+	if !candidate.ServesOperation(request.Operation) {
 		return reject(RejectionMissingOperation, "offering and adapter do not support the operation")
 	}
 	if request.Operation != "" {
@@ -356,15 +358,6 @@ func rejectPrice(
 		return RejectionPriceExceeded, "completion price exceeds the request max_price", true
 	}
 	return "", "", false
-}
-
-func supportsOperation(operations []Operation, required Operation) bool {
-	for _, operation := range operations {
-		if operation == required {
-			return true
-		}
-	}
-	return false
 }
 
 func modelAllowed(route Route, allowed map[string]struct{}) bool {

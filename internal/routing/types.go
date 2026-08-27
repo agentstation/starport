@@ -47,16 +47,6 @@ type TokenCost struct {
 	OutputPerToken float64
 }
 
-// Operation is one provider inference operation selected from catalog facts.
-type Operation string
-
-const (
-	// OperationChatCompletions generates chat completions.
-	OperationChatCompletions Operation = "chat-completions"
-	// OperationEmbeddings generates vector embeddings.
-	OperationEmbeddings Operation = "embeddings"
-)
-
 // Endpoint is the exact offering endpoint and wire protocol selected for an attempt.
 type Endpoint struct {
 	Protocol  string
@@ -83,6 +73,20 @@ type Candidate struct {
 	Latency       *time.Duration
 	Unavailable   bool
 	Unhealthy     bool
+}
+
+// ServesOperation reports whether the candidate declares the operation. An
+// empty operation means the caller named none, which every candidate serves.
+func (c Candidate) ServesOperation(operation Operation) bool {
+	if operation == "" {
+		return true
+	}
+	for _, declared := range c.Operations {
+		if declared == operation {
+			return true
+		}
+	}
+	return false
 }
 
 // Snapshot binds all planning candidates to one catalog generation and one

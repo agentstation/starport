@@ -63,6 +63,21 @@ func (c *OpenAIConnector) Embeddings(ctx context.Context, req *EmbeddingsRequest
 	return c.OpenAICompatibleConnector.Embeddings(ctx, req, c.setHeaders, c.handleError)
 }
 
+// GenerateImages serves images-generations and images-edits.
+func (c *OpenAIConnector) GenerateImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error) {
+	return c.OpenAICompatibleConnector.GenerateImages(ctx, req, c.setHeaders, c.handleError)
+}
+
+// SynthesizeSpeech serves audio-speech.
+func (c *OpenAIConnector) SynthesizeSpeech(ctx context.Context, req *SpeechRequest) (*SpeechResponse, error) {
+	return c.OpenAICompatibleConnector.SynthesizeSpeech(ctx, req, c.setHeaders, c.handleError)
+}
+
+// Transcribe serves audio-transcriptions and audio-translations.
+func (c *OpenAIConnector) Transcribe(ctx context.Context, req *TranscriptionRequest) (*TranscriptionResponse, error) {
+	return c.OpenAICompatibleConnector.Transcribe(ctx, req, c.setHeaders, c.handleError)
+}
+
 // Close closes the connector
 func (c *OpenAIConnector) Close() error {
 	c.httpClient.CloseIdleConnections()

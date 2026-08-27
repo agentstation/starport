@@ -99,7 +99,7 @@ func contentFromInference(part inference.ContentPart) (ContentPart, error) {
 		if part.Document == nil || part.Document.URL == "" {
 			return ContentPart{}, fmt.Errorf("%w: document part carries no reference", ErrInvalidMessageContent)
 		}
-		wire.Type = "file"
+		wire.Type = contentTypeFile
 		wire.File = &File{Filename: part.Document.Filename, FileData: part.Document.URL}
 	case inference.ContentVideo:
 		if part.Video == nil || part.Video.URL == "" {
@@ -139,7 +139,7 @@ func contentToInference(part ContentPart) (inference.ContentPart, error) {
 		}
 		canonical.Kind = inference.ContentAudio
 		canonical.Audio = &inference.Audio{Data: data, Format: part.InputAudio.Format}
-	case "file", "input_file":
+	case contentTypeFile, "input_file":
 		if part.File == nil {
 			return inference.ContentPart{}, fmt.Errorf("%w: file part carries no file", ErrInvalidMessageContent)
 		}
