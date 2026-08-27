@@ -7,6 +7,7 @@ import (
 	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
@@ -35,6 +36,7 @@ type catalogUpdateRuntime interface {
 
 type runtimeFactories struct {
 	openStorage  func(config.StorageConfig) (storage.KVStore, error)
+	openBlob     func(context.Context, config.FilesConfig) (blob.Store, error)
 	openCatalog  func(context.Context, storage.KVStore, config.CatalogConfig) (catalogRuntime, error)
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	newCache     func(cache.ManagerConfig, storage.KVStore) (*cache.Manager, error)

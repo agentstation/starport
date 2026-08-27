@@ -25,6 +25,7 @@ type Config struct {
 	Security          SecurityConfig     `env:",prefix=SECURITY_"`
 	Logging           LoggingConfig      `env:",prefix=LOGGING_"`
 	Cache             CacheConfig        `env:",prefix=CACHE_"`
+	Files             FilesConfig        `env:",prefix=FILES_"`
 	Console           ConsoleConfig      `env:",prefix=CONSOLE_"`
 
 	providerEnvironment  environmentLookup
@@ -318,6 +319,11 @@ func (c *Config) Validate() error {
 
 	// Validate logging config
 	if err := c.Logging.Validate(); err != nil {
+		return err
+	}
+
+	// Validate the file byte store selection
+	if err := c.Files.Validate(); err != nil {
 		return err
 	}
 
