@@ -109,6 +109,13 @@ type ChatCompletionRequest struct {
 type ChatCompletionResponse struct {
 	Response inference.ChatResponse
 
+	// ExtractionCached reports that every document this turn attached came
+	// back from the extraction cache. It is separate from CacheStatus below,
+	// which reports the response cache: a turn can read its attachments from
+	// the cache and still call the model, and that is the common case for a
+	// conversation about one document.
+	ExtractionCached bool `json:"-"`
+
 	// Internal fields (not serialized)
 	CacheStatus string     `json:"-"`
 	CacheAge    int        `json:"-"` // Seconds since cached

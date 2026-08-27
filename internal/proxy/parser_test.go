@@ -40,6 +40,7 @@ func parserFixture(t *testing.T, name string) []byte {
 type recognizingRouter struct {
 	*capturingRouter
 	asked *routepkg.RecognitionRequest
+	calls int
 	pages []inference.RecognizedPage
 	fail  error
 }
@@ -57,6 +58,7 @@ func (r *recognizingRouter) RouteDocumentRecognition(
 	req *routepkg.RecognitionRequest,
 ) (*routepkg.RecognitionResponse, error) {
 	r.asked = req
+	r.calls++
 	if r.fail != nil {
 		return nil, r.fail
 	}

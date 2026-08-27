@@ -21,6 +21,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
@@ -528,6 +529,20 @@ func (b *runtimeBuilder) buildGateway() error {
 	proxyOptions = append(proxyOptions, proxy.WithTokenEstimator(tokenize.NewEstimator()))
 	if b.files != nil {
 		proxyOptions = append(proxyOptions, proxy.WithFiles(storedDocuments{service: b.files}))
+	}
+	// A parser plugin reads an attachment once per account, engine, and
+	// catalog generation. The entries hold text rather than bytes, so they sit
+	// in the key-value store under their own prefix and expire on their own
+	// window.
+	if b.application.store != nil {
+		extractions, err := document.NewCache(
+			cache.NewDistributedCache(b.application.store, storage.KeyPrefixExtraction),
+			nil, 0,
+		)
+		if err != nil {
+			return fmt.Errorf("open extraction cache: %w", err)
+		}
+		proxyOptions = append(proxyOptions, proxy.WithDocumentCache(extractions))
 	}
 	if b.application.cacheManager != nil {
 		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, &proxy.CacheConfig{
