@@ -45,6 +45,8 @@
     "docs_url": "https://console.groq.com/docs",
     "url": "https://status.groq.com",
     "models": [
+      "groq/canopylabs/orpheus-arabic-saudi",
+      "groq/canopylabs/orpheus-v1-english",
       "groq/groq/compound",
       "groq/groq/compound-mini",
       "groq/llama-3.1-8b-instant",
@@ -55,11 +57,16 @@
       "groq/openai/gpt-oss-120b",
       "groq/openai/gpt-oss-20b",
       "groq/openai/gpt-oss-safeguard-20b",
+      "groq/whisper-large-v3",
+      "groq/whisper-large-v3-turbo",
       "groq/qwen/qwen3-32b",
       "groq/qwen/qwen3.6-27b",
       "groq/allam-2-7b"
     ],
     "capabilities": [
+      "audio-speech",
+      "audio-transcriptions",
+      "audio-translations",
       "chat-completions"
     ],
     "requires_auth": true,

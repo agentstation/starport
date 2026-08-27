@@ -718,6 +718,128 @@
       ]
     },
     {
+      "id": "canopy-labs/orpheus-arabic-saudi",
+      "canonical_slug": "canopy-labs/orpheus-arabic-saudi",
+      "name": "Canopy Labs Orpheus Arabic Saudi",
+      "object": "model",
+      "created": 1765843200,
+      "owned_by": "canopy-labs",
+      "pricing": {
+        "prompt": "4e-05",
+        "completion": "",
+        "currency": "USD"
+      },
+      "context_length": 4000,
+      "description": "Speech generation model for controllable voice, narration, and audio delivery",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "audio"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 4000,
+        "max_completion_tokens": 50000
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "canopy-labs",
+          "name": "Canopy Labs"
+        }
+      ],
+      "lineage": {
+        "family": "canopylabs"
+      },
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "canopylabs/orpheus-arabic-saudi",
+          "context_length": 4000,
+          "max_completion_tokens": 50000,
+          "availability": "unknown",
+          "lifecycle": "preview",
+          "pricing": {
+            "prompt": "4e-05",
+            "cache_read": "2e-05",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "canopy-labs/orpheus-v1-english",
+      "canonical_slug": "canopy-labs/orpheus-v1-english",
+      "name": "Canopy Labs Orpheus V1 English",
+      "object": "model",
+      "created": 1766102400,
+      "owned_by": "canopy-labs",
+      "pricing": {
+        "prompt": "2.2e-05",
+        "completion": "",
+        "currency": "USD"
+      },
+      "context_length": 4000,
+      "description": "Speech generation model for controllable voice, narration, and audio delivery",
+      "architecture": {
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "audio"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 4000,
+        "max_completion_tokens": 50000
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "canopy-labs",
+          "name": "Canopy Labs"
+        }
+      ],
+      "lineage": {
+        "family": "canopylabs"
+      },
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "canopylabs/orpheus-v1-english",
+          "context_length": 4000,
+          "max_completion_tokens": 50000,
+          "availability": "unknown",
+          "lifecycle": "preview",
+          "pricing": {
+            "prompt": "2.2e-05",
+            "cache_read": "1.1e-05",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
       "id": "groq/compound",
       "canonical_slug": "groq/compound",
       "name": "Compound",
@@ -1317,6 +1439,128 @@
             "prompt": "7.5e-08",
             "completion": "3e-07",
             "cache_read": "3.75e-08",
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai/whisper-large-v3",
+      "canonical_slug": "openai/whisper-large-v3",
+      "name": "openai/whisper-large-v3",
+      "object": "model",
+      "created": 1699228800,
+      "owned_by": "openai",
+      "pricing": {
+        "prompt": "",
+        "completion": "",
+        "currency": "USD"
+      },
+      "context_length": 448,
+      "description": "Whisper is a general-purpose speech recognition model. It is trained on a large dataset of diverse audio and is also a multi-task model that can perform multilingual speech recognition as well as speech translation and language identification.",
+      "architecture": {
+        "input_modalities": [
+          "audio",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 448,
+        "max_completion_tokens": 448
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "openai",
+          "name": "OpenAI"
+        }
+      ],
+      "tags": [
+        "stt"
+      ],
+      "open_weights": true,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "whisper-large-v3",
+          "context_length": 448,
+          "max_completion_tokens": 448,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "currency": "USD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai/whisper-large-v3-turbo",
+      "canonical_slug": "openai/whisper-large-v3-turbo",
+      "name": "openai/whisper-large-v3-turbo",
+      "object": "model",
+      "created": 1783800913,
+      "owned_by": "openai",
+      "pricing": {
+        "prompt": "0.00051",
+        "completion": "0.00051",
+        "currency": "USD"
+      },
+      "context_length": 448,
+      "description": "Whisper is a state-of-the-art model for automatic speech recognition (ASR) and speech translation, proposed in the paper \"Robust Speech Recognition via Large-Scale Weak Supervision\" by Alec Radford et al. from OpenAI. Trained on \u003e5M hours of labeled data, Whisper demonstrates a strong ability to generalise to many datasets and domains in a zero-shot setting. Whisper large-v3-turbo is a finetuned version of a pruned Whisper large-v3. In other words, it's the exact same model, except that the number of decoding layers have reduced from 32 to 4. As a result, the model is way faster, at the expense of a minor quality degradation.",
+      "architecture": {
+        "input_modalities": [
+          "audio",
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "",
+        "instruct_type": null
+      },
+      "top_provider": {
+        "context_length": 448,
+        "max_completion_tokens": 448
+      },
+      "supported_parameters": [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stop"
+      ],
+      "authors": [
+        {
+          "id": "openai",
+          "name": "OpenAI"
+        }
+      ],
+      "tags": [
+        "stt"
+      ],
+      "open_weights": false,
+      "offerings": [
+        {
+          "provider": "groq",
+          "provider_name": "Groq",
+          "provider_model_id": "whisper-large-v3-turbo",
+          "context_length": 448,
+          "max_completion_tokens": 448,
+          "availability": "unknown",
+          "lifecycle": "active",
+          "pricing": {
+            "prompt": "0.00051",
+            "completion": "0.00051",
             "currency": "USD"
           }
         }
