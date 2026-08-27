@@ -64,6 +64,19 @@ when its cache does is worse than one that reads a page twice.
 An incomplete key is different. It neither reads nor writes, because serving
 under a partial key would cross an account, an engine, or a generation.
 
+## A time budget that held on one platform alone
+
+The Windows job caught a defect PLG2 left. The reader checks the deadline
+between pages by reading the context error, which a timer sets. A timer fires
+on its platform's granularity, and Windows rounds to about fifteen
+milliseconds. A document reads faster than that, so the budget went unenforced
+there.
+
+The file `internal/document/pdf.go` now compares the deadline against the clock
+as well. The file `internal/document/deadline_test.go` locks the rule over a
+stub context. The stub deadline sits in the past and the stub timer stays quiet. A real
+timeout shows the gap on one platform alone.
+
 ## Evidence
 
 | Command | Result |
