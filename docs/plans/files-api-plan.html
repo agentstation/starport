@@ -299,8 +299,8 @@
         <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        <tr id="FIL0" data-status="todo"><td>FIL0</td><td>Baseline. Pin the commit, confirm the file object fields, name the object store, create the proof root, write the verifier red at 22 conditions.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="FIL1" data-status="todo"><td>FIL1</td><td>Phase A. The <code>internal/blob</code> contract, its contract test, and the filesystem backend. Conditions FIL-V01 to FIL-V03.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="FIL0" data-status="done"><td>FIL0</td><td>Baseline. Pin the commit, confirm the file object fields, name the object store, create the proof root, write the verifier red at 22 conditions.</td><td><code>done</code></td><td>2026-08-27. <code>scripts/verify-files-api.sh</code> reports <code>Summary: 0 passed, 22 failed</code> and exits 1. <code>docs/proof/files-api/fil0.md</code> names the nine object fields, the two accepted purposes and the six refusals, and the S3-compatible object store. <code>go build ./...</code> exits 0.</td></tr>
+        <tr id="FIL1" data-status="in_progress"><td>FIL1</td><td>Phase A. The <code>internal/blob</code> contract, its contract test, and the filesystem backend. Conditions FIL-V01 to FIL-V03.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="FIL2" data-status="todo"><td>FIL2</td><td>Phase A. The object store backend behind the same contract, selected by configuration. Conditions FIL-V04 to FIL-V06.</td><td><code>todo</code></td><td></td></tr>
         <tr id="FIL3" data-status="todo"><td>FIL3</td><td>Phase B. The tenant-scoped file record, its repository, and the orphan cases. Conditions FIL-V07 to FIL-V09.</td><td><code>todo</code></td><td></td></tr>
         <tr id="FIL4" data-status="todo"><td>FIL4</td><td>Phase B. Five routes under <code>/v1/files</code>, multipart upload, and two scopes. Conditions FIL-V10 to FIL-V13.</td><td><code>todo</code></td><td></td></tr>
@@ -776,6 +776,7 @@ terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted one finding. FIL7 now states the response cache rule for a stored file reference, and its seam gains <code>internal/response/cache</code>. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted three findings here. FIL4 registered five routes without naming a path, which left the route test nothing exact to assert, so FIL4 now names all five. FIL7 tested <code>internal/proxy</code> without naming it as a seam, and its seam now holds it. The plan carried the title of the model modalities plan.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>FIL7 now names <code>internal/files</code> and <code>internal/blob</code> as seams, because its lookup and read steps call them. The anonymous scope citation names <code>DefaultAnonymousScopes</code> rather than a signature line.</td></tr>
+        <tr><td>2026-08-27</td><td>FIL0</td><td>done</td><td>Baseline pinned at <code>7b224bb</code>. The gate is red at 22 conditions. No production file changed.</td></tr>
 </tbody>
     </table>
   </section>
