@@ -6,6 +6,7 @@ import {
   isCredentialRejected,
   request,
   setApiKey,
+  streamChat,
 } from "./api";
 
 function respond(status: number): Response {
@@ -96,4 +97,127 @@ test("a 401 without a stored key does not mark a rejection", async () => {
 
   await expect(request("/api/v1/models")).rejects.toBeInstanceOf(ApiError);
   expect(isCredentialRejected()).toBe(false);
+});
+
+// sseResponse answers one streaming request with the given events, one SSE
+// frame each, split across two network reads so the line buffer is exercised.
+function sseResponse(events: unknown[]): Response {
+  const frames = events.map((event) => `data: ${JSON.stringify(event)}\n\n`);
+  const body = `${frames.join("")}data: [DONE]\n\n`;
+  const bytes = new TextEncoder().encode(body);
+  const split = Math.floor(bytes.length / 2);
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, split));
+        controller.enqueue(bytes.slice(split));
+        controller.close();
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "text/event-stream" } },
+  );
+}
+
+// A spoken answer arrives in chunks, and each chunk is base64 on its own.
+// Joining the encoded strings produces padding in the middle, which no
+// decoder accepts, so the bytes are joined and encoded once at the end.
+test("a chunked spoken answer joins its bytes, not its base64", async () => {
+  const first = btoa("first-half-");
+  const second = btoa("second-half");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      sseResponse([
+        { model: "openai/gpt-audio", choices: [{ delta: { content: "hi" } }] },
+        {
+          choices: [
+            { delta: { audio: { data: first, format: "wav", transcript: "hi " } } },
+          ],
+        },
+        {
+          choices: [
+            { delta: { audio: { data: second, transcript: "there" } } },
+          ],
+        },
+      ]),
+    ),
+  );
+
+  const meta = await streamChat({ model: "openai/gpt-audio" }, { onDelta: () => {} });
+
+  expect(meta.media).toEqual([
+    {
+      kind: "audio",
+      url: `data:audio/wav;base64,${btoa("first-half-second-half")}`,
+      transcript: "hi there",
+    },
+  ]);
+});
+
+// A picture arrives whole in one delta and keeps the URL the gateway sent.
+test("a generated image reaches the turn metadata", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      sseResponse([
+        {
+          choices: [
+            {
+              delta: {
+                images: [{ image_url: { url: "data:image/png;base64,AAAA" } }],
+              },
+            },
+          ],
+        },
+      ]),
+    ),
+  );
+
+  const meta = await streamChat({ model: "openai/gpt-image-1" }, { onDelta: () => {} });
+
+  expect(meta.media).toEqual([
+    { kind: "image", url: "data:image/png;base64,AAAA" },
+  ]);
+});
+
+// An unreadable chunk drops itself. The text of the same turn is already on
+// screen, so failing the whole answer would lose more than it protects.
+test("an unreadable audio chunk drops that chunk alone", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      sseResponse([
+        { choices: [{ delta: { audio: { data: "!!!not-base64!!!" } } }] },
+        { choices: [{ delta: { audio: { data: btoa("kept") } } }] },
+      ]),
+    ),
+  );
+
+  const meta = await streamChat({ model: "openai/gpt-audio" }, { onDelta: () => {} });
+
+  expect(meta.media).toEqual([
+    { kind: "audio", url: `data:audio/mp3;base64,${btoa("kept")}`, transcript: undefined },
+  ]);
+});
+
+// A text answer produces no media at all, which is what most turns do.
+test("a text answer carries no media", async () => {
+  const chunks: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      sseResponse([
+        { model: "groq/llama", choices: [{ delta: { content: "hello" } }] },
+      ]),
+    ),
+  );
+
+  const meta = await streamChat(
+    { model: "groq/llama" },
+    { onDelta: (text) => chunks.push(text) },
+  );
+
+  expect(chunks.join("")).toBe("hello");
+  expect(meta.model).toBe("groq/llama");
+  expect(meta.media).toEqual([]);
 });

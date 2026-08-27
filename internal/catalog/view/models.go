@@ -165,6 +165,7 @@ func modelOfferings(
 			info.MaxCompletionTokens = &maxCompletion
 		}
 		info.Pricing = offeringPricing(offering.Pricing)
+		info.Operations = offeringOperations(route)
 		offerings = append(offerings, info)
 	}
 	sort.Slice(offerings, func(left, right int) bool {
@@ -174,6 +175,21 @@ func modelOfferings(
 		return offerings[left].ProviderModelID < offerings[right].ProviderModelID
 	})
 	return offerings
+}
+
+// offeringOperations names what one offering serves. The catalog already
+// filtered the list to the operations the compiled adapter implements, so this
+// is what a caller can actually reach rather than what the provider advertises.
+func offeringOperations(route runtimecatalog.Route) []string {
+	if len(route.Operations) == 0 {
+		return nil
+	}
+	operations := make([]string, 0, len(route.Operations))
+	for _, operation := range route.Operations {
+		operations = append(operations, string(operation))
+	}
+	sort.Strings(operations)
+	return operations
 }
 
 func offeringPricing(pricing *starmapcatalogs.ModelPricing) *OfferingPricingInfo {

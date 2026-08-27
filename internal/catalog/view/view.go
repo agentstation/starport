@@ -56,6 +56,10 @@ type ModelOfferingInfo struct {
 	Availability        string               `json:"availability,omitempty"`
 	Lifecycle           string               `json:"lifecycle,omitempty"`
 	Pricing             *OfferingPricingInfo `json:"pricing,omitempty"`
+	// Operations names what this offering serves, in the catalog's own
+	// spelling. A media model reaches a different path than a chat model, so
+	// a reader who cannot see the operations cannot tell which path to call.
+	Operations []string `json:"operations,omitempty"`
 }
 
 // OfferingPricingInfo carries every token price dimension of one offering

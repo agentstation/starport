@@ -1,9 +1,10 @@
 import type { Model } from "@/lib/api";
 
-// Attachments are the media a reader adds to one chat turn. The composer
-// owns the controls, chatStore owns the conversation record, and this
-// module owns the vocabulary the two share: which kinds exist, what the
-// catalog calls each one, and what each becomes on the wire.
+// This module owns the chat media vocabulary in both directions: the
+// attachments a reader adds to a turn, and the pictures and spoken answers a
+// model sends back. The composer owns the controls, chatStore owns the
+// conversation record, and both read the kinds, the catalog spelling of each
+// one, and the wire shape from here.
 
 export type AttachmentKind = "image" | "audio" | "document";
 
@@ -17,6 +18,16 @@ export type Attachment = {
   kind: AttachmentKind;
   url: string;
   name: string;
+};
+
+// GeneratedMedia is one non-text answer a model produced: a picture, or a
+// spoken answer with its transcript beside it. Both hold a data URL, so a
+// stored conversation replays them after a reload the way an attachment
+// does, rather than pointing at a link the provider expires.
+export type GeneratedMedia = {
+  kind: "image" | "audio";
+  url: string;
+  transcript?: string;
 };
 
 // ContentPart is one element of a chat request content array. The three

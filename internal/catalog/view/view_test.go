@@ -193,6 +193,33 @@ func TestModelsCarryDefinitionFacts(t *testing.T) {
 		"every routable model has at least one offering")
 }
 
+// TestModelOfferingsNameTheirOperations holds the fact a reader needs to tell
+// a media model from a chat model. Both accept text and both are routable, so
+// the modalities alone leave the path open. The operations name it.
+func TestModelOfferingsNameTheirOperations(t *testing.T) {
+	snapshot := fixtureSnapshot(t, "deepinfra")
+	var chat, images int
+	for _, model := range Models(snapshot) {
+		for _, offering := range model.Offerings {
+			require.NotEmptyf(t, offering.Operations,
+				"routable offering %s/%s serves no named operation",
+				offering.Provider, offering.ProviderModelID)
+			require.IsIncreasing(t, append([]string(nil), offering.Operations...),
+				"operations are sorted so the projection is stable")
+			for _, operation := range offering.Operations {
+				switch operation {
+				case string(catalogs.ProviderOperationChatCompletions):
+					chat++
+				case string(catalogs.ProviderOperationImagesGenerations):
+					images++
+				}
+			}
+		}
+	}
+	require.NotZero(t, chat, "deepinfra serves chat completions")
+	require.NotZero(t, images, "deepinfra serves image generation")
+}
+
 func TestProvidersCarryPolicyFacts(t *testing.T) {
 	snapshot := fixtureSnapshot(t, "anthropic")
 	providers := Providers(snapshot, nil)

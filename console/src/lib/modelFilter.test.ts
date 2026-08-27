@@ -7,6 +7,8 @@ import {
   fuzzyIncludes,
   hasCapability,
   matches,
+  operationsOf,
+  outputModalitiesOf,
   providerOf,
 } from "./modelFilter";
 
@@ -59,6 +61,43 @@ test("fuzzy id match accepts an in-order subsequence", () => {
   expect(matches(model, { q: "llama318b" })).toBe(true);
   // The author name is a fuzzy candidate too.
   expect(matches(model, { q: "Meta" })).toBe(true);
+});
+
+// An image model accepts text and returns a picture. Reading the input
+// modalities alone cannot tell it from a chat model, which is why the output
+// facet exists: the two reach different paths.
+const imageModel: Model = {
+  id: "openai/gpt-image-1",
+  name: "GPT Image 1",
+  architecture: { input_modalities: ["text"], output_modalities: ["image"] },
+  offerings: [
+    {
+      provider: "openai",
+      provider_model_id: "gpt-image-1",
+      operations: ["images-edits", "images-generations"],
+    },
+  ],
+};
+
+test("output facet selects a model by what it produces", () => {
+  expect(outputModalitiesOf(imageModel)).toEqual(["image"]);
+  expect(matches(imageModel, { output: "image" })).toBe(true);
+  // The text-only model accepts text and returns text. Its input modalities
+  // name text too, so a facet that read the input half would keep it here.
+  expect(matches(model, { output: "image" })).toBe(false);
+  expect(matches(model, { output: "text" })).toBe(false);
+});
+
+test("a model with no stated output modality says nothing rather than text", () => {
+  // A catalog entry that predates the field is unknown, not text-only. It is
+  // absent from both answers instead of being claimed by the text one.
+  expect(outputModalitiesOf({ id: "legacy/model" })).toEqual([]);
+  expect(matches({ id: "legacy/model" }, { output: "text" })).toBe(false);
+});
+
+test("operations gather across the offerings that serve a model", () => {
+  expect(operationsOf(imageModel)).toEqual(["images-edits", "images-generations"]);
+  expect(operationsOf(model)).toEqual([]);
 });
 
 test("reasoning capability accepts include_reasoning", () => {

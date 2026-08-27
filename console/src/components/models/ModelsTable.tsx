@@ -37,11 +37,20 @@ function CapabilityBadge({ children }: { children: ReactNode }) {
 
 // capabilityLabels turns modalities and supported parameters into the
 // labeled badges DESIGN.md requires instead of the legacy unlabeled icons.
+//
+// The modality halves read the catalog rather than a list written here. A
+// fixed list drops whatever the catalog learns next: the one it replaced
+// named three kinds and already omitted video, so a video model read as a
+// text model. Text stays out of both halves, because every model handles it
+// and a badge every row carries says nothing.
 function capabilityLabels(model: Model): string[] {
   const labels: string[] = [];
-  const inputs = model.architecture?.input_modalities ?? [];
-  for (const modality of ["image", "audio", "file"]) {
-    if (inputs.includes(modality)) labels.push(modality);
+  const architecture = model.architecture;
+  for (const modality of architecture?.input_modalities ?? []) {
+    if (modality !== "text") labels.push(modality);
+  }
+  for (const modality of architecture?.output_modalities ?? []) {
+    if (modality !== "text") labels.push(`${modality} out`);
   }
   const params = model.supported_parameters ?? [];
   if (params.includes("tools")) labels.push("tools");

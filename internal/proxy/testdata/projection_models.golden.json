@@ -68,7 +68,10 @@
             "cache_read": "1e-06",
             "cache_write": "1.25e-05",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -139,7 +142,10 @@
             "cache_read": "1.0000000000000001e-07",
             "cache_write": "1.25e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -210,7 +216,10 @@
             "cache_read": "1.5e-06",
             "cache_write": "1.875e-05",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -282,7 +291,10 @@
             "cache_read": "5e-07",
             "cache_write": "6.25e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -354,7 +366,10 @@
             "cache_read": "5e-07",
             "cache_write": "6.25e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -426,7 +441,10 @@
             "cache_read": "5e-07",
             "cache_write": "6.25e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -498,7 +516,10 @@
             "cache_read": "5e-07",
             "cache_write": "6.25e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -569,7 +590,10 @@
             "cache_read": "3e-07",
             "cache_write": "3.75e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -641,7 +665,10 @@
             "cache_read": "3e-07",
             "cache_write": "3.75e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -713,7 +740,10 @@
             "cache_read": "2.0000000000000002e-07",
             "cache_write": "2.5e-06",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -774,7 +804,10 @@
             "prompt": "4e-05",
             "cache_read": "2e-05",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "audio-speech"
+          ]
         }
       ]
     },
@@ -835,7 +868,10 @@
             "prompt": "2.2e-05",
             "cache_read": "1.1e-05",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "audio-speech"
+          ]
         }
       ]
     },
@@ -887,7 +923,10 @@
           "context_length": 131072,
           "max_completion_tokens": 8192,
           "availability": "unknown",
-          "lifecycle": "active"
+          "lifecycle": "active",
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -939,7 +978,10 @@
           "context_length": 131072,
           "max_completion_tokens": 8192,
           "availability": "unknown",
-          "lifecycle": "active"
+          "lifecycle": "active",
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -998,7 +1040,10 @@
             "completion": "8e-08",
             "cache_read": "2.5000000000000002e-08",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1057,7 +1102,10 @@
             "completion": "7.900000000000001e-07",
             "cache_read": "2.95e-07",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1116,7 +1164,10 @@
             "completion": "3.4000000000000003e-07",
             "cache_read": "5.5e-08",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1179,7 +1230,10 @@
             "completion": "3e-08",
             "cache_read": "1.5e-08",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1242,7 +1296,10 @@
             "completion": "4e-08",
             "cache_read": "2e-08",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1305,7 +1362,10 @@
             "completion": "6e-07",
             "cache_read": "7.5e-08",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1373,7 +1433,10 @@
             "completion": "3e-07",
             "cache_read": "3.75e-08",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1440,7 +1503,10 @@
             "completion": "3e-07",
             "cache_read": "3.75e-08",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1500,7 +1566,11 @@
           "lifecycle": "active",
           "pricing": {
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "audio-transcriptions",
+            "audio-translations"
+          ]
         }
       ]
     },
@@ -1562,7 +1632,11 @@
             "prompt": "0.00051",
             "completion": "0.00051",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "audio-transcriptions",
+            "audio-translations"
+          ]
         }
       ]
     },
@@ -1626,7 +1700,10 @@
             "completion": "5.9e-07",
             "cache_read": "1.45e-07",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1699,7 +1776,10 @@
             "completion": "3e-06",
             "cache_read": "3e-07",
             "currency": "USD"
-          }
+          },
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     },
@@ -1746,7 +1826,10 @@
           "context_length": 4096,
           "max_completion_tokens": 4096,
           "availability": "unknown",
-          "lifecycle": "active"
+          "lifecycle": "active",
+          "operations": [
+            "chat-completions"
+          ]
         }
       ]
     }

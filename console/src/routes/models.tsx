@@ -17,7 +17,11 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 // Filter state lives in the URL so a filtered view survives reload and
 // pastes as a link. Empty params are dropped from the search string.
-const MODALITIES = ["text", "image", "audio", "file"] as const;
+const MODALITIES = ["text", "image", "audio", "file", "video"] as const;
+// A model that produces a picture or a spoken answer reaches a different
+// path than a chat model, so what it emits is its own facet rather than a
+// second reading of what it accepts.
+const OUTPUT_MODALITIES = ["text", "image", "audio"] as const;
 const CAPABILITIES = ["tools", "reasoning", "structured_outputs"] as const;
 
 export const Route = createFileRoute("/models")({
@@ -31,6 +35,7 @@ export const Route = createFileRoute("/models")({
       author: str(search.author),
       tag: str(search.tag),
       modality: str(search.modality),
+      output: str(search.output),
       capability: str(search.capability),
     };
   },
@@ -231,6 +236,15 @@ function ModelsPage() {
           onChange={(modality) => setSearch({ modality })}
         />
         <FilterSelect
+          label="All outputs"
+          value={search.output}
+          options={OUTPUT_MODALITIES.map((modality) => ({
+            value: modality,
+            label: `${modality} out`,
+          }))}
+          onChange={(output) => setSearch({ output })}
+        />
+        <FilterSelect
           label="All capabilities"
           value={search.capability}
           options={CAPABILITIES.map((capability) => ({
@@ -265,6 +279,7 @@ function ModelsPage() {
                 author: undefined,
                 tag: undefined,
                 modality: undefined,
+                output: undefined,
                 capability: undefined,
               })
             }
