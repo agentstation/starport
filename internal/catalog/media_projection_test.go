@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mediaOperations names the five media operations the catalog carries. The
+// mediaOperations names the six media operations the catalog carries. The
 // projection is written to be operation-agnostic, which is what lets a media
 // offering reach a route without a code change. That same property means no
 // compiler error would appear if the projection started dropping media, so this
@@ -21,6 +21,7 @@ var mediaOperations = []catalogs.ProviderOperation{
 	catalogs.ProviderOperationAudioSpeech,
 	catalogs.ProviderOperationAudioTranscriptions,
 	catalogs.ProviderOperationAudioTranslations,
+	catalogs.ProviderOperationVideosGenerations,
 }
 
 // TestTheProjectionCarriesEveryMediaOperationTheCatalogNames is the end-to-end
@@ -84,6 +85,7 @@ func TestTheMediaOperationSpellingIsPinned(t *testing.T) {
 		"audio-speech",
 		"audio-transcriptions",
 		"audio-translations",
+		"videos-generations",
 	}, operationNames(mediaOperations))
 
 	// The two operations the gateway already served are pinned by the same

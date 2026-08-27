@@ -23,6 +23,10 @@ const (
 	OperationAudioTranscriptions Operation = "audio-transcriptions"
 	// OperationAudioTranslations writes recorded speech as English text.
 	OperationAudioTranslations Operation = "audio-translations"
+	// OperationVideosGenerations generates a video from a prompt. A provider
+	// answers it with a job rather than a video, so a caller submits, polls,
+	// and collects.
+	OperationVideosGenerations Operation = "videos-generations"
 )
 
 // OperationSet is an immutable set of operation names. One set answers the
@@ -84,6 +88,7 @@ var servedOperations = NewOperationSet(
 	OperationAudioSpeech,
 	OperationAudioTranscriptions,
 	OperationAudioTranslations,
+	OperationVideosGenerations,
 )
 
 // ServedOperations returns the operations this build can plan.
