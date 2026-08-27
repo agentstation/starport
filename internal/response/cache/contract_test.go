@@ -222,7 +222,7 @@ func TestCacheEligibilityRejectsUnsafeShapes(t *testing.T) {
 		{"missing generation", func(value *ChatIdentity) { value.CatalogGeneration = "" }, ErrGenerationRequired},
 		{"mutable image", func(value *ChatIdentity) {
 			value.Request.Messages[0].Content = []inference.ContentPart{{Kind: inference.ContentImage, Image: &inference.Image{URL: "https://example.invalid/image.png"}}}
-		}, ErrMutableImage},
+		}, ErrMutableMedia},
 		{"provider extension", func(value *ChatIdentity) {
 			value.Request.Extensions = map[string]json.RawMessage{"unknown": json.RawMessage(`true`)}
 		}, ErrUnknownExtension},
