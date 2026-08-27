@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
+	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
@@ -84,6 +85,11 @@ type Dependencies struct {
 	// Presets serves stored preset management. A nil repository degrades
 	// the preset endpoints to 503, loudly.
 	Presets presets.Repository
+	// Files serves the stored file surface. A nil service degrades the file
+	// endpoints to 503, loudly: the routes stay registered so a caller reads
+	// that this deployment configured no file storage rather than that the
+	// gateway has no files API.
+	Files *files.Service
 	// LocalGate redeems console launch tickets and verifies console sessions
 	// against this machine's local admin token. A nil gate refuses every
 	// launch and every session cookie, which is the right answer for a
@@ -143,6 +149,8 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		ProviderOperations: s.providerOperations,
 		Catalog:            dependencies.Catalog,
 		Presets:            dependencies.Presets,
+		Files:              dependencies.Files,
+		FileUploadBound:    config.MaxFileUploadSize,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
 		AuthPolicy:         s.authPolicy,

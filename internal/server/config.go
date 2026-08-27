@@ -32,6 +32,13 @@ type Config struct {
 	// that never reads the environment and would drift from the real one.
 	MaxRequestSize int64
 
+	// MaxFileUploadSize is the largest file upload the gateway accepts, in
+	// bytes. It carries no environment tag for the same reason MaxRequestSize
+	// does not: application composition supplies it from the loaded file
+	// configuration, and a tag here would state a second default that never
+	// reads the environment.
+	MaxFileUploadSize int64
+
 	// Maximum aggregate size of HTTP request headers.
 	MaxHeaderBytes int `env:"MAX_HEADER_BYTES,default=1048576"`
 

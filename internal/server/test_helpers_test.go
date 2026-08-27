@@ -8,7 +8,9 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers"
@@ -28,6 +30,7 @@ type testServerConfig struct {
 	store              storage.KVStore
 	masterKey          []byte
 	providerOperations controllers.ProviderOperations
+	blobs              blob.Store
 }
 
 type testRegistryAdapter struct{ registry *registry.Registry }
@@ -58,6 +61,12 @@ func withTestStore(store storage.KVStore) testServerOption {
 
 func withTestProviderOperations(operations controllers.ProviderOperations) testServerOption {
 	return func(config *testServerConfig) { config.providerOperations = operations }
+}
+
+// withTestBlobStore replaces the byte store the file service writes to. A test
+// that needs a failing store, or one it can inspect, supplies its own.
+func withTestBlobStore(store blob.Store) testServerOption {
+	return func(config *testServerConfig) { config.blobs = store }
 }
 
 type staticTestProviderOperations struct{}
@@ -131,6 +140,21 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
+	if testConfig.blobs == nil {
+		byteStore, blobErr := blob.NewFilesystem(tb.TempDir())
+		if blobErr != nil {
+			tb.Fatal(blobErr)
+		}
+		testConfig.blobs = byteStore
+	}
+	fileRecords, err := files.OpenRepository(testConfig.store)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	fileService, err := files.NewService(fileRecords, testConfig.blobs)
+	if err != nil {
+		tb.Fatal(err)
+	}
 	// Match production composition: preset references resolve before routing.
 	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter))
 
@@ -149,6 +173,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		Service: service, Identities: identities, Tenants: tenants,
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
+		Files: fileService,
 	})
 	if err != nil {
 		tb.Fatal(err)
