@@ -740,6 +740,96 @@ first node holds alone.
 the console settings page shows the same value. A deployment with no file
 storage reports `not configured`.
 
+## Video Jobs
+
+A video takes minutes, so a submission answers with a job identifier rather
+than with a video. The caller comes back to that identifier until the job
+reaches a terminal state, and then reads the bytes this gateway stored for it.
+
+Starport polls the provider itself. A caller never learns the provider's own
+job identifier, so a deployment can move a model between providers without
+breaking a caller that is mid-poll.
+
+### The routes and their scopes
+
+| Route | Scope | Meaning |
+| --- | --- | --- |
+| `POST /v1/videos` | `videos:write` | submit one job |
+| `GET /v1/videos` | `videos:write` | list the account's jobs |
+| `GET /v1/videos/{video_id}` | `videos:write` | read one job |
+| `GET /v1/videos/{video_id}/content` | `videos:write` | read the stored bytes |
+| `POST /v1/videos/{video_id}/cancel` | `videos:write` | cancel one job |
+
+The OpenRouter family serves the same five paths under `/api/v1/videos`. A
+caller polls a job through the family it submitted through.
+
+One scope covers the whole surface. The account that submits a job is the only
+account that can read it. A separate read scope would therefore name a
+capability no other caller can hold.
+
+### The job states
+
+A job holds one of five states:
+
+| State | Meaning |
+| --- | --- |
+| `queued` | the provider accepted the submission and has not started |
+| `running` | the provider is working |
+| `completed` | the video is ready, and this gateway may still hold the bytes |
+| `failed` | the provider refused or gave up, and `error.message` says why |
+| `cancelled` | a caller stopped the job before it finished |
+
+The last three are terminal. A terminal job never returns to `running`, so a
+caller that reads one of them can stop polling.
+
+A completed job carries `expires_at` while this gateway still holds its bytes.
+The field goes once the retention window closes. That tells a caller the work
+finished and the video went, without spending a request to find out.
+
+### Retention and the polling budget
+
+```text
+STARPORT_JOBS_ASSET_RETENTION=24h
+STARPORT_JOBS_MAX_ASSET_BYTES=268435456
+STARPORT_JOBS_SWEEP_INTERVAL=1h
+```
+
+The retention window defaults to 24 hours, measured from the moment this
+gateway stored the asset. It is short beside the 30 days a file gets. A
+generated video is an answer a caller collects rather than a document it keeps.
+Both provider families publish their own links with windows measured in hours.
+A caller that comes back past the window reads HTTP 410 and the window length
+in the refusal.
+
+One stored asset defaults to a 256 MiB bound. Without it a provider's decision
+about how large its own answer is would size this deployment's storage. A sweep
+reclaims expired bytes every hour. The sweep is a floor on how long expired
+bytes survive on disk. It is not a floor on how long an asset reads: an expired
+asset stops reading the moment it expires.
+
+Starport polls a job for one hour. Past that it fails the job and states the
+budget in the message. A provider that has not answered in an hour is not going
+to. The wait between polls starts at two seconds and doubles to a 30-second
+ceiling. The provider request count therefore grows with the logarithm of the
+wait.
+
+Video bytes go to the same backend that `## File Storage` above configures. A
+deployment that sets `STARPORT_FILES_BACKEND=objectstore` serves a video from
+any node. One that leaves the filesystem default serves it from the node that
+stored it.
+
+### Bounding what an account holds open
+
+Set `outstanding_jobs` on the account limits or on a gateway API key, and the
+tighter of the two applies. It defaults to eight. The gateway answers an
+account at its bound with HTTP 429 and a `rate_limit_error`, and the caller
+waits for one of its own jobs to finish.
+
+An outstanding job bound is a level and not a rate. A submission raises it, a
+terminal state lowers it, and no interval resets it. It bounds concurrent
+provider work rather than request volume. It therefore composes with the
+request and token rates rather than replaces them.
+
 ## Container Start
 
 The Compose file starts Starport with Valkey. Its optional `.env` file passes
