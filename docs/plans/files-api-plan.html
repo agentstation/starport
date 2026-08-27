@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Model modalities</title>
+<title>Files API</title>
 <style>
   :root {
     --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
@@ -234,7 +234,7 @@
     <p>Promote this plan to <code>active</code> only when every item
       holds.</p>
     <ol>
-      <li>The model modalities plan reports 25 of 25 conditions.</li>
+      <li>The model modalities plan reports 26 of 26 conditions.</li>
       <li>The owner approves the five decisions below.</li>
       <li>FIL0 confirms the OpenAI file object fields against live
         documentation.</li>
@@ -306,9 +306,9 @@
         <tr id="FIL4" data-status="todo"><td>FIL4</td><td>Phase B. Five routes under <code>/v1/files</code>, multipart upload, and two scopes. Conditions FIL-V10 to FIL-V13.</td><td><code>todo</code></td><td></td></tr>
         <tr id="FIL5" data-status="todo"><td>FIL5</td><td>Phase B. The retention window, expiry, and the deletion path across both stores. Conditions FIL-V14 and FIL-V15.</td><td><code>todo</code></td><td></td></tr>
         <tr id="FIL6" data-status="todo"><td>FIL6</td><td>Phase C. The per-tenant stored byte limit, checked before the write completes. Conditions FIL-V16 and FIL-V17.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="FIL7" data-status="todo"><td>FIL7</td><td>Phase C. Reference a stored file from a chat request instead of carrying its bytes. Conditions FIL-V18 and FIL-V19.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="FIL7" data-status="todo"><td>FIL7</td><td>Phase C. Reference a stored file from a chat request instead of carrying its bytes, and key the response cache by that reference. Conditions FIL-V18 and FIL-V19.</td><td><code>todo</code></td><td></td></tr>
         <tr id="FIL8" data-status="todo"><td>FIL8</td><td>Phase C. Console: list, upload, and delete a file, and show the tenant byte total. Condition FIL-V20.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="FIL9" data-status="todo"><td>FIL9</td><td>Close. Documentation, the required evidence list, and the terminal gate in CI. Conditions FIL-V21 and FIL-V22.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="FIL9" data-status="todo"><td>FIL9</td><td>Close. Documentation, the required evidence list, the terminal gate in CI, and promotion of the async media jobs plan and the document parser plan. Conditions FIL-V21 and FIL-V22.</td><td><code>todo</code></td><td></td></tr>
         <tr id="FIL10" data-status="todo"><td>FIL10</td><td>Cleanup. Delete this plan when its final pull request merges.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
@@ -475,7 +475,8 @@
     <p><strong>Problem.</strong> A caller reaches no file route today. The
       request size limit bounds a JSON body, and an upload needs a multipart
       body with its own bound. The anonymous identity at
-      <code>internal/identity/anonymous.go:23</code> carries a fixed scope
+      <code>DefaultAnonymousScopes</code> in
+      <code>internal/identity/anonymous.go</code> carries a fixed scope
       list, so a deployment with authentication disabled would reach a new
       route with no scope.</p>
 
@@ -483,8 +484,10 @@
       <code>internal/protocol/openai</code>, and
       <code>internal/identity</code>.</p>
     <ol>
-      <li>Register upload, list, retrieve, delete, and content under
-        <code>/v1/files</code>.</li>
+      <li>Register <code>POST /v1/files</code>, <code>GET /v1/files</code>,
+        <code>GET /v1/files/{file_id}</code>,
+        <code>DELETE /v1/files/{file_id}</code>, and
+        <code>GET /v1/files/{file_id}/content</code>.</li>
       <li>Guard the writing routes with <code>files:write</code> and the
         reading routes with <code>files:read</code>.</li>
       <li>Decode a multipart upload and stream it to the blob store.</li>
@@ -589,14 +592,18 @@
       raised. A reference removes that cost.</p>
 
     <p><strong>Seam.</strong> <code>internal/inference</code>,
-      <code>internal/protocol/openai</code>, and
-      <code>internal/protocol/openrouter</code>.</p>
+      <code>internal/protocol/openai</code>,
+      <code>internal/protocol/openrouter</code>,
+      <code>internal/proxy</code>, <code>internal/response/cache</code>, and
+      the <code>internal/files</code> and <code>internal/blob</code> readers
+      that FIL1 to FIL3 build.</p>
     <ol>
       <li>Let a document content part name a stored file identifier.</li>
-      <li>Resolve the identifier to bytes inside the tenant that owns it.</li>
-      <li>Refuse an identifier owned by another tenant as a not-found
-        result.</li>
+      <li>Resolve the identifier inside the owning tenant, and refuse
+        another tenant identifier as a not-found result.</li>
       <li>Keep the inline bytes path working, unchanged.</li>
+      <li>Treat a stored file reference as cache-eligible, and put its
+        identifier in the cache key.</li>
       <li>Refuse a request that names both a file identifier and inline
         bytes.</li>
       <li>Read the bytes once for each request, never once for each
@@ -607,7 +614,9 @@
       stored file reaches the provider as the same bytes an inline request
       sends. A second test asserts that a file
       belonging to another tenant produces a not-found result before any
-      provider call. A third test asserts that a retry reads the bytes once.</p>
+      provider call. A third test asserts that a retry reads the bytes once. A
+      fourth test asserts that two requests naming different file identifiers
+      produce different cache keys.</p>
 
     <p><strong>Fail-before.</strong> A content part cannot name a stored
       file.</p>
@@ -722,8 +731,8 @@
     <pre><code>Execute docs/plans/files-api-plan.html to completion. This is a
 whole-plan goal, not a single-task goal. Read the plan fully, then read
 CLAUDE.md, docs/TASKS.md, and docs/ARCHITECTURE.md. Do not start before
-the model modalities plan reports 25 of 25 conditions. The async media
-jobs plan starts after this one closes.
+the model modalities plan reports 26 of 26 conditions. The async media
+jobs plan and the document parser plan both start after this one closes.
 Work in /Users/jack/src/github.com/agentstation/starport on a branch named
 codex/files-api-&lt;task-id&gt;, one branch and one pull request per task.
 Chat history is not progress state. Resume from the status ledger, the
@@ -763,7 +772,11 @@ terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>authored</td><td>Written at status <code>proposed</code> as the named owner of the files API item that the model modalities plan and the async media jobs plan both left unowned. Measured starting position: no route under <code>/v1/files</code> exists, no package stores opaque bytes, <code>internal/storage</code> holds one byte-valued key store whose <code>cas.go</code> is compare-and-swap validation rather than content addressing, and <code>internal/limits</code> bounds requests, spend, and tokens alone. The owner chose a blob seam with a filesystem backend by default and an object store backend behind the same interface. That choice also gives task AMJ6 of the async media jobs plan a place to store a generated asset, which is why decision FIL-D5 puts this plan first.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>Two adversarial design reviews ran before approval, and every finding was checked against the tree before any edit. The blob contract offered no way to enumerate keys, so the orphan sweep in FIL3 and FIL5 could never find the bytes it had to delete. The fix is a write-ahead record: FIL3 writes a pending record, then the bytes, then commits, so every key stays reachable from the record store and the contract needs no listing operation. Four smaller gaps closed. The sweep now names <code>internal/app</code> as its owner, beside the existing reconciliation ticker. FIL1 now tests an interrupted put. FIL6 now names the atomic primitive at <code>internal/storage/interface.go:58</code> for its reserve and release. FIL8 now names the console key form, which hardcodes four scopes.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review found two ordering and governance gaps. FIL3 creates <code>internal/files</code> and never registered it in the import graph test, unlike FIL1, so a new package would ship outside the dependency direction campaign. The promotion of the two follower plans also sat in FIL10, the cleanup task, one pull request later than the precedent MOD16 sets by promoting at the close task. FIL9 now promotes both followers, and FIL10 no longer mentions them.</td></tr>
-      </tbody>
+              <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found two defects here. The ledger row for FIL9 omitted the promotion of the async media jobs plan and the document parser plan, which the task body carries and which the model modalities ledger states for its own promotion. The goal block named the async media jobs plan alone as the successor, although FIL9 promotes both plans. The anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code> so that all three plans cite one line.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted one finding. FIL7 now states the response cache rule for a stored file reference, and its seam gains <code>internal/response/cache</code>. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted three findings here. FIL4 registered five routes without naming a path, which left the route test nothing exact to assert, so FIL4 now names all five. FIL7 tested <code>internal/proxy</code> without naming it as a seam, and its seam now holds it. The plan carried the title of the model modalities plan.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>FIL7 now names <code>internal/files</code> and <code>internal/blob</code> as seams, because its lookup and read steps call them. The anonymous scope citation names <code>DefaultAnonymousScopes</code> rather than a signature line.</td></tr>
+</tbody>
     </table>
   </section>
 </main>
