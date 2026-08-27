@@ -26,6 +26,8 @@ var (
 	ErrInvalidBudgetLimit = errors.New("budget limit must be positive")
 	// ErrInvalidBudgetInterval reports an unknown budget interval.
 	ErrInvalidBudgetInterval = errors.New("budget interval must be day, week, or month")
+	// ErrInvalidStoredBytes reports a non-positive stored byte bound.
+	ErrInvalidStoredBytes = errors.New("stored bytes limit must be positive")
 )
 
 // Limits carries the request-rate override and the consumption budgets of
@@ -37,6 +39,10 @@ type Limits struct {
 	Spend *Budget `json:"spend,omitempty"`
 	// Tokens bounds total token consumption inside one fixed UTC interval.
 	Tokens *Budget `json:"tokens,omitempty"`
+	// StoredBytes bounds how many bytes this holder keeps in file storage at
+	// one time. It is a level rather than a rate, so no interval resets it: a
+	// write raises the total and a delete lowers it.
+	StoredBytes *int64 `json:"stored_bytes,omitempty"`
 }
 
 // RequestLimit is one request-rate override.
@@ -75,12 +81,16 @@ func (l *Limits) Validate() error {
 			return ErrInvalidBudgetInterval
 		}
 	}
+	if l.StoredBytes != nil && *l.StoredBytes <= 0 {
+		return ErrInvalidStoredBytes
+	}
 	return nil
 }
 
 // IsZero reports whether no limit dimension is set.
 func (l *Limits) IsZero() bool {
-	return l == nil || (l.Requests == nil && l.Spend == nil && l.Tokens == nil)
+	return l == nil || (l.Requests == nil && l.Spend == nil &&
+		l.Tokens == nil && l.StoredBytes == nil)
 }
 
 // Clone returns a deep copy of the limits.
@@ -100,6 +110,10 @@ func (l *Limits) Clone() *Limits {
 	if l.Tokens != nil {
 		tokens := *l.Tokens
 		clone.Tokens = &tokens
+	}
+	if l.StoredBytes != nil {
+		storedBytes := *l.StoredBytes
+		clone.StoredBytes = &storedBytes
 	}
 	return clone
 }

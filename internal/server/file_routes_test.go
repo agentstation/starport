@@ -20,6 +20,7 @@ import (
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/controllers"
 )
 
@@ -286,9 +287,63 @@ func TestUploadShortensItsRetentionWindow(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, badAnchor.Code, badAnchor.Body.String())
 }
 
+// TestAFullAccountRefusesAnUploadAndSaysWhy covers the wire half of FIL6. The
+// bound the key carries is not the request bound: the upload is a legal size,
+// and what it does not fit inside is the room the account has left. The two
+// need different answers, so the refusal says which one it is.
+func TestAFullAccountRefusesAnUploadAndSaysWhy(t *testing.T) {
+	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20, MaxFileUploadSize: 1 << 20})
+	bound := int64(1024)
+	key := storeFileTestKeyWithLimits(t, server, "file-bounded", &limits.Limits{StoredBytes: &bound},
+		"files:read", "files:write")
+
+	payload := strings.Repeat("x", 700)
+	first := uploadFile(t, server, key, "first.txt", "user_data", payload)
+	require.Equal(t, http.StatusOK, first.Code, first.Body.String())
+
+	second := uploadFile(t, server, key, "second.txt", "user_data", payload)
+	require.Equal(t, http.StatusRequestEntityTooLarge, second.Code, second.Body.String())
+	require.Contains(t, second.Body.String(), "Delete a file to make room")
+
+	// The account still holds exactly the one file that fit, and deleting it
+	// makes the refused upload land.
+	object := decodeFileObject(t, first)
+	id, _ := object["id"].(string)
+	require.NotEmpty(t, id)
+	deleted := doFileRequest(t, server, http.MethodDelete, "/v1/files/"+id, key, nil, "")
+	require.Equal(t, http.StatusOK, deleted.Code, deleted.Body.String())
+
+	retried := uploadFile(t, server, key, "second.txt", "user_data", payload)
+	require.Equal(t, http.StatusOK, retried.Code, retried.Body.String())
+}
+
 func storeFileTestKey(t *testing.T, server *Server, id string, scopes ...string) string {
 	t.Helper()
 	return storeFileTestKeyForTenant(t, server, id, "", scopes...)
+}
+
+// storeFileTestKeyWithLimits stores a key carrying its own limits.
+func storeFileTestKeyWithLimits(
+	t *testing.T,
+	server *Server,
+	id string,
+	keyLimits *limits.Limits,
+	scopes ...string,
+) string {
+	t.Helper()
+	secret := "sk-starport-" + id
+	hash := sha256.Sum256([]byte(secret))
+	_, err := server.identities.Create(t.Context(), identity.APIKey{
+		ID:        id,
+		Name:      id,
+		Hash:      hex.EncodeToString(hash[:]),
+		Scopes:    scopes,
+		Limits:    keyLimits,
+		Active:    true,
+		CreatedAt: time.Now(),
+	})
+	require.NoError(t, err)
+	return secret
 }
 
 // storeFileTestKeyForTenant issues one key under a named account. An empty

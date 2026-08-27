@@ -66,7 +66,8 @@ const (
 	FileStatePending FileState = "pending"
 	// FileStateReady marks a record whose bytes landed.
 	FileStateReady FileState = "ready"
-	// FileStateDeleting marks a record on its way out. FIL5 gives it meaning.
+	// FileStateDeleting marks a record on its way out. It reads as not found,
+	// and a sweep finishes the delete that left it.
 	FileStateDeleting FileState = "deleting"
 )
 

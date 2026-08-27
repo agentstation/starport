@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/files"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/server/dto"
 	"github.com/agentstation/starport/internal/server/requestctx"
@@ -92,11 +93,16 @@ func (h *FilesController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The multipart parse already read the part to memory or to a spill file,
+	// so the header states the real size rather than a caller's claim. The
+	// service still reconciles it against what the write lands.
 	record, err := h.service.Upload(r.Context(), files.UploadRequest{
-		Tenant:    requestctx.TenantIDOrDefault(r.Context()),
-		Filename:  header.Filename,
-		Purpose:   files.Purpose(strings.TrimSpace(r.FormValue("purpose"))),
-		Retention: retention,
+		Tenant:           requestctx.TenantIDOrDefault(r.Context()),
+		Filename:         header.Filename,
+		Purpose:          files.Purpose(strings.TrimSpace(r.FormValue("purpose"))),
+		Retention:        retention,
+		Size:             header.Size,
+		StoredBytesBound: storedBytesBound(r),
 	}, part)
 	if err != nil {
 		h.writeError(w, "upload a file", err)
@@ -212,6 +218,24 @@ func (h *FilesController) writeUploadError(w http.ResponseWriter, err error) {
 		"The request body is not a multipart form")
 }
 
+// storedBytesBound resolves the stored byte bound this upload must satisfy.
+// Both the account and the key travel in the request context from
+// authentication, so neither read reaches storage on the upload path.
+func storedBytesBound(r *http.Request) int64 {
+	var tenantLimits, keyLimits *limits.Limits
+	if record, ok := requestctx.GetTenantRecord(r.Context()); ok && record != nil {
+		tenantLimits = record.Limits
+	}
+	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil {
+		keyLimits = apiKey.Limits
+	}
+	rule, bounded := limits.TightestStoredBytes(tenantLimits, keyLimits)
+	if !bounded {
+		return 0
+	}
+	return rule.Limit
+}
+
 // writeError maps a file service failure onto a status.
 func (h *FilesController) writeError(w http.ResponseWriter, action string, err error) {
 	switch {
@@ -225,6 +249,13 @@ func (h *FilesController) writeError(w http.ResponseWriter, action string, err e
 		errors.Is(err, files.ErrRetentionTooLong),
 		errors.Is(err, files.ErrRetentionTooShort):
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
+	case errors.Is(err, limits.ErrStorageFull):
+		// The upload itself is a legal size. What it would not fit inside is
+		// the room this holder has left, which a delete frees and a retry of
+		// the same request does not. The message says which of the two bounds
+		// refused it, because the two need different answers.
+		dto.WriteError(w, http.StatusRequestEntityTooLarge, dto.ErrorTypeInvalidRequest,
+			"The stored file limit for this account is full. Delete a file to make room.")
 	default:
 		log.Error().Err(err).Str("action", action).Msg("file request failed")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError,
