@@ -27,6 +27,10 @@ const (
 	// answers it with a job rather than a video, so a caller submits, polls,
 	// and collects.
 	OperationVideosGenerations Operation = "videos-generations"
+	// OperationDocumentsRecognition reads the text off a document page that
+	// carries none. A document with a text layer needs no provider at all, so
+	// this operation names the case the in-process reader cannot answer.
+	OperationDocumentsRecognition Operation = "documents-recognition"
 )
 
 // OperationSet is an immutable set of operation names. One set answers the

@@ -82,6 +82,11 @@ const (
 	// adapter share no operation with a usable endpoint. The offering exists in
 	// the catalog and is healthy, and no request can reach it.
 	RouteExclusionOperationUnsupported RouteExclusion = "operation_unsupported"
+	// RouteExclusionOperationUnpriced reports that every operation the offering
+	// and the adapter share is one the gateway cannot bill. It is a separate
+	// verdict from operation_unsupported because the fix is a catalog price,
+	// not a compiled adapter.
+	RouteExclusionOperationUnpriced RouteExclusion = "operation_unpriced"
 )
 
 // OfferingRoutability is the planning verdict for one exact catalog offering.

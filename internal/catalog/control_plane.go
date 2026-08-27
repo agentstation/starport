@@ -23,6 +23,15 @@ var (
 	ErrCatalogRequired = errors.New("catalog state must contain a catalog")
 	// ErrCatalogGenerationRequired means that a Starmap state has no generation identity.
 	ErrCatalogGenerationRequired = errors.New("catalog state must contain a generation ID")
+	// ErrMissingPagePrice reports an offering that serves document recognition
+	// and states no price per page.
+	//
+	// Recognition is the one operation whose unit is neither a token nor a
+	// request, so a token price says nothing about what a page costs. An
+	// offering the gateway cannot price is one it would serve for free against
+	// real provider time, and a spend limit set on that tenant would never
+	// fire. Planning drops the operation instead of guessing a price.
+	ErrMissingPagePrice = errors.New("offering serves document recognition with no page price")
 )
 
 // Source supplies one atomic Starmap catalog and generation pair.
@@ -346,9 +355,13 @@ func deriveRoutableSnapshot(
 					verdict.Exclusion = RouteExclusionOfferingUnavailable
 					break
 				}
-				operations, endpoints = compatibleOfferingService(adapter, offering)
+				var unpriced bool
+				operations, endpoints, unpriced = compatibleOfferingService(adapter, offering)
 				if len(operations) == 0 {
 					verdict.Exclusion = RouteExclusionOperationUnsupported
+					if unpriced {
+						verdict.Exclusion = RouteExclusionOperationUnpriced
+					}
 					break
 				}
 				verdict.Routable = true
@@ -389,12 +402,17 @@ func deriveRoutableSnapshot(
 	return newRoutableSnapshot(state, availabilityRevision, routes, routability), nil
 }
 
+// compatibleOfferingService names the operations one offering and one adapter
+// both serve. It also reports whether an operation was dropped for its price
+// alone, which is the one drop an operator fixes in the catalog rather than in
+// the build.
 func compatibleOfferingService(
 	adapter AdapterAvailability,
 	offering catalogs.ProviderOffering,
-) ([]catalogs.ProviderOperation, []catalogs.ProviderOfferingEndpoint) {
+) ([]catalogs.ProviderOperation, []catalogs.ProviderOfferingEndpoint, bool) {
 	operations := make([]catalogs.ProviderOperation, 0, len(offering.Service.Operations))
 	endpoints := make([]catalogs.ProviderOfferingEndpoint, 0, len(offering.Endpoints))
+	unpriced := false
 	for _, operation := range offering.Service.Operations {
 		if !containsOperation(adapter.Operations, operation) {
 			continue
@@ -406,10 +424,36 @@ func compatibleOfferingService(
 		if strings.TrimSpace(endpoint.URL) == "" {
 			continue
 		}
+		if err := billableOperation(offering, operation); err != nil {
+			unpriced = true
+			continue
+		}
 		operations = append(operations, operation)
 		endpoints = append(endpoints, endpoint)
 	}
-	return operations, endpoints
+	return operations, endpoints, unpriced
+}
+
+// billableOperation reports whether the catalog states the price this operation
+// is charged in.
+//
+// Only document recognition is checked, and that is the whole point rather than
+// an omission. Every other operation this build plans is billed in tokens or in
+// requests, and a token price is already required of any offering the catalog
+// publishes. Recognition is billed by the page, and a page is a unit no token
+// price converts into.
+func billableOperation(offering catalogs.ProviderOffering, operation catalogs.ProviderOperation) error {
+	if operation != catalogs.ProviderOperationDocumentsRecognition {
+		return nil
+	}
+	if offering.Pricing == nil || offering.Pricing.Operations == nil {
+		return fmt.Errorf("%w: %s/%s", ErrMissingPagePrice, offering.ProviderID, offering.ProviderModelID)
+	}
+	page := offering.Pricing.Operations.PageInput
+	if page == nil || *page < 0 {
+		return fmt.Errorf("%w: %s/%s", ErrMissingPagePrice, offering.ProviderID, offering.ProviderModelID)
+	}
+	return nil
 }
 
 func containsOperation(values []catalogs.ProviderOperation, value catalogs.ProviderOperation) bool {
