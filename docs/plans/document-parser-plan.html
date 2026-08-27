@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Model modalities</title>
+<title>Document parser</title>
 <style>
   :root {
     --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
@@ -269,8 +269,8 @@
         <tr><td>PLG-D2</td><td>2026-08-26</td><td>Add an optical recognition operation to <code>ProviderOperation</code> in Starmap, with a per-page price.</td><td>The transport registry guard proves the provider layer. The planner in <code>internal/routing</code> is a separate earlier gate that fails a whole snapshot on an operation it does not name. Re-open if every recognition provider serves the work through a chat route instead.</td></tr>
         <tr><td>PLG-D3</td><td>2026-08-26</td><td>Key the extraction cache by the document content hash and the engine identifier, and hold the text in the key store.</td><td>Extracted text is small next to the document, so it fits the record store rather than the blob store. Re-open if an extraction result grows past the record size the store serves well.</td></tr>
         <tr><td>PLG-D4</td><td>2026-08-26</td><td>Refuse an unknown engine with a typed error rather than fall back to a default.</td><td>A caller learns that the engine name is wrong instead of paying for an engine it did not choose. Re-open if a provider adds engines faster than the catalog records them.</td></tr>
-        <tr><td>PLG-D6</td><td>2026-08-26</td><td>Fail the whole turn when a page fails recognition, rather than send partial text to the chat model.</td><td>Partial text produces a confident answer built on a document the model never fully read, and the caller cannot see the gap. The caller retries or chooses another engine. Re-open if a caller asks for partial text behind an explicit request field.</td></tr>
         <tr><td>PLG-D5</td><td>2026-08-26</td><td>Accept the plugin on the OpenRouter routes alone, because the OpenAI protocol has no plugins field.</td><td>The parity verifier stays terminal at 16 conditions, and this plan adds none. The unenforced record lives in <code>unenforcedGatewayFields</code> and the response header, so PLG7 changes the codec rather than the verifier. Re-open if OpenAI publishes an equivalent field.</td></tr>
+        <tr><td>PLG-D6</td><td>2026-08-26</td><td>Fail the whole turn when a page fails recognition, rather than send partial text to the chat model.</td><td>Partial text produces a confident answer built on a document the model never fully read, and the caller cannot see the gap. The caller retries or chooses another engine. Re-open if a caller asks for partial text behind an explicit request field.</td></tr>
       </tbody>
     </table>
   </section>
@@ -766,6 +766,7 @@ CI runs it, and every ledger row except PLG10 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>PLG4 extended the registry guard by hand, which put it in conflict with three tasks in other plans. MOD13 now replaces that guard with one named operation set, so PLG4 adds a member instead. The promotion gate records that the concurrency with the async media jobs plan is now a one-member addition on each side.</td></tr>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found three defects here. The promotion gate and the goal block required the files API plan alone, although PLG4 adds a member to the named operation set that MOD13 introduces and the scope section already depends on the model modalities plan for the document content kind. Both now require 25 of 25 conditions from that plan. The seam of PLG4 still described the planner as holding two hardcoded guards, and step three still planned to extend them, which contradicts step one and the MOD13 design that replaces all three guards with one named set. PLG4 now plans the route alone.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted one critical finding. PLG3 never raised the Starport dependency to the released catalog, so PLG4 planned a route from offerings the module could not read. PLG3 now raises it, and the goal records the two pull requests. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted one finding here. The plan carried the title of the model modalities plan. The decision table also listed PLG-D6 before PLG-D5.</td></tr>
 </tbody>
     </table>
   </section>

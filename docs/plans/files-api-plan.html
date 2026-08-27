@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Model modalities</title>
+<title>Files API</title>
 <style>
   :root {
     --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
@@ -483,8 +483,10 @@
       <code>internal/protocol/openai</code>, and
       <code>internal/identity</code>.</p>
     <ol>
-      <li>Register upload, list, retrieve, delete, and content under
-        <code>/v1/files</code>.</li>
+      <li>Register <code>POST /v1/files</code>, <code>GET /v1/files</code>,
+        <code>GET /v1/files/{file_id}</code>,
+        <code>DELETE /v1/files/{file_id}</code>, and
+        <code>GET /v1/files/{file_id}/content</code>.</li>
       <li>Guard the writing routes with <code>files:write</code> and the
         reading routes with <code>files:read</code>.</li>
       <li>Decode a multipart upload and stream it to the blob store.</li>
@@ -590,7 +592,8 @@
 
     <p><strong>Seam.</strong> <code>internal/inference</code>,
       <code>internal/protocol/openai</code>,
-      <code>internal/protocol/openrouter</code>, and
+      <code>internal/protocol/openrouter</code>,
+      <code>internal/proxy</code>, and
       <code>internal/response/cache</code>.</p>
     <ol>
       <li>Let a document content part name a stored file identifier.</li>
@@ -769,6 +772,7 @@ terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>reviewed</td><td>A third adversarial review found two ordering and governance gaps. FIL3 creates <code>internal/files</code> and never registered it in the import graph test, unlike FIL1, so a new package would ship outside the dependency direction campaign. The promotion of the two follower plans also sat in FIL10, the cleanup task, one pull request later than the precedent MOD16 sets by promoting at the close task. FIL9 now promotes both followers, and FIL10 no longer mentions them.</td></tr>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found two defects here. The ledger row for FIL9 omitted the promotion of the async media jobs plan and the document parser plan, which the task body carries and which the model modalities ledger states for its own promotion. The goal block named the async media jobs plan alone as the successor, although FIL9 promotes both plans. The anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code> so that all three plans cite one line.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted one finding. FIL7 now states the response cache rule for a stored file reference, and its seam gains <code>internal/response/cache</code>. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted three findings here. FIL4 registered five routes without naming a path, which left the route test nothing exact to assert, so FIL4 now names all five. FIL7 tested <code>internal/proxy</code> without naming it as a seam, and its seam now holds it. The plan carried the title of the model modalities plan.</td></tr>
 </tbody>
     </table>
   </section>

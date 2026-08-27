@@ -309,7 +309,7 @@
         <tr id="AMJ7" data-status="todo"><td>AMJ7</td><td>Phase C. Price a job once at its terminal state, and bound outstanding jobs per tenant. Conditions AMJ-V14 to AMJ-V16.</td><td><code>todo</code></td><td></td></tr>
         <tr id="AMJ8" data-status="todo"><td>AMJ8</td><td>Phase C. Console: submit a job, watch its state, and play the finished asset. Condition AMJ-V17.</td><td><code>todo</code></td><td></td></tr>
         <tr id="AMJ9" data-status="todo"><td>AMJ9</td><td>Close. Documentation, the terminal gate in CI, and the operator guidance for retention. Condition AMJ-V18.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="AMJ10" data-status="todo"><td>AMJ10</td><td>Cleanup after the final pull request merges. Delete this plan and its proof root.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="AMJ10" data-status="todo"><td>AMJ10</td><td>Cleanup after the final pull request merges. Delete this plan and keep its proof root.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -673,21 +673,23 @@
       <code>docs/TASKS.md</code>.</p>
     <ol>
       <li>Confirm that the final pull request merged.</li>
-      <li>Delete this plan and its proof root.</li>
+      <li>Delete this plan file, and keep
+        <code>docs/proof/async-media-jobs/</code> in the tree.</li>
       <li>Move the TASKS entry to Recently Completed.</li>
       <li>Name the durable verifier and its terminal count in that entry.</li>
       <li>Delete the merged <code>codex/</code> branches.</li>
     </ol>
 
-    <p><strong>Acceptance.</strong> The repository holds no reference to the
-      plan slug. The TASKS entry names
-      <code>scripts/verify-async-media-jobs.sh</code>.</p>
+    <p><strong>Acceptance.</strong> No file references
+      <code>async-media-jobs-plan.html</code>. The proof root stays. The TASKS
+      entry names <code>scripts/verify-async-media-jobs.sh</code>.</p>
 
     <p><strong>Fail-before.</strong> Not applicable. The ledger row records the
       merge.</p>
 
     <p><strong>Verification.</strong>
-      <code>git grep -l async-media-jobs</code> returns nothing. Then
+      <code>git grep -l async-media-jobs-plan.html</code> returns nothing.
+      Then
       <code>bash scripts/verify-doc-links.sh</code>.</p>
     </div>
   </section>
@@ -743,6 +745,7 @@ CI runs it, and every ledger row except AMJ10 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>AMJ4 extended the registry guard by hand, which put it in conflict with three tasks in other plans. MOD13 now replaces that guard with one named operation set, so AMJ4 adds a member instead.</td></tr>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found one defect here. AMJ5 described the submit, poll, content, and cancel routes without naming a path, so a route test had nothing exact to assert. AMJ5 now names <code>/v1/videos</code> and its three child paths. The audit confirmed that the promotion gate correctly requires both the model modalities plan and the files API plan, which is the standard the document parser plan now matches.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round changed no task here. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted two findings here. AMJ10 deleted its proof root while three sibling plans keep theirs, and its grep would always match the surviving verifier script. AMJ10 now keeps the proof root and greps the plan file name.</td></tr>
 </tbody>
     </table>
   </section>

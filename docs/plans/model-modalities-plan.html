@@ -273,8 +273,8 @@
         <tr><td>MOD-D2</td><td>2026-08-26</td><td>The new Starmap operations mirror the OpenAI endpoint set: <code>images-generations</code>, <code>images-edits</code>, <code>audio-speech</code>, <code>audio-transcriptions</code>, and <code>audio-translations</code>.</td><td>One Starmap operation maps to one provider path and one Starport route, so the endpoint facts stay mechanical. The planner needs no modality lookup, but it does need the guard widening that decision MOD-D6 owns. Re-open if a provider serves two of these operations on one path.</td></tr>
         <tr><td>MOD-D3</td><td>2026-08-26</td><td>The canonical document part is <code>ContentDocument</code>, and the wire word stays <code>file</code>.</td><td>The split follows <code>ContentImage</code>, which already differs from <code>image_url</code>. The Starmap <code>pdf</code> modality maps onto it. Re-open only if a provider ships a document part that is not a file.</td></tr>
         <tr><td>MOD-D4</td><td>2026-08-26</td><td>Extend usage with media units now, rather than record a media turn as unpriced.</td><td>A media request reports a real cost from its first day. The cost is one usage schema change and one Starmap pricing addition in MOD8. Re-open if a provider reports no countable media unit.</td></tr>
-        <tr><td>MOD-D6</td><td>2026-08-26</td><td>Catalog data degrades and caller input fails closed. A snapshot skips an operation Starport does not name, and a request for one is refused.</td><td>The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation through, and <code>validateSnapshot</code> rejects the whole snapshot on one it does not know. A Starmap catalog change alone would then break chat and embeddings routing with no Starport deploy. The registry guard and both planner guards read one named operation set after this decision, so a later plan adds a member rather than edits a boolean chain. Re-open if an unknown operation must become a hard error.</td></tr>
         <tr><td>MOD-D5</td><td>2026-08-26</td><td>The MMD gate guards the new OpenRouter media routes. <code>scripts/verify-openrouter-parity.sh</code> stays terminal at 16 conditions.</td><td>One gate owns the media surface, so the parity gate keeps its fixed count and its stated meaning. MOD16 records the split in <code>AGENTS.md</code>. Re-open if OpenRouter changes a route that ORP already guards.</td></tr>
+        <tr><td>MOD-D6</td><td>2026-08-26</td><td>Catalog data degrades and caller input fails closed. A snapshot skips an operation Starport does not name, and a request for one is refused.</td><td>The function <code>planningOperations</code> at <code>planner_adapter.go:283</code> passes every Starmap operation through, and <code>validateSnapshot</code> rejects the whole snapshot on one it does not know. A Starmap catalog change alone would then break chat and embeddings routing with no Starport deploy. The registry guard and both planner guards read one named operation set after this decision, so a later plan adds a member rather than edits a boolean chain. The reranking plan runs beside this one, so whichever lands first introduces the set and the other adds a member, which mirrors decision RNK-D6. Re-open if an unknown operation must become a hard error.</td></tr>
       </tbody>
     </table>
   </section>
@@ -318,11 +318,11 @@
         <tr id="MOD10" data-status="todo"><td>MOD10</td><td>Phase B. Carry generated media through both codecs and the cached stream replay. Conditions MMD-V13 and MMD-V14.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD11" data-status="todo"><td>MOD11</td><td>Phase B. Record and price media units in usage, cost, and the spend budget. Conditions MMD-V15 and MMD-V16.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD12" data-status="todo"><td>MOD12</td><td>Phase C. Starmap: five media operations, the offering derivation, the consistency rule, and a release. Conditions MMD-V17 and MMD-V18.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD13" data-status="todo"><td>MOD13</td><td>Phase C. Replace three hardcoded operation guards with one named set, route to the offerings that serve an operation, raise the dependency, then add the narrow optional interfaces. Conditions MMD-V19 and MMD-V20.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD14" data-status="todo"><td>MOD14</td><td>Phase C. Add the canonical media types, the eight routes, and the two scopes. Conditions MMD-V21 to MMD-V23.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD13" data-status="todo"><td>MOD13</td><td>Phase C. Introduce or extend the named operation set over three hardcoded guards, route to the offerings that serve an operation, raise the dependency, then add the narrow optional interfaces. Conditions MMD-V19 and MMD-V20.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD14" data-status="todo"><td>MOD14</td><td>Phase C. Add the canonical media types, the five OpenAI media paths, the three OpenRouter media paths, and the two scopes. Conditions MMD-V21 to MMD-V23.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD15" data-status="todo"><td>MOD15</td><td>Phase C. Console: make a media model visible, filterable, and usable. Condition MMD-V24.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD16" data-status="todo"><td>MOD16</td><td>Close. Documentation, the terminal gate in CI, and promotion of the files API plan. Conditions MMD-V25 and MMD-V26.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="MOD17" data-status="todo"><td>MOD17</td><td>Cleanup after the final pull request merges. Delete this plan and its proof root.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD17" data-status="todo"><td>MOD17</td><td>Cleanup after the final pull request merges. Delete this plan, keep its proof root, and repoint every link to it.</td><td><code>todo</code></td><td></td></tr>
       </tbody>
     </table>
   </section>
@@ -813,8 +813,8 @@
       <code>internal/routing</code>, <code>internal/router</code>,
       <code>internal/catalog</code>, and <code>internal/failure</code>.</p>
     <ol>
-      <li>Replace all three hardcoded guards with one named operation
-        set.</li>
+      <li>Introduce the named operation set over all three hardcoded
+        guards, or extend the set the reranking plan already introduced.</li>
       <li>Make a snapshot skip an operation the set omits, as decision
         MOD-D6 requires.</li>
       <li>Filter the route candidates to the offerings that serve the
@@ -965,22 +965,26 @@
       <code>docs/TASKS.md</code>.</p>
     <ol>
       <li>Confirm that the final pull request merged.</li>
-      <li>Delete this plan and its proof root.</li>
+      <li>Delete this plan file, and keep
+        <code>docs/proof/model-modalities/</code> in the tree.</li>
+      <li>Replace every link to this plan in another plan with the plan
+        name.</li>
       <li>Move the TASKS entry to Recently Completed.</li>
       <li>Name the durable verifier and its terminal count in that entry.</li>
       <li>Delete the merged <code>codex/</code> branches.</li>
     </ol>
 
-    <p><strong>Acceptance.</strong> The repository holds no reference to the
-      plan slug. The TASKS entry names
-      <code>scripts/verify-model-modalities.sh</code>. The async media jobs
-      plan stays, and it holds status <code>active</code>.</p>
+    <p><strong>Acceptance.</strong> No file references
+      <code>model-modalities-plan.html</code>. The proof root stays. The TASKS
+      entry names <code>scripts/verify-model-modalities.sh</code>. The files
+      API plan stays, and it holds status <code>active</code>.</p>
 
     <p><strong>Fail-before.</strong> Not applicable. The ledger row records the
       merge.</p>
 
     <p><strong>Verification.</strong>
-      <code>git grep -l model-modalities</code> returns nothing. Then
+      <code>git grep -l model-modalities-plan.html</code> returns nothing.
+      Then
       <code>bash scripts/verify-doc-links.sh</code>.</p>
     </div>
   </section>
@@ -1039,6 +1043,7 @@ CI runs it, and every ledger row except MOD17 is terminal.</code></pre>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit of all five plans found four defects here. The ledger row for MOD16 named the async media jobs plan, while the task body, the files API status line, and the earlier log entry all name the files API plan. The ledger row for MOD13 described the narrow interfaces alone and omitted the guard replacement and the dependency raise that make the task safe. The goal block still read that reranking and a files API stay unowned, and that <code>internal/protocol/openrouter</code> owns the parser plugins, which the scope section had already corrected. MOD14 counted eight routes and named none, so MOD14 now names the five OpenAI paths and MOD0 records the three OpenRouter paths. The baseline moved to 29a134c, and the anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code>, which the other plans now share.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted three findings. MOD13 now filters the route candidates by the requested operation under a new condition <code>MMD-V20</code>, which renumbers the phase C tail and raises the terminal count to 26. MOD13 also maps a media provider failure through <code>internal/failure</code>, which no task named before.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>measured</td><td>A census against the catalog that <code>starmap v0.8.0</code> ships contradicted the offering counts in decision MOD-D1. The measured counts are 170 image-input, 57 video-input, 50 pdf-input, and 44 audio-input offerings, against 29 image-output and 19 audio-output offerings. MOD-D1 now carries the measured counts and names the census. The phase order stands, because input modalities still outnumber output modalities by roughly six to one. <code>docs/proof/model-modalities/mod0-census.md</code> holds the census, which satisfies one MOD0 step early.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted five findings here. Decision MOD-D6 assumed this plan always introduces the named operation set, while decision RNK-D6 of the reranking plan already hedged both directions. MOD-D6 and MOD13 now carry the same hedge. MOD17 kept a proof root deletion that two sibling plans do not, named the wrong follow-up plan, and used a grep that the surviving verifier script would always match. MOD17 now keeps the proof root, names the files API plan, repoints every link to this plan, and greps the plan file name.</td></tr>
 </tbody>
     </table>
   </section>
