@@ -27,6 +27,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/vault/api v1.23.0
 	github.com/joho/godotenv v1.5.1
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/mattn/go-isatty v0.0.24
 	github.com/openbao/openbao/api/v2 v2.6.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
