@@ -551,7 +551,8 @@
     <p><strong>Problem.</strong> A rerank caller reaches no route today. The
       embeddings route at <code>internal/server/routes.go:37</code> shows the
       shape to mirror, including its scope guard. The anonymous identity at
-      <code>internal/identity/anonymous.go:21</code> carries a fixed scope
+      <code>DefaultAnonymousScopes</code> in
+      <code>internal/identity/anonymous.go</code> carries a fixed scope
       list, so a deployment with authentication disabled would reach a new
       route with no scope.</p>
 
@@ -803,6 +804,7 @@ runs it, and every ledger row except RNK11 is terminal.</code></pre>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found two defects here. The ledger row for RNK4 described the transport and the connector alone and omitted the guard replacement and the dependency raise, which is the ordering that keeps a catalog change from breaking chat routing. Step one of RNK4 also read as an unconditional widening, although decision RNK-D6 states that whichever of this plan and the model modalities plan lands first introduces the named set. Step one now reads introduce or extend. The anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code>.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted two findings. RNK7 still described the two hardcoded planner guards that RNK4 replaces, so its seam and first step now use the named operation set. Decision <code>RNK-D7</code> records why a rerank turn refuses an unpriced offering rather than recording a cost reason, which invariant I5 of the model modalities plan permits for media.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted two findings here. RNK4 requires a step that maps a provider rerank error through <code>internal/failure</code>, but neither its seam nor its verification named that package. Both now do. The plan carried the title of the model modalities plan, and its decision table listed RNK-D6 before RNK-D5.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>The anonymous scope citation names <code>DefaultAnonymousScopes</code> rather than a signature line.</td></tr>
 </tbody>
     </table>
   </section>

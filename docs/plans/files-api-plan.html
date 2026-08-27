@@ -475,7 +475,8 @@
     <p><strong>Problem.</strong> A caller reaches no file route today. The
       request size limit bounds a JSON body, and an upload needs a multipart
       body with its own bound. The anonymous identity at
-      <code>internal/identity/anonymous.go:21</code> carries a fixed scope
+      <code>DefaultAnonymousScopes</code> in
+      <code>internal/identity/anonymous.go</code> carries a fixed scope
       list, so a deployment with authentication disabled would reach a new
       route with no scope.</p>
 
@@ -593,8 +594,9 @@
     <p><strong>Seam.</strong> <code>internal/inference</code>,
       <code>internal/protocol/openai</code>,
       <code>internal/protocol/openrouter</code>,
-      <code>internal/proxy</code>, and
-      <code>internal/response/cache</code>.</p>
+      <code>internal/proxy</code>, <code>internal/response/cache</code>, and
+      the <code>internal/files</code> and <code>internal/blob</code> readers
+      that FIL1 to FIL3 build.</p>
     <ol>
       <li>Let a document content part name a stored file identifier.</li>
       <li>Resolve the identifier inside the owning tenant, and refuse
@@ -773,6 +775,7 @@ terminal.</code></pre>
               <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A cross-plan coherence audit found two defects here. The ledger row for FIL9 omitted the promotion of the async media jobs plan and the document parser plan, which the task body carries and which the model modalities ledger states for its own promotion. The goal block named the async media jobs plan alone as the successor, although FIL9 promotes both plans. The anonymous scope citation moved to <code>internal/identity/anonymous.go:21</code> so that all three plans cite one line.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted one finding. FIL7 now states the response cache rule for a stored file reference, and its seam gains <code>internal/response/cache</code>. The promotion gate and the goal follow the model modalities count to 26.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted three findings here. FIL4 registered five routes without naming a path, which left the route test nothing exact to assert, so FIL4 now names all five. FIL7 tested <code>internal/proxy</code> without naming it as a seam, and its seam now holds it. The plan carried the title of the model modalities plan.</td></tr>
+        <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>FIL7 now names <code>internal/files</code> and <code>internal/blob</code> as seams, because its lookup and read steps call them. The anonymous scope citation names <code>DefaultAnonymousScopes</code> rather than a signature line.</td></tr>
 </tbody>
     </table>
   </section>
