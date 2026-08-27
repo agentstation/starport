@@ -90,6 +90,7 @@ bash scripts/verify-auth-onboarding.sh
 bash scripts/verify-console-session-grants.sh
 bash scripts/verify-model-modalities.sh
 bash scripts/verify-files-api.sh
+bash scripts/verify-async-media-jobs.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
@@ -141,6 +142,13 @@ two scopes, the record and byte split across `internal/files` and
 `internal/blob`, both backends, the retention window, the stored-byte bound,
 the stored file reference a chat request carries, and the console file view. It
 is terminal at 22 conditions (`FIL-V01` through `FIL-V22`) and runs in CI.
+
+`scripts/verify-async-media-jobs.sh` guards the asynchronous job surface. It
+covers the job record, its five states, the five video routes, and their one
+scope. It covers the provider job identifier that never reaches a caller. It
+covers the retention window, the outstanding job bound, the poll budget that
+ends an abandoned job, and the console jobs page. It is terminal at 18
+conditions (`AMJ-V01` through `AMJ-V18`) and runs in CI.
 
 That gate owns the media surface alone. `scripts/verify-openrouter-parity.sh`
 keeps its own terminal count of 16 and its own stated meaning, so a new media

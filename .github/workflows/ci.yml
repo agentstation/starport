@@ -179,6 +179,7 @@ jobs:
           bash scripts/verify-console-session-grants.sh
           bash scripts/verify-model-modalities.sh
           bash scripts/verify-files-api.sh
+          bash scripts/verify-async-media-jobs.sh
           bash scripts/verify-catalog-performance.sh
           bash scripts/benchmark-overhead.sh
 
