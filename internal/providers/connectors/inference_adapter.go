@@ -151,13 +151,18 @@ func ChatResponseToInference(response *ChatResponse, modelUsed string) (inferenc
 			LogProbs:     logProbsToInference(choice.LogProbs),
 		}
 	}
+	// A provider reports no token count for a picture it generated, so the
+	// answer itself is the only record of how many it produced. Counting them
+	// here is what lets a cost and a spend budget see a media turn at all.
+	usage := usageToInference(response.Usage)
+	usage.GeneratedImages = inference.ResponseMediaUnits(choices).Images
 	return inference.ChatResponse{
 		ID:                response.ID,
 		CreatedUnix:       response.Created,
 		Model:             response.Model,
 		ModelUsed:         modelUsed,
 		Choices:           choices,
-		Usage:             usageToInference(response.Usage),
+		Usage:             usage,
 		SystemFingerprint: response.SystemFingerprint,
 	}, nil
 }
@@ -519,18 +524,21 @@ func outputToInference(format *ResponseFormat) inference.StructuredOutput {
 }
 
 func usageToInference(usage Usage) inference.Usage {
-	reasoningTokens := 0
+	reasoningTokens, audioOutputTokens := 0, 0
 	if usage.CompletionTokensDetails != nil {
 		reasoningTokens = usage.CompletionTokensDetails.ReasoningTokens
+		audioOutputTokens = usage.CompletionTokensDetails.AudioTokens
 	}
-	cacheReadTokens := 0
+	cacheReadTokens, audioInputTokens := 0, 0
 	if usage.PromptTokensDetails != nil {
 		cacheReadTokens = usage.PromptTokensDetails.CachedTokens
+		audioInputTokens = usage.PromptTokensDetails.AudioTokens
 	}
 	return inference.Usage{
 		InputTokens: usage.PromptTokens, OutputTokens: usage.CompletionTokens,
 		TotalTokens: usage.TotalTokens, ReasoningTokens: reasoningTokens,
 		CacheReadTokens: cacheReadTokens, CacheWriteTokens: usage.CacheWriteTokens,
+		AudioInputTokens: audioInputTokens, AudioOutputTokens: audioOutputTokens,
 	}
 }
 
@@ -539,11 +547,17 @@ func usageFromInference(usage inference.Usage) Usage {
 		PromptTokens: usage.InputTokens, CompletionTokens: usage.OutputTokens, TotalTokens: usage.TotalTokens,
 		CacheWriteTokens: usage.CacheWriteTokens,
 	}
-	if usage.ReasoningTokens != 0 {
-		converted.CompletionTokensDetails = &CompletionTokensDetails{ReasoningTokens: usage.ReasoningTokens}
+	if usage.ReasoningTokens != 0 || usage.AudioOutputTokens != 0 {
+		converted.CompletionTokensDetails = &CompletionTokensDetails{
+			ReasoningTokens: usage.ReasoningTokens,
+			AudioTokens:     usage.AudioOutputTokens,
+		}
 	}
-	if usage.CacheReadTokens != 0 {
-		converted.PromptTokensDetails = &PromptTokensDetails{CachedTokens: usage.CacheReadTokens}
+	if usage.CacheReadTokens != 0 || usage.AudioInputTokens != 0 {
+		converted.PromptTokensDetails = &PromptTokensDetails{
+			CachedTokens: usage.CacheReadTokens,
+			AudioTokens:  usage.AudioInputTokens,
+		}
 	}
 	return converted
 }

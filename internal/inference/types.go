@@ -278,6 +278,17 @@ type Usage struct {
 	CacheReadTokens  int
 	CacheWriteTokens int
 
+	// AudioInputTokens and AudioOutputTokens count the audio a provider
+	// metered at its own rate. Both are already inside InputTokens and
+	// OutputTokens, the way CacheReadTokens is: a cost that adds them again
+	// rather than reclassifying them bills the same audio twice.
+	AudioInputTokens  int
+	AudioOutputTokens int
+	// GeneratedImages counts the pictures the answer carries. It is the one
+	// output unit no token total can describe, because a provider prices a
+	// generated image per image and reports no tokens for it.
+	GeneratedImages int
+
 	// Estimated marks counts the gateway synthesized with a tokenizer
 	// because the provider reported no usage. Estimated counts never
 	// appear on the wire as provider-reported facts; accounting records

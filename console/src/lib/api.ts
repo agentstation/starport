@@ -474,6 +474,17 @@ export type ActivityTokens = {
   reasoning?: number;
   cache_read?: number;
   cache_write?: number;
+  // The audio shares are already inside input and output, the way cache_read
+  // is. Adding them to a displayed total would count the same audio twice.
+  audio_input?: number;
+  audio_output?: number;
+};
+
+// ActivityMedia counts the units of an answer that no token total describes.
+// A provider meters a generated image per image and reports no tokens for it,
+// so a record without this object is a text turn, not a free one.
+export type ActivityMedia = {
+  generated_images?: number;
 };
 
 // ActivityRecord is one completed inference request from the usage log.
@@ -497,6 +508,7 @@ export type ActivityRecord = {
   status_code?: number;
   error_class?: string;
   tokens?: ActivityTokens;
+  media?: ActivityMedia;
   tokens_estimated?: boolean;
   latency_ms?: number;
   routing_ms?: number;

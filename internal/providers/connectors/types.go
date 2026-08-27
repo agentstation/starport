@@ -268,11 +268,18 @@ type Usage struct {
 // PromptTokensDetails provides detailed prompt token counts
 type PromptTokensDetails struct {
 	CachedTokens int `json:"cached_tokens,omitempty"`
+	// AudioTokens counts the audio share of PromptTokens. It is a breakdown
+	// of that total rather than an addition to it, the way CachedTokens is,
+	// and a provider that meters audio at its own rate reports it here.
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // CompletionTokensDetails provides detailed token counts
 type CompletionTokensDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens,omitempty"`
+	// AudioTokens counts the audio share of CompletionTokens, and is a
+	// breakdown of that total rather than an addition to it.
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // ChatStreamChunk represents a chunk in a streaming response

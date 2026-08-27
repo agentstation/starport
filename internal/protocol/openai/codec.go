@@ -296,11 +296,21 @@ type Usage struct {
 	CompletionTokens       int                     `json:"completion_tokens"`
 	TotalTokens            int                     `json:"total_tokens"`
 	CompletionTokenDetails *CompletionTokenDetails `json:"completion_tokens_details,omitempty"`
+	PromptTokenDetails     *PromptTokenDetails     `json:"prompt_tokens_details,omitempty"`
+}
+
+// PromptTokenDetails breaks the prompt total down. A caller that asked for a
+// spoken turn reconciles its bill from the audio share, because a provider
+// charges audio at a rate the plain input rate does not describe.
+type PromptTokenDetails struct {
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // CompletionTokenDetails contains OpenAI reasoning-token accounting.
 type CompletionTokenDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens"`
+	// AudioTokens counts the audio share of CompletionTokens.
+	AudioTokens int `json:"audio_tokens,omitempty"`
 }
 
 // LogProbs contains output-token log probabilities.
@@ -718,8 +728,14 @@ func encodeToolCalls(calls []inference.ToolCall) []ToolCall {
 
 func encodeUsage(usage inference.Usage) Usage {
 	result := Usage{PromptTokens: usage.InputTokens, CompletionTokens: usage.OutputTokens, TotalTokens: usage.TotalTokens}
-	if usage.ReasoningTokens > 0 {
-		result.CompletionTokenDetails = &CompletionTokenDetails{ReasoningTokens: usage.ReasoningTokens}
+	if usage.ReasoningTokens > 0 || usage.AudioOutputTokens > 0 {
+		result.CompletionTokenDetails = &CompletionTokenDetails{
+			ReasoningTokens: usage.ReasoningTokens,
+			AudioTokens:     usage.AudioOutputTokens,
+		}
+	}
+	if usage.AudioInputTokens > 0 {
+		result.PromptTokenDetails = &PromptTokenDetails{AudioTokens: usage.AudioInputTokens}
 	}
 	return result
 }

@@ -38,6 +38,12 @@ const (
 	CostReasonNoRoute = "no_route"
 	// CostReasonNoUsage means the provider returned no token counts.
 	CostReasonNoUsage = "no_usage"
+	// CostReasonMediaUnpriced means the turn carried a media unit the
+	// offering does not price. The token half of such a turn does have a
+	// price, so a cost is computable; it would omit the media half, which is
+	// the expensive one. A silent understatement is worse than a named gap,
+	// so the whole cost drops and this reason says why.
+	CostReasonMediaUnpriced = "media_unpriced"
 )
 
 // ErrInvalidRecord reports a record that cannot be persisted.
@@ -51,6 +57,18 @@ type Tokens struct {
 	Reasoning  int64 `json:"reasoning,omitempty"`
 	CacheRead  int64 `json:"cache_read,omitempty"`
 	CacheWrite int64 `json:"cache_write,omitempty"`
+	// AudioInput and AudioOutput are the audio shares of Input and Output,
+	// not additions to them. A provider meters audio at its own rate, so a
+	// cost reclassifies these out of the plain rates rather than adding them.
+	AudioInput  int64 `json:"audio_input,omitempty"`
+	AudioOutput int64 `json:"audio_output,omitempty"`
+}
+
+// Media counts the non-token units one request produced. A generated image
+// carries no token count at all, so a token total cannot describe it, and a
+// spend budget that reads tokens alone would meter such a turn as free.
+type Media struct {
+	GeneratedImages int64 `json:"generated_images,omitempty"`
 }
 
 // Cost is the Starmap-derived cost of one request in integer nano-USD.
@@ -86,6 +104,9 @@ type Record struct {
 	StatusCode       int    `json:"status_code,omitempty"`
 	ErrorClass       string `json:"error_class,omitempty"`
 	Tokens           Tokens `json:"tokens"`
+	// Media is nil on a text turn, which is what every record written before
+	// media accounting existed reads back as.
+	Media *Media `json:"media,omitempty"`
 	// TokensEstimated marks counts the gateway synthesized with a
 	// tokenizer because the provider reported none.
 	TokensEstimated bool  `json:"tokens_estimated,omitempty"`
