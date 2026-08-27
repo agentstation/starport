@@ -517,14 +517,25 @@ func (b *runtimeBuilder) openConsole() error {
 	return nil
 }
 
+// fileBackend names where stored file bytes land, or nothing when this
+// deployment stores no files. The admin surface reports it, so an operator
+// confirms the destination without reading the process configuration.
+func (b *runtimeBuilder) fileBackend() string {
+	if b.application == nil || b.application.blobStore == nil {
+		return ""
+	}
+	return b.application.blobStore.Backend()
+}
+
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config, b.auth), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, Tenants: b.tenants,
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
-		Files:     b.files,
-		LocalGate: b.gate,
+		Files:       b.files,
+		FileBackend: b.fileBackend(),
+		LocalGate:   b.gate,
 	})
 	if err != nil {
 		if httpServer != nil {

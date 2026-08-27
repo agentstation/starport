@@ -31,6 +31,17 @@ type AdminController struct {
 	tenants      tenant.Repository
 	issuer       *identity.Issuer
 	usageRecords usage.Repository
+	fileBackend  string
+}
+
+// AdminOption adjusts what the admin surface reports.
+type AdminOption func(*AdminController)
+
+// WithFileStorage names the blob backend the deployment writes stored files
+// to. An operator reads it on the settings view to confirm where the bytes
+// land, which is the one fact about file storage that no route reveals.
+func WithFileStorage(backend string) AdminOption {
+	return func(c *AdminController) { c.fileBackend = backend }
 }
 
 // NewAdminController creates a new admin controller. The tenant repository
@@ -39,18 +50,23 @@ func NewAdminController(
 	identities identity.Repository,
 	tenants tenant.Repository,
 	usageRecords usage.Repository,
+	options ...AdminOption,
 ) *AdminController {
-	options := []identity.IssuerOption{}
+	issuerOptions := []identity.IssuerOption{}
 	if tenants != nil {
-		options = append(options, identity.WithTenantChecker(tenants))
+		issuerOptions = append(issuerOptions, identity.WithTenantChecker(tenants))
 	}
-	issuer, _ := identity.NewIssuer(identities, options...)
-	return &AdminController{
+	issuer, _ := identity.NewIssuer(identities, issuerOptions...)
+	controller := &AdminController{
 		identities:   identities,
 		tenants:      tenants,
 		issuer:       issuer,
 		usageRecords: usageRecords,
 	}
+	for _, option := range options {
+		option(controller)
+	}
+	return controller
 }
 
 // Key list pagination bounds.
@@ -450,6 +466,13 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 			"type":   "badger",
 			"status": "healthy",
 		},
+		// Stored file bytes do not live in the record store, so the backend
+		// that holds them is a separate fact. A deployment that stores no
+		// files says so rather than leaving the field out, because an absent
+		// field reads as an older gateway.
+		"files": map[string]any{
+			"backend": h.fileStorage(),
+		},
 		"providers": map[string]any{
 			responseCountField: systemInfoUnavailable,
 			"status":           systemInfoUnavailable,
@@ -459,6 +482,15 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 	if err := dto.WriteJSON(w, http.StatusOK, info); err != nil {
 		log.Error().Err(err).Msg("Failed to write response")
 	}
+}
+
+// fileStorage names the blob backend, or says that this deployment stores no
+// files at all.
+func (h *AdminController) fileStorage() string {
+	if h.fileBackend == "" {
+		return "not configured"
+	}
+	return h.fileBackend
 }
 
 // metricsSampleWindow bounds the record sample behind rates, error

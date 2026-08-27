@@ -204,6 +204,9 @@ export type SystemInfo = {
   version?: string;
   uptime?: string;
   storage?: { type?: string };
+  // Stored file bytes do not live in the record store, so the backend that
+  // holds them is a separate fact.
+  files?: { backend?: string };
 };
 
 export type SystemMetrics = {
@@ -781,6 +784,10 @@ export type TenantLimits = {
   requests?: { limit?: number; window_seconds?: number } | null;
   spend?: { limit?: number; interval?: string } | null;
   tokens?: { limit?: number; interval?: string } | null;
+  // stored_bytes is a level, not a rate. Nothing resets it at an interval
+  // boundary: an upload raises it and a delete lowers it. That is why it
+  // carries no window and no interval.
+  stored_bytes?: number | null;
 };
 
 export type Tenant = {
@@ -833,6 +840,81 @@ export function deleteTenant(tenantId: string): Promise<unknown> {
     `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}`,
     { method: "DELETE" },
   );
+}
+
+// --- Stored files ---
+
+// StoredFile is one file this gateway holds for the calling account. The shape
+// is the file object the /v1/files routes serve.
+//
+// `bytes` is the stored length. `created_at` and `expires_at` are Unix seconds.
+// `status` is the write state: a file reads `processing` while its bytes are
+// still landing, and `processed` once they have.
+export type StoredFile = {
+  id: string;
+  object?: string;
+  bytes: number;
+  created_at: number;
+  filename: string;
+  purpose: string;
+  expires_at?: number;
+  status: string;
+};
+
+// FileList is one page of stored files and whether more follow it.
+//
+// `hasMore` matters to the stored total below. A total summed from a partial
+// page is a floor, not the amount the account holds, and the view says which
+// of the two it is showing.
+export type FileList = {
+  files: StoredFile[];
+  hasMore: boolean;
+};
+
+// FILE_PAGE_LIMIT is the largest page the routes serve.
+const FILE_PAGE_LIMIT = 1000;
+
+// listFiles reads the files the credential's own account stores. It takes no
+// account argument: the routes scope every answer to the caller, so one account
+// never learns what another holds.
+export async function listFiles(): Promise<FileList> {
+  const body = await request<{ data?: StoredFile[]; has_more?: boolean }>(
+    `/v1/files?limit=${FILE_PAGE_LIMIT}`,
+  );
+  return { files: body?.data ?? [], hasMore: body?.has_more === true };
+}
+
+// uploadFile sends one file as multipart form data.
+//
+// It does not go through `request`, which sets a JSON content type and encodes
+// its body. A multipart body carries its own boundary, and the browser writes
+// that header itself from the FormData.
+export async function uploadFile(
+  file: File,
+  purpose: string,
+): Promise<StoredFile> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("purpose", purpose);
+  const held = credential();
+  const response = await fetch("/v1/files", {
+    method: "POST",
+    headers: authorization(held),
+    body: form,
+  });
+  if (!response.ok) {
+    const error = await parseError(response);
+    if (held.kind !== "none" && error.unauthorized) recordCredentialOutcome(true);
+    throw error;
+  }
+  if (held.kind !== "none") recordCredentialOutcome(false);
+  return (await response.json()) as StoredFile;
+}
+
+export function deleteFile(fileID: string): Promise<unknown> {
+  return request<unknown>(`/v1/files/${encodeURIComponent(fileID)}`, {
+    method: "DELETE",
+  });
 }
 
 function activityQuery(filters: ActivityFilters): string {

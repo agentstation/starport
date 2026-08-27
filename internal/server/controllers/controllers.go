@@ -56,8 +56,12 @@ type Config struct {
 	// deployment that configured no file storage says so instead of 404.
 	Files           *files.Service
 	FileUploadBound int64
-	ServiceName     string
-	Version         string
+	// FileBackend names the blob backend stored file bytes land in. It reaches
+	// the admin surface rather than the file routes, because it describes the
+	// deployment and not any one file.
+	FileBackend string
+	ServiceName string
+	Version     string
 	// AuthPolicy is the running authentication mode. It is a pointer to the
 	// live policy and not a copy of the mode, because the console can change
 	// the mode while the router stands.
@@ -93,16 +97,17 @@ func NewControllers(cfg Config) *Controllers {
 		Logos:                NewLogosController(cfg.Service),
 		ProviderCredentials:  NewProviderCredentialsController(cfg.ProviderKeys),
 		Activity:             NewActivityController(cfg.Usage),
-		Admin:                NewAdminController(cfg.Identities, cfg.Tenants, cfg.Usage),
-		Tenants:              NewTenantsController(cfg.Tenants, cfg.Identities),
-		ProviderOperations:   NewProviderOperationsController(cfg.ProviderOperations),
-		Catalog:              NewCatalogController(cfg.Catalog),
-		Files:                NewFilesController(cfg.Files, cfg.FileUploadBound),
-		Presets:              NewPresetsController(cfg.Presets),
-		Auth:                 NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
-		Launch:               NewLaunchController(cfg.LocalGate),
-		ConsoleSession:       NewConsoleSessionController(cfg.LocalGate),
-		Console:              cfg.Console,
+		Admin: NewAdminController(cfg.Identities, cfg.Tenants, cfg.Usage,
+			WithFileStorage(cfg.FileBackend)),
+		Tenants:            NewTenantsController(cfg.Tenants, cfg.Identities),
+		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),
+		Catalog:            NewCatalogController(cfg.Catalog),
+		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),
+		Presets:            NewPresetsController(cfg.Presets),
+		Auth:               NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
+		Launch:             NewLaunchController(cfg.LocalGate),
+		ConsoleSession:     NewConsoleSessionController(cfg.LocalGate),
+		Console:            cfg.Console,
 	}
 
 	return collections

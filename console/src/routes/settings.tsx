@@ -336,6 +336,12 @@ function AboutSection() {
             <dd className="font-mono text-text-2">{info.storage.type}</dd>
           </>
         )}
+        {info?.files?.backend && (
+          <>
+            <dt className="text-text-3">File storage</dt>
+            <dd className="font-mono text-text-2">{info.files.backend}</dd>
+          </>
+        )}
         {info?.uptime && info.uptime !== "unavailable" && (
           <>
             <dt className="text-text-3">Uptime</dt>

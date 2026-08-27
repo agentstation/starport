@@ -90,6 +90,10 @@ type Dependencies struct {
 	// that this deployment configured no file storage rather than that the
 	// gateway has no files API.
 	Files *files.Service
+
+	// FileBackend names the blob backend behind that service, for the admin
+	// surface to report. An empty name reads as no file storage at all.
+	FileBackend string
 	// LocalGate redeems console launch tickets and verifies console sessions
 	// against this machine's local admin token. A nil gate refuses every
 	// launch and every session cookie, which is the right answer for a
@@ -151,6 +155,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Presets:            dependencies.Presets,
 		Files:              dependencies.Files,
 		FileUploadBound:    config.MaxFileUploadSize,
+		FileBackend:        dependencies.FileBackend,
 		ServiceName:        "starport",
 		Version:            "1.0.0",
 		AuthPolicy:         s.authPolicy,
