@@ -2,8 +2,8 @@
 
 ## Outcome
 
-`scripts/verify-document-parser.sh` moves from 0 of 20 to 3 of 20.
-`PLG-V01`, `PLG-V02`, and `PLG-V03` pass. A caller that names the
+`scripts/verify-document-parser.sh` moves from 0 of 20 to 4 of 20.
+`PLG-V01`, `PLG-V02`, `PLG-V03`, and `PLG-V16` pass. A caller that names the
 `file-parser` plugin now gets a typed option on the canonical request. A caller
 that names any other plugin, or any engine outside the two this gateway runs,
 gets a refusal.
@@ -113,7 +113,7 @@ value in production source names an engine this gateway cannot route to.
 ## Evidence
 
 ```
-bash scripts/verify-document-parser.sh          Summary: 3 passed, 17 failed
+bash scripts/verify-document-parser.sh          Summary: 4 passed, 16 failed
 go test ./internal/protocol/...                 ok
 bash scripts/verify-v1-architecture.sh          Summary: 12 passed, 0 failed
 go test ./...                                   exit 0
@@ -141,3 +141,14 @@ in `internal/server/controllers/chat_test.go`.
 This task did not run `bash scripts/benchmark-overhead.sh` or `bash
 scripts/smoke-openrouter-sdks.sh`. Mark both UNVERIFIED. PLG7 runs the SDK
 smoke check, because that is where the parity surface changes.
+
+## Correction
+
+The first version of this file recorded 3 of 20. The real count at the merge
+commit is 4 of 20. The condition `PLG-V16` also passed. Its two search terms
+both appear in the tests this task re-pointed at `file-parser`.
+
+That pass was wrong. The condition claims a `file-parser` request names no
+unenforced field, and the shipped tests assert the opposite. PLG2 tightened the
+condition to read the source list rather than only the test vocabulary, so
+`PLG-V16` now fails until PLG7 removes the report.
