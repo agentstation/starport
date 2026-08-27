@@ -66,7 +66,11 @@ type OfferingPricingInfo struct {
 	Reasoning  string `json:"reasoning,omitempty"`
 	CacheRead  string `json:"cache_read,omitempty"`
 	CacheWrite string `json:"cache_write,omitempty"`
-	Currency   string `json:"currency,omitempty"`
+	// Audio tokens bill at their own rate wherever a provider meters them,
+	// so an audio turn cannot be priced from Prompt and Completion alone.
+	AudioInput  string `json:"audio_input,omitempty"`
+	AudioOutput string `json:"audio_output,omitempty"`
+	Currency    string `json:"currency,omitempty"`
 }
 
 // ModelPricing represents model pricing information

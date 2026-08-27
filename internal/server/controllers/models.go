@@ -217,12 +217,14 @@ func openRouterOffering(offering proxy.ModelOfferingInfo) openrouter.ModelOfferi
 	}
 	if offering.Pricing != nil {
 		converted.Pricing = &openrouter.OfferingPricing{
-			Prompt:     offering.Pricing.Prompt,
-			Completion: offering.Pricing.Completion,
-			Reasoning:  offering.Pricing.Reasoning,
-			CacheRead:  offering.Pricing.CacheRead,
-			CacheWrite: offering.Pricing.CacheWrite,
-			Currency:   offering.Pricing.Currency,
+			Prompt:      offering.Pricing.Prompt,
+			Completion:  offering.Pricing.Completion,
+			Reasoning:   offering.Pricing.Reasoning,
+			CacheRead:   offering.Pricing.CacheRead,
+			CacheWrite:  offering.Pricing.CacheWrite,
+			AudioInput:  offering.Pricing.AudioInput,
+			AudioOutput: offering.Pricing.AudioOutput,
+			Currency:    offering.Pricing.Currency,
 		}
 	}
 	return converted

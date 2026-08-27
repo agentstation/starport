@@ -243,7 +243,10 @@ func collectOfferings(catalog *catalogs.Catalog) map[offeringIdentity]offeringFa
 }
 
 // priceFields is the fixed comparison order for token prices.
-var priceFields = []string{"input", "output", "reasoning", "cache_read", "cache_write"}
+var priceFields = []string{
+	"input", "output", "reasoning", "cache_read", "cache_write",
+	"audio_input", "audio_output",
+}
 
 func diffOfferings(diff *Diff, from, to map[offeringIdentity]offeringFacts) {
 	fromModels := map[string]bool{}
@@ -340,6 +343,10 @@ func tokenPrice(pricing *catalogs.ModelPricing, field string) (float64, bool) {
 		cost = pricing.Tokens.CacheRead
 	case "cache_write":
 		cost = pricing.Tokens.CacheWrite
+	case "audio_input":
+		cost = pricing.Tokens.AudioInput
+	case "audio_output":
+		cost = pricing.Tokens.AudioOutput
 	}
 	if cost == nil {
 		return 0, false

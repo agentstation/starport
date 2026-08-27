@@ -535,7 +535,10 @@ type OfferingPricing struct {
 	Reasoning  string `json:"reasoning,omitempty"`
 	CacheRead  string `json:"cache_read,omitempty"`
 	CacheWrite string `json:"cache_write,omitempty"`
-	Currency   string `json:"currency,omitempty"`
+	// Audio tokens bill at their own rate wherever a provider meters them.
+	AudioInput  string `json:"audio_input,omitempty"`
+	AudioOutput string `json:"audio_output,omitempty"`
+	Currency    string `json:"currency,omitempty"`
 }
 
 // Architecture describes one OpenRouter model architecture.
