@@ -25,6 +25,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../catalog",
 		"../execution",
 		"../availability",
+		"../blob",
 		"../inference",
 		"../failure",
 		"../identity",
@@ -44,6 +45,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/catalog",
 		"github.com/agentstation/starport/internal/execution",
 		"github.com/agentstation/starport/internal/availability",
+		"github.com/agentstation/starport/internal/blob",
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
 		"github.com/agentstation/starport/internal/identity",
@@ -114,6 +116,11 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// Limits is the vocabulary both a gateway API key and a tenant hold. It
 	// stays a leaf so neither owner can reach the other through it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits"])
+	// Blob stores opaque bytes at an opaque key. It is a leaf with no internal
+	// import at all, because a store that could reach a Starport concept would
+	// start reading meaning into the bytes it holds. The owner of the key holds
+	// every meaning instead.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/blob"])
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
