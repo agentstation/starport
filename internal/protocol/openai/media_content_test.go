@@ -54,6 +54,16 @@ func TestDecodeMediaContentParts(t *testing.T) {
 			},
 		},
 		{
+			name: "document by stored reference",
+			part: `{"type":"file","file":{"file_id":"file-abc","filename":"report.pdf"}}`,
+			assert: func(t *testing.T, part inference.ContentPart) {
+				require.Equal(t, inference.ContentDocument, part.Kind)
+				require.Equal(t, "file-abc", part.Document.FileID)
+				require.Equal(t, "report.pdf", part.Document.Filename)
+				require.Empty(t, part.Document.URL, "a stored reference carried bytes it never sent")
+			},
+		},
+		{
 			name: "video",
 			part: `{"type":"video_url","video_url":{"url":"https://example.test/clip.mp4"}}`,
 			assert: func(t *testing.T, part inference.ContentPart) {
@@ -106,12 +116,13 @@ func TestDecodeMediaContentPartErrors(t *testing.T) {
 		{
 			name: "document under a field name that is not the documented one",
 			part: `{"type":"file","file":{"name":"a.pdf","data":"JVBERg=="}}`,
-			want: "content[0].file.file_data is required",
+			want: "content[0].file needs file_data or file_id",
 		},
 		{
-			name: "document by reference is refused by name",
-			part: `{"type":"file","file":{"file_id":"file-abc"}}`,
-			want: "content[0].file.file_id is not supported",
+			name: "document naming both its bytes and a stored reference",
+			part: `{"type":"file","file":{"file_id":"file-abc",` +
+				`"file_data":"data:application/pdf;base64,JVBERg=="}}`,
+			want: "content[0].file: a document part names more than one source",
 		},
 		{
 			name: "video without a url",

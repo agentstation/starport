@@ -222,6 +222,12 @@ func errorShape(err error) (status int, errorType, message string, param *string
 		return http.StatusNotFound, errorTypeNotFound, err.Error(), nil
 	}
 
+	// A file_id this account does not hold is the same caller error, and it
+	// reads the same whether the identifier is unknown or belongs elsewhere.
+	if errors.Is(err, proxy.ErrStoredFileNotFound) {
+		return http.StatusNotFound, errorTypeNotFound, err.Error(), nil
+	}
+
 	switch e := err.(type) {
 	case *proxy.ValidationError:
 		return http.StatusBadRequest, errorTypeInvalidRequest, e.Message, &e.Field

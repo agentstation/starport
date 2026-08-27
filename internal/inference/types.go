@@ -1,7 +1,10 @@
 // Package inference owns provider-neutral inference values and stream events.
 package inference
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+)
 
 // Role identifies a message participant.
 type Role string
@@ -104,11 +107,51 @@ type Audio struct {
 // Document describes a document input, such as a PDF. Filename is separate
 // from Format because both protocol families carry the caller's own name
 // beside the bytes, and a parser reports page numbers against it.
+//
+// A caller supplies the bytes one of three ways: inline Data, a URL the
+// gateway fetches, or FileID, which names a document this gateway already
+// stores for the caller's own account. The three are exclusive. A part that
+// named two of them would leave the answer to whichever one a codec happened
+// to read first.
 type Document struct {
 	URL      string
 	Data     []byte
 	Format   string
 	Filename string
+
+	// FileID names a stored document this gateway holds for the requesting
+	// account. It is the only document reference the gateway can resolve
+	// without leaving the deployment, and the only one whose bytes cannot
+	// change under a cached answer: a stored file is written once and
+	// deleted, never rewritten, and its identifier is never reused.
+	FileID string
+}
+
+// ErrDocumentSourceConflict reports a document part that names more than one
+// source for the same bytes.
+var ErrDocumentSourceConflict = errors.New("a document part names more than one source")
+
+// Validate refuses a document that names more than one source.
+//
+// A part naming none is not this rule's concern: a codec that decoded an empty
+// document part reports its own decode failure, and refusing here would turn
+// that into a second, less specific message.
+//
+// The refusal names the rule rather than the fields that collided, because the
+// two protocol families spell these sources differently on the wire. A codec
+// wraps this error with the field path of the part it was decoding, which is
+// what tells a caller where to look.
+func (d Document) Validate() error {
+	named := 0
+	for _, source := range []bool{d.FileID != "", len(d.Data) > 0, d.URL != ""} {
+		if source {
+			named++
+		}
+	}
+	if named > 1 {
+		return ErrDocumentSourceConflict
+	}
+	return nil
 }
 
 // Video describes a video input. A caller sends either a URL or inline

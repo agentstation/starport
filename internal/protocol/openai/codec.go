@@ -97,7 +97,7 @@ type InputAudio struct {
 }
 
 // File is a document input. FileData holds a data URL, and FileID names a
-// stored upload that this gateway does not serve yet.
+// document this gateway stores for the requesting account.
 type File struct {
 	Filename string `json:"filename,omitempty"`
 	FileData string `json:"file_data,omitempty"`
@@ -598,14 +598,24 @@ func decodeAudioPart(wire *InputAudio, index int) (*inference.Audio, error) {
 // decodeFilePart reads the document shape. The file_data field already carries
 // its media type inside a data URL, so the canonical URL holds it whole, the
 // same way an image input keeps its own data URL.
+//
+// A part names its bytes once: either file_data carries them or file_id names
+// a document this gateway stores. The conflict rule belongs to the canonical
+// type, so this function decodes the shape and lets that type refuse it. The
+// wrapping adds the wire path a caller can act on.
 func decodeFilePart(wire *File, index int) (*inference.Document, error) {
-	if wire != nil && wire.FileData == "" && wire.FileID != "" {
-		return nil, fmt.Errorf("content[%d].file.file_id is not supported", index)
+	if wire == nil || (wire.FileData == "" && wire.FileID == "") {
+		return nil, fmt.Errorf("content[%d].file needs file_data or file_id", index)
 	}
-	if wire == nil || wire.FileData == "" {
-		return nil, fmt.Errorf("content[%d].file.file_data is required", index)
+	document := &inference.Document{
+		URL:      wire.FileData,
+		FileID:   wire.FileID,
+		Filename: wire.Filename,
 	}
-	return &inference.Document{URL: wire.FileData, Filename: wire.Filename}, nil
+	if err := document.Validate(); err != nil {
+		return nil, fmt.Errorf("content[%d].file: %w", index, err)
+	}
+	return document, nil
 }
 
 // decodeVideoPart reads the video shape. A video arrives as a reference, so
