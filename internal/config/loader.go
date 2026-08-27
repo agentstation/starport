@@ -176,6 +176,7 @@ func defaultConfig(paths Paths) *Config {
 		Storage: StorageConfig{
 			Badger: BadgerConfig{Path: paths.BadgerDir},
 		},
+		Files:    FilesConfig{Path: paths.FilesDir},
 		Security: SecurityConfig{LocalTokenPath: paths.LocalTokenFile},
 	}
 }
@@ -206,6 +207,15 @@ func resolveConfiguredPaths(cfg *Config, paths Paths) error {
 		cfg.Storage.Badger.Path, err = resolvePath(paths.ConfigDir, cfg.Storage.Badger.Path)
 		if err != nil {
 			return fmt.Errorf("badger path: %w", err)
+		}
+	}
+	if cfg.Files.SelectedBackend() == BlobBackendFilesystem {
+		if cfg.Files.Path == "" {
+			cfg.Files.Path = paths.FilesDir
+		}
+		cfg.Files.Path, err = resolvePath(paths.ConfigDir, cfg.Files.Path)
+		if err != nil {
+			return fmt.Errorf("files path: %w", err)
 		}
 	}
 	cfg.Catalog.WorkspacePath, err = resolvePath(paths.ConfigDir, cfg.Catalog.WorkspacePath)

@@ -33,6 +33,23 @@ func backends(t *testing.T) []backend {
 				return store
 			},
 		},
+		{
+			name: "objectstore",
+			open: func(t *testing.T) blob.Store {
+				t.Helper()
+				_, endpoint := newObjectServer(t, "starport-files")
+				store, err := blob.NewObjectStore(context.Background(), blob.ObjectStoreOptions{
+					Bucket:          "starport-files",
+					Region:          "us-east-1",
+					Endpoint:        endpoint,
+					Prefix:          "deployment-one",
+					AccessKeyID:     "test-access-key",
+					SecretAccessKey: "test-secret-key",
+				})
+				require.NoError(t, err)
+				return store
+			},
+		},
 	}
 }
 

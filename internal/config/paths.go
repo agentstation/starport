@@ -16,6 +16,10 @@ type Paths struct {
 	ConfigFile string `json:"config_file"`
 	DataDir    string `json:"data_dir"`
 	BadgerDir  string `json:"badger_dir"`
+	// FilesDir roots the filesystem blob backend. It sits in the data
+	// directory beside the record store, because the bytes are state this
+	// machine holds rather than a decision an operator wrote down.
+	FilesDir string `json:"files_dir"`
 	// LocalTokenFile holds this machine's local admin token. It sits in the
 	// data directory rather than beside the configuration file, because it is
 	// state this machine generated and not a decision an operator wrote down.
@@ -55,6 +59,7 @@ func PathsForConfigDir(configDir string) Paths {
 		ConfigFile:       filepath.Join(configDir, "config.env"),
 		DataDir:          dataDir,
 		BadgerDir:        filepath.Join(dataDir, "badger"),
+		FilesDir:         filepath.Join(dataDir, "files"),
 		LocalTokenFile:   filepath.Join(dataDir, "local-admin-token.json"),
 		WelcomeStampFile: filepath.Join(dataDir, "welcomed"),
 	}
