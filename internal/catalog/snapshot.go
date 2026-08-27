@@ -303,6 +303,65 @@ func (s *RoutableSnapshot) Offering(route Route) (catalogs.ProviderOffering, err
 	return s.catalog.Offering(route.ProviderID, route.ProviderModelID)
 }
 
+// PagePriceFor returns what one model charges to read one page of a document,
+// in USD. A page is the unit recognition is billed in, and no token price
+// converts into it.
+func (s *RoutableSnapshot) PagePriceFor(
+	modelID string,
+	operation catalogs.ProviderOperation,
+) (float64, bool) {
+	route, found := s.ResolveOperation(modelID, operation)
+	if !found {
+		return 0, false
+	}
+	return s.routePagePrice(route)
+}
+
+// LowestPagePrice returns the cheapest page price this generation publishes for
+// one operation.
+//
+// It answers the question a caller has before a route exists: what is the least
+// this document can cost to read? The planner picks the offering afterwards, so
+// no exact price is knowable yet, and the cheapest one is the only bound that
+// refuses no work the account could have paid for.
+func (s *RoutableSnapshot) LowestPagePrice(operation catalogs.ProviderOperation) (float64, bool) {
+	if s == nil {
+		return 0, false
+	}
+	lowest, found := 0.0, false
+	for _, route := range s.routes {
+		if !route.Supports(operation) {
+			continue
+		}
+		price, priced := s.routePagePrice(route)
+		if !priced {
+			continue
+		}
+		if !found || price < lowest {
+			lowest, found = price, true
+		}
+	}
+	return lowest, found
+}
+
+// routePagePrice reads the per-page price one route's offering publishes. The
+// projection refuses a recognition offering that publishes none, so an offering
+// this gateway can route always answers.
+func (s *RoutableSnapshot) routePagePrice(route Route) (float64, bool) {
+	offering, err := s.Offering(route)
+	if err != nil {
+		return 0, false
+	}
+	if offering.Pricing == nil || offering.Pricing.Operations == nil {
+		return 0, false
+	}
+	page := offering.Pricing.Operations.PageInput
+	if page == nil || *page < 0 {
+		return 0, false
+	}
+	return *page, true
+}
+
 func cloneRoutes(source []Route) []Route {
 	result := make([]Route, len(source))
 	for index, route := range source {

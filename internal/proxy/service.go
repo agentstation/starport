@@ -116,6 +116,18 @@ type ChatCompletionResponse struct {
 	// conversation about one document.
 	ExtractionCached bool `json:"-"`
 
+	// The rest of the document read, as the usage record reports it: which
+	// engine ran, how many pages it read each way, which model recognized
+	// them, what that cost in integer nano-USD, and how long it took.
+	ExtractionEngine   string        `json:"-"`
+	ExtractionPages    int           `json:"-"`
+	RecognizedPages    int           `json:"-"`
+	NativePages        int           `json:"-"`
+	ExtractionOffering string        `json:"-"`
+	ExtractionNanoUSD  int64         `json:"-"`
+	ExtractionUnpriced bool          `json:"-"`
+	ExtractionDuration time.Duration `json:"-"`
+
 	// Internal fields (not serialized)
 	CacheStatus string     `json:"-"`
 	CacheAge    int        `json:"-"` // Seconds since cached

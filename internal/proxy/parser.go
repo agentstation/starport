@@ -4,13 +4,19 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
+	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
+
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/router"
 )
@@ -52,7 +58,8 @@ func (p *proxy) parseDocuments(
 		}
 	}
 
-	report := parseReport{Cached: true}
+	started := time.Now()
+	report := parseReport{Cached: true, Engine: engine}
 	parsed := *req
 	parsed.Request = req.Request.Clone()
 	for messageIndex := range parsed.Request.Messages {
@@ -67,12 +74,14 @@ func (p *proxy) parseDocuments(
 				return nil, parseReport{}, err
 			}
 			report.add(reading)
+			report.charge(p.pagePrices(ctx), reading)
 			*part = inference.ContentPart{
 				Kind: inference.ContentText,
 				Text: renderDocument(part.Document.Filename, reading.Text),
 			}
 		}
 	}
+	report.Duration = time.Since(started)
 	return &parsed, report, nil
 }
 
@@ -89,12 +98,86 @@ type parseReport struct {
 	Pages int
 	// Cached reports that every attachment came back from the cache.
 	Cached bool
+	// Engine is the engine the caller named.
+	Engine inference.ParserEngine
+	// RecognizedPages is how many pages this turn sent to a recognition model.
+	// A cached read reports none: an earlier turn paid for those pages.
+	RecognizedPages int
+	// NativePages is how many pages this turn read in process, for nothing.
+	NativePages int
+	// Offering is the recognition model that read the last document this turn
+	// recognized. It is empty when the turn recognized nothing.
+	Offering string
+	// CostNanoUSD is what the recognized pages cost.
+	CostNanoUSD int64
+	// Unpriced reports a recognized page the catalog gave no price for. The
+	// projection refuses such an offering, so this states a gap rather than a
+	// free page.
+	Unpriced bool
+	// Duration is how long the reads took, the cache lookups included.
+	Duration time.Duration
 }
 
 func (r *parseReport) add(reading documentReading) {
 	r.Documents++
 	r.Pages += reading.Pages
 	r.Cached = r.Cached && reading.Cached
+	switch {
+	case reading.Cached:
+		// Neither meter moves. The pages were read on an earlier turn, and
+		// counting them again here would bill a saving as a spend.
+	case reading.Offering != "":
+		r.RecognizedPages += reading.Pages
+		r.Offering = reading.Offering
+	default:
+		r.NativePages += reading.Pages
+	}
+}
+
+// report copies what the reads cost onto the answer the turn returns. It is
+// the one place the two vocabularies meet, so the usage middleware reads a
+// response rather than a parser type.
+func (r parseReport) report(response *ChatCompletionResponse) {
+	if response == nil {
+		return
+	}
+	response.ExtractionCached = r.Cached
+	if r.Documents == 0 {
+		// A turn that attached nothing reports nothing. Without this it would
+		// report a cached read of no documents, which is true and misleading.
+		response.ExtractionCached = false
+		return
+	}
+	response.ExtractionEngine = string(r.Engine)
+	response.ExtractionPages = r.Pages
+	response.RecognizedPages = r.RecognizedPages
+	response.NativePages = r.NativePages
+	response.ExtractionOffering = r.Offering
+	response.ExtractionNanoUSD = r.CostNanoUSD
+	response.ExtractionUnpriced = r.Unpriced
+	response.ExtractionDuration = r.Duration
+}
+
+// charge prices one recognized reading against the catalog that routed it.
+//
+// The price comes from the offering the planner actually chose, so the number
+// the record carries is the number the provider charges. A native read and a
+// cached read both skip this: neither reached a provider.
+func (r *parseReport) charge(prices pagePrices, reading documentReading) {
+	if reading.Cached || reading.Offering == "" || reading.Pages == 0 {
+		return
+	}
+	if prices == nil {
+		r.Unpriced = true
+		return
+	}
+	price, priced := prices.PagePriceFor(reading.Offering,
+		starmapcatalogs.ProviderOperationDocumentsRecognition)
+	if !priced {
+		r.Unpriced = true
+		return
+	}
+	r.CostNanoUSD += nanoUSD(float64(reading.Pages) * price)
 }
 
 // documentReading is one attachment after the named engine read it.
@@ -153,6 +236,9 @@ func (p *proxy) readDocument(
 		Pages: extraction.PageCount(),
 	}}
 	if engine == inference.ParserEngineRecognition && needsRecognition(extraction) {
+		if err := p.affordable(ctx, attached.Filename, extraction.PageCount()); err != nil {
+			return documentReading{}, err
+		}
 		recognized, offering, err := p.recognize(ctx, req, attached, data, mediaType, extraction, policy)
 		if err != nil {
 			return documentReading{}, err
@@ -197,17 +283,93 @@ func (p *proxy) storeReading(ctx context.Context, key document.CacheKey, reading
 	}
 }
 
+// affordable refuses a recognition call the holder cannot pay for, before the
+// call happens.
+//
+// The estimate uses the cheapest page price the catalog publishes, not the
+// price of the offering the planner will choose, because the planner chooses
+// after this runs. Erring low is the right direction: a bound that refused work
+// the account could have paid for would cost a caller a request over a price
+// that was never charged. Erring low overshoots the bound by at most one
+// document, and the account's own cap refuses the request after it.
+func (p *proxy) affordable(ctx context.Context, filename string, pages int) error {
+	allowance := limits.AllowanceFromContext(ctx)
+	if !allowance.Bounded || pages == 0 {
+		return nil
+	}
+	prices := p.pagePrices(ctx)
+	if prices == nil {
+		return nil
+	}
+	price, priced := prices.LowestPagePrice(starmapcatalogs.ProviderOperationDocumentsRecognition)
+	if !priced {
+		return nil
+	}
+	if err := allowance.Covers(nanoUSD(float64(pages) * price)); err != nil {
+		named := filename
+		if named == "" {
+			named = "the attached document"
+		}
+		return failure.New(
+			failure.Billing,
+			fmt.Sprintf("Reading %s would pass this account's spend budget.", named),
+			false,
+			failure.ProviderDetails{},
+			err,
+		)
+	}
+	return nil
+}
+
+// nanoUSD converts a catalog price into the integer unit every meter in this
+// gateway counts.
+func nanoUSD(usd float64) int64 {
+	return int64(math.Round(usd * 1e9))
+}
+
+// pagePrices is the catalog fact the parser reads: what one page of a document
+// costs, before a route exists and again once one does. The parser names the
+// two questions rather than the whole snapshot, because a price is all it
+// needs.
+type pagePrices interface {
+	// PagePriceFor is what one recognition model charges for one page.
+	PagePriceFor(modelID string, operation starmapcatalogs.ProviderOperation) (float64, bool)
+	// LowestPagePrice is the least any offering charges for one page.
+	LowestPagePrice(operation starmapcatalogs.ProviderOperation) (float64, bool)
+}
+
+// pagePrices answers what a page costs on this request.
+//
+// The catalog the request already carries answers it, which is every
+// deployment. A gateway assembled with prices of its own uses those instead,
+// which is how a caller with no runtime lease reaches a price at all.
+func (p *proxy) pagePrices(ctx context.Context) pagePrices {
+	if p.prices != nil {
+		return p.prices
+	}
+	if snapshot := catalogSnapshot(ctx); snapshot != nil {
+		return snapshot
+	}
+	return nil
+}
+
+// catalogSnapshot reads the catalog already in force on this request. Like
+// catalogGeneration below it never acquires a runtime of its own.
+func catalogSnapshot(ctx context.Context) *runtimecatalog.RoutableSnapshot {
+	lease := connectors.RuntimeLeaseFromContext(ctx)
+	if lease == nil {
+		return nil
+	}
+	return lease.Snapshot()
+}
+
 // catalogGeneration reads the catalog identity already in force on this
 // request. It never acquires a runtime of its own: a lookup that had to take a
 // lease would make an unreachable catalog a slower document read rather than
 // an uncached one, and an empty generation is a complete answer here, because
 // a key without one never reads and never writes.
 func (p *proxy) catalogGeneration(ctx context.Context) string {
-	lease := connectors.RuntimeLeaseFromContext(ctx)
-	if lease == nil {
-		return ""
-	}
-	snapshot := lease.Snapshot()
+	snapshot := catalogSnapshot(ctx)
 	if snapshot == nil {
 		return ""
 	}
