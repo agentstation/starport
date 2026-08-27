@@ -26,8 +26,11 @@ type Config struct {
 	// Shutdown timeout
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT,default=30s"`
 
-	// Maximum request body size (default: 10MB)
-	MaxRequestSize int64 `env:"MAX_REQUEST_SIZE,default=10485760"`
+	// MaxRequestSize is the largest request body the gateway reads, in bytes.
+	// Application composition supplies it from the loaded configuration, so
+	// this field carries no environment tag: a tag here would state a default
+	// that never reads the environment and would drift from the real one.
+	MaxRequestSize int64
 
 	// Maximum aggregate size of HTTP request headers.
 	MaxHeaderBytes int `env:"MAX_HEADER_BYTES,default=1048576"`

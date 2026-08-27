@@ -674,6 +674,18 @@ The main HTTP controls are:
 - `STARPORT_SERVER_MAX_HEADER_BYTES`
 - `STARPORT_SERVER_SHUTDOWN_TIMEOUT`
 
+`STARPORT_SERVER_MAX_REQUEST_SIZE` defaults to 33554432 bytes, which is 32
+MiB. A caller attaches an image, an audio file, or a document as base64 inside
+the JSON body, and base64 grows a payload by a third. The default therefore
+holds one file of about 25 MB, which is the largest single file the provider
+APIs commonly accept. Raise it if your callers send larger files.
+The gateway holds the body in memory while it reads it.
+
+The gateway answers a body above the limit with HTTP 413. The message states
+the limit in bytes. It also states the received size when the caller sends a
+`Content-Length` header. The gateway refuses a caller that states no length
+while it reads the body, so that message states the limit alone.
+
 `SIGINT` and `SIGTERM` start graceful shutdown. Starport drains HTTP first.
 It then closes background work, cache, providers, and storage in reverse
 construction order.

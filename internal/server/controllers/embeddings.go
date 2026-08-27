@@ -35,7 +35,7 @@ func newEmbeddingsController(service proxy.Proxy, protocol Protocol) *Embeddings
 func (h *EmbeddingsController) Create(w http.ResponseWriter, r *http.Request) {
 	request, err := h.decodeEmbedding(r)
 	if err != nil {
-		h.writeInvalidRequest(w, "Invalid request body: "+err.Error())
+		h.writeBodyRefusal(w, err)
 		return
 	}
 	req := &proxy.EmbeddingsRequest{Request: request}

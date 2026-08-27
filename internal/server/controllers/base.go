@@ -4,6 +4,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -116,6 +117,28 @@ func (h *BaseHandler) writePermissionDenied(w http.ResponseWriter, message strin
 		return
 	}
 	openai.WriteError(w, http.StatusForbidden, errorTypePermission, message, nil)
+}
+
+// writeBodyRefusal answers a request body the gateway would not read.
+//
+// A body above the size limit answers 413 rather than 400. The two statuses
+// tell the caller different things: 400 says the request was malformed, and a
+// caller who reads that about a valid request with one large attachment has no
+// reason to try a smaller one. The message states the limit, which the reader
+// itself reports, so the caller learns the number to cut to.
+func (h *BaseHandler) writeBodyRefusal(w http.ResponseWriter, err error) {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		message := fmt.Sprintf("Request body is above the %d byte limit", tooLarge.Limit)
+		if h.protocol == ProtocolOpenRouter {
+			openrouter.WriteError(w, http.StatusRequestEntityTooLarge, message,
+				map[string]any{openRouterErrorTypeField: errorTypeInvalidRequest})
+			return
+		}
+		openai.WriteError(w, http.StatusRequestEntityTooLarge, errorTypeInvalidRequest, message, nil)
+		return
+	}
+	h.writeInvalidRequest(w, "Invalid request body: "+err.Error())
 }
 
 func (h *BaseHandler) writeInvalidRequest(w http.ResponseWriter, message string) {

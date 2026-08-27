@@ -74,6 +74,17 @@ type CatalogConfig struct {
 	RemoteActivationInterval time.Duration `env:"REMOTE_ACTIVATION_INTERVAL,default=250ms"`
 }
 
+// DefaultMaxRequestSize is the largest request body the gateway reads, in
+// bytes. A caller attaches media as base64 inside the JSON body, and base64
+// grows a payload by a third, so the limit has to hold the grown form. The
+// largest media file the provider APIs commonly accept is a 25 MB audio file,
+// which reaches about 33,333,336 bytes as base64. This value clears that with
+// room for the surrounding request.
+//
+// The tag on MaxRequestSize repeats the number because a struct tag holds a
+// literal. TestBodyLimitDefaultMatchesItsConstant proves the two agree.
+const DefaultMaxRequestSize int64 = 33554432
+
 // ServerConfig defines HTTP server settings
 type ServerConfig struct {
 	Port              int           `env:"PORT,default=8080"`
@@ -82,7 +93,7 @@ type ServerConfig struct {
 	WriteTimeout      time.Duration `env:"WRITE_TIMEOUT,default=30s"`
 	IdleTimeout       time.Duration `env:"IDLE_TIMEOUT,default=120s"`
 	RequestTimeout    time.Duration `env:"REQUEST_TIMEOUT,default=60s"`
-	MaxRequestSize    int64         `env:"MAX_REQUEST_SIZE,default=10485760"`
+	MaxRequestSize    int64         `env:"MAX_REQUEST_SIZE,default=33554432"`
 	MaxHeaderBytes    int           `env:"MAX_HEADER_BYTES,default=1048576"`
 	ShutdownTimeout   time.Duration `env:"SHUTDOWN_TIMEOUT,default=30s"`
 	EnableProfiling   bool          `env:"ENABLE_PROFILING,default=false"`

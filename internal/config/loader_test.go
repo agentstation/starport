@@ -94,6 +94,27 @@ func TestLoaderSecurePlatformDefaults(t *testing.T) {
 	}
 }
 
+// TestBodyLimitDefaultMatchesItsConstant closes the gap a struct tag opens. A
+// tag holds a literal, so the default the loader applies and the constant the
+// rest of the gateway reads are two statements of one number, and a change to
+// either alone leaves a deployment reading a limit no other code agrees with.
+func TestBodyLimitDefaultMatchesItsConstant(t *testing.T) {
+	cfg, err := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(nil).
+		WithEnvFiles().
+		Load(context.Background())
+	if err != nil {
+		t.Fatalf("load defaults: %v", err)
+	}
+	if cfg.Server.MaxRequestSize != DefaultMaxRequestSize {
+		t.Fatalf(
+			"default max request size = %d, want %d",
+			cfg.Server.MaxRequestSize, DefaultMaxRequestSize,
+		)
+	}
+}
+
 func TestLoaderEnvironmentOverridesFiles(t *testing.T) {
 	dir := t.TempDir()
 	highPriorityFile := writeEnvFile(t, dir, "local.env", `STARPORT_SERVER_PORT=7777`)
