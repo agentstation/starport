@@ -82,10 +82,20 @@ func SecurityHeaders(next http.Handler) http.Handler {
 // A body whose size the caller does not state is cut while it is read. The
 // decode path answers that one, because only the reader learns the body was
 // too long.
-func SizeLimiter(maxSize int64) func(http.Handler) http.Handler {
+//
+// The exempt predicate names the routes that carry their own bound. A file
+// upload is one of them: this limit exists to stop a caller from making the
+// gateway hold and decode a huge document, and an upload streams to a store
+// instead. Its own bound is the operator's file setting, which is usually
+// larger, so the general limit steps aside rather than clamping it lower.
+func SizeLimiter(maxSize int64, exempt func(*http.Request) bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if maxSize <= 0 || !methodCarriesBody(r.Method) {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if exempt != nil && exempt(r) {
 				next.ServeHTTP(w, r)
 				return
 			}

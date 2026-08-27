@@ -37,7 +37,27 @@ type FilesConfig struct {
 	// the platform data directory, beside the record store.
 	Path string `env:"PATH"`
 
+	// MaxUploadBytes bounds one upload. It is a deployment decision rather
+	// than a wire-format one: the same request that a shared object store
+	// absorbs can fill the disk of a single node. FIL6 adds the separate
+	// bound on what one tenant may keep stored at once.
+	MaxUploadBytes int64 `env:"MAX_UPLOAD_BYTES,default=536870912"`
+
 	ObjectStore ObjectStoreConfig `env:",prefix=OBJECT_STORE_"`
+}
+
+// DefaultMaxUploadBytes is the upload bound an absent setting selects. It
+// matches the cap OpenAI publishes, so an SDK that already refuses a larger
+// file refuses it before the request leaves the client.
+const DefaultMaxUploadBytes int64 = 512 << 20
+
+// UploadBound reports the bound one upload may reach, with the default
+// standing in for an absent or nonsense value.
+func (c *FilesConfig) UploadBound() int64 {
+	if c == nil || c.MaxUploadBytes <= 0 {
+		return DefaultMaxUploadBytes
+	}
+	return c.MaxUploadBytes
 }
 
 // ObjectStoreConfig addresses one S3-compatible bucket.

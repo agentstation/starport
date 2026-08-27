@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -45,6 +46,18 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		r.With(s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.Media.Speech)
 		r.With(s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.Media.Transcribe)
 		r.With(s.requireAnyScope("audio:write")).Post("/audio/translations", s.controllers.Media.Translate)
+
+		// Files. An upload writes bytes the gateway keeps, so it needs a
+		// scope of its own rather than the chat scope: a key that may send a
+		// prompt should not thereby be allowed to consume the deployment's
+		// storage.
+		r.Route("/files", func(r chi.Router) {
+			r.With(s.requireAnyScope("files:write")).Post("/", s.controllers.Files.Create)
+			r.With(s.requireAnyScope("files:read")).Get("/", s.controllers.Files.List)
+			r.With(s.requireAnyScope("files:read")).Get("/{file_id}", s.controllers.Files.Get)
+			r.With(s.requireAnyScope("files:write")).Delete("/{file_id}", s.controllers.Files.Delete)
+			r.With(s.requireAnyScope("files:read")).Get("/{file_id}/content", s.controllers.Files.Content)
+		})
 
 		// Models
 		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.Models.List)
@@ -235,11 +248,21 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 		LoggingMiddleware, // Log requests
 		Recoverer,         // Recover from panics
 		SecurityHeaders,   // Add security headers
-		SizeLimiter(s.cfg.MaxRequestSize),
+		SizeLimiter(s.cfg.MaxRequestSize, carriesOwnBodyBound),
 		Timeout(s.cfg.RequestTimeout), // Request timeout
 		CORS(s.cfg.CORS),              // CORS handling
 		Compress(5),                   // Response compression
 	}
+}
+
+// carriesOwnBodyBound reports a path whose handler bounds its own body.
+//
+// The file upload is the only one. It streams to the byte store instead of
+// decoding into memory, and the operator sets its bound separately, so the
+// general request-size limit would otherwise cap an upload at the size of the
+// largest JSON document the gateway reads.
+func carriesOwnBodyBound(r *http.Request) bool {
+	return strings.TrimSuffix(r.URL.Path, "/") == "/v1/files"
 }
 
 // API Routes Documentation:
@@ -255,6 +278,11 @@ func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 // OpenAI-Compatible API (v1):
 //   POST /v1/chat/completions   - Create chat completion
 //   POST /v1/embeddings         - Create embeddings
+//   POST   /v1/files                  - Upload a file (files:write)
+//   GET    /v1/files                  - List stored files (files:read)
+//   GET    /v1/files/{file_id}        - Read one file object (files:read)
+//   DELETE /v1/files/{file_id}        - Delete a file (files:write)
+//   GET    /v1/files/{file_id}/content - Read the stored bytes (files:read)
 //   GET  /v1/models             - List available models
 //   GET  /v1/models/{model}     - Get model details
 //

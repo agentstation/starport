@@ -21,6 +21,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
+	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
@@ -167,6 +168,7 @@ type runtimeBuilder struct {
 	rateLimits   ratelimit.Repository
 	usageRecords usage.Repository
 	presets      presets.Repository
+	files        *files.Service
 	gateway      proxy.Proxy
 	console      console.PageServer
 	auth         authRuntime
@@ -355,6 +357,9 @@ func (b *runtimeBuilder) openConcepts() error {
 	if err != nil {
 		return fmt.Errorf("open preset repository: %w", err)
 	}
+	if err := b.openFileService(); err != nil {
+		return err
+	}
 	masterKey := []byte(b.config.Security.MasterKey)
 	if len(masterKey) < 32 {
 		masterKey = credentials.DeriveKeyFromPassword(b.config.Security.MasterKey)
@@ -380,6 +385,21 @@ func (b *runtimeBuilder) openConcepts() error {
 	b.providerKeys, err = keyring.NewProviderKeys(credentialRepository, masterKey, credentialValidator)
 	if err != nil {
 		return fmt.Errorf("open provider key service: %w", err)
+	}
+	return nil
+}
+
+// openFileService joins the two stores one stored file needs: the record
+// repository in the key-value store and the bytes in the byte store. It runs
+// after openBlob, because the service refuses to open without a byte store.
+func (b *runtimeBuilder) openFileService() error {
+	records, err := files.OpenRepository(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open file repository: %w", err)
+	}
+	b.files, err = files.NewService(records, b.application.blobStore)
+	if err != nil {
+		return fmt.Errorf("open file service: %w", err)
 	}
 	return nil
 }
@@ -488,6 +508,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
+		Files:     b.files,
 		LocalGate: b.gate,
 	})
 	if err != nil {
@@ -942,6 +963,7 @@ func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {
 		ReadTimeout: cfg.Server.ReadTimeout, WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout: cfg.Server.IdleTimeout, RequestTimeout: requestTimeout,
 		ShutdownTimeout: cfg.Server.ShutdownTimeout, MaxRequestSize: maxRequestSize,
+		MaxFileUploadSize:          cfg.Files.UploadBound(),
 		MaxHeaderBytes:             cfg.Server.MaxHeaderBytes,
 		AuthMode:                   auth.setting.Effective().Mode,
 		AuthModeSource:             auth.setting.Effective().Source,
