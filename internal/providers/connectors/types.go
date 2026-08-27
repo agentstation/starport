@@ -21,6 +21,7 @@ const (
 const (
 	contentTypeText           = "text"
 	contentTypeImageURL       = "image_url"
+	contentTypeFile           = "file"
 	finishReasonStop          = "stop"
 	objectChatCompletion      = "chat.completion"
 	objectChatCompletionChunk = "chat.completion.chunk"

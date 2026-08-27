@@ -24,6 +24,10 @@ var (
 	// ErrInvalidMessageContent indicates invalid message content format
 	ErrInvalidMessageContent = errors.New("invalid message content format")
 
+	// ErrInvalidMediaRequest indicates a media request that carries no upload
+	// the operation requires.
+	ErrInvalidMediaRequest = errors.New("invalid media request")
+
 	// ErrStreamClosed indicates the stream has been closed
 	ErrStreamClosed = errors.New("stream closed")
 

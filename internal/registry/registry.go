@@ -106,7 +106,11 @@ func (r *Registry) Start(ctx context.Context) error {
 	return nil
 }
 
-// Register adds a connector to the registry
+// Register adds a connector to the registry. It derives no operation and no
+// endpoint type. Both come from the compiled transport registry through
+// providers.Assess, which is the one seam that intersects a catalog offering
+// with what this build can execute. A second derivation here read the catalog
+// alone, so it published operations no transport implements.
 func (r *Registry) Register(provider string, connector connectors.Connector) error {
 	if provider == "" {
 		return ErrProviderRequired
@@ -116,8 +120,6 @@ func (r *Registry) Register(provider string, connector connectors.Connector) err
 	}
 	registration := Registration{Provider: provider, Connector: connector}
 	if snapshot := r.catalogSnapshot(); snapshot != nil {
-		operations := make(map[starmapcatalogs.ProviderOperation]struct{})
-		endpointTypes := make(map[starmapcatalogs.EndpointType]struct{})
 		providerID := starmapcatalogs.ProviderID(provider)
 		if providerRecord, lookupErr := snapshot.Catalog().Provider(providerID); lookupErr == nil && providerRecord.Credentials != nil {
 			profiles := make(map[starmapcatalogs.ProviderCredentialProfileID]starmapcatalogs.ProviderCredentialProfile)
@@ -132,27 +134,6 @@ func (r *Registry) Register(provider string, connector connectors.Connector) err
 				}
 			}
 		}
-		offerings, _ := snapshot.Catalog().ProviderOfferings(providerID)
-		for _, offering := range offerings {
-			for _, operation := range offering.Service.Operations {
-				operations[operation] = struct{}{}
-				if endpoint, found := offering.Endpoint(operation); found {
-					endpointTypes[endpoint.Type] = struct{}{}
-				}
-			}
-		}
-		for operation := range operations {
-			registration.Operations = append(registration.Operations, operation)
-		}
-		for endpointType := range endpointTypes {
-			registration.EndpointTypes = append(registration.EndpointTypes, endpointType)
-		}
-		sort.Slice(registration.Operations, func(left, right int) bool {
-			return registration.Operations[left] < registration.Operations[right]
-		})
-		sort.Slice(registration.EndpointTypes, func(left, right int) bool {
-			return registration.EndpointTypes[left] < registration.EndpointTypes[right]
-		})
 	}
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
