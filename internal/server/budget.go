@@ -81,8 +81,16 @@ func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 		now := time.Now().UTC()
 		for _, dimension := range budgetDimensions {
 			rules := limits.BudgetRules(tenantLimits, apiKey.Limits, dimension.name)
-			if !s.allowBudget(w, r, dimension, rules, tenantID, apiKey.ID, now) {
+			binding, allowed := s.allowBudget(w, r, dimension, rules, tenantID, apiKey.ID, now)
+			if !allowed {
 				return
+			}
+			// The spend reading travels on into the request. Work that costs
+			// money before the provider call the request came for refuses
+			// itself against the same number the headers above report, and
+			// reads the meter no second time.
+			if dimension.name == limits.DimensionSpend {
+				r = r.WithContext(limits.ContextWithAllowance(r.Context(), binding.allowance()))
 			}
 		}
 
@@ -98,10 +106,24 @@ type scopedBudget struct {
 	interval  string
 	windowEnd time.Time
 	exhausted bool
+	// bound reports that a budget applies at all. A holder with no budget and
+	// a holder with nothing left both read zero remaining, and they are
+	// opposite answers.
+	bound bool
 }
 
-// allowBudget checks every rule for one budget dimension. It reports true when
-// the request may proceed and writes the 402 response itself otherwise.
+// allowance is what this reading leaves the request to spend. A dimension no
+// budget covers leaves an unbounded one, which refuses nothing.
+func (b scopedBudget) allowance() limits.Allowance {
+	if !b.bound {
+		return limits.Allowance{}
+	}
+	return limits.Allowance{NanoUSD: b.remaining, Bounded: true}
+}
+
+// allowBudget checks every rule for one budget dimension. It returns the
+// tightest reading and reports true when the request may proceed; it writes the
+// 402 response itself otherwise.
 func (s *Server) allowBudget(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -109,7 +131,7 @@ func (s *Server) allowBudget(
 	rules []limits.BudgetRule,
 	tenantID, keyID string,
 	now time.Time,
-) bool {
+) (scopedBudget, bool) {
 	var binding scopedBudget
 	var bound bool
 
@@ -136,6 +158,7 @@ func (s *Server) allowBudget(
 			interval:  rule.Budget.Interval,
 			windowEnd: windowEnd,
 			exhausted: consumed >= rule.Budget.Limit,
+			bound:     true,
 		}
 
 		// The tightest meter owns the reported numbers, and an exhausted
@@ -150,7 +173,7 @@ func (s *Server) allowBudget(
 	}
 
 	if !bound {
-		return true
+		return scopedBudget{}, true
 	}
 
 	w.Header().Set(dimension.limitHeader, strconv.FormatInt(binding.limit, 10))
@@ -162,9 +185,9 @@ func (s *Server) allowBudget(
 		writeProtocolError(w, r, http.StatusPaymentRequired, "permission_error",
 			"Insufficient quota: "+string(binding.scope)+" "+string(dimension.name)+
 				" budget exhausted for the current "+binding.interval+" window")
-		return false
+		return binding, false
 	}
-	return true
+	return binding, true
 }
 
 // budgetScope names the counter set one budget meter reads.

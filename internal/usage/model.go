@@ -138,8 +138,33 @@ type Record struct {
 	Attempts    int    `json:"attempts,omitempty"`
 	CacheStatus string `json:"cache_status,omitempty"`
 
+	// ParserEngine names which engine read the documents this turn attached:
+	// `native` for the in-process reader, `recognition` for a catalogued model.
+	// It is empty on a turn that attached none.
+	ParserEngine string `json:"parser_engine,omitempty"`
+	// DocumentPages is how many pages those attachments held, whether this turn
+	// read them or the cache answered for them.
+	DocumentPages int64 `json:"document_pages,omitempty"`
+	// RecognizedPages is how many of those pages this turn sent to a
+	// recognition model. It is what ExtractionCost is charged for, and it is
+	// zero on a cached read: the pages were recognized once, on an earlier turn
+	// that paid for them.
+	RecognizedPages int64 `json:"recognized_pages,omitempty"`
+	// NativePages is how many pages this turn read in process. They cost
+	// nothing: no provider saw them.
+	NativePages int64 `json:"native_pages,omitempty"`
+	// ExtractionMillis is how long the document reads took. A recognition read
+	// is a provider call inside a provider call, so it is latency an operator
+	// cannot find anywhere else in this record.
+	ExtractionMillis int64 `json:"extraction_millis,omitempty"`
+	// ExtractionCost is the recognized share of Cost below, reported on its own
+	// so an operator can see what reading a document cost apart from what
+	// answering about it cost. It is nil when the turn recognized nothing.
+	ExtractionCost *Cost `json:"extraction_cost,omitempty"`
+
 	// Cost is nil when no cost could be computed; CostUnavailableReason
-	// then names why.
+	// then names why. It covers the whole request, the document reads
+	// included.
 	Cost                  *Cost  `json:"cost,omitempty"`
 	CostUnavailableReason string `json:"cost_unavailable_reason,omitempty"`
 }

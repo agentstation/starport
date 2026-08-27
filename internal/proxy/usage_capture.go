@@ -133,6 +133,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, record.CacheStatus)
+	applyExtraction(&record, response)
 	if overheadMS, ok := OverheadMS(ctx); ok {
 		record.OverheadMS = overheadMS
 	}
@@ -492,6 +493,43 @@ func usageMedia(u inference.Usage) *usage.Media {
 		return nil
 	}
 	return &usage.Media{GeneratedImages: int64(u.GeneratedImages)}
+}
+
+// applyExtraction folds one turn's document reads onto its usage record.
+//
+// It runs after the inference cost, because the two are added: an account's
+// spend budget meters what the account owes, and a page sent to a recognition
+// model is owed whether or not the chat model that read the text ever ran. The
+// recognized share stays visible on its own field, so an operator can tell what
+// reading the document cost from what answering about it cost.
+//
+// A record with no inference cost keeps none. The gap the reason names is the
+// whole request's cost, and reporting the extraction half alone as the total
+// would read as the bill.
+func applyExtraction(record *usage.Record, response *ChatCompletionResponse) {
+	if response == nil || response.ExtractionEngine == "" {
+		return
+	}
+	record.ParserEngine = response.ExtractionEngine
+	record.DocumentPages = int64(response.ExtractionPages)
+	record.RecognizedPages = int64(response.RecognizedPages)
+	record.NativePages = int64(response.NativePages)
+	record.ExtractionMillis = response.ExtractionDuration.Milliseconds()
+	if response.ExtractionUnpriced {
+		record.Cost = nil
+		record.CostUnavailableReason = usage.CostReasonNoPricing
+		return
+	}
+	if response.RecognizedPages == 0 {
+		// A native read and a cached read both cost nothing. Reporting a zero
+		// cost here would put an extraction cost on a turn that had none.
+		return
+	}
+	record.ExtractionCost = &usage.Cost{NanoUSD: response.ExtractionNanoUSD, Currency: usageCurrency}
+	if record.Cost == nil {
+		return
+	}
+	record.Cost.NanoUSD += response.ExtractionNanoUSD
 }
 
 // usageCost derives one request's cost from the exact catalog snapshot that

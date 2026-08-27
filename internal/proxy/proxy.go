@@ -287,6 +287,11 @@ type proxy struct {
 	// extractions holds text a parser engine already read, so a conversation
 	// that resends the same attachment on every turn pays for it once.
 	extractions *document.Cache
+
+	// prices answers what one page of a document costs. It is unset in every
+	// deployment, where the catalog the request carries answers instead; a
+	// caller that reaches this proxy without a runtime lease sets it.
+	prices pagePrices
 }
 
 // ProcessChatCompletion handles chat completion requests with routing
@@ -373,7 +378,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	}
 
 	// Retain the exact route that produced the canonical response.
-	proxyResp.ExtractionCached = parsing.Cached
+	parsing.report(proxyResp)
 	proxyResp.Response.ModelUsed = result.ModelUsed
 	proxyResp.ProviderUsed = result.ProviderUsed
 	proxyResp.CredentialSource = result.CredentialSource
