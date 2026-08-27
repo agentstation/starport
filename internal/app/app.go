@@ -441,10 +441,20 @@ func (b *runtimeBuilder) openJobService() error {
 	if err != nil {
 		return fmt.Errorf("open job repository: %w", err)
 	}
+	meter, err := limits.NewJobMeter(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open job meter: %w", err)
+	}
+	// The accountant reads the catalog through a closure rather than a captured
+	// snapshot. A job ends long after the request that started it, so the price
+	// it draws comes from whatever the catalog holds at that moment.
+	accountant := proxy.NewJobAccountant(b.application.currentRoutableSnapshot, b.usageRecords)
 	b.jobs, err = jobs.NewService(records,
 		jobs.WithAssetStore(b.application.blobStore),
 		jobs.WithRetention(b.config.Jobs.AssetRetentionWindow()),
-		jobs.WithAssetBound(b.config.Jobs.AssetBound()))
+		jobs.WithAssetBound(b.config.Jobs.AssetBound()),
+		jobs.WithJobMeter(meter),
+		jobs.WithAccountant(accountant))
 	if err != nil {
 		return fmt.Errorf("open job service: %w", err)
 	}
@@ -997,8 +1007,8 @@ func (a *App) sweepFiles(ctx context.Context) {
 		Msg("file sweep reclaimed storage")
 }
 
-// jobSweepLoop reclaims expired job asset storage on an interval. It follows
-// the file sweep: one pass at startup, then one per tick.
+// jobSweepLoop closes the books on jobs nobody came back for, on an interval.
+// It follows the file sweep: one pass at startup, then one per tick.
 func (a *App) jobSweepLoop(ctx context.Context) {
 	interval := a.config.Jobs.SweepEvery()
 	a.sweepJobAssets(ctx)
@@ -1021,14 +1031,16 @@ func (a *App) sweepJobAssets(ctx context.Context) {
 	if err != nil {
 		log.Warn().Err(err).
 			Int("reclaimed", result.Expired).
-			Msg("job asset sweep did not finish; the next pass retries the rest")
+			Msg("job sweep did not finish; the next pass retries the rest")
 	}
-	if result.Expired == 0 {
+	if result.Expired == 0 && result.Abandoned == 0 && result.Accounted == 0 {
 		return
 	}
 	log.Info().
 		Int("expired", result.Expired).
-		Msg("job asset sweep reclaimed storage")
+		Int("abandoned", result.Abandoned).
+		Int("accounted", result.Accounted).
+		Msg("job sweep reclaimed storage and closed finished work")
 }
 
 func (a *App) refreshCatalogLoop(ctx context.Context) {

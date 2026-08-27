@@ -36,6 +36,10 @@ const (
 	// OperationTranscription reports a speech-to-text request, in the spoken
 	// language or translated.
 	OperationTranscription = "transcription"
+	// OperationVideos reports a video generation. It is the one operation whose
+	// record is written after the request that started it returned, because the
+	// work outlives that request and only its end states what it cost.
+	OperationVideos = "videos"
 )
 
 // Cost unavailability reasons. A record without a cost carries one so the
@@ -78,6 +82,10 @@ type Tokens struct {
 // spend budget that reads tokens alone would meter such a turn as free.
 type Media struct {
 	GeneratedImages int64 `json:"generated_images,omitempty"`
+	// GeneratedVideos counts finished videos. A provider prices a video per
+	// video, not per second and not per token, so this is the whole meter for
+	// the operation rather than a share of another one.
+	GeneratedVideos int64 `json:"generated_videos,omitempty"`
 }
 
 // Cost is the Starmap-derived cost of one request in integer nano-USD.

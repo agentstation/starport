@@ -74,6 +74,11 @@ func (s JobState) Terminal() bool {
 	return s.Valid() && len(legalTransitions[s]) == 0
 }
 
+// Chargeable reports whether a job in this state produced work a tenant pays
+// for. Only a completed job did. A failed job produced no asset, and a
+// cancelled job is a caller stopping its own work, so neither draws a cost.
+func (s JobState) Chargeable() bool { return s == JobStateCompleted }
+
 // legalTransitions is the one transition table. Every state this package knows
 // appears as a key, so a missing key means an unknown word rather than a
 // terminal state, and every terminal state maps to an empty set.
@@ -122,8 +127,13 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
-	ID        string
-	Tenant    string
+	ID     string
+	Tenant string
+	// KeyID names the gateway API key that submitted the work. A usage record
+	// attributes spend to a key, and a job outlives the request that carried
+	// one, so the record holds it. It is optional: a deployment with
+	// authentication off submits jobs no key signed.
+	KeyID     string
 	Model     string
 	Operation routing.Operation
 	// Provider names who accepted the work. A poll carries an identifier only
@@ -157,6 +167,12 @@ type Job struct {
 	// caller that comes back late reads a completed job whose asset expired,
 	// which is a different answer from a job that produced none.
 	AssetExpiredAt time.Time
+
+	// AccountedAt is when this job drew its one usage record and gave back the
+	// slot it held. It lives on the record rather than in the accounting seam
+	// because a poll is free and a caller may poll a finished job forever: the
+	// stamp is what makes the second poll draw nothing.
+	AccountedAt time.Time
 
 	providerJobID string
 }
@@ -206,6 +222,8 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: the stored asset states no retention window", ErrInvalidJob)
 	case j.AssetKey == "" && !j.AssetExpiredAt.IsZero():
 		return fmt.Errorf("%w: an expiry marker names no stored asset", ErrInvalidJob)
+	case !j.AccountedAt.IsZero() && !j.State.Terminal():
+		return fmt.Errorf("%w: state %q was already accounted", ErrInvalidJob, j.State)
 	}
 	return nil
 }
@@ -330,6 +348,32 @@ func (j *Job) ExpireAsset(now time.Time) error {
 	}
 	return nil
 }
+
+// MarkAccounted stamps the job as priced and refuses a second stamp.
+//
+// The refusal is the invariant, not a convenience. Two concurrent polls of the
+// same finished job both read a record with no stamp, and the one that loses
+// the write refuses here rather than drawing a second cost for one video.
+func (j *Job) MarkAccounted(now time.Time) error {
+	switch {
+	case !j.State.Terminal():
+		return fmt.Errorf("%w: state %q has not ended", ErrInvalidJob, j.State)
+	case now.IsZero():
+		return fmt.Errorf("%w: an accounting states no time", ErrInvalidJob)
+	case !j.AccountedAt.IsZero():
+		return fmt.Errorf("%w: %s was already accounted", ErrInvalidJob, j.ID)
+	}
+	j.AccountedAt = now
+	return nil
+}
+
+// Accounted reports whether this job already drew its usage record.
+func (j Job) Accounted() bool { return !j.AccountedAt.IsZero() }
+
+// Outstanding reports whether this job still holds a slot against its owner's
+// outstanding job limit. A job holds one from its submission until the moment
+// it is accounted, which is the same moment it stops being able to spend.
+func (j Job) Outstanding() bool { return !j.Accounted() }
 
 // HasAsset reports whether this gateway holds readable bytes for the job.
 func (j Job) HasAsset() bool {

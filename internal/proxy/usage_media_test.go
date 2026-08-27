@@ -171,7 +171,7 @@ func TestAGeneratedImagePricesAtTheImageRate(t *testing.T) {
 	}
 	tokens := usage.Tokens{Input: 1000, Output: 100, Total: 1100}
 
-	media, reason := mediaCost(pricing, tokens, 3)
+	media, reason := mediaCost(pricing, tokens, usage.Media{GeneratedImages: 3})
 	require.Empty(t, reason)
 	require.InDelta(t, 0.12, media, 1e-12)
 
@@ -190,7 +190,7 @@ func TestAnImageOnlyAnswerNeedsNoTokenPrice(t *testing.T) {
 		Currency:   starmapcatalogs.ModelPricingCurrencyUSD,
 		Operations: &starmapcatalogs.ModelOperationPricing{ImageGen: float(0.04)},
 	}
-	media, reason := mediaCost(pricing, usage.Tokens{}, 1)
+	media, reason := mediaCost(pricing, usage.Tokens{}, usage.Media{GeneratedImages: 1})
 	require.Empty(t, reason)
 	require.InDelta(t, 0.04, media, 1e-12)
 

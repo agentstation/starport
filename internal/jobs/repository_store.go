@@ -31,6 +31,7 @@ type jobRecord struct {
 	SchemaVersion int               `json:"schema_version"`
 	ID            string            `json:"id"`
 	Tenant        string            `json:"tenant"`
+	KeyID         string            `json:"key_id,omitempty"`
 	Model         string            `json:"model"`
 	Operation     routing.Operation `json:"operation"`
 	Provider      string            `json:"provider"`
@@ -45,6 +46,8 @@ type jobRecord struct {
 	AssetContentType string    `json:"asset_content_type,omitempty"`
 	AssetExpiresAt   time.Time `json:"asset_expires_at,omitempty"`
 	AssetExpiredAt   time.Time `json:"asset_expired_at,omitempty"`
+
+	AccountedAt time.Time `json:"accounted_at,omitempty"`
 }
 
 // OpenRepository returns a storage-backed job record repository.
@@ -223,6 +226,7 @@ func encodeJob(job Job) ([]byte, error) {
 		SchemaVersion: StorageSchemaVersion,
 		ID:            job.ID,
 		Tenant:        job.Tenant,
+		KeyID:         job.KeyID,
 		Model:         job.Model,
 		Operation:     job.Operation,
 		Provider:      job.Provider,
@@ -237,6 +241,8 @@ func encodeJob(job Job) ([]byte, error) {
 		AssetContentType: job.AssetContentType,
 		AssetExpiresAt:   job.AssetExpiresAt,
 		AssetExpiredAt:   job.AssetExpiredAt,
+
+		AccountedAt: job.AccountedAt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("jobs: encode record: %w", err)
@@ -255,6 +261,7 @@ func decodeJob(data []byte) (Job, error) {
 	job := Job{
 		ID:            stored.ID,
 		Tenant:        stored.Tenant,
+		KeyID:         stored.KeyID,
 		Model:         stored.Model,
 		Operation:     stored.Operation,
 		Provider:      stored.Provider,
@@ -269,6 +276,8 @@ func decodeJob(data []byte) (Job, error) {
 		AssetContentType: stored.AssetContentType,
 		AssetExpiresAt:   stored.AssetExpiresAt,
 		AssetExpiredAt:   stored.AssetExpiredAt,
+
+		AccountedAt: stored.AccountedAt,
 	}
 	if err := job.Validate(); err != nil {
 		return Job{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)

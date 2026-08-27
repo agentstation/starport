@@ -173,9 +173,17 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	// The byte store is production composition too: without it a finished job
 	// stores no asset, and the content route would answer the same way for a
 	// gateway that never fetched one.
+	// The outstanding job meter is production composition as well. Without it
+	// every submission is admitted, and the refusal this surface publishes
+	// would be untestable through the router.
+	outstandingJobs, err := limits.NewJobMeter(testConfig.store)
+	if err != nil {
+		tb.Fatal(err)
+	}
 	jobService, err := jobs.NewService(jobRecords,
 		jobs.WithAssetStore(testConfig.blobs),
-		jobs.WithRetention(jobs.DefaultAssetRetention))
+		jobs.WithRetention(jobs.DefaultAssetRetention),
+		jobs.WithJobMeter(outstandingJobs))
 	if err != nil {
 		tb.Fatal(err)
 	}

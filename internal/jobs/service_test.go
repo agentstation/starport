@@ -37,6 +37,20 @@ type recordingRunner struct {
 	handles []jobs.Handle
 }
 
+// open hands the service a runner it already holds. Production builds the
+// runner inside the call, because that is where the route and the credential
+// are resolved and both come after the account's bound is claimed.
+func open(runner jobs.Runner) jobs.OpenRunner {
+	return func(context.Context) (jobs.Runner, error) { return runner, nil }
+}
+
+// submissionFor is what every test that does not test the limit submits: one
+// tenant, no key, and no bound. A test that means to exercise the bound states
+// its own.
+func submissionFor(tenant string) jobs.Submission {
+	return jobs.Submission{Tenant: tenant, Operation: routing.OperationVideosGenerations}
+}
+
 func (r *recordingRunner) Submit(context.Context) (jobs.Acceptance, error) {
 	r.submits++
 	return r.acceptance, r.submitErr
@@ -97,7 +111,7 @@ func TestSubmitRecordsWhatTheProviderAccepted(t *testing.T) {
 	service, records := newService(t)
 	runner := acceptedRunner()
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 	require.Equal(t, 1, runner.submits)
 	require.Equal(t, "job_service_01", job.ID)
@@ -125,7 +139,7 @@ func TestSubmitWritesNoRecordWhenTheProviderRefuses(t *testing.T) {
 	runner := acceptedRunner()
 	runner.submitErr = errors.New("the provider refused the prompt")
 
-	_, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	_, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.Error(t, err)
 
 	_, err = records.Get(ctx, tenantA, "job_service_01")
@@ -139,8 +153,7 @@ func TestSubmitRefusesAJobThatNamesNoTenant(t *testing.T) {
 	t.Parallel()
 
 	service, _ := newService(t)
-	_, err := service.Submit(context.Background(), acceptedRunner(), "  ",
-		routing.OperationVideosGenerations)
+	_, err := service.Submit(context.Background(), open(acceptedRunner()), submissionFor("  "))
 	require.ErrorIs(t, err, jobs.ErrInvalidJob)
 }
 
@@ -156,7 +169,7 @@ func TestPollingAFinishedJobReachesNoProvider(t *testing.T) {
 	runner := acceptedRunner()
 	runner.acceptance.State = jobs.JobStateCompleted
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCompleted, job.State)
 
@@ -177,7 +190,7 @@ func TestRefreshAdvancesTheRecordFromTheProviderAnswer(t *testing.T) {
 	ctx := context.Background()
 	service, records := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	runner.poll = jobs.Report{State: jobs.JobStateRunning}
@@ -203,7 +216,7 @@ func TestRefreshOfAnUnchangedJobRewritesNothing(t *testing.T) {
 	ctx := context.Background()
 	service, _ := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	runner.poll = jobs.Report{State: jobs.JobStateQueued}
@@ -222,7 +235,7 @@ func TestAFailedProviderAnswerAlwaysStatesAReason(t *testing.T) {
 	ctx := context.Background()
 	service, _ := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	runner.poll = jobs.Report{State: jobs.JobStateFailed}
@@ -243,7 +256,7 @@ func TestASpentJobFailsWithoutAskingTheProvider(t *testing.T) {
 	clock := submitted
 	service, _ := newService(t, jobs.WithClock(func() time.Time { return clock }))
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	clock = submitted.Add(jobs.DefaultLifetime + time.Minute)
@@ -263,7 +276,7 @@ func TestRefreshOfAnotherTenantsJobIsNotFound(t *testing.T) {
 	ctx := context.Background()
 	service, _ := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	_, err = service.Refresh(ctx, runner, tenantB, job.ID)
@@ -285,7 +298,7 @@ func TestCancelStopsTheProviderAndTheRecord(t *testing.T) {
 	ctx := context.Background()
 	service, records := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	runner.cancel = jobs.Report{State: jobs.JobStateRunning}
@@ -310,7 +323,7 @@ func TestCancelOfAFinishedJobIsAConflict(t *testing.T) {
 	service, _ := newService(t)
 	runner := acceptedRunner()
 	runner.acceptance.State = jobs.JobStateCompleted
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	ended, err := service.Cancel(ctx, runner, tenantA, job.ID)
@@ -327,10 +340,16 @@ func TestTheServiceRefusesACallWithNoProviderSide(t *testing.T) {
 	ctx := context.Background()
 	service, _ := newService(t)
 
-	_, err := service.Submit(ctx, nil, tenantA, routing.OperationVideosGenerations)
+	_, err := service.Submit(ctx, nil, submissionFor(tenantA))
 	require.ErrorIs(t, err, jobs.ErrRunnerRequired)
 
-	job, err := service.Submit(ctx, acceptedRunner(), tenantA, routing.OperationVideosGenerations)
+	// A call that names a builder returning nothing reads the same way. The
+	// builder runs after the slot is claimed, so this path also proves the
+	// claim comes back.
+	_, err = service.Submit(ctx, open(nil), submissionFor(tenantA))
+	require.ErrorIs(t, err, jobs.ErrRunnerRequired)
+
+	job, err := service.Submit(ctx, open(acceptedRunner()), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	_, err = service.Refresh(ctx, nil, tenantA, job.ID)
