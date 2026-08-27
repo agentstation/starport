@@ -67,16 +67,23 @@ func TestQuantizationsAccepted(t *testing.T) {
 	require.Error(t, err)
 }
 
-// plugins names work the OpenRouter gateway performs itself, such as its web
-// search plugin. Starport routes to providers directly, and no provider
-// understands the field. Forwarding it made the provider reject a request it
-// would otherwise have served, so it follows the drop-in contract instead:
-// accept, do not forward, and report the unkept promise.
+// plugins names work the OpenRouter gateway performs itself. Starport routes
+// to providers directly, and no provider understands the field, so forwarding
+// it made the provider reject a request it would otherwise have served.
+//
+// One plugin is no longer gateway work this deployment skips: file-parser runs
+// here, and plugins_test.go holds that contract. Every other identifier draws a
+// refusal now rather than a report, because a plugin changes what the model
+// reads.
+//
+// The unenforced report below is therefore stale for the one plugin that does
+// run. It stays until PLG7, which owns ending it, and this assertion is that
+// task's fail-before evidence.
 func TestGatewayPluginsAreReportedNotForwarded(t *testing.T) {
 	body := `{
 		"model": "openai/gpt-4o",
 		"messages": [{"role": "user", "content": "hi"}],
-		"plugins": [{"id": "web", "max_results": 3}]
+		"plugins": [{"id": "file-parser", "pdf": {"engine": "native"}}]
 	}`
 	decoded, err := DecodeChat(strings.NewReader(body))
 	require.NoError(t, err, "a documented OpenRouter field must not be rejected")

@@ -23,7 +23,9 @@ import (
 //
 // Version 3 added the output modality and audio output request fields.
 // Version 4 added the stored document reference.
-const SemanticKeyVersion = 4
+// Version 5 added the document parser the caller asked for. The same bytes
+// read by two engines are two different inputs to the model.
+const SemanticKeyVersion = 5
 
 var (
 	// ErrIneligible reports a request whose identity is not cache-safe.

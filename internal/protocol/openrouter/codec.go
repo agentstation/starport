@@ -243,6 +243,10 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 	if err != nil {
 		return DecodedChat{}, err
 	}
+	parser, err := decodePlugins(wire.Plugins)
+	if err != nil {
+		return DecodedChat{}, err
+	}
 	maxTokens := wire.MaxCompletionTokens
 	if maxTokens == nil {
 		maxTokens = wire.MaxTokens
@@ -262,9 +266,10 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 	putExtension(extensions, "top_a", wire.TopA)
 	putExtension(extensions, "logprobs", wire.LogProbs)
 	putExtension(extensions, "top_logprobs", wire.TopLogProbs)
-	// transforms and plugins name OpenRouter gateway work, not provider
-	// request fields. Forwarding them upstream makes a provider reject a
-	// request it would otherwise serve, so they are reported instead.
+	// transforms names OpenRouter gateway work, not a provider request
+	// field. Forwarding it upstream makes a provider reject a request it
+	// would otherwise serve, so it is reported instead. plugins is decoded
+	// above into a canonical option this gateway enforces itself.
 	if len(extensions) == 0 {
 		extensions = nil
 	}
@@ -280,6 +285,7 @@ func DecodeChat(reader io.Reader) (DecodedChat, error) {
 			Output: output, Reasoning: reasoning,
 			OutputModalities: decodeModalities(wire.Modalities),
 			AudioOutput:      decodeAudioConfig(wire.Audio),
+			DocumentParser:   parser,
 			Stream:           wire.Stream, User: wire.User, Extensions: extensions,
 			StreamOptions: inference.StreamOptions{IncludeUsage: wire.StreamOptions != nil && wire.StreamOptions.IncludeUsage},
 		},

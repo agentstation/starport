@@ -78,6 +78,9 @@ func keyedFields() []keyedField {
 		{"AudioOutput", func(r *inference.ChatRequest) {
 			r.AudioOutput = &inference.AudioOutput{Voice: "alloy", Format: "wav"}
 		}},
+		{"DocumentParser", func(r *inference.ChatRequest) {
+			r.DocumentParser = inference.DocumentParser{Engine: inference.ParserEngineRecognition}
+		}},
 		{"User", func(r *inference.ChatRequest) { r.User = "caller-two" }},
 	}
 }
