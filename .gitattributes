@@ -1,3 +1,8 @@
 # Golden files are byte-compared in tests. Keep LF on every platform so a
 # Windows checkout does not convert them to CRLF and break the comparison.
 *.golden.json text eol=lf
+
+# PDF fixtures are parsed by byte offset. A PDF small enough to carry no NUL
+# byte in its first 8000 reads as text to git, so a checkout that converts line
+# endings rewrites it and breaks every offset in its cross reference table.
+*.pdf binary

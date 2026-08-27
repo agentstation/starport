@@ -130,6 +130,17 @@ refused_before_the_call() {
   tests_all_present ErrSpendLimitExceeded -- internal/limits internal/proxy
 }
 
+# no_unenforced_plugin_report holds PLG-V16. The two test terms alone are not
+# the property: the shipped tests name both while asserting that `plugins` is
+# still reported as unenforced, which is PLG7's fail-before. The second clause
+# is the property itself. Once this gateway enforces the plugin, the field
+# stops appearing in the unenforced gateway list at all.
+no_unenforced_plugin_report() {
+  tests_all_present 'file-parser' 'X-Starport-Unenforced-Provider-Fields' \
+    -- internal/protocol/openrouter internal/server || return 1
+  ! grep -q '"plugins"' internal/protocol/openrouter/provider_prefs.go
+}
+
 # transforms_unchanged holds PLG-V17. Enforcing the plugins field must not
 # move the transforms field, and it must not move the parity gate. The count
 # is the guard: a new condition there would mean this campaign widened a
@@ -204,8 +215,7 @@ check PLG-V15 "the spend bound refuses before the recognition call" \
   refused_before_the_call
 
 check PLG-V16 "a file-parser request names no unenforced field" \
-  tests_all_present 'file-parser' 'X-Starport-Unenforced-Provider-Fields' \
-    -- internal/protocol/openrouter internal/server
+  no_unenforced_plugin_report
 
 check PLG-V17 "transforms keeps its drop-in behavior and parity stays at 16" \
   transforms_unchanged

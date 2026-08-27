@@ -26,6 +26,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../execution",
 		"../availability",
 		"../blob",
+		"../document",
 		"../files",
 		"../jobs",
 		"../inference",
@@ -48,6 +49,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/execution",
 		"github.com/agentstation/starport/internal/availability",
 		"github.com/agentstation/starport/internal/blob",
+		"github.com/agentstation/starport/internal/document",
 		"github.com/agentstation/starport/internal/files",
 		"github.com/agentstation/starport/internal/jobs",
 		"github.com/agentstation/starport/internal/inference",
@@ -125,6 +127,21 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// start reading meaning into the bytes it holds. The owner of the key holds
 	// every meaning instead.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/blob"])
+	// Document is the native parser engine. It is a leaf, and the rule is the
+	// reason the engine is free: an import of a provider, a connector, or a
+	// transport would mean a document that carries its own text could still
+	// leave the process, and the caller would pay for a read this package
+	// already did. The recognition engine is a route, not an import here.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/document"])
+	assertNoImports(t, packages["github.com/agentstation/starport/internal/document"],
+		"github.com/agentstation/starport/internal/providers",
+		"github.com/agentstation/starport/internal/proxy",
+		"github.com/agentstation/starport/internal/registry",
+		"github.com/agentstation/starport/internal/router",
+		"github.com/agentstation/starport/internal/server",
+		"net/http",
+		"net/url",
+	)
 	// Files owns the record that gives a stored object a name, an owner, and a
 	// lifetime. It reaches the two stores it writes to and nothing else. A
 	// dependency on routing, execution, or a protocol codec would let the
