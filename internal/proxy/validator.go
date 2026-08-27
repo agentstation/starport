@@ -20,24 +20,8 @@ func ValidateChatCompletionRequest(req *ChatCompletionRequest) error {
 	if len(request.Messages) == 0 {
 		return validationError("messages", "messages array cannot be empty")
 	}
-	for index, message := range request.Messages {
-		field := fmt.Sprintf("messages[%d]", index)
-		switch message.Role {
-		case inference.RoleSystem, inference.RoleUser, inference.RoleAssistant, inference.RoleTool:
-		default:
-			return validationError(field+".role", "role must be system, user, assistant, or tool")
-		}
-		if message.Role == inference.RoleTool && message.ToolCallID == "" {
-			return validationError(field+".tool_call_id", "tool_call_id is required for tool messages")
-		}
-		for partIndex, part := range message.Content {
-			if part.CacheControl != "" && part.CacheControl != "ephemeral" {
-				return validationError(
-					fmt.Sprintf("%s.content[%d].cache_control.type", field, partIndex),
-					"cache control type must be ephemeral",
-				)
-			}
-		}
+	if err := validateMessages(request.Messages); err != nil {
+		return err
 	}
 	if value := request.Sampling.Temperature; value != nil && (*value < 0 || *value > 2) {
 		return validationError("temperature", "temperature must be between 0 and 2")
@@ -59,6 +43,45 @@ func ValidateChatCompletionRequest(req *ChatCompletionRequest) error {
 	}
 	if req.Route != "" && req.Route != "fallback" {
 		return validationError("route", "supported route is fallback")
+	}
+	return nil
+}
+
+// validateMessages checks each message and each content part it carries. It is
+// separate from the request rules above because a message is its own shape: a
+// role, an optional tool link, and a content list whose parts each have their
+// own rules.
+func validateMessages(messages []inference.Message) error {
+	for index, message := range messages {
+		field := fmt.Sprintf("messages[%d]", index)
+		switch message.Role {
+		case inference.RoleSystem, inference.RoleUser, inference.RoleAssistant, inference.RoleTool:
+		default:
+			return validationError(field+".role", "role must be system, user, assistant, or tool")
+		}
+		if message.Role == inference.RoleTool && message.ToolCallID == "" {
+			return validationError(field+".tool_call_id", "tool_call_id is required for tool messages")
+		}
+		for partIndex, part := range message.Content {
+			if part.CacheControl != "" && part.CacheControl != "ephemeral" {
+				return validationError(
+					fmt.Sprintf("%s.content[%d].cache_control.type", field, partIndex),
+					"cache control type must be ephemeral",
+				)
+			}
+			// A document names its bytes once. Each protocol codec refuses a
+			// conflict at its own field path, and this check holds the same
+			// rule for the canonical request every surface reaches the proxy
+			// with, whether or not a codec built it.
+			if part.Document != nil {
+				if err := part.Document.Validate(); err != nil {
+					return validationError(
+						fmt.Sprintf("%s.content[%d].file", field, partIndex),
+						err.Error(),
+					)
+				}
+			}
+		}
 	}
 	return nil
 }

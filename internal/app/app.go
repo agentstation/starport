@@ -477,9 +477,12 @@ func (b *runtimeBuilder) buildGateway() error {
 		router.WithOperatorCredentialGate(b.application.providerStates),
 		router.WithStoredCredentials(b.providerKeys),
 	)
-	proxyOptions := make([]proxy.Option, 0, 2)
+	proxyOptions := make([]proxy.Option, 0, 3)
 	// Codecs build once here and serve every request concurrently.
 	proxyOptions = append(proxyOptions, proxy.WithTokenEstimator(tokenize.NewEstimator()))
+	if b.files != nil {
+		proxyOptions = append(proxyOptions, proxy.WithFiles(storedDocuments{service: b.files}))
+	}
 	if b.application.cacheManager != nil {
 		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, &proxy.CacheConfig{
 			EnableChatCache: true, EnableEmbeddingCache: true,

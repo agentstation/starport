@@ -22,7 +22,8 @@ import (
 // under an encoding that did not write it.
 //
 // Version 3 added the output modality and audio output request fields.
-const SemanticKeyVersion = 3
+// Version 4 added the stored document reference.
+const SemanticKeyVersion = 4
 
 var (
 	// ErrIneligible reports a request whose identity is not cache-safe.

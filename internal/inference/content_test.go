@@ -108,6 +108,7 @@ func mutateContentPart(part *ContentPart) {
 		part.Document.URL = "changed"
 		part.Document.Format = "changed"
 		part.Document.Filename = "changed"
+		part.Document.FileID = "changed"
 		part.Document.Data[0] = 0xFF
 	}
 	if part.Video != nil {

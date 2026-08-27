@@ -33,6 +33,10 @@ var (
 
 	// ErrPresetNotFound indicates a request referenced an unknown preset
 	ErrPresetNotFound = errors.New("preset not found")
+	// ErrStoredFileNotFound indicates a request referenced a stored file this
+	// account does not hold. A file another account holds reads the same way,
+	// because a different answer would report which identifiers exist.
+	ErrStoredFileNotFound = errors.New("stored file not found")
 )
 
 // ValidationError represents a request validation error

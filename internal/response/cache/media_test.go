@@ -175,8 +175,8 @@ func TestTextOnlyKeyIsPinnedToItsVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const pinned = "responsecache:v3:chat:" +
-		"d3f60e45512f5b5902b20c0db900e34befafd9fc6bf522e0e8edf74cddfd6247"
+	const pinned = "responsecache:v4:chat:" +
+		"98462996ac590df2daa451cdf47a3769e3b4b466a4c9e3ae13de997b148bea26"
 	if key != pinned {
 		t.Fatalf("key = %q, want %q; if this change is deliberate, raise SemanticKeyVersion with it", key, pinned)
 	}

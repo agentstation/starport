@@ -18,6 +18,13 @@ const inlinePrefix = "data:"
 // "https://example.test/clip.wav" can change while the request stays word for
 // word the same, so a cached answer would outlive the media it describes.
 // Every media kind carries that risk, not the image kind alone.
+//
+// A stored file identifier is not such a promise, so it is absent here. The
+// gateway owns those bytes: a stored file is written once and deleted, never
+// rewritten, and its identifier is never reused. The identifier therefore
+// names one fixed payload for as long as it resolves at all, which is what
+// the inline rule asks of a digest. It reaches the key as itself, on the
+// Document field the canonical request already encodes.
 func remoteMediaKind(part inference.ContentPart) inference.ContentKind {
 	switch {
 	case part.Image != nil && isRemoteReference(part.Image.URL):

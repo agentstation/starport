@@ -35,6 +35,11 @@ type Config struct {
 	// TokenEstimator synthesizes estimated usage for streams that end
 	// without provider-reported usage (optional)
 	TokenEstimator *tokenize.Estimator
+
+	// FileResolver reads the bytes behind a stored document reference
+	// (optional). A deployment without one refuses a request that names a
+	// file rather than sending the model an empty document.
+	FileResolver FileResolver
 }
 
 // Option configures the proxy service.
@@ -45,6 +50,14 @@ func WithCache(manager CacheManager, config *CacheConfig) Option {
 	return func(c *Config) {
 		c.CacheManager = manager
 		c.CacheConfig = config
+	}
+}
+
+// WithFiles lets a chat request name a document this gateway already stores
+// instead of carrying its bytes.
+func WithFiles(resolver FileResolver) Option {
+	return func(c *Config) {
+		c.FileResolver = resolver
 	}
 }
 
@@ -85,6 +98,7 @@ func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ..
 		registry:  cfg.Registry,
 		router:    cfg.Router,
 		estimator: cfg.TokenEstimator,
+		files:     cfg.FileResolver,
 	}
 
 	var p Proxy = core
@@ -238,12 +252,21 @@ type proxy struct {
 	registry  connectors.LeasingRegistry
 	router    router.ModelRouter
 	estimator *tokenize.Estimator
+	files     FileResolver
 }
 
 // ProcessChatCompletion handles chat completion requests with routing
 func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	// Validate request
 	if err := ValidateChatCompletionRequest(req); err != nil {
+		return nil, err
+	}
+
+	// Read every stored document once, before the attempt loop the router
+	// runs below. Everything after this point sees the request an inline
+	// caller would have sent.
+	req, err := p.resolveDocuments(ctx, req)
+	if err != nil {
 		return nil, err
 	}
 
@@ -339,6 +362,13 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 	// Ensure streaming is requested
 	if !req.Request.Stream {
 		return nil, ErrStreamingNotSupported
+	}
+
+	// Read every stored document once, before the attempt loop the router
+	// runs below. A stream retries the same way a completion does.
+	req, err := p.resolveDocuments(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	// Transform to connector request
