@@ -177,6 +177,7 @@ jobs:
           bash scripts/verify-console-modernization.sh
           bash scripts/verify-auth-onboarding.sh
           bash scripts/verify-console-session-grants.sh
+          bash scripts/verify-model-modalities.sh
           bash scripts/verify-catalog-performance.sh
           bash scripts/benchmark-overhead.sh
 
