@@ -418,7 +418,10 @@ function CreateKeyModal({
     }
     setFormError("");
     // A key needs at least one scope. Non-admin keys get the inference
-    // set: chat, embeddings, images, audio, model listing, activity.
+    // set: chat, embeddings, images, audio, model listing, activity, and the
+    // two file scopes. A key that can send a document inline can store one
+    // and name it later, so withholding the file scopes would not withhold
+    // the capability, only the cheaper way to use it.
     create.mutate({
       name: name.trim(),
       scopes: admin
@@ -430,6 +433,8 @@ function CreateKeyModal({
             "audio:write",
             "models:read",
             "activity:read",
+            "files:read",
+            "files:write",
           ],
       ...(fields.allowedModels.length > 0
         ? { allowed_models: fields.allowedModels }

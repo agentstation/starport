@@ -96,6 +96,18 @@ one_contract_two_backends() {
 
 # --- Phase A, the blob seam ---
 
+# console_files reports that the console reaches all three file operations and
+# holds each FIL-V20 statement in a test. The three greps stay separate on
+# purpose: a page that listed files and offered no upload would satisfy a
+# single-term grep and still leave an operator unable to put a document in.
+console_files() {
+  all_present listFiles uploadFile deleteFile \
+    -- console/src/components/files/FilesPanel.tsx || return 1
+  all_present file-row file-notice stored-total \
+    -- console/src/components/files/FilesPanel.test.tsx || return 1
+  grep_q FilesPanel console/src/routes/files.tsx
+}
+
 check FIL-V01 "one blob contract stores opaque bytes over streams" \
   all_present 'func.*Put' 'func.*Get' 'func.*Stat' 'func.*Delete' -- internal/blob
 
@@ -159,7 +171,7 @@ check FIL-V19 "a stored file reference reaches the cache key" \
   in_tests FileID internal/response/cache
 
 check FIL-V20 "the console lists, uploads, and deletes a stored file" \
-  grep_q 'files' console/src/routes/files.tsx
+  console_files
 
 # --- Close ---
 

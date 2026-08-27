@@ -9,6 +9,23 @@ export function formatCount(value: number | null | undefined): string {
   return number.toLocaleString("en-US");
 }
 
+// formatBytes renders a stored size in the unit a reader thinks in. It steps by
+// 1024, which is the unit a filesystem and an object store both report.
+export function formatBytes(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "\u2014";
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes)) return String(value);
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = bytes / 1024;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size >= 10 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`;
+}
+
 export function formatMs(ms: number | undefined): string {
   if (ms === undefined || !Number.isFinite(ms)) return "—";
   if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
@@ -50,6 +67,16 @@ export function formatRelativeTime(iso: string | undefined): string {
   const days = Math.round(hours / 24);
   if (days < 30) return `${days}d ago`;
   return new Date(iso).toLocaleDateString();
+}
+
+// formatUnixTime renders a Unix second stamp as a local date and time. A file
+// expiry is a future instant, so an elapsed-time phrase would read backwards
+// and an absolute stamp is what an operator plans against.
+export function formatUnixTime(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return "\u2014";
+  const at = new Date(seconds * 1000);
+  if (!Number.isFinite(at.getTime())) return "\u2014";
+  return at.toLocaleString();
 }
 
 // shortGenerationID keeps catalog generation ULIDs scannable.

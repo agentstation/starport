@@ -28,6 +28,7 @@ const PAGES: { path: string; label: string }[] = [
   { path: "/authors", label: "Authors" },
   { path: "/providers", label: "Providers" },
   { path: "/keys", label: "API Keys" },
+  { path: "/files", label: "Files" },
   { path: "/tenants", label: "Accounts" },
   { path: "/usage", label: "Usage" },
   { path: "/presets", label: "Presets" },

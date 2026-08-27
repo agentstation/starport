@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
   Building2,
+  FileText,
   Key,
   LayoutDashboard,
   MessageSquare,
@@ -32,6 +33,7 @@ const NAV = [
   { to: "/authors", label: "Authors", icon: Users, implemented: true },
   { to: "/providers", label: "Providers", icon: Server, implemented: true },
   { to: "/keys", label: "API Keys", icon: Key, implemented: true },
+  { to: "/files", label: "Files", icon: FileText, implemented: true },
   { to: "/tenants", label: "Accounts", icon: Building2, implemented: true },
   { to: "/usage", label: "Usage", icon: BarChart3, implemented: true },
   { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: true },

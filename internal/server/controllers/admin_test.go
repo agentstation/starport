@@ -77,6 +77,45 @@ func TestAdminHandler_SystemInfo(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), "TODO")
 }
 
+// TestSystemInfoNamesTheFileBackend states the one fact about file storage
+// that no file route reveals: where the bytes land. An operator reads it to
+// confirm the destination without opening the process configuration.
+func TestSystemInfoNamesTheFileBackend(t *testing.T) {
+	repository, err := identity.Open(storage.NewMockStore())
+	require.NoError(t, err)
+	handler := NewAdminController(repository, newAdminTestTenants(t), nil,
+		WithFileStorage("filesystem"))
+
+	response := httptest.NewRecorder()
+	handler.SystemInfo(response, httptest.NewRequest("GET", "/api/v1/admin/info", nil))
+
+	var body struct {
+		Files struct {
+			Backend string `json:"backend"`
+		} `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	assert.Equal(t, "filesystem", body.Files.Backend)
+}
+
+// TestSystemInfoSaysWhenNoFileStorageExists states the other half. A
+// deployment that stores no files reports that, rather than leaving the field
+// out, because an absent field reads as an older gateway.
+func TestSystemInfoSaysWhenNoFileStorageExists(t *testing.T) {
+	handler, _ := newAdminTestController(t)
+
+	response := httptest.NewRecorder()
+	handler.SystemInfo(response, httptest.NewRequest("GET", "/api/v1/admin/info", nil))
+
+	var body struct {
+		Files struct {
+			Backend string `json:"backend"`
+		} `json:"files"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	assert.Equal(t, "not configured", body.Files.Backend)
+}
+
 func TestAdminHandler_Metrics(t *testing.T) {
 	// Create handler
 	handler, _ := newAdminTestController(t)
