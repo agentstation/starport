@@ -23,6 +23,7 @@ func logosRouter() chi.Router {
 // not_found for everything else, so tests can prove the controller prefers
 // catalog bytes and still falls back to the embedded asset set.
 type catalogLogoProxy struct {
+	unsupportedMedia
 	mockProviders
 	id  string
 	svg []byte

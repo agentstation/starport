@@ -298,6 +298,28 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 }
 
 // cacheListResponse is a helper for caching list responses (models, providers)
+// The three media operations pass straight through. A generated image or
+// audio file is large and a caller that repeats a prompt expects a new
+// rendering, so there is nothing here to cache.
+
+// ProcessImages routes one image request without caching it.
+func (s *cachedService) ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error) {
+	return s.service.ProcessImages(ctx, req)
+}
+
+// ProcessSpeech routes one speech request without caching it.
+func (s *cachedService) ProcessSpeech(ctx context.Context, req *SpeechRequest) (*SpeechResponse, error) {
+	return s.service.ProcessSpeech(ctx, req)
+}
+
+// ProcessTranscription routes one transcription request without caching it.
+func (s *cachedService) ProcessTranscription(
+	ctx context.Context,
+	req *TranscriptionRequest,
+) (*TranscriptionResponse, error) {
+	return s.service.ProcessTranscription(ctx, req)
+}
+
 func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMsg string, fetchFunc func() (any, error)) (any, error) {
 	// Try to get from cache
 	cached, found, err := s.cacheManager.GetModel(ctx, cacheKey)

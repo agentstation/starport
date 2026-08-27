@@ -325,6 +325,7 @@ func readAllEvents(t *testing.T, stream ChatCompletionStreamResponse) []inferenc
 }
 
 type mockProxyImpl struct {
+	unsupportedMediaProxy
 	calls              map[string]int
 	chatResponse       *ChatCompletionResponse
 	modelsResponse     *ModelsResponse

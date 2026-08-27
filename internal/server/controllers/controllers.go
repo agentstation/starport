@@ -19,6 +19,8 @@ type Controllers struct {
 	OpenRouterChat       *ChatController
 	Embeddings           *EmbeddingsController
 	OpenRouterEmbeddings *EmbeddingsController
+	Media                *MediaController
+	OpenRouterMedia      *MediaController
 	Models               *ModelsController
 	OpenRouterModels     *ModelsController
 	Providers            *ProvidersController
@@ -75,6 +77,8 @@ func NewControllers(cfg Config) *Controllers {
 		OpenRouterChat:       NewOpenRouterChatController(cfg.Service),
 		Embeddings:           NewEmbeddingsController(cfg.Service),
 		OpenRouterEmbeddings: NewOpenRouterEmbeddingsController(cfg.Service),
+		Media:                NewMediaController(cfg.Service),
+		OpenRouterMedia:      NewOpenRouterMediaController(cfg.Service),
 		Models:               NewModelsController(cfg.Service),
 		OpenRouterModels:     NewOpenRouterModelsController(cfg.Service),
 		Providers:            NewProvidersController(cfg.Service),

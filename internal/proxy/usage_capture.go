@@ -188,6 +188,72 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 	return response, err
 }
 
+// ProcessImages records usage for one completed image request.
+func (s *usageCaptureService) ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error) {
+	return captureMedia(ctx, s, usage.OperationImages, req, req.Request.Model, s.Proxy.ProcessImages)
+}
+
+// ProcessSpeech records usage for one completed speech request.
+func (s *usageCaptureService) ProcessSpeech(ctx context.Context, req *SpeechRequest) (*SpeechResponse, error) {
+	return captureMedia(ctx, s, usage.OperationSpeech, req, req.Request.Model, s.Proxy.ProcessSpeech)
+}
+
+// ProcessTranscription records usage for one completed transcription request.
+func (s *usageCaptureService) ProcessTranscription(
+	ctx context.Context,
+	req *TranscriptionRequest,
+) (*TranscriptionResponse, error) {
+	return captureMedia(ctx, s, usage.OperationTranscription, req, req.Request.Model, s.Proxy.ProcessTranscription)
+}
+
+// captureMedia writes one usage record for a media request. A media answer is
+// never cached and never streamed, so the record it writes is the simplest of
+// the three shapes this file holds: one call, one outcome, one submission.
+func captureMedia[Request, Response any](
+	ctx context.Context,
+	s *usageCaptureService,
+	operation string,
+	req *MediaRequest[Request],
+	model string,
+	process func(context.Context, *MediaRequest[Request]) (*MediaResponse[Response], error),
+) (*MediaResponse[Response], error) {
+	start := time.Now()
+	response, err := process(ctx, req)
+
+	record := baseUsageRecord(operation, req.RequestID, req.KeyID, req.TenantID, req.Protocol, model, start)
+	applyOutcome(&record, err)
+	var snapshot *runtimecatalog.RoutableSnapshot
+	if response != nil {
+		record.ModelUsed = response.ModelUsed
+		record.Provider = response.ProviderUsed
+		record.CredentialSource = response.CredentialSource
+		record.Attempts = response.Attempts
+		record.RoutingMS = response.RoutingDuration.Milliseconds()
+		record.Tokens = usageTokens(mediaUsage(response.Response))
+		record.Media = usageMedia(mediaUsage(response.Response))
+		snapshot = response.CatalogSnapshot
+	}
+	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, "")
+	s.capture.submit(record)
+	return response, err
+}
+
+// mediaUsage reads the units a media answer reported. The three response types
+// share no interface, and adding one for a single field would put a method on
+// every canonical type for the benefit of this file alone.
+func mediaUsage(response any) inference.Usage {
+	switch typed := response.(type) {
+	case inference.ImagesResponse:
+		return typed.Usage
+	case inference.SpeechResponse:
+		return typed.Usage
+	case inference.TranscriptionResponse:
+		return typed.Usage
+	default:
+		return inference.Usage{}
+	}
+}
+
 // usageCaptureStream latches streamed usage events and records once when the
 // stream reaches a terminal state.
 type usageCaptureStream struct {

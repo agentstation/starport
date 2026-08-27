@@ -418,12 +418,19 @@ function CreateKeyModal({
     }
     setFormError("");
     // A key needs at least one scope. Non-admin keys get the inference
-    // set: chat, embeddings, model listing, activity.
+    // set: chat, embeddings, images, audio, model listing, activity.
     create.mutate({
       name: name.trim(),
       scopes: admin
         ? ["admin"]
-        : ["chat:write", "embeddings:write", "models:read", "activity:read"],
+        : [
+            "chat:write",
+            "embeddings:write",
+            "images:write",
+            "audio:write",
+            "models:read",
+            "activity:read",
+          ],
       ...(fields.allowedModels.length > 0
         ? { allowed_models: fields.allowedModels }
         : {}),

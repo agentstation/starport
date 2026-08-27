@@ -29,6 +29,16 @@ type Proxy interface {
 	// ProcessEmbeddings handles embedding generation requests
 	ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error)
 
+	// ProcessImages handles image generation and image edit requests.
+	ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error)
+
+	// ProcessSpeech handles text-to-speech requests.
+	ProcessSpeech(ctx context.Context, req *SpeechRequest) (*SpeechResponse, error)
+
+	// ProcessTranscription handles speech-to-text requests, in the spoken
+	// language or translated into English.
+	ProcessTranscription(ctx context.Context, req *TranscriptionRequest) (*TranscriptionResponse, error)
+
 	// ListModels returns available models based on routing configuration
 	ListModels(ctx context.Context) (*ModelsResponse, error)
 
@@ -144,6 +154,57 @@ type EmbeddingsResponse struct {
 	RoutingDuration  time.Duration                    `json:"-"`
 	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
 }
+
+// MediaRequest is one canonical media request plus gateway identity. The three
+// dedicated operations carry the same identity a chat request carries, so one
+// type states it once.
+type MediaRequest[Request any] struct {
+	Request Request
+
+	APIKey string `json:"-"`
+	// TenantID is the account the request runs under. Credential selection
+	// and tenant limits read this.
+	TenantID string `json:"-"`
+	// KeyID is the gateway API key that authenticated the request. Usage
+	// attribution and per-key limits read this.
+	KeyID        string               `json:"-"`
+	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
+	RequestID    string               `json:"-"`
+	Protocol     string               `json:"-"`
+}
+
+// MediaResponse is one canonical media result plus gateway route evidence. It
+// carries no cache fields, because a media answer is not cached: an image and
+// an audio file are large, and a caller that repeats a prompt expects a new
+// rendering rather than the previous one.
+type MediaResponse[Response any] struct {
+	Response Response
+
+	ModelUsed        string                           `json:"-"`
+	ProviderUsed     string                           `json:"-"`
+	CredentialSource string                           `json:"-"`
+	Attempts         int                              `json:"-"`
+	RoutingDuration  time.Duration                    `json:"-"`
+	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
+}
+
+// ImagesRequest is one gateway image generation or image edit request.
+type ImagesRequest = MediaRequest[inference.ImagesRequest]
+
+// ImagesResponse is one gateway image result.
+type ImagesResponse = MediaResponse[inference.ImagesResponse]
+
+// SpeechRequest is one gateway text-to-speech request.
+type SpeechRequest = MediaRequest[inference.SpeechRequest]
+
+// SpeechResponse is one gateway speech result.
+type SpeechResponse = MediaResponse[inference.SpeechResponse]
+
+// TranscriptionRequest is one gateway speech-to-text request.
+type TranscriptionRequest = MediaRequest[inference.TranscriptionRequest]
+
+// TranscriptionResponse is one gateway transcript.
+type TranscriptionResponse = MediaResponse[inference.TranscriptionResponse]
 
 // ModelsResponse represents a list of available models
 type ModelsResponse struct {

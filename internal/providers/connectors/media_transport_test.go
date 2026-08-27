@@ -152,25 +152,30 @@ func TestAMediaFailureNormalizesLikeAChatFailure(t *testing.T) {
 			mediaCalls := map[string]func() error{
 				"images": func() error {
 					_, err := connector.GenerateImages(context.Background(), &ImagesRequest{
-						Model: "gpt-image-1", Prompt: "a cat",
-						Endpoint: endpoint, Credential: credential,
+						MediaTarget: MediaTarget{
+							Model: "gpt-image-1", Endpoint: endpoint, Credential: credential,
+						},
+						Prompt: "a cat",
 					})
 					return err
 				},
 				"speech": func() error {
 					_, err := connector.SynthesizeSpeech(context.Background(), &SpeechRequest{
-						Model: "tts-1", Input: "hello", Voice: "alloy",
-						Endpoint: endpoint, Credential: credential,
+						MediaTarget: MediaTarget{
+							Model: "tts-1", Endpoint: endpoint, Credential: credential,
+						},
+						Input: "hello", Voice: "alloy",
 					})
 					return err
 				},
 				"transcription": func() error {
 					_, err := connector.Transcribe(context.Background(), &TranscriptionRequest{
-						Model: "whisper-1",
-						File:  UploadedFile{Filename: "clip.wav", Bytes: []byte("RIFF")},
 						// Endpoint and credential match the chat call, so the
 						// only difference between the two paths is the method.
-						Endpoint: endpoint, Credential: credential,
+						MediaTarget: MediaTarget{
+							Model: "whisper-1", Endpoint: endpoint, Credential: credential,
+						},
+						File: UploadedFile{Filename: "clip.wav", Bytes: []byte("RIFF")},
 					})
 					return err
 				},
@@ -215,9 +220,11 @@ func TestATranscriptionWithoutAudioFailsBeforeTheWire(t *testing.T) {
 	connector, err := NewOpenAIConnector(mediaTestConfig(server.URL + "/v1"))
 	require.NoError(t, err)
 	_, err = connector.Transcribe(context.Background(), &TranscriptionRequest{
-		Model:      "whisper-1",
-		Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/v1"},
-		Credential: testAPIMaterial("test-key"),
+		MediaTarget: MediaTarget{
+			Model:      "whisper-1",
+			Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL + "/v1"},
+			Credential: testAPIMaterial("test-key"),
+		},
 	})
 	require.True(t, errors.Is(err, ErrInvalidMediaRequest), "%v", err)
 }

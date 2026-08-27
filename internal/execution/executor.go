@@ -62,24 +62,14 @@ func (e *Executor) ExecuteChat(
 	plan *routing.Plan,
 	attempt ChatAttempt,
 ) (*ChatResult, error) {
-	if plan == nil {
-		return nil, ErrPlanRequired
-	}
-	if attempt == nil {
-		return nil, ErrAttemptRequired
-	}
-	result, err := executeInference(ctx, e, plan, func(
-		attemptCtx context.Context,
-		planned routing.Attempt,
-	) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
-		return attempt(attemptCtx, planned)
-	}, inference.ChatResponse.Clone)
+	result, err := Execute(ctx, e, plan, Attempt[inference.ChatResponse](attempt),
+		inference.ChatResponse.Clone)
 	if err != nil {
 		return nil, err
 	}
 	return &ChatResult{
-		Response: result.response, Route: result.route, Attempts: result.attempts,
-		StartedAt: result.startedAt, FinishedAt: result.finishedAt,
+		Response: result.Response, Route: result.Route, Attempts: result.Attempts,
+		StartedAt: result.StartedAt, FinishedAt: result.FinishedAt,
 	}, nil
 }
 
@@ -89,22 +79,44 @@ func (e *Executor) ExecuteEmbedding(
 	plan *routing.Plan,
 	attempt EmbeddingAttempt,
 ) (*EmbeddingResult, error) {
+	result, err := Execute(ctx, e, plan, Attempt[inference.EmbeddingResponse](attempt),
+		inference.EmbeddingResponse.Clone)
+	if err != nil {
+		return nil, err
+	}
+	return &EmbeddingResult{
+		Response: result.Response, Route: result.Route, Attempts: result.Attempts,
+		StartedAt: result.StartedAt, FinishedAt: result.FinishedAt,
+	}, nil
+}
+
+// Execute applies one total attempt and elapsed-time budget to any canonical
+// response type. A Go method carries no type parameter, so the one execution
+// path the gateway owns is a function rather than a method. Every operation
+// reaches it, which is what keeps one retry budget, one availability rule, and
+// one evidence record over all of them.
+//
+// clone is required. The executor hands the caller a value it also records, so
+// a response holding a slice or a pointer would otherwise be shared with the
+// evidence and with a replay.
+func Execute[Response any](
+	ctx context.Context,
+	executor *Executor,
+	plan *routing.Plan,
+	attempt Attempt[Response],
+	clone func(Response) Response,
+) (*Result[Response], error) {
 	if plan == nil {
 		return nil, ErrPlanRequired
 	}
 	if attempt == nil {
 		return nil, ErrAttemptRequired
 	}
-	result, err := executeInference(ctx, e, plan, func(
-		attemptCtx context.Context,
-		planned routing.Attempt,
-	) (*inference.EmbeddingResponse, *failure.Failure, AttemptAction) {
-		return attempt(attemptCtx, planned)
-	}, inference.EmbeddingResponse.Clone)
+	result, err := executeInference(ctx, executor, plan, attempt, clone)
 	if err != nil {
 		return nil, err
 	}
-	return &EmbeddingResult{
+	return &Result[Response]{
 		Response: result.response, Route: result.route, Attempts: result.attempts,
 		StartedAt: result.startedAt, FinishedAt: result.finishedAt,
 	}, nil
