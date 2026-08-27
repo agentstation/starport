@@ -54,7 +54,7 @@ func (p *proxy) resolveDocuments(ctx context.Context, req *ChatCompletionRequest
 	}
 	if p.files == nil {
 		return nil, &ValidationError{
-			Field:   "messages",
+			Field:   fieldMessages,
 			Message: "this gateway stores no files, so a file_id resolves to nothing",
 		}
 	}

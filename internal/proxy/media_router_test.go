@@ -62,6 +62,13 @@ func (unroutedMedia) RouteVideoContent(
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
+func (unroutedMedia) RouteDocumentRecognition(
+	context.Context,
+	*routepkg.RecognitionRequest,
+) (*routepkg.RecognitionResponse, error) {
+	return nil, routepkg.ErrNoModelsAvailable
+}
+
 // unsupportedMediaProxy answers the three media operations for a Proxy mock
 // that exercises a different path.
 type unsupportedMediaProxy struct{}

@@ -103,6 +103,34 @@ func TranscriptionResponseToInference(response *TranscriptionResponse) (inferenc
 	}, nil
 }
 
+// RecognitionRequestFromInference converts a canonical recognition request.
+func RecognitionRequestFromInference(request inference.RecognitionRequest) *RecognitionRequest {
+	return &RecognitionRequest{
+		MediaTarget: MediaTarget{Model: request.Model},
+		Document:    uploadFromInference(request.Document),
+		Pages:       request.Pages,
+	}
+}
+
+// RecognitionResponseToInference converts a provider recognition response.
+//
+// It does not judge the page count. Whether the pages returned are the pages
+// the document holds is a question about the document, and the seam that read
+// the document natively is the one that holds the answer.
+func RecognitionResponseToInference(response *RecognitionResponse) (inference.RecognitionResponse, error) {
+	if response == nil {
+		return inference.RecognitionResponse{}, fmt.Errorf("recognition response is required")
+	}
+	pages := make([]inference.RecognizedPage, len(response.Pages))
+	for index, page := range response.Pages {
+		pages[index] = inference.RecognizedPage{Number: page.Number, Text: page.Text}
+	}
+	return inference.RecognitionResponse{
+		Pages: pages,
+		Usage: mediaUsageToInference(response.Usage, 0),
+	}, nil
+}
+
 func uploadFromInference(upload inference.UploadedFile) UploadedFile {
 	return UploadedFile{
 		Filename:  upload.Filename,

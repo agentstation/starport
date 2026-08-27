@@ -142,11 +142,12 @@ func TestTheOperationSetNamesEveryOperationTheGatewayPlans(t *testing.T) {
 		OperationAudioTranscriptions,
 		OperationAudioTranslations,
 		OperationChatCompletions,
+		OperationDocumentsRecognition,
 		OperationEmbeddings,
 		OperationImagesEdits,
 		OperationImagesGenerations,
 		OperationVideosGenerations,
 	}, ServedOperations().Members())
 	require.False(t, ServedOperations().Contains(""))
-	require.Equal(t, 8, ServedOperations().Len())
+	require.Equal(t, 9, ServedOperations().Len())
 }

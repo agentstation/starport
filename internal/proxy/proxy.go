@@ -11,6 +11,7 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/catalog/view"
+	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/router"
@@ -40,6 +41,11 @@ type Config struct {
 	// (optional). A deployment without one refuses a request that names a
 	// file rather than sending the model an empty document.
 	FileResolver FileResolver
+
+	// DocumentExtractor is the native parser engine, with the page and time
+	// bounds this deployment sets (optional). A deployment without one reads
+	// documents under the engine's own default bounds.
+	DocumentExtractor *document.Extractor
 }
 
 // Option configures the proxy service.
@@ -58,6 +64,13 @@ func WithCache(manager CacheManager, config *CacheConfig) Option {
 func WithFiles(resolver FileResolver) Option {
 	return func(c *Config) {
 		c.FileResolver = resolver
+	}
+}
+
+// WithDocumentExtractor sets the bounds the native parser engine reads under.
+func WithDocumentExtractor(extractor *document.Extractor) Option {
+	return func(c *Config) {
+		c.DocumentExtractor = extractor
 	}
 }
 
@@ -99,6 +112,7 @@ func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ..
 		router:    cfg.Router,
 		estimator: cfg.TokenEstimator,
 		files:     cfg.FileResolver,
+		documents: cfg.DocumentExtractor,
 	}
 
 	var p Proxy = core
@@ -244,7 +258,7 @@ func modalityRefusal(err error) error {
 	if !errors.Is(err, routing.ErrModalityUnsupported) {
 		return nil
 	}
-	return &ValidationError{Field: "messages", Message: err.Error()}
+	return &ValidationError{Field: fieldMessages, Message: err.Error()}
 }
 
 // proxy implements the Proxy interface
@@ -253,6 +267,7 @@ type proxy struct {
 	router    router.ModelRouter
 	estimator *tokenize.Estimator
 	files     FileResolver
+	documents *document.Extractor
 }
 
 // ProcessChatCompletion handles chat completion requests with routing
@@ -270,8 +285,21 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		return nil, err
 	}
 
+	// The route is planned from the request the caller sent, and the parser
+	// below rewrites the request the provider receives. Reading the metadata
+	// first is what keeps those two facts separate: a document turned into
+	// text no longer looks like a document, and a route planned after the
+	// rewrite would land on a text-only model the caller never asked for.
+	keyConfig := transformAPIKeyConfig(req.APIKeyConfig)
+	metadata := p.buildRequestMetadata(req)
+
+	parsed, err := p.parseDocuments(ctx, req, keyConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	// Transform to connector request
-	connReq, err := TransformChatRequest(req)
+	connReq, err := TransformChatRequest(parsed)
 	if err != nil {
 		return nil, &ValidationError{Field: "request", Message: err.Error()}
 	}
@@ -290,8 +318,8 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		ChatRequest:         connReq,
 		Models:              req.Request.FallbackModels,
 		ProviderPreferences: transformProviderPreferences(req.Provider),
-		APIKeyConfig:        transformAPIKeyConfig(req.APIKeyConfig),
-		Metadata:            p.buildRequestMetadata(req),
+		APIKeyConfig:        keyConfig,
+		Metadata:            metadata,
 		TenantID:            req.TenantID,
 	}
 	if hasCacheControl {
@@ -371,8 +399,18 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 		return nil, err
 	}
 
+	// A stream plans its route from the caller's own request for the same
+	// reason a completion does. See ProcessChatCompletion above.
+	keyConfig := transformAPIKeyConfig(req.APIKeyConfig)
+	metadata := p.buildRequestMetadata(req)
+
+	parsed, err := p.parseDocuments(ctx, req, keyConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	// Transform to connector request
-	connReq, err := TransformChatRequest(req)
+	connReq, err := TransformChatRequest(parsed)
 	if err != nil {
 		return nil, &ValidationError{Field: "request", Message: err.Error()}
 	}
@@ -396,8 +434,8 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 		ChatRequest:         connReq,
 		Models:              req.Request.FallbackModels,
 		ProviderPreferences: transformProviderPreferences(req.Provider),
-		APIKeyConfig:        transformAPIKeyConfig(req.APIKeyConfig),
-		Metadata:            p.buildRequestMetadata(req),
+		APIKeyConfig:        keyConfig,
+		Metadata:            metadata,
 		TenantID:            req.TenantID,
 	}
 	if hasCacheControl {

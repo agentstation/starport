@@ -93,6 +93,7 @@ var servedOperations = NewOperationSet(
 	OperationAudioTranscriptions,
 	OperationAudioTranslations,
 	OperationVideosGenerations,
+	OperationDocumentsRecognition,
 )
 
 // ServedOperations returns the operations this build can plan.

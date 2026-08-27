@@ -53,6 +53,11 @@ type ModelRouter interface {
 	// RouteVideoContent reads the finished output of one accepted job from the
 	// provider that produced it.
 	RouteVideoContent(ctx context.Context, req *VideoAssetRequest) (*VideoAssetResponse, error)
+
+	// RouteDocumentRecognition reads the text off a document whose pages carry
+	// none. The gateway orders this read on a caller's behalf inside a chat
+	// turn, so it is the one route no HTTP path reaches.
+	RouteDocumentRecognition(ctx context.Context, req *RecognitionRequest) (*RecognitionResponse, error)
 }
 
 // Request contains the original request plus routing preferences
