@@ -2,6 +2,8 @@ package document_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -28,6 +30,31 @@ func fixture(t *testing.T, name string) []byte {
 	data, err := os.ReadFile(filepath.Join("testdata", name))
 	require.NoError(t, err)
 	return data
+}
+
+// TestTheFixturesArrivedUnmodified names one failure that otherwise arrives as
+// eight unrelated parse errors.
+//
+// A PDF records byte offsets in its cross reference table, so any rewrite of
+// its bytes breaks it. Three of these fixtures carry no NUL byte, which is how
+// git decides a file is text, and a checkout that converts line endings would
+// rewrite exactly those three. The repository marks the extension binary in
+// .gitattributes. This test is what says so when that mark goes missing.
+func TestTheFixturesArrivedUnmodified(t *testing.T) {
+	digests := map[string]string{
+		"handwritten.pdf": "81f89b02279d490683e41cccbf3b45d9632b030d686c67a6f4681b2630a01f04",
+		"many-pages.pdf":  "64ba81e703a454d97f3ef2b314c6a55b791e19d041ef8b20b41e4b3b1267826b",
+		"pdftex.pdf":      "23b66f81071cdf9faf47f56a148ec37ece20aaa02a9a15f4dfd27789bf5675dc",
+		"quartz.pdf":      "56bdd82ce227a47d50215744c06fc13aa419850d7672ec73fdf59033f45c4861",
+		"scanned.pdf":     "960611def9d9ec6a13833839f4282f7996204c63edab249d245b45b73927e5c8",
+	}
+	for name, want := range digests {
+		t.Run(name, func(t *testing.T) {
+			sum := sha256.Sum256(fixture(t, name))
+			require.Equal(t, want, hex.EncodeToString(sum[:]),
+				"the checkout modified this fixture, so its byte offsets no longer point at its objects")
+		})
+	}
 }
 
 func extract(t *testing.T, input document.Input) (document.Extraction, error) {
