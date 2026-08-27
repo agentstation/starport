@@ -59,6 +59,10 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
   `internal/files`. Put the bytes themselves in `internal/blob`, which owns the
   `filesystem` and `objectstore` backends and names the selected one. No other
   package names a backend, a bucket, or a storage path.
+- Put document reading in `internal/document`. It owns the text layer, the page
+  count, and the scanned verdict, and it reaches no network address. The engine
+  vocabulary lives in `internal/inference`, and the page price comes from the
+  catalog.
 - Make `internal/proxy` depend on `CacheManager` and
   `connectors.LeasingRegistry`, not concrete cache or registry adapters.
 - Put protocol codecs in `internal/protocol/openai` and
@@ -91,6 +95,7 @@ bash scripts/verify-console-session-grants.sh
 bash scripts/verify-model-modalities.sh
 bash scripts/verify-files-api.sh
 bash scripts/verify-async-media-jobs.sh
+bash scripts/verify-document-parser.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
@@ -149,6 +154,14 @@ scope. It covers the provider job identifier that never reaches a caller. It
 covers the retention window, the outstanding job bound, the poll budget that
 ends an abandoned job, and the console jobs page. It is terminal at 18
 conditions (`AMJ-V01` through `AMJ-V18`) and runs in CI.
+
+`scripts/verify-document-parser.sh` guards the document parser plugin. It covers
+the typed `file-parser` option and the two engines this gateway runs. It covers
+the refusals an unknown engine and an unenforced plugin draw. It covers the
+in-process read that reaches no provider. It covers the recognition route, its
+page charge, the extraction cache, the spend bound, and the console view of
+what a page cost. It is terminal at 20 conditions (`PLG-V01` through `PLG-V20`) and
+runs in CI.
 
 That gate owns the media surface alone. `scripts/verify-openrouter-parity.sh`
 keeps its own terminal count of 16 and its own stated meaning, so a new media
