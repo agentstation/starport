@@ -158,6 +158,23 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 	return router
 }
 
+// routePlanFailure maps a planner failure onto the router error contract and
+// returns nil when the failure carries no routing meaning and the caller must
+// add its own context. A modality refusal survives the collapse
+// onto ErrNoModelsAvailable: every other planning failure invites a retry
+// elsewhere, but a model that cannot read the media the caller sent refuses
+// the same request every time, and the caller needs to hear which modality
+// was the problem.
+func routePlanFailure(err error) error {
+	if errors.Is(err, routing.ErrModalityUnsupported) {
+		return err
+	}
+	if errors.Is(err, routing.ErrNoCandidate) {
+		return ErrNoModelsAvailable
+	}
+	return nil
+}
+
 // SelectModel chooses the best model based on the request and routing strategy
 func (r *modelRouter) SelectModel(ctx context.Context, req *Request) (string, connectors.Connector, error) {
 	runtime, owned, err := r.acquireRuntime(ctx)
@@ -169,8 +186,8 @@ func (r *modelRouter) SelectModel(ctx context.Context, req *Request) (string, co
 	}
 	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
-		if errors.Is(err, routing.ErrNoCandidate) {
-			return "", nil, ErrNoModelsAvailable
+		if mapped := routePlanFailure(err); mapped != nil {
+			return "", nil, mapped
 		}
 		return "", nil, fmt.Errorf("plan model route: %w", err)
 	}
@@ -200,8 +217,8 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 	plan, err := r.planRoute(ctx, req, runtime)
 	if err != nil {
-		if errors.Is(err, routing.ErrNoCandidate) {
-			return nil, ErrNoModelsAvailable
+		if mapped := routePlanFailure(err); mapped != nil {
+			return nil, mapped
 		}
 		return nil, fmt.Errorf("plan fallback route: %w", err)
 	}

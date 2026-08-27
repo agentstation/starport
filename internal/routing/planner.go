@@ -115,6 +115,12 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 		})
 	}
 	if len(plan.attempts) == 0 {
+		if rejection, found := firstRejection(rejections, RejectionMissingModality); found {
+			return plan, fmt.Errorf(
+				"%w: %w: %s: %s",
+				ErrNoCandidate, ErrModalityUnsupported, rejection.Route.ID(), rejection.Detail,
+			)
+		}
 		return plan, fmt.Errorf("%w: %d route(s) rejected", ErrNoCandidate, len(rejections))
 	}
 	return plan, nil
@@ -310,6 +316,9 @@ func rejectCandidate(
 	if missing := firstMissingCapability(candidate.Capabilities, requiredCapabilities); missing != "" {
 		return reject(RejectionMissingCapability, "missing capability "+missing)
 	}
+	if missing := firstMissingModality(candidate.InputModalities, request.RequiredModalities); missing != "" {
+		return reject(RejectionMissingModality, "model does not read "+string(missing)+" input")
+	}
 	if request.RequiredContextTokens > 0 && candidate.ContextWindow < request.RequiredContextTokens {
 		return reject(RejectionInsufficientContext, "context window is smaller than the request")
 	}
@@ -388,6 +397,41 @@ func firstMissingCapability(capabilities []string, required map[string]struct{})
 		return ""
 	}
 	return missing[0]
+}
+
+// firstMissingModality names the first requested modality a route does not
+// read. An empty accepted list means the catalog states no input modalities
+// for that model, and silence is not a refusal: rejecting on silence would
+// drop every model the catalog has not described yet.
+func firstMissingModality(accepted, required []Modality) Modality {
+	if len(required) == 0 || len(accepted) == 0 {
+		return ""
+	}
+	for _, modality := range required {
+		found := false
+		for _, candidate := range accepted {
+			if candidate == modality {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return modality
+		}
+	}
+	return ""
+}
+
+// firstRejection returns the first rejection carrying one code. The caller
+// sorts rejections before reading them, so the answer is stable across runs
+// over the same snapshot.
+func firstRejection(rejections []Rejection, code RejectionCode) (Rejection, bool) {
+	for _, rejection := range rejections {
+		if rejection.Code == code {
+			return rejection, true
+		}
+	}
+	return Rejection{}, false
 }
 
 func sortRankedCandidates(items []rankedCandidate, optimization OptimizationPolicy, hasProviderOrder bool) {

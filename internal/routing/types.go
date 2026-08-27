@@ -17,6 +17,11 @@ var (
 	ErrInvalidSnapshot = errors.New("invalid route-planning snapshot")
 	// ErrInvalidPlan reports incomplete or duplicate attempt identities.
 	ErrInvalidPlan = errors.New("invalid route plan")
+	// ErrModalityUnsupported reports that the request carries a modality no
+	// route accepts. It wraps beside ErrNoCandidate so a caller that answers
+	// every routing failure with a 503 can still separate this one, which is
+	// a caller mistake and answers 400.
+	ErrModalityUnsupported = errors.New("model does not accept a requested modality")
 )
 
 // Route identifies one provider offering in one immutable catalog generation.
@@ -62,11 +67,17 @@ type Endpoint struct {
 // Candidate contains facts and runtime measurements for one route. The
 // planner does not change this value.
 type Candidate struct {
-	Route         Route
-	Operations    []Operation
-	Endpoints     map[Operation]Endpoint
-	PromptCache   *bool
-	Capabilities  []string
+	Route        Route
+	Operations   []Operation
+	Endpoints    map[Operation]Endpoint
+	PromptCache  *bool
+	Capabilities []string
+
+	// InputModalities lists what the model reads. An empty list means the
+	// catalog states nothing, which the planner reads as silence rather than
+	// as a refusal.
+	InputModalities []Modality
+
 	ContextWindow int
 	Cost          *TokenCost
 	Latency       *time.Duration
@@ -117,6 +128,7 @@ type Request struct {
 	AllowModelFallbacks   bool
 	AllowAnyModelFallback bool
 	RequiredCapabilities  []string
+	RequiredModalities    []Modality
 	RequiredContextTokens int
 	EstimatedInputTokens  int
 	EstimatedOutputTokens int
@@ -129,6 +141,24 @@ type Request struct {
 	// with a known zero token price (the ":free" variant).
 	ZeroPriceModels []string
 }
+
+// Modality names one payload family a route accepts. Route planning keeps
+// its own vocabulary instead of importing the canonical message types,
+// because a plan stays a pure function of the values handed to it.
+type Modality string
+
+const (
+	// ModalityText is written or spoken language as characters.
+	ModalityText Modality = "text"
+	// ModalityImage is a still picture.
+	ModalityImage Modality = "image"
+	// ModalityAudio is recorded sound.
+	ModalityAudio Modality = "audio"
+	// ModalityDocument is a paged document, such as a PDF.
+	ModalityDocument Modality = "document"
+	// ModalityVideo is moving pictures.
+	ModalityVideo Modality = "video"
+)
 
 // RejectionCode is a stable reason that excluded one route.
 type RejectionCode string
@@ -146,6 +176,9 @@ const (
 	RejectionProviderPolicy RejectionCode = "provider_policy"
 	// RejectionMissingCapability means the route lacks a required capability.
 	RejectionMissingCapability RejectionCode = "missing_capability"
+	// RejectionMissingModality means the model does not read a modality the
+	// request carries.
+	RejectionMissingModality RejectionCode = "missing_modality"
 	// RejectionMissingOperation means the exact offering or adapter cannot perform the request.
 	RejectionMissingOperation RejectionCode = "missing_operation"
 	// RejectionMissingEndpoint means the exact offering has no usable operation endpoint.

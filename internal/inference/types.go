@@ -48,6 +48,26 @@ func ContentKinds() []ContentKind {
 	}
 }
 
+// Modality names one payload family. A content kind describes one message
+// part, while a modality describes what a request carries and what a model
+// accepts, so a route decision compares like with like. Starmap records a
+// document as the pdf modality, and the catalog boundary owns that
+// translation.
+type Modality string
+
+const (
+	// ModalityText is written or spoken language as characters.
+	ModalityText Modality = "text"
+	// ModalityImage is a still picture.
+	ModalityImage Modality = "image"
+	// ModalityAudio is recorded sound.
+	ModalityAudio Modality = "audio"
+	// ModalityDocument is a paged document, such as a PDF.
+	ModalityDocument Modality = "document"
+	// ModalityVideo is moving pictures.
+	ModalityVideo Modality = "video"
+)
+
 // Image describes an image input.
 type Image struct {
 	URL    string

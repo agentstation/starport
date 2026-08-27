@@ -4,6 +4,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
@@ -139,14 +140,16 @@ func transformAPIKeyConfig(config *APIKeyRoutingConfig) *router.APIKeyConfig {
 	}
 }
 
-func buildRequestMetadata(req *ChatCompletionRequest) *router.RequestMetadata {
+func (p *proxy) buildRequestMetadata(req *ChatCompletionRequest) *router.RequestMetadata {
 	if req == nil {
 		return nil
 	}
 
+	modalities := requestModalities(req.Request.Messages)
 	metadata := &router.RequestMetadata{
-		EstimatedTokens:  estimatePromptTokens(req.Request.Messages),
-		RequiredFeatures: requiredFeatures(req),
+		EstimatedTokens:    p.estimatePromptTokens(req),
+		RequiredFeatures:   requiredFeatures(req, modalities),
+		RequiredModalities: modalities,
 	}
 	if req.Request.User != "" {
 		// Starport does not currently expose a separate conversation ID field.
@@ -155,58 +158,79 @@ func buildRequestMetadata(req *ChatCompletionRequest) *router.RequestMetadata {
 		metadata.UserPreferences = map[string]any{"user": req.Request.User}
 	}
 
-	if metadata.EstimatedTokens == 0 && len(metadata.RequiredFeatures) == 0 && metadata.ConversationID == "" {
+	if metadata.EstimatedTokens == 0 && len(metadata.RequiredFeatures) == 0 &&
+		len(metadata.RequiredModalities) == 0 && metadata.ConversationID == "" {
 		return nil
 	}
 	return metadata
 }
 
-func estimatePromptTokens(messages []inference.Message) int {
-	total := 0
-	for _, msg := range messages {
-		for _, part := range msg.Content {
-			total += estimateStringTokens(part.Text)
-			if part.Image != nil && part.Image.URL != "" {
-				total += 85
-			}
-		}
-		total += estimateStringTokens(msg.Name)
-		total += estimateStringTokens(msg.Reasoning)
-	}
-	return total
+// estimatePromptTokens counts the prompt with the estimator that also counts
+// usage when a provider reports none. Two estimators over one request gave
+// two token counts for the same messages, so the route decision and the
+// usage record disagreed about the size of the same call.
+func (p *proxy) estimatePromptTokens(req *ChatCompletionRequest) int {
+	hint := tokenize.Hint{Model: req.Request.Model}
+	return p.tokenEstimator().CountMessages(hint, req.Request.Messages)
 }
 
-func estimateStringTokens(value string) int {
-	if value == "" {
-		return 0
+// tokenEstimator returns the composed estimator, or a codec-free one that
+// falls back to the bytes-per-token heuristic. A proxy built without an
+// estimator still routes; it just counts more coarsely.
+func (p *proxy) tokenEstimator() *tokenize.Estimator {
+	if p.estimator != nil {
+		return p.estimator
 	}
-	tokens := len(value) / 4
-	if tokens == 0 {
-		return 1
-	}
-	return tokens
+	return heuristicEstimator
 }
 
-func requiredFeatures(req *ChatCompletionRequest) []string {
+// heuristicEstimator holds no codecs, so every count it makes falls back to
+// the bytes-per-token heuristic. Building it costs nothing, which is why it
+// can be a package value.
+var heuristicEstimator = &tokenize.Estimator{}
+
+// requestModalities names the media the request carries. It reads the same
+// canonical walk the media accounting reads, so a route decision and a usage
+// record cannot disagree about which media a request held.
+func requestModalities(messages []inference.Message) []string {
+	modalities := inference.RequestMediaModalities(messages)
+	if len(modalities) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(modalities))
+	for _, modality := range modalities {
+		names = append(names, string(modality))
+	}
+	return names
+}
+
+// requiredFeatures names the model features the request needs. Vision is one
+// of them, and it now reads the modality list rather than repeating the
+// image test, so image is described in one place.
+func requiredFeatures(req *ChatCompletionRequest, modalities []string) []string {
 	var features []string
 	if len(req.Request.Tools) > 0 {
 		features = append(features, "function_calling")
 	}
-	if requestHasVision(req.Request.Messages) {
-		features = append(features, "vision")
+	for _, modality := range modalities {
+		if modality == string(inference.ModalityImage) {
+			features = append(features, "vision")
+			break
+		}
 	}
 	return features
 }
 
-func requestHasVision(messages []inference.Message) bool {
-	for _, msg := range messages {
-		for _, part := range msg.Content {
-			if part.Kind == inference.ContentImage || part.Image != nil {
-				return true
-			}
-		}
+// modalityRefusal converts a planner modality refusal into a caller-facing
+// validation error. Every other routing failure is a gateway or provider
+// condition and answers 503, but a model that cannot read the media the
+// caller sent is a caller mistake, and a retry against the same model will
+// fail the same way.
+func modalityRefusal(err error) error {
+	if !errors.Is(err, routing.ErrModalityUnsupported) {
+		return nil
 	}
-	return false
+	return &ValidationError{Field: "messages", Message: err.Error()}
 }
 
 // proxy implements the Proxy interface
@@ -244,7 +268,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		Models:              req.Request.FallbackModels,
 		ProviderPreferences: transformProviderPreferences(req.Provider),
 		APIKeyConfig:        transformAPIKeyConfig(req.APIKeyConfig),
-		Metadata:            buildRequestMetadata(req),
+		Metadata:            p.buildRequestMetadata(req),
 		TenantID:            req.TenantID,
 	}
 	if hasCacheControl {
@@ -262,6 +286,9 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	// Route the request with fallback
 	result, err := p.router.RouteWithFallback(ctx, routingReq)
 	if err != nil {
+		if refusal := modalityRefusal(err); refusal != nil {
+			return nil, refusal
+		}
 		return nil, &RoutingError{
 			Model:  req.Request.Model,
 			Reason: "failed to route request",
@@ -340,7 +367,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 		Models:              req.Request.FallbackModels,
 		ProviderPreferences: transformProviderPreferences(req.Provider),
 		APIKeyConfig:        transformAPIKeyConfig(req.APIKeyConfig),
-		Metadata:            buildRequestMetadata(req),
+		Metadata:            p.buildRequestMetadata(req),
 		TenantID:            req.TenantID,
 	}
 	if hasCacheControl {
@@ -356,6 +383,9 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 
 	stream, err := p.router.RouteStream(ctx, routingReq)
 	if err != nil {
+		if refusal := modalityRefusal(err); refusal != nil {
+			return nil, refusal
+		}
 		return nil, &RoutingError{
 			Model:  req.Request.Model,
 			Reason: "failed to execute stream route",

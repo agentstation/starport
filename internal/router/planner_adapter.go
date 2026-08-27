@@ -159,6 +159,7 @@ func (r *modelRouter) toPlanningRequest(req *Request) routing.Request {
 	}
 	if req.Metadata != nil {
 		request.RequiredCapabilities = append([]string(nil), req.Metadata.RequiredFeatures...)
+		request.RequiredModalities = planningModalities(req.Metadata.RequiredModalities)
 		request.EstimatedInputTokens = req.Metadata.EstimatedTokens
 		request.EstimatedOutputTokens = req.Metadata.EstimatedTokens / 4
 		if r.config.EnableStickySessions && req.Metadata.ConversationID != "" {
@@ -267,14 +268,15 @@ func (r *modelRouter) toPlanningCandidates(
 				ProviderID:          provider,
 				ProviderModelID:     string(route.ProviderModelID),
 			},
-			Operations:    planningOperations(route.Operations),
-			Endpoints:     planningEndpoints(route.Endpoints),
-			PromptCache:   copyPlanningBool(route.PromptCache),
-			Capabilities:  modelCapabilities(definition),
-			ContextWindow: contextWindow,
-			Cost:          modelCost(offering.Pricing),
-			Latency:       providerState.latency,
-			Unavailable:   providerState.unavailable,
+			Operations:      planningOperations(route.Operations),
+			Endpoints:       planningEndpoints(route.Endpoints),
+			PromptCache:     copyPlanningBool(route.PromptCache),
+			Capabilities:    modelCapabilities(definition),
+			InputModalities: modelInputModalities(definition),
+			ContextWindow:   contextWindow,
+			Cost:            modelCost(offering.Pricing),
+			Latency:         providerState.latency,
+			Unavailable:     providerState.unavailable,
 		})
 	}
 	return candidates
@@ -359,6 +361,60 @@ func modelCapabilities(definition starmapcatalogs.ModelDefinition) []string {
 		capabilities = append(capabilities, "streaming")
 	}
 	return capabilities
+}
+
+// modelInputModalities projects the input modalities the catalog states for
+// one model onto the planner vocabulary. A modality the planner has no name
+// for is dropped rather than guessed, because an invented name would reject
+// every request that carries it.
+func modelInputModalities(definition starmapcatalogs.ModelDefinition) []routing.Modality {
+	features := definition.Capabilities.Features
+	if features == nil {
+		return nil
+	}
+	modalities := make([]routing.Modality, 0, len(features.Modalities.Input))
+	for _, modality := range features.Modalities.Input {
+		if planned, known := planningModality(modality); known {
+			modalities = append(modalities, planned)
+		}
+	}
+	if len(modalities) == 0 {
+		return nil
+	}
+	return modalities
+}
+
+// planningModality translates one catalog modality. Starmap records a
+// document as the pdf modality, and this boundary is the only place that
+// translation lives.
+func planningModality(modality starmapcatalogs.ModelModality) (routing.Modality, bool) {
+	switch modality {
+	case starmapcatalogs.ModelModalityText:
+		return routing.ModalityText, true
+	case starmapcatalogs.ModelModalityImage:
+		return routing.ModalityImage, true
+	case starmapcatalogs.ModelModalityAudio:
+		return routing.ModalityAudio, true
+	case starmapcatalogs.ModelModalityVideo:
+		return routing.ModalityVideo, true
+	case starmapcatalogs.ModelModalityPDF:
+		return routing.ModalityDocument, true
+	}
+	return "", false
+}
+
+// planningModalities carries the request modalities the proxy derived onto
+// the planning request. The names cross the boundary as strings, the same
+// way required capabilities do.
+func planningModalities(names []string) []routing.Modality {
+	if len(names) == 0 {
+		return nil
+	}
+	modalities := make([]routing.Modality, 0, len(names))
+	for _, name := range names {
+		modalities = append(modalities, routing.Modality(name))
+	}
+	return modalities
 }
 
 func modelCost(pricing *starmapcatalogs.ModelPricing) *routing.TokenCost {

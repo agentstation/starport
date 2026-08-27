@@ -34,8 +34,8 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		if owned {
 			runtime.Release()
 		}
-		if errors.Is(err, routing.ErrNoCandidate) {
-			return nil, ErrNoModelsAvailable
+		if mapped := routePlanFailure(err); mapped != nil {
+			return nil, mapped
 		}
 		return nil, err
 	}
