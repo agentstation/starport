@@ -13,10 +13,13 @@ import (
 
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/server/requestctx"
+	"github.com/agentstation/starport/internal/tenant"
 )
 
 // videosNotConfiguredMessage answers a deployment that assembled no job store.
@@ -69,14 +72,29 @@ func (h *VideosController) Submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	gateway, err := mediaGatewayRequest(ctx, h.BaseHandler, request)
-	if err != nil {
-		h.writeCredentialStrategyError(w, err)
+	// The route and the credential are resolved inside the submission rather
+	// than before it, so an account already holding its bound is refused
+	// without spending either. The gateway failure is held aside because it
+	// answers a caller in the credential vocabulary, not the job one.
+	var gatewayErr error
+	job, err := h.jobs.Submit(ctx, func(ctx context.Context) (jobs.Runner, error) {
+		gateway, buildErr := mediaGatewayRequest(ctx, h.BaseHandler, request)
+		if buildErr != nil {
+			gatewayErr = buildErr
+			return nil, buildErr
+		}
+		return h.service.VideoJobRunner(gateway), nil
+	}, jobs.Submission{
+		Tenant:           h.getTenantID(ctx),
+		KeyID:            h.getAPIKeyID(ctx),
+		Operation:        routing.OperationVideosGenerations,
+		OutstandingBound: outstandingJobBound(r),
+	})
+	switch {
+	case gatewayErr != nil:
+		h.writeCredentialStrategyError(w, gatewayErr)
 		return
-	}
-	job, err := h.jobs.Submit(ctx, h.service.VideoJobRunner(gateway),
-		h.getTenantID(ctx), routing.OperationVideosGenerations)
-	if err != nil {
+	case err != nil:
 		h.writeJobError(ctx, w, err, "video job submission failed")
 		return
 	}
@@ -285,6 +303,28 @@ func (h *VideosController) writeJobList(w http.ResponseWriter, records []inferen
 	_ = openai.WriteJSON(w, http.StatusOK, openai.EncodeVideoJobs(records))
 }
 
+// outstandingJobBound resolves how many jobs this account may hold open.
+//
+// It falls back to the tenant default rather than to unlimited. An account that
+// states no bound is the common case, and on this one dimension an absent bound
+// would let a single key hold an unbounded spend commitment open. Every other
+// limit meters work that already finished, so unlimited there costs nothing
+// nobody counted.
+func outstandingJobBound(r *http.Request) int64 {
+	var tenantLimits, keyLimits *limits.Limits
+	if record, ok := requestctx.GetTenantRecord(r.Context()); ok && record != nil {
+		tenantLimits = record.Limits
+	}
+	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil {
+		keyLimits = apiKey.Limits
+	}
+	rule, bounded := limits.TightestOutstandingJobs(tenantLimits, keyLimits)
+	if !bounded {
+		return tenant.DefaultOutstandingJobs
+	}
+	return rule.Limit
+}
+
 // writeJobError maps a job service failure onto a status.
 func (h *VideosController) writeJobError(
 	ctx context.Context,
@@ -302,6 +342,12 @@ func (h *VideosController) writeJobError(
 		h.writeVideoStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
 	case errors.Is(err, jobs.ErrInvalidJob), errors.Is(err, jobs.ErrIllegalTransition):
 		h.writeVideoStatus(w, http.StatusConflict, errorTypeInvalidRequest, err.Error())
+	case errors.Is(err, limits.ErrTooManyOutstandingJobs):
+		// The submission is legal. What it would not fit inside is the number
+		// of jobs this account already holds open, which a finished job frees
+		// and an immediate retry does not. That is a rate answer, not a
+		// request answer, so it reads as 429 rather than 400.
+		h.writeVideoStatus(w, http.StatusTooManyRequests, errorTypeRateLimit, err.Error())
 	default:
 		h.logError(ctx, err, message)
 		h.writeError(w, err)

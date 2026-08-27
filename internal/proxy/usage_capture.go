@@ -510,13 +510,14 @@ func usageCost(
 	if snapshot == nil || modelID == "" {
 		return nil, usage.CostReasonNoRoute
 	}
-	var generatedImages int64
+	var units usage.Media
 	if media != nil {
-		generatedImages = media.GeneratedImages
+		units = *media
 	}
-	// A generated image is metered per image, so a turn that produced one
-	// reported usage even when it reported no tokens at all.
-	if tokens.Input == 0 && tokens.Output == 0 && tokens.Total == 0 && generatedImages == 0 {
+	// A generated image and a generated video are metered per unit, so a turn
+	// that produced one reported usage even when it reported no tokens at all.
+	noTokens := tokens.Input == 0 && tokens.Output == 0 && tokens.Total == 0
+	if noTokens && units.GeneratedImages == 0 && units.GeneratedVideos == 0 {
 		return nil, usage.CostReasonNoUsage
 	}
 	route, ok := snapshot.ResolveRoute(modelID)
@@ -530,7 +531,7 @@ func usageCost(
 	// The media half decides first. A media unit the offering does not price
 	// withdraws the whole cost, because the token half of such a turn is the
 	// cheap half and reporting it alone reads as the bill.
-	mediaTotal, reason := mediaCost(offering.Pricing, tokens, generatedImages)
+	mediaTotal, reason := mediaCost(offering.Pricing, tokens, units)
 	if reason != "" {
 		return nil, reason
 	}
@@ -547,13 +548,23 @@ func usageCost(
 // picture billed as free and a spoken minute billed at the text rate are both
 // silent understatements, and providers charge many times the text rate for
 // audio, so a named gap is the honest answer.
-func mediaCost(pricing *starmapcatalogs.ModelPricing, tokens usage.Tokens, generatedImages int64) (float64, string) {
+func mediaCost(pricing *starmapcatalogs.ModelPricing, tokens usage.Tokens, units usage.Media) (float64, string) {
 	var total float64
-	if generatedImages > 0 {
+	if units.GeneratedImages > 0 {
 		if pricing.Operations == nil || pricing.Operations.ImageGen == nil {
 			return 0, usage.CostReasonMediaUnpriced
 		}
-		total += float64(generatedImages) * *pricing.Operations.ImageGen
+		total += float64(units.GeneratedImages) * *pricing.Operations.ImageGen
+	}
+	if units.GeneratedVideos > 0 {
+		// A video is priced per video, the way an image is. An offering that
+		// serves videos and publishes no video price withdraws the whole cost,
+		// because a video is the most expensive unit this gateway meters and
+		// reporting the token half alone would read as the bill.
+		if pricing.Operations == nil || pricing.Operations.VideoGen == nil {
+			return 0, usage.CostReasonMediaUnpriced
+		}
+		total += float64(units.GeneratedVideos) * *pricing.Operations.VideoGen
 	}
 	audioPriced := pricing.Tokens != nil
 	if tokens.AudioInput > 0 && (!audioPriced || pricing.Tokens.AudioInput == nil) {

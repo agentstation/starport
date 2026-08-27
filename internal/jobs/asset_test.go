@@ -11,7 +11,6 @@ import (
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/jobs"
-	"github.com/agentstation/starport/internal/routing"
 )
 
 // assetBound is the bound these tests hand the service. It is small enough to
@@ -73,7 +72,7 @@ func TestAFinishedJobFetchesItsAssetOnce(t *testing.T) {
 	service, _, store, _ := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
@@ -123,7 +122,7 @@ func TestAFailedFetchLeavesACompletedJobAndRetries(t *testing.T) {
 	runner := finishingRunner()
 	runner.fetchErr = errProviderUnreachable
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 
 	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
@@ -153,7 +152,7 @@ func TestTheSweepDeletesAnAssetPastItsWindow(t *testing.T) {
 	service, records, store, clock := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
 	require.NoError(t, err)
@@ -200,7 +199,7 @@ func TestAnAssetPastItsWindowIsRefusedBeforeTheSweepRuns(t *testing.T) {
 	service, _, store, clock := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
 	require.NoError(t, err)
@@ -227,7 +226,7 @@ func TestAJobKeepsTheWindowItWasPromised(t *testing.T) {
 	service, records, _, _ := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
 	require.NoError(t, err)
@@ -248,7 +247,7 @@ func TestAJobWithNoByteStoreCollectsNothing(t *testing.T) {
 	service, _ := newService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, runner, tenantA, routing.OperationVideosGenerations)
+	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
 	require.NoError(t, err)
 	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
 	require.NoError(t, err)

@@ -78,7 +78,15 @@ type Runner interface {
 type Service struct {
 	records Repository
 	assets  blob.Store
-	policy  PollPolicy
+	// accountant prices a job once, at its terminal state. A service without
+	// one still runs: it keeps the same stamp on the record, so a deployment
+	// that later gains an accountant does not re-price the jobs it already
+	// finished.
+	accountant Accountant
+	// meter bounds how many jobs one account holds open. A service without one
+	// bounds nothing, which is what a deployment with no counter gets.
+	meter  Meter
+	policy PollPolicy
 	// retention is how long a stored asset stays readable, measured from the
 	// moment this gateway stored it.
 	retention time.Duration
@@ -132,6 +140,16 @@ func WithAssetBound(bytes int64) ServiceOption {
 	}
 }
 
+// WithAccountant gives the service somewhere to report a finished job.
+func WithAccountant(accountant Accountant) ServiceOption {
+	return func(s *Service) { s.accountant = accountant }
+}
+
+// WithJobMeter gives the service the counter that bounds outstanding jobs.
+func WithJobMeter(meter Meter) ServiceOption {
+	return func(s *Service) { s.meter = meter }
+}
+
 // WithIdentifiers replaces how a job identifier is minted.
 func WithIdentifiers(mint func() string) ServiceOption {
 	return func(s *Service) {
@@ -172,32 +190,79 @@ func (s *Service) PollPolicy() PollPolicy { return s.policy }
 // a caller reads and the window the sweep applies are one value.
 func (s *Service) Retention() time.Duration { return s.retention }
 
+// Submission is who is asking for the work and what bounds them.
+//
+// It is a struct rather than a parameter list because the three values that
+// travel with a submission come from three different places: the tenant and the
+// key from the authenticated request, the operation from the route, and the
+// bound from the tightest of the account's and the key's limits. A positional
+// list of four strings and a number is the shape that quietly transposes.
+type Submission struct {
+	Tenant string
+	// KeyID names the gateway API key that signed the request. It is optional:
+	// a deployment with authentication off submits jobs no key signed.
+	KeyID     string
+	Operation routing.Operation
+	// OutstandingBound is how many jobs this account may hold open. A value of
+	// zero or less leaves the account unbounded.
+	OutstandingBound int64
+}
+
+// OpenRunner builds the provider side of one submission.
+//
+// It is a function rather than a Runner because the account's outstanding job
+// bound is decided before it is called. Building a runner resolves a route and
+// a credential, and an account already at its limit must not spend either to be
+// told it is at its limit.
+type OpenRunner func(ctx context.Context) (Runner, error)
+
 // Submit starts one job and records it.
 //
 // The provider call comes before the record on purpose. A record written first
 // would name a job no provider ever accepted, and a caller polling it would
 // wait out the whole lifetime for an answer that was never coming.
-func (s *Service) Submit(
-	ctx context.Context,
-	runner Runner,
-	tenant string,
-	operation routing.Operation,
-) (Job, error) {
-	if runner == nil {
+//
+// The slot claim comes before everything, for the opposite reason. A submission
+// this gateway is about to refuse must not spend routing, credential
+// resolution, or provider work first, or the limit would bound what a tenant
+// reads rather than what it pays for. Every path that then fails to reach a
+// stored record gives the slot back.
+func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submission) (Job, error) {
+	if open == nil {
 		return Job{}, ErrRunnerRequired
 	}
-	if strings.TrimSpace(tenant) == "" {
+	tenant := strings.TrimSpace(submission.Tenant)
+	if tenant == "" {
 		return Job{}, fmt.Errorf("%w: it names no tenant", ErrInvalidJob)
+	}
+	if err := s.reserveSlot(ctx, tenant, submission.OutstandingBound); err != nil {
+		return Job{}, err
+	}
+	// kept turns true once a stored record holds the slot. Until then this
+	// function owns it, and settle must not be able to release it twice.
+	kept := false
+	defer func() {
+		if !kept {
+			s.releaseSlot(ctx, Job{Tenant: tenant})
+		}
+	}()
+	runner, err := open(ctx)
+	if err != nil {
+		return Job{}, err
+	}
+	if runner == nil {
+		return Job{}, ErrRunnerRequired
 	}
 	accepted, err := runner.Submit(ctx)
 	if err != nil {
 		return Job{}, err
 	}
 	now := s.now()
-	job, err := New(s.mint(), tenant, accepted.Provider, accepted.Model, operation, now)
+	job, err := New(s.mint(), tenant, accepted.Provider, accepted.Model, submission.Operation, now)
 	if err != nil {
 		return Job{}, err
 	}
+	job.KeyID = submission.KeyID
 	if err := job.AdoptProviderJob(accepted.ProviderJobID); err != nil {
 		return Job{}, err
 	}
@@ -207,10 +272,12 @@ func (s *Service) Submit(
 	if err := s.records.Create(ctx, job); err != nil {
 		return Job{}, err
 	}
+	kept = true
 	// A provider that answered a finished job on the first response has an
 	// asset waiting already. Collecting it here rather than on the first poll
-	// means a caller that never polls still gets the bytes it paid for.
-	return s.collect(ctx, runner, job), nil
+	// means a caller that never polls still gets the bytes it paid for, and
+	// settling it here means such a job never holds a slot it cannot use.
+	return s.settle(ctx, s.collect(ctx, runner, job)), nil
 }
 
 // Get reads one job without asking its provider anything. It is what a listing
@@ -237,14 +304,18 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, tenant, id string)
 		return Job{}, err
 	}
 	if job.State.Terminal() {
-		return s.collect(ctx, runner, job), nil
+		return s.settle(ctx, s.collect(ctx, runner, job)), nil
 	}
 	now := s.now()
 	if s.policy.Spent(job, now) {
 		if err := s.policy.FailSpent(&job, now); err != nil {
 			return Job{}, err
 		}
-		return s.commit(ctx, job)
+		spent, err := s.commit(ctx, job)
+		if err != nil {
+			return Job{}, err
+		}
+		return s.settle(ctx, spent), nil
 	}
 	if runner == nil {
 		return Job{}, ErrRunnerRequired
@@ -263,7 +334,7 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, tenant, id string)
 	if err != nil {
 		return Job{}, err
 	}
-	return s.collect(ctx, runner, moved), nil
+	return s.settle(ctx, s.collect(ctx, runner, moved)), nil
 }
 
 // Cancel stops one running job.
@@ -294,7 +365,11 @@ func (s *Service) Cancel(ctx context.Context, runner Runner, tenant, id string) 
 	if err := job.Transition(JobStateCancelled, now); err != nil {
 		return Job{}, err
 	}
-	return s.commit(ctx, job)
+	stopped, err := s.commit(ctx, job)
+	if err != nil {
+		return Job{}, err
+	}
+	return s.settle(ctx, stopped), nil
 }
 
 // handle reads the provider identifier out of the record for one call. The

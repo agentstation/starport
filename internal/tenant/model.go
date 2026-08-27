@@ -20,6 +20,20 @@ const DefaultID = "default"
 // DefaultName is the display name of the canonical tenant.
 const DefaultName = "Default"
 
+// DefaultOutstandingJobs bounds how many asynchronous jobs one account may
+// hold open when it sets no bound of its own.
+//
+// A job is the one operation this gateway starts and cannot price until later,
+// so an unbounded account can hold an unbounded spend commitment open against a
+// provider. Every other limit meters work that already finished. A default
+// therefore has to exist, because an absent one reads as unlimited on the only
+// dimension where unlimited costs money nothing has counted yet.
+//
+// Eight is a working number for one operator, not a provider fact. A video
+// takes minutes, so eight in flight keeps an interactive caller from waiting
+// while it stays far under what a provider queues.
+const DefaultOutstandingJobs int64 = 8
+
 // CredentialStrategy names which provider credential sources serve this
 // tenant, and in which order. The tenant owns this value because it is how
 // an operator says whether an account may draw on the deployment's own
@@ -116,6 +130,15 @@ func (t Tenant) Validate() error {
 
 // IsDefault reports whether this is the canonical tenant.
 func (t Tenant) IsDefault() bool { return t.ID == DefaultID }
+
+// OutstandingJobsBound resolves how many jobs this account may hold open,
+// treating an unset limit as the default rather than as unlimited.
+func (t Tenant) OutstandingJobsBound() int64 {
+	if t.Limits == nil || t.Limits.OutstandingJobs == nil {
+		return DefaultOutstandingJobs
+	}
+	return *t.Limits.OutstandingJobs
+}
 
 // EffectiveCredentialStrategy resolves the stored value, treating an unset
 // strategy as the default rather than as an error.

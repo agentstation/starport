@@ -96,11 +96,17 @@ func (l *Limits) budget(dimension Dimension) *Budget {
 	return nil
 }
 
-// StoredBytesRule is one stored byte bound an upload must satisfy.
-type StoredBytesRule struct {
+// LevelRule is one level bound a call must satisfy, and the holder that set it.
+type LevelRule struct {
 	Scope Scope
 	Limit int64
 }
+
+// StoredBytesRule is one stored byte bound an upload must satisfy.
+type StoredBytesRule = LevelRule
+
+// OutstandingJobsRule is one outstanding job bound a submission must satisfy.
+type OutstandingJobsRule = LevelRule
 
 // TightestStoredBytes reports the stored byte bound an upload must satisfy,
 // and whether one applies at all.
@@ -116,7 +122,24 @@ type StoredBytesRule struct {
 // tighter number than the account's own. The returned scope names which holder
 // set the bound, so a refusal can name the owner an operator has to talk to.
 func TightestStoredBytes(tenantLimits, keyLimits *Limits) (StoredBytesRule, bool) {
-	var tightest StoredBytesRule
+	return tightestLevel(tenantLimits, keyLimits, func(l *Limits) *int64 { return l.StoredBytes })
+}
+
+// TightestOutstandingJobs reports the outstanding job bound a submission must
+// satisfy, and whether one applies at all.
+//
+// It resolves the same way stored bytes do, and for the same reason. A job
+// belongs to an account, so both bounds read one counter and the smaller of
+// them satisfies the larger. A key bound is an operator asking that this key
+// not fill the account's queue on its own.
+func TightestOutstandingJobs(tenantLimits, keyLimits *Limits) (OutstandingJobsRule, bool) {
+	return tightestLevel(tenantLimits, keyLimits, func(l *Limits) *int64 { return l.OutstandingJobs })
+}
+
+// tightestLevel picks the smaller of the account bound and the key bound for
+// one level dimension, and reports which holder set it.
+func tightestLevel(tenantLimits, keyLimits *Limits, read func(*Limits) *int64) (LevelRule, bool) {
+	var tightest LevelRule
 	found := false
 	for _, holder := range []struct {
 		scope  Scope
@@ -125,12 +148,15 @@ func TightestStoredBytes(tenantLimits, keyLimits *Limits) (StoredBytesRule, bool
 		{ScopeTenant, tenantLimits},
 		{ScopeKey, keyLimits},
 	} {
-		if holder.limits == nil || holder.limits.StoredBytes == nil {
+		if holder.limits == nil {
 			continue
 		}
-		bound := *holder.limits.StoredBytes
-		if !found || bound < tightest.Limit {
-			tightest = StoredBytesRule{Scope: holder.scope, Limit: bound}
+		value := read(holder.limits)
+		if value == nil {
+			continue
+		}
+		if !found || *value < tightest.Limit {
+			tightest = LevelRule{Scope: holder.scope, Limit: *value}
 			found = true
 		}
 	}

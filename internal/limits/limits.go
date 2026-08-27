@@ -28,6 +28,8 @@ var (
 	ErrInvalidBudgetInterval = errors.New("budget interval must be day, week, or month")
 	// ErrInvalidStoredBytes reports a non-positive stored byte bound.
 	ErrInvalidStoredBytes = errors.New("stored bytes limit must be positive")
+	// ErrInvalidOutstandingJobs reports a non-positive outstanding job bound.
+	ErrInvalidOutstandingJobs = errors.New("outstanding jobs limit must be positive")
 )
 
 // Limits carries the request-rate override and the consumption budgets of
@@ -43,6 +45,11 @@ type Limits struct {
 	// one time. It is a level rather than a rate, so no interval resets it: a
 	// write raises the total and a delete lowers it.
 	StoredBytes *int64 `json:"stored_bytes,omitempty"`
+	// OutstandingJobs bounds how many jobs this holder may have running at
+	// one time. Like StoredBytes it is a level rather than a rate, and unlike
+	// every other limit here it meters work that has not finished: a submitted
+	// job is a spend commitment this gateway cannot read yet.
+	OutstandingJobs *int64 `json:"outstanding_jobs,omitempty"`
 }
 
 // RequestLimit is one request-rate override.
@@ -84,13 +91,16 @@ func (l *Limits) Validate() error {
 	if l.StoredBytes != nil && *l.StoredBytes <= 0 {
 		return ErrInvalidStoredBytes
 	}
+	if l.OutstandingJobs != nil && *l.OutstandingJobs <= 0 {
+		return ErrInvalidOutstandingJobs
+	}
 	return nil
 }
 
 // IsZero reports whether no limit dimension is set.
 func (l *Limits) IsZero() bool {
 	return l == nil || (l.Requests == nil && l.Spend == nil &&
-		l.Tokens == nil && l.StoredBytes == nil)
+		l.Tokens == nil && l.StoredBytes == nil && l.OutstandingJobs == nil)
 }
 
 // Clone returns a deep copy of the limits.
@@ -114,6 +124,10 @@ func (l *Limits) Clone() *Limits {
 	if l.StoredBytes != nil {
 		storedBytes := *l.StoredBytes
 		clone.StoredBytes = &storedBytes
+	}
+	if l.OutstandingJobs != nil {
+		outstandingJobs := *l.OutstandingJobs
+		clone.OutstandingJobs = &outstandingJobs
 	}
 	return clone
 }
