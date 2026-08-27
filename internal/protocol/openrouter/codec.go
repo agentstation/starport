@@ -594,9 +594,14 @@ type ModelOffering struct {
 	Availability        string           `json:"availability,omitempty"`
 	Lifecycle           string           `json:"lifecycle,omitempty"`
 	Pricing             *OfferingPricing `json:"pricing,omitempty"`
+	// Operations names what this offering serves. A caller reads it to learn
+	// which route answers for the model, because a model that reads documents
+	// and a model that answers chat reach different paths.
+	Operations []string `json:"operations,omitempty"`
 }
 
-// OfferingPricing carries every token price dimension of one offering.
+// OfferingPricing carries the published prices of one offering. The token
+// dimensions price one token each. PageInput prices one document page.
 type OfferingPricing struct {
 	Prompt     string `json:"prompt,omitempty"`
 	Completion string `json:"completion,omitempty"`
@@ -606,7 +611,10 @@ type OfferingPricing struct {
 	// Audio tokens bill at their own rate wherever a provider meters them.
 	AudioInput  string `json:"audio_input,omitempty"`
 	AudioOutput string `json:"audio_output,omitempty"`
-	Currency    string `json:"currency,omitempty"`
+	// A page is the unit document recognition bills in. No token price
+	// converts into it.
+	PageInput string `json:"page_input,omitempty"`
+	Currency  string `json:"currency,omitempty"`
 }
 
 // Architecture describes one OpenRouter model architecture.

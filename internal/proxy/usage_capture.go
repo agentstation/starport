@@ -514,6 +514,7 @@ func applyExtraction(record *usage.Record, response *ChatCompletionResponse) {
 	record.DocumentPages = int64(response.ExtractionPages)
 	record.RecognizedPages = int64(response.RecognizedPages)
 	record.NativePages = int64(response.NativePages)
+	record.ExtractionCached = response.ExtractionCached
 	record.ExtractionMillis = response.ExtractionDuration.Milliseconds()
 	if response.ExtractionUnpriced {
 		record.Cost = nil

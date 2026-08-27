@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { listModels, listPresets, listProviderCatalog, type Model } from "@/lib/api";
 import { formatContext, formatPricePerM, providerLabel } from "@/lib/format";
+import { chattableModels } from "@/lib/modelFilter";
 
 // ModelPicker is the chat model popover (DESIGN.md): search, pinned
 // models first, presets, then provider groups. Rows show capability
@@ -106,7 +107,7 @@ export function ModelPicker({
     const matches = (haystack: string) =>
       !needle || haystack.toLowerCase().includes(needle);
 
-    const all = models.data ?? [];
+    const all = chattableModels(models.data ?? []);
     const pinned: PickerItem[] = [];
     const byProvider = new Map<string, PickerItem[]>();
     for (const model of all) {

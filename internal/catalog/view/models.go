@@ -192,20 +192,40 @@ func offeringOperations(route runtimecatalog.Route) []string {
 	return operations
 }
 
+// offeringPricing projects the prices one offering publishes.
+//
+// An offering that reads documents may publish a page price and no token price
+// at all, so the token block alone no longer decides whether there is anything
+// to report. A reader that saw no pricing on such an offering would take a
+// priced page for a free one.
 func offeringPricing(pricing *starmapcatalogs.ModelPricing) *OfferingPricingInfo {
-	if pricing == nil || pricing.Tokens == nil {
+	if pricing == nil {
 		return nil
 	}
-	return &OfferingPricingInfo{
-		Prompt:      formatTokenPrice(pricing.Tokens.Input),
-		Completion:  formatTokenPrice(pricing.Tokens.Output),
-		Reasoning:   formatTokenPrice(pricing.Tokens.Reasoning),
-		CacheRead:   formatTokenPrice(pricing.Tokens.CacheRead),
-		CacheWrite:  formatTokenPrice(pricing.Tokens.CacheWrite),
-		AudioInput:  formatTokenPrice(pricing.Tokens.AudioInput),
-		AudioOutput: formatTokenPrice(pricing.Tokens.AudioOutput),
-		Currency:    pricing.Currency.String(),
+	page := formatPagePrice(pricing)
+	if pricing.Tokens == nil && page == "" {
+		return nil
 	}
+	info := &OfferingPricingInfo{PageInput: page, Currency: pricing.Currency.String()}
+	if pricing.Tokens != nil {
+		info.Prompt = formatTokenPrice(pricing.Tokens.Input)
+		info.Completion = formatTokenPrice(pricing.Tokens.Output)
+		info.Reasoning = formatTokenPrice(pricing.Tokens.Reasoning)
+		info.CacheRead = formatTokenPrice(pricing.Tokens.CacheRead)
+		info.CacheWrite = formatTokenPrice(pricing.Tokens.CacheWrite)
+		info.AudioInput = formatTokenPrice(pricing.Tokens.AudioInput)
+		info.AudioOutput = formatTokenPrice(pricing.Tokens.AudioOutput)
+	}
+	return info
+}
+
+// formatPagePrice reads the per-page cost of one document page. It is already
+// a whole-page number, so unlike a token price it needs no scaling.
+func formatPagePrice(pricing *starmapcatalogs.ModelPricing) string {
+	if pricing.Operations == nil || pricing.Operations.PageInput == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*pricing.Operations.PageInput, 'g', -1, 64)
 }
 
 func formatTokenPrice(cost *starmapcatalogs.ModelTokenCost) string {

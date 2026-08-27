@@ -1,4 +1,4 @@
-import type { Model } from "@/lib/api";
+import { RECOGNITION_OPERATION, type Model } from "@/lib/api";
 
 // The models-list filter predicate. Filter state lives in the URL, so
 // this seam defines what each search param means.
@@ -44,6 +44,34 @@ export function operationsOf(model: Model): string[] {
     for (const operation of offering.operations ?? []) seen.add(operation);
   }
   return [...seen].sort();
+}
+
+// chattableModels drops the models that read documents and answer nothing.
+//
+// A recognition model reaches this gateway through the file-parser plugin, not
+// through the model field, so offering one in a chat picker hands the reader a
+// routing refusal that says nothing about the mistake. A model that serves
+// recognition beside chat stays: it can answer, and these are chat pickers.
+//
+// A model with no offerings stays too. That is a catalog this console could not
+// read rather than a model that serves nothing, and hiding it would shrink the
+// picker over a fact nobody established.
+export function chattableModels(models: Model[]): Model[] {
+  return models.filter((model) => {
+    const offerings = model.offerings ?? [];
+    if (offerings.length === 0) return true;
+    return !offerings.every((offering) => servesOnlyRecognition(offering));
+  });
+}
+
+// servesOnlyRecognition reads one offering. Recognition beside any other
+// operation is a model that answers, so the test is what the list holds apart
+// from recognition, not whether recognition is in it. An offering that names no
+// operation is one the catalog did not describe, and it is not excluded.
+function servesOnlyRecognition(offering: { operations?: string[] }): boolean {
+  const operations = offering.operations ?? [];
+  if (operations.length === 0) return false;
+  return operations.every((operation) => operation === RECOGNITION_OPERATION);
 }
 
 export function hasCapability(model: Model, capability: string): boolean {

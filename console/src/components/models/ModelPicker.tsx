@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { INPUT_CLASS } from "@/components/ui/Form";
 import { listModels } from "@/lib/api";
+import { chattableModels } from "@/lib/modelFilter";
 
 const MAX_SUGGESTIONS = 8;
 
@@ -32,7 +33,7 @@ export function ModelPicker({
   });
 
   const suggestions = useMemo(() => {
-    const ids = (models.data ?? []).map((model) => model.id);
+    const ids = chattableModels(models.data ?? []).map((model) => model.id);
     const query = value.trim().toLowerCase();
     const matches = query
       ? ids.filter((modelId) => modelId.toLowerCase().includes(query))

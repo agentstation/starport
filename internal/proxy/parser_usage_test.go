@@ -9,6 +9,7 @@ import (
 
 	starmapcatalogs "github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/limits"
@@ -91,6 +92,69 @@ func meteredProxyWithPrices(
 		return records[0]
 	}
 	return service, router, read
+}
+
+// meteredCachingProxy is meteredProxy with a document cache behind it, which
+// is how a second turn over the same document is put under test.
+func meteredCachingProxy(t *testing.T, page string) (Proxy, *recognizingRouter, meterReaders) {
+	t.Helper()
+	cache, err := document.NewCache(newExtractionStore(), nil, 0)
+	require.NoError(t, err)
+	router := newRecognizingRouter(page)
+	repository := &recordingUsageRepository{}
+	capture := NewUsageCapture(repository)
+	service := capture.Wrap(&proxy{
+		router:      router,
+		prices:      recognitionPrices(),
+		extractions: cache,
+	})
+	read := func(t *testing.T, count int) []usage.Record {
+		t.Helper()
+		capture.Flush()
+		records := repository.all()
+		require.Len(t, records, count)
+		return records
+	}
+	return service, router, read
+}
+
+// meterReaders returns the records this proxy has written so far.
+type meterReaders func(t *testing.T, count int) []usage.Record
+
+// TestACachedDocumentIsRecordedAsCachedAndNotChargedAgain holds what the second
+// turn of a conversation about one document reports.
+//
+// The pages are the same pages and the cost is nothing, which is exactly what a
+// native read records too. Only the cached flag separates them, and without it
+// an operator reading a month of records would credit the native engine for
+// every cache hit the recognizer paid for once.
+func TestACachedDocumentIsRecordedAsCachedAndNotChargedAgain(t *testing.T) {
+	t.Parallel()
+	service, router, read := meteredCachingProxy(t, "INVOICE 4471\nAmount due: $912.00")
+
+	// The cache key names the catalog generation that read the document, so a
+	// turn with no catalog in force caches nothing.
+	ctx := catalogContext(t)
+	for range 2 {
+		_, err := service.ProcessChatCompletion(ctx,
+			parsedRequest(t, "scanned.pdf", inference.ParserEngineRecognition))
+		require.NoError(t, err)
+	}
+	require.Equal(t, 1, router.calls,
+		"the second turn paid to read a document it had already read")
+
+	records := read(t, 2)
+	first, second := records[0], records[1]
+	require.False(t, first.ExtractionCached)
+	require.NotNil(t, first.ExtractionCost)
+
+	require.True(t, second.ExtractionCached,
+		"a cache hit was recorded as an uncached read of the same pages")
+	require.Equal(t, first.DocumentPages, second.DocumentPages,
+		"a cached turn stopped naming the pages the model was given")
+	require.Zero(t, second.RecognizedPages)
+	require.Nil(t, second.ExtractionCost,
+		"the account paid twice to read one document")
 }
 
 // TestARecognizedDocumentRecordsItsPagesAndItsCost is the acceptance case. The

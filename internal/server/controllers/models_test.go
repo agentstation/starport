@@ -145,15 +145,6 @@ func modelFixture() *proxy.ModelsResponse {
 // reports the omission. The field is simply absent from the response, which a
 // caller cannot tell from an offering that publishes no such price.
 func TestOpenRouterPricingMirrorsTheCatalogProjection(t *testing.T) {
-	wireNames := func(value any) []string {
-		structType := reflect.TypeOf(value)
-		names := make([]string, 0, structType.NumField())
-		for i := range structType.NumField() {
-			name, _, _ := strings.Cut(structType.Field(i).Tag.Get("json"), ",")
-			names = append(names, name)
-		}
-		return names
-	}
 	require.Equal(t, wireNames(view.OfferingPricingInfo{}), wireNames(openrouter.OfferingPricing{}),
 		"the OpenRouter offering price shape drifted from the catalog projection")
 
@@ -177,4 +168,53 @@ func TestOpenRouterPricingMirrorsTheCatalogProjection(t *testing.T) {
 		require.Equal(t, "value-"+field.Name, decoded[name],
 			"openRouterOffering drops %s, so no caller ever sees it", field.Name)
 	}
+}
+
+// TestOpenRouterOfferingsMirrorTheCatalogProjection widens the same guard from
+// the price block to the offering that holds it.
+//
+// The operations list reached the projection and stopped there. Nothing failed:
+// the OpenRouter offering simply had no such field, so every response said the
+// offering served nothing, and a console filtering media models by operation
+// filtered against an empty list. A dropped fact is invisible in a response,
+// which is why the shape needs a test rather than a reader.
+func TestOpenRouterOfferingsMirrorTheCatalogProjection(t *testing.T) {
+	require.Equal(t, wireNames(view.ModelOfferingInfo{}), wireNames(openrouter.ModelOffering{}),
+		"the OpenRouter offering shape drifted from the catalog projection")
+
+	length := 128000
+	completion := 4096
+	converted := openRouterOffering(proxy.ModelOfferingInfo{
+		Provider:            "mistral",
+		ProviderName:        "Mistral",
+		ProviderModelID:     "mistral-ocr-2505",
+		ContextLength:       &length,
+		MaxCompletionTokens: &completion,
+		Availability:        "available",
+		Lifecycle:           "active",
+		Pricing:             &view.OfferingPricingInfo{PageInput: "0.001", Currency: "USD"},
+		Operations:          []string{"documents-recognition"},
+	})
+
+	encoded, err := json.Marshal(converted)
+	require.NoError(t, err)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	for _, name := range wireNames(view.ModelOfferingInfo{}) {
+		require.NotEmptyf(t, decoded[name],
+			"openRouterOffering drops %s, so no caller ever sees it", name)
+	}
+	require.Equal(t, []any{"documents-recognition"}, decoded["operations"])
+	require.Equal(t, "0.001", decoded["pricing"].(map[string]any)["page_input"])
+}
+
+// wireNames lists the JSON names of one struct in declaration order.
+func wireNames(value any) []string {
+	structType := reflect.TypeOf(value)
+	names := make([]string, 0, structType.NumField())
+	for i := range structType.NumField() {
+		name, _, _ := strings.Cut(structType.Field(i).Tag.Get("json"), ",")
+		names = append(names, name)
+	}
+	return names
 }
