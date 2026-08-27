@@ -62,8 +62,9 @@ type ModelOfferingInfo struct {
 	Operations []string `json:"operations,omitempty"`
 }
 
-// OfferingPricingInfo carries every token price dimension of one offering
-// as decimal per-token strings.
+// OfferingPricingInfo carries the published prices of one offering as decimal
+// strings. The token dimensions price one token each. PageInput prices one
+// document page.
 type OfferingPricingInfo struct {
 	Prompt     string `json:"prompt,omitempty"`
 	Completion string `json:"completion,omitempty"`
@@ -74,7 +75,11 @@ type OfferingPricingInfo struct {
 	// so an audio turn cannot be priced from Prompt and Completion alone.
 	AudioInput  string `json:"audio_input,omitempty"`
 	AudioOutput string `json:"audio_output,omitempty"`
-	Currency    string `json:"currency,omitempty"`
+	// PageInput is what one document page costs at this offering. No token
+	// price converts into it, so an offering that reads documents and
+	// publishes no page price is one a caller cannot price at all.
+	PageInput string `json:"page_input,omitempty"`
+	Currency  string `json:"currency,omitempty"`
 }
 
 // ModelPricing represents model pricing information

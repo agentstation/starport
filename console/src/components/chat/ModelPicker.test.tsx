@@ -24,6 +24,28 @@ vi.mock("@/lib/api", async (importOriginal) => {
         name: "Llama 3.1 8B",
         supported_parameters: ["tools", "tool_choice"],
       },
+      {
+        id: "mistral/mistral-ocr",
+        name: "Mistral OCR",
+        offerings: [
+          {
+            provider: "mistral",
+            provider_model_id: "mistral-ocr-2505",
+            operations: ["documents-recognition"],
+          },
+        ],
+      },
+      {
+        id: "google/gemini-2.5-flash",
+        name: "Gemini 2.5 Flash",
+        offerings: [
+          {
+            provider: "google",
+            provider_model_id: "gemini-2.5-flash",
+            operations: ["chat-completions", "documents-recognition"],
+          },
+        ],
+      },
     ],
     listPresets: async () => [],
     listProviderCatalog: async () => [],
@@ -65,4 +87,19 @@ test("web search badge follows the catalog parameter", async () => {
 
   // Tool support is a separate fact and must keep reading independently.
   expect(rowFor("Llama 3.1 8B").querySelector("[aria-label='Tools']")).toBeTruthy();
+});
+
+// PLG-V18. A model that only reads documents answers no chat turn. It reaches
+// this gateway through the file-parser plugin instead, so picking one from the
+// chat picker returns a routing refusal that names nothing the reader did
+// wrong. The catalog is the only place that says which models those are.
+test("the chat picker omits a model that only reads documents", async () => {
+  mount();
+  await waitFor(() => expect(screen.getByText("Llama 3.1 8B")).toBeTruthy());
+
+  expect(screen.queryByText("Mistral OCR")).toBeNull();
+
+  // A model that reads documents and also answers chat stays. The exclusion is
+  // about what a model cannot do, not about the operation being present.
+  expect(screen.getByText("Gemini 2.5 Flash")).toBeTruthy();
 });

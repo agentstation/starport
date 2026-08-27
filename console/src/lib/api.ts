@@ -330,6 +330,10 @@ export type OfferingPricing = {
   // Audio tokens bill at their own rate wherever a provider meters them.
   audio_input?: string;
   audio_output?: string;
+  // A page is the unit document recognition bills in. No token price converts
+  // into it, so an offering that reads documents and publishes no page price
+  // is one this console cannot price at all.
+  page_input?: string;
   currency?: string;
 };
 
@@ -524,6 +528,22 @@ export type ActivityRecord = {
   ttft_ms?: number;
   attempts?: number;
   cache_status?: string;
+  // Which engine read the documents this turn attached: "native" for the
+  // in-process reader, "recognition" for a catalogued model. Absent on a turn
+  // that attached none, which is every ordinary chat turn.
+  parser_engine?: string;
+  document_pages?: number;
+  // The pages a recognition model was paid to read this turn. Zero on a cached
+  // read: an earlier turn paid for those pages.
+  recognized_pages?: number;
+  native_pages?: number;
+  // Every attachment came back from the extraction cache. A cached read and a
+  // native read both cost nothing, and only this separates them.
+  extraction_cached?: boolean;
+  extraction_millis?: number;
+  // The recognized share of `cost`, reported on its own so a reader can tell
+  // what reading the document cost from what answering about it cost.
+  extraction_cost?: { nano_usd?: number; currency?: string };
   cost?: { nano_usd?: number; currency?: string };
   cost_unavailable_reason?: string;
 };
@@ -1177,6 +1197,11 @@ export function completeChat(
 // gateway and fetches the bytes from it.
 
 export const VIDEO_OPERATION = "videos-generations";
+
+// RECOGNITION_OPERATION is the catalog's own name for reading the text off a
+// document. A model that serves it is a document reader, and a chat request
+// naming one is a routing refusal waiting to happen.
+export const RECOGNITION_OPERATION = "documents-recognition";
 
 export type VideoJob = {
   id: string;

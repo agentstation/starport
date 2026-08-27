@@ -112,6 +112,41 @@ func TestANativelyReadDocumentCostsNothing(t *testing.T) {
 	})
 }
 
+// TestACachedReadIsRecordedAsCachedRatherThanFree separates the two records
+// that carry pages and no cost.
+//
+// A native read cost nothing because no provider saw the pages. A cached read
+// cost nothing because an earlier turn paid for them. Without this flag the two
+// look alike, and an operator reading a month of records would count every
+// cache hit as work the native engine did.
+func TestACachedReadIsRecordedAsCachedRatherThanFree(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := context.Background()
+		repository, err := Open(store, Options{})
+		require.NoError(t, err)
+
+		record := extractionRecord("req-cached", testBase)
+		record.ParserEngine = "recognition"
+		record.RecognizedPages = 0
+		record.NativePages = 0
+		record.ExtractionCached = true
+		record.ExtractionCost = nil
+		require.NoError(t, repository.Put(ctx, record))
+
+		page, err := repository.List(ctx, Query{KeyID: "key-a"})
+		require.NoError(t, err)
+		require.Len(t, page.Records, 1)
+		stored := page.Records[0]
+
+		require.True(t, stored.ExtractionCached,
+			"a cache hit was stored as an uncached read of the same pages")
+		require.Positive(t, stored.DocumentPages,
+			"a cached read still names the pages the model was given")
+		require.Zero(t, stored.RecognizedPages)
+		require.Nil(t, stored.ExtractionCost)
+	})
+}
+
 // TestTheExtractionDurationSurvivesTheRoundTrip holds the latency an operator
 // cannot find anywhere else. A recognition call runs inside the request and
 // before the model does, so the request latency reports the two together and

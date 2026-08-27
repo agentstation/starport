@@ -214,6 +214,7 @@ func openRouterOffering(offering proxy.ModelOfferingInfo) openrouter.ModelOfferi
 		MaxCompletionTokens: offering.MaxCompletionTokens,
 		Availability:        offering.Availability,
 		Lifecycle:           offering.Lifecycle,
+		Operations:          offering.Operations,
 	}
 	if offering.Pricing != nil {
 		converted.Pricing = &openrouter.OfferingPricing{
@@ -224,6 +225,7 @@ func openRouterOffering(offering proxy.ModelOfferingInfo) openrouter.ModelOfferi
 			CacheWrite:  offering.Pricing.CacheWrite,
 			AudioInput:  offering.Pricing.AudioInput,
 			AudioOutput: offering.Pricing.AudioOutput,
+			PageInput:   offering.Pricing.PageInput,
 			Currency:    offering.Pricing.Currency,
 		}
 	}

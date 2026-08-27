@@ -153,6 +153,11 @@ type Record struct {
 	// NativePages is how many pages this turn read in process. They cost
 	// nothing: no provider saw them.
 	NativePages int64 `json:"native_pages,omitempty"`
+	// ExtractionCached reports that every attachment came back from the
+	// extraction cache. A cached read and a native read both record no cost,
+	// and only this field separates a page an earlier turn already paid for
+	// from a page no provider ever charged for.
+	ExtractionCached bool `json:"extraction_cached,omitempty"`
 	// ExtractionMillis is how long the document reads took. A recognition read
 	// is a provider call inside a provider call, so it is latency an operator
 	// cannot find anywhere else in this record.
