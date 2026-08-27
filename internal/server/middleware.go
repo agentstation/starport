@@ -73,17 +73,36 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// SizeLimiter limits the size of request bodies
+// SizeLimiter limits the size of request bodies. A caller that states its
+// size in Content-Length is refused before the gateway reads a byte of it,
+// which matters most for the case this limit exists to catch: a request that
+// carries attached media is large, and reading it only to discard it costs
+// the memory the limit is there to protect.
+//
+// A body whose size the caller does not state is cut while it is read. The
+// decode path answers that one, because only the reader learns the body was
+// too long.
 func SizeLimiter(maxSize int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Only limit request body size for methods that have a body
-			if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
-				r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+			if maxSize <= 0 || !methodCarriesBody(r.Method) {
+				next.ServeHTTP(w, r)
+				return
 			}
+			if r.ContentLength > maxSize {
+				writeRequestTooLarge(w, r, maxSize, r.ContentLength)
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// methodCarriesBody reports whether a method can carry a request body worth
+// limiting.
+func methodCarriesBody(method string) bool {
+	return method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch
 }
 
 // Timeout adds a timeout to requests

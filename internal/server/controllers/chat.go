@@ -40,7 +40,7 @@ func newChatController(service proxy.Proxy, protocol Protocol) *ChatController {
 func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
 	req, unenforced, err := h.decodeRequest(r)
 	if err != nil {
-		h.writeInvalidRequest(w, "Invalid request body: "+err.Error())
+		h.writeBodyRefusal(w, err)
 		return
 	}
 	if len(unenforced) > 0 {

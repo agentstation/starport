@@ -4,6 +4,8 @@
 // used an earlier console keeps its history, so they must not change.
 
 import type { ChatUsage } from "@/lib/api";
+import { attachmentPart } from "@/lib/attachments";
+import type { Attachment, ContentPart } from "@/lib/attachments";
 
 const STORAGE_KEY = "starport.chats";
 const LEGACY_STORAGE_KEY = "starport_chats";
@@ -55,8 +57,11 @@ export type ChatStats = {
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
-  // Attached images on a user turn, as data URLs. Absent on legacy
-  // records and on text-only turns.
+  // Attached media on a user turn. Absent on a text-only turn.
+  attachments?: Attachment[];
+  // Attached images on a user turn, as data URLs. This is the shape the
+  // console wrote before an attachment carried a kind. A stored
+  // conversation still holds it, so the read path keeps it.
   images?: string[];
   reasoning?: string;
   // The routed model that produced an assistant turn.
@@ -67,23 +72,32 @@ export type ChatMessage = {
   reasoningMs?: number;
 };
 
-export type ContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
+// turnAttachments reads the attachments of one turn from either record
+// shape. A conversation stored before audio existed holds images alone,
+// and those turns must still render and still replay on a retry.
+export function turnAttachments(
+  message: Pick<ChatMessage, "images" | "attachments">,
+): Attachment[] {
+  if (message.attachments?.length) return message.attachments;
+  return (message.images ?? []).map((url, index) => ({
+    kind: "image" as const,
+    url,
+    name: `Attachment ${index + 1}`,
+  }));
+}
 
 // messageContent builds the request content for one turn: the plain
-// string without attachments (legacy shape), content parts with them.
+// string without attachments, content parts with them. The string stays
+// for a text-only turn because that is the request every model accepts,
+// including one the catalog records no modalities for.
 export function messageContent(
-  message: Pick<ChatMessage, "content" | "images">,
+  message: Pick<ChatMessage, "content" | "images" | "attachments">,
 ): string | ContentPart[] {
-  const images = message.images ?? [];
-  if (!images.length) return message.content;
+  const attachments = turnAttachments(message);
+  if (!attachments.length) return message.content;
   return [
     { type: "text" as const, text: message.content },
-    ...images.map((url) => ({
-      type: "image_url" as const,
-      image_url: { url },
-    })),
+    ...attachments.map(attachmentPart),
   ];
 }
 

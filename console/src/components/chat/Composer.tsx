@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUp,
+  AudioLines,
   Brain,
   ChevronDown,
   Columns2,
+  FileText,
   Plus,
   SlidersHorizontal,
   Square,
@@ -11,13 +13,16 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import {
-  ModelPicker,
-  supportsReasoning,
-  supportsVision,
-} from "@/components/chat/ModelPicker";
+import { ModelPicker, supportsReasoning } from "@/components/chat/ModelPicker";
 import { INPUT_CLASS, TEXTAREA_CLASS } from "@/components/ui/Form";
 import { listModels } from "@/lib/api";
+import {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_KINDS,
+  modelAccepts,
+  readAttachment,
+} from "@/lib/attachments";
+import type { Attachment, AttachmentKind } from "@/lib/attachments";
 import type { ChatParams } from "@/lib/chatStore";
 
 // Composer is the DESIGN.md chat input card: one rounded surface with
@@ -28,6 +33,40 @@ import type { ChatParams } from "@/lib/chatStore";
 
 const MAX_TEXTAREA_HEIGHT = 240;
 const MAX_ATTACHMENTS = 4;
+
+// ATTACHMENT_LABELS names each control. A disabled control states why it
+// is disabled, because the two reasons ask for different things from the
+// reader: a compare session has to end, and an unsupported kind needs
+// another model.
+const ATTACHMENT_LABELS: Record<
+  AttachmentKind,
+  { button: string; input: string; compare: string; unsupported: string }
+> = {
+  image: {
+    button: "Attach image",
+    input: "Attach images",
+    compare: "Image attachments are unavailable in compare mode",
+    unsupported: "This model does not accept image input",
+  },
+  audio: {
+    button: "Attach audio",
+    input: "Attach audio files",
+    compare: "Audio attachments are unavailable in compare mode",
+    unsupported: "This model does not accept audio input",
+  },
+  document: {
+    button: "Attach document",
+    input: "Attach documents",
+    compare: "Document attachments are unavailable in compare mode",
+    unsupported: "This model does not accept document input",
+  },
+};
+
+const ATTACHMENT_ICONS: Record<AttachmentKind, typeof Plus> = {
+  image: Plus,
+  audio: AudioLines,
+  document: FileText,
+};
 
 const EFFORT_CHOICES = [
   { value: "", label: "Default effort" },
@@ -71,6 +110,54 @@ function BarButton({
     >
       {children}
     </button>
+  );
+}
+
+// AttachControl is one attachment kind: a hidden file input and the bar
+// button that opens it. Each kind owns its own input so the picker filter
+// matches the control the reader pressed.
+function AttachControl({
+  kind,
+  enabled,
+  compareActive,
+  onFiles,
+}: {
+  kind: AttachmentKind;
+  enabled: boolean;
+  compareActive: boolean;
+  onFiles: (files: FileList | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const labels = ATTACHMENT_LABELS[kind];
+  const Icon = ATTACHMENT_ICONS[kind];
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ATTACHMENT_ACCEPT[kind]}
+        multiple
+        aria-label={labels.input}
+        className="hidden"
+        onChange={(event) => {
+          onFiles(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      <BarButton
+        onClick={() => inputRef.current?.click()}
+        label={
+          enabled
+            ? labels.button
+            : compareActive
+              ? labels.compare
+              : labels.unsupported
+        }
+        disabled={!enabled}
+      >
+        <Icon className="size-4" />
+      </BarButton>
+    </>
   );
 }
 
@@ -259,7 +346,7 @@ export function Composer({
 }: {
   draft: string;
   onDraftChange: (next: string) => void;
-  onSend: (text: string, images?: string[]) => void;
+  onSend: (text: string, attachments?: Attachment[]) => void;
   streaming: boolean;
   onStop: () => void;
   model: string;
@@ -280,10 +367,9 @@ export function Composer({
   onCompareRemove?: (id: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<"none" | "effort" | "params">("none");
-  // Attached images as data URLs; they ship with the next send.
-  const [attachments, setAttachments] = useState<string[]>([]);
+  // Attached media; it ships with the next send.
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const models = useQuery({
     queryKey: ["models"],
@@ -294,28 +380,31 @@ export function Composer({
 
   const selectedModel = models.data?.find((entry) => entry.id === model);
   const reasoning = supportsReasoning(selectedModel);
-  const vision = supportsVision(selectedModel);
   const effort = params.effort ?? "";
-  // Attachments only exist for a model that accepts image input; a
-  // switch to a text-only model (or compare mode) drops them rather
-  // than silently sending content the model rejects.
-  const canAttach = vision && !compareActive;
+  // A control is live only for a model that reads its kind. Compare mode
+  // sends one text prompt to several models, so it accepts none.
+  const accepts = (kind: AttachmentKind) =>
+    !compareActive && modelAccepts(selectedModel, kind);
+  // A switch to a model that reads less drops what it cannot read, rather
+  // than silently sending content the model rejects. The stored draft
+  // keeps whatever the new model still accepts.
+  const acceptedKinds = ATTACHMENT_KINDS.filter(accepts).join(",");
   useEffect(() => {
-    if (!canAttach) setAttachments([]);
-  }, [canAttach]);
+    const live = new Set(acceptedKinds ? acceptedKinds.split(",") : []);
+    setAttachments((current) => {
+      const kept = current.filter((item) => live.has(item.kind));
+      return kept.length === current.length ? current : kept;
+    });
+  }, [acceptedKinds]);
 
   const attachFiles = (files: FileList | null) => {
     for (const file of [...(files ?? [])].slice(0, MAX_ATTACHMENTS)) {
-      if (!file.type.startsWith("image/")) continue;
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result !== "string") return;
-        const url = reader.result;
+      void readAttachment(file).then((attachment) => {
+        if (!attachment || !accepts(attachment.kind)) return;
         setAttachments((current) =>
-          current.length >= MAX_ATTACHMENTS ? current : [...current, url],
+          current.length >= MAX_ATTACHMENTS ? current : [...current, attachment],
         );
-      };
-      reader.readAsDataURL(file);
+      });
     }
   };
 
@@ -369,16 +458,29 @@ export function Composer({
       />
       {attachments.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 px-3 pb-1">
-          {attachments.map((url, index) => (
+          {attachments.map((attachment, index) => (
             <span
-              key={`${index}-${url.slice(-24)}`}
-              className="relative inline-flex overflow-hidden rounded-md border border-border-2"
+              key={`${index}-${attachment.url.slice(-24)}`}
+              className="relative inline-flex items-center overflow-hidden rounded-md border border-border-2"
             >
-              <img
-                src={url}
-                alt={`Attachment ${index + 1}`}
-                className="size-14 object-cover"
-              />
+              {attachment.kind === "image" ? (
+                <img
+                  src={attachment.url}
+                  alt={`Attachment ${index + 1}`}
+                  className="size-14 object-cover"
+                />
+              ) : (
+                // A sound file and a document have nothing to show, so the
+                // chip carries the name the reader picked the file by.
+                <span className="flex h-14 items-center gap-1.5 bg-bg-panel pl-2 pr-6 text-xs text-text-2">
+                  {attachment.kind === "audio" ? (
+                    <AudioLines className="size-3.5 shrink-0 text-text-4" />
+                  ) : (
+                    <FileText className="size-3.5 shrink-0 text-text-4" />
+                  )}
+                  <span className="max-w-32 truncate">{attachment.name}</span>
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() =>
@@ -396,31 +498,15 @@ export function Composer({
         </div>
       )}
       <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          aria-label="Attach images"
-          className="hidden"
-          onChange={(event) => {
-            attachFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <BarButton
-          onClick={() => fileInputRef.current?.click()}
-          label={
-            canAttach
-              ? "Attach image"
-              : compareActive
-                ? "Attachments are unavailable in compare mode"
-                : "This model does not accept image input"
-          }
-          disabled={!canAttach}
-        >
-          <Plus className="size-4" />
-        </BarButton>
+        {ATTACHMENT_KINDS.map((kind) => (
+          <AttachControl
+            key={kind}
+            kind={kind}
+            enabled={accepts(kind)}
+            compareActive={Boolean(compareActive)}
+            onFiles={attachFiles}
+          />
+        ))}
 
         {onCompareToggle && (
           <BarButton

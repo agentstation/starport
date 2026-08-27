@@ -65,7 +65,10 @@ func executeAnthropicChat(
 	setHeaders func(credentials.Material, *http.Request) error,
 	handleError func(*http.Response) error,
 ) (*ChatResponse, error) {
-	anthropicReq := convertToAnthropicRequest(req, includeModel)
+	anthropicReq, err := convertToAnthropicRequest(req, includeModel)
+	if err != nil {
+		return nil, err
+	}
 	anthropicReq[wireFieldStream] = false
 
 	body, err := json.Marshal(anthropicReq)
@@ -121,7 +124,10 @@ func executeAnthropicStream(
 	setHeaders func(credentials.Material, *http.Request) error,
 	handleError func(*http.Response) error,
 ) (ChatStream, error) {
-	anthropicReq := convertToAnthropicRequest(req, includeModel)
+	anthropicReq, err := convertToAnthropicRequest(req, includeModel)
+	if err != nil {
+		return nil, err
+	}
 	anthropicReq[wireFieldStream] = true
 
 	body, err := json.Marshal(anthropicReq)
@@ -219,8 +225,57 @@ func prepareAnthropicRequest(req *ChatRequest) (*ChatRequest, bool) {
 	return &copyRequest, false
 }
 
+// anthropicContentBlocks reshapes one message's parts into Anthropic content
+// blocks. Anthropic serves images and documents. It serves no audio and no
+// video, so those return the named error rather than reaching the model as an
+// empty text block that reads like the caller sent nothing.
+func anthropicContentBlocks(parts []ContentPart) ([]map[string]any, error) {
+	var content []map[string]any
+	for _, part := range parts {
+		switch {
+		case part.ImageURL != nil:
+			content = append(content, anthropicSource("image", dataURLPayload(part.ImageURL.URL)))
+		case part.File != nil:
+			content = append(content, anthropicSource("document", dataURLPayload(part.File.FileData)))
+		case part.InputAudio != nil:
+			return nil, fmt.Errorf("%w: audio on anthropic", ErrContentKindUnsupported)
+		case part.VideoURL != nil:
+			return nil, fmt.Errorf("%w: video on anthropic", ErrContentKindUnsupported)
+		default:
+			content = append(content, map[string]any{
+				wireTypeToken:   contentTypeText,
+				contentTypeText: part.Text,
+			})
+		}
+	}
+	return content, nil
+}
+
+// anthropicSource builds one Anthropic media block. Inline bytes become a
+// base64 source and a reference becomes a url source, which is the split the
+// image arm already used before documents joined it.
+func anthropicSource(block string, payload mediaPayload) map[string]any {
+	if payload.Base64 != "" {
+		return map[string]any{
+			wireTypeToken: block,
+			"source": map[string]any{
+				wireTypeToken: "base64",
+				"media_type":  payload.MediaType,
+				"data":        payload.Base64,
+			},
+		}
+	}
+	return map[string]any{
+		wireTypeToken: block,
+		"source": map[string]any{
+			wireTypeToken: "url",
+			"url":         payload.URL,
+		},
+	}
+}
+
 // convertToAnthropicRequest converts OpenAI format to Anthropic format
-func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]any {
+func convertToAnthropicRequest(req *ChatRequest, includeModel bool) (map[string]any, error) {
 	anthropicReq := make(map[string]any)
 
 	if includeModel {
@@ -248,34 +303,9 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 		if strContent, ok := msg.Content.(string); ok {
 			anthropicMsg["content"] = strContent
 		} else if parts, err := ParseMessageContent(msg.Content); err == nil {
-			// Handle multimodal content
-			var content []map[string]any
-			for _, part := range parts {
-				if part.ImageURL != nil {
-					if mediaType, data, ok := parseImageDataURL(part.ImageURL.URL); ok {
-						content = append(content, map[string]any{
-							wireTypeToken: "image",
-							"source": map[string]any{
-								wireTypeToken: "base64",
-								"media_type":  mediaType,
-								"data":        data,
-							},
-						})
-					} else {
-						content = append(content, map[string]any{
-							wireTypeToken: "image",
-							"source": map[string]any{
-								wireTypeToken: "url",
-								"url":         part.ImageURL.URL,
-							},
-						})
-					}
-					continue
-				}
-				content = append(content, map[string]any{
-					wireTypeToken:   contentTypeText,
-					contentTypeText: part.Text,
-				})
+			content, err := anthropicContentBlocks(parts)
+			if err != nil {
+				return nil, err
 			}
 			anthropicMsg["content"] = content
 		}
@@ -310,7 +340,7 @@ func convertToAnthropicRequest(req *ChatRequest, includeModel bool) map[string]a
 		anthropicReq[field] = value
 	}
 
-	return anthropicReq
+	return anthropicReq, nil
 }
 
 // convertToOpenAIResponse converts Anthropic response to OpenAI format

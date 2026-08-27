@@ -3,6 +3,7 @@ package openai
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,15 +56,38 @@ type Message struct {
 
 // ContentPart is one OpenAI multipart message input.
 type ContentPart struct {
-	Type     string    `json:"type"`
-	Text     string    `json:"text,omitempty"`
-	ImageURL *ImageURL `json:"image_url,omitempty"`
+	Type       string      `json:"type"`
+	Text       string      `json:"text,omitempty"`
+	ImageURL   *ImageURL   `json:"image_url,omitempty"`
+	InputAudio *InputAudio `json:"input_audio,omitempty"`
+	File       *File       `json:"file,omitempty"`
+	VideoURL   *VideoURL   `json:"video_url,omitempty"`
 }
 
 // ImageURL is an OpenAI image input.
 type ImageURL struct {
 	URL    string `json:"url"`
 	Detail string `json:"detail,omitempty"`
+}
+
+// InputAudio is an audio input. Data is raw base64 with no data URL prefix,
+// which is why Format names the container beside it.
+type InputAudio struct {
+	Data   string `json:"data"`
+	Format string `json:"format,omitempty"`
+}
+
+// File is a document input. FileData holds a data URL, and FileID names a
+// stored upload that this gateway does not serve yet.
+type File struct {
+	Filename string `json:"filename,omitempty"`
+	FileData string `json:"file_data,omitempty"`
+	FileID   string `json:"file_id,omitempty"`
+}
+
+// VideoURL is a video input.
+type VideoURL struct {
+	URL string `json:"url"`
 }
 
 // Tool is an OpenAI function tool.
@@ -462,12 +486,69 @@ func decodeContent(raw json.RawMessage, allowCacheControl bool) ([]inference.Con
 				return nil, fmt.Errorf("content[%d].image_url.url is required", index)
 			}
 			result[index] = inference.ContentPart{Kind: inference.ContentImage, Image: &inference.Image{URL: part.ImageURL.URL, Detail: part.ImageURL.Detail}}
+		case "input_audio":
+			audio, err := decodeAudioPart(part.InputAudio, index)
+			if err != nil {
+				return nil, err
+			}
+			result[index] = inference.ContentPart{Kind: inference.ContentAudio, Audio: audio}
+		case "file", "input_file":
+			document, err := decodeFilePart(part.File, index)
+			if err != nil {
+				return nil, err
+			}
+			result[index] = inference.ContentPart{Kind: inference.ContentDocument, Document: document}
+		case "video_url":
+			video, err := decodeVideoPart(part.VideoURL, index)
+			if err != nil {
+				return nil, err
+			}
+			result[index] = inference.ContentPart{Kind: inference.ContentVideo, Video: video}
 		default:
 			return nil, fmt.Errorf("content[%d].type %q is not supported", index, part.Type)
 		}
 	}
 	_ = allowCacheControl
 	return result, nil
+}
+
+// decodeAudioPart reads the inline audio shape. The data field is raw base64
+// rather than a data URL, so the bytes decode here and the format stays with
+// them. A route that refuses audio needs the decoded size, not a string.
+func decodeAudioPart(wire *InputAudio, index int) (*inference.Audio, error) {
+	if wire == nil || wire.Data == "" {
+		return nil, fmt.Errorf("content[%d].input_audio.data is required", index)
+	}
+	if wire.Format == "" {
+		return nil, fmt.Errorf("content[%d].input_audio.format is required", index)
+	}
+	data, err := base64.StdEncoding.DecodeString(wire.Data)
+	if err != nil {
+		return nil, fmt.Errorf("content[%d].input_audio.data must be base64: %w", index, err)
+	}
+	return &inference.Audio{Data: data, Format: wire.Format}, nil
+}
+
+// decodeFilePart reads the document shape. The file_data field already carries
+// its media type inside a data URL, so the canonical URL holds it whole, the
+// same way an image input keeps its own data URL.
+func decodeFilePart(wire *File, index int) (*inference.Document, error) {
+	if wire != nil && wire.FileData == "" && wire.FileID != "" {
+		return nil, fmt.Errorf("content[%d].file.file_id is not supported", index)
+	}
+	if wire == nil || wire.FileData == "" {
+		return nil, fmt.Errorf("content[%d].file.file_data is required", index)
+	}
+	return &inference.Document{URL: wire.FileData, Filename: wire.Filename}, nil
+}
+
+// decodeVideoPart reads the video shape. A video arrives as a reference, so
+// there is no inline arm to match the audio one above.
+func decodeVideoPart(wire *VideoURL, index int) (*inference.Video, error) {
+	if wire == nil || wire.URL == "" {
+		return nil, fmt.Errorf("content[%d].video_url.url is required", index)
+	}
+	return &inference.Video{URL: wire.URL}, nil
 }
 
 func decodeTools(wire []Tool) ([]inference.Tool, error) {

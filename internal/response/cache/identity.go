@@ -24,8 +24,9 @@ var (
 	ErrTenantRequired = errors.New("cache tenant ID is required")
 	// ErrGenerationRequired reports a request without catalog identity.
 	ErrGenerationRequired = errors.New("catalog generation ID is required")
-	// ErrMutableImage reports a remote image that can change without a new key.
-	ErrMutableImage = errors.New("remote image input is mutable")
+	// ErrMutableMedia reports a remote media input that can change without a
+	// new key.
+	ErrMutableMedia = errors.New("remote media input is mutable")
 	// ErrUnknownExtension reports provider semantics outside the canonical identity.
 	ErrUnknownExtension = errors.New("provider extension semantics are not cache-safe")
 	// ErrInvalidJSONContract reports an invalid tool or output schema.
@@ -87,13 +88,21 @@ func ChatKey(identity ChatIdentity) (string, error) {
 	// Delivery format does not change the canonical completed result.
 	request.Stream = false
 	request.StreamOptions = inference.StreamOptions{}
+	// Inline media reaches the key as a digest rather than as bytes. A
+	// request that carries no media folds nothing, so its key is the key it
+	// had before media parts existed and the deployed cache survives.
+	digests := foldInlineMedia(&request)
 	payload := struct {
 		Version           int                   `json:"version"`
 		TenantID          string                `json:"tenant_id"`
 		CatalogGeneration string                `json:"catalog_generation"`
 		Request           inference.ChatRequest `json:"request"`
+		MediaDigests      []string              `json:"media_digests,omitempty"`
 		Policy            Policy                `json:"policy"`
-	}{SemanticKeyVersion, identity.TenantID, identity.CatalogGeneration, request, normalizePolicy(identity.Policy)}
+	}{
+		SemanticKeyVersion, identity.TenantID, identity.CatalogGeneration,
+		request, digests, normalizePolicy(identity.Policy),
+	}
 	return semanticKey("chat", payload)
 }
 
@@ -121,8 +130,8 @@ func chatEligibility(identity ChatIdentity) error {
 	}
 	for _, message := range identity.Request.Messages {
 		for _, part := range message.Content {
-			if part.Kind == inference.ContentImage || part.Image != nil {
-				return fmt.Errorf("%w: %w", ErrIneligible, ErrMutableImage)
+			if kind := remoteMediaKind(part); kind != "" {
+				return fmt.Errorf("%w: %s: %w", ErrIneligible, kind, ErrMutableMedia)
 			}
 		}
 	}

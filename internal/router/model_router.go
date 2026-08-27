@@ -109,6 +109,12 @@ type RequestMetadata struct {
 	// Required features (e.g., "vision", "function_calling")
 	RequiredFeatures []string
 
+	// RequiredModalities names the media the request carries, such as
+	// "audio". A model that does not read one of them cannot answer the
+	// request, so the planner drops it rather than letting the provider
+	// refuse the call.
+	RequiredModalities []string
+
 	// Conversation ID for sticky routing
 	ConversationID string
 

@@ -2,6 +2,8 @@ package catalog
 
 import (
 	"context"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,6 +195,45 @@ func TestDiffModelsAndPrices(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, soloDiff.Available)
 	assert.NotEmpty(t, soloDiff.Reason)
+}
+
+// TestPriceFieldsCoverEveryStarmapTokenPrice pins the two hand-maintained
+// lists that decide which price changes an operator ever sees.
+//
+// priceFields names the prices to compare. tokenPrice resolves each name to a
+// field. A name in the first list with no case in the second resolves to
+// "absent" on both sides of every diff, so diffOfferings skips it and a real
+// price change is reported as no change at all. A price Starmap adds that
+// priceFields never lists is invisible the same way. Neither failure produces
+// an error, so only this test catches them.
+func TestPriceFieldsCoverEveryStarmapTokenPrice(t *testing.T) {
+	// Give each token price a distinct rate, so a case that reads the wrong
+	// field fails on the value rather than passing by coincidence.
+	tokens := &catalogs.ModelTokenPricing{}
+	value := reflect.ValueOf(tokens).Elem()
+	structType := value.Type()
+	wireNames := make(map[string]float64, structType.NumField())
+	for i := range structType.NumField() {
+		field := structType.Field(i)
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		require.NotEmpty(t, name, "field %s carries no json tag", field.Name)
+		rate := float64(i+1) * 1.5
+		wireNames[name] = rate
+		value.Field(i).Set(reflect.ValueOf(&catalogs.ModelTokenCost{Per1M: rate}))
+	}
+	pricing := &catalogs.ModelPricing{Currency: catalogs.ModelPricingCurrencyUSD, Tokens: tokens}
+
+	listed := make(map[string]bool, len(priceFields))
+	for _, field := range priceFields {
+		listed[field] = true
+		price, found := tokenPrice(pricing, field)
+		require.True(t, found, "tokenPrice has no case for priceFields entry %q", field)
+		assert.Equal(t, wireNames[field], price, "tokenPrice(%q) reads the wrong field", field)
+	}
+	for name := range wireNames {
+		assert.True(t, listed[name],
+			"Starmap prices %q and priceFields omits it, so a change to it is never reported", name)
+	}
 }
 
 func TestDiffSkipsProvenanceOnlyChange(t *testing.T) {

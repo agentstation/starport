@@ -7,9 +7,11 @@ import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import {
+  AudioLines,
   Check,
   ChevronRight,
   Copy,
+  FileText,
   Loader2,
   Pencil,
   RefreshCcw,
@@ -18,6 +20,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Streamdown, type ControlsConfig } from "streamdown";
 
 import type { Model } from "@/lib/api";
+import { turnAttachments } from "@/lib/chatStore";
 import type { ChatMessage } from "@/lib/chatStore";
 import { formatCount, formatMs, formatNanoUSD } from "@/lib/format";
 
@@ -361,6 +364,7 @@ export function UserMessage({
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(message.content);
+  const attachments = turnAttachments(message);
 
   const submit = () => {
     const clean = text.trim();
@@ -414,16 +418,32 @@ export function UserMessage({
 
   return (
     <div className="group flex flex-col items-end">
-      {(message.images ?? []).length > 0 && (
+      {attachments.length > 0 && (
         <div className="mb-1.5 flex max-w-[85%] flex-wrap justify-end gap-1.5">
-          {(message.images ?? []).map((url, index) => (
-            <img
-              key={`${index}-${url.slice(-24)}`}
-              src={url}
-              alt={`Attachment ${index + 1}`}
-              className="max-h-48 max-w-64 rounded-lg border border-border-1 object-cover"
-            />
-          ))}
+          {attachments.map((attachment, index) =>
+            attachment.kind === "image" ? (
+              <img
+                key={`${index}-${attachment.url.slice(-24)}`}
+                src={attachment.url}
+                alt={`Attachment ${index + 1}`}
+                className="max-h-48 max-w-64 rounded-lg border border-border-1 object-cover"
+              />
+            ) : (
+              // A sound file and a document have nothing to show, so the
+              // turn names the file the reader sent instead.
+              <span
+                key={`${index}-${attachment.url.slice(-24)}`}
+                className="flex items-center gap-1.5 rounded-lg border border-border-1 bg-bg-raised px-2.5 py-1.5 text-xs text-text-2"
+              >
+                {attachment.kind === "audio" ? (
+                  <AudioLines className="size-3.5 shrink-0 text-text-4" />
+                ) : (
+                  <FileText className="size-3.5 shrink-0 text-text-4" />
+                )}
+                <span className="max-w-48 truncate">{attachment.name}</span>
+              </span>
+            ),
+          )}
         </div>
       )}
       <div className="max-w-[85%] whitespace-pre-wrap rounded-xl bg-bg-raised px-4 py-2.5 text-base text-text-1">

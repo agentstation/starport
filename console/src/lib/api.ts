@@ -322,6 +322,9 @@ export type OfferingPricing = {
   reasoning?: string;
   cache_read?: string;
   cache_write?: string;
+  // Audio tokens bill at their own rate wherever a provider meters them.
+  audio_input?: string;
+  audio_output?: string;
   currency?: string;
 };
 

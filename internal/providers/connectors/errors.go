@@ -14,6 +14,13 @@ var (
 	// ErrInvalidConfig indicates invalid configuration
 	ErrInvalidConfig = errors.New("invalid configuration")
 
+	// ErrContentKindUnsupported reports that a provider transport has no wire
+	// shape for a content kind the caller sent. A transport returns it rather
+	// than forwarding the part with its payload stripped, because a silent
+	// drop reaches the caller as a confident answer about media the model
+	// never saw.
+	ErrContentKindUnsupported = errors.New("provider transport does not support this content kind")
+
 	// ErrInvalidMessageContent indicates invalid message content format
 	ErrInvalidMessageContent = errors.New("invalid message content format")
 

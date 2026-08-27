@@ -19,9 +19,9 @@ func TestParseImageDataURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mediaType, data, ok := parseImageDataURL(tt.url)
+			mediaType, data, ok := parseDataURL(tt.url)
 			if ok != tt.ok || mediaType != tt.mediaType || data != tt.data {
-				t.Fatalf("parseImageDataURL(%q) = (%q, %q, %v), want (%q, %q, %v)",
+				t.Fatalf("parseDataURL(%q) = (%q, %q, %v), want (%q, %q, %v)",
 					tt.url, mediaType, data, ok, tt.mediaType, tt.data, tt.ok)
 			}
 		})
@@ -143,7 +143,10 @@ func TestConvertToAnthropicRequestMultimodal(t *testing.T) {
 		},
 	}
 
-	got := convertToAnthropicRequest(req, true)
+	got, err := convertToAnthropicRequest(req, true)
+	if err != nil {
+		t.Fatalf("convert: %v", err)
+	}
 	if got["system"] != "Be brief." {
 		t.Fatalf("system = %v", got["system"])
 	}

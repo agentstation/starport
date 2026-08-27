@@ -878,7 +878,7 @@ func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {
 	}
 	maxRequestSize := cfg.Server.MaxRequestSize
 	if maxRequestSize == 0 {
-		maxRequestSize = 10 * 1024 * 1024
+		maxRequestSize = config.DefaultMaxRequestSize
 	}
 	return &server.Config{
 		Port: cfg.Server.Port, Host: cfg.Server.Host,

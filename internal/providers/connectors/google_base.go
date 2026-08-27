@@ -132,10 +132,11 @@ func (c *googleBaseConnector) handleError(resp *http.Response) error {
 	}
 }
 
-// geminiParts converts one message's content into Gemini parts. Text
-// parts map to text; data-URL images become inline data; remote image
-// URLs pass through as file data so the provider reports its own
-// contract error instead of the gateway guessing.
+// geminiParts converts one message's content into Gemini parts. Text parts
+// map to text; data-URL media becomes inline data; a remote reference passes
+// through as file data so the provider reports its own contract error instead
+// of the gateway guessing. Gemini accepts every media kind, so no arm here
+// refuses one.
 func geminiParts(content MessageContent) []map[string]any {
 	parts, err := ParseMessageContent(content)
 	if err != nil || len(parts) == 0 {
@@ -143,22 +144,25 @@ func geminiParts(content MessageContent) []map[string]any {
 	}
 	result := make([]map[string]any, 0, len(parts))
 	for _, part := range parts {
-		if part.ImageURL != nil {
-			if mediaType, data, ok := parseImageDataURL(part.ImageURL.URL); ok {
-				result = append(result, map[string]any{
-					"inline_data": map[string]any{
-						"mime_type": mediaType,
-						"data":      data,
-					},
-				})
-			} else {
-				result = append(result, map[string]any{
-					"file_data": map[string]any{"file_uri": part.ImageURL.URL},
-				})
-			}
+		payload, ok := partMediaPayload(part)
+		if !ok {
+			result = append(result, map[string]any{contentTypeText: part.Text})
 			continue
 		}
-		result = append(result, map[string]any{contentTypeText: part.Text})
+		if payload.Base64 != "" {
+			result = append(result, map[string]any{
+				"inline_data": map[string]any{
+					"mime_type": payload.MediaType,
+					"data":      payload.Base64,
+				},
+			})
+			continue
+		}
+		fileData := map[string]any{"file_uri": payload.URL}
+		if payload.MediaType != "" {
+			fileData["mime_type"] = payload.MediaType
+		}
+		result = append(result, map[string]any{"file_data": fileData})
 	}
 	return result
 }

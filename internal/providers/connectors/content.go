@@ -2,10 +2,11 @@ package connectors
 
 import "strings"
 
-// parseImageDataURL splits a data URL ("data:image/png;base64,AAAA")
-// into its media type and base64 payload. It reports false for any
-// other URL shape, including remote http(s) references.
-func parseImageDataURL(url string) (mediaType, data string, ok bool) {
+// parseDataURL splits a data URL ("data:image/png;base64,AAAA") into its
+// media type and base64 payload. It reports false for any other URL shape,
+// including remote http(s) references. Every media kind uses this shape, not
+// images alone.
+func parseDataURL(url string) (mediaType, data string, ok bool) {
 	rest, found := strings.CutPrefix(url, "data:")
 	if !found {
 		return "", "", false

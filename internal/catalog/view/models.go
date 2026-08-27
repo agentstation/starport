@@ -181,12 +181,14 @@ func offeringPricing(pricing *starmapcatalogs.ModelPricing) *OfferingPricingInfo
 		return nil
 	}
 	return &OfferingPricingInfo{
-		Prompt:     formatTokenPrice(pricing.Tokens.Input),
-		Completion: formatTokenPrice(pricing.Tokens.Output),
-		Reasoning:  formatTokenPrice(pricing.Tokens.Reasoning),
-		CacheRead:  formatTokenPrice(pricing.Tokens.CacheRead),
-		CacheWrite: formatTokenPrice(pricing.Tokens.CacheWrite),
-		Currency:   pricing.Currency.String(),
+		Prompt:      formatTokenPrice(pricing.Tokens.Input),
+		Completion:  formatTokenPrice(pricing.Tokens.Output),
+		Reasoning:   formatTokenPrice(pricing.Tokens.Reasoning),
+		CacheRead:   formatTokenPrice(pricing.Tokens.CacheRead),
+		CacheWrite:  formatTokenPrice(pricing.Tokens.CacheWrite),
+		AudioInput:  formatTokenPrice(pricing.Tokens.AudioInput),
+		AudioOutput: formatTokenPrice(pricing.Tokens.AudioOutput),
+		Currency:    pricing.Currency.String(),
 	}
 }
 
