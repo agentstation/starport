@@ -47,6 +47,44 @@ type ProviderJobRef struct {
 	ProviderJobID string `json:"-"`
 }
 
+// JobAssetRef names the finished output of one accepted job and bounds how much
+// of it this gateway will hold.
+//
+// The bound arrives with the request rather than living in this package. The
+// half that stores the bytes is the half that decides what it is willing to
+// store, and a transport that chose for itself would size a deployment's
+// storage from a provider client.
+type JobAssetRef struct {
+	ProviderJobRef
+	MaxBytes int64 `json:"-"`
+}
+
+// JobAsset is the finished output of one job, read whole.
+//
+// A provider serves it from a link that expires. Starport reads it once, from
+// the one provider that accepted the job, and answers for the bytes itself,
+// which is why the caller never learns the provider link.
+type JobAsset struct {
+	// ContentType is the media type the provider served, carried forward so
+	// that the Starport content route states what a caller is reading rather
+	// than guessing from the bytes.
+	ContentType string
+	// Bytes is the whole asset.
+	Bytes []byte
+}
+
+// Clone returns a copy that shares nothing with the original. The shared media
+// path clones every answer before it leaves the attempt budget, so the bytes are
+// copied rather than aliased.
+func (a JobAsset) Clone() JobAsset {
+	if a.Bytes == nil {
+		return JobAsset{ContentType: a.ContentType}
+	}
+	copied := make([]byte, len(a.Bytes))
+	copy(copied, a.Bytes)
+	return JobAsset{ContentType: a.ContentType, Bytes: copied}
+}
+
 // ProviderJob is one provider answer about one job, read into the vocabulary
 // Starport keeps. The state is already canonical here rather than at a later
 // seam, because the provider's word is the only thing that knows which
@@ -79,6 +117,7 @@ type JobRunner interface {
 	SubmitJob(ctx context.Context, request *JobSubmission) (*ProviderJob, error)
 	PollJob(ctx context.Context, reference *ProviderJobRef) (*ProviderJob, error)
 	CancelJob(ctx context.Context, reference *ProviderJobRef) (*ProviderJob, error)
+	FetchJobAsset(ctx context.Context, reference *JobAssetRef) (*JobAsset, error)
 }
 
 // JobRunnerFor returns the job transport a route selected.

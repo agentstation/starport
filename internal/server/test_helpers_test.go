@@ -170,7 +170,12 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
-	jobService, err := jobs.NewService(jobRecords)
+	// The byte store is production composition too: without it a finished job
+	// stores no asset, and the content route would answer the same way for a
+	// gateway that never fetched one.
+	jobService, err := jobs.NewService(jobRecords,
+		jobs.WithAssetStore(testConfig.blobs),
+		jobs.WithRetention(jobs.DefaultAssetRetention))
 	if err != nil {
 		tb.Fatal(err)
 	}

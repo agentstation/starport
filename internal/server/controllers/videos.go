@@ -3,7 +3,11 @@ package controllers
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -144,23 +148,73 @@ func (h *VideosController) Cancel(w http.ResponseWriter, r *http.Request) {
 
 // Content handles GET /v1/videos/{video_id}/content.
 //
+// The route serves Starport's own stored bytes and never redirects a caller to
+// the provider. A provider link expires on the provider's schedule and carries
+// the provider's credential, so a caller holding a Starport identifier would be
+// handed something it cannot read and this gateway cannot promise.
+//
 // The route reads the record first, so a job another account owns answers not
-// found here exactly as it does on every other video path. It then answers that
-// this gateway holds no bytes for the job. Storing the finished asset is the
-// next task on this surface, and the route exists now so that the answer is
-// about the asset rather than about the path.
+// found here exactly as it does on every other video path.
 func (h *VideosController) Content(w http.ResponseWriter, r *http.Request) {
 	if !h.ready(w) {
 		return
 	}
 	ctx := r.Context()
-	job, err := h.jobs.Get(ctx, h.getTenantID(ctx), chi.URLParam(r, videoIDParam))
+	job, asset, err := h.jobs.Open(ctx, h.getTenantID(ctx), chi.URLParam(r, videoIDParam))
 	if err != nil {
-		h.writeJobError(ctx, w, err, "video content read failed")
+		h.writeAssetError(ctx, w, err, job)
 		return
 	}
-	h.writeVideoStatus(w, http.StatusNotFound, errorTypeNotFound,
-		"No stored content for video "+job.ID)
+	defer func() { _ = asset.Close() }()
+	w.Header().Set("Content-Type", job.AssetContentType)
+	if job.AssetBytes > 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(job.AssetBytes, 10))
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := io.Copy(w, asset); err != nil {
+		// The status is written. Reporting the failure to the caller is no
+		// longer possible, so the log is the only place it can go.
+		h.logError(ctx, err, "video content write failed")
+	}
+}
+
+// writeAssetError separates the two answers a caller reads about missing bytes.
+//
+// An asset that expired answers 410 and states the window, because the caller
+// asked in time for a job that ran and too late for the answer. An asset that
+// never arrived answers 404, which is what a running job, a failed job, and a
+// fetch that has not landed all read as.
+func (h *VideosController) writeAssetError(
+	ctx context.Context,
+	w http.ResponseWriter,
+	err error,
+	job jobs.Job,
+) {
+	switch {
+	case errors.Is(err, jobs.ErrAssetExpired):
+		h.writeVideoStatus(w, http.StatusGone, errorTypeInvalidRequest,
+			"The content for video "+job.ID+" expired. This gateway keeps a finished video for "+
+				retentionWindowText(h.jobs.Retention())+" after it stores it.")
+	case errors.Is(err, jobs.ErrAssetNotFound):
+		h.writeVideoStatus(w, http.StatusNotFound, errorTypeNotFound,
+			"No stored content for video "+job.ID)
+	default:
+		h.writeJobError(ctx, w, err, "video content read failed")
+	}
+}
+
+// retentionWindowText states one window in its shortest exact form. A duration
+// prints every unit it holds, and a caller reading why its content went reads a
+// day rather than "24h0m0s".
+func retentionWindowText(window time.Duration) string {
+	text := window.String()
+	switch {
+	case strings.HasSuffix(text, "h0m0s"):
+		return strings.TrimSuffix(text, "0m0s")
+	case strings.HasSuffix(text, "m0s"):
+		return strings.TrimSuffix(text, "0s")
+	}
+	return text
 }
 
 // ready reports whether the deployment assembled a job store.

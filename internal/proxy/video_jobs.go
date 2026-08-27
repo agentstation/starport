@@ -25,6 +25,22 @@ type VideoJobReference = router.VideoJobReference
 // VideoJobRequest is one gateway poll or cancel of an accepted job.
 type VideoJobRequest = MediaRequest[VideoJobReference]
 
+// VideoAssetReference names the finished output of one accepted job.
+type VideoAssetReference = router.VideoAssetReference
+
+// VideoAssetRequest is one gateway read of a finished job's asset.
+type VideoAssetRequest = MediaRequest[VideoAssetReference]
+
+// VideoAsset is one finished output with the route evidence that names who
+// served it. The bytes arrive whole: the caller stores them, and the bound it
+// sent is what makes holding them safe.
+type VideoAsset struct {
+	ContentType  string
+	Bytes        []byte
+	ModelUsed    string
+	ProviderUsed string
+}
+
 // VideoJobAnswer is what a provider reported about one job, with the route
 // evidence that names who reported it.
 type VideoJobAnswer struct {
@@ -57,6 +73,23 @@ func (p *proxy) CancelVideoJob(ctx context.Context, req *VideoJobRequest) (*Vide
 		return nil, err
 	}
 	return videoJobAnswer(processMedia(ctx, req, req.Request.Model, p.router.RouteVideoCancel))
+}
+
+// FetchVideoAsset reads the finished output of one accepted job.
+func (p *proxy) FetchVideoAsset(ctx context.Context, req *VideoAssetRequest) (*VideoAsset, error) {
+	if err := ValidateVideoAssetReference(req); err != nil {
+		return nil, err
+	}
+	result, err := processMedia(ctx, req, req.Request.Model, p.router.RouteVideoContent)
+	if err != nil {
+		return nil, err
+	}
+	return &VideoAsset{
+		ContentType:  result.Response.ContentType,
+		Bytes:        result.Response.Bytes,
+		ModelUsed:    result.ModelUsed,
+		ProviderUsed: result.ProviderUsed,
+	}, nil
 }
 
 // VideoJobRunner hands the record store the provider side of one caller's
@@ -134,6 +167,39 @@ func (r *VideoJobRunner) Poll(ctx context.Context, handle jobs.Handle) (jobs.Rep
 // Cancel asks the provider to stop the accepted job.
 func (r *VideoJobRunner) Cancel(ctx context.Context, handle jobs.Handle) (jobs.Report, error) {
 	return r.report(ctx, handle, r.service.CancelVideoJob)
+}
+
+// Fetch reads the finished output of the accepted job.
+//
+// maxBytes arrives as an argument rather than as a setting this side reads. The
+// record store is the half that holds the bytes, so it is the half that decides
+// how large an asset it is willing to hold.
+func (r *VideoJobRunner) Fetch(
+	ctx context.Context,
+	handle jobs.Handle,
+	maxBytes int64,
+) (jobs.Asset, error) {
+	request := VideoAssetRequest{
+		Request: VideoAssetReference{
+			VideoJobReference: VideoJobReference{
+				Provider:      handle.Provider,
+				Model:         handle.Model,
+				ProviderJobID: handle.ProviderJobID,
+			},
+			MaxBytes: maxBytes,
+		},
+		APIKey:       r.caller.APIKey,
+		TenantID:     r.caller.TenantID,
+		KeyID:        r.caller.KeyID,
+		APIKeyConfig: r.caller.APIKeyConfig,
+		RequestID:    r.caller.RequestID,
+		Protocol:     r.caller.Protocol,
+	}
+	answer, err := r.service.FetchVideoAsset(ctx, &request)
+	if err != nil {
+		return jobs.Asset{}, err
+	}
+	return jobs.Asset{ContentType: answer.ContentType, Bytes: answer.Bytes}, nil
 }
 
 func (r *VideoJobRunner) report(

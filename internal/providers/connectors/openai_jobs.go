@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -91,6 +92,63 @@ func (c *OpenAICompatibleConnector) CancelJob(
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return &ProviderJob{ID: ref.ProviderJobID, State: jobs.JobStateCancelled}, nil
+}
+
+// FetchJobAsset reads the finished output of one accepted job.
+//
+// Both published video surfaces serve the asset from a content path under the
+// job, which is the shape addressed here. Starport reads the bytes rather than
+// handing the caller the provider link, because that link carries the
+// provider's credential scope and expires on the provider's schedule.
+func (c *OpenAICompatibleConnector) FetchJobAsset(
+	ctx context.Context,
+	ref *JobAssetRef,
+	setHeaders setHeadersFunc,
+	handleError handleErrorFunc,
+) (*JobAsset, error) {
+	endpoint, err := jobEndpoint(&ref.ProviderJobRef)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/content", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := c.send(ctx, httpReq, ref.Credential, setHeaders, handleError)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	bound := ref.MaxBytes
+	if bound <= 0 {
+		return nil, fmt.Errorf("%w: no stored bound was stated", ErrInvalidMediaRequest)
+	}
+	// One byte past the bound is read on purpose. A body exactly at the bound
+	// and a body over it are otherwise the same read, and the second has to
+	// fail rather than land truncated.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, bound+1))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the asset: %w", err)
+	}
+	if int64(len(body)) > bound {
+		return nil, fmt.Errorf("%w: the provider asset is larger than %d bytes", ErrInvalidMediaRequest, bound)
+	}
+	return &JobAsset{ContentType: assetContentType(resp.Header.Get("Content-Type")), Bytes: body}, nil
+}
+
+// defaultAssetContentType is what a provider that states no media type gets. It
+// is the generic byte stream rather than a guess at a container format, because
+// a wrong specific type reads worse to a client than an honest unspecific one.
+const defaultAssetContentType = "application/octet-stream"
+
+// assetContentType keeps what the provider stated and falls back to the generic
+// byte stream.
+func assetContentType(header string) string {
+	if value := strings.TrimSpace(header); value != "" {
+		return value
+	}
+	return defaultAssetContentType
 }
 
 // readJob performs one request and reads the provider's job answer into the

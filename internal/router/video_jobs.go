@@ -35,6 +35,22 @@ type VideoJobReference struct {
 // VideoJobRequest routes one poll or one cancel of an accepted job.
 type VideoJobRequest = MediaRequest[VideoJobReference]
 
+// VideoAssetReference names the finished output of one accepted job and states
+// the bound the record store is willing to hold.
+type VideoAssetReference struct {
+	VideoJobReference
+	// MaxBytes is the largest asset the caller will store. It travels with the
+	// request rather than living here, because the half that stores the bytes
+	// is the half that decides what it is willing to store.
+	MaxBytes int64
+}
+
+// VideoAssetRequest routes one read of a finished job's asset.
+type VideoAssetRequest = MediaRequest[VideoAssetReference]
+
+// VideoAssetResponse is one finished asset with route evidence.
+type VideoAssetResponse = MediaResponse[connectors.JobAsset]
+
 // VideoJobResponse is one provider job answer with route evidence.
 type VideoJobResponse = MediaResponse[connectors.ProviderJob]
 
@@ -80,6 +96,54 @@ func (r *modelRouter) RouteVideoCancel(
 	return r.routeAcceptedJob(ctx, req, jobCancelTransport)
 }
 
+// RouteVideoContent reads the finished asset from the provider that produced it.
+//
+// It pins to the accepting provider exactly as a poll does. A second provider
+// would not hold the asset, so the fan-out every other media operation relies on
+// has nothing to reach here.
+func (r *modelRouter) RouteVideoContent(
+	ctx context.Context,
+	req *VideoAssetRequest,
+) (*VideoAssetResponse, error) {
+	if req == nil || req.Request.MaxBytes <= 0 {
+		return nil, ErrNoModelsAvailable
+	}
+	policy, err := acceptedJobPolicy(req.policy(req.Request.Model), req.Request.VideoJobReference)
+	if err != nil {
+		return nil, err
+	}
+	reference := req.Request
+	call := mediaCall[*connectors.JobAssetRef, *connectors.JobAsset, connectors.JobAsset]{
+		transport: jobAssetTransport,
+		build: func() *connectors.JobAssetRef {
+			return &connectors.JobAssetRef{
+				ProviderJobRef: connectors.ProviderJobRef{ProviderJobID: reference.ProviderJobID},
+				MaxBytes:       reference.MaxBytes,
+			}
+		},
+		convert: providerJobAsset,
+	}
+	operation := routing.OperationVideosGenerations
+	return routeMedia(ctx, r, policy, operation,
+		connectors.JobAsset.Clone, call.attempt(operation))
+}
+
+// acceptedJobPolicy pins one plan to the provider that already holds the job.
+//
+// A key whose provider restriction no longer names the accepting provider
+// reaches no route at all. Answering "no models available" is the same answer
+// the key would get for a model it may not use.
+func acceptedJobPolicy(policy mediaPolicy, reference VideoJobReference) (mediaPolicy, error) {
+	if reference.Model == "" || reference.Provider == "" || reference.ProviderJobID == "" {
+		return mediaPolicy{}, ErrNoModelsAvailable
+	}
+	if !policy.allows(reference.Provider) {
+		return mediaPolicy{}, ErrNoModelsAvailable
+	}
+	policy.Provider = reference.Provider
+	return policy, nil
+}
+
 // routeAcceptedJob runs a poll or a cancel against the one provider that
 // accepted the work. The two differ only in the transport method they call.
 func (r *modelRouter) routeAcceptedJob(
@@ -87,18 +151,13 @@ func (r *modelRouter) routeAcceptedJob(
 	req *VideoJobRequest,
 	transport func(connectors.Connector, catalogs.EndpointType) (mediaInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool),
 ) (*VideoJobResponse, error) {
-	if req == nil || req.Request.Model == "" || req.Request.Provider == "" ||
-		req.Request.ProviderJobID == "" {
+	if req == nil {
 		return nil, ErrNoModelsAvailable
 	}
-	policy := req.policy(req.Request.Model)
-	// A key whose provider restriction no longer names the accepting provider
-	// reaches no route at all. Answering "no models available" is the same
-	// answer the key would get for a model it may not use.
-	if !policy.allows(req.Request.Provider) {
-		return nil, ErrNoModelsAvailable
+	policy, err := acceptedJobPolicy(req.policy(req.Request.Model), req.Request)
+	if err != nil {
+		return nil, err
 	}
-	policy.Provider = req.Request.Provider
 	call := mediaCall[*connectors.ProviderJobRef, *connectors.ProviderJob, connectors.ProviderJob]{
 		transport: transport,
 		build: func() *connectors.ProviderJobRef {
@@ -152,4 +211,23 @@ func jobCancelTransport(
 		return nil, false
 	}
 	return runner.CancelJob, true
+}
+
+func jobAssetTransport(
+	connector connectors.Connector,
+	endpointType catalogs.EndpointType,
+) (mediaInvoke[*connectors.JobAssetRef, *connectors.JobAsset], bool) {
+	runner, implemented := connectors.JobRunnerFor(connector, endpointType)
+	if !implemented {
+		return nil, false
+	}
+	return runner.FetchJobAsset, true
+}
+
+// providerJobAsset unwraps the transport answer.
+func providerJobAsset(answer *connectors.JobAsset) (connectors.JobAsset, error) {
+	if answer == nil {
+		return connectors.JobAsset{}, ErrNoModelsAvailable
+	}
+	return *answer, nil
 }

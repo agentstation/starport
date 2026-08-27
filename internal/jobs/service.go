@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/routing"
 )
 
@@ -57,10 +58,15 @@ type Report struct {
 // holds the caller's credential policy and the request itself, so this package
 // starts work without naming a single field of what the work is. That keeps
 // the video shape, and every later media shape, out of the record.
+//
+// Fetch carries the byte bound as an argument rather than reading a setting of
+// its own. This package decides what it is willing to store, because it is the
+// half that stores it.
 type Runner interface {
 	Submit(ctx context.Context) (Acceptance, error)
 	Poll(ctx context.Context, handle Handle) (Report, error)
 	Cancel(ctx context.Context, handle Handle) (Report, error)
+	Fetch(ctx context.Context, handle Handle, maxBytes int64) (Asset, error)
 }
 
 // Service turns provider answers into records, and it is the only thing that
@@ -71,9 +77,16 @@ type Runner interface {
 // history rather than several writers' versions of one.
 type Service struct {
 	records Repository
+	assets  blob.Store
 	policy  PollPolicy
-	now     func() time.Time
-	mint    func() string
+	// retention is how long a stored asset stays readable, measured from the
+	// moment this gateway stored it.
+	retention time.Duration
+	// maxAssetBytes bounds one stored asset. A gateway that fetched whatever a
+	// provider served would size its own storage from a provider's decision.
+	maxAssetBytes int64
+	now           func() time.Time
+	mint          func() string
 }
 
 // ServiceOption changes one service setting.
@@ -94,6 +107,31 @@ func WithClock(now func() time.Time) ServiceOption {
 	}
 }
 
+// WithAssetStore gives the service somewhere to put a finished asset. A service
+// with no store keeps records alone, which is what a deployment that configured
+// no blob backend gets.
+func WithAssetStore(store blob.Store) ServiceOption {
+	return func(s *Service) { s.assets = store }
+}
+
+// WithRetention replaces how long a stored asset stays readable.
+func WithRetention(window time.Duration) ServiceOption {
+	return func(s *Service) {
+		if window > 0 {
+			s.retention = window
+		}
+	}
+}
+
+// WithAssetBound replaces the largest asset this gateway will store.
+func WithAssetBound(bytes int64) ServiceOption {
+	return func(s *Service) {
+		if bytes > 0 {
+			s.maxAssetBytes = bytes
+		}
+	}
+}
+
 // WithIdentifiers replaces how a job identifier is minted.
 func WithIdentifiers(mint func() string) ServiceOption {
 	return func(s *Service) {
@@ -109,10 +147,12 @@ func NewService(records Repository, options ...ServiceOption) (*Service, error) 
 		return nil, ErrRepositoryRequired
 	}
 	service := &Service{
-		records: records,
-		policy:  DefaultPollPolicy(),
-		now:     time.Now,
-		mint:    newJobID,
+		records:       records,
+		policy:        DefaultPollPolicy(),
+		retention:     DefaultAssetRetention,
+		maxAssetBytes: DefaultMaxAssetBytes,
+		now:           time.Now,
+		mint:          newJobID,
 	}
 	for _, option := range options {
 		option(service)
@@ -126,6 +166,11 @@ func NewService(records Repository, options ...ServiceOption) (*Service, error) 
 // PollPolicy reports the bounds this service applies. A caller that waits
 // between polls reads the interval from here rather than choosing its own.
 func (s *Service) PollPolicy() PollPolicy { return s.policy }
+
+// Retention reports how long this deployment keeps a finished asset. The
+// content route states it to a caller whose asset already went, so the window
+// a caller reads and the window the sweep applies are one value.
+func (s *Service) Retention() time.Duration { return s.retention }
 
 // Submit starts one job and records it.
 //
@@ -162,7 +207,10 @@ func (s *Service) Submit(
 	if err := s.records.Create(ctx, job); err != nil {
 		return Job{}, err
 	}
-	return job, nil
+	// A provider that answered a finished job on the first response has an
+	// asset waiting already. Collecting it here rather than on the first poll
+	// means a caller that never polls still gets the bytes it paid for.
+	return s.collect(ctx, runner, job), nil
 }
 
 // Get reads one job without asking its provider anything. It is what a listing
@@ -189,7 +237,7 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, tenant, id string)
 		return Job{}, err
 	}
 	if job.State.Terminal() {
-		return job, nil
+		return s.collect(ctx, runner, job), nil
 	}
 	now := s.now()
 	if s.policy.Spent(job, now) {
@@ -211,7 +259,11 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, tenant, id string)
 	if err := applyReport(&job, report, now); err != nil {
 		return Job{}, err
 	}
-	return s.commit(ctx, job)
+	moved, err := s.commit(ctx, job)
+	if err != nil {
+		return Job{}, err
+	}
+	return s.collect(ctx, runner, moved), nil
 }
 
 // Cancel stops one running job.

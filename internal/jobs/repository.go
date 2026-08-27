@@ -22,14 +22,19 @@ var (
 
 // Repository is the durable job record contract.
 //
-// Every method takes the tenant, so a store cannot answer with a record its
-// caller does not own. Replace carries the whole record rather than a state
-// word, because a state change is never the only change: a terminal move
-// stamps a time, and a provider answer records an identifier with it.
+// Every method a request path calls takes the tenant, so a store cannot answer
+// with a record its caller does not own. Replace carries the whole record
+// rather than a state word, because a state change is never the only change: a
+// terminal move stamps a time, and a provider answer records an identifier
+// with it.
+//
+// Scan is the one method that names no tenant. The sweep that reclaims expired
+// asset storage is a deployment-wide pass, and no request path calls it.
 type Repository interface {
 	Create(context.Context, Job) error
 	Get(context.Context, string, string) (Job, error)
 	List(context.Context, string, int) ([]Job, error)
+	Scan(context.Context, int) ([]Job, error)
 	Replace(context.Context, Job) error
 	Delete(context.Context, string, string) error
 }

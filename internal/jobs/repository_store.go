@@ -39,6 +39,12 @@ type jobRecord struct {
 	CreatedAt     time.Time         `json:"created_at"`
 	TerminalAt    time.Time         `json:"terminal_at,omitempty"`
 	ProviderJobID string            `json:"provider_job_id,omitempty"`
+
+	AssetKey         string    `json:"asset_key,omitempty"`
+	AssetBytes       int64     `json:"asset_bytes,omitempty"`
+	AssetContentType string    `json:"asset_content_type,omitempty"`
+	AssetExpiresAt   time.Time `json:"asset_expires_at,omitempty"`
+	AssetExpiredAt   time.Time `json:"asset_expired_at,omitempty"`
 }
 
 // OpenRepository returns a storage-backed job record repository.
@@ -128,6 +134,38 @@ func sortNewestFirst(records []Job) {
 // state change meets the transition table. A caller that assembled an illegal
 // record fails here rather than in storage, so no store has to know which
 // state changes this package allows.
+// Scan answers every job record this deployment holds, newest first.
+//
+// It reads across tenants because the sweep that reclaims expired asset storage
+// is a deployment-wide pass. Nothing on a request path calls it: a caller reads
+// its own jobs through List, which cannot see another tenant's prefix.
+func (r *repository) Scan(ctx context.Context, limit int) ([]Job, error) {
+	if limit <= 0 {
+		limit = defaultListLimit
+	}
+	keys, err := r.store.ScanWithPrefix(ctx, StoragePrefix, limit)
+	if err != nil {
+		return nil, fmt.Errorf("jobs: scan records: %w", err)
+	}
+	records := make([]Job, 0, len(keys))
+	for _, key := range keys {
+		data, err := r.store.Get(ctx, key)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				continue
+			}
+			return nil, fmt.Errorf("jobs: read scanned record: %w", err)
+		}
+		job, err := decodeJob(data)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, job)
+	}
+	sortNewestFirst(records)
+	return records, nil
+}
+
 func (r *repository) Replace(ctx context.Context, job Job) error {
 	data, err := encodeJob(job)
 	if err != nil {
@@ -193,6 +231,12 @@ func encodeJob(job Job) ([]byte, error) {
 		CreatedAt:     job.CreatedAt,
 		TerminalAt:    job.TerminalAt,
 		ProviderJobID: job.providerJobID,
+
+		AssetKey:         job.AssetKey,
+		AssetBytes:       job.AssetBytes,
+		AssetContentType: job.AssetContentType,
+		AssetExpiresAt:   job.AssetExpiresAt,
+		AssetExpiredAt:   job.AssetExpiredAt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("jobs: encode record: %w", err)
@@ -219,6 +263,12 @@ func decodeJob(data []byte) (Job, error) {
 		CreatedAt:     stored.CreatedAt,
 		TerminalAt:    stored.TerminalAt,
 		providerJobID: stored.ProviderJobID,
+
+		AssetKey:         stored.AssetKey,
+		AssetBytes:       stored.AssetBytes,
+		AssetContentType: stored.AssetContentType,
+		AssetExpiresAt:   stored.AssetExpiresAt,
+		AssetExpiredAt:   stored.AssetExpiredAt,
 	}
 	if err := job.Validate(); err != nil {
 		return Job{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)

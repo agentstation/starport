@@ -26,9 +26,14 @@ type recordingRunner struct {
 	cancel    jobs.Report
 	cancelErr error
 
+	asset    jobs.Asset
+	fetchErr error
+
 	submits int
 	polls   int
 	cancels int
+	fetches int
+	bounds  []int64
 	handles []jobs.Handle
 }
 
@@ -47,6 +52,17 @@ func (r *recordingRunner) Cancel(_ context.Context, handle jobs.Handle) (jobs.Re
 	r.cancels++
 	r.handles = append(r.handles, handle)
 	return r.cancel, r.cancelErr
+}
+
+func (r *recordingRunner) Fetch(
+	_ context.Context,
+	handle jobs.Handle,
+	maxBytes int64,
+) (jobs.Asset, error) {
+	r.fetches++
+	r.bounds = append(r.bounds, maxBytes)
+	r.handles = append(r.handles, handle)
+	return r.asset, r.fetchErr
 }
 
 func acceptedRunner() *recordingRunner {
