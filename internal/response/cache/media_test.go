@@ -152,10 +152,15 @@ func TestFoldingLeavesNoBytesInTheKeyedRequest(t *testing.T) {
 	}
 }
 
-// TestTextOnlyKeysDidNotChange guards the deployed cache. The media digests
-// join the key payload only when the request carries media, so every entry a
-// running gateway already holds still answers its own request.
-func TestTextOnlyKeysDidNotChange(t *testing.T) {
+// TestTextOnlyKeyIsPinnedToItsVersion guards the deployed cache. The key
+// payload embeds inference.ChatRequest, so a field added to that canonical
+// struct moves this digest even when no caller sets the field, and every
+// entry a running gateway holds stops answering its own request.
+//
+// A digest change is allowed. It is not allowed silently: raise
+// SemanticKeyVersion in the same change, so the stale entries keep the prefix
+// that wrote them, then update the constant below to the new full key.
+func TestTextOnlyKeyIsPinnedToItsVersion(t *testing.T) {
 	key, err := ChatKey(ChatIdentity{
 		TenantID:          "tenant",
 		CatalogGeneration: "generation",
@@ -170,9 +175,9 @@ func TestTextOnlyKeysDidNotChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const before = "responsecache:v2:chat:" +
-		"47d183667d1611efe9fd3a340f8ad6f7f33375d5d07d76c00758e1c05eee5328"
-	if key != before {
-		t.Fatalf("key = %q, want %q", key, before)
+	const pinned = "responsecache:v3:chat:" +
+		"d3f60e45512f5b5902b20c0db900e34befafd9fc6bf522e0e8edf74cddfd6247"
+	if key != pinned {
+		t.Fatalf("key = %q, want %q; if this change is deliberate, raise SemanticKeyVersion with it", key, pinned)
 	}
 }

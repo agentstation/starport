@@ -93,8 +93,13 @@ check MMD-V10 "the console audio control follows the model input modalities" \
 check MMD-V11 "Starmap prices audio input and audio output" \
   all_present audio_input audio_output -- internal/catalog
 
+# The first spelling of this condition asked for 'type Modality' and 'Audio'.
+# Phase A had already shipped both, as ContentAudio, so the condition held
+# before its own task ran. Name the symbols this task adds instead, and require
+# the clone sweep beside them: a field with no clone line aliases under retry.
 check MMD-V12 "the canonical chat types name an output modality and a delta audio chunk" \
-  all_present 'type Modality' 'Audio' -- internal/inference/types.go
+  all_present 'OutputModalities' '*AudioOutput' 'type AudioChunk' \
+  'assertNoSharedMemory' -- internal/inference
 
 check MMD-V13 "both codecs read the output modality request field" \
   all_present 'json:"modalities"' -- internal/protocol/openai internal/protocol/openrouter

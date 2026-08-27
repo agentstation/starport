@@ -74,6 +74,25 @@ type Image struct {
 	Detail string
 }
 
+// AudioOutput asks the model to speak its answer. Voice names the provider's
+// voice, and Format names the container the caller wants back, such as "wav"
+// or "mp3". A provider that serves audio output requires both, so neither
+// carries a gateway default: an unset field stays unset on the wire and the
+// provider answers for it.
+type AudioOutput struct {
+	Voice  string
+	Format string
+}
+
+// AudioChunk is one streamed piece of a spoken answer. Data holds the audio
+// bytes for this chunk, and Transcript holds the text the model spoke in it.
+// A provider sends either or both in one chunk, so neither field implies the
+// other.
+type AudioChunk struct {
+	Data       []byte
+	Transcript string
+}
+
 // Audio describes an audio input. A caller sends either a URL or inline
 // Data, and Format names the container, such as "wav" or "mp3".
 type Audio struct {
@@ -227,10 +246,25 @@ type ChatRequest struct {
 	ParallelToolCalls *bool
 	Output            StructuredOutput
 	Reasoning         Reasoning
-	Stream            bool
-	StreamOptions     StreamOptions
-	User              string
-	Extensions        map[string]json.RawMessage
+	// OutputModalities names what the caller will accept back. Empty means
+	// text, which is what every model served before this field existed.
+	// A model that speaks its answer needs the caller to ask for audio, so
+	// this is a request field and not a routing hint.
+	//
+	// The response cache derives its key by serializing this struct, so a
+	// field added here changes the key of every request, including one that
+	// never sets it. internal/response/cache owns that consequence and
+	// answers for it by version, because a canonical type carries no
+	// transport tag that could hide the field instead.
+	OutputModalities []Modality
+	// AudioOutput configures the spoken answer OutputModalities asks for.
+	// Nil leaves the provider to choose, and a provider that requires a
+	// voice refuses the turn itself rather than take a gateway default.
+	AudioOutput   *AudioOutput
+	Stream        bool
+	StreamOptions StreamOptions
+	User          string
+	Extensions    map[string]json.RawMessage
 }
 
 // Usage reports normalized token counts. InputTokens includes cache reads
@@ -301,10 +335,14 @@ const (
 
 // ChoiceDelta contains one streamed choice update.
 type ChoiceDelta struct {
-	Index        int
-	Role         Role
-	Text         string
-	Reasoning    string
+	Index     int
+	Role      Role
+	Text      string
+	Reasoning string
+	// Audio carries one chunk of a spoken answer. OpenRouter serves audio
+	// output through streaming alone, so a caller that never reads this
+	// field never receives the answer at all.
+	Audio        *AudioChunk
 	ToolCalls    []ToolCall
 	LogProbs     []LogProb
 	FinishReason string
@@ -371,6 +409,8 @@ func (r ChatRequest) Clone() ChatRequest {
 	clone.ParallelToolCalls = clonePointer(r.ParallelToolCalls)
 	clone.Output.Schema = append(json.RawMessage(nil), r.Output.Schema...)
 	clone.Reasoning.MaxTokens = clonePointer(r.Reasoning.MaxTokens)
+	clone.OutputModalities = append([]Modality(nil), r.OutputModalities...)
+	clone.AudioOutput = clonePointer(r.AudioOutput)
 	clone.Extensions = cloneExtensions(r.Extensions)
 	return clone
 }
@@ -395,6 +435,14 @@ func (e StreamEvent) Clone() StreamEvent {
 		clone.Deltas[i] = delta
 		clone.Deltas[i].ToolCalls = append([]ToolCall(nil), delta.ToolCalls...)
 		clone.Deltas[i].LogProbs = cloneLogProbs(delta.LogProbs)
+		// Audio is the first pointer a delta carries. The struct copy above
+		// aliases it, and the chunk owns a byte slice, so a replayed or
+		// retried stream would share the bytes it is about to overwrite.
+		if delta.Audio != nil {
+			audio := *delta.Audio
+			audio.Data = append([]byte(nil), delta.Audio.Data...)
+			clone.Deltas[i].Audio = &audio
+		}
 	}
 	clone.Usage = clonePointer(e.Usage)
 	return clone
