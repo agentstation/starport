@@ -278,10 +278,38 @@ Concept repositories own these version 1 namespaces:
 - `internal/usage`: `usage:v1:`
 - `internal/catalog`: `catalog_generation:v1:` for accepted state and
   `catalog_remote_generation:v1:` for the independently verified remote head
+- `internal/files`: `files:v1:tenant:`
 
 Each repository owns its key encoding, record envelope, validation, revisions, and compare-and-swap rules. Controllers and business services use repository contracts. They do not construct durable keys or serialize durable records. The cache package stores response and model-cache data only.
 
 Starport has no released durable-data contract. Therefore, the version 1 repositories do not read old namespaces or run compatibility branches. A future released schema change must use an explicit migration and a new version.
+
+### File Storage
+
+A stored file has two halves, and they live apart. The record holds the
+identifier, the filename, the purpose, the size, the owning account, and the
+expiry, and it goes to the `KVStore` under `files:v1:tenant:`. The bytes go to
+`internal/blob`, which owns them alone.
+
+The split follows the size. A record is small, indexed, and scanned by prefix.
+A byte range is large, written once, and read whole. A `KVStore` value that
+held a 512 MiB upload would put that payload in every prefix scan.
+
+`blob.Store` exposes `Put`, `Get`, `Stat`, `Delete`, and `Backend`. Two
+implementations satisfy it:
+
+- `filesystem` writes under a deployment path. It is the default and needs no
+  external service.
+- `objectstore` writes to an S3-compatible bucket, which reaches AWS S3,
+  Cloudflare R2, MinIO, and Backblaze B2.
+
+An incomplete object-store selection refuses startup. It does not fall back to
+the filesystem. A deployment that asked for a shared bucket and got a local
+directory would lose a file the moment a second node answered.
+
+`internal/files` owns the record, the purpose set, the retention window, and
+the stored-byte bound. It reaches the bytes only through `blob.Store`. No other
+package names a backend, a bucket, or a path.
 
 ## Response Cache
 
@@ -505,15 +533,20 @@ The route group selects the wire dialect before request decoding. Shared gateway
 OpenAI-compatible:
 
 ```text
-POST /v1/chat/completions
-POST /v1/embeddings
-POST /v1/images/generations
-POST /v1/images/edits
-POST /v1/audio/speech
-POST /v1/audio/transcriptions
-POST /v1/audio/translations
-GET  /v1/models
-GET  /v1/models/{model}
+POST   /v1/chat/completions
+POST   /v1/embeddings
+POST   /v1/images/generations
+POST   /v1/images/edits
+POST   /v1/audio/speech
+POST   /v1/audio/transcriptions
+POST   /v1/audio/translations
+POST   /v1/files
+GET    /v1/files
+GET    /v1/files/{file_id}
+DELETE /v1/files/{file_id}
+GET    /v1/files/{file_id}/content
+GET    /v1/models
+GET    /v1/models/{model}
 ```
 
 OpenRouter-compatible:
@@ -531,7 +564,12 @@ GET  /api/v1/providers
 ```
 
 OpenRouter publishes no image edit path and no translation path. Its media list
-is shorter rather than padded with paths its own clients cannot call.
+is shorter rather than padded with paths its own clients cannot call. It also
+publishes no file store, so the five file paths stay on the OpenAI group alone.
+
+A read route needs `files:read`. A write route needs `files:write`. The scopes
+stay separate because a caller that names a stored document in a chat request
+reads it and never stores one.
 
 ### Modalities and operations
 

@@ -654,6 +654,91 @@ STARPORT_STORAGE_VALKEY_URL=valkey://valkey.example:6379
 Use `rediss://` for a TLS Valkey endpoint. Apply the Valkey service's normal
 backup, access-control, and failover procedures.
 
+## File Storage
+
+Starport stores a document once and lets a chat request name it. The record
+goes to the configured `KVStore`. The bytes go to a separate backend.
+
+### The routes and their scopes
+
+| Route | Scope | Meaning |
+| --- | --- | --- |
+| `POST /v1/files` | `files:write` | store one file |
+| `GET /v1/files` | `files:read` | list the account's files |
+| `GET /v1/files/{file_id}` | `files:read` | read one file record |
+| `DELETE /v1/files/{file_id}` | `files:write` | delete one file |
+| `GET /v1/files/{file_id}/content` | `files:read` | read the stored bytes |
+
+Every route scopes its answer to the calling credential. There is no route that
+lists across accounts, so an operator reads another account's files with that
+account's credential.
+
+An upload is `multipart/form-data` with a `file` part and a `purpose` part.
+Starport accepts two purposes, `user_data` and `vision`. It refuses any other
+value and names the set it accepts in the refusal.
+
+### Retention and size
+
+```text
+STARPORT_FILES_MAX_UPLOAD_BYTES=536870912
+STARPORT_FILES_RETENTION=720h
+STARPORT_FILES_SWEEP_INTERVAL=1h
+```
+
+The upload bound defaults to 512 MiB. The retention window defaults to 30 days,
+and a sweep deletes expired files every hour.
+
+An upload can ask for a shorter window with the `expires_after[anchor]` and
+`expires_after[seconds]` form fields. Starport refuses a request under one hour
+and a request longer than the deployment window. A caller therefore shortens
+retention and never extends it.
+
+`STARPORT_SERVER_MAX_REQUEST_SIZE` still bounds the HTTP body. Raise it with
+the upload bound, or the server refuses a large upload before the file service
+reads it.
+
+An account also carries a stored-byte bound. Set it as `stored_bytes` on the
+account limits or on a gateway API key, and the tighter of the two applies. The
+gateway answers a full account with HTTP 413 and tells the caller to delete a
+file to make room. A stored-byte bound is a level and not a rate: an upload
+raises it and a delete lowers it, and no interval resets it.
+
+### Choosing a backend
+
+The default writes to the platform data directory:
+
+```text
+STARPORT_FILES_BACKEND=filesystem
+# STARPORT_FILES_PATH=/absolute/path/to/starport/data/files
+```
+
+Keep that directory on persistent storage and include it in the same backup
+procedure as the Badger directory.
+
+Use an S3-compatible bucket for multiple nodes:
+
+```text
+STARPORT_FILES_BACKEND=objectstore
+STARPORT_FILES_OBJECT_STORE_BUCKET=starport-files
+STARPORT_FILES_OBJECT_STORE_REGION=us-east-1
+STARPORT_FILES_OBJECT_STORE_ACCESS_KEY_ID=...
+STARPORT_FILES_OBJECT_STORE_SECRET_ACCESS_KEY=...
+# STARPORT_FILES_OBJECT_STORE_ENDPOINT=https://account.r2.cloudflarestorage.com
+# STARPORT_FILES_OBJECT_STORE_PREFIX=production/
+```
+
+The object store reaches AWS S3, Cloudflare R2, MinIO, and Backblaze B2
+buckets. Set the endpoint for a bucket that AWS does not host. Set the prefix
+to share one bucket between two deployments.
+
+An incomplete object-store selection refuses startup. Starport does not fall
+back to the filesystem, because a second node would then answer for bytes the
+first node holds alone.
+
+`GET /api/v1/admin/info` reports the selected backend as `files.backend`, and
+the console settings page shows the same value. A deployment with no file
+storage reports `not configured`.
+
 ## Container Start
 
 The Compose file starts Starport with Valkey. Its optional `.env` file passes

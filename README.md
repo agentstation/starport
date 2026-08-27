@@ -301,7 +301,9 @@ Version 1 includes:
 - Request logs and usage accounting with catalog-priced costs at
   `/api/v1/activity`.
 - An embedded web console with overview, chat with model comparison, models,
-  providers, usage, presets, keys, and settings pages.
+  providers, usage, presets, keys, files, and settings pages.
+- A file store at `/v1/files` that keeps a document for a later chat request.
+  It writes to a local filesystem or an S3-compatible bucket.
 - Tenant-safe response caching.
 - Badger storage for one process and Valkey storage for multiple processes.
 
