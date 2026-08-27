@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ledongthuc/pdf"
 )
@@ -52,7 +53,7 @@ func readPDF(ctx context.Context, source io.ReaderAt, size int64, limits Limits)
 	for number := 1; number <= total; number++ {
 		// The deadline is checked between pages, which is the only place this
 		// loop can stop: the reader has no cancellation of its own.
-		if err := ctx.Err(); err != nil {
+		if err := stopped(ctx); err != nil {
 			return Extraction{}, err
 		}
 		var page Page
@@ -74,6 +75,23 @@ func readPDF(ctx context.Context, source io.ReaderAt, size int64, limits Limits)
 	}
 	extraction.Text = joinPages(extraction.Pages)
 	return extraction, nil
+}
+
+// stopped reports a context that has run out.
+//
+// It reads the deadline as well as the error, because a timer fires on its
+// platform's own granularity and Windows rounds to about fifteen milliseconds.
+// A document that reads faster than that granularity would otherwise finish
+// inside a bound it already went past, which turns the operator's time budget
+// into a bound that holds on one platform and not another.
+func stopped(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
 }
 
 // readPage assembles one page's text. It runs inside recovering.

@@ -46,6 +46,11 @@ type Config struct {
 	// bounds this deployment sets (optional). A deployment without one reads
 	// documents under the engine's own default bounds.
 	DocumentExtractor *document.Extractor
+
+	// DocumentCache holds one document's text for reuse inside a window
+	// (optional). A deployment without one reads every attachment on every
+	// turn, which is correct and pays the page price each time.
+	DocumentCache *document.Cache
 }
 
 // Option configures the proxy service.
@@ -71,6 +76,14 @@ func WithFiles(resolver FileResolver) Option {
 func WithDocumentExtractor(extractor *document.Extractor) Option {
 	return func(c *Config) {
 		c.DocumentExtractor = extractor
+	}
+}
+
+// WithDocumentCache reuses one document's text across the turns of a
+// conversation that keeps resending it.
+func WithDocumentCache(cache *document.Cache) Option {
+	return func(c *Config) {
+		c.DocumentCache = cache
 	}
 }
 
@@ -113,6 +126,8 @@ func New(registry connectors.LeasingRegistry, router router.ModelRouter, opts ..
 		estimator: cfg.TokenEstimator,
 		files:     cfg.FileResolver,
 		documents: cfg.DocumentExtractor,
+
+		extractions: cfg.DocumentCache,
 	}
 
 	var p Proxy = core
@@ -268,6 +283,10 @@ type proxy struct {
 	estimator *tokenize.Estimator
 	files     FileResolver
 	documents *document.Extractor
+
+	// extractions holds text a parser engine already read, so a conversation
+	// that resends the same attachment on every turn pays for it once.
+	extractions *document.Cache
 }
 
 // ProcessChatCompletion handles chat completion requests with routing
@@ -293,7 +312,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	keyConfig := transformAPIKeyConfig(req.APIKeyConfig)
 	metadata := p.buildRequestMetadata(req)
 
-	parsed, err := p.parseDocuments(ctx, req, keyConfig)
+	parsed, parsing, err := p.parseDocuments(ctx, req, keyConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -354,6 +373,7 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	}
 
 	// Retain the exact route that produced the canonical response.
+	proxyResp.ExtractionCached = parsing.Cached
 	proxyResp.Response.ModelUsed = result.ModelUsed
 	proxyResp.ProviderUsed = result.ProviderUsed
 	proxyResp.CredentialSource = result.CredentialSource
@@ -404,7 +424,10 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 	keyConfig := transformAPIKeyConfig(req.APIKeyConfig)
 	metadata := p.buildRequestMetadata(req)
 
-	parsed, err := p.parseDocuments(ctx, req, keyConfig)
+	// A stream reports no extraction hit. The saving is real and the stream
+	// has nowhere to state it: the first event a caller reads is a token of
+	// the answer, and by then the document is long read.
+	parsed, _, err := p.parseDocuments(ctx, req, keyConfig)
 	if err != nil {
 		return nil, err
 	}
