@@ -23,6 +23,7 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
@@ -89,6 +90,7 @@ type App struct {
 	store              storage.KVStore
 	blobStore          blob.Store
 	files              *files.Service
+	jobs               *jobs.Service
 	cacheManager       *cache.Manager
 	transports         *connectors.TransportRegistry
 	authentication     *providerauth.Registry
@@ -171,6 +173,7 @@ type runtimeBuilder struct {
 	usageRecords usage.Repository
 	presets      presets.Repository
 	files        *files.Service
+	jobs         *jobs.Service
 	gateway      proxy.Proxy
 	console      console.PageServer
 	auth         authRuntime
@@ -320,27 +323,7 @@ func (b *runtimeBuilder) openConcepts() error {
 		resolutionFailureIDs(startupFailures),
 	)
 
-	b.tenants, err = tenant.Open(b.application.store)
-	if err != nil {
-		return fmt.Errorf("open tenant repository: %w", err)
-	}
-	// Every gateway API key resolves to a tenant, so the canonical tenant has
-	// to exist before the first key is read. The call is idempotent and safe
-	// against a concurrent boot.
-	if _, err := b.tenants.EnsureDefault(context.Background()); err != nil {
-		return fmt.Errorf("ensure the default tenant: %w", err)
-	}
-	b.identities, err = identity.Open(b.application.store)
-	if err != nil {
-		return fmt.Errorf("open identity repository: %w", err)
-	}
-	if err := b.resolveAuthMode(context.Background()); err != nil {
-		return err
-	}
-	if err := requireIdentity(context.Background(), b.identities, b.auth.setting.Mode); err != nil {
-		return err
-	}
-	if err := b.resolveLocalToken(context.Background()); err != nil {
+	if err := b.openAccountIdentity(); err != nil {
 		return err
 	}
 	credentialRepository, err := credentials.Open(b.application.store)
@@ -360,6 +343,9 @@ func (b *runtimeBuilder) openConcepts() error {
 		return fmt.Errorf("open preset repository: %w", err)
 	}
 	if err := b.openFileService(); err != nil {
+		return err
+	}
+	if err := b.openJobService(); err != nil {
 		return err
 	}
 	masterKey := []byte(b.config.Security.MasterKey)
@@ -391,6 +377,37 @@ func (b *runtimeBuilder) openConcepts() error {
 	return nil
 }
 
+// openAccountIdentity opens who a request belongs to and how it proves it.
+//
+// The four steps run together because each one is unreadable without the ones
+// before it: a gateway API key names an identity, an identity resolves to a
+// tenant, and the authentication mode decides whether a deployment is allowed
+// to hold no identity at all.
+func (b *runtimeBuilder) openAccountIdentity() error {
+	var err error
+	b.tenants, err = tenant.Open(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open tenant repository: %w", err)
+	}
+	// Every gateway API key resolves to a tenant, so the canonical tenant has
+	// to exist before the first key is read. The call is idempotent and safe
+	// against a concurrent boot.
+	if _, err := b.tenants.EnsureDefault(context.Background()); err != nil {
+		return fmt.Errorf("ensure the default tenant: %w", err)
+	}
+	b.identities, err = identity.Open(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open identity repository: %w", err)
+	}
+	if err := b.resolveAuthMode(context.Background()); err != nil {
+		return err
+	}
+	if err := requireIdentity(context.Background(), b.identities, b.auth.setting.Mode); err != nil {
+		return err
+	}
+	return b.resolveLocalToken(context.Background())
+}
+
 // openFileService joins the two stores one stored file needs: the record
 // repository in the key-value store and the bytes in the byte store. It runs
 // after openBlob, because the service refuses to open without a byte store.
@@ -413,6 +430,22 @@ func (b *runtimeBuilder) openFileService() error {
 		return fmt.Errorf("open file service: %w", err)
 	}
 	b.application.files = b.files
+	return nil
+}
+
+// openJobService opens the record store for work that outlives its request.
+// It needs no byte store yet: a job records where it got to, and the finished
+// asset is a separate fact this seam stores later.
+func (b *runtimeBuilder) openJobService() error {
+	records, err := jobs.OpenRepository(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open job repository: %w", err)
+	}
+	b.jobs, err = jobs.NewService(records)
+	if err != nil {
+		return fmt.Errorf("open job service: %w", err)
+	}
+	b.application.jobs = b.jobs
 	return nil
 }
 
@@ -534,6 +567,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
 		Files:       b.files,
+		Jobs:        b.jobs,
 		FileBackend: b.fileBackend(),
 		LocalGate:   b.gate,
 	})

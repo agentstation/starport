@@ -39,6 +39,16 @@ type ModelRouter interface {
 	// RouteTranscription executes one speech-to-text request, in the spoken
 	// language or translated into English.
 	RouteTranscription(ctx context.Context, req *TranscriptionRequest) (*TranscriptionResponse, error)
+
+	// RouteVideoSubmit starts one video generation at a provider that serves
+	// it, and answers with the provider's own job identifier.
+	RouteVideoSubmit(ctx context.Context, req *VideoSubmitRequest) (*VideoJobResponse, error)
+
+	// RouteVideoPoll asks the provider that accepted a job where it got to.
+	RouteVideoPoll(ctx context.Context, req *VideoJobRequest) (*VideoJobResponse, error)
+
+	// RouteVideoCancel asks the provider that accepted a job to stop it.
+	RouteVideoCancel(ctx context.Context, req *VideoJobRequest) (*VideoJobResponse, error)
 }
 
 // Request contains the original request plus routing preferences

@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -90,6 +91,11 @@ type Dependencies struct {
 	// that this deployment configured no file storage rather than that the
 	// gateway has no files API.
 	Files *files.Service
+	// Jobs serves work that outlives its request. A nil service degrades the
+	// video endpoints to 503, loudly, for the same reason a nil file service
+	// does: the routes stay registered so a caller reads that this deployment
+	// configured no job store rather than that the gateway has no video API.
+	Jobs *jobs.Service
 
 	// FileBackend names the blob backend behind that service, for the admin
 	// surface to report. An empty name reads as no file storage at all.
@@ -154,6 +160,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Catalog:            dependencies.Catalog,
 		Presets:            dependencies.Presets,
 		Files:              dependencies.Files,
+		Jobs:               dependencies.Jobs,
 		FileUploadBound:    config.MaxFileUploadSize,
 		FileBackend:        dependencies.FileBackend,
 		ServiceName:        "starport",

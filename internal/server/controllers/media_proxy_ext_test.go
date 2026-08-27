@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/proxy"
 )
 
@@ -31,6 +32,33 @@ func (unsupportedMedia) ProcessTranscription(
 	context.Context,
 	*proxy.TranscriptionRequest,
 ) (*proxy.TranscriptionResponse, error) {
+	return nil, errUnsupportedMedia
+}
+
+func (unsupportedMedia) SubmitVideoJob(
+	context.Context,
+	*proxy.VideoSubmitRequest,
+) (*proxy.VideoJobAnswer, error) {
+	return nil, errUnsupportedMedia
+}
+
+func (unsupportedMedia) PollVideoJob(
+	context.Context,
+	*proxy.VideoJobRequest,
+) (*proxy.VideoJobAnswer, error) {
+	return nil, errUnsupportedMedia
+}
+
+// VideoJobRunner answers no provider side, so a record store handed this mock
+// refuses to start work rather than starting work nothing serves.
+func (unsupportedMedia) VideoJobRunner(*proxy.VideoSubmitRequest) jobs.Runner {
+	return nil
+}
+
+func (unsupportedMedia) CancelVideoJob(
+	context.Context,
+	*proxy.VideoJobRequest,
+) (*proxy.VideoJobAnswer, error) {
 	return nil, errUnsupportedMedia
 }
 

@@ -5,6 +5,7 @@ import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -34,6 +35,8 @@ type Controllers struct {
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
 	Files                *FilesController
+	Videos               *VideosController
+	OpenRouterVideos     *VideosController
 	Presets              *PresetsController
 	Auth                 *AuthController
 	Launch               *LaunchController
@@ -56,6 +59,10 @@ type Config struct {
 	// deployment that configured no file storage says so instead of 404.
 	Files           *files.Service
 	FileUploadBound int64
+	// Jobs serves work that outlives its request. A nil service leaves the
+	// video routes registered and answers each one with a service-unavailable
+	// result, the same way an unconfigured file store answers.
+	Jobs *jobs.Service
 	// FileBackend names the blob backend stored file bytes land in. It reaches
 	// the admin surface rather than the file routes, because it describes the
 	// deployment and not any one file.
@@ -103,6 +110,8 @@ func NewControllers(cfg Config) *Controllers {
 		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:            NewCatalogController(cfg.Catalog),
 		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),
+		Videos:             NewVideosController(cfg.Service, cfg.Jobs),
+		OpenRouterVideos:   NewOpenRouterVideosController(cfg.Service, cfg.Jobs),
 		Presets:            NewPresetsController(cfg.Presets),
 		Auth:               NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
 		Launch:             NewLaunchController(cfg.LocalGate),

@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	responsecache "github.com/agentstation/starport/internal/response/cache"
 	"github.com/rs/zerolog/log"
@@ -310,6 +311,29 @@ func (s *cachedService) ProcessImages(ctx context.Context, req *ImagesRequest) (
 // ProcessSpeech routes one speech request without caching it.
 func (s *cachedService) ProcessSpeech(ctx context.Context, req *SpeechRequest) (*SpeechResponse, error) {
 	return s.service.ProcessSpeech(ctx, req)
+}
+
+// SubmitVideoJob starts one video job without caching it.
+func (s *cachedService) SubmitVideoJob(ctx context.Context, req *VideoSubmitRequest) (*VideoJobAnswer, error) {
+	return s.service.SubmitVideoJob(ctx, req)
+}
+
+// PollVideoJob polls one accepted job without caching the answer. A cached
+// poll would report a finished job as still running for the life of the entry.
+func (s *cachedService) PollVideoJob(ctx context.Context, req *VideoJobRequest) (*VideoJobAnswer, error) {
+	return s.service.PollVideoJob(ctx, req)
+}
+
+// CancelVideoJob stops one accepted job without caching the answer.
+func (s *cachedService) CancelVideoJob(ctx context.Context, req *VideoJobRequest) (*VideoJobAnswer, error) {
+	return s.service.CancelVideoJob(ctx, req)
+}
+
+// VideoJobRunner binds the runner to this wrapper rather than to the service
+// behind it, so a job started through the deployment's gateway is polled and
+// stopped through the same one.
+func (s *cachedService) VideoJobRunner(req *VideoSubmitRequest) jobs.Runner {
+	return videoJobRunner(s, req)
 }
 
 // ProcessTranscription routes one transcription request without caching it.

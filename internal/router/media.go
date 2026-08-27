@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -43,6 +44,29 @@ type mediaPolicy struct {
 	Model        string
 	APIKeyConfig *APIKeyConfig
 	TenantID     string
+	// Provider pins the plan to one provider. It is empty for every operation
+	// that finishes inside its request, and set only when a request carries an
+	// identifier a single provider issued.
+	Provider string
+}
+
+// allows reports whether the key may reach one named provider. An empty
+// restriction reaches every provider, which is what an unrestricted key means
+// everywhere else.
+func (p mediaPolicy) allows(provider string) bool {
+	if p.APIKeyConfig == nil {
+		return true
+	}
+	allowed := normalizeProviders(p.APIKeyConfig.AllowedProviders)
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, candidate := range allowed {
+		if strings.EqualFold(candidate, provider) {
+			return true
+		}
+	}
+	return false
 }
 
 // MediaResponse is one media result with the same route evidence a chat or an
@@ -246,6 +270,12 @@ func mediaPlanningRequest(policy mediaPolicy, preferLowestCost bool) routing.Req
 			AllowedProviders: normalizeProviders(policy.APIKeyConfig.AllowedProviders),
 			ModelOverrides:   cloneModelOverrides(policy.APIKeyConfig.ModelOverrides),
 		}
+	}
+	// A pinned provider narrows what the key already allows and never widens
+	// it. The caller checked membership before setting it, so writing the one
+	// name here cannot let a key reach a provider it may not use.
+	if policy.Provider != "" {
+		request.Tenant.AllowedProviders = []string{policy.Provider}
 	}
 	return request
 }

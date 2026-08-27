@@ -8,6 +8,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/catalog/view"
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/providers/keyring"
 )
 
@@ -38,6 +39,22 @@ type Proxy interface {
 	// ProcessTranscription handles speech-to-text requests, in the spoken
 	// language or translated into English.
 	ProcessTranscription(ctx context.Context, req *TranscriptionRequest) (*TranscriptionResponse, error)
+
+	// SubmitVideoJob starts one video generation and answers with the
+	// provider's own job identifier. Nothing above this interface stores that
+	// identifier except the job record, which never hands it back out.
+	SubmitVideoJob(ctx context.Context, req *VideoSubmitRequest) (*VideoJobAnswer, error)
+
+	// PollVideoJob asks the provider that accepted a job where it got to.
+	PollVideoJob(ctx context.Context, req *VideoJobRequest) (*VideoJobAnswer, error)
+
+	// CancelVideoJob asks the provider that accepted a job to stop it.
+	CancelVideoJob(ctx context.Context, req *VideoJobRequest) (*VideoJobAnswer, error)
+
+	// VideoJobRunner returns the provider side of one caller's video jobs,
+	// bound to the gateway identity the request carries. The record store
+	// drives a job through this value and names no transport itself.
+	VideoJobRunner(req *VideoSubmitRequest) jobs.Runner
 
 	// ListModels returns available models based on routing configuration
 	ListModels(ctx context.Context) (*ModelsResponse, error)

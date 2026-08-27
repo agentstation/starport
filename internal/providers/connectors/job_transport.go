@@ -62,6 +62,11 @@ type ProviderJob struct {
 	Reason string
 }
 
+// Clone returns a copy that shares nothing with the original. The shared media
+// path clones every answer before it leaves the attempt budget, so a retry
+// cannot hand back a value an earlier attempt still holds.
+func (j ProviderJob) Clone() ProviderJob { return j }
+
 // JobRunner is the narrow optional interface a transport implements to submit,
 // poll, and cancel one provider job.
 //

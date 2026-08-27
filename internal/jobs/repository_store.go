@@ -33,6 +33,7 @@ type jobRecord struct {
 	Tenant        string            `json:"tenant"`
 	Model         string            `json:"model"`
 	Operation     routing.Operation `json:"operation"`
+	Provider      string            `json:"provider"`
 	State         JobState          `json:"state"`
 	Reason        string            `json:"reason,omitempty"`
 	CreatedAt     time.Time         `json:"created_at"`
@@ -186,6 +187,7 @@ func encodeJob(job Job) ([]byte, error) {
 		Tenant:        job.Tenant,
 		Model:         job.Model,
 		Operation:     job.Operation,
+		Provider:      job.Provider,
 		State:         job.State,
 		Reason:        job.Reason,
 		CreatedAt:     job.CreatedAt,
@@ -211,6 +213,7 @@ func decodeJob(data []byte) (Job, error) {
 		Tenant:        stored.Tenant,
 		Model:         stored.Model,
 		Operation:     stored.Operation,
+		Provider:      stored.Provider,
 		State:         stored.State,
 		Reason:        stored.Reason,
 		CreatedAt:     stored.CreatedAt,
