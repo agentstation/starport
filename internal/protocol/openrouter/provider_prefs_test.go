@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/inference"
 )
 
 func TestQuantizationsAccepted(t *testing.T) {
@@ -67,19 +69,15 @@ func TestQuantizationsAccepted(t *testing.T) {
 	require.Error(t, err)
 }
 
-// plugins names work the OpenRouter gateway performs itself. Starport routes
-// to providers directly, and no provider understands the field, so forwarding
-// it made the provider reject a request it would otherwise have served.
+// plugins named work the OpenRouter gateway performs itself, and Starport
+// reported the whole field as unkept. That report is now wrong for the one
+// plugin this gateway runs.
 //
-// One plugin is no longer gateway work this deployment skips: file-parser runs
-// here, and plugins_test.go holds that contract. Every other identifier draws a
-// refusal now rather than a report, because a plugin changes what the model
-// reads.
-//
-// The unenforced report below is therefore stale for the one plugin that does
-// run. It stays until PLG7, which owns ending it, and this assertion is that
-// task's fail-before evidence.
-func TestGatewayPluginsAreReportedNotForwarded(t *testing.T) {
+// A caller that reads the header reads it to learn what did not happen. A
+// file-parser request had its document read, so naming the field there tells
+// the caller the opposite of the truth, and it would send a caller looking for
+// a fault that is not there.
+func TestAFileParserRequestNamesNoUnenforcedField(t *testing.T) {
 	body := `{
 		"model": "openai/gpt-4o",
 		"messages": [{"role": "user", "content": "hi"}],
@@ -88,11 +86,57 @@ func TestGatewayPluginsAreReportedNotForwarded(t *testing.T) {
 	decoded, err := DecodeChat(strings.NewReader(body))
 	require.NoError(t, err, "a documented OpenRouter field must not be rejected")
 
+	require.Equal(t, inference.ParserEngineNative, decoded.Inference.DocumentParser.Engine,
+		"the plugin the header no longer reports has to be the plugin that ran")
+	require.Empty(t, decoded.UnenforcedProviderFields,
+		"a plugin this gateway enforces was reported as unkept")
+
 	// Extensions travel into the upstream request body verbatim. A gateway
 	// field placed there reaches a provider that cannot read it.
 	require.NotContains(t, decoded.Inference.Extensions, "plugins")
 	require.Empty(t, decoded.Inference.Extensions,
 		"a plugins-only request must stay free of extensions, which also keeps it cacheable")
+}
 
-	require.Equal(t, []string{"plugins"}, decoded.UnenforcedProviderFields)
+// TestAnUnknownPluginIsRefusedRatherThanReported states where the report ended
+// and what replaced it.
+//
+// The plan wrote this case as a report, because an unenforced plugin was a
+// header line when the plan was written. PLG1 made it a refusal instead: a
+// plugin changes what the model reads, so serving the request without it
+// answers a different question and bills the caller for the answer. The
+// refusal names the enforced set, which the header never did.
+func TestAnUnknownPluginIsRefusedRatherThanReported(t *testing.T) {
+	body := `{
+		"model": "openai/gpt-4o",
+		"messages": [{"role": "user", "content": "hi"}],
+		"plugins": [{"id": "web"}]
+	}`
+	_, err := DecodeChat(strings.NewReader(body))
+	require.ErrorIs(t, err, ErrUnenforcedPlugin)
+	require.Contains(t, err.Error(), "file-parser",
+		"a refusal that names no enforced plugin leaves the caller guessing")
+}
+
+// TestTransformsStaysADropInField holds invariant P7 while the plugin beside
+// it changes.
+//
+// transforms names work this gateway does not do, so its report is still the
+// truth. The two fields sit in the same list and the same decode path, and a
+// change to one of them must not move the other.
+func TestTransformsStaysADropInField(t *testing.T) {
+	body := `{
+		"model": "openai/gpt-4o",
+		"messages": [{"role": "user", "content": "hi"}],
+		"transforms": ["middle-out"],
+		"plugins": [{"id": "file-parser", "pdf": {"engine": "native"}}]
+	}`
+	decoded, err := DecodeChat(strings.NewReader(body))
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"transforms"}, decoded.UnenforcedProviderFields,
+		"the enforced plugin and the unkept transform must report separately")
+	require.Equal(t, inference.ParserEngineNative, decoded.Inference.DocumentParser.Engine)
+	require.NotContains(t, decoded.Inference.Extensions, "transforms",
+		"a gateway field must not reach a provider that cannot read it")
 }
