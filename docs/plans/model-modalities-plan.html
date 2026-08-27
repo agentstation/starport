@@ -122,7 +122,7 @@
     Created: 2026-08-26 ·
     Baseline: starport main at 29a134c, starmap main at ce19e939 ·
     Proof root: <code>docs/proof/model-modalities/</code> ·
-    Next action: MOD2
+    Next action: MOD3
   </p>
 
   <section id="outcome">
@@ -307,8 +307,8 @@
       <tbody>
         <tr id="MOD0" data-status="done"><td>MOD0</td><td>Baseline. Pin both commits, create the proof root, write the verifier red at 26 conditions, capture fail-before evidence.</td><td><code>done</code></td><td><a href="../proof/model-modalities/mod0.md">mod0.md</a>. <code>scripts/verify-model-modalities.sh</code> reports <code>Summary: 0 passed, 26 failed</code>. Both refusal bodies, the eight 404 media paths, and the three OpenRouter paths are recorded.</td></tr>
         <tr id="MOD1" data-status="done"><td>MOD1</td><td>Phase A. Widen the canonical content vocabulary with audio, document, and video parts. Conditions MMD-V01 and MMD-V02.</td><td><code>done</code></td><td><code>go test ./internal/inference/...</code> passes. <code>scripts/verify-model-modalities.sh</code> reports <code>Summary: 2 passed, 24 failed</code>.</td></tr>
-        <tr id="MOD2" data-status="in_progress"><td>MOD2</td><td>Phase A. Decode and encode the new parts in both protocol codecs. Conditions MMD-V03 and MMD-V04.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="MOD3" data-status="todo"><td>MOD3</td><td>Phase A. Carry the new parts through the connector adapters into each provider shape. Condition MMD-V05.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="MOD2" data-status="done"><td>MOD2</td><td>Phase A. Decode and encode the new parts in both protocol codecs. Conditions MMD-V03 and MMD-V04.</td><td><code>done</code></td><td>Both codecs decode <code>input_audio</code>, <code>file</code>, <code>input_file</code>, and <code>video_url</code>. <code>go test ./internal/protocol/...</code> passes, and <code>bash scripts/verify-openrouter-parity.sh</code> reports 16 passed. MMD-V03 and MMD-V04 pass, so the verifier reports 4 passed, 22 failed. Removing the four decode arms fails the new tests with <code>content[0].type "input_audio" is not supported</code>, the body MOD0 captured.</td></tr>
+        <tr id="MOD3" data-status="in_progress"><td>MOD3</td><td>Phase A. Carry the new parts through the connector adapters into each provider shape. Condition MMD-V05.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="MOD4" data-status="todo"><td>MOD4</td><td>Phase A. Refuse a request whose modality the routed model does not accept. Conditions MMD-V06 and MMD-V07.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD5" data-status="todo"><td>MOD5</td><td>Phase A. Widen the response cache eligibility rule to every remote media input. Condition MMD-V08.</td><td><code>todo</code></td><td></td></tr>
         <tr id="MOD6" data-status="todo"><td>MOD6</td><td>Phase A. Size the request body limit for media and state the limit in the refusal. Condition MMD-V09.</td><td><code>todo</code></td><td></td></tr>
@@ -1048,6 +1048,7 @@ CI runs it, and every ledger row except MOD17 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>MOD-D6 names <code>internal/router/planner_adapter.go:283</code>, because <code>internal/routing</code> holds no such file. The anonymous scope citation names <code>DefaultAnonymousScopes</code> rather than a signature line.</td></tr>
         <tr><td>2026-08-26</td><td>MOD0</td><td>done</td><td>The verifier reports <code>Summary: 0 passed, 26 failed</code>. Three conditions needed a rewrite to reach red. Two matched code that already ships, and one used a constant spelling the package does not use. The live OpenRouter document states three media paths and no image edit path, so MOD14 registers the edit route on the OpenAI family alone.</td></tr>
         <tr><td>2026-08-26</td><td>MOD1</td><td>done</td><td>The inline payload of each new part is <code>[]byte</code>, not a base64 string. A string needs no clone arm, so a string field would have made condition MMD-V02 vacuous. <code>Document</code> also carries a filename, because both protocol families put the caller name beside the bytes and MOD2 asserts the <code>file.filename</code> spelling. Removing one clone arm and shallow-copying one byte slice each fail the contract test.</td></tr>
+        <tr><td>2026-08-26</td><td>MOD2</td><td>done</td><td>The task text names an encode step, and this commit decodes alone. The protocol packages hold no request encoder: an assistant message encodes through <code>messageText</code>, which keeps text alone, and the outbound provider shape belongs to <code>internal/providers/connectors</code>. An exported encoder with no caller would be dead code. MOD3 owns the outbound direction, and MOD10 owns the assistant media field. A document keeps its <code>file_data</code> data URL whole, the way an image input already keeps its own, while audio decodes its base64, because the audio shape carries raw base64 beside a separate format. A <code>file_id</code> reference fails by name, so the files API plan has a fail-before body.</td></tr>
 </tbody>
     </table>
   </section>
