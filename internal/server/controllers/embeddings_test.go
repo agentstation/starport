@@ -20,6 +20,7 @@ import (
 )
 
 type mockEmbeddings struct {
+	unsupportedMedia
 	response    *proxy.EmbeddingsResponse
 	err         error
 	lastRequest *proxy.EmbeddingsRequest

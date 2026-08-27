@@ -15,6 +15,7 @@ import (
 )
 
 type mockAuthors struct {
+	unsupportedMedia
 	authors *proxy.AuthorsResponse
 	author  *proxy.AuthorInfo
 	err     error

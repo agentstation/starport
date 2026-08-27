@@ -99,6 +99,60 @@ func ValidateEmbeddingsRequest(req *EmbeddingsRequest) error {
 	return nil
 }
 
+// ValidateImagesRequest checks one image generation or image edit request.
+func ValidateImagesRequest(req *ImagesRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	if req.Request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if req.Request.Prompt == "" {
+		return validationError("prompt", "prompt is required")
+	}
+	if req.Request.N < 0 {
+		return validationError("n", "n cannot be negative")
+	}
+	// A mask names a region of the source image, so it means nothing without
+	// one. Accepting the pair silently would send a provider an edit it
+	// cannot apply and charge the caller for the rejection.
+	if req.Request.Mask.Present() && !req.Request.Image.Present() {
+		return validationError("mask", "mask requires an image")
+	}
+	return nil
+}
+
+// ValidateSpeechRequest checks one text-to-speech request.
+func ValidateSpeechRequest(req *SpeechRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	if req.Request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if req.Request.Input == "" {
+		return validationError("input", "input is required")
+	}
+	if req.Request.Speed != nil && *req.Request.Speed <= 0 {
+		return validationError("speed", "speed must be greater than 0")
+	}
+	return nil
+}
+
+// ValidateTranscriptionRequest checks one speech-to-text request.
+func ValidateTranscriptionRequest(req *TranscriptionRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	if req.Request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if !req.Request.File.Present() {
+		return validationError("file", "file is required")
+	}
+	return nil
+}
+
 func validationError(field, message string) error {
 	return &ValidationError{Field: field, Message: message}
 }

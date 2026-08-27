@@ -36,6 +36,16 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Embeddings
 		r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.Embeddings.Create)
 
+		// Images. An edit carries a source image, which is why it is a
+		// separate path and a multipart body rather than a flag.
+		r.With(s.requireAnyScope("images:write")).Post("/images/generations", s.controllers.Media.GenerateImages)
+		r.With(s.requireAnyScope("images:write")).Post("/images/edits", s.controllers.Media.EditImages)
+
+		// Audio. Speech writes an audio file; the other two read one.
+		r.With(s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.Media.Speech)
+		r.With(s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.Media.Transcribe)
+		r.With(s.requireAnyScope("audio:write")).Post("/audio/translations", s.controllers.Media.Translate)
+
 		// Models
 		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.Models.List)
 		r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.Models.Get)
@@ -66,6 +76,13 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 
 			// Embeddings
 			r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.OpenRouterEmbeddings.Create)
+
+			// Media. OpenRouter publishes one image path, one speech path,
+			// and one transcription path, and no path for an image edit or a
+			// translation. The two it omits stay on the OpenAI family.
+			r.With(s.requireAnyScope("images:write")).Post("/images", s.controllers.OpenRouterMedia.GenerateImages)
+			r.With(s.requireAnyScope("audio:write")).Post("/audio/speech", s.controllers.OpenRouterMedia.Speech)
+			r.With(s.requireAnyScope("audio:write")).Post("/audio/transcriptions", s.controllers.OpenRouterMedia.Transcribe)
 
 			// Models with enhanced metadata
 			r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.OpenRouterModels.List)

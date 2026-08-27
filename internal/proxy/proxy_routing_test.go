@@ -14,6 +14,7 @@ import (
 )
 
 type capturingRouter struct {
+	unroutedMedia
 	req          *routepkg.Request
 	embeddingReq *routepkg.EmbeddingRequest
 }
@@ -118,6 +119,7 @@ func TestProcessEmbeddingsDelegatesTenantCredentialAndRoutingPolicy(t *testing.T
 }
 
 type preparingRouter struct {
+	unroutedMedia
 	calls    int
 	received connectors.ChatRequest
 }
@@ -186,6 +188,7 @@ func TestProcessChatCompletionStripsCacheControlBeforeSingleUnsupportedProviderA
 }
 
 type streamCapturingRouter struct {
+	unroutedMedia
 	request  *routepkg.Request
 	received connectors.ChatRequest
 	modelID  string

@@ -310,9 +310,16 @@ curl --fail-with-body \
   http://localhost:8080/api/v1/chat/completions
 ```
 
-The key needs `chat:write` or wildcard scope. Model discovery needs
-`models:read`. Embeddings need `embeddings:write`, `chat:write`, or wildcard
-scope.
+Each route reads its own scope:
+
+- Chat needs `chat:write` or wildcard scope.
+- Model discovery needs `models:read`.
+- Embeddings need `embeddings:write`, `chat:write`, or wildcard scope.
+- Image generation and image edits need `images:write`.
+- Speech, transcription, and translation need `audio:write`.
+
+A deployment with authentication disabled holds all of these, so the media
+routes answer an unauthenticated caller exactly as the chat route does.
 
 ## Provider Configuration
 

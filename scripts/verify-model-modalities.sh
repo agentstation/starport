@@ -76,6 +76,20 @@ in_each() {
   return 0
 }
 
+# media_routes_registered holds MMD-V21. Each path is registered relative to
+# its protocol group, so the absolute path a caller types never appears in the
+# source that registers it, and a grep over that source would read a doc
+# comment as a route. The held contract is the route test: it walks the router
+# the server built and names every path a client can reach.
+media_routes_registered() {
+  local held=internal/server/media_routes_test.go
+  [ -f "$held" ] || return 1
+  grep -q 'chi.Walk' "$held" || return 1
+  all_present '/v1/images/generations' '/v1/images/edits' '/v1/audio/speech' \
+    '/v1/audio/transcriptions' '/v1/audio/translations' '/api/v1/images' \
+    '/api/v1/audio/speech' '/api/v1/audio/transcriptions' -- "$held"
+}
+
 # unpriced_media_reason holds both halves of MMD-V15 as one condition. A
 # constant declared and never reached is a vocabulary entry, and a cost path
 # that names it without a test is a claim. Require the declaration at the seam
@@ -188,9 +202,8 @@ check MMD-V19 "one named operation set replaces the hardcoded guards" \
 check MMD-V20 "the route candidates are filtered to the requested operation" \
   grep_q ServesOperation internal/routing
 
-check MMD-V21 "the server registers the five OpenAI media paths" \
-  all_present '/v1/images/generations' '/v1/images/edits' '/v1/audio/speech' \
-  '/v1/audio/transcriptions' '/v1/audio/translations' -- internal/server/routes.go
+check MMD-V21 "a route test walks the router and names the eight media paths" \
+  media_routes_registered
 
 check MMD-V22 "the media scopes exist and the anonymous identity carries them" \
   all_present 'images:write' 'audio:write' -- internal/identity/anonymous.go

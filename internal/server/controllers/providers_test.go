@@ -16,6 +16,7 @@ import (
 
 // mockProviders implements proxy.Proxy for testing
 type mockProviders struct {
+	unsupportedMedia
 	providers *proxy.ProvidersResponse
 	err       error
 }

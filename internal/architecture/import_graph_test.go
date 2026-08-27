@@ -35,6 +35,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../presets",
 		"../usage",
 		"../response/cache",
+		"../protocol/mediaform",
 		"../protocol/openai",
 		"../protocol/openrouter",
 	)
@@ -53,6 +54,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/presets",
 		"github.com/agentstation/starport/internal/usage",
 		"github.com/agentstation/starport/internal/response/cache",
+		"github.com/agentstation/starport/internal/protocol/mediaform",
 		"github.com/agentstation/starport/internal/protocol/openai",
 		"github.com/agentstation/starport/internal/protocol/openrouter",
 	} {
@@ -123,12 +125,20 @@ func TestImportGraphArchitecture(t *testing.T) {
 			"net/http",
 		)
 	}
+	// A media upload arrives as multipart form data, and both protocol
+	// families spell its parts the same way. Mediaform owns that reading once,
+	// and stays a leaf beside the canonical vocabulary so neither codec can
+	// reach the other through it.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/protocol/mediaform"],
+		"github.com/agentstation/starport/internal/inference",
+	)
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/protocol/openai",
 		"github.com/agentstation/starport/internal/protocol/openrouter",
 	} {
 		assertOnlyInternalImports(t, packages[packagePath],
 			"github.com/agentstation/starport/internal/inference",
+			"github.com/agentstation/starport/internal/protocol/mediaform",
 		)
 		assertNoImports(t, packages[packagePath],
 			"github.com/agentstation/starport/internal/proxy",

@@ -22,6 +22,8 @@ func DefaultAnonymousScopes() []string {
 	return []string{
 		"chat:write",
 		"embeddings:write",
+		"images:write",
+		"audio:write",
 		"models:read",
 		"activity:read",
 		"presets:write",

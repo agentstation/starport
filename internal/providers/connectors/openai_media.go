@@ -8,8 +8,10 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
@@ -214,15 +216,11 @@ func multipartRequest(
 		}
 	}
 	for _, name := range sortedFieldNames(files) {
-		upload := files[name]
-		filename := upload.Filename
-		if filename == "" {
-			filename = name
-		}
-		part, err := writer.CreateFormFile(name, filename)
+		part, err := createUpload(writer, name, files[name])
 		if err != nil {
 			return nil, fmt.Errorf("failed to write %s upload: %w", name, err)
 		}
+		upload := files[name]
 		if _, err := part.Write(upload.Bytes); err != nil {
 			return nil, fmt.Errorf("failed to write %s upload: %w", name, err)
 		}
@@ -237,6 +235,30 @@ func multipartRequest(
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
 	return httpReq, nil
 }
+
+// createUpload writes one file part. It states the caller's media type when
+// there is one, because CreateFormFile labels every upload as an opaque byte
+// stream and a provider picks its decoder from that label.
+func createUpload(writer *multipart.Writer, field string, upload UploadedFile) (io.Writer, error) {
+	filename := upload.Filename
+	if filename == "" {
+		filename = field
+	}
+	if upload.MediaType == "" {
+		return writer.CreateFormFile(field, filename)
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(
+		`form-data; name="%s"; filename="%s"`,
+		quoteEscaper.Replace(field), quoteEscaper.Replace(filename),
+	))
+	header.Set("Content-Type", upload.MediaType)
+	return writer.CreatePart(header)
+}
+
+// quoteEscaper matches the escaping mime/multipart applies to a part name, so
+// a filename holding a quote cannot break the header it sits in.
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
 
 // sortedFieldNames keeps a multipart body byte-identical across runs, so a
 // retry sends the same bytes and a test can assert on them.

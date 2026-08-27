@@ -29,6 +29,16 @@ type ModelRouter interface {
 	// RouteEmbeddings executes one embedding request through the same route,
 	// credential, availability, and total-attempt policies as chat requests.
 	RouteEmbeddings(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error)
+
+	// RouteImages executes one image generation or image edit request.
+	RouteImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error)
+
+	// RouteSpeech executes one text-to-speech request.
+	RouteSpeech(ctx context.Context, req *SpeechRequest) (*SpeechResponse, error)
+
+	// RouteTranscription executes one speech-to-text request, in the spoken
+	// language or translated into English.
+	RouteTranscription(ctx context.Context, req *TranscriptionRequest) (*TranscriptionResponse, error)
 }
 
 // Request contains the original request plus routing preferences

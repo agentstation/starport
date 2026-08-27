@@ -226,7 +226,7 @@ func TestAnAudioTurnAgainstAPricedOfferingCosts(t *testing.T) {
 
 	// 400 plain input, 600 audio input, 100 plain output, 300 audio output.
 	// The audio shares come out of the plain totals rather than adding to them.
-	expected := int64(math.Round((400*2.50/1e6+600*40.00/1e6+100*10.00/1e6+300*80.00/1e6)*1e9))
+	expected := int64(math.Round((400*2.50/1e6 + 600*40.00/1e6 + 100*10.00/1e6 + 300*80.00/1e6) * 1e9))
 	require.Equal(t, expected, record.Cost.NanoUSD)
 }
 

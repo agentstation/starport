@@ -18,6 +18,7 @@ import (
 )
 
 type mockModels struct {
+	unsupportedMedia
 	models *proxy.ModelsResponse
 	err    error
 }

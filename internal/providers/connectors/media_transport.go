@@ -8,11 +8,31 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 )
 
+// MediaTarget is the route binding every media provider request carries: the
+// provider's own model ID, the endpoint the planner selected, and the
+// credential that pays for the call. It is one embedded concept rather than the
+// same three fields written on each request, so a caller that binds a route
+// says it the same way whichever operation it is running.
+type MediaTarget struct {
+	Model string `json:"model"`
+	// Endpoint and Credential are transport facts rather than request fields,
+	// so neither reaches the provider body.
+	Endpoint   InferenceEndpoint    `json:"-"`
+	Credential credentials.Material `json:"-"`
+}
+
+// Bind applies one selected route and credential to the request that embeds it.
+func (t *MediaTarget) Bind(model string, endpoint InferenceEndpoint, credential credentials.Material) {
+	t.Model = model
+	t.Endpoint = endpoint
+	t.Credential = credential
+}
+
 // ImagesRequest is one image generation or image edit call. The endpoint the
 // planner selected decides which of the two the provider performs, because the
 // catalog carries a separate path for each operation.
 type ImagesRequest struct {
-	Model          string `json:"model"`
+	MediaTarget
 	Prompt         string `json:"prompt"`
 	N              int    `json:"n,omitempty"`
 	Size           string `json:"size,omitempty"`
@@ -24,16 +44,18 @@ type ImagesRequest struct {
 	// Image and Mask carry the decoded upload of an edit request. Bytes stay
 	// on the request so a retry replays the same upload without asking the
 	// caller to send it again.
-	Image      UploadedFile `json:"-"`
-	Mask       UploadedFile `json:"-"`
-	Endpoint   InferenceEndpoint
-	Credential credentials.Material `json:"-"`
+	Image UploadedFile `json:"-"`
+	Mask  UploadedFile `json:"-"`
 }
 
 // UploadedFile is one decoded upload held for replay across attempts.
 type UploadedFile struct {
 	Filename string
-	Bytes    []byte
+	// MediaType is the content type the caller stated. A provider reads it
+	// to pick a decoder, so the multipart body repeats it rather than
+	// letting every upload arrive as an opaque byte stream.
+	MediaType string
+	Bytes     []byte
 }
 
 // Present reports whether the upload carries content.
@@ -64,14 +86,11 @@ type MediaUsage struct {
 
 // SpeechRequest is one text-to-speech call.
 type SpeechRequest struct {
-	Model          string  `json:"model"`
+	MediaTarget
 	Input          string  `json:"input"`
 	Voice          string  `json:"voice,omitempty"`
 	ResponseFormat string  `json:"response_format,omitempty"`
 	Speed          float64 `json:"speed,omitempty"`
-
-	Endpoint   InferenceEndpoint    `json:"-"`
-	Credential credentials.Material `json:"-"`
 }
 
 // SpeechResponse is generated audio. A speech endpoint answers with the encoded
@@ -86,15 +105,12 @@ type SpeechResponse struct {
 // both transcription and translation, because the two differ only in the
 // endpoint the catalog names.
 type TranscriptionRequest struct {
-	Model          string
+	MediaTarget
 	File           UploadedFile
 	Language       string
 	Prompt         string
 	ResponseFormat string
 	Temperature    *float64
-
-	Endpoint   InferenceEndpoint
-	Credential credentials.Material
 }
 
 // TranscriptionResponse is written speech.

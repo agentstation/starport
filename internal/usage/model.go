@@ -27,6 +27,15 @@ const (
 	OperationChat = "chat"
 	// OperationEmbeddings reports an embeddings request.
 	OperationEmbeddings = "embeddings"
+	// OperationImages reports an image generation or image edit request.
+	// One name covers both, because the two are metered the same way and a
+	// spend report reads the meter rather than the path.
+	OperationImages = "images"
+	// OperationSpeech reports a text-to-speech request.
+	OperationSpeech = "speech"
+	// OperationTranscription reports a speech-to-text request, in the spoken
+	// language or translated.
+	OperationTranscription = "transcription"
 )
 
 // Cost unavailability reasons. A record without a cost carries one so the

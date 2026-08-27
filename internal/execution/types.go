@@ -186,6 +186,20 @@ type EmbeddingResult struct {
 	FinishedAt time.Time
 }
 
+// Attempt makes one non-streaming provider invocation for any canonical
+// response type. Chat and embeddings each have a named alias below, because
+// they are the two the gateway served before the media operations arrived.
+type Attempt[Response any] func(context.Context, routing.Attempt) (*Response, *failure.Failure, AttemptAction)
+
+// Result is one canonical completed result with execution evidence.
+type Result[Response any] struct {
+	Response   Response
+	Route      routing.Route
+	Attempts   []AttemptEvidence
+	StartedAt  time.Time
+	FinishedAt time.Time
+}
+
 // Stream is a provider-neutral inference event stream.
 type Stream interface {
 	Read() (*inference.StreamEvent, error)
