@@ -122,11 +122,15 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
-	ID         string
-	Tenant     string
-	Model      string
-	Operation  routing.Operation
-	State      JobState
+	ID        string
+	Tenant    string
+	Model     string
+	Operation routing.Operation
+	State     JobState
+	// Reason states why a failed job produced no asset. A caller that polls a
+	// failed job reads it, so JobStateFailed is the one state a record cannot
+	// reach without one.
+	Reason     string
 	CreatedAt  time.Time
 	TerminalAt time.Time
 
@@ -164,6 +168,10 @@ func (j Job) Validate() error {
 		return fmt.Errorf("%w: state %q records no end time", ErrInvalidJob, j.State)
 	case !j.State.Terminal() && !j.TerminalAt.IsZero():
 		return fmt.Errorf("%w: state %q records an end time", ErrInvalidJob, j.State)
+	case j.State == JobStateFailed && strings.TrimSpace(j.Reason) == "":
+		return fmt.Errorf("%w: a failed job states no reason", ErrInvalidJob)
+	case j.State != JobStateFailed && strings.TrimSpace(j.Reason) != "":
+		return fmt.Errorf("%w: state %q states a failure reason", ErrInvalidJob, j.State)
 	}
 	return nil
 }
@@ -186,9 +194,35 @@ func New(id, tenant, model string, operation routing.Operation, now time.Time) (
 }
 
 // Transition moves the job through the table and stamps the end of a terminal
-// move. It is the only way a state changes, so a caller cannot reach a
-// terminal state without recording when it arrived.
+// move. It is how a state changes, so a caller cannot reach a terminal state
+// without recording when it arrived.
+//
+// It refuses JobStateFailed. That state carries a reason a caller reads, and a
+// door that takes no reason would let a record reach storage without one. Fail
+// is the door for it.
 func (j *Job) Transition(to JobState, now time.Time) error {
+	if to == JobStateFailed {
+		return fmt.Errorf("%w: a failed job states its reason, so use Fail", ErrInvalidJob)
+	}
+	return j.transition(to, now)
+}
+
+// Fail moves the job to its terminal failed state and records why. Every path
+// that ends a job without an asset passes through here: a provider rejection, a
+// provider state word that names a failure, and a job that outlived its
+// polling budget.
+func (j *Job) Fail(reason string, now time.Time) error {
+	if strings.TrimSpace(reason) == "" {
+		return fmt.Errorf("%w: a failed job states no reason", ErrInvalidJob)
+	}
+	if err := j.transition(JobStateFailed, now); err != nil {
+		return err
+	}
+	j.Reason = reason
+	return nil
+}
+
+func (j *Job) transition(to JobState, now time.Time) error {
 	if !CanTransition(j.State, to) {
 		return fmt.Errorf("%w: %q to %q", ErrIllegalTransition, j.State, to)
 	}

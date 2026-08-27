@@ -115,7 +115,7 @@ func TestNoTerminalStateAcceptsATransition(t *testing.T) {
 		}
 
 		job := newTestJob(t)
-		require.NoError(t, job.Transition(terminal, ended))
+		require.NoError(t, reachTerminal(&job, terminal, ended))
 		require.Equal(t, ended, job.TerminalAt)
 
 		err := job.Transition(jobs.JobStateRunning, later)
@@ -248,4 +248,15 @@ func TestAdoptProviderJobRefusesAnEmptyAnswer(t *testing.T) {
 	job := newTestJob(t)
 	require.ErrorIs(t, job.AdoptProviderJob("  "), jobs.ErrInvalidJob)
 	require.False(t, job.HasProviderJob())
+}
+
+// reachTerminal moves a job into one terminal state through the door that state
+// uses. Failed carries a reason a caller reads, so it has its own door, and a
+// test that walked every terminal state through Transition would prove only
+// that the other two do.
+func reachTerminal(job *jobs.Job, terminal jobs.JobState, now time.Time) error {
+	if terminal == jobs.JobStateFailed {
+		return job.Fail("the provider rejected the prompt", now)
+	}
+	return job.Transition(terminal, now)
 }
