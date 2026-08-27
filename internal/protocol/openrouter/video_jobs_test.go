@@ -69,6 +69,25 @@ func TestEncodeVideoJobStatesWhyAJobFailed(t *testing.T) {
 	require.Equal(t, "the provider discarded the asset before it was fetched", wire.Error.Message)
 }
 
+// TestEncodeVideoJobCarriesTheRetentionWindow keeps the two families reporting
+// the same fact under the same name. A client that switched families would
+// otherwise lose the only way to tell a playable video from a record of one.
+func TestEncodeVideoJobCarriesTheRetentionWindow(t *testing.T) {
+	wire := EncodeVideoJob(inference.VideoJob{
+		ID: "job-9f2c", Model: "openai/sora-2", State: "completed",
+		CreatedUnix: 1767225600, CompletedUnix: 1767225700, ExpiresUnix: 1767312100,
+	})
+	require.Equal(t, int64(1767312100), wire.ExpiresAt)
+
+	encoded, err := json.Marshal(EncodeVideoJob(inference.VideoJob{
+		ID: "job-9f2c", Model: "openai/sora-2", State: "queued", CreatedUnix: 1767225600,
+	}))
+	require.NoError(t, err)
+	var absent map[string]any
+	require.NoError(t, json.Unmarshal(encoded, &absent))
+	require.NotContains(t, absent, "expires_at")
+}
+
 // TestEncodeVideoJobsHoldsTheListShape pins the listing. This family carries
 // the records under `data` and wraps them in no envelope word.
 func TestEncodeVideoJobsHoldsTheListShape(t *testing.T) {

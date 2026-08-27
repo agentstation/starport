@@ -42,6 +42,7 @@ type VideoJob struct {
 	Status      string         `json:"status"`
 	CreatedAt   int64          `json:"created_at"`
 	CompletedAt int64          `json:"completed_at,omitempty"`
+	ExpiresAt   int64          `json:"expires_at,omitempty"`
 	Error       *VideoJobError `json:"error,omitempty"`
 }
 
@@ -64,6 +65,7 @@ func EncodeVideoJob(job inference.VideoJob) VideoJob {
 		Status:      videoJobStatus(job.State),
 		CreatedAt:   job.CreatedUnix,
 		CompletedAt: job.CompletedUnix,
+		ExpiresAt:   job.ExpiresUnix,
 	}
 	if job.Reason != "" {
 		wire.Error = &VideoJobError{Message: job.Reason}

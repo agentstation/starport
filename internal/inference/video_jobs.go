@@ -58,6 +58,14 @@ type VideoJob struct {
 	// CompletedUnix is when the job reached a terminal state, or zero while it
 	// has not.
 	CompletedUnix int64
+	// ExpiresUnix is when the retention window on the stored asset ends. It is
+	// zero when this gateway holds no bytes for the job, which covers every job
+	// that has not finished and every finished one whose bytes already went.
+	//
+	// A caller reads it to tell a video it can still fetch from one it cannot.
+	// Without it the only way to ask is to fetch and read the refusal, which
+	// spends a request per job to learn that a list of jobs is unplayable.
+	ExpiresUnix int64
 }
 
 // Clone returns a copy that shares nothing with the original.

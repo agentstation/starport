@@ -75,6 +75,26 @@ func TestEncodeVideoJobKeepsTheCancelledWord(t *testing.T) {
 	require.Nil(t, wire.Error)
 }
 
+// TestEncodeVideoJobCarriesTheRetentionWindow puts the fact a client needs to
+// tell a video it can still fetch from one it cannot. The OpenAI object names
+// this field `expires_at`, and a job holding no bytes states nothing rather
+// than a zero a client would read as 1970.
+func TestEncodeVideoJobCarriesTheRetentionWindow(t *testing.T) {
+	wire := EncodeVideoJob(inference.VideoJob{
+		ID: "job-9f2c", Model: "openai/sora-2", State: "completed",
+		CreatedUnix: 1767225600, CompletedUnix: 1767225700, ExpiresUnix: 1767312100,
+	})
+	require.Equal(t, int64(1767312100), wire.ExpiresAt)
+
+	encoded, err := json.Marshal(EncodeVideoJob(inference.VideoJob{
+		ID: "job-9f2c", Model: "openai/sora-2", State: "queued", CreatedUnix: 1767225600,
+	}))
+	require.NoError(t, err)
+	var absent map[string]any
+	require.NoError(t, json.Unmarshal(encoded, &absent))
+	require.NotContains(t, absent, "expires_at")
+}
+
 // TestEncodeVideoJobsHoldsTheListShape pins the listing. The OpenAI API wraps
 // every listing in an object named `list` with the records under `data`.
 func TestEncodeVideoJobsHoldsTheListShape(t *testing.T) {
