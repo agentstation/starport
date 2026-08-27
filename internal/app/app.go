@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/availability"
+	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/cache"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
@@ -44,6 +45,10 @@ var (
 	ErrConfigRequired = errors.New("application config is required")
 	// ErrStorageRequired reports a storage factory that returned no adapter.
 	ErrStorageRequired = errors.New("storage factory returned no storage")
+
+	// ErrBlobStorageRequired reports a file storage factory that returned no
+	// store.
+	ErrBlobStorageRequired = errors.New("file storage factory returned no store")
 	// ErrCatalogRequired reports a catalog factory that returned no control plane.
 	ErrCatalogRequired = errors.New("catalog factory returned no catalog")
 	// ErrCredentialsRequired reports an absent provider-credential master key.
@@ -80,6 +85,7 @@ type App struct {
 	catalog            *runtimecatalog.ControlPlane
 	catalogFreshness   *runtimecatalog.FreshnessService
 	store              storage.KVStore
+	blobStore          blob.Store
 	cacheManager       *cache.Manager
 	transports         *connectors.TransportRegistry
 	authentication     *providerauth.Registry
@@ -179,6 +185,7 @@ type authRuntime struct {
 func (b *runtimeBuilder) compose() error {
 	steps := []func() error{
 		b.openStorage,
+		b.openBlob,
 		b.openConcepts,
 		b.openRegistry,
 		b.openCache,
@@ -209,6 +216,34 @@ func (b *runtimeBuilder) openStorage() error {
 	}
 	b.application.store = store
 	b.application.own("storage", func(context.Context) error { return store.Close() })
+	return nil
+}
+
+// openBlob opens the store that holds file bytes and reports which one it is.
+//
+// The report prints once at startup rather than per upload. An operator needs
+// to know where the bytes land before the first request, because a deployment
+// that meant to share a bucket and got a per-node directory looks healthy until
+// a second node answers not-found.
+func (b *runtimeBuilder) openBlob() error {
+	store, err := b.factories.openBlob(context.Background(), b.config.Files)
+	if err != nil {
+		return fmt.Errorf("open file storage: %w", err)
+	}
+	if store == nil {
+		return ErrBlobStorageRequired
+	}
+	b.application.blobStore = store
+	event := log.Info().Str("backend", store.Backend())
+	if b.config.Files.SelectedBackend() == config.BlobBackendFilesystem {
+		event = event.Str("path", b.config.Files.Path)
+	} else {
+		// The bucket and the prefix identify the destination. Neither key ever
+		// reaches a log line.
+		event = event.Str("bucket", b.config.Files.ObjectStore.Bucket).
+			Str("prefix", b.config.Files.ObjectStore.Prefix)
+	}
+	event.Msg("file byte storage ready")
 	return nil
 }
 
@@ -680,6 +715,7 @@ func (a *App) closeWithTimeout() error {
 func defaultRuntimeFactories() runtimeFactories {
 	return runtimeFactories{
 		openStorage: openStorage,
+		openBlob:    openBlob,
 		openCatalog: func(
 			ctx context.Context,
 			store storage.KVStore,
@@ -855,7 +891,8 @@ func (a *App) remoteCatalogLoop(ctx context.Context) {
 }
 
 func validateFactories(factories runtimeFactories) error {
-	if factories.openStorage == nil || factories.openCatalog == nil || factories.newConnector == nil ||
+	if factories.openStorage == nil || factories.openBlob == nil ||
+		factories.openCatalog == nil || factories.newConnector == nil ||
 		factories.newCache == nil || factories.newServer == nil {
 		return errors.New("application runtime factories are incomplete")
 	}
@@ -864,6 +901,26 @@ func validateFactories(factories runtimeFactories) error {
 
 func openStorage(cfg config.StorageConfig) (storage.KVStore, error) {
 	return storage.Open(cfg.RuntimeStorage())
+}
+
+// openBlob selects the backend from configuration. The filesystem is the
+// default, and it needs nothing configured. Validation has already refused an
+// incomplete object store selection, so this function reads a decision rather
+// than making one.
+func openBlob(ctx context.Context, cfg config.FilesConfig) (blob.Store, error) {
+	switch cfg.SelectedBackend() {
+	case config.BlobBackendObjectStore:
+		return blob.NewObjectStore(ctx, blob.ObjectStoreOptions{
+			Bucket:          cfg.ObjectStore.Bucket,
+			Region:          cfg.ObjectStore.Region,
+			Endpoint:        cfg.ObjectStore.Endpoint,
+			Prefix:          cfg.ObjectStore.Prefix,
+			AccessKeyID:     cfg.ObjectStore.AccessKeyID,
+			SecretAccessKey: cfg.ObjectStore.SecretAccessKey,
+		})
+	default:
+		return blob.NewFilesystem(cfg.Path)
+	}
 }
 
 func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {

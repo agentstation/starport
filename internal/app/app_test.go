@@ -307,6 +307,9 @@ func validProductionConfig(t *testing.T) *config.Config {
 		},
 		Cache:   config.CacheConfig{Enabled: false},
 		Console: config.ConsoleConfig{},
+		// The loader always resolves a path for the filesystem backend, so a
+		// production configuration always carries one.
+		Files: config.FilesConfig{Path: t.TempDir()},
 	}
 }
 
