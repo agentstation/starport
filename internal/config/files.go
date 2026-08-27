@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // The blob backends an operator can select. The words match the ones
@@ -43,6 +44,15 @@ type FilesConfig struct {
 	// bound on what one tenant may keep stored at once.
 	MaxUploadBytes int64 `env:"MAX_UPLOAD_BYTES,default=536870912"`
 
+	// Retention is how long a stored file stays readable. Every file expires,
+	// and an upload may ask for a shorter window but never a longer one.
+	Retention time.Duration `env:"RETENTION,default=720h"`
+
+	// SweepInterval is how often the gateway reclaims expired and abandoned
+	// files. It is a floor on how long deleted bytes survive, not on how long
+	// a file reads: an expired file reads as not found the moment it expires.
+	SweepInterval time.Duration `env:"SWEEP_INTERVAL,default=1h"`
+
 	ObjectStore ObjectStoreConfig `env:",prefix=OBJECT_STORE_"`
 }
 
@@ -58,6 +68,29 @@ func (c *FilesConfig) UploadBound() int64 {
 		return DefaultMaxUploadBytes
 	}
 	return c.MaxUploadBytes
+}
+
+// DefaultRetention is the window an absent setting selects, and
+// DefaultSweepInterval is how often the reclaim pass runs.
+const (
+	DefaultRetention     = 30 * 24 * time.Hour
+	DefaultSweepInterval = time.Hour
+)
+
+// RetentionWindow reports how long a stored file stays readable.
+func (c *FilesConfig) RetentionWindow() time.Duration {
+	if c == nil || c.Retention <= 0 {
+		return DefaultRetention
+	}
+	return c.Retention
+}
+
+// SweepEvery reports how often the reclaim pass runs.
+func (c *FilesConfig) SweepEvery() time.Duration {
+	if c == nil || c.SweepInterval <= 0 {
+		return DefaultSweepInterval
+	}
+	return c.SweepInterval
 }
 
 // ObjectStoreConfig addresses one S3-compatible bucket.
