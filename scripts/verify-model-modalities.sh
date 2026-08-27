@@ -56,6 +56,26 @@ all_present() {
   return 0
 }
 
+# in_each reports that every term appears under every path, rather than under
+# any one of them. A condition that names two codecs needs this: all_present
+# ORs its paths, so one codec carrying the whole vocabulary satisfies it while
+# the other still drops the field.
+in_each() {
+  local terms=() paths=()
+  local seen=0 arg
+  for arg in "$@"; do
+    if [ "$arg" = "--" ]; then seen=1; continue; fi
+    if [ "$seen" -eq 0 ]; then terms+=("$arg"); else paths+=("$arg"); fi
+  done
+  local term path
+  for path in "${paths[@]}"; do
+    for term in "${terms[@]}"; do
+      grep -Rq -- "$term" "$path" || return 1
+    done
+  done
+  return 0
+}
+
 # --- Phase A, multimodal chat input ---
 
 check MMD-V01 "the canonical content vocabulary names audio, document, and video parts" \
@@ -101,11 +121,21 @@ check MMD-V12 "the canonical chat types name an output modality and a delta audi
   all_present 'OutputModalities' '*AudioOutput' 'type AudioChunk' \
   'assertNoSharedMemory' -- internal/inference
 
+# The first spelling of this condition asked for the exact tag json:"modalities"
+# and passed its two paths to all_present, which ORs them. It therefore missed
+# the shipped tag, which carries omitempty, and would have held for a tree where
+# one codec read the field and the other did not. Require both codecs to name
+# the field and to decode it.
 check MMD-V13 "both codecs read the output modality request field" \
-  all_present 'json:"modalities"' -- internal/protocol/openai internal/protocol/openrouter
+  in_each 'json:"modalities,omitempty"' 'decodeModalities' 'json:"audio,omitempty"' \
+  -- internal/protocol/openai internal/protocol/openrouter
 
+# The first spelling of this condition grepped one codec for the lowercase word
+# 'images', which the input path already carried. Require the encoder itself, in
+# both codecs, together with the audio half of the same answer.
 check MMD-V14 "a response holding an image part encodes to the documented field" \
-  all_present 'images' ContentImage -- internal/protocol/openai
+  in_each 'json:"images,omitempty"' 'encodeGeneratedImages' 'json:"audio,omitempty"' \
+  -- internal/protocol/openai internal/protocol/openrouter
 
 check MMD-V15 "an unpriced media turn records a named cost reason and no cost" \
   grep_q CostReasonMediaUnpriced internal/inference

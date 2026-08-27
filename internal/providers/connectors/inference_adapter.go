@@ -1,6 +1,7 @@
 package connectors
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -57,6 +58,8 @@ func ChatRequestFromInference(request inference.ChatRequest) (*ChatRequest, erro
 		ResponseFormat:    responseFormatFromInference(request.Output),
 		Models:            append([]string(nil), request.FallbackModels...),
 		ProviderOptions:   providerOptions,
+		Modalities:        modalitiesFromInference(request.OutputModalities),
+		Audio:             audioConfigFromInference(request.AudioOutput),
 	}
 	if request.StreamOptions.IncludeUsage {
 		wireRequest.StreamOptions = &StreamOptions{IncludeUsage: true}
@@ -114,7 +117,9 @@ func ChatRequestToInference(request *ChatRequest) (inference.ChatRequest, error)
 		Tools: tools, ToolChoice: toolChoiceToInference(request.ToolChoice),
 		ParallelToolCalls: request.ParallelToolCalls,
 		Output:            outputToInference(request.ResponseFormat), Stream: request.Stream, User: request.User,
-		Extensions: extensions,
+		OutputModalities: modalitiesToInference(request.Modalities),
+		AudioOutput:      audioConfigToInference(request.Audio),
+		Extensions:       extensions,
 	}
 	if request.StreamOptions != nil {
 		canonical.StreamOptions.IncludeUsage = request.StreamOptions.IncludeUsage
@@ -190,11 +195,21 @@ func StreamEventsToInference(chunk *ChatStreamChunk, modelUsed string) ([]infere
 	if len(chunk.Choices) > 0 {
 		deltas := make([]inference.ChoiceDelta, len(chunk.Choices))
 		for i, choice := range chunk.Choices {
+			media, err := appendGeneratedMedia(nil, choice.Delta.Images, nil)
+			if err != nil {
+				return nil, fmt.Errorf("choices[%d]: %w", i, err)
+			}
+			audio, err := audioChunkToInference(choice.Delta.Audio)
+			if err != nil {
+				return nil, fmt.Errorf("choices[%d]: %w", i, err)
+			}
 			deltas[i] = inference.ChoiceDelta{
 				Index:        choice.Index,
 				Role:         inference.Role(choice.Delta.Role),
 				Text:         choice.Delta.Content,
 				Reasoning:    choice.Delta.Reasoning,
+				Audio:        audio,
+				Media:        media,
 				ToolCalls:    toolCallsToInference(choice.Delta.ToolCalls),
 				LogProbs:     logProbsToInference(choice.LogProbs),
 				FinishReason: choice.FinishReason,
@@ -224,12 +239,31 @@ func StreamEventsToInference(chunk *ChatStreamChunk, modelUsed string) ([]infere
 	return events, nil
 }
 
+// audioChunkToInference reads one streamed piece of a spoken answer. A chunk
+// carries either bytes or transcript, so neither absence ends the chunk.
+func audioChunkToInference(audio *GeneratedAudio) (*inference.AudioChunk, error) {
+	if audio == nil {
+		return nil, nil
+	}
+	chunk := inference.AudioChunk{Transcript: audio.Transcript}
+	if audio.Data != "" {
+		data, err := base64.StdEncoding.DecodeString(audio.Data)
+		if err != nil {
+			return nil, fmt.Errorf("decode streamed audio: %w", err)
+		}
+		chunk.Data = data
+	}
+	return &chunk, nil
+}
+
 func streamEventKind(deltas []inference.ChoiceDelta) inference.StreamEventKind {
 	allStart := len(deltas) > 0
 	allEnd := len(deltas) > 0
 	for _, delta := range deltas {
-		allStart = allStart && delta.Role != "" && delta.Text == "" && delta.Reasoning == "" && len(delta.ToolCalls) == 0 && delta.FinishReason == ""
-		allEnd = allEnd && delta.FinishReason != "" && delta.Role == "" && delta.Text == "" && delta.Reasoning == "" && len(delta.ToolCalls) == 0
+		empty := delta.Text == "" && delta.Reasoning == "" && len(delta.ToolCalls) == 0 &&
+			delta.Audio == nil && len(delta.Media) == 0
+		allStart = allStart && delta.Role != "" && empty && delta.FinishReason == ""
+		allEnd = allEnd && delta.FinishReason != "" && delta.Role == "" && empty
 	}
 	if allStart {
 		return inference.StreamStart
@@ -312,6 +346,10 @@ func messageToInference(message Message) (inference.Message, error) {
 		}
 		content[i] = canonical
 	}
+	content, err = appendGeneratedMedia(content, message.Images, message.Audio)
+	if err != nil {
+		return inference.Message{}, err
+	}
 	return inference.Message{
 		Role:       inference.Role(message.Role),
 		Content:    content,
@@ -320,6 +358,88 @@ func messageToInference(message Message) (inference.Message, error) {
 		ToolCalls:  toolCallsToInference(message.ToolCalls),
 		ToolCallID: message.ToolCallID,
 	}, nil
+}
+
+// appendGeneratedMedia folds the media a provider returns beside the content
+// into the canonical part list. A generated image and a spoken answer arrive in
+// their own wire fields, so a reader that only walked the content would drop
+// the answer and report an empty turn.
+func appendGeneratedMedia(content []inference.ContentPart, images []GeneratedImage, audio *GeneratedAudio) ([]inference.ContentPart, error) {
+	for _, image := range images {
+		if image.ImageURL == nil || image.ImageURL.URL == "" {
+			continue
+		}
+		content = append(content, inference.ContentPart{
+			Kind:  inference.ContentImage,
+			Image: &inference.Image{URL: image.ImageURL.URL, Detail: image.ImageURL.Detail},
+		})
+	}
+	if audio == nil {
+		return content, nil
+	}
+	// The transcript is the answer in words, so it belongs with the text the
+	// message already holds rather than in a field of its own.
+	if audio.Transcript != "" {
+		content = appendTranscript(content, audio.Transcript)
+	}
+	if audio.Data == "" {
+		return content, nil
+	}
+	data, err := base64.StdEncoding.DecodeString(audio.Data)
+	if err != nil {
+		return nil, fmt.Errorf("decode generated audio: %w", err)
+	}
+	return append(content, inference.ContentPart{
+		Kind: inference.ContentAudio, Audio: &inference.Audio{Data: data, Format: audio.Format},
+	}), nil
+}
+
+func appendTranscript(content []inference.ContentPart, transcript string) []inference.ContentPart {
+	for index := range content {
+		if content[index].Kind == inference.ContentText {
+			if content[index].Text == "" {
+				content[index].Text = transcript
+			}
+			return content
+		}
+	}
+	return append(content, inference.ContentPart{Kind: inference.ContentText, Text: transcript})
+}
+
+func modalitiesFromInference(modalities []inference.Modality) []string {
+	if len(modalities) == 0 {
+		return nil
+	}
+	names := make([]string, len(modalities))
+	for index, modality := range modalities {
+		names[index] = string(modality)
+	}
+	return names
+}
+
+func modalitiesToInference(names []string) []inference.Modality {
+	if len(names) == 0 {
+		return nil
+	}
+	modalities := make([]inference.Modality, len(names))
+	for index, name := range names {
+		modalities[index] = inference.Modality(name)
+	}
+	return modalities
+}
+
+func audioConfigFromInference(audio *inference.AudioOutput) *AudioConfig {
+	if audio == nil {
+		return nil
+	}
+	return &AudioConfig{Voice: audio.Voice, Format: audio.Format}
+}
+
+func audioConfigToInference(audio *AudioConfig) *inference.AudioOutput {
+	if audio == nil {
+		return nil
+	}
+	return &inference.AudioOutput{Voice: audio.Voice, Format: audio.Format}
 }
 
 func toolCallsFromInference(calls []inference.ToolCall) []ToolCall {

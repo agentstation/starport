@@ -11,8 +11,12 @@ import (
 var (
 	// ErrNoStreamEvents reports an empty canonical event sequence.
 	ErrNoStreamEvents = errors.New("stream has no canonical events")
-	// ErrUnsupportedContent reports content that canonical replay cannot represent.
-	ErrUnsupportedContent = errors.New("cached stream content is not text")
+	// ErrUnsupportedContent reports a content part that canonical replay
+	// cannot represent. A part now replays whatever kind it names, so the
+	// remaining case is a malformed part: one that claims to be text while
+	// carrying a media payload, which no reader can resolve without
+	// guessing which half to believe.
+	ErrUnsupportedContent = errors.New("cached stream content part is malformed")
 )
 
 // StreamEvents reconstructs canonical stream events from a completed result.
@@ -21,13 +25,14 @@ func StreamEvents(response inference.ChatResponse, options inference.StreamOptio
 	delta := baseEvent(response, inference.StreamDelta)
 	end := baseEvent(response, inference.StreamEnd)
 	for _, choice := range response.Choices {
-		text, err := messageText(choice.Message)
+		text, media, err := splitMessage(choice.Message)
 		if err != nil {
 			return nil, err
 		}
 		start.Deltas = append(start.Deltas, inference.ChoiceDelta{Index: choice.Index, Role: choice.Message.Role})
 		delta.Deltas = append(delta.Deltas, inference.ChoiceDelta{
 			Index: choice.Index, Text: text, Reasoning: choice.Message.Reasoning,
+			Media:     media,
 			ToolCalls: append([]inference.ToolCall(nil), choice.Message.ToolCalls...),
 			LogProbs:  append([]inference.LogProb(nil), choice.LogProbs...),
 		})
@@ -65,6 +70,7 @@ func CompleteStream(events []inference.StreamEvent) (inference.ChatResponse, err
 				choice.Message.Role = delta.Role
 			}
 			appendMessageText(&choice.Message, delta.Text)
+			choice.Message.Content = append(choice.Message.Content, delta.Media...)
 			choice.Message.Reasoning += delta.Reasoning
 			mergeToolCalls(&choice.Message.ToolCalls, delta.ToolCalls)
 			choice.LogProbs = append(choice.LogProbs, delta.LogProbs...)
@@ -93,15 +99,24 @@ func baseEvent(response inference.ChatResponse, kind inference.StreamEventKind) 
 	}
 }
 
-func messageText(message inference.Message) (string, error) {
+// splitMessage separates a completed message into the text a delta
+// accumulates and the media parts a delta carries whole. A generated image
+// used to end the replay here with an error, so a caller that asked for a
+// stream received the answer only while the cache missed.
+func splitMessage(message inference.Message) (string, []inference.ContentPart, error) {
 	var text string
+	var media []inference.ContentPart
 	for _, part := range message.Content {
-		if part.Kind != inference.ContentText || part.Image != nil {
-			return "", fmt.Errorf("%w: %s", ErrUnsupportedContent, part.Kind)
+		if part.Kind == inference.ContentText {
+			if part.Image != nil || part.Audio != nil || part.Document != nil || part.Video != nil {
+				return "", nil, fmt.Errorf("%w: a text part carries a %s payload", ErrUnsupportedContent, part.Kind)
+			}
+			text += part.Text
+			continue
 		}
-		text += part.Text
+		media = append(media, part)
 	}
-	return text, nil
+	return text, media, nil
 }
 
 func applyEventIdentity(response *inference.ChatResponse, event inference.StreamEvent) {
@@ -122,14 +137,23 @@ func applyEventIdentity(response *inference.ChatResponse, event inference.Stream
 	}
 }
 
+// appendMessageText accumulates streamed text into the message's text part.
+// It looks the part up rather than assuming index zero: a delta that carried a
+// generated image before the first text delta arrived would otherwise append
+// the answer's words into the image part.
 func appendMessageText(message *inference.Message, text string) {
 	if text == "" {
 		return
 	}
-	if len(message.Content) == 0 {
-		message.Content = append(message.Content, inference.ContentPart{Kind: inference.ContentText})
+	for index := range message.Content {
+		if message.Content[index].Kind == inference.ContentText {
+			message.Content[index].Text += text
+			return
+		}
 	}
-	message.Content[0].Text += text
+	message.Content = append(message.Content, inference.ContentPart{
+		Kind: inference.ContentText, Text: text,
+	})
 }
 
 func mergeToolCalls(target *[]inference.ToolCall, updates []inference.ToolCall) {

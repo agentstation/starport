@@ -342,7 +342,13 @@ type ChoiceDelta struct {
 	// Audio carries one chunk of a spoken answer. OpenRouter serves audio
 	// output through streaming alone, so a caller that never reads this
 	// field never receives the answer at all.
-	Audio        *AudioChunk
+	Audio *AudioChunk
+	// Media carries generated parts that arrive whole rather than in
+	// pieces. An image is the case that forces the field: a provider sends
+	// the finished picture in one delta, so there is nothing to accumulate
+	// and nothing Text could hold. Audio is the other case and keeps its
+	// own field, because a spoken answer does arrive in pieces.
+	Media        []ContentPart
 	ToolCalls    []ToolCall
 	LogProbs     []LogProb
 	FinishReason string
@@ -435,6 +441,7 @@ func (e StreamEvent) Clone() StreamEvent {
 		clone.Deltas[i] = delta
 		clone.Deltas[i].ToolCalls = append([]ToolCall(nil), delta.ToolCalls...)
 		clone.Deltas[i].LogProbs = cloneLogProbs(delta.LogProbs)
+		clone.Deltas[i].Media = cloneContent(delta.Media)
 		// Audio is the first pointer a delta carries. The struct copy above
 		// aliases it, and the chunk owns a byte slice, so a replayed or
 		// retried stream would share the bytes it is about to overwrite.
@@ -489,12 +496,22 @@ func cloneMessages(messages []Message) []Message {
 
 func cloneMessage(message Message) Message {
 	clone := message
-	clone.Content = make([]ContentPart, len(message.Content))
-	for i, part := range message.Content {
-		clone.Content[i] = cloneContentPart(part)
-	}
+	clone.Content = cloneContent(message.Content)
 	clone.ToolCalls = append([]ToolCall(nil), message.ToolCalls...)
 	return clone
+}
+
+// cloneContent returns a part list that shares no memory with its source. A
+// message holds one and so does a stream delta, and neither may hand a second
+// reader the bytes the first is about to overwrite. A nil list clones to an
+// empty one, which is what cloneMessage did before this helper existed and
+// what the response cache key already hashes.
+func cloneContent(parts []ContentPart) []ContentPart {
+	clones := make([]ContentPart, len(parts))
+	for i, part := range parts {
+		clones[i] = cloneContentPart(part)
+	}
+	return clones
 }
 
 // cloneContentPart returns a part that shares no memory with its source.
