@@ -277,15 +277,11 @@ func messagesFromInference(messages []inference.Message) ([]Message, error) {
 	for i, message := range messages {
 		content := make([]ContentPart, len(message.Content))
 		for j, part := range message.Content {
-			content[j].Type = string(part.Kind)
-			content[j].Text = part.Text
-			if part.Kind == inference.ContentImage && part.Image != nil {
-				content[j].Type = "image_url"
-				content[j].ImageURL = &ImageURL{URL: part.Image.URL, Detail: part.Image.Detail}
+			wire, err := contentFromInference(part)
+			if err != nil {
+				return nil, fmt.Errorf("messages[%d].content[%d]: %w", i, j, err)
 			}
-			if part.CacheControl != "" {
-				content[j].CacheControl = &CacheControl{Type: part.CacheControl}
-			}
+			content[j] = wire
 		}
 		var wireContent MessageContent = content
 		if len(content) == 1 && content[0].Type == contentTypeText && content[0].CacheControl == nil {
@@ -310,14 +306,11 @@ func messageToInference(message Message) (inference.Message, error) {
 	}
 	content := make([]inference.ContentPart, len(parts))
 	for i, part := range parts {
-		content[i] = inference.ContentPart{Kind: inference.ContentKind(part.Type), Text: part.Text}
-		if part.ImageURL != nil {
-			content[i].Kind = inference.ContentImage
-			content[i].Image = &inference.Image{URL: part.ImageURL.URL, Detail: part.ImageURL.Detail}
+		canonical, err := contentToInference(part)
+		if err != nil {
+			return inference.Message{}, fmt.Errorf("content[%d]: %w", i, err)
 		}
-		if part.CacheControl != nil {
-			content[i].CacheControl = part.CacheControl.Type
-		}
+		content[i] = canonical
 	}
 	return inference.Message{
 		Role:       inference.Role(message.Role),

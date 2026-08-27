@@ -102,6 +102,9 @@ type ContentPart struct {
 	Type         string        `json:"type"`
 	Text         string        `json:"text,omitempty"`
 	ImageURL     *ImageURL     `json:"image_url,omitempty"`
+	InputAudio   *InputAudio   `json:"input_audio,omitempty"`
+	File         *File         `json:"file,omitempty"`
+	VideoURL     *VideoURL     `json:"video_url,omitempty"`
 	CacheControl *CacheControl `json:"cache_control,omitempty"`
 }
 
@@ -114,6 +117,25 @@ type CacheControl struct {
 type ImageURL struct {
 	URL    string `json:"url"`
 	Detail string `json:"detail,omitempty"`
+}
+
+// InputAudio represents audio in a message. Data is raw base64 with no data
+// URL prefix, which is why Format names the container beside it.
+type InputAudio struct {
+	Data   string `json:"data"`
+	Format string `json:"format,omitempty"`
+}
+
+// File represents a document in a message. FileData holds a data URL or a
+// remote reference, and Filename is the caller's own name for it.
+type File struct {
+	Filename string `json:"filename,omitempty"`
+	FileData string `json:"file_data,omitempty"`
+}
+
+// VideoURL represents a video in a message.
+type VideoURL struct {
+	URL string `json:"url"`
 }
 
 // Tool represents a function tool
