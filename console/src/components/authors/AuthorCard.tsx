@@ -76,8 +76,9 @@ export function AuthorLinks({ author }: { author: CatalogAuthor }) {
           href={link.href}
           target="_blank"
           rel="noreferrer"
-          onClick={(event) => event.stopPropagation()}
-          className="flex items-center gap-1 text-xs text-text-3 transition-colors duration-150 ease-standard hover:text-text-1"
+          // relative lifts these above the card's stretched detail link,
+          // which would otherwise swallow the click.
+          className="relative flex items-center gap-1 text-xs text-text-3 transition-colors duration-150 ease-standard hover:text-text-1"
         >
           <ExternalLink className="size-3" />
           {link.label}
@@ -94,12 +95,13 @@ export function AuthorCard({
   author: CatalogAuthor;
   modelCount: number;
 }) {
+  // The card holds external anchors, so it cannot itself be an anchor
+  // (nested <a> is invalid HTML). The detail link stretches over the
+  // card through its ::after overlay instead.
   return (
-    <Link
-      to="/authors/$authorId"
-      params={{ authorId: author.id }}
+    <div
       data-testid="author-card"
-      className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4 transition-colors duration-150 ease-standard hover:border-border-2 hover:bg-bg-raised"
+      className="relative flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4 transition-colors duration-150 ease-standard hover:border-border-2 hover:bg-bg-raised"
     >
       <div className="flex min-w-0 items-center gap-2.5">
         <EntityLogo
@@ -109,9 +111,15 @@ export function AuthorCard({
           size={28}
         />
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-sm font-medium text-text-1">
-            {authorLabel(author)}
-          </span>
+          <Link
+            to="/authors/$authorId"
+            params={{ authorId: author.id }}
+            // truncate lives on the inner span: overflow-hidden on the
+            // anchor itself would clip the stretched ::after overlay.
+            className="min-w-0 text-sm font-medium text-text-1 after:absolute after:inset-0 after:rounded-md"
+          >
+            <span className="block truncate">{authorLabel(author)}</span>
+          </Link>
           <span className="shrink-0 font-mono text-xs text-text-4">
             {author.id}
           </span>
@@ -128,6 +136,6 @@ export function AuthorCard({
         </span>
         <AuthorLinks author={author} />
       </div>
-    </Link>
+    </div>
   );
 }
