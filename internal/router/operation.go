@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -118,8 +117,8 @@ func routeOperation[Response any](
 	planningRequest := operationPlanningRequest(policy, r.config.EnableCostOptimization)
 	plan, err := r.planOperation(ctx, planningRequest, operation, runtime, nil)
 	if err != nil {
-		if errors.Is(err, routing.ErrNoCandidate) {
-			return nil, ErrNoModelsAvailable
+		if mapped := routePlanFailure(err); mapped != nil {
+			return nil, mapped
 		}
 		return nil, fmt.Errorf("plan %s route: %w", operation, err)
 	}
@@ -252,6 +251,12 @@ type providerCall[Request requestBinder, ProviderResponse, Response any] struct 
 	transport func(connectors.Connector, catalogs.EndpointType) (providerInvoke[Request, ProviderResponse], bool)
 	build     func() Request
 	convert   func(ProviderResponse) (Response, error)
+
+	// bounded refuses one route whose offering states a limit the request
+	// exceeds. Most operations leave it nil: a limit that every offering
+	// shares belongs in validation, and only a limit that differs between two
+	// offerings of one model has to wait until the planner has chosen.
+	bounded func(routing.Route) error
 }
 
 // providerInvoke is one provider call, taken from the transport interface
@@ -271,6 +276,11 @@ func (call providerCall[Request, ProviderResponse, Response]) attempt(
 		invoke, implemented := call.transport(connector, endpointTypeOf(route))
 		if !implemented {
 			return nil, transportInterfaceMissing(route, string(operation)), execution.AttemptActionDefault
+		}
+		if call.bounded != nil {
+			if err := call.bounded(route); err != nil {
+				return nil, offeringBoundExceeded(route, err), execution.AttemptActionDefault
+			}
 		}
 		request := call.build()
 		request.Bind(
@@ -304,6 +314,22 @@ func operationAnswer[Response any](
 		), execution.AttemptActionDefault
 	}
 	return &canonical, nil, execution.AttemptActionDefault
+}
+
+// offeringBoundExceeded reports a request the chosen offering will not accept.
+// It is retryable, because the bound belongs to the offering rather than to the
+// model: a second offering of the same model may state a larger one, and the
+// gateway has no reason to refuse before it has asked. The kind is a validation
+// fault, so a request that exhausts every offering answers the caller rather
+// than reporting an unavailable gateway.
+func offeringBoundExceeded(route routing.Route, err error) *failure.Failure {
+	return failure.New(
+		failure.Validation,
+		err.Error(),
+		true,
+		failure.ProviderDetails{Provider: route.ProviderID},
+		err,
+	)
 }
 
 func endpointTypeOf(route routing.Route) catalogs.EndpointType {

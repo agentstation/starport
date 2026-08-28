@@ -6,6 +6,7 @@ import (
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/router"
+	"github.com/agentstation/starport/internal/routing"
 )
 
 // processOperation hands one validated request to the router and carries the
@@ -40,14 +41,20 @@ func processOperation[Request, Response any](
 	return response, nil
 }
 
-// routeFailure names one failed route. A model the catalog does not hold is
-// passed through rather than wrapped, because it is a caller error about a
-// name and every other route failure is a report that the gateway could not
-// reach a provider. Wrapping the two alike would answer a misspelled model with
-// "try again later".
+// routeFailure names one failed route. Two failures leave it unwrapped,
+// because both are caller errors and every other route failure is a report
+// that the gateway could not reach a provider. Wrapping them alike would
+// answer a misspelled model, or a chat model asked to rerank, with "try again
+// later".
 func routeFailure(model string, err error) error {
 	if errors.Is(err, runtimecatalog.ErrModelNotCatalogued) {
 		return err
+	}
+	// A model that serves other operations refuses this request every time, so
+	// the answer names the model and the operation rather than reporting a
+	// gateway that could not reach a provider.
+	if errors.Is(err, routing.ErrOperationUnsupported) {
+		return &ValidationError{Field: fieldModel, Message: err.Error()}
 	}
 	return &RoutingError{Model: model, Reason: "failed to route request", Err: err}
 }

@@ -33,6 +33,12 @@ func (r *modelRouter) RouteRerank(ctx context.Context, req *RerankRequest) (*Rer
 			return connectors.RerankRequestFromInference(req.Request)
 		},
 		convert: connectors.RerankResponseToInference,
+		// Cohere and Voyage both cap the document list, and the cap belongs to
+		// the offering. Asking here, after the planner chose, is what lets a
+		// second offering of the same model answer a list the first refuses.
+		bounded: func(route routing.Route) error {
+			return req.Request.CheckDocumentBound(route.MaxDocuments)
+		},
 	}
 	return routeOperation(ctx, r, req.policy(req.Request.Model), routing.OperationRerank,
 		inference.RerankResponse.Clone, call.attempt(routing.OperationRerank))
