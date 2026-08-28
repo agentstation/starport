@@ -78,19 +78,27 @@ ts_all_present() {
   return 0
 }
 
-# no_local_operation_table refuses a Starport-side rerank operation constant.
-# Invariant R1: the operation is a Starmap fact, so a local string constant
-# spelled "rerank" in the routing or catalog seams is a second source that
-# drifts from the first.
+# no_local_operation_table refuses a rerank operation constant outside the one
+# seam that names operations at all. Invariant R1: internal/routing restates
+# Starmap's operation names to stay free of the catalog import, and a contract
+# test in internal/providers/connectors holds the two lists equal. A third
+# spelling in the catalog projection or in the canonical types is an unheld
+# source that drifts from both.
 no_local_operation_table() {
   ! grep -Rq --include='*.go' -e 'Operation[A-Za-z]* *= *"rerank"' \
-    internal/routing internal/catalog internal/inference
+    internal/catalog internal/inference
+}
+
+# rerank_operation_from_starmap is RNK-V01 in full: Starport names the Starmap
+# operation, and it declares no competing constant of its own.
+rerank_operation_from_starmap() {
+  all_present 'ProviderOperationRerank' -- internal && no_local_operation_table
 }
 
 # --- Phase A, the catalog fact ---
 
 check RNK-V01 "Starport reads the rerank operation from Starmap and declares none of its own" \
-  all_present 'ProviderOperationRerank' -- internal
+  rerank_operation_from_starmap
 
 check RNK-V02 "a model that serves rerank alone stays out of the chat model list" \
   tests_all_present 'ProviderOperationRerank' -- internal/catalog
@@ -109,8 +117,12 @@ check RNK-V05 "the canonical rerank shape names a document by index and carries 
 check RNK-V06 "the transport registry accepts a rerank descriptor and still refuses an unknown operation" \
   tests_all_present 'ProviderOperationRerank' -- internal/providers/connectors
 
+# RNK-V07 reads the connectors package rather than internal/failure. Decision
+# RNK-D13 records why: internal/failure owns the failure vocabulary and imports
+# no provider code, so the package that normalizes a provider rejection is the
+# package that holds the contract.
 check RNK-V07 "a connector without the operation refuses, and a provider error normalizes" \
-  tests_all_present 'Rerank' -- internal/failure
+  tests_all_present 'Rerank' 'NormalizeFailure' -- internal/providers/connectors
 
 check RNK-V08 "the /v1 codec round-trips the published rerank request and response" \
   tests_all_present 'relevance_score' 'top_n' -- internal/protocol/openai

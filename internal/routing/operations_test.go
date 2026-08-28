@@ -146,8 +146,9 @@ func TestTheOperationSetNamesEveryOperationTheGatewayPlans(t *testing.T) {
 		OperationEmbeddings,
 		OperationImagesEdits,
 		OperationImagesGenerations,
+		OperationRerank,
 		OperationVideosGenerations,
 	}, ServedOperations().Members())
 	require.False(t, ServedOperations().Contains(""))
-	require.Equal(t, 9, ServedOperations().Len())
+	require.Equal(t, 10, ServedOperations().Len())
 }

@@ -65,6 +65,10 @@ var mediaInterfaces = []struct {
 		_, ok := c.(DocumentRecognizer)
 		return ok
 	}},
+	{catalogs.ProviderOperationRerank, "Reranker", ErrTransportInterfaceMissing, func(c Connector) bool {
+		_, ok := c.(Reranker)
+		return ok
+	}},
 }
 
 // requireMediaInterfaces refuses a transport that declares a media operation it
@@ -185,6 +189,21 @@ func ProductionTransportRegistry() (*TransportRegistry, error) {
 			Factory: func(providerID catalogs.ProviderID, config ProviderConfig) (Connector, error) {
 				return newGoogleCloudConnector(string(providerID), config)
 			},
+		},
+		// Reranking has no shape everyone copied, so it arrives as two
+		// protocols rather than one. Cohere's is the shape OpenRouter resells,
+		// and Voyage AI's disagrees on the result count, the result list, and
+		// the billing unit. Each one serves the rerank operation and no other,
+		// which is what the providers themselves publish.
+		TransportDescriptor{
+			EndpointType: catalogs.EndpointTypeCohere,
+			Operations:   []catalogs.ProviderOperation{catalogs.ProviderOperationRerank},
+			Factory:      newCohereConnector,
+		},
+		TransportDescriptor{
+			EndpointType: catalogs.EndpointTypeVoyage,
+			Operations:   []catalogs.ProviderOperation{catalogs.ProviderOperationRerank},
+			Factory:      newVoyageConnector,
 		},
 		TransportDescriptor{
 			EndpointType: catalogs.EndpointTypeOllama,

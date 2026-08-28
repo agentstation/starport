@@ -64,6 +64,11 @@ func TestTransportAuthenticationRegistriesUsePrimitives(t *testing.T) {
 		catalogs.EndpointTypeGoogle,
 		catalogs.EndpointTypeGoogleCloud,
 		catalogs.EndpointTypeOllama,
+		// Reranking arrives as two protocols rather than one. Cohere's is the
+		// shape OpenRouter resells, and Voyage AI disagrees on the result
+		// count, the result list, and the billing unit.
+		catalogs.EndpointTypeCohere,
+		catalogs.EndpointTypeVoyage,
 	}, transports.EndpointTypes())
 	require.True(t, transports.Supports(
 		catalogs.EndpointTypeOpenAI,
