@@ -176,7 +176,8 @@ test("a request that attached nothing is not a document read", async () => {
 
 // The price a reader plans against comes from the catalog, not from this
 // console. A deployment that serves no recognition has to say so, or a reader
-// takes the empty list for a page that costs nothing.
+// takes the empty list for a page that costs nothing. The price renders per
+// 1K pages so a sub-cent page price stays readable ($1, not 0.001).
 test("the catalogued recognition models render with their page price", async () => {
   gateway.models = [OCR_MODEL];
   mount();
@@ -185,7 +186,8 @@ test("the catalogued recognition models render with their page price", async () 
   const row = screen.getByTestId("recognition-row");
   expect(row.textContent).toContain("mistral/mistral-ocr");
   expect(row.textContent).toContain("mistral-ocr-2505");
-  expect(row.textContent).toContain("0.001 USD");
+  expect(row.textContent).toContain("$1 USD");
+  expect(screen.getByText("Per 1K pages")).toBeTruthy();
 });
 
 test("a catalog that serves no recognition says so", async () => {

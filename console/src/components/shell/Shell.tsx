@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
+  BookOpen,
   Building2,
   FileText,
   Film,
@@ -27,22 +28,53 @@ import { CommandPalette, openCommandPalette } from "@/components/palette/Command
 import { readAuthMode } from "@/lib/api";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
-// Nav entries flip to implemented as their page tasks land (CM3–CM10).
-const NAV = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, implemented: true },
-  { to: "/chat", label: "Chat", icon: MessageSquare, implemented: true },
-  { to: "/models", label: "Models", icon: Sparkles, implemented: true },
-  { to: "/authors", label: "Authors", icon: Users, implemented: true },
-  { to: "/providers", label: "Providers", icon: Server, implemented: true },
-  { to: "/keys", label: "API Keys", icon: Key, implemented: true },
-  { to: "/files", label: "Files", icon: FileText, implemented: true },
-  { to: "/jobs", label: "Jobs", icon: Film, implemented: true },
-  { to: "/documents", label: "Documents", icon: ScanText, implemented: true },
-  { to: "/tenants", label: "Accounts", icon: Building2, implemented: true },
-  { to: "/usage", label: "Usage", icon: BarChart3, implemented: true },
-  { to: "/presets", label: "Presets", icon: SlidersHorizontal, implemented: true },
-  { to: "/settings", label: "Settings", icon: Settings, implemented: true },
-] as const;
+// Nav is grouped by who reaches for it (DESIGN.md information
+// architecture): the catalog everyone browses, the account surface a
+// caller owns, and the gateway surface an operator runs. A local
+// developer is all three at once, so nothing hides — the labels only
+// say which hat a page belongs to.
+const NAV_SECTIONS: ReadonlyArray<{
+  label: string | null;
+  items: ReadonlyArray<{ to: string; label: string; icon: typeof LayoutDashboard }>;
+}> = [
+  {
+    label: null,
+    items: [
+      { to: "/", label: "Overview", icon: LayoutDashboard },
+      { to: "/chat", label: "Chat", icon: MessageSquare },
+    ],
+  },
+  {
+    label: "Catalog",
+    items: [
+      { to: "/models", label: "Models", icon: Sparkles },
+      { to: "/providers", label: "Providers", icon: Server },
+      { to: "/authors", label: "Authors", icon: Users },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { to: "/keys", label: "API Keys", icon: Key },
+      { to: "/files", label: "Files", icon: FileText },
+      { to: "/jobs", label: "Jobs", icon: Film },
+      { to: "/documents", label: "Documents", icon: ScanText },
+      { to: "/presets", label: "Presets", icon: SlidersHorizontal },
+      { to: "/usage", label: "Usage", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Gateway",
+    items: [
+      { to: "/tenants", label: "Accounts", icon: Building2 },
+      { to: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
+  {
+    label: null,
+    items: [{ to: "/docs", label: "Docs", icon: BookOpen }],
+  },
+];
 
 const COLLAPSE_KEY = "starport.sidebar.collapsed";
 
@@ -86,23 +118,32 @@ function StarMark() {
   );
 }
 
+// FOOTER_ITEM matches the nav-item geometry exactly (h-9, px-3,
+// gap-2.5, 16px icons), so the collapsed rail reads as one aligned
+// icon column from top to bottom.
+const FOOTER_ITEM =
+  "flex h-9 items-center gap-2.5 rounded-sm px-3 text-base text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2";
+
+// The toggle names the state the console is in — the icon and label
+// both read as "this is the current theme" — and clicking it flips to
+// the other one. Showing the target instead reads as a wrong status.
 function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   const theme = useSyncExternalStore(onThemeChange, appliedTheme);
   const flip = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
-  const Icon = theme === "dark" ? Sun : Moon;
+  const Icon = theme === "dark" ? Moon : Sun;
+  const label = theme === "dark" ? "Dark theme" : "Light theme";
   return (
     <button
       type="button"
       onClick={flip}
-      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      className="flex h-8 items-center gap-2 rounded-sm px-2 text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
+      title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      aria-label={theme === "dark" ? "Dark theme — switch to light" : "Light theme — switch to dark"}
+      className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
     >
       <Icon className="size-4 shrink-0" />
-      {!collapsed && (
-        <span className="text-xs">{theme === "dark" ? "Light theme" : "Dark theme"}</span>
-      )}
+      {!collapsed && <span>{label}</span>}
     </button>
   );
 }
@@ -112,17 +153,26 @@ function GatewayStatus({ collapsed }: { collapsed: boolean }) {
   const ok = health.data?.status === "ok";
   const label = health.isPending ? "Connecting" : ok ? "Gateway healthy" : "Gateway unreachable";
   return (
-    <div className="flex h-8 items-center gap-2 px-2" title={label}>
-      <span
-        aria-hidden="true"
-        className={`size-2 shrink-0 rounded-full ${
-          health.isPending ? "bg-text-4" : ok ? "bg-success" : "bg-error"
-        }`}
-      />
+    <div
+      className={`flex h-9 items-center gap-2.5 px-3 ${collapsed ? "justify-center px-0" : ""}`}
+      title={label}
+    >
+      {/* The dot sits inside an icon-sized box so it lines up with the
+          16px icons above and below it. */}
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <span
+          aria-hidden="true"
+          className={`size-2 rounded-full ${
+            health.isPending ? "bg-text-4" : ok ? "bg-success" : "bg-error"
+          }`}
+        />
+      </span>
       {!collapsed && (
-        <span className="truncate text-xs text-text-3">
+        <span className="truncate text-base text-text-3">
           {label}
-          {ok && health.data?.version ? ` · v${health.data.version}` : ""}
+          {ok && health.data?.version ? (
+            <span className="text-text-4"> · v{health.data.version}</span>
+          ) : null}
         </span>
       )}
     </div>
@@ -184,6 +234,14 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-bg-canvas text-text-1">
       <aside
+        onClick={(event) => {
+          // Clicking sidebar whitespace toggles the rail. Anything
+          // interactive — a nav link, the search button, the footer
+          // controls — owns its own click and is excluded.
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("a,button,input,[role=dialog]")) return;
+          setCollapsed((value) => !value);
+        }}
         className={`fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-[width] duration-150 ease-standard ${
           collapsed ? "w-16" : "w-60"
         }`}
@@ -205,53 +263,54 @@ export function Shell({ children }: { children: ReactNode }) {
             {!collapsed && (
               <>
                 <span className="text-sm">Search</span>
-                <kbd className="ml-auto rounded-xs border border-border-1 px-1.5 py-0.5 text-[10px]">
-                  ⌘K
+                <kbd className="ml-auto rounded-xs border border-border-1 px-1.5 py-0.5 font-sans text-[10px] tracking-[0.08em]">
+                  ⌘ K
                 </kbd>
               </>
             )}
           </button>
         </div>
 
-        <nav aria-label="Console" className="flex flex-1 flex-col gap-0.5 px-2 pt-2">
-          {NAV.map((item) => {
-            const active = pathname === item.to;
-            const Icon = item.icon;
-            if (!item.implemented) {
-              return (
-                <span
-                  key={item.to}
-                  aria-disabled="true"
-                  title="Not built yet"
-                  className={`relative flex h-9 items-center gap-2.5 rounded-sm px-3 text-base text-text-4 ${collapsed ? "justify-center px-0" : ""}`}
-                >
-                  <Icon className="size-4 shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
-                </span>
-              );
-            }
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                aria-current={active ? "page" : undefined}
-                className={`relative flex h-9 items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""} ${
-                  active
-                    ? "bg-bg-hover text-text-1"
-                    : "text-text-3 hover:bg-bg-hover hover:text-text-2"
-                }`}
-              >
-                {active && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
-                  />
-                )}
-                <Icon className="size-4 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
-            );
-          })}
+        <nav aria-label="Console" className="flex flex-1 flex-col px-2 pt-2">
+          {NAV_SECTIONS.map((section, sectionIndex) => (
+            <div key={section.label ?? sectionIndex} className="flex flex-col gap-0.5">
+              {sectionIndex > 0 &&
+                (collapsed ? (
+                  <div aria-hidden="true" className="mx-2 my-2 border-t border-border-1" />
+                ) : section.label ? (
+                  <p className="px-3 pb-1 pt-4 text-[10px] font-medium uppercase tracking-[0.08em] text-text-4">
+                    {section.label}
+                  </p>
+                ) : (
+                  <div aria-hidden="true" className="mx-1 my-2 border-t border-border-1" />
+                ))}
+              {section.items.map((item) => {
+                const active = pathname === item.to;
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    aria-current={active ? "page" : undefined}
+                    className={`relative flex h-9 items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""} ${
+                      active
+                        ? "bg-bg-hover text-text-1"
+                        : "text-text-3 hover:bg-bg-hover hover:text-text-2"
+                    }`}
+                  >
+                    {active && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+                      />
+                    )}
+                    <Icon className="size-4 shrink-0" />
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="flex flex-col gap-0.5 border-t border-border-1 p-2">
@@ -261,23 +320,23 @@ export function Shell({ children }: { children: ReactNode }) {
             href="https://github.com/agentstation/starport"
             target="_blank"
             rel="noreferrer"
-            className="flex h-8 items-center gap-2 rounded-sm px-2 text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
+            className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
           >
             <GitHubMark className="size-4 shrink-0" />
-            {!collapsed && <span className="text-xs">GitHub</span>}
+            {!collapsed && <span>GitHub</span>}
           </a>
           <button
             type="button"
             onClick={() => setCollapsed((value) => !value)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="flex h-8 items-center gap-2 rounded-sm px-2 text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
+            className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4 shrink-0" />
             ) : (
               <>
                 <PanelLeftClose className="size-4 shrink-0" />
-                <span className="text-xs">Collapse</span>
+                <span>Collapse</span>
               </>
             )}
           </button>

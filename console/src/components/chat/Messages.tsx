@@ -3,6 +3,8 @@
 // bundled locally, no CDN), with a reasoning disclosure, a persistent
 // metadata line, and hover actions. User turns get copy and edit.
 
+import { Link } from "@tanstack/react-router";
+
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
@@ -373,7 +375,23 @@ export function AssistantMessage({
         />
       )}
       {message.error ? (
-        <p className="text-sm text-error">{message.content || "Request failed."}</p>
+        <div className="flex flex-col gap-1 rounded-sm border border-error/30 bg-error-tint px-3 py-2">
+          <p className="text-sm text-error">
+            {message.content || "Request failed."}
+          </p>
+          {/credential/i.test(message.content ?? "") && (
+            <p className="text-xs text-text-3">
+              Provider credentials are configured per provider — open{" "}
+              <Link
+                to="/providers"
+                className="text-accent-link hover:underline"
+              >
+                Providers
+              </Link>{" "}
+              and apply one for the provider that serves this model.
+            </p>
+          )}
+        </div>
       ) : message.content ? (
         <Markdown text={message.content} streaming={streaming} />
       ) : !message.reasoning ? (

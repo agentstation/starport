@@ -23,10 +23,11 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 // provider alone and edited here, on the provider's own screen, rather than
 // anywhere near a gateway API key.
 //
-// It is not BYOK. BYOK is a credential a tenant brings for itself, and it
-// lives on the tenants screen. The two never appear on the same screen,
-// because the question they answer — whose money pays for this call — has one
-// answer per screen.
+// It is not BYOK. BYOK is a credential a tenant brings for itself, and it is
+// managed on the tenants screen. The provider credential card may name BYOK
+// as the third resolution source, but this panel never edits one and never
+// names an account: the credential it applies belongs to the deployment.
+// The section renders as a row of that card and carries no chrome of its own.
 
 export function gatewayCredentialQueryKey(providerId: string): string[] {
   return ["gateway-credential", providerId];
@@ -115,7 +116,7 @@ export function GatewayCredentialPanel({
   return (
     <section
       data-testid="gateway-credential-panel"
-      className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
+      className="flex min-w-0 flex-1 flex-col gap-2"
     >
       <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
         Gateway credential

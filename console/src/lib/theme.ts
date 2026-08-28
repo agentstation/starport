@@ -7,13 +7,23 @@ export type ThemeChoice = "dark" | "light" | "system";
 const STORAGE_KEY = "starport.theme";
 const lightQuery = "(prefers-color-scheme: light)";
 
+// Storage access stays defensive: a test DOM or a locked-down browser
+// context may not provide localStorage, and "system" is a safe default.
 export function savedTheme(): ThemeChoice {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    // Fall through to the default.
+  }
   return raw === "dark" || raw === "light" || raw === "system" ? raw : "system";
 }
 
 function resolve(choice: ThemeChoice): "dark" | "light" {
   if (choice === "system") {
+    // A DOM without matchMedia (test environments) gets the design-first
+    // dark default.
+    if (typeof window.matchMedia !== "function") return "dark";
     return window.matchMedia(lightQuery).matches ? "light" : "dark";
   }
   return choice;
@@ -28,7 +38,11 @@ export function applyTheme(choice: ThemeChoice): void {
 }
 
 export function setTheme(choice: ThemeChoice): void {
-  localStorage.setItem(STORAGE_KEY, choice);
+  try {
+    localStorage.setItem(STORAGE_KEY, choice);
+  } catch {
+    // The choice still applies for this page via applyTheme below.
+  }
   applyTheme(choice);
   for (const listener of themeListeners) listener();
 }

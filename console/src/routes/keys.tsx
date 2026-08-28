@@ -10,8 +10,8 @@ import {
   INPUT_CLASS,
   PrimaryButton,
   RowAction,
-  SELECT_CLASS,
 } from "@/components/ui/Form";
+import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
   accessMessage,
@@ -316,11 +316,10 @@ function LimitsFields({
             placeholder="unlimited"
             className={`${INPUT_CLASS} w-32`}
           />
-          <select
+          <Select
             value={draft.reqWindow}
             onChange={(event) => set({ reqWindow: event.target.value })}
             aria-label="Request window"
-            className={SELECT_CLASS}
           >
             <option value="60">per minute</option>
             <option value="3600">per hour</option>
@@ -328,7 +327,7 @@ function LimitsFields({
             {!["60", "3600", "86400"].includes(draft.reqWindow) && (
               <option value={draft.reqWindow}>per {draft.reqWindow}s</option>
             )}
-          </select>
+          </Select>
         </div>
       </Field>
       <Field label="Spend budget (USD)">
@@ -342,14 +341,13 @@ function LimitsFields({
             placeholder="unlimited"
             className={`${INPUT_CLASS} w-32`}
           />
-          <select
+          <Select
             value={draft.spendInterval}
             onChange={(event) => set({ spendInterval: event.target.value })}
             aria-label="Spend budget interval"
-            className={SELECT_CLASS}
           >
             {intervalOptions}
-          </select>
+          </Select>
         </div>
       </Field>
       <Field label="Token budget">
@@ -362,14 +360,13 @@ function LimitsFields({
             placeholder="unlimited"
             className={`${INPUT_CLASS} w-32`}
           />
-          <select
+          <Select
             value={draft.tokensInterval}
             onChange={(event) => set({ tokensInterval: event.target.value })}
             aria-label="Token budget interval"
-            className={SELECT_CLASS}
           >
             {intervalOptions}
-          </select>
+          </Select>
         </div>
       </Field>
     </>

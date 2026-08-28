@@ -12,6 +12,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    // The tsconfig "@" alias, restated for the dev server. URL.pathname
+    // keeps this file inside the browser-lib type surface (no node types).
+    alias: { "@": new URL("./src", import.meta.url).pathname },
+  },
   build: {
     outDir: "../internal/console/dist",
     emptyOutDir: true,
@@ -20,6 +25,8 @@ export default defineConfig({
     proxy: {
       "/v1": "http://localhost:8080",
       "/api": "http://localhost:8080",
+      "/health": "http://localhost:8080",
+      "/console/session": "http://localhost:8080",
     },
   },
 });

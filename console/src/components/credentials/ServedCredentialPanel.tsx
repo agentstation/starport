@@ -4,10 +4,11 @@ import { formatCount } from "@/lib/format";
 // --- Served credential source: which credential plane actually paid for the
 // requests this provider handled in the window.
 //
-// The two panels beside this one report what is configured. This one reports
-// what was spent, and the difference is the point: an operator who applied a
-// gateway credential expecting accounts to bring their own can see, here,
-// that every request is still drawing on the deployment's money.
+// The provider credential card beside this one reports what is configured.
+// This one reports what was spent, and the difference is the point: an
+// operator who applied a gateway credential expecting accounts to bring
+// their own can see, here, that every request is still drawing on the
+// deployment's money.
 //
 // The names are the gateway's own (`internal/providers/keyring`), read from
 // the activity log's `credential_source`. A record written before the gateway

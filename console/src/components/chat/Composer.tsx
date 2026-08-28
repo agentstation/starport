@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ModelPicker, supportsReasoning } from "@/components/chat/ModelPicker";
 import { INPUT_CLASS, TEXTAREA_CLASS } from "@/components/ui/Form";
+import { Select } from "@/components/ui/Select";
 import { listModels } from "@/lib/api";
 import {
   ATTACHMENT_ACCEPT,
@@ -306,16 +307,16 @@ function ParamsPopover({
           )}
           {field(
             "Sort",
-            <select
+            <Select
               value={params.sort}
               onChange={(event) => onChange({ ...params, sort: event.target.value })}
-              className={`${INPUT_CLASS} w-full`}
+              className="w-full"
             >
               <option value="">default</option>
               <option value="price">price</option>
               <option value="throughput">throughput</option>
               <option value="latency">latency</option>
-            </select>,
+            </Select>,
           )}
         </div>
       </div>
@@ -542,7 +543,7 @@ export function Composer({
           <div className="relative">
             <BarButton
               onClick={() => onPickerOpenChange(!pickerOpen)}
-              label={compareActive ? "Add model to comparison (⌘K)" : "Choose model (⌘K)"}
+              label={compareActive ? "Add model to comparison" : "Choose model"}
               active={pickerOpen}
             >
               <span className="max-w-48 truncate">
