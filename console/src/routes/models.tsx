@@ -7,10 +7,12 @@ import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
 import { accessMessage, ApiError, listModels, listProviderCatalog } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
+import { operationLabel } from "@/components/models/ModelsTable";
 import {
   authorIdsOf,
   matches,
   type ModelsSearch,
+  operationsOf,
   providerOf,
 } from "@/lib/modelFilter";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
@@ -37,6 +39,7 @@ export const Route = createFileRoute("/models")({
       modality: str(search.modality),
       output: str(search.output),
       capability: str(search.capability),
+      operation: str(search.operation),
     };
   },
 });
@@ -186,6 +189,24 @@ function ModelsPage() {
       .map(([tag, count]) => ({ value: tag, label: `${tag} (${count})` }));
   }, [all]);
 
+  // The operation facet is built from the loaded catalog rather than from a
+  // list written here. A fixed list would omit whatever operation the catalog
+  // learns next, and the omission would read as a catalog that holds none.
+  const operations = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const model of all) {
+      for (const operation of operationsOf(model)) {
+        counts.set(operation, (counts.get(operation) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([operation, count]) => ({
+        value: operation,
+        label: `${operationLabel(operation)} (${count})`,
+      }));
+  }, [all]);
+
   const filtered = useMemo(
     () => all.filter((model) => matches(model, search)),
     [all, search],
@@ -244,6 +265,14 @@ function ModelsPage() {
           }))}
           onChange={(output) => setSearch({ output })}
         />
+        {operations.length > 0 && (
+          <FilterSelect
+            label="All operations"
+            value={search.operation}
+            options={operations}
+            onChange={(operation) => setSearch({ operation })}
+          />
+        )}
         <FilterSelect
           label="All capabilities"
           value={search.capability}
@@ -281,6 +310,7 @@ function ModelsPage() {
                 modality: undefined,
                 output: undefined,
                 capability: undefined,
+                operation: undefined,
               })
             }
             className="text-accent hover:underline"

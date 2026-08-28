@@ -1,4 +1,4 @@
-import { RECOGNITION_OPERATION, type Model } from "@/lib/api";
+import { RECOGNITION_OPERATION, RERANK_OPERATION, type Model } from "@/lib/api";
 
 // The models-list filter predicate. Filter state lives in the URL, so
 // this seam defines what each search param means.
@@ -10,6 +10,7 @@ export type ModelsSearch = {
   modality?: string;
   output?: string;
   capability?: string;
+  operation?: string;
 };
 
 // providerOf mirrors the gateway's model ID shape: "<author>/<model>".
@@ -46,12 +47,22 @@ export function operationsOf(model: Model): string[] {
   return [...seen].sort();
 }
 
-// chattableModels drops the models that read documents and answer nothing.
+// SILENT_OPERATIONS are the operations that answer no chat turn. A document
+// reader returns the text it read and a reranker returns scores, and each
+// reaches this gateway through its own route rather than through the model
+// field of a chat request.
+const SILENT_OPERATIONS = new Set<string>([
+  RECOGNITION_OPERATION,
+  RERANK_OPERATION,
+]);
+
+// chattableModels drops the models that answer no chat turn.
 //
-// A recognition model reaches this gateway through the file-parser plugin, not
-// through the model field, so offering one in a chat picker hands the reader a
-// routing refusal that says nothing about the mistake. A model that serves
-// recognition beside chat stays: it can answer, and these are chat pickers.
+// A document reader or a reranker reaches this gateway through its own route,
+// not through the model field, so offering one in a chat picker hands the
+// reader a routing refusal that says nothing about the mistake. A model that
+// serves one of them beside chat stays: it can answer, and these are chat
+// pickers.
 //
 // A model with no offerings stays too. That is a catalog this console could not
 // read rather than a model that serves nothing, and hiding it would shrink the
@@ -60,18 +71,18 @@ export function chattableModels(models: Model[]): Model[] {
   return models.filter((model) => {
     const offerings = model.offerings ?? [];
     if (offerings.length === 0) return true;
-    return !offerings.every((offering) => servesOnlyRecognition(offering));
+    return !offerings.every((offering) => answersNoChatTurn(offering));
   });
 }
 
-// servesOnlyRecognition reads one offering. Recognition beside any other
-// operation is a model that answers, so the test is what the list holds apart
-// from recognition, not whether recognition is in it. An offering that names no
+// answersNoChatTurn reads one offering. A silent operation beside any other one
+// is a model that answers, so the test is what the list holds apart from the
+// silent ones, not whether a silent one is in it. An offering that names no
 // operation is one the catalog did not describe, and it is not excluded.
-function servesOnlyRecognition(offering: { operations?: string[] }): boolean {
+function answersNoChatTurn(offering: { operations?: string[] }): boolean {
   const operations = offering.operations ?? [];
   if (operations.length === 0) return false;
-  return operations.every((operation) => operation === RECOGNITION_OPERATION);
+  return operations.every((operation) => SILENT_OPERATIONS.has(operation));
 }
 
 export function hasCapability(model: Model, capability: string): boolean {
@@ -139,6 +150,9 @@ export function matches(model: Model, search: ModelsSearch): boolean {
     return false;
   }
   if (search.capability && !hasCapability(model, search.capability)) return false;
+  if (search.operation && !operationsOf(model).includes(search.operation)) {
+    return false;
+  }
   if (search.q) {
     const query = search.q;
     if (!queryCandidates(model).some((candidate) => fuzzyIncludes(candidate, query))) {

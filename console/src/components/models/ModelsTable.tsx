@@ -15,9 +15,11 @@ import { useRef, type ReactNode } from "react";
 import { CopyButton } from "@/components/ui/CopyButton";
 import type { Model } from "@/lib/api";
 import { formatContext, formatPricePerM } from "@/lib/format";
+import { operationsOf } from "@/lib/modelFilter";
 
 const ROW_HEIGHT = 40;
-const GRID = "grid grid-cols-[minmax(320px,1fr)_220px_90px_170px] items-center";
+const GRID =
+  "grid grid-cols-[minmax(260px,1fr)_190px_190px_90px_170px] items-center";
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -61,6 +63,16 @@ function capabilityLabels(model: Model): string[] {
   return labels;
 }
 
+// operationLabel reads the catalog's own operation name and changes only its
+// separator. Shortening it to the last word would render images-generations
+// and videos-generations as one label, and mapping the known names through a
+// table would drop whatever the catalog learns next. An operation this console
+// has never seen renders under its catalog name, because a badge missing from
+// the row would read as a model that serves nothing.
+export function operationLabel(operation: string): string {
+  return operation.replaceAll("-", " ");
+}
+
 // Unknown prices and contexts return undefined so sortUndefined: "last"
 // keeps them at the bottom in both sort directions.
 function promptPriceNumber(model: Model): number | undefined {
@@ -75,6 +87,13 @@ const columns = helper.columns([
     sortFn: "alphanumeric",
   }),
   helper.display({ id: "capabilities", header: "capabilities" }),
+  // Sorting by the joined operation list groups the models that serve the
+  // same set, which is the order a reader scanning for one of them wants.
+  helper.accessor((row) => operationsOf(row).join(" "), {
+    id: "operations",
+    header: "operations",
+    sortFn: "alphanumeric",
+  }),
   helper.accessor((row) => row.context_length ?? undefined, {
     id: "context",
     header: "context",
@@ -229,6 +248,13 @@ export function ModelsTable({ models }: { models: Model[] }) {
               <div role="cell" className="flex gap-1 overflow-hidden px-2.5">
                 {capabilityLabels(model).map((label) => (
                   <CapabilityBadge key={label}>{label}</CapabilityBadge>
+                ))}
+              </div>
+              <div role="cell" className="flex gap-1 overflow-hidden px-2.5">
+                {operationsOf(model).map((operation) => (
+                  <CapabilityBadge key={operation}>
+                    {operationLabel(operation)}
+                  </CapabilityBadge>
                 ))}
               </div>
               <div

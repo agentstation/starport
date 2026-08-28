@@ -99,6 +99,19 @@ export function formatPricePerM(perTokenString: string | undefined): string | nu
   return `$${perMillion.toPrecision(2).replace(/\.?0+$/, "")}`;
 }
 
+// formatUnitPrice renders a price that already covers one whole unit: a
+// document page, or a rerank search unit. Unlike a token price it needs no
+// scaling. Like one it answers null rather than zero when the catalog
+// published nothing, because an unknown price is never free.
+export function formatUnitPrice(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const price = Number.parseFloat(value);
+  if (!Number.isFinite(price)) return null;
+  if (price === 0) return "$0";
+  if (price >= 1) return `$${price.toFixed(2).replace(/\.?0+$/, "")}`;
+  return `$${price.toPrecision(2).replace(/\.?0+$/, "")}`;
+}
+
 // providerLabel is the one place provider display names resolve. The
 // catalog name wins; the raw provider id is the fallback so unknown or
 // unfetched slugs still render. Never case-transform the id: casing is

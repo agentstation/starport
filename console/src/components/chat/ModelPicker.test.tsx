@@ -36,6 +36,17 @@ vi.mock("@/lib/api", async (importOriginal) => {
         ],
       },
       {
+        id: "cohere/rerank-v3.5",
+        name: "Rerank 3.5",
+        offerings: [
+          {
+            provider: "cohere",
+            provider_model_id: "rerank-v3.5",
+            operations: ["rerank"],
+          },
+        ],
+      },
+      {
         id: "google/gemini-2.5-flash",
         name: "Gemini 2.5 Flash",
         offerings: [
@@ -101,5 +112,19 @@ test("the chat picker omits a model that only reads documents", async () => {
 
   // A model that reads documents and also answers chat stays. The exclusion is
   // about what a model cannot do, not about the operation being present.
+  expect(screen.getByText("Gemini 2.5 Flash")).toBeTruthy();
+});
+
+// RNK-V18. A reranker scores a document list against one query and returns no
+// message. It reaches this gateway through /v1/rerank, so naming one in the
+// model field of a chat request is a routing refusal the reader cannot act on.
+test("the chat picker omits a model that only reranks", async () => {
+  mount();
+  await waitFor(() => expect(screen.getByText("Llama 3.1 8B")).toBeTruthy());
+
+  expect(screen.queryByText("Rerank 3.5")).toBeNull();
+
+  // The exclusion reads the whole operation list rather than looking for one
+  // name in it, so a model that reranks and also answers chat stays.
   expect(screen.getByText("Gemini 2.5 Flash")).toBeTruthy();
 });

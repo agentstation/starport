@@ -105,3 +105,25 @@ test("reasoning capability accepts include_reasoning", () => {
   expect(hasCapability(model, "tools")).toBe(true);
   expect(hasCapability(model, "structured_outputs")).toBe(false);
 });
+
+// RNK-V18. An operator confirming what the catalog serves needs to narrow the
+// table to one operation. A model serving several answers to each of them.
+test("operation facet selects a model by what it serves", () => {
+  const reranker: Model = {
+    id: "cohere/rerank-v3.5",
+    offerings: [
+      {
+        provider: "cohere",
+        provider_model_id: "rerank-v3.5",
+        operations: ["rerank"],
+      },
+    ],
+  };
+
+  expect(matches(reranker, { operation: "rerank" })).toBe(true);
+  expect(matches(reranker, { operation: "chat-completions" })).toBe(false);
+  expect(matches(imageModel, { operation: "images-edits" })).toBe(true);
+  // A model whose offerings name no operation is one the catalog did not
+  // describe, and it answers to no operation rather than to all of them.
+  expect(matches(model, { operation: "chat-completions" })).toBe(false);
+});

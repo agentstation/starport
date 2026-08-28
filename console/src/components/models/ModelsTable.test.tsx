@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import type { Model } from "@/lib/api";
 
-import { ModelsTable } from "./ModelsTable";
+import { ModelsTable, operationLabel } from "./ModelsTable";
 
 const navigate = vi.fn();
 
@@ -70,5 +70,80 @@ test("the model id links to the detail page", () => {
   const link = screen.getByText("author-0/model-0").closest("a");
   expect(link?.getAttribute("href")).toBe(
     "/models/$modelId".replace("$modelId", "author-0/model-0"),
+  );
+});
+
+// RNK-V18. A rerank model answers no chat turn and reaches its own route, so a
+// reader who cannot see which operation a model serves cannot tell it apart
+// from a chat model that happens to be priced oddly.
+const operationCatalog: Model[] = [
+  {
+    id: "cohere/rerank-v3.5",
+    name: "Rerank 3.5",
+    offerings: [
+      {
+        provider: "cohere",
+        provider_model_id: "rerank-v3.5",
+        operations: ["rerank"],
+      },
+    ],
+  },
+  {
+    id: "meta/llama-3.1-8b-instruct",
+    name: "Llama 3.1 8B",
+    offerings: [
+      {
+        provider: "groq",
+        provider_model_id: "llama-3.1-8b-instant",
+        operations: ["chat-completions"],
+      },
+    ],
+  },
+];
+
+test("the operations column names what each model serves", () => {
+  render(<ModelsTable models={operationCatalog} />);
+
+  const rerank = screen.getByText("cohere/rerank-v3.5").closest('[role="row"]');
+  expect(rerank?.textContent).toContain("rerank");
+
+  // The column reads every offering rather than the first, and it does not
+  // hand one model's operation to another.
+  const chat = screen.getByText("meta/llama-3.1-8b-instruct").closest('[role="row"]');
+  expect(chat?.textContent).toContain("chat completions");
+  expect(chat?.textContent).not.toContain("rerank");
+});
+
+// The catalog gains operations this console has not been rewritten for. A label
+// table would render such a model with no operation at all, which reads as a
+// model that serves nothing rather than one this console has not learned.
+test("an operation this console has never seen renders under its catalog name", () => {
+  render(
+    <ModelsTable
+      models={[
+        {
+          id: "acme/futurist",
+          offerings: [
+            {
+              provider: "acme",
+              provider_model_id: "futurist",
+              operations: ["holograms-projections"],
+            },
+          ],
+        },
+      ]}
+    />,
+  );
+
+  const row = screen.getByText("acme/futurist").closest('[role="row"]');
+  expect(row?.textContent).toContain("holograms projections");
+});
+
+// Shortening an operation to its last word would render images-generations and
+// videos-generations as one badge, which is the same failure as the fixed list
+// above with a different cause.
+test("two operations that end in the same word stay apart", () => {
+  expect(operationLabel("images-generations")).not.toBe(
+    operationLabel("videos-generations"),
   );
 });
