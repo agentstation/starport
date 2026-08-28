@@ -597,6 +597,9 @@ type ModelOffering struct {
 	Availability        string           `json:"availability,omitempty"`
 	Lifecycle           string           `json:"lifecycle,omitempty"`
 	Pricing             *OfferingPricing `json:"pricing,omitempty"`
+	// MaxDocuments is the longest document list this offering ranks in one
+	// rerank request. A caller that sends more gets a refusal.
+	MaxDocuments *int `json:"max_documents,omitempty"`
 	// Operations names what this offering serves. A caller reads it to learn
 	// which route answers for the model, because a model that reads documents
 	// and a model that answers chat reach different paths.
@@ -617,7 +620,11 @@ type OfferingPricing struct {
 	// A page is the unit document recognition bills in. No token price
 	// converts into it.
 	PageInput string `json:"page_input,omitempty"`
-	Currency  string `json:"currency,omitempty"`
+	// A search unit is the unit reranking bills in on the providers that
+	// meter it: one query against a bounded document count. Such an offering
+	// may publish no token price at all.
+	SearchUnit string `json:"search_unit,omitempty"`
+	Currency   string `json:"currency,omitempty"`
 }
 
 // Architecture describes one OpenRouter model architecture.

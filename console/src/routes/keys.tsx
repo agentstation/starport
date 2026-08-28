@@ -418,10 +418,12 @@ function CreateKeyModal({
     }
     setFormError("");
     // A key needs at least one scope. Non-admin keys get the inference
-    // set: chat, embeddings, images, audio, model listing, activity, and the
-    // two file scopes. A key that can send a document inline can store one
-    // and name it later, so withholding the file scopes would not withhold
-    // the capability, only the cheaper way to use it.
+    // set: chat, embeddings, images, audio, reranking, model listing,
+    // activity, and the two file scopes. A key that can send a document
+    // inline can store one and name it later, so withholding the file scopes
+    // would not withhold the capability, only the cheaper way to use it.
+    // Reranking reads the caller's own documents rather than a stored one, so
+    // it carries its own scope beside chat rather than riding on it.
     create.mutate({
       name: name.trim(),
       scopes: admin
@@ -431,6 +433,7 @@ function CreateKeyModal({
             "embeddings:write",
             "images:write",
             "audio:write",
+            "rerank:write",
             "models:read",
             "activity:read",
             "files:read",

@@ -10,6 +10,7 @@ import {
   formatContext,
   formatCount,
   formatPricePerM,
+  formatUnitPrice,
   providerLabel,
 } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
@@ -166,6 +167,21 @@ function price(value: string | undefined): string {
   return formatPricePerM(value) ?? "—";
 }
 
+// unitPrice names the price of one whole unit and the unit it buys, because
+// the number alone reads as a token price beside four of them.
+//
+// A rerank offering that bills search units publishes no token price at all,
+// and a document reader publishes a page price beside them. Either one shows
+// four dashes across the token columns, so an offering with a real published
+// price would read as one nobody priced.
+function unitPrice(offering: ModelOffering): string {
+  const searchUnit = formatUnitPrice(offering.pricing?.search_unit);
+  if (searchUnit !== null) return `${searchUnit} / search`;
+  const page = formatUnitPrice(offering.pricing?.page_input);
+  if (page !== null) return `${page} / page`;
+  return "—";
+}
+
 export function OfferingTable({
   model,
   providers,
@@ -193,6 +209,8 @@ export function OfferingTable({
             <th className="px-3 py-2 font-medium">Prompt /1M</th>
             <th className="px-3 py-2 font-medium">Completion /1M</th>
             <th className="px-3 py-2 font-medium">Cache read /1M</th>
+            <th className="px-3 py-2 font-medium">Unit price</th>
+            <th className="px-3 py-2 font-medium">Max docs</th>
             <th className="px-3 py-2 font-medium">Circuit</th>
             <th className="px-3 py-2 font-medium">Lifecycle</th>
           </tr>
@@ -233,6 +251,12 @@ export function OfferingTable({
                 </td>
                 <td className="px-3 py-2 tabular-nums text-text-2">
                   {price(offering.pricing?.cache_read)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums text-text-2">
+                  {unitPrice(offering)}
+                </td>
+                <td className="px-3 py-2 tabular-nums text-text-2">
+                  {offering.max_documents ? formatCount(offering.max_documents) : "—"}
                 </td>
                 <td className="px-3 py-2">
                   {circuit ? (

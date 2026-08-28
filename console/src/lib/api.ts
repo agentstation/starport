@@ -334,6 +334,11 @@ export type OfferingPricing = {
   // into it, so an offering that reads documents and publishes no page price
   // is one this console cannot price at all.
   page_input?: string;
+  // A search unit is what reranking bills in on the providers that meter it:
+  // one query against a bounded document count. Such an offering may publish
+  // no token price at all, so a reader looking only at prompt and completion
+  // would take a priced rerank for a free one.
+  search_unit?: string;
   currency?: string;
 };
 
@@ -347,6 +352,9 @@ export type ModelOffering = {
   availability?: string;
   lifecycle?: string;
   pricing?: OfferingPricing;
+  // max_documents is the longest document list this offering ranks in one
+  // rerank request. A caller that sends more gets a refusal.
+  max_documents?: number;
   operations?: string[];
 };
 
@@ -1202,6 +1210,11 @@ export const VIDEO_OPERATION = "videos-generations";
 // document. A model that serves it is a document reader, and a chat request
 // naming one is a routing refusal waiting to happen.
 export const RECOGNITION_OPERATION = "documents-recognition";
+
+// RERANK_OPERATION is the catalog's own name for scoring a document list
+// against one query. A rerank model answers no chat turn, so a chat request
+// naming one is a routing refusal waiting to happen.
+export const RERANK_OPERATION = "rerank";
 
 export type VideoJob = {
   id: string;

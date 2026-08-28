@@ -163,6 +163,12 @@ func modelOfferings(
 			maxCompletion := boundedModelInt(offering.Limits.OutputTokens)
 			info.ContextLength = &contextLength
 			info.MaxCompletionTokens = &maxCompletion
+			// Zero means the catalog states no bound, which is a different
+			// answer than a bound of none and stays unreported.
+			if offering.Limits.MaxDocuments > 0 {
+				maxDocuments := boundedModelInt(offering.Limits.MaxDocuments)
+				info.MaxDocuments = &maxDocuments
+			}
 		}
 		info.Pricing = offeringPricing(offering.Pricing)
 		info.Operations = offeringOperations(route)
@@ -203,10 +209,15 @@ func offeringPricing(pricing *starmapcatalogs.ModelPricing) *OfferingPricingInfo
 		return nil
 	}
 	page := formatPagePrice(pricing)
-	if pricing.Tokens == nil && page == "" {
+	searchUnit := formatSearchUnitPrice(pricing)
+	if pricing.Tokens == nil && page == "" && searchUnit == "" {
 		return nil
 	}
-	info := &OfferingPricingInfo{PageInput: page, Currency: pricing.Currency.String()}
+	info := &OfferingPricingInfo{
+		PageInput:  page,
+		SearchUnit: searchUnit,
+		Currency:   pricing.Currency.String(),
+	}
 	if pricing.Tokens != nil {
 		info.Prompt = formatTokenPrice(pricing.Tokens.Input)
 		info.Completion = formatTokenPrice(pricing.Tokens.Output)
@@ -226,6 +237,21 @@ func formatPagePrice(pricing *starmapcatalogs.ModelPricing) string {
 		return ""
 	}
 	return strconv.FormatFloat(*pricing.Operations.PageInput, 'g', -1, 64)
+}
+
+// formatSearchUnitPrice reads what one rerank search unit costs. Like a page
+// price it is already a whole-unit number, and unlike one it reports only on an
+// offering that says it bills search units: an offering that bills the tokens
+// it reads may carry a stale figure here, and reporting it would price a turn
+// in a unit the provider never charges.
+func formatSearchUnitPrice(pricing *starmapcatalogs.ModelPricing) string {
+	if pricing.Operations == nil || pricing.Operations.SearchUnit == nil {
+		return ""
+	}
+	if pricing.Operations.RerankBasis != starmapcatalogs.ModelRerankBasisSearchUnit {
+		return ""
+	}
+	return strconv.FormatFloat(*pricing.Operations.SearchUnit, 'g', -1, 64)
 }
 
 func formatTokenPrice(cost *starmapcatalogs.ModelTokenCost) string {

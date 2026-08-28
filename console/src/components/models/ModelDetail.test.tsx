@@ -167,3 +167,42 @@ test("links family, parent, and root without duplicates", () => {
   ]);
   expect(lineageLinks({ id: "x" })).toEqual([]);
 });
+
+// --- Rerank offerings
+
+// RNK-V18. A rerank offering on Cohere publishes no token price at all, so the
+// four token columns show a dash across the row. Without a column for the unit
+// it does bill in, a priced offering reads as one nobody priced.
+const reranker: Model = {
+  id: "cohere/rerank-v3.5",
+  offerings: [
+    {
+      provider: "cohere",
+      provider_model_id: "rerank-v3.5",
+      pricing: { search_unit: "0.0025", currency: "USD" },
+      max_documents: 1000,
+      operations: ["rerank"],
+    },
+  ],
+};
+
+test("a rerank offering shows the unit it bills in and the documents it ranks", () => {
+  render(<OfferingTable model={reranker} providers={[]} />);
+
+  const row = screen.getByText("rerank-v3.5").closest("tr");
+  // The unit is named beside the number. Alone it reads as a fifth token price.
+  expect(row?.textContent).toContain("$0.0025 / search");
+  // A caller that sends more documents than this gets a refusal, so the bound
+  // is the one limit a rerank caller has to plan around.
+  expect(row?.textContent).toContain("1,000");
+});
+
+test("a chat offering claims no unit price and no document limit", () => {
+  render(<OfferingTable model={model} providers={providers} />);
+
+  // Reading a page or search price off an offering that publishes neither would
+  // bill a chat turn in a unit no provider charges for.
+  const row = screen.getByText("llama-3.1-8b-instant").closest("tr");
+  expect(row?.textContent).not.toContain("/ search");
+  expect(row?.textContent).not.toContain("/ page");
+});

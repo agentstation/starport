@@ -56,6 +56,10 @@ type ModelOfferingInfo struct {
 	Availability        string               `json:"availability,omitempty"`
 	Lifecycle           string               `json:"lifecycle,omitempty"`
 	Pricing             *OfferingPricingInfo `json:"pricing,omitempty"`
+	// MaxDocuments is the longest document list this offering ranks in one
+	// request. A rerank caller that sends more gets a refusal, so the bound
+	// belongs beside the context window rather than inside the pricing block.
+	MaxDocuments *int `json:"max_documents,omitempty"`
 	// Operations names what this offering serves, in the catalog's own
 	// spelling. A media model reaches a different path than a chat model, so
 	// a reader who cannot see the operations cannot tell which path to call.
@@ -79,7 +83,12 @@ type OfferingPricingInfo struct {
 	// price converts into it, so an offering that reads documents and
 	// publishes no page price is one a caller cannot price at all.
 	PageInput string `json:"page_input,omitempty"`
-	Currency  string `json:"currency,omitempty"`
+	// SearchUnit is what one rerank search unit costs at this offering, which
+	// is one query against a bounded document count. A rerank provider bills
+	// either this or the tokens it reads, so an offering that publishes it
+	// may publish no token price at all.
+	SearchUnit string `json:"search_unit,omitempty"`
+	Currency   string `json:"currency,omitempty"`
 }
 
 // ModelPricing represents model pricing information

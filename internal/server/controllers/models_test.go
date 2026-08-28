@@ -182,18 +182,27 @@ func TestOpenRouterOfferingsMirrorTheCatalogProjection(t *testing.T) {
 	require.Equal(t, wireNames(view.ModelOfferingInfo{}), wireNames(openrouter.ModelOffering{}),
 		"the OpenRouter offering shape drifted from the catalog projection")
 
+	// The fixture carries every fact at once, including ones no real offering
+	// publishes together. The guard is about the shape surviving the conversion,
+	// so a field left unset here is a field the guard stops covering.
 	length := 128000
 	completion := 4096
+	documents := 1000
 	converted := openRouterOffering(proxy.ModelOfferingInfo{
 		Provider:            "mistral",
 		ProviderName:        "Mistral",
 		ProviderModelID:     "mistral-ocr-2505",
 		ContextLength:       &length,
 		MaxCompletionTokens: &completion,
+		MaxDocuments:        &documents,
 		Availability:        "available",
 		Lifecycle:           "active",
-		Pricing:             &view.OfferingPricingInfo{PageInput: "0.001", Currency: "USD"},
-		Operations:          []string{"documents-recognition"},
+		Pricing: &view.OfferingPricingInfo{
+			PageInput:  "0.001",
+			SearchUnit: "0.0025",
+			Currency:   "USD",
+		},
+		Operations: []string{"documents-recognition"},
 	})
 
 	encoded, err := json.Marshal(converted)
@@ -205,7 +214,10 @@ func TestOpenRouterOfferingsMirrorTheCatalogProjection(t *testing.T) {
 			"openRouterOffering drops %s, so no caller ever sees it", name)
 	}
 	require.Equal(t, []any{"documents-recognition"}, decoded["operations"])
-	require.Equal(t, "0.001", decoded["pricing"].(map[string]any)["page_input"])
+	require.Equal(t, float64(1000), decoded["max_documents"])
+	pricing := decoded["pricing"].(map[string]any)
+	require.Equal(t, "0.001", pricing["page_input"])
+	require.Equal(t, "0.0025", pricing["search_unit"])
 }
 
 // wireNames lists the JSON names of one struct in declaration order.
