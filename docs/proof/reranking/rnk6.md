@@ -65,6 +65,13 @@ states the new count in both places that name it. The media gate
 `scripts/verify-model-modalities.sh` keeps its own count. The split the two
 gates hold stays where it was.
 
+A second gate reads that count. `PLG-V17` in
+`scripts/verify-document-parser.sh` pinned it at 16, to catch a parser change
+that widened a surface decision PLG-D5 kept closed. The pin now reads 17 and
+names the decision that moved it, so the guard still catches an unclaimed
+condition. CI caught this. The first evidence pass did not run the parser gate,
+which the required-evidence list in `AGENTS.md` names.
+
 ## Tests
 
 Five new tests in `internal/server/rerank_routes_test.go`:

@@ -143,12 +143,15 @@ no_unenforced_plugin_report() {
 
 # transforms_unchanged holds PLG-V17. Enforcing the plugins field must not
 # move the transforms field, and it must not move the parity gate. The count
-# is the guard: a new condition there would mean this campaign widened a
-# surface decision PLG-D5 kept closed.
+# is the guard: a condition added there without a decision naming it would
+# mean a campaign widened a surface decision PLG-D5 kept closed. The pin
+# tracks the shipped count and rises only with the decision that grew it.
+# It stood at 16 for the parser campaign and at 17 after decision RNK-D9
+# claimed POST /api/v1/rerank.
 transforms_unchanged() {
   tests_all_present Transforms DocumentParser \
     -- internal/protocol/openrouter || return 1
-  [ "$(grep -c '^check ORP-V' scripts/verify-openrouter-parity.sh)" = "16" ]
+  [ "$(grep -c '^check ORP-V' scripts/verify-openrouter-parity.sh)" = "17" ]
 }
 
 # console_shows_the_cost holds PLG-V18. A reader who sees an extraction but
@@ -217,7 +220,7 @@ check PLG-V15 "the spend bound refuses before the recognition call" \
 check PLG-V16 "a file-parser request names no unenforced field" \
   no_unenforced_plugin_report
 
-check PLG-V17 "transforms keeps its drop-in behavior and parity stays at 16" \
+check PLG-V17 "transforms keeps its drop-in behavior and parity stays pinned" \
   transforms_unchanged
 
 check PLG-V18 "the console shows the engine, the page count, the cost, and a cache hit" \
