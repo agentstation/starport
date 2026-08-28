@@ -7,13 +7,14 @@ import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { ServedCredentialPanel } from "@/components/credentials/ServedCredentialPanel";
 import {
   availableOfferings,
-  CredentialPill,
+  HealthBadge,
+  providerHealth,
 } from "@/components/providers/ProviderCard";
 import { ProviderCredentialCard } from "@/components/credentials/ProviderCredentialCard";
 import {
   HealthPanel,
   OfferingsTable,
-  PolicyChips,
+  PolicySummary,
 } from "@/components/providers/ProviderDetail";
 import {
   ApiError,
@@ -109,15 +110,13 @@ function ProviderDetailPage() {
             )}
           </div>
         </div>
-        {runtime && <CredentialPill credential={runtime.operator_credential} />}
+        {runtime && <HealthBadge health={providerHealth(runtime)} />}
       </div>
-
-      <PolicyChips entry={entry} />
 
       <div className="flex flex-wrap items-center gap-4 text-sm text-text-2">
         {runtime && (
           <span className="tabular-nums">
-            {formatCount(offerings.length)} models · {formatCount(available)}{" "}
+            {formatCount(available)} of {formatCount(offerings.length)} models
             available
           </span>
         )}
@@ -168,6 +167,8 @@ function ProviderDetailPage() {
       )}
 
       {runtime && <OfferingsTable providerId={providerId} offerings={offerings} />}
+
+      <PolicySummary entry={entry} />
 
       {!entry && !catalog.isPending && (
         <p className="text-base text-text-3">
