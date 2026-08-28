@@ -67,6 +67,7 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 			selectedRoute.Operation = request.Operation
 			selectedRoute.Endpoint = candidate.Endpoints[request.Operation]
 		}
+		selectedRoute.MaxDocuments = candidate.MaxDocuments
 
 		providerRank := 0
 		if len(providerRanks) > 0 {
@@ -115,6 +116,15 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 		})
 	}
 	if len(plan.attempts) == 0 {
+		// The operation comes first, because it is the coarsest mismatch: a
+		// model that serves other operations cannot answer this request under
+		// any modality, capability, or price the caller changes.
+		if rejection, found := firstRejection(rejections, RejectionMissingOperation); found {
+			return plan, fmt.Errorf(
+				"%w: %w: %s: %s",
+				ErrNoCandidate, ErrOperationUnsupported, rejection.Route.ID(), rejection.Detail,
+			)
+		}
 		if rejection, found := firstRejection(rejections, RejectionMissingModality); found {
 			return plan, fmt.Errorf(
 				"%w: %w: %s: %s",
@@ -161,6 +171,9 @@ func validateSnapshot(snapshot Snapshot) error {
 		seen[route.ID()] = struct{}{}
 		if candidate.ContextWindow < 0 {
 			return fmt.Errorf("%w: route %q has a negative context window", ErrInvalidSnapshot, route.ID())
+		}
+		if candidate.MaxDocuments < 0 {
+			return fmt.Errorf("%w: route %q has a negative document bound", ErrInvalidSnapshot, route.ID())
 		}
 		if candidate.Cost != nil && (candidate.Cost.InputPerToken < 0 || candidate.Cost.OutputPerToken < 0) {
 			return fmt.Errorf("%w: route %q has a negative token price", ErrInvalidSnapshot, route.ID())
@@ -289,7 +302,7 @@ func rejectCandidate(
 		return reject(RejectionUnhealthy, "runtime health disabled the offering")
 	}
 	if !candidate.ServesOperation(request.Operation) {
-		return reject(RejectionMissingOperation, "offering and adapter do not support the operation")
+		return reject(RejectionMissingOperation, "offering does not serve the "+string(request.Operation)+" operation")
 	}
 	if request.Operation != "" {
 		endpoint, exists := candidate.Endpoints[request.Operation]

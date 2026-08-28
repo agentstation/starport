@@ -256,8 +256,17 @@ func (r *modelRouter) toPlanningCandidates(
 			continue
 		}
 		contextWindow := 0
-		if offering.Limits != nil && offering.Limits.ContextWindow > 0 {
-			contextWindow = boundedInt(offering.Limits.ContextWindow)
+		maxDocuments := 0
+		if offering.Limits != nil {
+			if offering.Limits.ContextWindow > 0 {
+				contextWindow = boundedInt(offering.Limits.ContextWindow)
+			}
+			// A document bound belongs to the offering, and two offerings of
+			// one model state different ones. Carrying it here is what lets the
+			// rerank path refuse a list the chosen provider would reject.
+			if offering.Limits.MaxDocuments > 0 {
+				maxDocuments = boundedInt(offering.Limits.MaxDocuments)
+			}
 		}
 		provider := string(route.ProviderID)
 		providerState := providerStates[provider]
@@ -274,6 +283,7 @@ func (r *modelRouter) toPlanningCandidates(
 			Capabilities:    modelCapabilities(definition),
 			InputModalities: modelInputModalities(definition),
 			ContextWindow:   contextWindow,
+			MaxDocuments:    maxDocuments,
 			Cost:            modelCost(offering.Pricing),
 			Latency:         providerState.latency,
 			Unavailable:     providerState.unavailable,

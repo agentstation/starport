@@ -13,6 +13,10 @@ import (
 // malformed part, or a document the gateway could not read.
 const fieldMessages = "messages"
 
+// fieldModel is the request field a refusal names when the fault is the model
+// the caller chose rather than what the caller sent it.
+const fieldModel = "model"
+
 // ValidateChatCompletionRequest validates one canonical gateway chat request.
 func ValidateChatCompletionRequest(req *ChatCompletionRequest) error {
 	if req == nil {

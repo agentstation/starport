@@ -22,6 +22,13 @@ var (
 	// every routing failure with a 503 can still separate this one, which is
 	// a caller mistake and answers 400.
 	ErrModalityUnsupported = errors.New("model does not accept a requested modality")
+	// ErrOperationUnsupported reports that every offering the request reached
+	// serves other operations. A chat model asked to rerank is the case it
+	// exists for: without it the planner reports "no candidate", the caller
+	// hears a gateway problem, and the real cause stays inside the plan. It
+	// wraps beside ErrNoCandidate so a caller answering every routing failure
+	// with a 503 can still separate this one, which no retry changes.
+	ErrOperationUnsupported = errors.New("model does not serve the requested operation")
 )
 
 // Route identifies one provider offering in one immutable catalog generation.
@@ -34,6 +41,12 @@ type Route struct {
 	Endpoint            Endpoint
 	PromptCacheKnown    bool
 	PromptCache         bool
+
+	// MaxDocuments is the longest document list this offering accepts, and
+	// zero means the catalog states no bound. It rides on the route rather
+	// than on a table beside it, because the bound belongs to the offering the
+	// planner chose and differs between two offerings of one model.
+	MaxDocuments int
 }
 
 // ID returns Starport's provider-scoped route ID.
@@ -69,10 +82,16 @@ type Candidate struct {
 	InputModalities []Modality
 
 	ContextWindow int
-	Cost          *TokenCost
-	Latency       *time.Duration
-	Unavailable   bool
-	Unhealthy     bool
+
+	// MaxDocuments is the longest document list this offering accepts. The
+	// planner reads it nowhere: it carries the fact to the chosen route, which
+	// is where the operation that has documents can enforce it.
+	MaxDocuments int
+
+	Cost        *TokenCost
+	Latency     *time.Duration
+	Unavailable bool
+	Unhealthy   bool
 }
 
 // ServesOperation reports whether the candidate declares the operation. An

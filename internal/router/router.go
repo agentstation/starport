@@ -160,13 +160,13 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 
 // routePlanFailure maps a planner failure onto the router error contract and
 // returns nil when the failure carries no routing meaning and the caller must
-// add its own context. A modality refusal survives the collapse
+// add its own context. Two refusals survive the collapse
 // onto ErrNoModelsAvailable: every other planning failure invites a retry
-// elsewhere, but a model that cannot read the media the caller sent refuses
-// the same request every time, and the caller needs to hear which modality
-// was the problem.
+// elsewhere, but a model that cannot read the media the caller sent, or that
+// serves other operations entirely, refuses the same request every time. The
+// caller needs to hear which one it was.
 func routePlanFailure(err error) error {
-	if errors.Is(err, routing.ErrModalityUnsupported) {
+	if errors.Is(err, routing.ErrModalityUnsupported) || errors.Is(err, routing.ErrOperationUnsupported) {
 		return err
 	}
 	if errors.Is(err, routing.ErrNoCandidate) {
