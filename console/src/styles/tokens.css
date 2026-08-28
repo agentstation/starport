@@ -229,3 +229,27 @@ html {
     0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent),
     0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
 }
+
+/* Text fields match :focus-visible on every focus, including mouse
+ * clicks, so the ring would box every input while typing. Fields
+ * signal focus with their accent border instead; the ring stays on
+ * buttons and links, where it marks keyboard reach. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable="true"]:focus-visible {
+  box-shadow: none;
+}
+
+/* Monochrome catalog marks (EntityLogo "mono" setting): flatten any
+ * bundled brand SVG — full-color or currentColor — to the theme's ink
+ * so the set reads as one. brightness(0) inks every path black;
+ * invert(1) lifts it to white for the dark palette. */
+.mono-mark svg {
+  filter: brightness(0) invert(1);
+  opacity: 0.85;
+}
+.light .mono-mark svg {
+  filter: brightness(0);
+  opacity: 0.75;
+}

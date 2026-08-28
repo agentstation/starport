@@ -184,6 +184,15 @@ key). Sequential content uses flat sections with hairline dividers.
 - **Prices:** OpenRouter grammar — `$0.22 / M in · $0.88 / M out`, mono,
   tabular, right-aligned in tables. Keep significant digits for sub-cent
   values; never scientific notation. Unknown price renders `—`, not `$0`.
+  Per-unit prices scale to a readable denomination: tokens per 1M, document
+  pages per 1K (`$1 / 1K pages`, never `0.001`).
+- **Provider and author marks:** rendered through `EntityLogo`, which obeys
+  the mark-treatment setting (`color` keeps each brand mark as shipped;
+  `mono` flattens every mark to a single-tone glyph so the catalog reads as
+  one set). Pages never bypass it with raw mark assets.
+- **Refresh:** an icon-only button beside the staleness caption; the icon
+  spins while the fetch runs. No "Refresh" label — the caption already
+  names the data's age.
 - **Token counts:** compact notation above 10k (`12.4k`, `1.2M`), exact below.
 - **Latency:** ms below 1s, seconds with two decimals above (`740ms`,
   `2.81s`). Throughput as `54 tok/s`.
@@ -211,7 +220,14 @@ Rules that override shadcn defaults:
   two-layer ring, no border color change alone.
 - **Tables:** TanStack Table; header row 12px/500 Text 3 on transparent
   ground with a bottom hairline; sortable headers show direction on hover
-  and when active; virtualized above ~100 rows.
+  and when active; virtualized above ~100 rows. Dense catalog tables offer
+  drag-resizable columns (thin handle on the header edge, double-click
+  resets); the first column flexes to fill, the rest hold their size.
+- **Selects:** the styled `Select` component only — `appearance-none` over
+  `--bg-raised` with a Lucide chevron. The browser-default `<select>`
+  chrome never ships. Multi-value filtering uses `FacetFilter`: a popover
+  of checkbox facets with a search field above ~8 options, summarized in
+  the trigger as `label · n`.
 - **Popovers/dropdowns:** `--bg-raised`, `--border-2`, radius 8, shadow
   `0 8px 24px rgba(0,0,0,0.4)` + inset 1px white@0.05 ring (dark).
 - **Modals:** radius 12, same shadow contract, backdrop `black@0.6`;
@@ -219,8 +235,18 @@ Rules that override shadcn defaults:
   confirmation.
 - **Toasts:** bottom-right, one line, auto-dismiss 4s, semantic left rule.
 - **Command palette (⌘K):** global — navigation, model search, actions.
+  Spotlight-scale: a centered ~640px panel with a large borderless input,
+  not a small dropdown. The shortcut hint renders as `⌘ K` (spaced keys).
   `/` focuses inline search on catalog pages. Every list in the product is
   fully keyboard-navigable.
+- **Credential resolution:** the provider detail page renders one numbered
+  chain card in the keyring's true order (environment → gateway → BYOK by
+  default), each source a row. Provider screens never link `/keys` and, in
+  source, only `components/credentials/` files may say "BYOK" — both are
+  test-enforced. Observed spend ("Paid by") stays a separate panel: it
+  reports what happened, not what is configured.
+- **Theme toggle:** shows the current state (the icon for the theme you are
+  in), never the state it would switch to.
 
 ## Chat
 
@@ -255,7 +281,8 @@ after the first send.
 
 ### Model picker
 
-Opens upward from the trigger, ~400px wide, max 60vh. Also opens via ⌘K.
+Opens upward from the trigger, ~400px wide, max 60vh. ⌘K belongs to the
+global palette everywhere, chat included — the palette searches models too.
 
 1. Search field on top, autofocused, fuzzy over display name, provider, and
    exact model ID.
@@ -297,6 +324,12 @@ columns, each with its own header (icon + name), stop/retry, and stats line.
 ## Voice
 
 - Sentence case everywhere, including buttons and table headers.
+- The product is "the Starport gateway" — the UI never says "LLM gateway".
+  The CLI renders as code: `starport`. The wordmark stays uppercase
+  `STARPORT` in the sidebar brand only.
+- Documentation lives in the console at `/docs`, organized by persona
+  (build against it · use an account · operate it), with copyable mono
+  snippets that use the deployment's own origin.
 - Controls name their outcome ("Create key", then a toast "Key created").
 - Errors state what failed and the next action; no apologies, no codes
   without words.

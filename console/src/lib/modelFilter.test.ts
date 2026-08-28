@@ -4,8 +4,10 @@ import type { Model } from "@/lib/api";
 
 import {
   authorIdsOf,
+  facetValues,
   fuzzyIncludes,
   hasCapability,
+  joinFacet,
   matches,
   operationsOf,
   outputModalitiesOf,
@@ -46,6 +48,24 @@ test("tag facet matches declared tags", () => {
   expect(matches(model, { tag: "open-weights" })).toBe(true);
   expect(matches(model, { tag: "vision" })).toBe(false);
   expect(matches({ id: "x" }, { tag: "chat" })).toBe(false);
+});
+
+// Facet params hold comma-joined lists: values OR within one facet and
+// AND across facets, so "groq or openai" narrows without emptying.
+test("a facet with several values matches any of them", () => {
+  expect(matches(model, { provider: "openai,groq" })).toBe(true);
+  expect(matches(model, { provider: "openai,anthropic" })).toBe(false);
+  expect(matches(model, { tag: "vision,chat" })).toBe(true);
+  // Facets still AND together.
+  expect(matches(model, { provider: "openai,groq", tag: "vision" })).toBe(false);
+});
+
+test("facet params round-trip through their URL form", () => {
+  expect(facetValues(undefined)).toEqual([]);
+  expect(facetValues("")).toEqual([]);
+  expect(facetValues("groq,openai")).toEqual(["groq", "openai"]);
+  expect(joinFacet([])).toBeUndefined();
+  expect(joinFacet(["groq", "openai"])).toBe("groq,openai");
 });
 
 test("query matches provider model ids alongside the canonical id", () => {

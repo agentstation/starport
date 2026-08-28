@@ -99,6 +99,21 @@ export function formatPricePerM(perTokenString: string | undefined): string | nu
   return `$${perMillion.toPrecision(2).replace(/\.?0+$/, "")}`;
 }
 
+// formatPricePerK converts a per-unit price string into a per-thousand
+// display value — the magnitude page pricing is quoted in. A raw catalog
+// string like "2.58e-05" would otherwise reach the page as scientific
+// notation. Returns null when absent or unparseable (unknown is never $0).
+export function formatPricePerK(perUnitString: string | undefined): string | null {
+  if (perUnitString === undefined) return null;
+  const perUnit = Number.parseFloat(perUnitString);
+  if (!Number.isFinite(perUnit)) return null;
+  const perThousand = perUnit * 1_000;
+  if (perThousand === 0) return "$0";
+  if (perThousand >= 100) return `$${perThousand.toFixed(0)}`;
+  if (perThousand >= 1) return `$${perThousand.toFixed(2).replace(/\.?0+$/, "")}`;
+  return `$${perThousand.toPrecision(2).replace(/\.?0+$/, "")}`;
+}
+
 // formatUnitPrice renders a price that already covers one whole unit: a
 // document page, or a rerank search unit. Unlike a token price it needs no
 // scaling. Like one it answers null rather than zero when the catalog

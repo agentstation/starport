@@ -10,9 +10,9 @@ import {
   INPUT_CLASS,
   PrimaryButton,
   RowAction,
-  SELECT_CLASS,
   TEXTAREA_CLASS,
 } from "@/components/ui/Form";
+import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
   accessMessage,
@@ -408,17 +408,16 @@ function EditorModal({
             />
           </Field>
           <Field label="Sort" hint="price, latency, or throughput">
-            <select
+            <Select
               value={draft.sort}
               onChange={(event) => patch({ sort: event.target.value })}
-              className={SELECT_CLASS}
             >
               {SORTS.map((sort) => (
                 <option key={sort} value={sort}>
                   {sort || "server default"}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Only" hint="allowlist, comma-separated">
             <input

@@ -11,8 +11,8 @@ import {
   Field,
   PrimaryButton,
   RowAction,
-  SELECT_CLASS,
 } from "@/components/ui/Form";
+import { Select } from "@/components/ui/Select";
 import {
   deleteBYOKCredential,
   listBYOKCredentials,
@@ -183,14 +183,13 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
 
       <div className="flex flex-col gap-2 border-t border-border-1 pt-3">
         <Field label="Add a BYOK credential">
-          <select
+          <Select
             value={provider}
             onChange={(event) => {
               setProvider(event.target.value);
               setValues({});
             }}
             aria-label="Provider"
-            className={SELECT_CLASS}
           >
             <option value="">Select a provider…</option>
             {unstored.map((entry) => (
@@ -198,7 +197,7 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
                 {providerLabel(entry.id, entry.name)}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         {provider &&
           (fields.length === 0 ? (

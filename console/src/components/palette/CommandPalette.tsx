@@ -1,11 +1,30 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  BarChart3,
+  BookOpen,
+  Building2,
+  FileText,
+  Film,
+  Key,
+  LayoutDashboard,
+  MessageSquare,
+  Moon,
+  ScanText,
+  Search,
+  Server,
+  Settings,
+  SlidersHorizontal,
+  Sparkles,
+  SquarePen,
+  Sun,
+  Users,
+} from "lucide-react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { listAuthors, listModels, listProviderCatalog } from "@/lib/api";
-import { appliedTheme, setTheme } from "@/lib/theme";
+import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import {
   KIND_LABELS,
@@ -21,20 +40,32 @@ export function openCommandPalette(): void {
   window.dispatchEvent(new Event(PALETTE_EVENT));
 }
 
-const PAGES: { path: string; label: string }[] = [
-  { path: "/", label: "Overview" },
-  { path: "/chat", label: "Chat" },
-  { path: "/models", label: "Models" },
-  { path: "/authors", label: "Authors" },
-  { path: "/providers", label: "Providers" },
-  { path: "/keys", label: "API Keys" },
-  { path: "/files", label: "Files" },
-  { path: "/jobs", label: "Jobs" },
-  { path: "/tenants", label: "Accounts" },
-  { path: "/usage", label: "Usage" },
-  { path: "/presets", label: "Presets" },
-  { path: "/settings", label: "Settings" },
+const PAGES: { path: string; label: string; icon: typeof LayoutDashboard }[] = [
+  { path: "/", label: "Overview", icon: LayoutDashboard },
+  { path: "/chat", label: "Chat", icon: MessageSquare },
+  { path: "/models", label: "Models", icon: Sparkles },
+  { path: "/providers", label: "Providers", icon: Server },
+  { path: "/authors", label: "Authors", icon: Users },
+  { path: "/keys", label: "API Keys", icon: Key },
+  { path: "/files", label: "Files", icon: FileText },
+  { path: "/jobs", label: "Jobs", icon: Film },
+  { path: "/documents", label: "Documents", icon: ScanText },
+  { path: "/tenants", label: "Accounts", icon: Building2 },
+  { path: "/usage", label: "Usage", icon: BarChart3 },
+  { path: "/presets", label: "Presets", icon: SlidersHorizontal },
+  { path: "/settings", label: "Settings", icon: Settings },
+  { path: "/docs", label: "Docs", icon: BookOpen },
 ];
+
+const PAGE_ICONS = new Map(PAGES.map((page) => [page.path, page.icon]));
+
+function Kbd({ children }: { children: string }) {
+  return (
+    <kbd className="rounded-xs border border-border-1 bg-bg-panel px-1.5 py-0.5 font-sans text-[10px] text-text-4">
+      {children}
+    </kbd>
+  );
+}
 
 // CommandPalette is the global ⌘K surface over models, providers,
 // authors, pages, and actions. It stays mounted (and dormant) in the
@@ -43,6 +74,7 @@ const PAGES: { path: string; label: string }[] = [
 export function CommandPalette() {
   const navigate = useNavigate();
   const keyUsable = useGatewayAccess();
+  const theme = useSyncExternalStore(onThemeChange, appliedTheme);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -94,9 +126,8 @@ export function CommandPalette() {
       {
         kind: "action" as const,
         id: "toggle-theme",
-        label: "Toggle theme",
-        hint: "dark ↔ light",
-        keywords: ["dark", "light", "appearance"],
+        label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme",
+        keywords: ["dark", "light", "theme", "appearance", "toggle"],
       },
       {
         kind: "action" as const,
@@ -124,7 +155,7 @@ export function CommandPalette() {
         hint: author.id,
       })),
     ],
-    [models.data, providers.data, authors.data],
+    [models.data, providers.data, authors.data, theme],
   );
 
   const visible = useMemo(() => searchPalette(query, items), [query, items]);
@@ -170,7 +201,7 @@ export function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-6 pt-[18vh]">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-6 pt-[14vh]">
       <button
         type="button"
         aria-label="Close command palette"
@@ -181,10 +212,10 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="relative flex max-h-[52vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border-2 bg-bg-raised shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+        className="relative flex max-h-[58vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border-2 bg-bg-raised shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
       >
-        <div className="flex items-center gap-2 border-b border-border-1 px-3">
-          <Search className="size-4 shrink-0 text-text-4" />
+        <div className="flex items-center gap-3 border-b border-border-1 px-4">
+          <Search className="size-5 shrink-0 text-text-4" />
           <input
             autoFocus
             value={query}
@@ -216,25 +247,32 @@ export function CommandPalette() {
                 ? `palette-${activeItem.kind}-${activeItem.id}`
                 : undefined
             }
-            className="h-11 w-full bg-transparent text-sm text-text-1 outline-none placeholder:text-text-4"
+            className="h-14 w-full bg-transparent text-md text-text-1 outline-none placeholder:text-text-4"
           />
-          <kbd className="rounded-xs border border-border-1 px-1.5 py-0.5 text-[10px] text-text-4">
-            esc
-          </kbd>
         </div>
         <div role="listbox" aria-label="Results" className="overflow-y-auto p-1.5">
           {visible.length === 0 && (
-            <p className="px-2.5 py-3 text-sm text-text-3">
+            <p className="px-3 py-4 text-sm text-text-3">
               No matches for “{query.trim()}”.
             </p>
           )}
           {visible.map((item, index) => {
             const first =
               index === 0 || visible[index - 1]?.kind !== item.kind;
+            const PageIcon =
+              item.kind === "page"
+                ? (PAGE_ICONS.get(item.id) ?? LayoutDashboard)
+                : item.kind === "action"
+                  ? item.id === "toggle-theme"
+                    ? theme === "dark"
+                      ? Sun
+                      : Moon
+                    : SquarePen
+                  : null;
             return (
               <div key={`${item.kind}:${item.id}`}>
                 {first && (
-                  <p className="px-2.5 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-text-4">
+                  <p className="px-3 pb-1 pt-2.5 text-[10px] font-medium uppercase tracking-[0.08em] text-text-4">
                     {KIND_LABELS[item.kind]}
                   </p>
                 )}
@@ -245,10 +283,13 @@ export function CommandPalette() {
                   aria-selected={item === activeItem}
                   onMouseEnter={() => setActive(index)}
                   onClick={() => run(item)}
-                  className={`flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-left ${
+                  className={`flex h-10 w-full items-center gap-3 rounded-sm px-3 text-left ${
                     item === activeItem ? "bg-bg-hover" : ""
                   }`}
                 >
+                  {PageIcon && (
+                    <PageIcon className="size-4 shrink-0 text-text-3" />
+                  )}
                   {(item.kind === "provider" || item.kind === "author") && (
                     <EntityLogo
                       kind={item.kind === "provider" ? "providers" : "authors"}
@@ -257,25 +298,40 @@ export function CommandPalette() {
                       size={20}
                     />
                   )}
+                  {item.kind === "model" && (
+                    <Sparkles className="size-4 shrink-0 text-text-4" />
+                  )}
                   <span
-                    className={`min-w-0 truncate text-sm text-text-1 ${
-                      item.kind === "model" ? "font-mono text-xs" : ""
+                    className={`min-w-0 truncate text-text-1 ${
+                      item.kind === "model" ? "font-mono text-sm" : "text-base"
                     }`}
                   >
                     {item.label}
                   </span>
                   {item.hint && (
-                    <span className="min-w-0 truncate text-xs text-text-4">
+                    <span className="ml-auto min-w-0 shrink truncate pl-3 text-xs text-text-4">
                       {item.hint}
                     </span>
                   )}
-                  <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-text-4">
-                    {item.kind}
-                  </span>
                 </button>
               </div>
             );
           })}
+        </div>
+        <div className="flex items-center gap-4 border-t border-border-1 px-4 py-2 text-[11px] text-text-4">
+          <span className="flex items-center gap-1.5">
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd>
+            navigate
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>↵</Kbd>
+            open
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Kbd>esc</Kbd>
+            close
+          </span>
         </div>
       </div>
     </div>

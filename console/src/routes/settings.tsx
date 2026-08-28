@@ -14,6 +14,12 @@ import {
   setApiKey,
   systemInfo,
 } from "@/lib/api";
+import {
+  onLogoStyleChange,
+  savedLogoStyle,
+  setLogoStyle,
+  type LogoStyle,
+} from "@/lib/logoStyle";
 import { onThemeChange, savedTheme, setTheme, type ThemeChoice } from "@/lib/theme";
 
 export const Route = createFileRoute("/settings")({
@@ -187,8 +193,14 @@ const THEME_CHOICES: { value: ThemeChoice; label: string; icon: typeof Sun }[] =
   { value: "system", label: "System", icon: Monitor },
 ];
 
+const LOGO_CHOICES: { value: LogoStyle; label: string }[] = [
+  { value: "color", label: "Color" },
+  { value: "mono", label: "Monochrome" },
+];
+
 function AppearanceSection() {
   const choice = useSyncExternalStore(onThemeChange, savedTheme);
+  const logoChoice = useSyncExternalStore(onLogoStyleChange, savedLogoStyle);
   return (
     <Section
       title="Appearance"
@@ -216,6 +228,35 @@ function AppearanceSection() {
             {label}
           </button>
         ))}
+      </div>
+      <div className="mt-5">
+        <p className="text-sm text-text-2">Provider marks</p>
+        <p className="mt-0.5 text-sm text-text-3">
+          Monochrome flattens every provider and author mark to one ink, so
+          mixed-brand lists read as a single set.
+        </p>
+        <div
+          role="radiogroup"
+          aria-label="Provider marks"
+          className="mt-2 inline-flex rounded-sm border border-border-2 p-0.5"
+        >
+          {LOGO_CHOICES.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={logoChoice === value}
+              onClick={() => setLogoStyle(value)}
+              className={`flex h-8 items-center rounded-xs px-3 text-sm transition-colors duration-150 ease-standard ${
+                logoChoice === value
+                  ? "bg-bg-hover text-text-1"
+                  : "text-text-3 hover:text-text-2"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </Section>
   );
@@ -319,7 +360,7 @@ function AboutSection() {
   return (
     <Section
       title="About"
-      description="Starport is a local, open-source LLM gateway — an OpenRouter-compatible drop-in that routes against the Starmap catalog."
+      description="The Starport gateway is local and open source — an OpenRouter-compatible drop-in that routes against the Starmap catalog."
     >
       <dl className="grid max-w-md grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
         <dt className="text-text-3">Gateway</dt>

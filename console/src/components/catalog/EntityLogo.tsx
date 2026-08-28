@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+
+import { onLogoStyleChange, savedLogoStyle } from "@/lib/logoStyle";
 
 // EntityLogo renders catalog identity offline through a fallback chain:
 // bundled gateway SVG → tinted monochrome (currentColor marks inherit the
@@ -48,6 +50,7 @@ export function EntityLogo({
 }) {
   // undefined = loading, null = no bundled mark → initials.
   const [svg, setSvg] = useState<string | null | undefined>(undefined);
+  const logoStyle = useSyncExternalStore(onLogoStyleChange, savedLogoStyle);
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +86,13 @@ export function EntityLogo({
       // bundle, so inlining is safe — and inlining is what lets
       // fill="currentColor" marks tint with the theme.
       dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
-      className={`${frame} text-text-1 [&_svg]:h-[1em] [&_svg]:w-[1em]`}
+      data-logo-style={logoStyle}
+      // Mono mode flattens full-color brand marks to the theme's ink
+      // (mono-mark, tokens.css) so they sit beside the currentColor
+      // glyphs as one set; color mode renders each mark as shipped.
+      className={`${frame} text-text-1 [&_svg]:h-[1em] [&_svg]:w-[1em] ${
+        logoStyle === "mono" ? "mono-mark" : ""
+      }`}
       style={{ width: size, height: size, fontSize: size }}
     />
   );

@@ -7,9 +7,6 @@ import type { ReactNode } from "react";
 export const INPUT_CLASS =
   "h-9 rounded-sm border border-border-2 bg-bg-raised px-3 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 focus:border-accent";
 
-export const SELECT_CLASS =
-  "h-9 rounded-sm border border-border-2 bg-bg-raised px-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard focus:border-accent";
-
 export const TEXTAREA_CLASS =
   "rounded-sm border border-border-2 bg-bg-raised px-3 py-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 focus:border-accent";
 

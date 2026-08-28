@@ -4,14 +4,13 @@ import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
-import { GatewayCredentialPanel } from "@/components/credentials/GatewayCredentialPanel";
 import { ServedCredentialPanel } from "@/components/credentials/ServedCredentialPanel";
 import {
   availableOfferings,
   CredentialPill,
 } from "@/components/providers/ProviderCard";
+import { ProviderCredentialCard } from "@/components/credentials/ProviderCredentialCard";
 import {
-  EnvironmentCredentialPanel,
   HealthPanel,
   OfferingsTable,
   PolicyChips,
@@ -153,15 +152,15 @@ function ProviderDetailPage() {
 
       {runtime && (
         <>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <EnvironmentCredentialPanel
-              providerId={providerId}
-              credential={runtime.operator_credential}
-            />
-            <GatewayCredentialPanel
-              providerId={providerId}
-              fields={entry?.credential_fields ?? []}
-            />
+          <div className="grid items-start gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <ProviderCredentialCard
+                providerId={providerId}
+                name={name}
+                credential={runtime.operator_credential}
+                fields={entry?.credential_fields ?? []}
+              />
+            </div>
             <ServedCredentialPanel records={activity.data?.data} />
           </div>
           <HealthPanel offerings={offerings} records={activity.data?.data} />

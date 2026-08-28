@@ -8,6 +8,7 @@ import {
   ProviderCard,
   credentialRank,
 } from "@/components/providers/ProviderCard";
+import { Select } from "@/components/ui/Select";
 import {
   accessMessage,
   ApiError,
@@ -220,10 +221,11 @@ function ProvidersPage() {
             type="button"
             onClick={refresh}
             disabled={refreshing}
-            className="flex h-8 items-center gap-1.5 rounded-sm border border-border-2 bg-bg-raised px-3 text-xs text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover disabled:opacity-50"
+            aria-label="Refresh provider status"
+            title="Refresh provider status"
+            className="flex size-8 items-center justify-center rounded-sm border border-border-2 bg-bg-raised text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover disabled:opacity-50"
           >
             <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            refresh
           </button>
         </div>
       </div>
@@ -239,16 +241,16 @@ function ProvidersPage() {
             className="w-full bg-transparent text-sm text-text-1 outline-none placeholder:text-text-4"
           />
         </label>
-        <select
+        <Select
+          uiSize="sm"
           value={sort}
           onChange={(event) => setSort(event.target.value as SortKey)}
           aria-label="Sort providers"
-          className="h-8 rounded-sm border border-border-2 bg-bg-raised px-2 text-xs text-text-2 outline-none"
         >
           <option value="status">Sort: status</option>
           <option value="name">Sort: name</option>
           <option value="models">Sort: models</option>
-        </select>
+        </Select>
       </div>
       {body}
     </div>

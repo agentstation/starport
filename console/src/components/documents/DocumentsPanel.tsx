@@ -11,7 +11,12 @@ import {
   type ActivityRecord,
   type Model,
 } from "@/lib/api";
-import { formatMs, formatNanoUSD, formatRelativeTime } from "@/lib/format";
+import {
+  formatMs,
+  formatNanoUSD,
+  formatPricePerK,
+  formatRelativeTime,
+} from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 // Reading a document is the one provider call this gateway makes that the
@@ -209,7 +214,7 @@ function RecognitionPrices({ offerings }: { offerings: recognitionOffering[] }) 
             <th className="px-4 py-2.5">Model</th>
             <th className="px-4 py-2.5">Provider</th>
             <th className="px-4 py-2.5">Provider model</th>
-            <th className="px-4 py-2.5">Per page</th>
+            <th className="px-4 py-2.5">Per 1K pages</th>
           </tr>
         </thead>
         <tbody>
@@ -226,9 +231,9 @@ function RecognitionPrices({ offerings }: { offerings: recognitionOffering[] }) 
               <td className="px-4 py-2 font-mono text-xs text-text-3">
                 {offering.providerModelID}
               </td>
-              <td className="px-4 py-2 tabular-nums text-xs text-text-2">
-                {offering.pagePrice ? (
-                  `${offering.pagePrice} ${offering.currency ?? "USD"}`
+              <td className="px-4 py-2 font-mono tabular-nums text-xs text-text-2">
+                {formatPricePerK(offering.pagePrice) !== null ? (
+                  `${formatPricePerK(offering.pagePrice)} ${offering.currency ?? "USD"}`
                 ) : (
                   <span className="text-warning">unpriced</span>
                 )}

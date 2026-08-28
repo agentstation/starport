@@ -18,9 +18,11 @@ import {
   ApiError,
   completeChat,
   listModels,
+  providerStatus,
   streamChat,
 } from "@/lib/api";
 import type { Attachment, ContentPart } from "@/lib/attachments";
+import { chattableModels } from "@/lib/modelFilter";
 import {
   DEFAULT_PARAMS,
   lastModel,
@@ -151,13 +153,37 @@ function ChatPage() {
     }
   }, [seedModel, navigate]);
 
-  // Fall back to the first catalog model when nothing is remembered.
+  // A default the reader never chose must be one that can answer, so the
+  // fallback prefers the first chattable model served by a provider whose
+  // operator credential is usable. Without provider status (a locked
+  // endpoint, an early error) the first catalog model stands in.
+  const status = useQuery({
+    queryKey: ["provider-status"],
+    queryFn: providerStatus,
+    staleTime: 60_000,
+    retry: false,
+  });
   useEffect(() => {
-    const first = models.data?.[0];
-    if (!newModel && first) {
-      setNewModel(first.id);
-    }
-  }, [newModel, models.data]);
+    if (newModel || !models.data?.length) return;
+    // Wait for the credential picture; a status error ends the wait and
+    // the plain catalog order decides.
+    if (status.isPending) return;
+    const candidates = chattableModels(models.data);
+    const usable = new Set(
+      (status.data?.providers ?? [])
+        .filter((provider) => provider.operator_credential?.usable === true)
+        .map((provider) => provider.provider_id),
+    );
+    const credentialed = usable.size
+      ? candidates.find((model) =>
+          (model.offerings ?? []).some((offering) =>
+            usable.has(offering.provider),
+          ),
+        )
+      : undefined;
+    const chosen = credentialed ?? candidates[0] ?? models.data[0];
+    if (chosen) setNewModel(chosen.id);
+  }, [newModel, models.data, status.isPending, status.data]);
 
   const active = useMemo(
     () => conversations.find((conversation) => conversation.id === activeId) ?? null,
@@ -181,18 +207,6 @@ function ChatPage() {
     },
     [],
   );
-
-  // ⌘K / Ctrl+K opens the model picker (DESIGN.md).
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setPickerOpen((open) => !open);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   // Opening a thread always starts at the bottom.
   useEffect(() => {
@@ -633,7 +647,9 @@ function ChatPage() {
             <p className="truncate text-sm text-text-2">Compare models</p>
           ) : (
             active && (
-              <p className="truncate text-sm text-text-2">{active.title}</p>
+              <p className="min-w-0 flex-1 truncate text-sm text-text-2">
+                {active.title}
+              </p>
             )
           )}
         </div>

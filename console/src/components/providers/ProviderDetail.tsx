@@ -105,15 +105,16 @@ export function PolicyChips({ entry }: { entry: ProviderCatalogEntry | undefined
   );
 }
 
-// --- Environment credential panel: the provider credential this
+// --- Environment credential section: the provider credential this
 // deployment read from its own process environment (README:
 // <PROVIDER>_API_KEY, then STARPORT_<PROVIDER>_API_KEY).
 //
 // It is read-only from the console by construction: the value lives in the
-// process the operator started, and no HTTP route can change it. The panel
-// beside this one holds the credential the operator can apply, and neither is
-// a gateway API key: a gateway API key authenticates a caller and never pays
-// a provider.
+// process the operator started, and no HTTP route can change it. It renders
+// as the first row of the provider credential card — the source the gateway
+// tries first — and carries no card chrome of its own. Neither it nor the
+// section below it is a gateway API key: a gateway API key authenticates a
+// caller and never pays a provider.
 
 export function operatorEnvNames(providerId: string): [string, string] {
   const stem = providerId.toUpperCase().replaceAll("-", "_");
@@ -147,7 +148,7 @@ export function EnvironmentCredentialPanel({
   return (
     <section
       data-testid="credential-panel"
-      className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
+      className="flex min-w-0 flex-1 flex-col gap-2"
     >
       <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
         Environment credential

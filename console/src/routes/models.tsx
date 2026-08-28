@@ -5,11 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
+import { FacetFilter } from "@/components/ui/FacetFilter";
 import { accessMessage, ApiError, listModels, listProviderCatalog } from "@/lib/api";
 import { formatCount, providerLabel } from "@/lib/format";
 import { operationLabel } from "@/components/models/ModelsTable";
 import {
   authorIdsOf,
+  facetValues,
+  joinFacet,
   matches,
   type ModelsSearch,
   operationsOf,
@@ -44,34 +47,6 @@ export const Route = createFileRoute("/models")({
   },
 });
 
-
-function FilterSelect({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string | undefined;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string | undefined) => void;
-}) {
-  return (
-    <select
-      aria-label={label}
-      value={value ?? ""}
-      onChange={(event) => onChange(event.target.value || undefined)}
-      className="h-8 rounded-sm border border-border-1 bg-bg-panel px-2 text-xs text-text-2 outline-none transition-colors duration-150 ease-standard hover:border-border-2 focus:border-accent"
-    >
-      <option value="">{label}</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 const SEARCH_DEBOUNCE_MS = 200;
 
@@ -153,7 +128,8 @@ function ModelsPage() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([provider, count]) => ({
         value: provider,
-        label: `${providerLabel(provider, providerNames.get(provider))} (${count})`,
+        label: providerLabel(provider, providerNames.get(provider)),
+        count,
       }));
   }, [all, providerNames]);
 
@@ -173,7 +149,8 @@ function ModelsPage() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([id, entry]) => ({
         value: id,
-        label: `${entry.name} (${entry.count})`,
+        label: entry.name,
+        count: entry.count,
       }));
   }, [all]);
 
@@ -186,7 +163,7 @@ function ModelsPage() {
     }
     return [...counts.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([tag, count]) => ({ value: tag, label: `${tag} (${count})` }));
+      .map(([tag, count]) => ({ value: tag, label: tag, count }));
   }, [all]);
 
   // The operation facet is built from the loaded catalog rather than from a
@@ -203,7 +180,8 @@ function ModelsPage() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([operation, count]) => ({
         value: operation,
-        label: `${operationLabel(operation)} (${count})`,
+        label: operationLabel(operation),
+        count,
       }));
   }, [all]);
 
@@ -230,57 +208,61 @@ function ModelsPage() {
             className="h-8 w-64 rounded-sm border border-border-1 bg-bg-panel pl-8 pr-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 hover:border-border-2 focus:border-accent"
           />
         </div>
-        <FilterSelect
-          label="All providers"
-          value={search.provider}
+        <FacetFilter
+          label="Provider"
           options={providers}
-          onChange={(provider) => setSearch({ provider })}
+          selected={facetValues(search.provider)}
+          onChange={(values) => setSearch({ provider: joinFacet(values) })}
         />
-        <FilterSelect
-          label="All authors"
-          value={search.author}
+        <FacetFilter
+          label="Author"
           options={authors}
-          onChange={(author) => setSearch({ author })}
+          selected={facetValues(search.author)}
+          onChange={(values) => setSearch({ author: joinFacet(values) })}
         />
         {tags.length > 0 && (
-          <FilterSelect
-            label="All tags"
-            value={search.tag}
+          <FacetFilter
+            label="Tag"
             options={tags}
-            onChange={(tag) => setSearch({ tag })}
+            selected={facetValues(search.tag)}
+            onChange={(values) => setSearch({ tag: joinFacet(values) })}
           />
         )}
-        <FilterSelect
-          label="All modalities"
-          value={search.modality}
+        <FacetFilter
+          label="Input"
+          searchable={false}
           options={MODALITIES.map((modality) => ({ value: modality, label: modality }))}
-          onChange={(modality) => setSearch({ modality })}
+          selected={facetValues(search.modality)}
+          onChange={(values) => setSearch({ modality: joinFacet(values) })}
         />
-        <FilterSelect
-          label="All outputs"
-          value={search.output}
+        <FacetFilter
+          label="Output"
+          searchable={false}
           options={OUTPUT_MODALITIES.map((modality) => ({
             value: modality,
-            label: `${modality} out`,
+            label: modality,
           }))}
-          onChange={(output) => setSearch({ output })}
+          selected={facetValues(search.output)}
+          onChange={(values) => setSearch({ output: joinFacet(values) })}
         />
         {operations.length > 0 && (
-          <FilterSelect
-            label="All operations"
-            value={search.operation}
+          <FacetFilter
+            label="Operation"
+            searchable={false}
             options={operations}
-            onChange={(operation) => setSearch({ operation })}
+            selected={facetValues(search.operation)}
+            onChange={(values) => setSearch({ operation: joinFacet(values) })}
           />
         )}
-        <FilterSelect
-          label="All capabilities"
-          value={search.capability}
+        <FacetFilter
+          label="Capability"
+          searchable={false}
           options={CAPABILITIES.map((capability) => ({
             value: capability,
             label: capability === "structured_outputs" ? "structured outputs" : capability,
           }))}
-          onChange={(capability) => setSearch({ capability })}
+          selected={facetValues(search.capability)}
+          onChange={(values) => setSearch({ capability: joinFacet(values) })}
         />
         <span className="ml-auto text-xs tabular-nums text-text-3">
           {models.isPending

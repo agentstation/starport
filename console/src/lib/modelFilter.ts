@@ -1,7 +1,10 @@
 import { RECOGNITION_OPERATION, RERANK_OPERATION, type Model } from "@/lib/api";
 
 // The models-list filter predicate. Filter state lives in the URL, so
-// this seam defines what each search param means.
+// this seam defines what each search param means. Every facet param is
+// a comma-joined list: values within one facet OR together, facets AND
+// together. A single value is the one-element list, so old links keep
+// working.
 export type ModelsSearch = {
   q?: string;
   provider?: string;
@@ -12,6 +15,17 @@ export type ModelsSearch = {
   capability?: string;
   operation?: string;
 };
+
+// facetValues reads one facet param into its value list.
+export function facetValues(raw: string | undefined): string[] {
+  return raw ? raw.split(",").filter(Boolean) : [];
+}
+
+// joinFacet writes a value list back into URL form; an empty list drops
+// the param entirely.
+export function joinFacet(values: string[]): string | undefined {
+  return values.length > 0 ? values.join(",") : undefined;
+}
 
 // providerOf mirrors the gateway's model ID shape: "<author>/<model>".
 export function providerOf(model: Model): string {
@@ -125,32 +139,59 @@ function queryCandidates(model: Model): string[] {
   ].filter(Boolean);
 }
 
+// passes reads one facet: an empty selection filters nothing, and a
+// model passes when ANY selected value matches (OR within a facet).
+function passes(raw: string | undefined, test: (value: string) => boolean): boolean {
+  const values = facetValues(raw);
+  return values.length === 0 || values.some(test);
+}
+
 export function matches(model: Model, search: ModelsSearch): boolean {
   // The provider filter matches the providers that actually serve the
   // model (its offerings), not just the id prefix — a canonical model
   // like meta/llama-… routes through providers the prefix never names.
   if (
-    search.provider &&
-    providerOf(model) !== search.provider &&
-    !(model.offerings ?? []).some(
-      (offering) => offering.provider === search.provider,
+    !passes(
+      search.provider,
+      (provider) =>
+        providerOf(model) === provider ||
+        (model.offerings ?? []).some(
+          (offering) => offering.provider === provider,
+        ),
     )
   ) {
     return false;
   }
-  if (search.author && !authorIdsOf(model).includes(search.author)) return false;
-  if (search.tag && !(model.tags ?? []).includes(search.tag)) return false;
+  if (!passes(search.author, (author) => authorIdsOf(model).includes(author))) {
+    return false;
+  }
+  if (!passes(search.tag, (tag) => (model.tags ?? []).includes(tag))) {
+    return false;
+  }
   if (
-    search.modality &&
-    !(model.architecture?.input_modalities ?? []).includes(search.modality)
+    !passes(search.modality, (modality) =>
+      (model.architecture?.input_modalities ?? []).includes(modality),
+    )
   ) {
     return false;
   }
-  if (search.output && !outputModalitiesOf(model).includes(search.output)) {
+  if (
+    !passes(search.output, (output) =>
+      outputModalitiesOf(model).includes(output),
+    )
+  ) {
     return false;
   }
-  if (search.capability && !hasCapability(model, search.capability)) return false;
-  if (search.operation && !operationsOf(model).includes(search.operation)) {
+  if (
+    !passes(search.capability, (capability) => hasCapability(model, capability))
+  ) {
+    return false;
+  }
+  if (
+    !passes(search.operation, (operation) =>
+      operationsOf(model).includes(operation),
+    )
+  ) {
     return false;
   }
   if (search.q) {

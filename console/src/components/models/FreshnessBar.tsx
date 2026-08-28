@@ -137,7 +137,7 @@ export function FreshnessBar() {
             aria-expanded={detailsOpen}
             className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
           >
-            details
+            Details
           </button>
         )}
         {data?.generation_id && (
@@ -146,17 +146,18 @@ export function FreshnessBar() {
             onClick={() => setChangesOpen(true)}
             className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
           >
-            what changed
+            What changed
           </button>
         )}
         <button
           type="button"
           onClick={refresh}
           disabled={refreshing}
-          className="flex h-7 items-center gap-1.5 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 disabled:opacity-50"
+          aria-label="Refresh catalog"
+          title="Refresh catalog"
+          className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 disabled:opacity-50"
         >
           <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
-          refresh catalog
         </button>
       </div>
       {detailsOpen && data && (

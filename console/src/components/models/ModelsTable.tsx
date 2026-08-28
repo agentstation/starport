@@ -1,4 +1,6 @@
 import {
+  columnResizingFeature,
+  columnSizingFeature,
   createColumnHelper,
   createSortedRowModel,
   rowSortingFeature,
@@ -18,22 +20,51 @@ import { formatContext, formatPricePerM } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
 
 const ROW_HEIGHT = 40;
-const GRID =
-  "grid grid-cols-[minmax(260px,1fr)_190px_190px_90px_170px] items-center";
 
 const features = tableFeatures({
   rowSortingFeature,
+  columnSizingFeature,
+  columnResizingFeature,
   sortedRowModel: createSortedRowModel(),
   sortFns: { alphanumeric: sortFn_alphanumeric, basic: sortFn_basic },
 });
 
 const helper = createColumnHelper<typeof features, Model>();
 
-function CapabilityBadge({ children }: { children: ReactNode }) {
+function CapabilityBadge({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title?: string;
+}) {
   return (
-    <span className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 text-xs text-text-3">
+    <span
+      title={title}
+      className="inline-flex h-5 shrink-0 items-center rounded-xs bg-bg-raised px-1.5 text-xs text-text-3"
+    >
       {children}
     </span>
+  );
+}
+
+// BadgeList caps a badge row at a count and folds the rest into "+N"
+// (full list in the title tooltip). The previous overflow-hidden clip
+// cut badges mid-word, which read as a label that does not exist.
+function BadgeList({ labels, max }: { labels: string[]; max: number }) {
+  const shown = labels.slice(0, max);
+  const extra = labels.length - shown.length;
+  return (
+    <>
+      {shown.map((label) => (
+        <CapabilityBadge key={label}>{label}</CapabilityBadge>
+      ))}
+      {extra > 0 && (
+        <CapabilityBadge title={labels.slice(max).join(", ")}>
+          +{extra}
+        </CapabilityBadge>
+      )}
+    </>
   );
 }
 
@@ -81,52 +112,77 @@ function promptPriceNumber(model: Model): number | undefined {
 }
 
 const columns = helper.columns([
-  helper.accessor("id", {
+  helper.accessor((row) => row.name ?? row.id, {
     id: "model",
-    header: "model",
+    header: "Model",
     sortFn: "alphanumeric",
+    size: 380,
+    minSize: 240,
   }),
-  helper.display({ id: "capabilities", header: "capabilities" }),
+  helper.display({
+    id: "capabilities",
+    header: "Capabilities",
+    size: 190,
+    minSize: 120,
+  }),
   // Sorting by the joined operation list groups the models that serve the
   // same set, which is the order a reader scanning for one of them wants.
   helper.accessor((row) => operationsOf(row).join(" "), {
     id: "operations",
-    header: "operations",
+    header: "Operations",
     sortFn: "alphanumeric",
+    size: 190,
+    minSize: 120,
   }),
   helper.accessor((row) => row.context_length ?? undefined, {
     id: "context",
-    header: "context",
+    header: "Context",
     sortFn: "basic",
     sortUndefined: "last",
+    size: 90,
+    minSize: 70,
   }),
   helper.accessor(promptPriceNumber, {
     id: "price",
-    header: "price / 1M",
+    header: "Price / 1M",
     sortFn: "basic",
     sortUndefined: "last",
+    size: 180,
+    minSize: 120,
   }),
 ]);
 
+// ModelCell puts the display name first (what a reader scans for) with
+// the routable id beside it in dim mono, aligned as one baseline row.
+// The id copies on hover; the name links to the detail page.
 function ModelCell({ model }: { model: Model }) {
+  const named = Boolean(model.name) && model.name !== model.id;
   return (
     <div className="group flex min-w-0 items-center gap-2">
       <Link
         to="/models/$modelId"
         params={{ modelId: model.id }}
         onClick={(event) => event.stopPropagation()}
-        className="flex min-w-0 items-center rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 transition-colors duration-150 ease-standard hover:border-border-2"
+        className="flex min-w-0 items-baseline gap-2"
       >
-        <span className="truncate font-mono text-xs text-text-1">{model.id}</span>
+        <span
+          className={`min-w-0 shrink-0 truncate ${
+            named
+              ? "max-w-[55%] text-sm text-text-1"
+              : "font-mono text-xs text-text-1"
+          }`}
+        >
+          {named ? model.name : model.id}
+        </span>
+        {named && (
+          <span className="min-w-0 truncate font-mono text-xs text-text-4">
+            {model.id}
+          </span>
+        )}
       </Link>
-      <span className="opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+      <span className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
         <CopyButton text={model.id} />
       </span>
-      {model.name && model.name !== model.id && (
-        <span className="hidden min-w-0 truncate text-xs text-text-4 lg:inline">
-          {model.name}
-        </span>
-      )}
     </div>
   );
 }
@@ -145,8 +201,8 @@ function PriceCell({ model }: { model: Model }) {
 }
 
 // ModelsTable renders the filtered catalog: TanStack Table owns column
-// order and sorting, TanStack Virtual keeps 400+ rows cheap through the
-// window scroller, and the header stays sticky above the virtual list.
+// order, sorting, and sizing; TanStack Virtual keeps 400+ rows cheap
+// through the window scroller; the header stays sticky above the list.
 export function ModelsTable({ models }: { models: Model[] }) {
   const navigate = useNavigate();
   const table = useTable({
@@ -154,8 +210,18 @@ export function ModelsTable({ models }: { models: Model[] }) {
     columns,
     data: models,
     getRowId: (model) => model.id,
+    columnResizeMode: "onChange",
     initialState: { sorting: [{ id: "model", desc: false }] },
   });
+
+  // The first column flexes to fill the viewport; the rest hold their
+  // dragged size. One template string serves the header and every row.
+  const template = table
+    .getAllLeafColumns()
+    .map((column, index) =>
+      index === 0 ? `minmax(${column.getSize()}px, 1fr)` : `${column.getSize()}px`,
+    )
+    .join(" ");
 
   const rows = table.getRowModel().rows;
   const listRef = useRef<HTMLDivElement>(null);
@@ -173,7 +239,8 @@ export function ModelsTable({ models }: { models: Model[] }) {
           <div
             role="row"
             key={headerGroup.id}
-            className={`${GRID} h-8 border-b border-border-1`}
+            className="grid h-8 items-center border-b border-border-1"
+            style={{ gridTemplateColumns: template }}
           >
             {headerGroup.headers.map((header) => {
               const sorted = header.column.getIsSorted();
@@ -189,7 +256,7 @@ export function ModelsTable({ models }: { models: Model[] }) {
                         ? "descending"
                         : undefined
                   }
-                  className={numeric ? "text-right" : ""}
+                  className={`relative ${numeric ? "text-right" : ""}`}
                 >
                   <button
                     type="button"
@@ -207,6 +274,21 @@ export function ModelsTable({ models }: { models: Model[] }) {
                       <ArrowUp className="size-3 opacity-0 transition-opacity group-hover:opacity-40" />
                     )}
                   </button>
+                  {header.column.getCanResize() && (
+                    <div
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={`Resize ${header.column.id} column`}
+                      onMouseDown={header.getResizeHandler()}
+                      onTouchStart={header.getResizeHandler()}
+                      onDoubleClick={() => header.column.resetSize()}
+                      className={`absolute -right-0.5 top-1/2 z-10 h-5 w-1 -translate-y-1/2 cursor-col-resize rounded-full transition-colors duration-150 ${
+                        header.column.getIsResizing()
+                          ? "bg-accent"
+                          : "hover:bg-border-3"
+                      }`}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -236,8 +318,9 @@ export function ModelsTable({ models }: { models: Model[] }) {
                   params: { modelId: model.id },
                 });
               }}
-              className={`${GRID} absolute left-0 top-0 w-full cursor-pointer border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover`}
+              className="absolute left-0 top-0 grid w-full cursor-pointer items-center border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover"
               style={{
+                gridTemplateColumns: template,
                 height: item.size,
                 transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
               }}
@@ -246,16 +329,13 @@ export function ModelsTable({ models }: { models: Model[] }) {
                 <ModelCell model={model} />
               </div>
               <div role="cell" className="flex gap-1 overflow-hidden px-2.5">
-                {capabilityLabels(model).map((label) => (
-                  <CapabilityBadge key={label}>{label}</CapabilityBadge>
-                ))}
+                <BadgeList labels={capabilityLabels(model)} max={3} />
               </div>
               <div role="cell" className="flex gap-1 overflow-hidden px-2.5">
-                {operationsOf(model).map((operation) => (
-                  <CapabilityBadge key={operation}>
-                    {operationLabel(operation)}
-                  </CapabilityBadge>
-                ))}
+                <BadgeList
+                  labels={operationsOf(model).map(operationLabel)}
+                  max={2}
+                />
               </div>
               <div
                 role="cell"

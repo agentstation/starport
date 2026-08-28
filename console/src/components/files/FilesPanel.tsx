@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Upload } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
-import { GhostButton, PrimaryButton, SELECT_CLASS } from "@/components/ui/Form";
+import { GhostButton, PrimaryButton } from "@/components/ui/Form";
+import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
   accessMessage,
@@ -245,18 +246,17 @@ export function FilesPanel() {
           <label className="sr-only" htmlFor="file-purpose">
             Purpose
           </label>
-          <select
+          <Select
             id="file-purpose"
             value={purpose}
             onChange={(event) => setPurpose(event.target.value as Purpose)}
-            className={SELECT_CLASS}
           >
             {PURPOSES.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
             ))}
-          </select>
+          </Select>
           <input
             ref={chooser}
             type="file"

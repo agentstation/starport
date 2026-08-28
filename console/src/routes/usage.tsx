@@ -17,6 +17,7 @@ import {
 } from "recharts";
 
 import { AXIS_TICK, CHART, ChartCard, ChartTip } from "@/components/ui/Chart";
+import { Select } from "@/components/ui/Select";
 import { SidePanel } from "@/components/ui/SidePanel";
 import {
   ApiError,
@@ -215,9 +216,14 @@ function StatusPill({ record }: { record: ActivityRecord }) {
       record.error_class?.replaceAll("_", " ") ?? "error";
     if (record.status_code === 402) label = "budget exhausted";
     if (record.status_code === 429) label = "rate limited";
+    // The pill can still run out of column; the tooltip always carries
+    // the whole phrase so a clipped label never reads as a shorter one.
     return (
-      <span className="inline-flex h-5 max-w-full items-center truncate rounded-full bg-error-tint px-2 text-xs font-medium text-error" title={title}>
-        {label}
+      <span
+        className="inline-flex h-5 max-w-full items-center rounded-full bg-error-tint px-2 text-xs font-medium text-error"
+        title={title ? `${label} · ${title}` : label}
+      >
+        <span className="truncate">{label}</span>
       </span>
     );
   }
@@ -263,6 +269,19 @@ function CacheCell({ status }: { status?: string }) {
 function truncateKeyId(id: string | undefined): string {
   if (!id) return "—";
   return id.length > 20 ? `${id.slice(0, 13)}…${id.slice(-4)}` : id;
+}
+
+// resolutionDiffers says whether the routed model is worth a second line.
+// Routing often only prefixes the provider (groq/compound-mini →
+// groq/groq/compound-mini); repeating that under every row reads as a
+// different model when it is the same one.
+function resolutionDiffers(record: ActivityRecord): boolean {
+  const used = record.model_used;
+  const requested = record.model_requested;
+  if (!used || !requested || used === requested) return false;
+  if (used === `${record.provider}/${requested}`) return false;
+  if (used.endsWith(`/${requested}`)) return false;
+  return true;
 }
 
 // Usage rows show absolute times when a range filter is active
@@ -363,7 +382,7 @@ function RequestDetail({
             </code>
           </DetailRow>
         )}
-        {record.model_used && record.model_used !== record.model_requested && (
+        {resolutionDiffers(record) && (
           <DetailRow label="Model used">
             <code className="break-all font-mono text-xs text-text-2">{record.model_used}</code>
           </DetailRow>
@@ -662,33 +681,33 @@ function UsagePage() {
             className={`${INPUT_CLASS} w-40 font-mono`}
           />
         )}
-        <select
+        <Select
+          uiSize="sm"
           aria-label="Filter by status"
           value={search.status ?? ""}
           onChange={(event) => setSearch({ status: event.target.value || undefined })}
-          className={INPUT_CLASS}
         >
-          <option value="">any status</option>
+          <option value="">Any status</option>
           {STATUSES.map((status) => (
             <option key={status} value={status}>
               {status}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
+          uiSize="sm"
           aria-label="Time range"
           value={range}
           onChange={(event) =>
             setSearch({ range: event.target.value === "24h" ? undefined : event.target.value })
           }
-          className={INPUT_CLASS}
         >
           {Object.entries(RANGE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
+        </Select>
         <span className="ml-auto text-xs tabular-nums text-text-3">
           {loading
             ? "loading…"
@@ -729,14 +748,17 @@ function UsagePage() {
                   {formatCount(records.length)}
                   {suffix}
                   {totals.errors > 0 && (
-                    <span className="ml-2 text-error">
-                      {formatCount(totals.errors)} err
-                    </span>
+                    <>
+                      <span className="mx-1.5 font-normal text-text-4">·</span>
+                      <span className="text-error">
+                        {formatCount(totals.errors)} errors
+                      </span>
+                    </>
                   )}
                 </>
               }
             >
-              <BarChart data={buckets} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+              <BarChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -777,7 +799,7 @@ function UsagePage() {
             </ChartCard>
 
             <ChartCard title="Tokens" value={`${formatCount(totals.tokens)}${suffix}`}>
-              <AreaChart data={buckets} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+              <AreaChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -837,7 +859,7 @@ function UsagePage() {
                 )
               }
             >
-              <AreaChart data={buckets} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+              <AreaChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -885,7 +907,7 @@ function UsagePage() {
               title="Latency"
               value={totals.avgLatency !== undefined ? `${formatMs(totals.avgLatency)} avg` : "—"}
             >
-              <LineChart data={buckets} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <LineChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -932,19 +954,19 @@ function UsagePage() {
           <div role="table" aria-rowcount={records.length} className="text-sm">
             <div role="rowgroup" className="sticky top-0 z-10 bg-bg-canvas">
               <div role="row" className={`${grid} h-8 border-b border-border-1`}>
-                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">time</div>
-                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">model</div>
+                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Time</div>
+                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Model</div>
                 {admin && (
-                  <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">key</div>
+                  <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Key</div>
                 )}
-                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">provider</div>
-                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">status</div>
-                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">tokens</div>
-                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Gateway-added latency: total handling minus provider time">overhead</div>
+                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Provider</div>
+                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Status</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Tokens</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Gateway-added latency: total handling minus provider time">Overhead</div>
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3" title="Time to first token (streamed requests)">TTFT</div>
-                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">latency</div>
-                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">cost</div>
-                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">cache</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Latency</div>
+                <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Cost</div>
+                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Cache</div>
               </div>
             </div>
             <div
@@ -979,7 +1001,7 @@ function UsagePage() {
                     </div>
                     <div role="cell" className="min-w-0 px-2.5">
                       <div className="truncate text-text-1">{record.model_requested ?? "—"}</div>
-                      {record.model_used && record.model_used !== record.model_requested && (
+                      {resolutionDiffers(record) && (
                         <div className="truncate font-mono text-xs text-text-4">
                           {record.model_used}
                         </div>

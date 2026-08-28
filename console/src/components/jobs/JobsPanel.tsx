@@ -6,8 +6,8 @@ import {
   INPUT_CLASS,
   GhostButton,
   PrimaryButton,
-  SELECT_CLASS,
 } from "@/components/ui/Form";
+import { Select } from "@/components/ui/Select";
 import {
   accessMessage,
   ApiError,
@@ -304,11 +304,10 @@ export function JobsPanel() {
         <label className="sr-only" htmlFor="job-model">
           Model
         </label>
-        <select
+        <Select
           id="job-model"
           value={model}
           onChange={(event) => setModel(event.target.value)}
-          className={SELECT_CLASS}
         >
           <option value="">Choose a model</option>
           {servers.map((option) => (
@@ -316,7 +315,7 @@ export function JobsPanel() {
               {option.id}
             </option>
           ))}
-        </select>
+        </Select>
         <label className="sr-only" htmlFor="job-prompt">
           Prompt
         </label>

@@ -10,8 +10,8 @@ import {
   INPUT_CLASS,
   PrimaryButton,
   RowAction,
-  SELECT_CLASS,
 } from "@/components/ui/Form";
+import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { SidePanel } from "@/components/ui/SidePanel";
 import {
@@ -128,21 +128,20 @@ function TenantDetail({
           label="Credential strategy"
           hint="Which credentials serve this account, and in which order."
         >
-          <select
+          <Select
             value={tenant.credential_strategy ?? "operator_first"}
             onChange={(event) =>
               strategy.mutate(event.target.value as CredentialStrategy)
             }
             disabled={strategy.isPending}
             aria-label="Credential strategy"
-            className={SELECT_CLASS}
           >
             {STRATEGIES.map((option) => (
               <option key={option} value={option}>
                 {CREDENTIAL_STRATEGY_LABELS[option]}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         {strategyError && (
           <p className="text-xs text-error">Update failed: {strategyError}</p>
@@ -265,20 +264,19 @@ function CreateTenantModal({
           />
         </Field>
         <Field label="Credential strategy">
-          <select
+          <Select
             value={strategy}
             onChange={(event) =>
               setStrategy(event.target.value as CredentialStrategy)
             }
             aria-label="Credential strategy"
-            className={SELECT_CLASS}
           >
             {STRATEGIES.map((option) => (
               <option key={option} value={option}>
                 {CREDENTIAL_STRATEGY_LABELS[option]}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         {error && <p className="text-sm text-error">{error}</p>}
       </div>
