@@ -63,6 +63,10 @@ type RerankResponse struct {
 type RerankUsage struct {
 	SearchUnits int `json:"search_units,omitempty"`
 	TotalTokens int `json:"total_tokens,omitempty"`
+	// Cost is what the gateway charged, in US dollars. OpenRouter states it on
+	// every rerank answer. A turn the catalog could not price omits it rather
+	// than reporting zero, because zero is a price a caller would believe.
+	Cost *float64 `json:"cost,omitempty"`
 }
 
 // RerankDecoding is one decoded OpenRouter rerank request with the unkept
@@ -130,10 +134,16 @@ func decodeRerankDocument(raw json.RawMessage) (string, error) {
 // EncodeRerank writes one canonical rerank answer in the OpenRouter shape. The
 // schema requires the document on every result, so the request is not optional
 // here the way it is on the /v1 route.
+//
+// The cost comes from the gateway rather than from the provider. A rerank
+// provider reports the units it billed and no money at all, so the dollar
+// figure is the gateway's own accounting and the caller gets it only when the
+// catalog priced the turn.
 func EncodeRerank(
 	response inference.RerankResponse,
 	request inference.RerankRequest,
 	provider string,
+	costUSD *float64,
 ) (RerankResponse, error) {
 	if err := response.Validate(request); err != nil {
 		return RerankResponse{}, err
@@ -157,6 +167,7 @@ func EncodeRerank(
 		Usage: RerankUsage{
 			SearchUnits: response.Usage.SearchUnits,
 			TotalTokens: response.Usage.TotalTokens,
+			Cost:        costUSD,
 		},
 	}, nil
 }

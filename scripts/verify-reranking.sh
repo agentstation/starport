@@ -156,14 +156,19 @@ check RNK-V13 "the planner refuses a model that serves no rerank offering" \
 check RNK-V14 "the refusal names the model and the operation rather than a provider error" \
   all_present 'ErrOperationUnsupported' -- internal/routing
 
-check RNK-V15 "a rerank turn records a search unit count" \
-  tests_all_present 'SearchUnits' -- internal/usage
+# Decision RNK-D19 moved the three seams below. The record field belongs to
+# internal/usage, but the meter that fills it and the bound that reads its
+# price both live where the request is, so a test in internal/usage would hold
+# an arithmetic no request runs through.
+check RNK-V15 "a rerank turn records a search unit count and a nonzero cost" \
+  tests_all_present 'SearchUnits' 'record.Cost' -- internal/proxy
 
 check RNK-V16 "a tenant at its spend bound is refused before the provider call" \
-  tests_all_present 'SearchUnits' -- internal/limits
+  tests_all_present 'LowestSearchUnitPrice' 'ErrSpendLimitExceeded' -- internal/proxy
 
 check RNK-V17 "a turn on an unpriced rerank offering fails rather than reporting zero" \
-  tests_all_present 'ErrRerankUnpriced' -- internal/usage internal/routing
+  tests_all_present 'ErrRerankUnpriced' 'RouteExclusionOperationUnpriced' 'CostReasonRerankUnpriced' \
+  -- internal/catalog internal/proxy
 
 check RNK-V18 "the console names the operation, the search unit price, and the document limit" \
   ts_all_present 'rerank' 'search_unit'

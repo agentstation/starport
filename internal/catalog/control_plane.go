@@ -38,6 +38,16 @@ var (
 	// real provider time, and a spend limit set on that tenant would never
 	// fire. Planning drops the operation instead of guessing a price.
 	ErrMissingPagePrice = errors.New("offering serves document recognition with no page price")
+	// ErrRerankUnpriced reports an offering that serves reranking and states
+	// no price in the unit it bills.
+	//
+	// Providers disagree on that unit. Cohere bills a search unit, which is one
+	// query against a bounded document count, and Voyage bills the tokens it
+	// reads. The offering names its own basis, so an offering that names one
+	// and publishes no price for it is a catalog defect rather than a known
+	// gap. Planning drops the operation, which keeps a silent zero out of the
+	// account's spend total.
+	ErrRerankUnpriced = errors.New("offering serves reranking with no price in the unit it bills")
 )
 
 // Source supplies one atomic Starmap catalog and generation pair.
@@ -443,15 +453,24 @@ func compatibleOfferingService(
 // billableOperation reports whether the catalog states the price this operation
 // is charged in.
 //
-// Only document recognition is checked, and that is the whole point rather than
-// an omission. Every other operation this build plans is billed in tokens or in
+// Two operations are checked, and the rest are skipped on purpose rather than
+// by omission. Every other operation this build plans is billed in tokens or in
 // requests, and a token price is already required of any offering the catalog
-// publishes. Recognition is billed by the page, and a page is a unit no token
-// price converts into.
+// publishes. Recognition is billed by the page and reranking by a unit the
+// offering itself names, and neither is a unit a token price converts into.
 func billableOperation(offering catalogs.ProviderOffering, operation catalogs.ProviderOperation) error {
-	if operation != catalogs.ProviderOperationDocumentsRecognition {
+	switch operation {
+	case catalogs.ProviderOperationDocumentsRecognition:
+		return billablePages(offering)
+	case catalogs.ProviderOperationRerank:
+		return billableRerank(offering)
+	default:
 		return nil
 	}
+}
+
+// billablePages reports whether the offering states what one page costs.
+func billablePages(offering catalogs.ProviderOffering) error {
 	if offering.Pricing == nil || offering.Pricing.Operations == nil {
 		return fmt.Errorf("%w: %s/%s", ErrMissingPagePrice, offering.ProviderID, offering.ProviderModelID)
 	}
@@ -460,6 +479,35 @@ func billableOperation(offering catalogs.ProviderOffering, operation catalogs.Pr
 		return fmt.Errorf("%w: %s/%s", ErrMissingPagePrice, offering.ProviderID, offering.ProviderModelID)
 	}
 	return nil
+}
+
+// billableRerank reports whether the offering states a price in the unit it
+// says it bills.
+//
+// The basis decides which price to read. An offering that states no basis is
+// unpriced here even when a token price sits beside it, because the basis
+// exists so a consumer reads the right one rather than guessing from whichever
+// price happens to be present.
+func billableRerank(offering catalogs.ProviderOffering) error {
+	unpriced := fmt.Errorf("%w: %s/%s", ErrRerankUnpriced, offering.ProviderID, offering.ProviderModelID)
+	if offering.Pricing == nil || offering.Pricing.Operations == nil {
+		return unpriced
+	}
+	switch offering.Pricing.Operations.RerankBasis {
+	case catalogs.ModelRerankBasisSearchUnit:
+		unit := offering.Pricing.Operations.SearchUnit
+		if unit == nil || *unit < 0 {
+			return unpriced
+		}
+		return nil
+	case catalogs.ModelRerankBasisToken:
+		if offering.Pricing.Tokens == nil || offering.Pricing.Tokens.Input == nil {
+			return unpriced
+		}
+		return nil
+	default:
+		return unpriced
+	}
 }
 
 func containsOperation(values []catalogs.ProviderOperation, value catalogs.ProviderOperation) bool {

@@ -288,10 +288,11 @@ type proxy struct {
 	// that resends the same attachment on every turn pays for it once.
 	extractions *document.Cache
 
-	// prices answers what one page of a document costs. It is unset in every
-	// deployment, where the catalog the request carries answers instead; a
-	// caller that reaches this proxy without a runtime lease sets it.
-	prices pagePrices
+	// prices answers what one page of a document and one search unit cost. It
+	// is unset in every deployment, where the catalog the request carries
+	// answers instead; a caller that reaches this proxy without a runtime lease
+	// sets it.
+	prices catalogPrices
 }
 
 // ProcessChatCompletion handles chat completion requests with routing

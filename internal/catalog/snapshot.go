@@ -341,6 +341,45 @@ func (s *RoutableSnapshot) PagePriceFor(
 	return s.routePagePrice(route)
 }
 
+// LowestSearchUnitPrice returns the cheapest search unit price this generation
+// publishes for one model's rerank offerings.
+//
+// It answers the question a spend budget has before a route exists: what is the
+// least this rerank call can cost? The planner picks the offering afterwards,
+// so no exact price is knowable yet, and the cheapest one is the only bound
+// that refuses no work the account could have paid for. An offering that bills
+// tokens rather than search units states no floor at all before the provider
+// has read the documents, so it answers nothing and the budget refuses nothing.
+func (s *RoutableSnapshot) LowestSearchUnitPrice(modelID string) (float64, bool) {
+	if s == nil {
+		return 0, false
+	}
+	lowest, found := 0.0, false
+	for _, route := range s.routes {
+		if string(route.DefinitionID) != modelID && route.ID() != modelID {
+			continue
+		}
+		if !route.Supports(catalogs.ProviderOperationRerank) {
+			continue
+		}
+		offering, err := s.Offering(route)
+		if err != nil || offering.Pricing == nil || offering.Pricing.Operations == nil {
+			continue
+		}
+		if offering.Pricing.Operations.RerankBasis != catalogs.ModelRerankBasisSearchUnit {
+			continue
+		}
+		unit := offering.Pricing.Operations.SearchUnit
+		if unit == nil || *unit < 0 {
+			continue
+		}
+		if !found || *unit < lowest {
+			lowest, found = *unit, true
+		}
+	}
+	return lowest, found
+}
+
 // LowestPagePrice returns the cheapest page price this generation publishes for
 // one operation.
 //
