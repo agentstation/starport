@@ -535,11 +535,17 @@ OpenAI-compatible:
 ```text
 POST   /v1/chat/completions
 POST   /v1/embeddings
+POST   /v1/rerank
 POST   /v1/images/generations
 POST   /v1/images/edits
 POST   /v1/audio/speech
 POST   /v1/audio/transcriptions
 POST   /v1/audio/translations
+POST   /v1/videos
+GET    /v1/videos
+GET    /v1/videos/{video_id}
+GET    /v1/videos/{video_id}/content
+POST   /v1/videos/{video_id}/cancel
 POST   /v1/files
 GET    /v1/files
 GET    /v1/files/{file_id}
@@ -554,9 +560,15 @@ OpenRouter-compatible:
 ```text
 POST /api/v1/chat/completions
 POST /api/v1/embeddings
+POST /api/v1/rerank
 POST /api/v1/images
 POST /api/v1/audio/speech
 POST /api/v1/audio/transcriptions
+POST /api/v1/videos
+GET  /api/v1/videos
+GET  /api/v1/videos/{video_id}
+GET  /api/v1/videos/{video_id}/content
+POST /api/v1/videos/{video_id}/cancel
 GET  /api/v1/models
 GET  /api/v1/models/{model}
 GET  /api/v1/models/{model}/endpoints
@@ -570,6 +582,10 @@ publishes no file store, so the five file paths stay on the OpenAI group alone.
 A read route needs `files:read`. A write route needs `files:write`. The scopes
 stay separate because a caller that names a stored document in a chat request
 reads it and never stores one.
+
+Reranking needs `rerank:write` and nothing else. It reads the documents the
+caller sent rather than a stored one, and it generates no message, so neither
+`chat:write` nor `files:read` covers it.
 
 ### Modalities and operations
 
@@ -600,6 +616,9 @@ operation. `internal/routing` holds the set this build can plan.
 | `audio-speech` | generates speech from text |
 | `audio-transcriptions` | writes recorded speech as text in its own language |
 | `audio-translations` | writes recorded speech as English text |
+| `videos-generations` | generates a video from a prompt, through a job |
+| `documents-recognition` | reads the text off a document page that carries none |
+| `rerank` | scores a document list against one query |
 
 A catalog fact that names an operation outside the set describes a gateway that
 has not shipped yet. The planner treats such a fact as inert rather than as

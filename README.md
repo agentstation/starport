@@ -309,6 +309,9 @@ Version 1 includes:
   nothing. The `recognition` engine sends a scanned page to a catalog model
   that serves `documents-recognition`, and the record reports what the pages
   cost.
+- Reranking at `/v1/rerank` and `/api/v1/rerank`, which scores a document list
+  against one query. It needs the `rerank:write` scope, and Starmap owns the
+  offerings, the billing basis, and the price.
 - Tenant-safe response caching.
 - Badger storage for one process and Valkey storage for multiple processes.
 

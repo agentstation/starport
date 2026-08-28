@@ -742,6 +742,57 @@ first node holds alone.
 the console settings page shows the same value. A deployment with no file
 storage reports `not configured`.
 
+## Reranking
+
+A rerank request scores a list of documents against one query and returns them
+in relevance order. It generates no message, so a rerank model answers no chat
+turn and appears in no chat model picker.
+
+### The routes and the scope
+
+```text
+POST /v1/rerank
+POST /api/v1/rerank
+```
+
+Both need `rerank:write`. The scope stands alone. A rerank request reads the
+documents the caller sent rather than a stored one, so neither `chat:write` nor
+`files:read` covers it.
+
+The two paths plan one route and reach one provider. They differ at the wire.
+The OpenAI path takes `return_documents` and echoes the ranked text only when
+the caller asks. The OpenRouter schema echoes the text on every result and has
+no flag.
+
+### The request and the answer
+
+A request names a model, a query, and the documents. `top_n` bounds how many
+results come back. A result carries the index of the document in the caller's
+list, its relevance score, and the text when the protocol states it.
+
+The gateway refuses a request whose document count is over the bound the chosen
+offering publishes. The refusal names the model and the count, which are the two
+things the caller can change.
+
+### Where the price comes from
+
+Starmap owns the `rerank` operation, the offerings, and the price. Two billing
+bases exist, and an offering states which one it uses.
+
+- A `search-unit` basis bills one query against a bounded document count.
+  Cohere meters this and publishes no token price at all.
+- A `token` basis bills the tokens the provider read. Voyage meters this.
+
+The basis decides which price the gateway reads. An offering that publishes no
+price in the unit it bills loses its rerank operation before planning, so no
+turn reaches it. A zero cost would let an account rerank without limit.
+
+The usage record carries `search_units` beside the token counts. The spend
+budget refuses a turn on a search-unit offering before the provider call. The
+estimate uses the lowest search unit price in the generation, because the
+planner chooses the offering afterward. A token-billed offering states no floor
+before it reads, so it refuses nothing early.
+
 ## Document Parsing
 
 A chat request attaches a document and names the `file-parser` plugin. Starport
