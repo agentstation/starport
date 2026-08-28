@@ -31,6 +31,10 @@ const (
 	// carries none. A document with a text layer needs no provider at all, so
 	// this operation names the case the in-process reader cannot answer.
 	OperationDocumentsRecognition Operation = "documents-recognition"
+	// OperationRerank scores a list of documents against one query and returns
+	// them in relevance order. It generates nothing, so a model that serves it
+	// serves no other operation.
+	OperationRerank Operation = "rerank"
 )
 
 // OperationSet is an immutable set of operation names. One set answers the
@@ -94,6 +98,7 @@ var servedOperations = NewOperationSet(
 	OperationAudioTranslations,
 	OperationVideosGenerations,
 	OperationDocumentsRecognition,
+	OperationRerank,
 )
 
 // ServedOperations returns the operations this build can plan.
