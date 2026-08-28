@@ -62,7 +62,7 @@ func (r *modelRouter) RouteVideoSubmit(
 	if req == nil || req.Request.Model == "" {
 		return nil, ErrNoModelsAvailable
 	}
-	call := mediaCall[*connectors.JobSubmission, *connectors.ProviderJob, connectors.ProviderJob]{
+	call := providerCall[*connectors.JobSubmission, *connectors.ProviderJob, connectors.ProviderJob]{
 		transport: jobSubmitTransport,
 		build: func() *connectors.JobSubmission {
 			return &connectors.JobSubmission{
@@ -76,7 +76,7 @@ func (r *modelRouter) RouteVideoSubmit(
 		convert: providerJobAnswer,
 	}
 	operation := routing.OperationVideosGenerations
-	return routeMedia(ctx, r, req.policy(req.Request.Model), operation,
+	return routeOperation(ctx, r, req.policy(req.Request.Model), operation,
 		connectors.ProviderJob.Clone, call.attempt(operation))
 }
 
@@ -113,7 +113,7 @@ func (r *modelRouter) RouteVideoContent(
 		return nil, err
 	}
 	reference := req.Request
-	call := mediaCall[*connectors.JobAssetRef, *connectors.JobAsset, connectors.JobAsset]{
+	call := providerCall[*connectors.JobAssetRef, *connectors.JobAsset, connectors.JobAsset]{
 		transport: jobAssetTransport,
 		build: func() *connectors.JobAssetRef {
 			return &connectors.JobAssetRef{
@@ -124,7 +124,7 @@ func (r *modelRouter) RouteVideoContent(
 		convert: providerJobAsset,
 	}
 	operation := routing.OperationVideosGenerations
-	return routeMedia(ctx, r, policy, operation,
+	return routeOperation(ctx, r, policy, operation,
 		connectors.JobAsset.Clone, call.attempt(operation))
 }
 
@@ -133,12 +133,12 @@ func (r *modelRouter) RouteVideoContent(
 // A key whose provider restriction no longer names the accepting provider
 // reaches no route at all. Answering "no models available" is the same answer
 // the key would get for a model it may not use.
-func acceptedJobPolicy(policy mediaPolicy, reference VideoJobReference) (mediaPolicy, error) {
+func acceptedJobPolicy(policy operationPolicy, reference VideoJobReference) (operationPolicy, error) {
 	if reference.Model == "" || reference.Provider == "" || reference.ProviderJobID == "" {
-		return mediaPolicy{}, ErrNoModelsAvailable
+		return operationPolicy{}, ErrNoModelsAvailable
 	}
 	if !policy.allows(reference.Provider) {
-		return mediaPolicy{}, ErrNoModelsAvailable
+		return operationPolicy{}, ErrNoModelsAvailable
 	}
 	policy.Provider = reference.Provider
 	return policy, nil
@@ -149,7 +149,7 @@ func acceptedJobPolicy(policy mediaPolicy, reference VideoJobReference) (mediaPo
 func (r *modelRouter) routeAcceptedJob(
 	ctx context.Context,
 	req *VideoJobRequest,
-	transport func(connectors.Connector, catalogs.EndpointType) (mediaInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool),
+	transport func(connectors.Connector, catalogs.EndpointType) (providerInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool),
 ) (*VideoJobResponse, error) {
 	if req == nil {
 		return nil, ErrNoModelsAvailable
@@ -158,7 +158,7 @@ func (r *modelRouter) routeAcceptedJob(
 	if err != nil {
 		return nil, err
 	}
-	call := mediaCall[*connectors.ProviderJobRef, *connectors.ProviderJob, connectors.ProviderJob]{
+	call := providerCall[*connectors.ProviderJobRef, *connectors.ProviderJob, connectors.ProviderJob]{
 		transport: transport,
 		build: func() *connectors.ProviderJobRef {
 			return &connectors.ProviderJobRef{ProviderJobID: req.Request.ProviderJobID}
@@ -166,7 +166,7 @@ func (r *modelRouter) routeAcceptedJob(
 		convert: providerJobAnswer,
 	}
 	operation := routing.OperationVideosGenerations
-	return routeMedia(ctx, r, policy, operation,
+	return routeOperation(ctx, r, policy, operation,
 		connectors.ProviderJob.Clone, call.attempt(operation))
 }
 
@@ -183,7 +183,7 @@ func providerJobAnswer(answer *connectors.ProviderJob) (connectors.ProviderJob, 
 func jobSubmitTransport(
 	connector connectors.Connector,
 	endpointType catalogs.EndpointType,
-) (mediaInvoke[*connectors.JobSubmission, *connectors.ProviderJob], bool) {
+) (providerInvoke[*connectors.JobSubmission, *connectors.ProviderJob], bool) {
 	runner, implemented := connectors.JobRunnerFor(connector, endpointType)
 	if !implemented {
 		return nil, false
@@ -194,7 +194,7 @@ func jobSubmitTransport(
 func jobPollTransport(
 	connector connectors.Connector,
 	endpointType catalogs.EndpointType,
-) (mediaInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool) {
+) (providerInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool) {
 	runner, implemented := connectors.JobRunnerFor(connector, endpointType)
 	if !implemented {
 		return nil, false
@@ -205,7 +205,7 @@ func jobPollTransport(
 func jobCancelTransport(
 	connector connectors.Connector,
 	endpointType catalogs.EndpointType,
-) (mediaInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool) {
+) (providerInvoke[*connectors.ProviderJobRef, *connectors.ProviderJob], bool) {
 	runner, implemented := connectors.JobRunnerFor(connector, endpointType)
 	if !implemented {
 		return nil, false
@@ -216,7 +216,7 @@ func jobCancelTransport(
 func jobAssetTransport(
 	connector connectors.Connector,
 	endpointType catalogs.EndpointType,
-) (mediaInvoke[*connectors.JobAssetRef, *connectors.JobAsset], bool) {
+) (providerInvoke[*connectors.JobAssetRef, *connectors.JobAsset], bool) {
 	runner, implemented := connectors.JobRunnerFor(connector, endpointType)
 	if !implemented {
 		return nil, false

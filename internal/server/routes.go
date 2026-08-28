@@ -37,6 +37,11 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Embeddings
 		r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.Embeddings.Create)
 
+		// Reranking. The scope stands alone rather than riding on
+		// "chat:write", because a rerank request reads a caller's own
+		// documents and a key that only writes chat should not.
+		r.With(s.requireAnyScope("rerank:write")).Post("/rerank", s.controllers.Rerank.Create)
+
 		// Images. An edit carries a source image, which is why it is a
 		// separate path and a multipart body rather than a flag.
 		r.With(s.requireAnyScope("images:write")).Post("/images/generations", s.controllers.Media.GenerateImages)
@@ -102,6 +107,10 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 
 			// Embeddings
 			r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.OpenRouterEmbeddings.Create)
+
+			// Reranking. OpenRouter publishes this path under its own
+			// prefix, and it plans the same route the /v1 path plans.
+			r.With(s.requireAnyScope("rerank:write")).Post("/rerank", s.controllers.OpenRouterRerank.Create)
 
 			// Media. OpenRouter publishes one image path, one speech path,
 			// and one transcription path, and no path for an image edit or a
@@ -302,6 +311,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 // OpenAI-Compatible API (v1):
 //   POST /v1/chat/completions   - Create chat completion
 //   POST /v1/embeddings         - Create embeddings
+//   POST /v1/rerank             - Rank documents against a query (rerank:write)
 //   POST /v1/images/generations - Generate images (images:write)
 //   POST /v1/images/edits       - Edit an image (images:write)
 //   POST /v1/audio/speech       - Synthesize speech (audio:write)
@@ -323,6 +333,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 // OpenRouter-Compatible API (api/v1):
 //   POST /api/v1/chat/completions           - Create routed chat completion
 //   POST /api/v1/embeddings                 - Create embeddings
+//   POST /api/v1/rerank                     - Rank documents (rerank:write)
 //   POST /api/v1/images                     - Generate images (images:write)
 //   POST /api/v1/audio/speech               - Synthesize speech (audio:write)
 //   POST /api/v1/audio/transcriptions       - Transcribe audio (audio:write)

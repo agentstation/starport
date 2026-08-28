@@ -245,6 +245,30 @@ func (s *RoutableSnapshot) Definitions() []catalogs.ModelDefinition {
 	return definitions
 }
 
+// Names reports whether this generation holds one model name at all. It reads
+// every offering the generation carries and not the routable subset, because a
+// name whose provider has no credential today is still a name the catalog
+// holds. A caller that used the routable set here would answer a configuration
+// gap with "no such model" and send an operator looking for a typo.
+//
+// It accepts the same two spellings ResolveRoute accepts: a provider-scoped
+// route ID and a canonical definition ID.
+func (s *RoutableSnapshot) Names(modelID string) bool {
+	if s == nil || strings.TrimSpace(modelID) == "" {
+		return false
+	}
+	for _, offering := range s.routability {
+		if string(offering.ProviderID)+"/"+string(offering.ProviderModelID) == modelID {
+			return true
+		}
+	}
+	if s.catalog == nil {
+		return false
+	}
+	_, err := s.catalog.Definition(catalogs.ModelDefinitionID(modelID))
+	return err == nil
+}
+
 // ResolveRoute resolves a provider-scoped route ID or a canonical definition
 // ID to the first stable routable offering.
 func (s *RoutableSnapshot) ResolveRoute(modelID string) (Route, bool) {

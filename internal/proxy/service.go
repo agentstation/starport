@@ -30,6 +30,10 @@ type Proxy interface {
 	// ProcessEmbeddings handles embedding generation requests
 	ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (*EmbeddingsResponse, error)
 
+	// ProcessRerank scores one document list against a query and answers with
+	// the caller's own document positions in ranked order.
+	ProcessRerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error)
+
 	// ProcessImages handles image generation and image edit requests.
 	ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error)
 
@@ -194,10 +198,10 @@ type EmbeddingsResponse struct {
 	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
 }
 
-// MediaRequest is one canonical media request plus gateway identity. The three
-// dedicated operations carry the same identity a chat request carries, so one
-// type states it once.
-type MediaRequest[Request any] struct {
+// OperationRequest is one canonical request plus gateway identity. Every
+// operation past chat carries the identity a chat request carries, so one type
+// states it once.
+type OperationRequest[Request any] struct {
 	Request Request
 
 	APIKey string `json:"-"`
@@ -212,11 +216,13 @@ type MediaRequest[Request any] struct {
 	Protocol     string               `json:"-"`
 }
 
-// MediaResponse is one canonical media result plus gateway route evidence. It
-// carries no cache fields, because a media answer is not cached: an image and
-// an audio file are large, and a caller that repeats a prompt expects a new
-// rendering rather than the previous one.
-type MediaResponse[Response any] struct {
+// OperationResponse is one canonical result plus gateway route evidence. It
+// carries no cache fields. A media answer is not cached, because an image and
+// an audio file are large and a caller that repeats a prompt expects a new
+// rendering rather than the previous one. A rerank answer is not cached
+// either, because its result names positions in one caller's own document
+// list and a second caller's list holds different text at those positions.
+type OperationResponse[Response any] struct {
 	Response Response
 
 	ModelUsed        string                           `json:"-"`
@@ -227,23 +233,38 @@ type MediaResponse[Response any] struct {
 	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
 }
 
+// MediaRequest routes one canonical media request. The shared carrier is
+// OperationRequest.
+type MediaRequest[Request any] = OperationRequest[Request]
+
+// MediaResponse is one media result. The shared carrier is OperationResponse:
+// reranking is not media, and a media name on the answer it returns would say
+// it was.
+type MediaResponse[Response any] = OperationResponse[Response]
+
+// RerankRequest is one gateway rerank request.
+type RerankRequest = OperationRequest[inference.RerankRequest]
+
+// RerankResponse is one gateway ranked document list.
+type RerankResponse = OperationResponse[inference.RerankResponse]
+
 // ImagesRequest is one gateway image generation or image edit request.
-type ImagesRequest = MediaRequest[inference.ImagesRequest]
+type ImagesRequest = OperationRequest[inference.ImagesRequest]
 
 // ImagesResponse is one gateway image result.
-type ImagesResponse = MediaResponse[inference.ImagesResponse]
+type ImagesResponse = OperationResponse[inference.ImagesResponse]
 
 // SpeechRequest is one gateway text-to-speech request.
-type SpeechRequest = MediaRequest[inference.SpeechRequest]
+type SpeechRequest = OperationRequest[inference.SpeechRequest]
 
 // SpeechResponse is one gateway speech result.
-type SpeechResponse = MediaResponse[inference.SpeechResponse]
+type SpeechResponse = OperationResponse[inference.SpeechResponse]
 
 // TranscriptionRequest is one gateway speech-to-text request.
-type TranscriptionRequest = MediaRequest[inference.TranscriptionRequest]
+type TranscriptionRequest = OperationRequest[inference.TranscriptionRequest]
 
 // TranscriptionResponse is one gateway transcript.
-type TranscriptionResponse = MediaResponse[inference.TranscriptionResponse]
+type TranscriptionResponse = OperationResponse[inference.TranscriptionResponse]
 
 // ModelsResponse represents a list of available models
 type ModelsResponse struct {

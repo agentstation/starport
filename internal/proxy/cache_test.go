@@ -325,7 +325,7 @@ func readAllEvents(t *testing.T, stream ChatCompletionStreamResponse) []inferenc
 }
 
 type mockProxyImpl struct {
-	unsupportedMediaProxy
+	unsupportedOperationProxy
 	calls              map[string]int
 	chatResponse       *ChatCompletionResponse
 	modelsResponse     *ModelsResponse
@@ -369,6 +369,11 @@ func (m *mockProxyImpl) ProcessChatCompletionStream(ctx context.Context, _ *Chat
 func (m *mockProxyImpl) ProcessEmbeddings(context.Context, *EmbeddingsRequest) (*EmbeddingsResponse, error) {
 	m.count("ProcessEmbeddings")
 	return m.embeddingsResponse, nil
+}
+
+func (m *mockProxyImpl) ProcessRerank(context.Context, *RerankRequest) (*RerankResponse, error) {
+	m.count("ProcessRerank")
+	return &RerankResponse{}, nil
 }
 
 func (m *mockProxyImpl) GetLogo(context.Context, view.LogoKind, string) ([]byte, error) {

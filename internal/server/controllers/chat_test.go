@@ -20,7 +20,7 @@ import (
 )
 
 type mockProxy struct {
-	unsupportedMedia
+	unsupportedOperations
 	chat     *proxy.ChatCompletionResponse
 	stream   proxy.ChatCompletionStreamResponse
 	err      error

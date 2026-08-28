@@ -124,7 +124,7 @@ func TestAnotherTenantsFileIsNotFoundBeforeAnyProviderCall(t *testing.T) {
 // retryingRouter runs the attempt hook several times for one request, the way
 // a real route does when the first provider fails.
 type retryingRouter struct {
-	unroutedMedia
+	unroutedOperations
 	attempts int
 }
 

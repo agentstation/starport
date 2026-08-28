@@ -30,6 +30,10 @@ type ModelRouter interface {
 	// credential, availability, and total-attempt policies as chat requests.
 	RouteEmbeddings(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error)
 
+	// RouteRerank scores one document list against a query through the same
+	// route, credential, availability, and total-attempt policies as chat.
+	RouteRerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error)
+
 	// RouteImages executes one image generation or image edit request.
 	RouteImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error)
 

@@ -8,125 +8,140 @@ import (
 	routepkg "github.com/agentstation/starport/internal/router"
 )
 
-// unroutedMedia answers the three media routes for a test router that
-// exercises a different path. A fake gains them by embedding it, so adding a
-// media operation to ModelRouter does not edit every fake in this package.
-type unroutedMedia struct{}
+// unroutedOperations answers every route past chat and embeddings for a test
+// router that exercises a different path. A fake gains them by embedding it,
+// so adding an operation to ModelRouter does not edit every fake in this
+// package.
+type unroutedOperations struct{}
 
-func (unroutedMedia) RouteImages(
+func (unroutedOperations) RouteRerank(
+	context.Context,
+	*routepkg.RerankRequest,
+) (*routepkg.RerankResponse, error) {
+	return nil, routepkg.ErrNoModelsAvailable
+}
+
+func (unroutedOperations) RouteImages(
 	context.Context,
 	*routepkg.ImagesRequest,
 ) (*routepkg.ImagesResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-func (unroutedMedia) RouteSpeech(
+func (unroutedOperations) RouteSpeech(
 	context.Context,
 	*routepkg.SpeechRequest,
 ) (*routepkg.SpeechResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-func (unroutedMedia) RouteTranscription(
+func (unroutedOperations) RouteTranscription(
 	context.Context,
 	*routepkg.TranscriptionRequest,
 ) (*routepkg.TranscriptionResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-func (unroutedMedia) RouteVideoSubmit(
+func (unroutedOperations) RouteVideoSubmit(
 	context.Context,
 	*routepkg.VideoSubmitRequest,
 ) (*routepkg.VideoJobResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-func (unroutedMedia) RouteVideoPoll(
+func (unroutedOperations) RouteVideoPoll(
 	context.Context,
 	*routepkg.VideoJobRequest,
 ) (*routepkg.VideoJobResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-func (unroutedMedia) RouteVideoCancel(
+func (unroutedOperations) RouteVideoCancel(
 	context.Context,
 	*routepkg.VideoJobRequest,
 ) (*routepkg.VideoJobResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-func (unroutedMedia) RouteVideoContent(
+func (unroutedOperations) RouteVideoContent(
 	context.Context,
 	*routepkg.VideoAssetRequest,
 ) (*routepkg.VideoAssetResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-func (unroutedMedia) RouteDocumentRecognition(
+func (unroutedOperations) RouteDocumentRecognition(
 	context.Context,
 	*routepkg.RecognitionRequest,
 ) (*routepkg.RecognitionResponse, error) {
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
-// unsupportedMediaProxy answers the three media operations for a Proxy mock
-// that exercises a different path.
-type unsupportedMediaProxy struct{}
+// unsupportedOperationProxy answers every operation past chat and embeddings
+// for a Proxy mock that exercises a different path.
+type unsupportedOperationProxy struct{}
 
-func (unsupportedMediaProxy) ProcessImages(
+func (unsupportedOperationProxy) ProcessRerank(
+	context.Context,
+	*RerankRequest,
+) (*RerankResponse, error) {
+	return nil, errUnsupportedOperation
+}
+
+func (unsupportedOperationProxy) ProcessImages(
 	context.Context,
 	*ImagesRequest,
 ) (*ImagesResponse, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMediaProxy) ProcessSpeech(
+func (unsupportedOperationProxy) ProcessSpeech(
 	context.Context,
 	*SpeechRequest,
 ) (*SpeechResponse, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMediaProxy) ProcessTranscription(
+func (unsupportedOperationProxy) ProcessTranscription(
 	context.Context,
 	*TranscriptionRequest,
 ) (*TranscriptionResponse, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMediaProxy) SubmitVideoJob(
+func (unsupportedOperationProxy) SubmitVideoJob(
 	context.Context,
 	*VideoSubmitRequest,
 ) (*VideoJobAnswer, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMediaProxy) PollVideoJob(
+func (unsupportedOperationProxy) PollVideoJob(
 	context.Context,
 	*VideoJobRequest,
 ) (*VideoJobAnswer, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMediaProxy) CancelVideoJob(
+func (unsupportedOperationProxy) CancelVideoJob(
 	context.Context,
 	*VideoJobRequest,
 ) (*VideoJobAnswer, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMediaProxy) FetchVideoAsset(
+func (unsupportedOperationProxy) FetchVideoAsset(
 	context.Context,
 	*VideoAssetRequest,
 ) (*VideoAsset, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
 // VideoJobRunner answers no provider side, so a record store handed this mock
 // refuses to start work rather than starting work nothing serves.
-func (unsupportedMediaProxy) VideoJobRunner(*VideoSubmitRequest) jobs.Runner {
+func (unsupportedOperationProxy) VideoJobRunner(*VideoSubmitRequest) jobs.Runner {
 	return nil
 }
 
-// errUnsupportedMedia is the answer a mock without a media path gives.
-var errUnsupportedMedia = errors.New("media operation is not part of this test")
+// errUnsupportedOperation is the answer a mock without this path gives.
+var errUnsupportedOperation = errors.New("operation is not part of this test")

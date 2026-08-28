@@ -119,7 +119,8 @@ Snapshot job owns them. Keep the list and the required CI jobs in step. A gate
 that no workflow runs cannot report a regression.
 
 `scripts/verify-openrouter-parity.sh` guards the shipped OpenRouter parity
-surface (conditions `ORP-V01` through `ORP-V16`) and runs in CI.
+surface (conditions `ORP-V01` through `ORP-V17`) and runs in CI. It grows only
+when OpenRouter publishes a route outside the media surface.
 
 `scripts/verify-auth-onboarding.sh` guards the separation of the credential
 ideas: a gateway API key authenticates and owns nothing else, a provider
@@ -163,9 +164,9 @@ page charge, the extraction cache, the spend bound, and the console view of
 what a page cost. It is terminal at 20 conditions (`PLG-V01` through `PLG-V20`) and
 runs in CI.
 
-That gate owns the media surface alone. `scripts/verify-openrouter-parity.sh`
-keeps its own terminal count of 16 and its own stated meaning, so a new media
-route does not move it. Re-open the split when OpenRouter changes a route that
+That gate owns the media surface alone. The parity gate
+`scripts/verify-openrouter-parity.sh` keeps its own count of 17 and its own
+stated meaning, so a new media route does not move it. Re-open the split when OpenRouter changes a route that
 the parity gate already guards.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
