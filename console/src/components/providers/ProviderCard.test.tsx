@@ -72,15 +72,15 @@ const entry: ProviderCatalogEntry = {
   description: "Fast inference on custom LPU hardware.",
 };
 
-test("renders the slug inline beside the name, not as its own row", () => {
+test("renders the id inline beside the name, not as its own row", () => {
   render(<ProviderCard status={runtime()} entry={entry} />);
 
   const name = screen.getByText("Groq");
-  const slug = screen.getByText("groq");
-  // Same flex row: the identity line holds logo, name, and slug together.
-  expect(slug.parentElement).toBe(name.parentElement);
-  expect(slug.className).toContain("font-mono");
-  expect(slug.className).not.toContain("rounded");
+  const id = screen.getByText("groq");
+  // Same flex row: the identity line holds logo, name, and id together.
+  expect(id.parentElement).toBe(name.parentElement);
+  expect(id.className).toContain("font-mono");
+  expect(id.className).not.toContain("rounded");
 });
 
 test("states the model count as 'N models · M available'", () => {

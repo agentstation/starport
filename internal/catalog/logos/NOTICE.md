@@ -48,3 +48,7 @@ Files: `svg/providers/hetzner.svg`.
 
 The simple-icons project dedicates its icons to the public domain under
 CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
+
+The path carries `fill="#D50C2D"`, the brand color simple-icons
+documents for Hetzner. The upstream file ships the bare glyph with no
+fill, which renders ink-black regardless of theme.

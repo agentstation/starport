@@ -116,8 +116,21 @@ const columns = helper.columns([
     id: "model",
     header: "Model",
     sortFn: "alphanumeric",
-    size: 380,
-    minSize: 240,
+    size: 260,
+    minSize: 160,
+  }),
+  // The routable id is its own column so every id starts at the same
+  // x-position; trailing it after the name left the ids ragged and
+  // unscannable. "ID" is the console-wide name for this string — the
+  // field both API surfaces return and callers copy into `model` —
+  // never "slug", which is OpenRouter doc vocabulary for the same
+  // thing (their wire field is also `id`).
+  helper.accessor((row) => row.id, {
+    id: "id",
+    header: "ID",
+    sortFn: "alphanumeric",
+    size: 260,
+    minSize: 160,
   }),
   helper.display({
     id: "capabilities",
@@ -152,34 +165,33 @@ const columns = helper.columns([
   }),
 ]);
 
-// ModelCell puts the display name first (what a reader scans for) with
-// the routable id beside it in dim mono, aligned as one baseline row.
-// The id copies on hover; the name links to the detail page.
+// ModelCell holds only the display name (what a reader scans for); the
+// routable id lives in its own aligned column. An unnamed model shows
+// its id here in mono, because a blank cell reads as a missing model.
 function ModelCell({ model }: { model: Model }) {
   const named = Boolean(model.name) && model.name !== model.id;
   return (
-    <div className="group flex min-w-0 items-center gap-2">
-      <Link
-        to="/models/$modelId"
-        params={{ modelId: model.id }}
-        onClick={(event) => event.stopPropagation()}
-        className="flex min-w-0 items-baseline gap-2"
-      >
-        <span
-          className={`min-w-0 shrink-0 truncate ${
-            named
-              ? "max-w-[55%] text-sm text-text-1"
-              : "font-mono text-xs text-text-1"
-          }`}
-        >
-          {named ? model.name : model.id}
-        </span>
-        {named && (
-          <span className="min-w-0 truncate font-mono text-xs text-text-4">
-            {model.id}
-          </span>
-        )}
-      </Link>
+    <Link
+      to="/models/$modelId"
+      params={{ modelId: model.id }}
+      onClick={(event) => event.stopPropagation()}
+      className={`block min-w-0 truncate ${
+        named ? "text-sm text-text-1" : "font-mono text-xs text-text-1"
+      }`}
+    >
+      {named ? model.name : model.id}
+    </Link>
+  );
+}
+
+// IdCell renders the routable id in dim mono with a copy affordance
+// that appears on row hover.
+function IdCell({ model }: { model: Model }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="min-w-0 truncate font-mono text-xs text-text-4">
+        {model.id}
+      </span>
       <span className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
         <CopyButton text={model.id} />
       </span>
@@ -318,7 +330,7 @@ export function ModelsTable({ models }: { models: Model[] }) {
                   params: { modelId: model.id },
                 });
               }}
-              className="absolute left-0 top-0 grid w-full cursor-pointer items-center border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover"
+              className="group absolute left-0 top-0 grid w-full cursor-pointer items-center border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover"
               style={{
                 gridTemplateColumns: template,
                 height: item.size,
@@ -327,6 +339,9 @@ export function ModelsTable({ models }: { models: Model[] }) {
             >
               <div role="cell" className="min-w-0 px-2.5">
                 <ModelCell model={model} />
+              </div>
+              <div role="cell" className="min-w-0 px-2.5">
+                <IdCell model={model} />
               </div>
               <div role="cell" className="flex gap-1 overflow-hidden px-2.5">
                 <BadgeList labels={capabilityLabels(model)} max={3} />

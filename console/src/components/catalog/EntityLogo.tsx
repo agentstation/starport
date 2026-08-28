@@ -78,6 +78,13 @@ export function EntityLogo({
     );
   }
 
+  // A mark that names no fill anywhere renders the SVG default —
+  // ink-black in every theme, invisible on dark. Catalog-carried
+  // glyphs arrive this way (models.dev ships bare simple-icons
+  // paths), so such a mark is tinted with the theme text color the
+  // same way declared currentColor marks are.
+  const bare = svg !== undefined && !svg.includes("fill");
+
   return (
     <span
       aria-hidden="true"
@@ -91,8 +98,8 @@ export function EntityLogo({
       // (mono-mark, tokens.css) so they sit beside the currentColor
       // glyphs as one set; color mode renders each mark as shipped.
       className={`${frame} text-text-1 [&_svg]:h-[1em] [&_svg]:w-[1em] ${
-        logoStyle === "mono" ? "mono-mark" : ""
-      }`}
+        bare ? "[&_svg]:fill-current" : ""
+      } ${logoStyle === "mono" ? "mono-mark" : ""}`}
       style={{ width: size, height: size, fontSize: size }}
     />
   );

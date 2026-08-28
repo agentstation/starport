@@ -48,6 +48,37 @@ test("tints monochrome marks through the theme text color", async () => {
   expect(screen.getByTestId("entity-mark").className).toContain("text-text-1");
 });
 
+test("tints a mark that names no fill at all", async () => {
+  // The catalog can carry a bare glyph (models.dev ships raw
+  // simple-icons paths); without a tint it renders the SVG default —
+  // ink-black in every theme.
+  stubFetch({
+    ok: true,
+    body: '<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>',
+  });
+  render(<EntityLogo kind="providers" id="hetzner" name="Hetzner" />);
+
+  await waitFor(() => {
+    expect(screen.getByTestId("entity-mark").querySelector("svg")).not.toBeNull();
+  });
+  expect(screen.getByTestId("entity-mark").className).toContain("fill-current");
+});
+
+test("leaves a declared fill alone", async () => {
+  stubFetch({
+    ok: true,
+    body: '<svg viewBox="0 0 24 24"><path fill="#D50C2D" d="M0 0h24v24H0z"/></svg>',
+  });
+  render(<EntityLogo kind="providers" id="fireworks-ai" name="Fireworks" />);
+
+  await waitFor(() => {
+    expect(screen.getByTestId("entity-mark").querySelector("svg")).not.toBeNull();
+  });
+  expect(screen.getByTestId("entity-mark").className).not.toContain(
+    "fill-current",
+  );
+});
+
 test("falls back to two-letter initials when no mark is bundled", async () => {
   stubFetch({ ok: false });
   render(<EntityLogo kind="authors" id="bria" name="Bria AI" />);

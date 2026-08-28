@@ -175,7 +175,7 @@ key). Sequential content uses flat sections with hairline dividers.
 
 ## Data display
 
-- **IDs, keys, slugs:** mono 13px inside a subtle chip (`--bg-raised`,
+- **IDs and keys** (the console says *ID*, never *slug*): mono 13px inside a subtle chip (`--bg-raised`,
   `--border-1`, radius 6) with a copy button on hover. Copy always confirms
   ("Copied") and never truncates silently — truncated values show head and
   tail: `STARPORT_02EH…C5KW`.
