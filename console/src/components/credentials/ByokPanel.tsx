@@ -2,16 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import {
-  CredentialFieldInputs,
-  credentialBody,
-  hasSecretValue,
-} from "@/components/credentials/CredentialFields";
-import {
-  Field,
-  PrimaryButton,
-  RowAction,
-} from "@/components/ui/Form";
+import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
+import { Field, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import {
   deleteBYOKCredential,
@@ -38,8 +30,8 @@ export function byokQueryKey(tenantId: string): string[] {
 
 export function ByokPanel({ tenantId }: { tenantId: string }) {
   const queryClient = useQueryClient();
+  const [adding, setAdding] = useState(false);
   const [provider, setProvider] = useState("");
-  const [values, setValues] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -68,19 +60,6 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
   const fields =
     catalog.data?.find((entry) => entry.id === provider)?.credential_fields ??
     [];
-
-  const apply = useMutation({
-    mutationFn: () =>
-      putBYOKCredential(tenantId, provider, credentialBody(fields, values)),
-    onSuccess: async () => {
-      say(`BYOK credential stored for ${nameOf(provider)}`);
-      setValues({});
-      setProvider("");
-      await reload();
-    },
-    onError: (error) =>
-      say(`Store failed: ${error instanceof Error ? error.message : error}`, true),
-  });
 
   const validate = useMutation({
     mutationFn: (target: string) => validateBYOKCredential(tenantId, target),
@@ -116,7 +95,10 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
   return (
     <section data-testid="byok-section" className="flex flex-col gap-3">
       <div>
-        <h3 className="text-sm font-medium text-text-2">BYOK credentials</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-medium text-text-2">BYOK credentials</h3>
+          <RowAction onClick={() => setAdding(true)}>add credential…</RowAction>
+        </div>
         <p className="mt-1 text-xs text-text-3">
           Provider credentials this account brings for itself, stored encrypted
           and never returned. They are separate from the deployment credential
@@ -181,48 +163,40 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
         </ul>
       )}
 
-      <div className="flex flex-col gap-2 border-t border-border-1 pt-3">
-        <Field label="Add a BYOK credential">
-          <Select
-            value={provider}
-            onChange={(event) => {
-              setProvider(event.target.value);
-              setValues({});
-            }}
-            aria-label="Provider"
-          >
-            <option value="">Select a provider…</option>
-            {unstored.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {providerLabel(entry.id, entry.name)}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        {provider &&
-          (fields.length === 0 ? (
-            <p className="text-xs text-text-4">
-              {nameOf(provider)} declares no credential contract, so
-              there is nothing to store.
-            </p>
-          ) : (
-            <>
-              <CredentialFieldInputs
-                fields={fields}
-                values={values}
-                onChange={(id, value) =>
-                  setValues((previous) => ({ ...previous, [id]: value }))
-                }
-              />
-              <PrimaryButton
-                onClick={() => apply.mutate()}
-                disabled={!hasSecretValue(fields, values) || apply.isPending}
-              >
-                Store credential
-              </PrimaryButton>
-            </>
-          ))}
-      </div>
+      {adding && (
+        <CredentialApplyModal
+          key={provider}
+          title="Add a BYOK credential"
+          description="Stored against this account, encrypted and never returned. Only this account's requests use it."
+          fields={fields}
+          applyLabel="Store credential"
+          ready={provider !== ""}
+          apply={async (body) => {
+            await putBYOKCredential(tenantId, provider, body);
+            await reload();
+          }}
+          validate={() => validateBYOKCredential(tenantId, provider)}
+          onClose={() => {
+            setAdding(false);
+            setProvider("");
+          }}
+        >
+          <Field label="Provider">
+            <Select
+              value={provider}
+              onChange={(event) => setProvider(event.target.value)}
+              aria-label="Provider"
+            >
+              <option value="">Select a provider…</option>
+              {unstored.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {providerLabel(entry.id, entry.name)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </CredentialApplyModal>
+      )}
     </section>
   );
 }

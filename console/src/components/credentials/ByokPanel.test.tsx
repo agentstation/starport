@@ -45,6 +45,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       gateway.stored.push({ tenant, provider, body });
       return {};
     },
+    validateBYOKCredential: async () => ({ valid: true }),
   };
 });
 
@@ -73,6 +74,9 @@ test("stores a credential against the account, not the deployment", async () => 
     ).toBeTruthy(),
   );
 
+  // The add flow is a dialog: pick the provider, paste the secret, and the
+  // store is validated before the dialog closes.
+  fireEvent.click(screen.getByText("add credential…"));
   fireEvent.change(screen.getByLabelText("Provider"), {
     target: { value: "groq" },
   });
@@ -88,6 +92,9 @@ test("stores a credential against the account, not the deployment", async () => 
     provider: "groq",
     body: { credentials: { api_key: "gsk-tenant-secret" } },
   });
+  await waitFor(() =>
+    expect(screen.getByText(/Applied and validated/)).toBeTruthy(),
+  );
 });
 
 // This is the one screen that says BYOK. A reader arriving here has to be able
@@ -115,6 +122,7 @@ test("offers only the providers this account has not covered", async () => {
   mount("acme");
 
   await waitFor(() => expect(screen.getByText("Groq")).toBeTruthy());
+  fireEvent.click(screen.getByText("add credential…"));
   const options = screen.getByLabelText("Provider").querySelectorAll("option");
   expect([...options].map((option) => option.getAttribute("value"))).toEqual([
     "",

@@ -14,8 +14,8 @@ import {
   OfferingsTable,
   operatorEnvNames,
   reachableSummary,
-  policyChips,
-  PolicyChips,
+  policyFacts,
+  PolicySummary,
 } from "./ProviderDetail";
 
 // Unit tests run outside a live router: Link renders as a plain anchor
@@ -51,11 +51,11 @@ afterEach(() => {
   cleanup();
 });
 
-// --- Policy chips
+// --- Data policy summary
 
-test("maps declared policies and headquarters to chips", () => {
+test("maps declared policies and headquarters to labeled facts", () => {
   expect(
-    policyChips({
+    policyFacts({
       id: "groq",
       headquarters: "United States",
       policies: {
@@ -66,17 +66,52 @@ test("maps declared policies and headquarters to chips", () => {
       },
     }),
   ).toEqual([
-    "no data retention",
-    "no training on data",
-    "retention: 30 days",
-    "moderated",
-    "HQ: United States",
+    // Retention prose is the full answer: the boolean never renders beside it.
+    { label: "Retention", value: "30 days" },
+    { label: "Training", value: "Does not train on your data" },
+    { label: "Moderation", value: "Moderated by the provider" },
+    { label: "Headquarters", value: "United States" },
+  ]);
+});
+
+test("falls back to the retention verdict and links policy documents", () => {
+  expect(
+    policyFacts({
+      id: "groq",
+      policies: {
+        retains_data: true,
+        privacy_policy_url: "https://example.invalid/privacy",
+      },
+    }),
+  ).toEqual([
+    { label: "Retention", value: "Retains API data" },
+    {
+      label: "Privacy policy",
+      value: "https://example.invalid/privacy",
+      href: "https://example.invalid/privacy",
+    },
   ]);
 });
 
 test("renders nothing when no policy facts are declared", () => {
-  const { container } = render(<PolicyChips entry={{ id: "groq" }} />);
+  const { container } = render(<PolicySummary entry={{ id: "groq" }} />);
   expect(container.innerHTML).toBe("");
+});
+
+test("renders each fact as a label · value row", () => {
+  render(
+    <PolicySummary
+      entry={{
+        id: "groq",
+        policies: { retention: "30 days", trains_on_data: false },
+      }}
+    />,
+  );
+
+  const summary = screen.getByTestId("policy-summary");
+  expect(summary.textContent).toContain("Retention");
+  expect(summary.textContent).toContain("30 days");
+  expect(summary.textContent).toContain("Does not train on your data");
 });
 
 // --- Environment credential panel
@@ -112,7 +147,10 @@ test("states a usable credential without a fix-it path", () => {
     />,
   );
 
-  expect(screen.getByText(/Read from the gateway environment/)).toBeDefined();
+  // The sentence names the variables the value came from, so "set" is
+  // never ambiguous about where.
+  expect(screen.getByText("GROQ_API_KEY")).toBeDefined();
+  expect(container.textContent).toContain("in the gateway environment");
   noKeysLink(container);
 });
 
