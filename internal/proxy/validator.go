@@ -127,6 +127,43 @@ func ValidateEmbeddingsRequest(req *EmbeddingsRequest) error {
 	return nil
 }
 
+// ValidateRerankRequest checks one canonical rerank request. The codec already
+// refuses an empty query and an empty document list, so this guard covers the
+// caller the codec does not cover: a gateway-internal one that builds the
+// request itself.
+func ValidateRerankRequest(req *RerankRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	request := req.Request
+	if request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if request.Query == "" {
+		return validationError("query", "query is required")
+	}
+	if len(request.Documents) == 0 {
+		return validationError("documents", "documents is required")
+	}
+	for index, document := range request.Documents {
+		if document == "" {
+			return validationError(
+				fmt.Sprintf("documents[%d]", index), "document cannot be empty",
+			)
+		}
+	}
+	// A result count of zero asks for a ranking the caller cannot read, and a
+	// negative one asks for nothing at all. Both reach a provider as a paid
+	// error, so they stop here.
+	if request.TopN != nil && *request.TopN < 1 {
+		return validationError("top_n", "top_n must be at least 1")
+	}
+	if request.MaxTokensPerDocument != nil && *request.MaxTokensPerDocument < 1 {
+		return validationError("max_tokens_per_doc", "max_tokens_per_doc must be at least 1")
+	}
+	return nil
+}
+
 // ValidateImagesRequest checks one image generation or image edit request.
 func ValidateImagesRequest(req *ImagesRequest) error {
 	if req == nil {

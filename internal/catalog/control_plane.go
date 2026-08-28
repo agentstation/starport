@@ -21,6 +21,12 @@ var (
 	ErrCatalogSourceRequired = errors.New("catalog source is required")
 	// ErrCatalogRequired means that a Starmap state has no immutable catalog.
 	ErrCatalogRequired = errors.New("catalog state must contain a catalog")
+	// ErrModelNotCatalogued reports a model name the retained generation does
+	// not hold. It is separate from an unreachable model because the two have
+	// different answers: a name the catalog never held is the caller's to
+	// correct, and a catalogued model with no reachable provider is the
+	// gateway's to report.
+	ErrModelNotCatalogued = errors.New("model is not in the catalog")
 	// ErrCatalogGenerationRequired means that a Starmap state has no generation identity.
 	ErrCatalogGenerationRequired = errors.New("catalog state must contain a generation ID")
 	// ErrMissingPagePrice reports an offering that serves document recognition

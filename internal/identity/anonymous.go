@@ -22,6 +22,7 @@ func DefaultAnonymousScopes() []string {
 	return []string{
 		"chat:write",
 		"embeddings:write",
+		"rerank:write",
 		"images:write",
 		"audio:write",
 		"videos:write",

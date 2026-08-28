@@ -56,7 +56,7 @@ func (p *proxy) SubmitVideoJob(ctx context.Context, req *VideoSubmitRequest) (*V
 	if err := ValidateVideoJobRequest(req); err != nil {
 		return nil, err
 	}
-	return videoJobAnswer(processMedia(ctx, req, req.Request.Model, p.router.RouteVideoSubmit))
+	return videoJobAnswer(processOperation(ctx, req, req.Request.Model, p.router.RouteVideoSubmit))
 }
 
 // PollVideoJob asks the provider that accepted a job where it got to.
@@ -64,7 +64,7 @@ func (p *proxy) PollVideoJob(ctx context.Context, req *VideoJobRequest) (*VideoJ
 	if err := ValidateVideoJobReference(req); err != nil {
 		return nil, err
 	}
-	return videoJobAnswer(processMedia(ctx, req, req.Request.Model, p.router.RouteVideoPoll))
+	return videoJobAnswer(processOperation(ctx, req, req.Request.Model, p.router.RouteVideoPoll))
 }
 
 // CancelVideoJob asks the provider that accepted a job to stop it.
@@ -72,7 +72,7 @@ func (p *proxy) CancelVideoJob(ctx context.Context, req *VideoJobRequest) (*Vide
 	if err := ValidateVideoJobReference(req); err != nil {
 		return nil, err
 	}
-	return videoJobAnswer(processMedia(ctx, req, req.Request.Model, p.router.RouteVideoCancel))
+	return videoJobAnswer(processOperation(ctx, req, req.Request.Model, p.router.RouteVideoCancel))
 }
 
 // FetchVideoAsset reads the finished output of one accepted job.
@@ -80,7 +80,7 @@ func (p *proxy) FetchVideoAsset(ctx context.Context, req *VideoAssetRequest) (*V
 	if err := ValidateVideoAssetReference(req); err != nil {
 		return nil, err
 	}
-	result, err := processMedia(ctx, req, req.Request.Model, p.router.RouteVideoContent)
+	result, err := processOperation(ctx, req, req.Request.Model, p.router.RouteVideoContent)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
@@ -225,6 +226,14 @@ func errorShape(err error) (status int, errorType, message string, param *string
 	// A file_id this account does not hold is the same caller error, and it
 	// reads the same whether the identifier is unknown or belongs elsewhere.
 	if errors.Is(err, proxy.ErrStoredFileNotFound) {
+		return http.StatusNotFound, errorTypeNotFound, err.Error(), nil
+	}
+
+	// A model name the retained catalog generation does not hold is a caller
+	// error about a name. It answers 404 rather than the 503 every other
+	// routing failure answers, because "try again later" is wrong advice for a
+	// model that no wait will produce.
+	if errors.Is(err, catalog.ErrModelNotCatalogued) {
 		return http.StatusNotFound, errorTypeNotFound, err.Error(), nil
 	}
 

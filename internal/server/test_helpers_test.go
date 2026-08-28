@@ -9,6 +9,7 @@ import (
 
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/blob"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
@@ -33,6 +34,11 @@ type testServerConfig struct {
 	masterKey          []byte
 	providerOperations controllers.ProviderOperations
 	blobs              blob.Store
+	// routableCatalog gives the registry the catalog generation a running
+	// gateway holds. Without it the registry carries no snapshot, and a route
+	// test cannot separate a model name no catalog holds from a gateway that
+	// has not read a catalog yet.
+	routableCatalog bool
 }
 
 type testRegistryAdapter struct{ registry *registry.Registry }
@@ -69,6 +75,13 @@ func withTestProviderOperations(operations controllers.ProviderOperations) testS
 // that needs a failing store, or one it can inspect, supplies its own.
 func withTestBlobStore(store blob.Store) testServerOption {
 	return func(config *testServerConfig) { config.blobs = store }
+}
+
+// withRoutableCatalog composes the registry against a real catalog generation.
+// A test that asserts what the gateway answers for one model name needs it,
+// because the answer differs when no generation is loaded.
+func withRoutableCatalog() testServerOption {
+	return func(config *testServerConfig) { config.routableCatalog = true }
 }
 
 type staticTestProviderOperations struct{}
@@ -133,6 +146,13 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	}
 
 	reg := registry.NewEmpty()
+	if testConfig.routableCatalog {
+		plane, planeErr := runtimecatalog.Open(client)
+		if planeErr != nil {
+			tb.Fatal(planeErr)
+		}
+		reg = registry.NewEmptyWithCatalog(plane)
+	}
 	mockConfig := connectors.ProviderConfig{BaseURL: "http://mock"}
 	if err := reg.Register("mock", connectors.NewMockConnector(mockConfig)); err != nil {
 		tb.Fatal(err)

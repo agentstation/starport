@@ -46,7 +46,7 @@ func (r *recordingUsageRepository) all() []usage.Record {
 
 // usageEvidenceRouter returns a fixed routed response with route evidence.
 type usageEvidenceRouter struct {
-	unroutedMedia
+	unroutedOperations
 	response *routepkg.Response
 	stream   execution.ManagedStream
 	err      error

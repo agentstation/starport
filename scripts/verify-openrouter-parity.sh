@@ -57,6 +57,11 @@ check ORP-V15 "budget exhaustion has a 402 regression test" \
   grep_q 'TestSpendBudgetExhaustionReturns402' internal/server
 check ORP-V16 "chat page has a comparison mode" \
   test -f console/src/components/chat/Compare.tsx
+# OpenRouter publishes POST /api/v1/rerank, so the parity surface names it.
+# The media routes stay with scripts/verify-model-modalities.sh, which owns
+# them and keeps its own terminal count.
+check ORP-V17 "POST /api/v1/rerank is registered on the OpenRouter family" \
+  grep_q 'OpenRouterRerank' internal/server/routes.go
 
 printf 'Summary: %d passed, %d failed\n' "$pass" "$fail"
 test "$fail" -eq 0

@@ -303,6 +303,13 @@ func (s *cachedService) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRe
 // audio file is large and a caller that repeats a prompt expects a new
 // rendering, so there is nothing here to cache.
 
+// ProcessRerank routes one rerank request without caching it. A rerank result
+// names positions in one caller's own document list, so a second caller with a
+// different list would read the first caller's ranking against its own text.
+func (s *cachedService) ProcessRerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error) {
+	return s.service.ProcessRerank(ctx, req)
+}
+
 // ProcessImages routes one image request without caching it.
 func (s *cachedService) ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error) {
 	return s.service.ProcessImages(ctx, req)

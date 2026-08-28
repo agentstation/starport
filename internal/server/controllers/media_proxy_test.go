@@ -8,65 +8,72 @@ import (
 	"github.com/agentstation/starport/internal/proxy"
 )
 
-// unsupportedMedia answers the three media operations for a mock that
-// exercises a different controller. A mock gains them by embedding it, so
-// adding a media operation to proxy.Proxy does not edit every mock here.
-type unsupportedMedia struct{}
+// unsupportedOperations answers every operation past chat and embeddings for a
+// mock that exercises a different controller. A mock gains them by embedding
+// it, so adding an operation to proxy.Proxy does not edit every mock here.
+type unsupportedOperations struct{}
 
-func (unsupportedMedia) ProcessImages(
+func (unsupportedOperations) ProcessRerank(
+	context.Context,
+	*proxy.RerankRequest,
+) (*proxy.RerankResponse, error) {
+	return nil, errUnsupportedOperation
+}
+
+func (unsupportedOperations) ProcessImages(
 	context.Context,
 	*proxy.ImagesRequest,
 ) (*proxy.ImagesResponse, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMedia) ProcessSpeech(
+func (unsupportedOperations) ProcessSpeech(
 	context.Context,
 	*proxy.SpeechRequest,
 ) (*proxy.SpeechResponse, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMedia) ProcessTranscription(
+func (unsupportedOperations) ProcessTranscription(
 	context.Context,
 	*proxy.TranscriptionRequest,
 ) (*proxy.TranscriptionResponse, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMedia) SubmitVideoJob(
+func (unsupportedOperations) SubmitVideoJob(
 	context.Context,
 	*proxy.VideoSubmitRequest,
 ) (*proxy.VideoJobAnswer, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMedia) PollVideoJob(
+func (unsupportedOperations) PollVideoJob(
 	context.Context,
 	*proxy.VideoJobRequest,
 ) (*proxy.VideoJobAnswer, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
 // VideoJobRunner answers no provider side, so a record store handed this mock
 // refuses to start work rather than starting work nothing serves.
-func (unsupportedMedia) VideoJobRunner(*proxy.VideoSubmitRequest) jobs.Runner {
+func (unsupportedOperations) VideoJobRunner(*proxy.VideoSubmitRequest) jobs.Runner {
 	return nil
 }
 
-func (unsupportedMedia) CancelVideoJob(
+func (unsupportedOperations) CancelVideoJob(
 	context.Context,
 	*proxy.VideoJobRequest,
 ) (*proxy.VideoJobAnswer, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-func (unsupportedMedia) FetchVideoAsset(
+func (unsupportedOperations) FetchVideoAsset(
 	context.Context,
 	*proxy.VideoAssetRequest,
 ) (*proxy.VideoAsset, error) {
-	return nil, errUnsupportedMedia
+	return nil, errUnsupportedOperation
 }
 
-// errUnsupportedMedia is the answer a mock without a media path gives.
-var errUnsupportedMedia = errors.New("media operation is not part of this test")
+// errUnsupportedOperation is the answer a mock without a media path gives.
+var errUnsupportedOperation = errors.New("media operation is not part of this test")

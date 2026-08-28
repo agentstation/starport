@@ -16,7 +16,7 @@ import (
 
 // refusingRouter answers every route with the planner's modality refusal. It
 // stands in for a catalog whose models all read text alone.
-type refusingRouter struct{ unroutedMedia }
+type refusingRouter struct{ unroutedOperations }
 
 func (refusingRouter) SelectModel(context.Context, *routepkg.Request) (string, connectors.Connector, error) {
 	return "", nil, routingModalityRefusal()

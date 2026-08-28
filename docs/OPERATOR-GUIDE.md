@@ -315,6 +315,8 @@ Each route reads its own scope:
 - Chat needs `chat:write` or wildcard scope.
 - Model discovery needs `models:read`.
 - Embeddings need `embeddings:write`, `chat:write`, or wildcard scope.
+- Reranking needs `rerank:write`. The scope stands alone, because a rerank
+  request reads the caller's own documents.
 - Image generation and image edits need `images:write`.
 - Speech, transcription, and translation need `audio:write`.
 - Video jobs need `videos:write` on each of their five routes.

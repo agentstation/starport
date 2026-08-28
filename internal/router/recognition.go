@@ -35,21 +35,21 @@ func (r *modelRouter) RouteDocumentRecognition(
 	if req == nil || !req.Request.Document.Present() {
 		return nil, ErrNoModelsAvailable
 	}
-	call := mediaCall[*connectors.RecognitionRequest, *connectors.RecognitionResponse, inference.RecognitionResponse]{
+	call := providerCall[*connectors.RecognitionRequest, *connectors.RecognitionResponse, inference.RecognitionResponse]{
 		transport: recognitionTransport,
 		build: func() *connectors.RecognitionRequest {
 			return connectors.RecognitionRequestFromInference(req.Request)
 		},
 		convert: connectors.RecognitionResponseToInference,
 	}
-	return routeMedia(ctx, r, req.policy(req.Request.Model), routing.OperationDocumentsRecognition,
+	return routeOperation(ctx, r, req.policy(req.Request.Model), routing.OperationDocumentsRecognition,
 		inference.RecognitionResponse.Clone, call.attempt(routing.OperationDocumentsRecognition))
 }
 
 func recognitionTransport(
 	connector connectors.Connector,
 	endpointType catalogs.EndpointType,
-) (mediaInvoke[*connectors.RecognitionRequest, *connectors.RecognitionResponse], bool) {
+) (providerInvoke[*connectors.RecognitionRequest, *connectors.RecognitionResponse], bool) {
 	recognizer, implemented := connectors.DocumentRecognizerFor(connector, endpointType)
 	if !implemented {
 		return nil, false
