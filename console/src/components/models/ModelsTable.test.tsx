@@ -64,13 +64,19 @@ test("virtualizes the catalog: 422 models render a bounded number of rows", () =
   expect(elapsed).toBeLessThan(1000);
 });
 
-test("the model id links to the detail page", () => {
+test("the model name links to the detail page and the id has its own cell", () => {
   render(<ModelsTable models={catalog(3)} />);
 
-  const link = screen.getByText("author-0/model-0").closest("a");
+  const link = screen.getByText("Model 0").closest("a");
   expect(link?.getAttribute("href")).toBe(
     "/models/$modelId".replace("$modelId", "author-0/model-0"),
   );
+
+  // The routable id renders in its own aligned column, not inside the
+  // name link.
+  const id = screen.getByText("author-0/model-0");
+  expect(id.closest("a")).toBeNull();
+  expect(id.closest('[role="cell"]')).not.toBeNull();
 });
 
 // RNK-V18. A rerank model answers no chat turn and reaches its own route, so a
@@ -135,7 +141,8 @@ test("an operation this console has never seen renders under its catalog name", 
     />,
   );
 
-  const row = screen.getByText("acme/futurist").closest('[role="row"]');
+  // An unnamed model shows its id in both the Model and ID cells.
+  const row = screen.getAllByText("acme/futurist")[0]?.closest('[role="row"]');
   expect(row?.textContent).toContain("holograms projections");
 });
 

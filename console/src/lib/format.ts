@@ -129,7 +129,7 @@ export function formatUnitPrice(value: string | undefined): string | null {
 
 // providerLabel is the one place provider display names resolve. The
 // catalog name wins; the raw provider id is the fallback so unknown or
-// unfetched slugs still render. Never case-transform the id: casing is
+// unfetched ids still render. Never case-transform the id: casing is
 // a catalog fact, not a console guess.
 export function providerLabel(
   id: string | undefined,

@@ -62,7 +62,7 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
   // The catalog names both halves of this panel: what a provider's credential
   // is made of, and what the provider is called. A stored record carries only
   // the id, so the list resolves the name the same way the add control does
-  // rather than showing a slug beside a display name.
+  // rather than showing an id beside a display name.
   const nameOf = (id: string) =>
     providerLabel(id, catalog.data?.find((entry) => entry.id === id)?.name);
   const fields =
