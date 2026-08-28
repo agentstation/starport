@@ -111,7 +111,7 @@ func (h *RerankController) writeRerank(
 	decoding rerankDecoding,
 ) error {
 	if h.protocol == ProtocolOpenRouter {
-		encoded, err := openrouter.EncodeRerank(resp.Response, decoding.request, resp.ProviderUsed)
+		encoded, err := openrouter.EncodeRerank(resp.Response, decoding.request, resp.ProviderUsed, rerankCostUSD(resp))
 		if err != nil {
 			h.writeError(w, err)
 			return err
@@ -127,4 +127,15 @@ func (h *RerankController) writeRerank(
 		return err
 	}
 	return openai.WriteJSON(w, http.StatusOK, encoded)
+}
+
+// rerankCostUSD states the gateway's own accounting in the unit the OpenRouter
+// usage block names. A turn nothing priced reports no cost rather than a zero
+// one, because a caller reading zero would take it for a free request.
+func rerankCostUSD(resp *proxy.RerankResponse) *float64 {
+	if resp.Cost == nil {
+		return nil
+	}
+	usd := float64(resp.Cost.NanoUSD) / 1e9
+	return &usd
 }

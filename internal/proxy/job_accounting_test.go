@@ -131,7 +131,7 @@ func TestAnOfferingThatPricesNoVideoWithdrawsTheWholeCost(t *testing.T) {
 func TestAVideoAloneIsUsage(t *testing.T) {
 	t.Parallel()
 
-	_, reason := usageCost(nil, "", usage.Tokens{}, &usage.Media{GeneratedVideos: 1}, "")
+	_, reason := usageCost(nil, usage.Record{Media: &usage.Media{GeneratedVideos: 1}})
 	require.Equal(t, usage.CostReasonNoRoute, reason,
 		"the missing snapshot is the gap, not the missing tokens")
 }

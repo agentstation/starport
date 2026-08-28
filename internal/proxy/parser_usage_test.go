@@ -25,16 +25,18 @@ import (
 // no offering in the catalog serves recognition yet. What the tests hold is the
 // arithmetic and the refusal, and both have to be right on the day one does.
 
-// pageFixture prices recognition the way a catalog does: one price for the
-// offering the planner chose, and one for the cheapest offering there is.
-type pageFixture struct {
-	perModel map[string]float64
-	lowest   float64
-	priced   bool
+// priceFixture prices the two operations that ask a price before a route
+// exists: one price for the offering the planner chose, one for the cheapest
+// offering there is, and one search unit floor for reranking.
+type priceFixture struct {
+	perModel   map[string]float64
+	lowest     float64
+	priced     bool
+	searchUnit map[string]float64
 }
 
-func recognitionPrices() *pageFixture {
-	return &pageFixture{
+func recognitionPrices() *priceFixture {
+	return &priceFixture{
 		// Ten cents a page at the model the fixture router answers with, and a
 		// cheaper offering elsewhere in the same generation.
 		perModel: map[string]float64{"google/gemini-2.5-flash": 0.10},
@@ -43,7 +45,7 @@ func recognitionPrices() *pageFixture {
 	}
 }
 
-func (f *pageFixture) PagePriceFor(
+func (f *priceFixture) PagePriceFor(
 	modelID string,
 	operation starmapcatalogs.ProviderOperation,
 ) (float64, bool) {
@@ -54,11 +56,16 @@ func (f *pageFixture) PagePriceFor(
 	return price, found
 }
 
-func (f *pageFixture) LowestPagePrice(operation starmapcatalogs.ProviderOperation) (float64, bool) {
+func (f *priceFixture) LowestPagePrice(operation starmapcatalogs.ProviderOperation) (float64, bool) {
 	if operation != starmapcatalogs.ProviderOperationDocumentsRecognition || !f.priced {
 		return 0, false
 	}
 	return f.lowest, true
+}
+
+func (f *priceFixture) LowestSearchUnitPrice(modelID string) (float64, bool) {
+	price, found := f.searchUnit[modelID]
+	return price, found
 }
 
 // meterReader returns the one record this turn wrote, after the capture
@@ -76,7 +83,7 @@ func meteredProxy(t *testing.T, pages ...string) (Proxy, *recognizingRouter, met
 // how a gateway that cannot price a page at all is put under test.
 func meteredProxyWithPrices(
 	t *testing.T,
-	prices pagePrices,
+	prices catalogPrices,
 	pages ...string,
 ) (Proxy, *recognizingRouter, meterReader) {
 	t.Helper()

@@ -74,7 +74,7 @@ func (p *proxy) parseDocuments(
 				return nil, parseReport{}, err
 			}
 			report.add(reading)
-			report.charge(p.pagePrices(ctx), reading)
+			report.charge(p.catalogPrices(ctx), reading)
 			*part = inference.ContentPart{
 				Kind: inference.ContentText,
 				Text: renderDocument(part.Document.Filename, reading.Text),
@@ -163,7 +163,7 @@ func (r parseReport) report(response *ChatCompletionResponse) {
 // The price comes from the offering the planner actually chose, so the number
 // the record carries is the number the provider charges. A native read and a
 // cached read both skip this: neither reached a provider.
-func (r *parseReport) charge(prices pagePrices, reading documentReading) {
+func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
 	if reading.Cached || reading.Offering == "" || reading.Pages == 0 {
 		return
 	}
@@ -297,7 +297,7 @@ func (p *proxy) affordable(ctx context.Context, filename string, pages int) erro
 	if !allowance.Bounded || pages == 0 {
 		return nil
 	}
-	prices := p.pagePrices(ctx)
+	prices := p.catalogPrices(ctx)
 	if prices == nil {
 		return nil
 	}
@@ -327,23 +327,27 @@ func nanoUSD(usd float64) int64 {
 	return int64(math.Round(usd * 1e9))
 }
 
-// pagePrices is the catalog fact the parser reads: what one page of a document
-// costs, before a route exists and again once one does. The parser names the
-// two questions rather than the whole snapshot, because a price is all it
-// needs.
-type pagePrices interface {
+// catalogPrices holds the prices a request needs before its route exists. Every
+// question below is asked ahead of the planner, where no exact offering is
+// known yet, so each answers with a floor rather than a bill. The callers name
+// the questions rather than the whole snapshot, because a price is all they
+// need.
+type catalogPrices interface {
 	// PagePriceFor is what one recognition model charges for one page.
 	PagePriceFor(modelID string, operation starmapcatalogs.ProviderOperation) (float64, bool)
 	// LowestPagePrice is the least any offering charges for one page.
 	LowestPagePrice(operation starmapcatalogs.ProviderOperation) (float64, bool)
+	// LowestSearchUnitPrice is the least one query against this model can
+	// cost, on the offerings that bill a search unit.
+	LowestSearchUnitPrice(modelID string) (float64, bool)
 }
 
-// pagePrices answers what a page costs on this request.
+// catalogPrices answers what a unit costs on this request.
 //
 // The catalog the request already carries answers it, which is every
 // deployment. A gateway assembled with prices of its own uses those instead,
 // which is how a caller with no runtime lease reaches a price at all.
-func (p *proxy) pagePrices(ctx context.Context) pagePrices {
+func (p *proxy) catalogPrices(ctx context.Context) catalogPrices {
 	if p.prices != nil {
 		return p.prices
 	}

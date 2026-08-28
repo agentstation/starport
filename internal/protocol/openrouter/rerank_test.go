@@ -54,7 +54,8 @@ func TestTheOpenRouterRerankCodecEchoesEveryDocument(t *testing.T) {
 	require.NotNil(t, decoding.Request.TopN)
 	require.Equal(t, 2, *decoding.Request.TopN)
 
-	encoded, err := EncodeRerank(openRouterRerankAnswer(), decoding.Request, "cohere")
+	cost := 0.0025
+	encoded, err := EncodeRerank(openRouterRerankAnswer(), decoding.Request, "cohere", &cost)
 	require.NoError(t, err)
 	require.Equal(t, "cohere/rerank-v3.5", encoded.Model)
 	require.Equal(t, "cohere", encoded.Provider)
@@ -69,6 +70,11 @@ func TestTheOpenRouterRerankCodecEchoesEveryDocument(t *testing.T) {
 	require.Equal(t, 1, encoded.Usage.SearchUnits)
 	require.Equal(t, 38, encoded.Usage.TotalTokens)
 
+	// The cost is the gateway's own, because a rerank provider reports the
+	// units it billed and no money at all.
+	require.NotNil(t, encoded.Usage.Cost)
+	require.InDelta(t, 0.0025, *encoded.Usage.Cost, 1e-12)
+
 	written, err := json.Marshal(encoded)
 	require.NoError(t, err)
 	require.JSONEq(t, `{
@@ -78,8 +84,16 @@ func TestTheOpenRouterRerankCodecEchoesEveryDocument(t *testing.T) {
 	    {"index": 1, "relevance_score": 0.91, "document": "Cohere serves reranking"},
 	    {"index": 2, "relevance_score": 0.42, "document": "Voyage AI serves reranking"}
 	  ],
-	  "usage": {"search_units": 1, "total_tokens": 38}
+	  "usage": {"search_units": 1, "total_tokens": 38, "cost": 0.0025}
 	}`, string(written))
+
+	// A turn the catalog could not price omits the member rather than
+	// publishing zero, which a caller would read as a free request.
+	unpriced, err := EncodeRerank(openRouterRerankAnswer(), decoding.Request, "cohere", nil)
+	require.NoError(t, err)
+	written, err = json.Marshal(unpriced)
+	require.NoError(t, err)
+	require.NotContains(t, string(written), "cost")
 }
 
 // TestTheOpenRouterRerankCodecReportsAnUnkeptProviderPromise holds the
@@ -146,12 +160,12 @@ func TestTheOpenRouterRerankCodecRefusesAnAnswerItCannotPublish(t *testing.T) {
 
 	outOfRange := openRouterRerankAnswer()
 	outOfRange.Results = []inference.RerankResult{{Index: 9, RelevanceScore: 0.5}}
-	_, err = EncodeRerank(outOfRange, decoding.Request, "cohere")
+	_, err = EncodeRerank(outOfRange, decoding.Request, "cohere", nil)
 	require.ErrorIs(t, err, inference.ErrRerankResultOutOfRange)
 
 	overScored := openRouterRerankAnswer()
 	overScored.Results = []inference.RerankResult{{Index: 0, RelevanceScore: 1.2}}
-	_, err = EncodeRerank(overScored, decoding.Request, "cohere")
+	_, err = EncodeRerank(overScored, decoding.Request, "cohere", nil)
 	require.ErrorIs(t, err, inference.ErrRerankScoreOutOfRange)
 }
 

@@ -132,7 +132,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		record.Media = usageMedia(response.Response.Usage)
 		snapshot = response.CatalogSnapshot
 	}
-	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, record.CacheStatus)
+	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
 	applyExtraction(&record, response)
 	if overheadMS, ok := OverheadMS(ctx); ok {
 		record.OverheadMS = overheadMS
@@ -150,7 +150,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	record.Streaming = true
 	if err != nil {
 		applyOutcome(&record, err)
-		record.Cost, record.CostUnavailableReason = usageCost(nil, "", record.Tokens, record.Media, "")
+		record.Cost, record.CostUnavailableReason = usageCost(nil, record)
 		if overheadMS, ok := OverheadMS(ctx); ok {
 			record.OverheadMS = overheadMS
 		}
@@ -184,7 +184,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 		record.Tokens = usageTokens(response.Response.Usage)
 		snapshot = response.CatalogSnapshot
 	}
-	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, record.CacheStatus)
+	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
 	s.capture.submit(record)
 	return response, err
 }
@@ -238,9 +238,15 @@ func captureOperation[Request, Response any](
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.Tokens = usageTokens(operationUsage(response.Response))
 		record.Media = usageMedia(operationUsage(response.Response))
+		record.SearchUnits = int64(operationUsage(response.Response).SearchUnits)
 		snapshot = response.CatalogSnapshot
 	}
-	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, "")
+	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
+	if response != nil {
+		// The caller reads the same figure the account is billed, because both
+		// come from the one derivation above rather than pricing the turn twice.
+		response.Cost = record.Cost
+	}
 	s.capture.submit(record)
 	return response, err
 }
@@ -358,7 +364,7 @@ func (s *usageCaptureStream) finalize(terminal error) {
 			record.RoutingMS = evidence.RoutingDuration().Milliseconds()
 			snapshot = evidence.CatalogSnapshot()
 		}
-		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record.ModelUsed, record.Tokens, record.Media, record.CacheStatus)
+		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
 		if s.timer != nil {
 			record.OverheadMS = s.timer.OverheadMS()
 		}
@@ -543,31 +549,31 @@ func applyExtraction(record *usage.Record, response *ChatCompletionResponse) {
 
 // usageCost derives one request's cost from the exact catalog snapshot that
 // routed it. A missing cost carries a reason, never a silent zero.
-func usageCost(
-	snapshot *runtimecatalog.RoutableSnapshot,
-	modelID string,
-	tokens usage.Tokens,
-	media *usage.Media,
-	cacheStatus string,
-) (*usage.Cost, string) {
-	if cacheStatus == CacheStatusHit {
+//
+// It reads the record rather than the loose counts, because the record already
+// holds every unit a turn can be billed in and a fifth unit would otherwise add
+// a fifth parameter to every call site.
+func usageCost(snapshot *runtimecatalog.RoutableSnapshot, record usage.Record) (*usage.Cost, string) {
+	if record.CacheStatus == CacheStatusHit {
 		// A cache hit spends no provider tokens.
 		return &usage.Cost{NanoUSD: 0, Currency: usageCurrency}, ""
 	}
-	if snapshot == nil || modelID == "" {
+	if snapshot == nil || record.ModelUsed == "" {
 		return nil, usage.CostReasonNoRoute
 	}
+	tokens := record.Tokens
 	var units usage.Media
-	if media != nil {
-		units = *media
+	if record.Media != nil {
+		units = *record.Media
 	}
-	// A generated image and a generated video are metered per unit, so a turn
-	// that produced one reported usage even when it reported no tokens at all.
+	// A generated image, a generated video, and a search unit are each metered
+	// per unit, so a turn that produced one reported usage even when it
+	// reported no tokens at all.
 	noTokens := tokens.Input == 0 && tokens.Output == 0 && tokens.Total == 0
-	if noTokens && units.GeneratedImages == 0 && units.GeneratedVideos == 0 {
+	if noTokens && units.GeneratedImages == 0 && units.GeneratedVideos == 0 && record.SearchUnits == 0 {
 		return nil, usage.CostReasonNoUsage
 	}
-	route, ok := snapshot.ResolveRoute(modelID)
+	route, ok := snapshot.ResolveRoute(record.ModelUsed)
 	if !ok {
 		return nil, usage.CostReasonNoRoute
 	}
@@ -582,12 +588,33 @@ func usageCost(
 	if reason != "" {
 		return nil, reason
 	}
+	searchTotal, reason := searchUnitCost(offering.Pricing, record.SearchUnits)
+	if reason != "" {
+		return nil, reason
+	}
 	tokenTotal, reason := tokenCost(offering.Pricing.Tokens, tokens)
 	if reason != "" {
 		return nil, reason
 	}
-	total := tokenTotal + mediaTotal
+	total := tokenTotal + mediaTotal + searchTotal
 	return &usage.Cost{NanoUSD: int64(math.Round(total * 1e9)), Currency: usageCurrency}, ""
+}
+
+// searchUnitCost prices the rerank half of one turn.
+//
+// A turn that reported no search unit costs nothing here, whether it reranked
+// nothing or reranked on an offering that bills the tokens it read. The catalog
+// projection refuses a rerank offering that publishes no price in the unit it
+// names, so an offering this gateway routes always answers; the reason below
+// covers a snapshot that reached this point without that guard.
+func searchUnitCost(pricing *starmapcatalogs.ModelPricing, searchUnits int64) (float64, string) {
+	if searchUnits == 0 {
+		return 0, ""
+	}
+	if pricing.Operations == nil || pricing.Operations.SearchUnit == nil {
+		return 0, usage.CostReasonRerankUnpriced
+	}
+	return float64(searchUnits) * *pricing.Operations.SearchUnit, ""
 }
 
 // mediaCost prices the units no plain token rate describes. It answers with a

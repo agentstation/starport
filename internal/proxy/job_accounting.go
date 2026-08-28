@@ -74,7 +74,7 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 	}
 	media := usage.Media{GeneratedVideos: 1}
 	record.Media = &media
-	cost, reason := usageCost(a.snapshot(), entry.Model, usage.Tokens{}, &media, "")
+	cost, reason := usageCost(a.snapshot(), record)
 	record.Cost = cost
 	record.CostUnavailableReason = reason
 	return a.put(ctx, record)

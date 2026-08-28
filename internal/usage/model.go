@@ -62,6 +62,11 @@ const (
 	// the expensive one. A silent understatement is worse than a named gap,
 	// so the whole cost drops and this reason says why.
 	CostReasonMediaUnpriced = "media_unpriced"
+	// CostReasonRerankUnpriced means the turn billed a search unit the
+	// offering publishes no price for. The catalog projection drops such an
+	// offering, so this reason names a snapshot that reached accounting
+	// without that guard rather than a gap an operator has to accept.
+	CostReasonRerankUnpriced = "rerank_unpriced"
 )
 
 // ErrInvalidRecord reports a record that cannot be persisted.
@@ -129,6 +134,12 @@ type Record struct {
 	// Media is nil on a text turn, which is what every record written before
 	// media accounting existed reads back as.
 	Media *Media `json:"media,omitempty"`
+	// SearchUnits counts what a rerank provider that bills by search unit
+	// billed. It sits beside Media rather than inside it because reranking
+	// produces no media, and it sits outside Tokens because no token total
+	// converts into it: a Cohere turn reports a search unit and no tokens at
+	// all, and a record that read tokens alone would meter it as free.
+	SearchUnits int64 `json:"search_units,omitempty"`
 	// TokensEstimated marks counts the gateway synthesized with a
 	// tokenizer because the provider reported none.
 	TokensEstimated bool  `json:"tokens_estimated,omitempty"`

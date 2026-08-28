@@ -10,6 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/providers/keyring"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 // Proxy defines the core proxy interface for LLM request handling.
@@ -231,6 +232,13 @@ type OperationResponse[Response any] struct {
 	Attempts         int                              `json:"-"`
 	RoutingDuration  time.Duration                    `json:"-"`
 	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
+
+	// Cost is what this turn cost, once the accounting middleware has priced it
+	// against the snapshot that routed it. It is nil until then, and it stays
+	// nil on a turn the catalog could not price. A protocol that names a cost on
+	// its usage block reads this field, so the number the caller sees and the
+	// number the account is billed come from one derivation.
+	Cost *usage.Cost `json:"-"`
 }
 
 // MediaRequest routes one canonical media request. The shared carrier is
