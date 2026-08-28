@@ -40,6 +40,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       };
       return {};
     },
+    validateGatewayCredential: async () => ({ valid: true }),
   };
 });
 
@@ -61,9 +62,21 @@ function mount(fields: CredentialField[] = FIELDS) {
   });
   return render(
     <QueryClientProvider client={client}>
-      <GatewayCredentialPanel providerId="groq" fields={fields} />
+      <GatewayCredentialPanel
+        providerId="groq"
+        name="Groq"
+        fields={fields}
+        active
+      />
     </QueryClientProvider>,
   );
+}
+
+// The apply flow lives in a modal: the row offers one primary action, and the
+// dialog validates right after storing so the answer arrives before it closes.
+async function openApplyModal() {
+  await waitFor(() => expect(screen.getByText("Set credential")).toBeTruthy());
+  fireEvent.click(screen.getByText("Set credential"));
 }
 
 // A 404 is the gateway saying "no credential here", which is a state to render
@@ -74,14 +87,16 @@ test("reads a missing credential as a state, not a failure", async () => {
 
   await waitFor(() =>
     expect(
-      screen.getByText("No gateway credential is applied for this provider."),
+      screen.getByText(/No gateway credential is applied for this provider/),
     ).toBeTruthy(),
   );
   expect(screen.queryByText(/Failed to load/)).toBeNull();
+  expect(screen.getByText("Not set")).toBeTruthy();
 });
 
 test("applies the deployment credential without naming an account", async () => {
   mount();
+  await openApplyModal();
   await waitFor(() => expect(screen.getByLabelText("api_key")).toBeTruthy());
 
   fireEvent.change(screen.getByLabelText("api_key"), {
@@ -105,8 +120,10 @@ test("applies the deployment credential without naming an account", async () => 
     },
   ]);
 
+  // Validation ran inside the dialog, so the operator learns the credential
+  // works before the modal closes.
   await waitFor(() =>
-    expect(screen.getByText("Gateway credential applied")).toBeTruthy(),
+    expect(screen.getByText(/Applied and validated/)).toBeTruthy(),
   );
 });
 
@@ -114,6 +131,7 @@ test("applies the deployment credential without naming an account", async () => 
 // catalog is what says which field is the secret.
 test("refuses to submit configuration with no secret", async () => {
   mount();
+  await openApplyModal();
   await waitFor(() => expect(screen.getByLabelText("base_url")).toBeTruthy());
 
   fireEvent.change(screen.getByLabelText("base_url"), {
@@ -133,10 +151,10 @@ test("never calls the deployment credential BYOK", async () => {
   const { container } = mount();
   await waitFor(() =>
     expect(
-      screen.getByText("No gateway credential is applied for this provider."),
+      screen.getByText(/No gateway credential is applied for this provider/),
     ).toBeTruthy(),
   );
 
-  expect(container.textContent).toContain("Gateway credential");
+  expect(container.textContent?.toLowerCase()).toContain("gateway credential");
   expect(container.textContent?.toLowerCase()).not.toContain("byok");
 });

@@ -10,6 +10,7 @@ import {
   CatalogProviderCard,
   credentialRank,
   ProviderCard,
+  providerHealth,
 } from "./ProviderCard";
 
 // The cards are unit-tested outside a live router: Link renders as a
@@ -83,10 +84,10 @@ test("renders the id inline beside the name, not as its own row", () => {
   expect(id.className).not.toContain("rounded");
 });
 
-test("states the model count as 'N models · M available'", () => {
+test("states the model count once, as 'M of N models available'", () => {
   render(<ProviderCard status={runtime()} entry={entry} />);
 
-  expect(screen.getByText("3 models · 2 available")).toBeDefined();
+  expect(screen.getByText("2 of 3 models available")).toBeDefined();
 });
 
 test("links the whole card to the provider detail route", () => {
@@ -97,13 +98,34 @@ test("links the whole card to the provider detail route", () => {
   );
 });
 
-test("shows the credential pill as the single status on a healthy card", () => {
+test("shows the health badge as the single status on a healthy card", () => {
   render(<ProviderCard status={runtime()} entry={entry} />);
 
-  expect(screen.getByText("ready")).toBeDefined();
-  // A ready adapter renders no second status treatment.
-  expect(screen.queryByText("no offerings")).toBeNull();
-  expect(screen.queryByText("unknown")).toBeNull();
+  // Two of three offerings admit requests, so the rollup says degraded.
+  expect(screen.getByTestId("health-badge").textContent).toBe("degraded");
+  // A usable credential renders no pill: the card states its status once.
+  expect(screen.queryByText("ready")).toBeNull();
+});
+
+test("rolls adapter, circuit, and routing into one health verdict", () => {
+  expect(providerHealth(runtime()).state).toBe("degraded");
+  expect(
+    providerHealth(
+      runtime({ offerings: [{ provider_model_id: "a", state: "healthy" }] }),
+    ).state,
+  ).toBe("operational");
+  expect(
+    providerHealth(runtime({ adapter: { state: "error" } })).state,
+  ).toBe("unavailable");
+  expect(
+    providerHealth(
+      runtime({ offerings: [{ provider_model_id: "a", state: "open" }] }),
+    ).state,
+  ).toBe("unavailable");
+  expect(
+    providerHealth(runtime({ adapter: { state: "no_offerings" }, offerings: [] }))
+      .state,
+  ).toBe("no_models");
 });
 
 test("labels a missing credential 'no credential'", () => {
@@ -135,7 +157,7 @@ test("surfaces the credential failure reason", () => {
   expect(screen.getByText("credential rejected")).toBeDefined();
 });
 
-test("shows the adapter state only when the adapter is at fault", () => {
+test("reports an adapter with nothing to serve as 'no models'", () => {
   render(
     <ProviderCard
       status={runtime({ adapter: { state: "no_offerings" } })}
@@ -143,7 +165,7 @@ test("shows the adapter state only when the adapter is at fault", () => {
     />,
   );
 
-  expect(screen.getByText("no offerings")).toBeDefined();
+  expect(screen.getByTestId("health-badge").textContent).toBe("no models");
 });
 
 test("catalog card links and counts models without runtime status", () => {

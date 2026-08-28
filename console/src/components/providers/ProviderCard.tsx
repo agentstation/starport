@@ -4,10 +4,11 @@ import { EntityLogo } from "@/components/catalog/EntityLogo";
 import type { ProviderCatalogEntry, ProviderRuntimeStatus } from "@/lib/api";
 import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
 
-// One status vocabulary (DESIGN.md): the pill is the operator credential
-// lifecycle and is the card's single always-present status. The adapter
-// dot is an exception signal — it appears only when the adapter cannot
-// route, so a healthy card states its status exactly once.
+// One status vocabulary (DESIGN.md): the dot reports liveness — the health
+// rollup is the card's single always-present status, and the same badge
+// leads the detail header, so the two screens agree. The credential pill is
+// lifecycle and appears only when the credential needs attention: a healthy
+// card states its status exactly once.
 const CREDENTIAL_TONES: Record<string, string> = {
   ready: "bg-success-tint text-success",
   not_configured: "bg-bg-raised text-text-3",
@@ -41,16 +42,50 @@ export function CredentialPill({
   );
 }
 
-function AdapterFault({ state }: { state: string }) {
+// providerHealth folds adapter state, circuit state, and routing into the
+// one verdict both the card and the detail header lead with. It reports
+// liveness only — a missing credential is the credential pill's story, even
+// though it is often why nothing is available.
+export type ProviderHealth = {
+  state: "operational" | "degraded" | "unavailable" | "no_models";
+  label: string;
+};
+
+export function providerHealth(status: ProviderRuntimeStatus): ProviderHealth {
+  const offerings = status.offerings ?? [];
+  const adapterState = status.adapter?.state ?? "unknown";
+  if (adapterState === "no_offerings" || offerings.length === 0) {
+    return { state: "no_models", label: "no models" };
+  }
+  if (adapterState !== "ready") {
+    return { state: "unavailable", label: "unavailable" };
+  }
+  const available = availableOfferings(offerings);
+  if (available === 0) return { state: "unavailable", label: "unavailable" };
+  if (available < offerings.length) {
+    return { state: "degraded", label: "degraded" };
+  }
+  return { state: "operational", label: "operational" };
+}
+
+const HEALTH_DOTS: Record<ProviderHealth["state"], string> = {
+  operational: "bg-success",
+  degraded: "bg-warning",
+  unavailable: "bg-error",
+  no_models: "bg-text-4",
+};
+
+export function HealthBadge({ health }: { health: ProviderHealth }) {
   return (
-    <span className="flex items-center gap-1.5 text-xs text-text-3">
+    <span
+      data-testid="health-badge"
+      className="flex shrink-0 items-center gap-1.5 text-xs text-text-2"
+    >
       <span
         aria-hidden="true"
-        className={`size-2 shrink-0 rounded-full ${
-          state === "no_offerings" ? "bg-text-4" : "bg-error"
-        }`}
+        className={`size-2 shrink-0 rounded-full ${HEALTH_DOTS[health.state]}`}
       />
-      {state.replaceAll("_", " ")}
+      {health.label}
     </span>
   );
 }
@@ -82,6 +117,7 @@ export function ProviderCard({
   const credential = status.operator_credential;
   const offerings = status.offerings ?? [];
   const available = availableOfferings(offerings);
+  const health = providerHealth(status);
   const description = entry?.description;
   const credentialReason =
     credential &&
@@ -89,9 +125,10 @@ export function ProviderCard({
     credential.state !== "not_configured" &&
     credential.reason;
   const adapterState = status.adapter?.state ?? "unknown";
-  const adapterFault = adapterState !== "ready";
   const adapterReason =
-    adapterFault && adapterState !== "no_offerings" && status.adapter?.reason;
+    adapterState !== "ready" &&
+    adapterState !== "no_offerings" &&
+    status.adapter?.reason;
   return (
     <Link
       to="/providers/$providerId"
@@ -116,7 +153,7 @@ export function ProviderCard({
             </span>
           </div>
         </div>
-        <CredentialPill credential={credential} />
+        <HealthBadge health={health} />
       </div>
       {description && (
         <p className="line-clamp-2 text-xs leading-relaxed text-text-3">
@@ -128,12 +165,12 @@ export function ProviderCard({
           {(credentialReason || adapterReason || "").replaceAll("_", " ")}
         </p>
       )}
-      <div className="flex items-center gap-4 text-xs text-text-3">
-        {adapterFault && <AdapterFault state={adapterState} />}
+      <div className="flex items-center gap-3 text-xs text-text-3">
         <span className="tabular-nums">
-          {formatCount(offerings.length)} models · {formatCount(available)}{" "}
+          {formatCount(available)} of {formatCount(offerings.length)} models
           available
         </span>
+        {!credential?.usable && <CredentialPill credential={credential} />}
       </div>
     </Link>
   );

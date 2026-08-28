@@ -71,37 +71,90 @@ export function reachableSummary(
   return { routable, unroutable, known: routable + unroutable };
 }
 
-// --- Policy chips: catalog-declared data-handling facts. Only declared
-// facts render — an absent field stays silent instead of guessing.
+// --- Data policy: catalog-declared data-handling facts, rendered as a
+// summary list (label · value rows) so the retention prose reads as a
+// sentence instead of truncating inside a chip. Only declared facts render —
+// an absent field stays silent instead of guessing.
 
-export function policyChips(entry: ProviderCatalogEntry | undefined): string[] {
-  const chips: string[] = [];
+export type PolicyFact = { label: string; value: string; href?: string };
+
+export function policyFacts(
+  entry: ProviderCatalogEntry | undefined,
+): PolicyFact[] {
+  const facts: PolicyFact[] = [];
   const policies = entry?.policies;
-  if (policies?.retains_data === true) chips.push("retains data");
-  if (policies?.retains_data === false) chips.push("no data retention");
-  if (policies?.trains_on_data === true) chips.push("trains on data");
-  if (policies?.trains_on_data === false) chips.push("no training on data");
-  if (policies?.retention) chips.push(`retention: ${policies.retention}`);
-  if (policies?.moderated === true) chips.push("moderated");
-  if (entry?.headquarters) chips.push(`HQ: ${entry.headquarters}`);
-  return chips;
+  // The retention prose is the full answer when the catalog carries one;
+  // the boolean is the fallback verdict, never a second row beside it.
+  if (policies?.retention) {
+    facts.push({ label: "Retention", value: policies.retention });
+  } else if (policies?.retains_data === true) {
+    facts.push({ label: "Retention", value: "Retains API data" });
+  } else if (policies?.retains_data === false) {
+    facts.push({ label: "Retention", value: "Does not retain API data" });
+  }
+  if (policies?.trains_on_data === true) {
+    facts.push({ label: "Training", value: "May train on your data" });
+  }
+  if (policies?.trains_on_data === false) {
+    facts.push({ label: "Training", value: "Does not train on your data" });
+  }
+  if (policies?.moderated === true) {
+    facts.push({ label: "Moderation", value: "Moderated by the provider" });
+  }
+  if (entry?.headquarters) {
+    facts.push({ label: "Headquarters", value: entry.headquarters });
+  }
+  if (policies?.privacy_policy_url) {
+    facts.push({
+      label: "Privacy policy",
+      value: policies.privacy_policy_url,
+      href: policies.privacy_policy_url,
+    });
+  }
+  if (policies?.terms_of_service_url) {
+    facts.push({
+      label: "Terms of service",
+      value: policies.terms_of_service_url,
+      href: policies.terms_of_service_url,
+    });
+  }
+  return facts;
 }
 
-export function PolicyChips({ entry }: { entry: ProviderCatalogEntry | undefined }) {
-  const chips = policyChips(entry);
-  if (chips.length === 0) return null;
+export function PolicySummary({
+  entry,
+}: {
+  entry: ProviderCatalogEntry | undefined;
+}) {
+  const facts = policyFacts(entry);
+  if (facts.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {chips.map((chip) => (
-        <span
-          key={chip}
-          title={chip}
-          className="inline-flex h-5 max-w-96 items-center rounded-xs bg-bg-raised px-1.5 text-xs text-text-3"
-        >
-          <span className="truncate">{chip}</span>
-        </span>
-      ))}
-    </div>
+    <section data-testid="policy-summary" className="flex flex-col gap-2">
+      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+        Data policy
+      </h2>
+      <dl className="flex flex-col divide-y divide-border-1 rounded-md border border-border-1 bg-bg-panel">
+        {facts.map((fact) => (
+          <div key={fact.label} className="flex gap-4 px-4 py-2.5">
+            <dt className="w-32 shrink-0 text-sm text-text-4">{fact.label}</dt>
+            <dd className="min-w-0 text-sm text-text-2">
+              {fact.href ? (
+                <a
+                  href={fact.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all text-accent-link transition-colors duration-150 ease-standard hover:underline"
+                >
+                  {fact.value}
+                </a>
+              ) : (
+                fact.value
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
@@ -150,14 +203,14 @@ export function EnvironmentCredentialPanel({
       data-testid="credential-panel"
       className="flex min-w-0 flex-1 flex-col gap-2"
     >
-      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
-        Environment credential
-      </h2>
       {usable ? (
         <p className="text-sm text-text-2">
-          Read from the gateway environment
+          Set as{" "}
+          <code className="font-mono text-xs text-text-2">{envName}</code> or{" "}
+          <code className="font-mono text-xs text-text-2">{prefixedEnvName}</code>{" "}
+          in the gateway environment
           {credential?.updated_at
-            ? ` · updated ${formatRelativeTime(credential.updated_at)}`
+            ? ` · read ${formatRelativeTime(credential.updated_at)}`
             : ""}
           .
         </p>

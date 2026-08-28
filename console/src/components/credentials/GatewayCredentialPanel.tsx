@@ -2,12 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import {
-  CredentialFieldInputs,
-  credentialBody,
-  hasSecretValue,
-} from "@/components/credentials/CredentialFields";
-import { GhostButton, PrimaryButton } from "@/components/ui/Form";
+import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
+import { SourcePill } from "@/components/credentials/SourcePill";
+import { GhostButton, PrimaryButton, RowAction } from "@/components/ui/Form";
+import { Modal } from "@/components/ui/Modal";
 import {
   ApiError,
   deleteGatewayCredential,
@@ -24,10 +22,10 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 // anywhere near a gateway API key.
 //
 // It is not BYOK. BYOK is a credential a tenant brings for itself, and it is
-// managed on the tenants screen. The provider credential card may name BYOK
-// as the third resolution source, but this panel never edits one and never
-// names an account: the credential it applies belongs to the deployment.
-// The section renders as a row of that card and carries no chrome of its own.
+// managed per account. The provider credential card may name accounts as the
+// third resolution source, but this panel never edits one and never names an
+// account: the credential it applies belongs to the deployment. The section
+// renders as a row of that card and carries no chrome of its own.
 
 export function gatewayCredentialQueryKey(providerId: string): string[] {
   return ["gateway-credential", providerId];
@@ -42,14 +40,22 @@ function notApplied(error: unknown): boolean {
 
 export function GatewayCredentialPanel({
   providerId,
+  name,
   fields,
+  // Whether requests would use this source: true when no earlier source
+  // (the environment credential) is usable. An applied credential behind a
+  // usable environment credential is stored but shadowed, and its pill says
+  // Applied rather than Active.
+  active,
 }: {
   providerId: string;
+  name: string;
   fields: CredentialField[];
+  active: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [editing, setEditing] = useState(false);
+  const [setting, setSetting] = useState(false);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -66,27 +72,12 @@ export function GatewayCredentialPanel({
     retry: false,
   });
 
-  const apply = useMutation({
-    mutationFn: () =>
-      putGatewayCredential(providerId, credentialBody(fields, values)),
-    onSuccess: async () => {
-      setValues({});
-      setEditing(false);
-      say("Gateway credential applied");
-      await refresh();
-    },
-    onError: (error) =>
-      say(`Apply failed: ${error instanceof Error ? error.message : error}`, true),
-  });
-
   const validate = useMutation({
     mutationFn: () => validateGatewayCredential(providerId),
     onSuccess: (result) => {
       const valid = result?.valid !== false;
       say(
-        valid
-          ? "Gateway credential is valid"
-          : "Gateway credential is invalid",
+        valid ? "Gateway credential is valid" : "Gateway credential is invalid",
         !valid,
       );
     },
@@ -100,31 +91,60 @@ export function GatewayCredentialPanel({
   const remove = useMutation({
     mutationFn: () => deleteGatewayCredential(providerId),
     onSuccess: async () => {
+      setConfirmingRemove(false);
       say("Gateway credential removed");
       await refresh();
     },
-    onError: (error) =>
-      say(`Remove failed: ${error instanceof Error ? error.message : error}`, true),
+    onError: (error) => {
+      setConfirmingRemove(false);
+      say(`Remove failed: ${error instanceof Error ? error.message : error}`, true);
+    },
   });
 
   const locked =
     credential.error instanceof ApiError && credential.error.needsKey;
   const missing = notApplied(credential.error);
   const applied = credential.data?.has_credentials === true;
-  const showForm = (missing || editing) && !locked;
 
   return (
     <section
       data-testid="gateway-credential-panel"
       className="flex min-w-0 flex-1 flex-col gap-2"
     >
-      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
-        Gateway credential
-      </h2>
-      <p className="text-sm text-text-3">
-        Applied by the operator and used by the whole deployment. It is stored
-        encrypted and never returned.
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-medium text-text-1">Gateway</h3>
+        {applied && (
+          <SourcePill
+            label={active ? "Active" : "Applied"}
+            tone={active ? "success" : "info"}
+            title={
+              active
+                ? "Requests use this credential"
+                : "Stored, but the environment credential is used first"
+            }
+          />
+        )}
+        {missing && <SourcePill label="Not set" tone="neutral" />}
+        {applied && (
+          <div className="ml-auto flex items-center gap-1">
+            <RowAction
+              onClick={() => validate.mutate()}
+              disabled={validate.isPending}
+            >
+              validate
+            </RowAction>
+            <RowAction onClick={() => setSetting(true)}>replace</RowAction>
+            <button
+              type="button"
+              onClick={() => setConfirmingRemove(true)}
+              aria-label={`Remove the ${providerId} gateway credential`}
+              className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
 
       {notice && (
         <p className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
@@ -136,80 +156,86 @@ export function GatewayCredentialPanel({
         <p className="text-sm text-text-3">Loading credential…</p>
       ) : locked ? (
         <p className="text-sm text-text-3">
-          Only an operator key with the admin scope can read or apply the
-          deployment credential.
+          Applied by an operator for the whole deployment. Only an operator key
+          with the admin scope can read or apply it.
         </p>
       ) : credential.error && !missing ? (
         <p className="text-sm text-text-3">
           Failed to load the credential: {credential.error.message}
         </p>
       ) : applied ? (
-        <div className="flex flex-wrap items-center gap-3 text-sm text-text-2">
-          <span>
-            Applied
-            {credential.data?.created_at
-              ? ` ${formatRelativeTime(credential.data.created_at)}`
-              : ""}
-            .
-          </span>
-          {credential.data?.last_used && (
-            <span className="text-xs text-text-4">
-              last used {formatRelativeTime(credential.data.last_used)}
-              {typeof credential.data.usage_count === "number"
-                ? ` · ${formatCount(credential.data.usage_count)} requests`
-                : ""}
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-1">
-            <GhostButton
-              onClick={() => validate.mutate()}
-              disabled={validate.isPending}
-            >
-              validate
-            </GhostButton>
-            <GhostButton onClick={() => setEditing((open) => !open)}>
-              {editing ? "cancel" : "replace"}
-            </GhostButton>
-            <button
-              type="button"
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
-              aria-label={`Remove the ${providerId} gateway credential`}
-              className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-        </div>
-      ) : (
         <p className="text-sm text-text-2">
-          No gateway credential is applied for this provider.
+          Applied
+          {credential.data?.created_at
+            ? ` ${formatRelativeTime(credential.data.created_at)}`
+            : ""}{" "}
+          for the whole deployment · stored encrypted and never returned
+          {credential.data?.last_used
+            ? ` · last used ${formatRelativeTime(credential.data.last_used)}`
+            : ""}
+          {typeof credential.data?.usage_count === "number"
+            ? ` · ${formatCount(credential.data.usage_count)} requests`
+            : ""}
+          .
         </p>
-      )}
-
-      {showForm &&
-        (fields.length === 0 ? (
-          <p className="text-xs text-text-4">
-            This provider declares no credential contract, so there is nothing
-            to apply.
+      ) : (
+        <>
+          <p className="text-sm text-text-2">
+            No gateway credential is applied for this provider. One applied
+            here pays every account's requests, stored encrypted and never
+            returned.
           </p>
-        ) : (
-          <div className="flex flex-col gap-2 border-t border-border-1 pt-3">
-            <CredentialFieldInputs
-              fields={fields}
-              values={values}
-              onChange={(id, value) =>
-                setValues((previous) => ({ ...previous, [id]: value }))
-              }
-            />
-            <PrimaryButton
-              onClick={() => apply.mutate()}
-              disabled={!hasSecretValue(fields, values) || apply.isPending}
-            >
-              {applied ? "Replace credential" : "Apply credential"}
+          <div>
+            <PrimaryButton onClick={() => setSetting(true)}>
+              Set credential
             </PrimaryButton>
           </div>
-        ))}
+        </>
+      )}
+
+      {setting && (
+        <CredentialApplyModal
+          title={applied ? "Replace gateway credential" : "Set gateway credential"}
+          description={`The deployment credential for ${name}. Every account's requests can use it; it is stored encrypted and never returned.`}
+          fields={fields}
+          apply={async (body) => {
+            await putGatewayCredential(providerId, body);
+            await refresh();
+          }}
+          validate={() => validateGatewayCredential(providerId)}
+          onClose={() => setSetting(false)}
+        />
+      )}
+
+      {confirmingRemove && (
+        <Modal
+          title="Remove gateway credential"
+          onClose={() => setConfirmingRemove(false)}
+          footer={
+            <>
+              <GhostButton onClick={() => setConfirmingRemove(false)}>
+                Cancel
+              </GhostButton>
+              <button
+                type="button"
+                onClick={() => remove.mutate()}
+                disabled={remove.isPending}
+                className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-opacity duration-150 ease-standard hover:opacity-90 disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </>
+          }
+        >
+          <p className="text-sm text-text-2">
+            This removes the deployment credential for{" "}
+            <strong className="font-semibold text-text-1">{name}</strong>.
+            Requests stop using it immediately; accounts fall back to the
+            environment credential or their own. The stored value cannot be
+            recovered.
+          </p>
+        </Modal>
+      )}
     </section>
   );
 }
