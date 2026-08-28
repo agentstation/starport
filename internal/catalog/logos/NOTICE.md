@@ -1,9 +1,12 @@
 # Third-party logo notices
 
 The SVG files under `svg/` are vendored brand marks, renamed to Starport
-catalog IDs. They are an interim set: once the Starmap catalog payload
-carries logo bytes (CP6), the gateway prefers catalog bytes and this set
-becomes the offline fallback.
+catalog IDs. The set is curated color-first: each brand uses its
+lobehub `-color` variant when one exists, and the base (currentColor)
+variant for brands whose official mark is monochrome. The gateway
+serves this bundle first and falls back to catalog-carried bytes only
+for IDs the bundle does not cover — the catalog set mixes monochrome
+and color glyphs, so the curated bundle owns consistency.
 
 Trademarks remain the property of their respective owners. The files are
 used only to identify the corresponding provider or model author inside

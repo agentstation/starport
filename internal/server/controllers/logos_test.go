@@ -21,7 +21,8 @@ func logosRouter() chi.Router {
 
 // catalogLogoProxy serves catalog bytes for one provider ID and reports
 // not_found for everything else, so tests can prove the controller prefers
-// catalog bytes and still falls back to the embedded asset set.
+// the curated bundle and reaches catalog bytes only for IDs the bundle
+// does not carry.
 type catalogLogoProxy struct {
 	unsupportedOperations
 	mockProviders
@@ -63,25 +64,32 @@ func TestLogosControllerNotModified(t *testing.T) {
 	require.Empty(t, second.Body.String())
 }
 
-func TestLogosControllerPrefersCatalogBytes(t *testing.T) {
-	catalogSVG := `<svg xmlns="http://www.w3.org/2000/svg"><title>catalog-openai</title></svg>`
-	controller := NewLogosController(&catalogLogoProxy{id: "openai", svg: []byte(catalogSVG)})
-	router := chi.NewRouter()
-	router.Get("/api/v1/logos/{kind}/{id}.svg", controller.Get)
+func TestLogosControllerPrefersBundledBytes(t *testing.T) {
+	catalogSVG := `<svg xmlns="http://www.w3.org/2000/svg"><title>catalog-mark</title></svg>`
 
+	// A bundled ID serves the curated bytes even when the catalog also
+	// carries a mark for it: the catalog set mixes monochrome and color
+	// glyphs, so the consistent bundle wins.
+	bundled := NewLogosController(&catalogLogoProxy{id: "openai", svg: []byte(catalogSVG)})
+	router := chi.NewRouter()
+	router.Get("/api/v1/logos/{kind}/{id}.svg", bundled.Get)
 	catalog := httptest.NewRecorder()
 	router.ServeHTTP(catalog,
 		httptest.NewRequest(http.MethodGet, "/api/v1/logos/providers/openai.svg", nil))
 	require.Equal(t, http.StatusOK, catalog.Code)
-	require.Equal(t, catalogSVG, catalog.Body.String())
-	require.NotEmpty(t, catalog.Header().Get("ETag"))
+	require.NotEqual(t, catalogSVG, catalog.Body.String())
+	require.Contains(t, catalog.Body.String(), "<svg")
 
+	// An ID the bundle does not carry falls through to catalog bytes.
+	gap := NewLogosController(&catalogLogoProxy{id: "unbundled-provider", svg: []byte(catalogSVG)})
+	gapRouter := chi.NewRouter()
+	gapRouter.Get("/api/v1/logos/{kind}/{id}.svg", gap.Get)
 	fallback := httptest.NewRecorder()
-	router.ServeHTTP(fallback,
-		httptest.NewRequest(http.MethodGet, "/api/v1/logos/providers/groq.svg", nil))
+	gapRouter.ServeHTTP(fallback,
+		httptest.NewRequest(http.MethodGet, "/api/v1/logos/providers/unbundled-provider.svg", nil))
 	require.Equal(t, http.StatusOK, fallback.Code)
-	require.NotEqual(t, catalogSVG, fallback.Body.String())
-	require.Contains(t, fallback.Body.String(), "<svg")
+	require.Equal(t, catalogSVG, fallback.Body.String())
+	require.NotEmpty(t, fallback.Header().Get("ETag"))
 }
 
 func TestLogosControllerUnknownIs404(t *testing.T) {
