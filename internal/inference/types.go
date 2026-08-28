@@ -389,6 +389,12 @@ type Usage struct {
 	// output unit no token total can describe, because a provider prices a
 	// generated image per image and reports no tokens for it.
 	GeneratedImages int
+	// SearchUnits counts the units a rerank provider that bills by search
+	// billed. One unit covers one query against a fixed number of documents,
+	// and a longer document counts as several. No token total converts into
+	// it, and the offering's own basis says whether to read this field or the
+	// token counts beside it.
+	SearchUnits int
 
 	// Estimated marks counts the gateway synthesized with a tokenizer
 	// because the provider reported no usage. Estimated counts never

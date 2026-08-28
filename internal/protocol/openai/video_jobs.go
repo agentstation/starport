@@ -79,7 +79,7 @@ func EncodeVideoJobs(records []inference.VideoJob) VideoJobList {
 	for index, job := range records {
 		data[index] = EncodeVideoJob(job)
 	}
-	return VideoJobList{Object: "list", Data: data}
+	return VideoJobList{Object: ListObject, Data: data}
 }
 
 // videoJobStatus renders the canonical state as the word this family
