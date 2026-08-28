@@ -377,7 +377,7 @@ func EncodeEmbedding(response inference.EmbeddingResponse) EmbeddingResponse {
 	for index, embedding := range response.Data {
 		data[index] = Embedding{Object: "embedding", Index: embedding.Index, Embedding: embedding.Vector}
 	}
-	return EmbeddingResponse{Object: "list", Data: data, Model: response.Model, Usage: encodeUsage(response.Usage)}
+	return EmbeddingResponse{Object: ListObject, Data: data, Model: response.Model, Usage: encodeUsage(response.Usage)}
 }
 
 // StreamChunk is one OpenAI SSE data value.

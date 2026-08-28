@@ -11,8 +11,9 @@ package openai
 const (
 	// StoredFileObject is the literal every file object carries.
 	StoredFileObject = "file"
-	// StoredFileListObject is the literal a list envelope carries.
-	StoredFileListObject = "list"
+	// ListObject is the literal every list envelope carries. A stored file
+	// page, an embedding set, a video job page, and a rerank answer all state it.
+	ListObject = "list"
 )
 
 // The status field. Upstream marks it deprecated and Starport still serves it,
@@ -59,7 +60,7 @@ type StoredFileList struct {
 // The cursor fields come from the page rather than from the caller, so a
 // client that pages with last_id reads the same order the server returned.
 func NewStoredFileList(page []StoredFile, hasMore bool) StoredFileList {
-	list := StoredFileList{Object: StoredFileListObject, Data: page, HasMore: hasMore}
+	list := StoredFileList{Object: ListObject, Data: page, HasMore: hasMore}
 	if list.Data == nil {
 		// An empty page encodes as [] rather than null. A client that ranges
 		// over data should not have to test for a missing array first.

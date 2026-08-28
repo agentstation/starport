@@ -1,6 +1,9 @@
 package inference
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Reranking scores a list of documents against one query and returns them in
 // relevance order. Four providers serve it and no two agree on the wire: one
@@ -114,3 +117,48 @@ func (r RerankResponse) Documents(request RerankRequest) ([]string, error) {
 // ErrRerankResultOutOfRange reports a result that names a document position the
 // request never held.
 var ErrRerankResultOutOfRange = errors.New("a rerank result names a document the request does not hold")
+
+// ErrRerankScoreOutOfRange reports a relevance score outside the unit
+// interval. Every rerank provider publishes a normalized score, so a number
+// outside it is a decoding fault rather than an unusual answer, and a caller
+// that ranked on it would rank on a number the schema says cannot exist.
+var ErrRerankScoreOutOfRange = errors.New("a rerank relevance score falls outside zero through one")
+
+// ErrRerankDocumentsExceedBound reports a document list longer than the
+// selected offering accepts. A provider refuses the whole batch rather than
+// ranking a prefix of it, so the caller pays for a round trip that could not
+// have succeeded.
+var ErrRerankDocumentsExceedBound = errors.New("a rerank request holds more documents than the offering accepts")
+
+// CheckDocumentBound refuses a document list longer than the offering allows.
+// A limit of zero or less states no bound, which is what a catalog says when
+// the provider publishes no document count.
+func (r RerankRequest) CheckDocumentBound(limit int) error {
+	if limit <= 0 || len(r.Documents) <= limit {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: %d documents against a bound of %d",
+		ErrRerankDocumentsExceedBound, len(r.Documents), limit,
+	)
+}
+
+// Validate refuses a response that cannot describe the request that produced
+// it. A codec calls it before writing, because both faults produce an answer
+// that reads as ordinary: an index outside the request resolves to the wrong
+// document, and a score outside the unit interval sorts against every other
+// provider's scale.
+func (r RerankResponse) Validate(request RerankRequest) error {
+	for _, result := range r.Results {
+		if result.Index < 0 || result.Index >= len(request.Documents) {
+			return ErrRerankResultOutOfRange
+		}
+		if result.RelevanceScore < 0 || result.RelevanceScore > 1 {
+			return fmt.Errorf(
+				"%w: document %d scored %v",
+				ErrRerankScoreOutOfRange, result.Index, result.RelevanceScore,
+			)
+		}
+	}
+	return nil
+}
