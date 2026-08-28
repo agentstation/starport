@@ -7,14 +7,13 @@ Last Updated: 2026-08-27
 
 ### Active Work
 
-No plan is active. The document parser plan closed on 2026-08-27. Promote the
-reranking plan below to start the next one.
+| Plan | Prefix | Outcome | Gate |
+|------|--------|---------|------|
+| [Reranking](plans/reranking-plan.html) | RNK | Serve `POST /v1/rerank` and `POST /api/v1/rerank` on models Starmap catalogs. Adds a rerank `ProviderOperation` in Starmap with rerank offerings, a search-unit price, and the billing basis beside it, canonical rerank types, a transport descriptor and connector call, two codecs, a `rerank:write` scope, operation-aware routing, and per-search-unit accounting. Depends on no other plan. | `scripts/verify-reranking.sh`, terminal at 22 conditions (`RNK-V01`–`RNK-V22`) |
 
 ### Proposed Work
 
-| Plan | Prefix | Outcome | Gate |
-|------|--------|---------|------|
-| [Reranking](plans/reranking-plan.html) | RNK | Serve `POST /v1/rerank` on models Starmap catalogs. Adds a third `ProviderOperation` in Starmap with rerank offerings and search-unit prices, canonical rerank types, a transport descriptor and connector call, a Cohere-compatible codec, a `rerank:write` scope, operation-aware routing, and per-search-unit accounting. Depends on no other plan and can run beside them. | `scripts/verify-reranking.sh`, terminal at 20 conditions (`RNK-V01`–`RNK-V20`) |
+No plan is proposed. Every plan on the version 1 roadmap is active or closed.
 
 ### Recently Completed
 

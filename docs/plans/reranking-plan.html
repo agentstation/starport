@@ -118,12 +118,12 @@
 <header id="overview">
   <h1>Reranking</h1>
   <p id="status-line">
-    Status: <code data-plan-status="proposed">proposed</code> ·
+    Status: <code data-plan-status="active">active</code> ·
     Owner: this plan ·
     Created: 2026-08-26 ·
-    Baseline: RNK0 pins both repositories ·
+    Baseline: starport <code>cf17df8</code>, starmap <code>7265f4e6</code> ·
     Proof root: <code>docs/proof/reranking/</code> ·
-    Next action: RNK0 after approval
+    Next action: RNK1, the Starmap rerank operation
   </p>
 
   <section id="outcome">
@@ -253,7 +253,7 @@
         <tr><td>R2</td><td>The canonical rerank types carry no wire word. The codec owns every wire name.</td><td>The embedding types hold this line today, and a second shape that breaks it would leak a provider name into routing.</td></tr>
         <tr><td>R3</td><td>A rerank model never appears in the chat completions view or the chat models list.</td><td><code>isChatCompletionModel</code> already disqualifies the tag. A caller that saw a reranker in the chat list would send it a request it cannot answer.</td></tr>
         <tr><td>R4</td><td>The transport registry refuses a descriptor whose operation no member names.</td><td>The registry guard proves an operation reached the provider layer. The planner in <code>internal/routing</code> is a separate earlier gate with its own two hardcoded operation guards, so a silent third value would route nowhere.</td></tr>
-        <tr><td>R5</td><td>A rerank response references a document by its index in the request. Starport refuses a request that asks it to echo the documents.</td><td>A response that echoes documents multiplies the payload and lets a caller believe the gateway stored them. The Cohere shape carries a <code>return_documents</code> field, and accepting it while ignoring it would report a setting that took no effect.</td></tr>
+        <tr><td>R5</td><td>The canonical rerank response references a document by its index alone. A codec that has to echo the text reads it back out of the request it already holds.</td><td>A canonical shape that carried a second copy of every document would double the payload through every layer and let a caller believe the gateway stored them. The wire shapes disagree: Cohere v2 publishes no echo field, Jina and Voyage make it optional, and OpenRouter marks the echoed document required on every result. RNK0 read all four. A codec that reads the text from the request satisfies each one and keeps the copy out of routing, usage, and the cache.</td></tr>
         <tr><td>R6</td><td>A rerank turn records usage and counts against a spend budget.</td><td>An operation that records nothing reads as free, and one tenant could then spend without bound.</td></tr>
         <tr><td>R7</td><td>Starport refuses a rerank request whose model serves no rerank offering, before it reaches a provider.</td><td>Reporting a provider 400 as a Starport 400 hides the real cause from the caller.</td></tr>
       </tbody>
@@ -267,11 +267,13 @@
       <tbody>
         <tr><td>RNK-D1</td><td>2026-08-26</td><td>Serve the Cohere-compatible request shape at <code>POST /v1/rerank</code>, with <code>model</code>, <code>query</code>, <code>documents</code>, and <code>top_n</code>.</td><td>OpenAI publishes no rerank endpoint, and Jina, Voyage, and the open-source inference servers converged on this shape. A caller reaches Starport by changing a base URL. Re-open if OpenAI publishes a rerank endpoint that the ecosystem adopts.</td></tr>
         <tr><td>RNK-D2</td><td>2026-08-26</td><td>Add <code>rerank</code> to <code>ProviderOperation</code> in Starmap, beside chat completions and embeddings.</td><td>Every layer that switches on an operation gains a third arm, and the transport registry guard proves each one. Re-open if a provider serves reranking through a chat route instead.</td></tr>
-        <tr><td>RNK-D3</td><td>2026-08-26</td><td>Add no OpenRouter rerank route.</td><td><code>scripts/verify-openrouter-parity.sh</code> stays terminal at 16 conditions, because the parity surface does not grow. Re-open if OpenRouter publishes a rerank endpoint.</td></tr>
-        <tr><td>RNK-D4</td><td>2026-08-26</td><td>Price a rerank turn per search unit, which is one query against a bounded document count.</td><td>The price matches how Cohere bills, so a Starport cost reconciles against a provider invoice. RNK0 records the billing basis of every reachable provider before this decision settles. Starmap states the unit definition beside the price, so <code>internal/usage</code> never reimplements a provider formula. Re-open if a reachable provider prices reranking per token instead.</td></tr>
-        <tr><td>RNK-D5</td><td>2026-08-26</td><td>Catalog the reachable rerank providers first, and let RNK0 name them.</td><td>The plan proves itself against a live provider rather than a documented one. A provider that this deployment cannot reach waits for a later catalog change. Re-open if no provider is reachable, which blocks the plan at RNK0.</td></tr>
+        <tr><td>RNK-D3</td><td>2026-08-26</td><td><s>Add no OpenRouter rerank route.</s> Superseded by RNK-D9 on 2026-08-27.</td><td>The re-open condition fired. RNK0 read the live OpenRouter OpenAPI document, which publishes <code>POST /api/v1/rerank</code>, and the live endpoint answers 401 rather than the 404 a missing route gives.</td></tr>
+        <tr><td>RNK-D4</td><td>2026-08-26</td><td>Price a rerank turn per search unit, which is one query against a bounded document count.</td><td>The price matches how Cohere bills, so a Starport cost reconciles against a provider invoice. Starmap states the unit definition beside the price, so <code>internal/usage</code> never reimplements a provider formula. RNK0 read four providers and found two bases rather than one: Cohere and OpenRouter bill per search unit, and Jina and Voyage bill per token. The decision therefore holds with one addition. Starmap records the basis beside the price, and <code>internal/usage</code> reads the recorded basis instead of assuming a search unit. Re-open if a provider publishes a third basis.</td></tr>
+        <tr><td>RNK-D5</td><td>2026-08-26</td><td><s>Catalog the reachable rerank providers first, and let RNK0 name them.</s> Superseded by RNK-D8 on 2026-08-27.</td><td>The re-open condition fired. RNK0 found no rerank provider this deployment can reach with a credential it holds, so the decision as written would block the plan at task zero.</td></tr>
         <tr><td>RNK-D6</td><td>2026-08-26</td><td>Widen the three operation guards before raising the Starmap dependency, and mirror decision MOD-D6 of the model modalities plan.</td><td>The function <code>planningOperations</code> passes every Starmap operation through, and <code>validateSnapshot</code> then rejects the whole snapshot on one it does not know. Cataloguing a rerank offering would break chat routing on its own. This plan runs beside the model modalities plan, so whichever lands first introduces the named operation set and the other adds a member. Re-open if the two plans merge into one queue.</td></tr>
         <tr><td>RNK-D7</td><td>2026-08-26</td><td>Refuse a rerank turn on an offering that carries no search-unit price, rather than recording a cost reason.</td><td>Invariant I5 of the model modalities plan lets a media response carry a recorded cost reason, because a media price is often absent upstream. A rerank price is always present in the catalog, so an absent one means a catalog defect rather than a known gap. The refusal keeps a silent zero out of the spend budget. Re-open if a reachable rerank provider publishes no price.</td></tr>
+        <tr><td>RNK-D8</td><td>2026-08-27</td><td>Catalog Cohere, Jina, and Voyage from their published endpoint facts, and prove the request path against recorded provider transcripts.</td><td>Replaces RNK-D5. Reachability is not the standard this catalog holds anywhere else: it already describes DeepSeek, Mistral, Moonshot, Cerebras, and Fireworks, and this deployment holds a credential for none of them. A recorded transcript proves a codec and a failure mapping, which is the whole request path this plan owns. The live proof is the only step a credential adds, and RNK10 records it <code>UNVERIFIED</code> rather than green. Re-open when an operator supplies a rerank credential.</td></tr>
+        <tr><td>RNK-D9</td><td>2026-08-27</td><td>Serve <code>POST /api/v1/rerank</code> beside the <code>/v1</code> route, and grow the parity gate to match.</td><td>Replaces RNK-D3. OpenRouter publishes the route, so the parity surface grew and the gate has to grow with it. The two wire shapes differ, which is why RNK5 owns two codecs rather than one: OpenRouter takes a <code>provider</code> preference block, accepts a structured document that carries text or an image, and requires the echoed document on every result. Both routes read one canonical shape and one route plan. Re-open if OpenRouter withdraws the route.</td></tr>
       </tbody>
     </table>
   </section>
@@ -281,16 +283,19 @@
     <p><code>scripts/verify-reranking.sh</code> reports every condition and
       exits nonzero while any condition fails. It prints
       <code>Summary: N passed, M failed</code>. The condition identifiers run
-      from <code>RNK-V01</code> to <code>RNK-V20</code>. RNK0 writes the
-      verifier red at 0 passed and 20 failed. Every task section below names
+      from <code>RNK-V01</code> to <code>RNK-V22</code>. RNK0 wrote the
+      verifier red at 0 passed and 22 failed. Every task section below names
       the conditions it turns green.</p>
+    <p>The count grew from 20 to 22 at RNK0. Decision RNK-D9 added the
+      OpenRouter route, and its two conditions carry the highest numbers so
+      that the earlier identifiers stay stable. Both belong to phase B.</p>
     <table>
       <thead><tr><th>Phase</th><th>Tasks</th><th>Conditions</th><th>Cumulative passing</th></tr></thead>
       <tbody>
         <tr><td>A, the catalog fact</td><td>RNK1 and RNK2</td><td>RNK-V01 to RNK-V04</td><td>4</td></tr>
-        <tr><td>B, the request path</td><td>RNK3 to RNK6</td><td>RNK-V05 to RNK-V12</td><td>12</td></tr>
-        <tr><td>C, policy and money</td><td>RNK7 to RNK9</td><td>RNK-V13 to RNK-V18</td><td>18</td></tr>
-        <tr><td>Close</td><td>RNK10</td><td>RNK-V19 to RNK-V20</td><td>20, terminal</td></tr>
+        <tr><td>B, the request path</td><td>RNK3 to RNK6</td><td>RNK-V05 to RNK-V12, RNK-V21, RNK-V22</td><td>14</td></tr>
+        <tr><td>C, policy and money</td><td>RNK7 to RNK9</td><td>RNK-V13 to RNK-V18</td><td>20</td></tr>
+        <tr><td>Close</td><td>RNK10</td><td>RNK-V19 to RNK-V20</td><td>22, terminal</td></tr>
       </tbody>
     </table>
   </section>
@@ -302,8 +307,8 @@
         <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
       </thead>
       <tbody>
-        <tr id="RNK0" data-status="todo"><td>RNK0</td><td>Baseline. Pin both commits, confirm the provider request shapes, name a reachable provider, create the proof root, write the verifier red at 20 conditions.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="RNK1" data-status="todo"><td>RNK1</td><td>Phase A. Starmap: add the rerank operation and its endpoint facts, and hold the chat exclusion. Conditions RNK-V01 and RNK-V02.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="RNK0" data-status="done"><td>RNK0</td><td>Baseline. Pin both commits, confirm the provider request shapes, record the reachable providers, create the proof root, write the verifier red at 22 conditions.</td><td><code>done</code></td><td><code>docs/proof/reranking/rnk0.md</code>. Verifier 0 passed, 22 failed. Four providers read on 2026-08-27. Decisions RNK-D8 and RNK-D9 replace RNK-D3 and RNK-D5, and invariant R5 now separates the canonical shape from the wire shape.</td></tr>
+        <tr id="RNK1" data-status="in_progress"><td>RNK1</td><td>Phase A. Starmap: add the rerank operation and its endpoint facts, and hold the chat exclusion. Conditions RNK-V01 and RNK-V02.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="RNK2" data-status="todo"><td>RNK2</td><td>Phase A. Starmap: catalog the rerank offerings and their prices, then release. Conditions RNK-V03 and RNK-V04.</td><td><code>todo</code></td><td></td></tr>
         <tr id="RNK3" data-status="todo"><td>RNK3</td><td>Phase B. Canonical rerank request and response in <code>internal/inference</code>. Condition RNK-V05.</td><td><code>todo</code></td><td></td></tr>
         <tr id="RNK4" data-status="todo"><td>RNK4</td><td>Phase B. Replace three hardcoded operation guards with one named set, raise the dependency, then add the rerank transport and connector. Conditions RNK-V06 and RNK-V07.</td><td><code>todo</code></td><td></td></tr>
@@ -517,25 +522,31 @@
       JSON by hand. Both outcomes break the rule that a codec owns every wire
       name.</p>
 
-    <p><strong>Seam.</strong> <code>internal/protocol/openai</code>.</p>
+    <p><strong>Seam.</strong> <code>internal/protocol/openai</code> and
+      <code>internal/protocol/openrouter</code>.</p>
     <ol>
       <li>Decode the request fields that RNK-D1 names.</li>
       <li>Refuse a document list longer than the offering allows.</li>
-      <li>Refuse a request that asks Starport to echo the documents.</li>
+      <li>Echo a document only when the caller asks for it, and read the text
+        from the request rather than from the canonical response.</li>
       <li>Report an unknown request field the way the chat codec reports
         one.</li>
       <li>Encode the response as an ordered result list with an index and a
         score.</li>
       <li>Encode the usage record and every failure through the shared
         shapes.</li>
+      <li>Add the OpenRouter codec that decision RNK-D9 requires. It accepts a
+        <code>provider</code> preference block and a structured document, and
+        it echoes the document on every result.</li>
     </ol>
 
-    <p><strong>Acceptance, RNK-V08 and RNK-V09.</strong> A round-trip test
-      decodes a recorded provider request and encodes a recorded provider
-      response without loss. A second test asserts that a request asking Starport
-      to echo the documents produces a typed refusal. A third test asserts
-      that a score outside zero through one fails decoding. A fourth test
-      asserts that the encoded response names no document text.</p>
+    <p><strong>Acceptance, RNK-V08, RNK-V09, and RNK-V21.</strong> A round-trip
+      test decodes a recorded provider request and encodes a recorded provider
+      response without loss. A second test asserts that the encoded response
+      names no document text unless the caller asked for it. A third test
+      asserts that a score outside zero through one fails decoding. A fourth
+      test asserts that the OpenRouter codec echoes the document and reports
+      <code>search_units</code>, as its published schema requires.</p>
 
     <p><strong>Fail-before.</strong> No rerank codec exists.</p>
 
@@ -565,16 +576,19 @@
       <li>Add <code>rerank:write</code> to the anonymous scope list.</li>
       <li>Add the scope to the operator guide, which enumerates the
         vocabulary.</li>
-      <li>Register no OpenRouter route, per decision RNK-D3.</li>
+      <li>Register <code>POST /api/v1/rerank</code> behind the same scope, per
+        decision RNK-D9, and grow the parity gate to name it.</li>
       <li>Report a request for an uncatalogued model as a 404 before any
         provider call.</li>
     </ol>
 
-    <p><strong>Acceptance, RNK-V10 to RNK-V12.</strong> A server test asserts
-      that a key without the scope receives a 403 refusal. A key that carries
-      the scope succeeds. A second test asserts that the anonymous identity
-      reaches the route when an operator disables authentication. A third test
-      asserts that <code>/api/v1/rerank</code> stays absent.</p>
+    <p><strong>Acceptance, RNK-V10 to RNK-V12 and RNK-V22.</strong> A server
+      test asserts that a key without the scope receives a 403 refusal. A key
+      that carries the scope succeeds. A second test asserts that the anonymous
+      identity reaches the route when an operator disables authentication. A
+      third test asserts that both routes answer and that they share one route
+      plan. The parity gate names the route and states its new terminal
+      count.</p>
 
     <p><strong>Fail-before.</strong> The route returns 404.</p>
 
@@ -709,7 +723,7 @@
     </ol>
 
     <p><strong>Acceptance, RNK-V19 and RNK-V20.</strong> The verifier reports
-      <code>Summary: 20 passed, 0 failed</code>. <code>verify-doc-links.sh</code>
+      <code>Summary: 22 passed, 0 failed</code>. <code>verify-doc-links.sh</code>
       passes. The CI workflow names the verifier, and the required evidence
       list holds it.</p>
 
@@ -784,7 +798,7 @@ substantive code changes. Run the repository technical-writing linter over
 this plan before every plan commit. Stop only at a valid stop state from
 the plans skill. Before you stop, update the ledger and the log, and
 record the next action in the status line. The goal is met when
-scripts/verify-reranking.sh reports "Summary: 20 passed, 0 failed", CI
+scripts/verify-reranking.sh reports "Summary: 22 passed, 0 failed", CI
 runs it, and every ledger row except RNK11 is terminal.</code></pre>
   </section>
 
@@ -804,6 +818,8 @@ runs it, and every ledger row except RNK11 is terminal.</code></pre>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A second audit round accepted two findings. RNK7 still described the two hardcoded planner guards that RNK4 replaces, so its seam and first step now use the named operation set. Decision <code>RNK-D7</code> records why a rerank turn refuses an unpriced offering rather than recording a cost reason, which invariant I5 of the model modalities plan permits for media.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>audited</td><td>A Sol audit round accepted two findings here. RNK4 requires a step that maps a provider rerank error through <code>internal/failure</code>, but neither its seam nor its verification named that package. Both now do. The plan carried the title of the model modalities plan, and its decision table listed RNK-D6 before RNK-D5.</td></tr>
         <tr><td>2026-08-26</td><td>meta</td><td>corrected</td><td>The anonymous scope citation names <code>DefaultAnonymousScopes</code> rather than a signature line.</td></tr>
+        <tr><td>2026-08-27</td><td>meta</td><td>promoted</td><td>Promoted to <code>active</code> after the document parser plan closed. The reranking row moved from proposed work to active work in <code>docs/TASKS.md</code>.</td></tr>
+        <tr><td>2026-08-27</td><td>RNK0</td><td>done</td><td>Baseline pinned at starport <code>cf17df8</code> and starmap <code>7265f4e6</code>. <code>scripts/verify-reranking.sh</code> reports 0 passed, 22 failed. Live reading of four rerank providers produced four corrections. OpenRouter publishes <code>POST /api/v1/rerank</code>, so RNK-D3 fired its re-open condition and RNK-D9 replaces it. No rerank provider is reachable with a credential this deployment holds, so RNK-D5 fired its re-open condition and RNK-D8 replaces it. Two of four providers bill per token, so RNK-D4 now records the basis beside the price. The OpenRouter schema requires the echoed document, so invariant R5 now separates the canonical shape from the wire shape.</td></tr>
 </tbody>
     </table>
   </section>
