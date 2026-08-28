@@ -96,6 +96,7 @@ bash scripts/verify-model-modalities.sh
 bash scripts/verify-files-api.sh
 bash scripts/verify-async-media-jobs.sh
 bash scripts/verify-document-parser.sh
+bash scripts/verify-reranking.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
@@ -163,6 +164,16 @@ in-process read that reaches no provider. It covers the recognition route, its
 page charge, the extraction cache, the spend bound, and the console view of
 what a page cost. It is terminal at 20 conditions (`PLG-V01` through `PLG-V20`) and
 runs in CI.
+
+`scripts/verify-reranking.sh` guards reranking. It covers the canonical types,
+the transport descriptor, and the connector call. It covers the two codecs and
+every wire name each one owns. It covers the two routes and the `rerank:write`
+scope that stands alone. It covers operation-aware planning and the document
+bound.
+
+It covers the search unit in the usage record and the spend refusal before the
+provider call. It covers the console surface that names what a model serves. It
+is terminal at 22 conditions (`RNK-V01` through `RNK-V22`) and runs in CI.
 
 That gate owns the media surface alone. The parity gate
 `scripts/verify-openrouter-parity.sh` keeps its own count of 17 and its own

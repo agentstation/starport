@@ -181,6 +181,7 @@ jobs:
           bash scripts/verify-files-api.sh
           bash scripts/verify-async-media-jobs.sh
           bash scripts/verify-document-parser.sh
+          bash scripts/verify-reranking.sh
           bash scripts/verify-catalog-performance.sh
           bash scripts/benchmark-overhead.sh
 
