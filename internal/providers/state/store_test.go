@@ -107,6 +107,50 @@ func TestUnreachableProjectsItsOwnReason(t *testing.T) {
 	require.Equal(t, ReasonProviderUnreachable, offering.Reason)
 }
 
+// TestIncidentProjectionShowsClearsAndCountsChange proves the status-page
+// projection: a live incident reaches the snapshot, a "none" pass clears it,
+// re-confirmation does not move the revision, and a change does.
+func TestIncidentProjectionShowsClearsAndCountsChange(t *testing.T) {
+	catalog := embeddedCatalog(t)
+	store := New()
+	require.NoError(t, store.PublishCatalog("generation-1", catalog, catalogAdapterObservations(catalog,
+		AdapterObservation{ProviderID: catalogs.ProviderIDOpenAI, State: AdapterReady},
+	)))
+
+	checked := time.Unix(200, 0).UTC()
+	store.PublishIncidents([]IncidentObservation{{
+		ProviderID:  catalogs.ProviderIDOpenAI,
+		Indicator:   "major",
+		Description: "Elevated error rates",
+		CheckedAt:   checked,
+	}})
+	openAI := requireProvider(t, store.Snapshot(), catalogs.ProviderIDOpenAI)
+	require.NotNil(t, openAI.Incident)
+	require.Equal(t, "major", openAI.Incident.Indicator)
+	require.Equal(t, "Elevated error rates", openAI.Incident.Description)
+	require.Equal(t, checked, openAI.Incident.CheckedAt)
+
+	// The same verdict again is confirmation, not change.
+	before := store.Snapshot().Revision
+	store.PublishIncidents([]IncidentObservation{{
+		ProviderID:  catalogs.ProviderIDOpenAI,
+		Indicator:   "major",
+		Description: "Elevated error rates",
+		CheckedAt:   checked.Add(time.Minute),
+	}})
+	require.Equal(t, before, store.Snapshot().Revision)
+
+	// The provider reporting "none" clears the incident and counts as change.
+	store.PublishIncidents([]IncidentObservation{{
+		ProviderID: catalogs.ProviderIDOpenAI,
+		Indicator:  "none",
+		CheckedAt:  checked.Add(2 * time.Minute),
+	}})
+	snapshot := store.Snapshot()
+	require.Greater(t, snapshot.Revision, before)
+	require.Nil(t, requireProvider(t, snapshot, catalogs.ProviderIDOpenAI).Incident)
+}
+
 // TestCredentialDetailRoundTripsAndDetectsChange proves the operator-facing
 // detail text survives projection into the snapshot and that a detail-only
 // change advances the revision.
