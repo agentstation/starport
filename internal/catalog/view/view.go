@@ -119,6 +119,7 @@ type ProviderInfo struct {
 	Description      string                `json:"description,omitempty"`
 	DocsURL          string                `json:"docs_url,omitempty"`
 	URL              string                `json:"url,omitempty"`
+	StatusPageURL    string                `json:"status_page_url,omitempty"`
 	Models           []string              `json:"models"`
 	Capabilities     []string              `json:"capabilities,omitempty"`
 	RequiresAuth     bool                  `json:"requires_auth"`

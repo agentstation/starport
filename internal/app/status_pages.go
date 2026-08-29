@@ -10,14 +10,18 @@ import (
 	"github.com/agentstation/starport/internal/providers/statuspage"
 )
 
-// catalogStatusPageSource names each routable provider's published status
-// page from the current catalog snapshot. The poller calls it fresh each
-// pass, so a catalog refresh changes what is polled without a restart.
-type catalogStatusPageSource struct {
+// catalogHealthAPISource names each routable provider's declared health API
+// from the current catalog snapshot: the URL, the wire convention it
+// speaks, and the components that serve this gateway's endpoints. The
+// poller calls it fresh each pass, so a catalog refresh changes what is
+// polled without a restart. A provider that declares no health API is not
+// polled — the catalog owns status sources, and a guessed poll asserts
+// evidence about a page the catalog never named.
+type catalogHealthAPISource struct {
 	catalog *runtimecatalog.ControlPlane
 }
 
-func (s catalogStatusPageSource) StatusPages() map[catalogs.ProviderID]string {
+func (s catalogHealthAPISource) HealthAPIs() map[catalogs.ProviderID]statuspage.Target {
 	if s.catalog == nil {
 		return nil
 	}
@@ -25,22 +29,26 @@ func (s catalogStatusPageSource) StatusPages() map[catalogs.ProviderID]string {
 	if snapshot == nil {
 		return nil
 	}
-	pages := make(map[catalogs.ProviderID]string)
+	targets := make(map[catalogs.ProviderID]statuspage.Target)
 	for _, route := range snapshot.Routes() {
-		if _, exists := pages[route.ProviderID]; exists {
+		if _, exists := targets[route.ProviderID]; exists {
 			continue
 		}
 		provider, err := snapshot.Catalog().Provider(route.ProviderID)
-		if err != nil || provider.StatusPageURL == nil {
+		if err != nil || provider.Inference == nil || provider.Inference.HealthAPIURL == nil {
 			continue
 		}
-		pageURL := strings.TrimSpace(*provider.StatusPageURL)
-		if pageURL == "" {
+		apiURL := strings.TrimSpace(*provider.Inference.HealthAPIURL)
+		if apiURL == "" {
 			continue
 		}
-		pages[route.ProviderID] = pageURL
+		targets[route.ProviderID] = statuspage.Target{
+			URL:        apiURL,
+			Kind:       provider.Inference.HealthAPIKind,
+			Components: provider.Inference.HealthComponents,
+		}
 	}
-	return pages
+	return targets
 }
 
 // providerIncidentPublisher carries status-page observations into the

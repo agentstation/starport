@@ -42,8 +42,11 @@ func Providers(
 		if provider.DocsURL != nil {
 			info.DocsURL = *provider.DocsURL
 		}
+		if provider.Website != nil {
+			info.URL = *provider.Website
+		}
 		if provider.StatusPageURL != nil {
-			info.URL = *provider.StatusPageURL
+			info.StatusPageURL = *provider.StatusPageURL
 		}
 		if provider.Headquarters != nil {
 			info.Headquarters = *provider.Headquarters

@@ -850,7 +850,7 @@ func (a *App) Run(ctx context.Context) error {
 	if a.providerStates != nil && a.catalog != nil {
 		incidentPoller, err := statuspage.New(
 			statuspage.DefaultConfig(),
-			catalogStatusPageSource{catalog: a.catalog},
+			catalogHealthAPISource{catalog: a.catalog},
 			providerIncidentPublisher{states: a.providerStates},
 		)
 		if err != nil {
