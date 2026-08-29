@@ -19,6 +19,7 @@ import (
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/providers"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
+	"github.com/agentstation/starport/internal/providers/statuspage"
 )
 
 func TestAdminProviderStatusContract(t *testing.T) {
@@ -51,6 +52,94 @@ func TestAdminProviderStatusContract(t *testing.T) {
 	require.Len(t, response.Providers, 1)
 	require.NotContains(t, recorder.Body.String(), "material-version")
 	require.NotContains(t, recorder.Body.String(), "provider-secret")
+}
+
+func TestAdminProviderIncidentsContract(t *testing.T) {
+	startedAt := time.Date(2026, 8, 29, 9, 30, 0, 0, time.UTC)
+	observedAt := time.Date(2026, 8, 29, 9, 31, 0, 0, time.UTC)
+	operations := &providerOperationsStub{
+		incidentLogs: map[catalogs.ProviderID]statuspage.History{
+			"openai": {
+				Availability: statuspage.HistoryAvailable,
+				FetchedAt:    observedAt,
+				Incidents: []statuspage.Incident{{
+					Title:     "Elevated error rates",
+					Indicator: statuspage.IndicatorMajor,
+					Status:    "investigating",
+					StartedAt: startedAt,
+					URL:       "https://stspg.io/active",
+				}},
+			},
+			"ollama": {Availability: statuspage.HistoryUnpublished, FetchedAt: observedAt},
+		},
+		observed: map[catalogs.ProviderID][]providerstate.IncidentTransition{
+			"openai": {{
+				ProviderID: "openai", Indicator: "major",
+				Description: "Elevated error rates", ObservedAt: observedAt,
+			}},
+		},
+	}
+	server := newTestServer(
+		t, &Config{MaxRequestSize: 1 << 20}, withTestProviderOperations(operations),
+	)
+	secret := createServerAPIKey(t, server, "provider-admin", []string{"admin"})
+
+	t.Run("serves both provenances for a known provider", func(t *testing.T) {
+		recorder := serveAuthorized(
+			server, http.MethodGet, "/api/v1/admin/providers/openai/incidents", secret, context.Background(),
+		)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		require.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
+		var response struct {
+			ProviderID string                             `json:"provider_id"`
+			Log        statuspage.History                 `json:"log"`
+			Observed   []providerstate.IncidentTransition `json:"observed"`
+		}
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+		require.Equal(t, "openai", response.ProviderID)
+		require.Equal(t, statuspage.HistoryAvailable, response.Log.Availability)
+		require.Len(t, response.Log.Incidents, 1)
+		require.Equal(t, "Elevated error rates", response.Log.Incidents[0].Title)
+		require.Len(t, response.Observed, 1)
+		require.Equal(t, "major", response.Observed[0].Indicator)
+	})
+
+	t.Run("an unpublished log still answers", func(t *testing.T) {
+		recorder := serveAuthorized(
+			server, http.MethodGet, "/api/v1/admin/providers/ollama/incidents", secret, context.Background(),
+		)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		var response struct {
+			Log statuspage.History `json:"log"`
+		}
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+		require.Equal(t, statuspage.HistoryUnpublished, response.Log.Availability)
+	})
+
+	t.Run("an unknown provider is not found", func(t *testing.T) {
+		recorder := serveAuthorized(
+			server, http.MethodGet, "/api/v1/admin/providers/nonesuch/incidents", secret, context.Background(),
+		)
+		require.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
+	})
+
+	t.Run("a failed durable read is a server error", func(t *testing.T) {
+		failing := &providerOperationsStub{
+			incidentLogs: map[catalogs.ProviderID]statuspage.History{
+				"openai": {Availability: statuspage.HistoryAvailable},
+			},
+			transitionsErr: errors.New("relational storage unavailable"),
+		}
+		failingServer := newTestServer(
+			t, &Config{MaxRequestSize: 1 << 20}, withTestProviderOperations(failing),
+		)
+		failingSecret := createServerAPIKey(t, failingServer, "provider-admin", []string{"admin"})
+		recorder := serveAuthorized(
+			failingServer, http.MethodGet, "/api/v1/admin/providers/openai/incidents", failingSecret, context.Background(),
+		)
+		require.Equal(t, http.StatusInternalServerError, recorder.Code, recorder.Body.String())
+		require.NotContains(t, recorder.Body.String(), "relational storage unavailable")
+	})
 }
 
 func TestAdminProviderRefreshContract(t *testing.T) {
@@ -176,13 +265,16 @@ func TestAdminProviderRoutesRequireAuthentication(t *testing.T) {
 }
 
 type providerOperationsStub struct {
-	mu      sync.Mutex
-	state   providerstate.Snapshot
-	after   providerstate.Snapshot
-	report  providers.ReconcileReport
-	refresh error
-	calls   int
-	started chan struct{}
+	mu             sync.Mutex
+	state          providerstate.Snapshot
+	after          providerstate.Snapshot
+	report         providers.ReconcileReport
+	refresh        error
+	calls          int
+	started        chan struct{}
+	incidentLogs   map[catalogs.ProviderID]statuspage.History
+	observed       map[catalogs.ProviderID][]providerstate.IncidentTransition
+	transitionsErr error
 }
 
 func newBlockingProviderOperations() *providerOperationsStub {
@@ -215,6 +307,25 @@ func (o *providerOperationsStub) RefreshProviders(ctx context.Context) (provider
 	o.state = after
 	o.mu.Unlock()
 	return report, nil
+}
+
+func (o *providerOperationsStub) ProviderIncidentLog(_ context.Context, providerID catalogs.ProviderID) (statuspage.History, bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.incidentLogs == nil {
+		return statuspage.History{}, false
+	}
+	history, known := o.incidentLogs[providerID]
+	return history, known
+}
+
+func (o *providerOperationsStub) ProviderIncidentTransitions(_ context.Context, providerID catalogs.ProviderID) ([]providerstate.IncidentTransition, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.transitionsErr != nil {
+		return nil, o.transitionsErr
+	}
+	return o.observed[providerID], nil
 }
 
 func (o *providerOperationsStub) callCount() int {

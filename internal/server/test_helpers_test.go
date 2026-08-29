@@ -21,6 +21,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
+	"github.com/agentstation/starport/internal/providers/statuspage"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/registry"
@@ -93,6 +94,14 @@ func (staticTestProviderOperations) ProviderStates() providerstate.Snapshot {
 
 func (staticTestProviderOperations) RefreshProviders(context.Context) (providers.ReconcileReport, error) {
 	return providers.ReconcileReport{}, nil
+}
+
+func (staticTestProviderOperations) ProviderIncidentLog(context.Context, catalogs.ProviderID) (statuspage.History, bool) {
+	return statuspage.History{}, false
+}
+
+func (staticTestProviderOperations) ProviderIncidentTransitions(context.Context, catalogs.ProviderID) ([]providerstate.IncidentTransition, error) {
+	return nil, nil
 }
 
 // newTestServer is the explicit server test composition root.

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 )
 
 // maxStatuspageBytes caps a summary or components response. The largest
@@ -119,6 +120,86 @@ func (p *Poller) readStatuspageSummary(ctx context.Context, apiURL string) (verd
 		indicator:   indicator,
 		description: strings.TrimSpace(document.Status.Description),
 	}, true
+}
+
+// maxStatuspageIncidentBytes caps the incidents document. It carries the
+// page's last 50 incidents with their full update threads; the largest
+// among catalog providers measures ~200 KB today.
+const maxStatuspageIncidentBytes = 2 * 1024 * 1024
+
+// incidentsDocument is the part of the statuspage.io incidents listing the
+// history reader uses. The API returns the page's recent incidents newest
+// first, each with its update thread in the same order.
+type incidentsDocument struct {
+	Incidents []struct {
+		Name       string `json:"name"`
+		Status     string `json:"status"`
+		Impact     string `json:"impact"`
+		StartedAt  string `json:"started_at"`
+		CreatedAt  string `json:"created_at"`
+		ResolvedAt string `json:"resolved_at"`
+		Shortlink  string `json:"shortlink"`
+		Components []struct {
+			Name string `json:"name"`
+		} `json:"components"`
+		IncidentUpdates []struct {
+			Body string `json:"body"`
+		} `json:"incident_updates"`
+	} `json:"incidents"`
+}
+
+// historyStatuspage reads the incidents document beside the declared
+// summary URL. Impact maps one-to-one onto the severity vocabulary because
+// the vocabulary is the Statuspage one; an impact of "none" or an unknown
+// word stays unstated rather than asserting a severity the page did not.
+func (r *HistoryReader) historyStatuspage(ctx context.Context, target Target) ([]Incident, bool) {
+	body, ok := fetchDocument(ctx, r.client, siblingDocumentURL(target.URL, "incidents.json"), maxStatuspageIncidentBytes)
+	if !ok {
+		return nil, false
+	}
+	var document incidentsDocument
+	if err := json.Unmarshal(body, &document); err != nil {
+		return nil, false
+	}
+	incidents := make([]Incident, 0, len(document.Incidents))
+	for _, entry := range document.Incidents {
+		incident := Incident{
+			Title:      strings.TrimSpace(entry.Name),
+			Status:     strings.ToLower(strings.TrimSpace(entry.Status)),
+			StartedAt:  parseStatuspageTime(entry.StartedAt, entry.CreatedAt),
+			ResolvedAt: parseStatuspageTime(entry.ResolvedAt),
+			URL:        strings.TrimSpace(entry.Shortlink),
+		}
+		switch impact := Indicator(strings.ToLower(strings.TrimSpace(entry.Impact))); impact {
+		case IndicatorMinor, IndicatorMajor, IndicatorCritical:
+			incident.Indicator = impact
+		}
+		if len(entry.IncidentUpdates) > 0 {
+			incident.Update = truncateRunes(stripMarkup(entry.IncidentUpdates[0].Body), maxHistoryUpdateRunes)
+		}
+		for _, component := range entry.Components {
+			if name := strings.TrimSpace(component.Name); name != "" {
+				incident.Components = append(incident.Components, name)
+			}
+		}
+		incidents = append(incidents, incident)
+	}
+	return incidents, true
+}
+
+// parseStatuspageTime reads the first candidate that parses. Statuspage
+// timestamps are RFC 3339 with milliseconds.
+func parseStatuspageTime(candidates ...string) time.Time {
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if stamp, err := time.Parse(time.RFC3339, candidate); err == nil {
+			return stamp.UTC()
+		}
+	}
+	return time.Time{}
 }
 
 // siblingDocumentURL swaps the final path segment of a health API URL for a

@@ -284,6 +284,43 @@ export type ProviderStatus = {
   providers?: ProviderRuntimeStatus[];
 };
 
+// ProviderIncident is one entry in the provider's own published incident
+// log, normalized by the gateway. Every fact in it is the provider's
+// assertion about itself; absent fields mean the wire left them unstated.
+export type ProviderIncident = {
+  title: string;
+  indicator?: string;
+  status?: string;
+  started_at?: string;
+  resolved_at?: string;
+  url?: string;
+  update?: string;
+  components?: string[];
+};
+
+// ObservedIncidentTransition is one indicator change this gateway itself
+// recorded from the provider's status feed — the deployment's own memory,
+// on its own clock, distinct from what the provider chooses to publish.
+export type ObservedIncidentTransition = {
+  provider_id: string;
+  indicator: string;
+  description?: string;
+  observed_at: string;
+};
+
+// ProviderIncidentLog carries both provenances for one provider: `log` is
+// the provider's published history (with an availability verdict so an
+// empty list is honest), `observed` is what this gateway recorded.
+export type ProviderIncidentLog = {
+  provider_id: string;
+  log: {
+    availability: "available" | "unpublished" | "unreachable";
+    incidents?: ProviderIncident[];
+    fetched_at?: string;
+  };
+  observed?: ObservedIncidentTransition[];
+};
+
 // CredentialField is a catalog-declared inference credential field a
 // caller supplies for BYOK. It never carries secret values.
 export type CredentialField = {
@@ -654,6 +691,14 @@ export async function listProviderCatalog(): Promise<ProviderCatalogEntry[]> {
     "/api/v1/providers",
   );
   return body?.providers ?? [];
+}
+
+export function providerIncidentLog(
+  providerId: string,
+): Promise<ProviderIncidentLog> {
+  return request<ProviderIncidentLog>(
+    `/api/v1/admin/providers/${encodeURIComponent(providerId)}/incidents`,
+  );
 }
 
 export function refreshProviders(): Promise<ProviderRefreshReport> {

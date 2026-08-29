@@ -6,11 +6,13 @@ import (
 	"net/http"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/providers"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
+	"github.com/agentstation/starport/internal/providers/statuspage"
 	"github.com/agentstation/starport/internal/server/dto"
 )
 
@@ -18,6 +20,12 @@ import (
 type ProviderOperations interface {
 	ProviderStates() providerstate.Snapshot
 	RefreshProviders(context.Context) (providers.ReconcileReport, error)
+	// ProviderIncidentLog answers one provider's published incident log;
+	// the bool reports whether the catalog knows the provider at all.
+	ProviderIncidentLog(context.Context, catalogs.ProviderID) (statuspage.History, bool)
+	// ProviderIncidentTransitions answers the durable record of indicator
+	// changes this gateway observed for one provider, newest first.
+	ProviderIncidentTransitions(context.Context, catalogs.ProviderID) ([]providerstate.IncidentTransition, error)
 }
 
 // ProviderOperationsController handles authenticated provider operations.
@@ -36,6 +44,41 @@ func (h *ProviderOperationsController) Status(w http.ResponseWriter, _ *http.Req
 	if err := dto.WriteJSON(w, http.StatusOK, h.operations.ProviderStates()); err != nil {
 		log.Error().Err(err).Msg("failed to write provider status")
 	}
+}
+
+// Incidents handles GET /api/v1/admin/providers/{provider}/incidents. The
+// response keeps the two provenances apart: `log` is what the provider's
+// own status page publishes about itself, and `observed` is what this
+// gateway saw the live indicator do, on this deployment's clock.
+func (h *ProviderOperationsController) Incidents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	providerID := catalogs.ProviderID(chi.URLParam(r, "provider"))
+	history, known := h.operations.ProviderIncidentLog(r.Context(), providerID)
+	if !known {
+		dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Provider not found")
+		return
+	}
+	observed, err := h.operations.ProviderIncidentTransitions(r.Context(), providerID)
+	if err != nil {
+		log.Error().Err(err).Str("provider", string(providerID)).Msg("failed to read incident transitions")
+		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Incident record read failed")
+		return
+	}
+	response := providerIncidentsResponse{
+		ProviderID: string(providerID),
+		Log:        history,
+		Observed:   observed,
+	}
+	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {
+		log.Error().Err(err).Msg("failed to write provider incidents")
+	}
+}
+
+// providerIncidentsResponse is the incident surface for one provider.
+type providerIncidentsResponse struct {
+	ProviderID string                             `json:"provider_id"`
+	Log        statuspage.History                 `json:"log"`
+	Observed   []providerstate.IncidentTransition `json:"observed,omitempty"`
 }
 
 // Refresh handles POST /api/v1/admin/providers/refresh.
