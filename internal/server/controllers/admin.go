@@ -113,13 +113,9 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]any{
-		"keys":             apiKeys,
-		responseCountField: len(apiKeys),
-		"pagination": map[string]any{
-			fieldLimit: limit,
-			"offset":   offset,
-			"has_more": hasMore,
-		},
+		"keys":                  apiKeys,
+		responseCountField:      len(apiKeys),
+		responsePaginationField: paginationEnvelope(limit, offset, hasMore),
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {

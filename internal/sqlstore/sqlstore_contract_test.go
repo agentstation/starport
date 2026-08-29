@@ -321,11 +321,11 @@ func TestDialectMigrationSetsAgree(t *testing.T) {
 // bind is what lets the runner write one query for three engines.
 func TestBindNumbersPostgresPlaceholders(t *testing.T) {
 	pg := &DB{dialect: TypePostgres}
-	if got := pg.bind("a = ? AND b = ?"); got != "a = $1 AND b = $2" {
+	if got := pg.Bind("a = ? AND b = ?"); got != "a = $1 AND b = $2" {
 		t.Fatalf("postgres bind = %q", got)
 	}
 	lite := &DB{dialect: TypeSQLite}
-	if got := lite.bind("a = ?"); got != "a = ?" {
+	if got := lite.Bind("a = ?"); got != "a = ?" {
 		t.Fatalf("sqlite bind = %q", got)
 	}
 }

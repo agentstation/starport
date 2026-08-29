@@ -39,6 +39,7 @@ import (
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/agentstation/starport/internal/tokenize"
 	"github.com/agentstation/starport/internal/usage"
@@ -173,6 +174,8 @@ type runtimeBuilder struct {
 	rateLimits   ratelimit.Repository
 	usageRecords usage.Repository
 	presets      presets.Repository
+	sqlDB        *sqlstore.DB
+	templates    account.TemplateRepository
 	files        *files.Service
 	jobs         *jobs.Service
 	gateway      proxy.Proxy
@@ -193,6 +196,7 @@ type authRuntime struct {
 func (b *runtimeBuilder) compose() error {
 	steps := []func() error{
 		b.openStorage,
+		b.openSQLStore,
 		b.openBlob,
 		b.openConcepts,
 		b.openRegistry,
@@ -224,6 +228,29 @@ func (b *runtimeBuilder) openStorage() error {
 	}
 	b.application.store = store
 	b.application.own("storage", func(context.Context) error { return store.Close() })
+	return nil
+}
+
+// openSQLStore opens the relational store beside the key-value one and
+// brings its schema current, so every repository that rides it reads a
+// migrated database. The repositories themselves open in openConcepts with
+// the rest.
+func (b *runtimeBuilder) openSQLStore() error {
+	db, err := b.factories.openSQL(b.config.Storage)
+	if err != nil {
+		return fmt.Errorf("open relational storage: %w", err)
+	}
+	if db == nil {
+		return errors.New("relational storage is required")
+	}
+	b.sqlDB = db
+	b.application.own("relational storage", func(context.Context) error { return db.Close() })
+	migrateCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := db.Migrate(migrateCtx); err != nil {
+		return fmt.Errorf("migrate relational storage: %w", err)
+	}
+	log.Info().Str("dialect", db.Dialect()).Msg("relational storage ready")
 	return nil
 }
 
@@ -342,6 +369,10 @@ func (b *runtimeBuilder) openConcepts() error {
 	b.presets, err = presets.Open(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open preset repository: %w", err)
+	}
+	b.templates, err = account.OpenTemplates(b.sqlDB)
+	if err != nil {
+		return fmt.Errorf("open account template repository: %w", err)
 	}
 	if err := b.openFileService(); err != nil {
 		return err
@@ -594,6 +625,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
+		Templates: b.templates,
 		Files:       b.files,
 		Jobs:        b.jobs,
 		FileBackend: b.fileBackend(),
@@ -838,6 +870,7 @@ func (a *App) closeWithTimeout() error {
 func defaultRuntimeFactories() runtimeFactories {
 	return runtimeFactories{
 		openStorage: openStorage,
+		openSQL:     openSQL,
 		openBlob:    openBlob,
 		openCatalog: func(
 			ctx context.Context,
@@ -1092,7 +1125,8 @@ func (a *App) remoteCatalogLoop(ctx context.Context) {
 }
 
 func validateFactories(factories runtimeFactories) error {
-	if factories.openStorage == nil || factories.openBlob == nil ||
+	if factories.openStorage == nil || factories.openSQL == nil ||
+		factories.openBlob == nil ||
 		factories.openCatalog == nil || factories.newConnector == nil ||
 		factories.newCache == nil || factories.newServer == nil {
 		return errors.New("application runtime factories are incomplete")
@@ -1102,6 +1136,10 @@ func validateFactories(factories runtimeFactories) error {
 
 func openStorage(cfg config.StorageConfig) (storage.KVStore, error) {
 	return storage.Open(cfg.RuntimeStorage())
+}
+
+func openSQL(cfg config.StorageConfig) (*sqlstore.DB, error) {
+	return sqlstore.Open(cfg.RuntimeSQL())
 }
 
 // openBlob selects the backend from configuration. The filesystem is the

@@ -1,0 +1,83 @@
+CSH-E1 fail-before: the template routes 404 on baseline.
+Baseline: 08f938b50a811d48f95c13fad82ee2439ee34b77 (plan: CSH-D2 done (PR #290, e4e2f64); CSH-E1 in_progress)
+
+$ grep -rn 'AccountTemplate' internal/account internal/server/controllers internal/server/routes.go
+(no matches)
+
+$ go test ./internal/server -run 'TestAccountTemplate|TestAccountCreateFromTemplate' (test written first, run against baseline)
+    account_template_routes_test.go:59: 
+        	Error Trace:	/Users/jack/src/github.com/agentstation/starport/internal/server/account_template_routes_test.go:59
+        	Error:      	Not equal: 
+        	            	expected: 201
+        	            	actual  : 404
+        	Test:       	TestAccountTemplateCRUDRoutes
+        	Messages:   	{"error":{"code":404,"message":"The requested endpoint does not exist","metadata":{"error_type":"not_found_error"}}}
+{"level":"info","provider":"mock","time":"2026-08-29T06:00:58-05:00","message":"registered connector"}
+{"level":"info","method":"POST","path":"/api/v1/admin/account-templates","remote_addr":"192.0.2.1:1234","client_ip":"192.0.2.1","request_id":"Jacks-MacBook-Pro.local/L8ZdfHDkeO-000002","status":404,"bytes":117,"duration":0.017291,"time":"2026-08-29T06:00:58-05:00","message":"request completed"}
+--- FAIL: TestAccountTemplateRoutesRefuseInvalid (0.00s)
+    account_template_routes_test.go:133: 
+        	Error Trace:	/Users/jack/src/github.com/agentstation/starport/internal/server/account_template_routes_test.go:133
+        	Error:      	Not equal: 
+        	            	expected: 400
+        	            	actual  : 404
+        	Test:       	TestAccountTemplateRoutesRefuseInvalid
+        	Messages:   	{"error":{"code":404,"message":"The requested endpoint does not exist","metadata":{"error_type":"not_found_error"}}}
+{"level":"info","provider":"mock","time":"2026-08-29T06:00:58-05:00","message":"registered connector"}
+{"level":"info","method":"POST","path":"/api/v1/admin/account-templates","remote_addr":"192.0.2.1:1234","client_ip":"192.0.2.1","request_id":"Jacks-MacBook-Pro.local/L8ZdfHDkeO-000003","status":404,"bytes":117,"duration":0.015125,"time":"2026-08-29T06:00:58-05:00","message":"request completed"}
+--- FAIL: TestAccountCreateFromTemplate (0.00s)
+    account_template_routes_test.go:164: 
+        	Error Trace:	/Users/jack/src/github.com/agentstation/starport/internal/server/account_template_routes_test.go:164
+        	Error:      	Not equal: 
+        	            	expected: 201
+        	            	actual  : 404
+        	Test:       	TestAccountCreateFromTemplate
+        	Messages:   	{"error":{"code":404,"message":"The requested endpoint does not exist","metadata":{"error_type":"not_found_error"}}}
+FAIL
+FAIL	github.com/agentstation/starport/internal/server	1.631s
+FAIL
+
+================================================================
+After implementation (same branch, codex/csh-e1-account-templates)
+================================================================
+
+The three route tests above now pass, with the model, repository, and
+composition tests beside them:
+
+$ go test -count=1 -v -run 'TestAccountTemplate|TestAccountCreateFromTemplate' ./internal/server/
+--- PASS: TestAccountTemplateCRUDRoutes
+--- PASS: TestAccountTemplateRoutesRefuseInvalid
+--- PASS: TestAccountCreateFromTemplate
+(3 of 3 pass; the same three failed with 404 on baseline above)
+
+$ go test -count=1 ./internal/account/... ./internal/server/... ./internal/sqlstore/... ./internal/app/...
+ok  internal/account            (18 passing tests/subtests, template model,
+                                 repository CRUD, conflicts, validation,
+                                 pagination, nil-store refusal among them)
+ok  internal/server
+ok  internal/server/controllers
+ok  internal/sqlstore
+ok  internal/app
+
+Verifier: bash scripts/verify-credential-sharing.sh
+  PASS CSH-V15 account templates stamp creation defaults
+  Summary: 15 passed, 8 failed
+  (was 14 passed, 9 failed before this task; the 8 remaining failures
+   are owned by CSH-E2, F1-F3, G1-G2, and H1)
+
+CSH-V15 note: the check's original single token 'AccountTemplate' was a
+pre-implementation guess at the Go type name. Package account already
+owns the Account concept, so the idiomatic type is account.Template.
+The check now pins two stronger tokens instead of one weaker one:
+'type Template struct' and 'func (t Template) Stamp' in internal/account,
+which name the actual type and the stamping behavior the condition
+describes.
+
+Acceptance evidence:
+- "creating from a template stamps the defaults": TestAccountCreateFromTemplate
+  (HTTP level) and TestTemplateStampCopiesWithoutSharing (model level).
+- "editing a template never rewrites existing accounts":
+  TestAccountCreateFromTemplate PUTs the template to operator_first with a
+  lower limit and re-reads the account: still byok_first with the stamped
+  limit. TestTemplateStampCopiesWithoutSharing mutates the template's
+  Limits, BYOK providers, and Access models after the stamp and proves the
+  account holds its own copies.

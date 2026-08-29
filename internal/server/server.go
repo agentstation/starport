@@ -86,6 +86,10 @@ type Dependencies struct {
 	// Presets serves stored preset management. A nil repository degrades
 	// the preset endpoints to 503, loudly.
 	Presets presets.Repository
+	// Templates serves account templates: the named creation defaults an
+	// account can be stamped from. A nil repository degrades the template
+	// endpoints to 503, loudly.
+	Templates account.TemplateRepository
 	// Files serves the stored file surface. A nil service degrades the file
 	// endpoints to 503, loudly: the routes stay registered so a caller reads
 	// that this deployment configured no file storage rather than that the
@@ -159,6 +163,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		ProviderOperations: s.providerOperations,
 		Catalog:            dependencies.Catalog,
 		Presets:            dependencies.Presets,
+		Templates:          dependencies.Templates,
 		Files:              dependencies.Files,
 		Jobs:               dependencies.Jobs,
 		FileUploadBound:    config.MaxFileUploadSize,

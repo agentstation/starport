@@ -238,6 +238,18 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 						r.Delete("/{account_id}", s.controllers.Accounts.Delete)
 					})
 
+					// Account templates: the named creation defaults an
+					// account can be stamped from. They sit beside the
+					// accounts because a template is an account-shaped
+					// thing, not an account.
+					r.Route("/account-templates", func(r chi.Router) {
+						r.Get("/", s.controllers.AccountTemplates.List)
+						r.Post("/", s.controllers.AccountTemplates.Create)
+						r.Get("/{template_id}", s.controllers.AccountTemplates.Get)
+						r.Put("/{template_id}", s.controllers.AccountTemplates.Update)
+						r.Delete("/{template_id}", s.controllers.AccountTemplates.Delete)
+					})
+
 					// System information
 					r.Get("/info", s.controllers.Admin.SystemInfo)
 					r.Get("/metrics", s.controllers.Admin.Metrics)
@@ -392,6 +404,11 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /api/v1/admin/accounts/{account_id}    - Get account details
 //   PUT    /api/v1/admin/accounts/{account_id}    - Update an account, revision-checked
 //   DELETE /api/v1/admin/accounts/{account_id}    - Delete an account that holds no keys
+//   GET    /api/v1/admin/account-templates                - List account templates
+//   POST   /api/v1/admin/account-templates                - Create an account template
+//   GET    /api/v1/admin/account-templates/{template_id}  - Get one template
+//   PUT    /api/v1/admin/account-templates/{template_id}  - Update a template, revision-checked
+//   DELETE /api/v1/admin/account-templates/{template_id}  - Delete a template
 //   GET    /api/v1/admin/info              - System information
 //   GET    /api/v1/admin/metrics           - System metrics
 //   GET    /api/v1/admin/activity          - List request activity across keys

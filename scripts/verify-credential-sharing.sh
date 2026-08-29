@@ -136,7 +136,7 @@ check CSH-V14 "planning refuses a model outside the account's access, held by te
 # --- Phase E, account templates ---
 
 check CSH-V15 "account templates stamp creation defaults" \
-  all_present 'AccountTemplate' -- internal/account
+  all_present 'type Template struct' 'func (t Template) Stamp' -- internal/account
 
 check CSH-V16 "the console word for creation defaults is template, not preset" \
   ts_all_present 'account template'

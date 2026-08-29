@@ -33,6 +33,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../failure",
 		"../identity",
 		"../account",
+		"../sqlstore",
 		"../limits",
 		"../credentials",
 		"../ratelimit",
@@ -56,6 +57,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/failure",
 		"github.com/agentstation/starport/internal/identity",
 		"github.com/agentstation/starport/internal/account",
+		"github.com/agentstation/starport/internal/sqlstore",
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
@@ -96,7 +98,8 @@ func TestImportGraphArchitecture(t *testing.T) {
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/response/cache"],
 		"github.com/agentstation/starport/internal/inference",
 	)
-	// A repository-owning concept reaches durable storage and the shared
+	// A repository-owning concept reaches durable storage — the key-value
+	// store, and for account templates the relational store — and the shared
 	// limits vocabulary, and nothing else inside the module.
 	for _, packagePath := range []string{
 		"github.com/agentstation/starport/internal/account",
@@ -107,9 +110,13 @@ func TestImportGraphArchitecture(t *testing.T) {
 	} {
 		assertOnlyInternalImports(t, packages[packagePath],
 			"github.com/agentstation/starport/internal/storage",
+			"github.com/agentstation/starport/internal/sqlstore",
 			"github.com/agentstation/starport/internal/limits",
 		)
 	}
+	// The relational store is a leaf beside the key-value store: it holds
+	// rows for the concepts that own them and reads no meaning of its own.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/sqlstore"])
 	// A gateway API key belongs to an account, so identity reaches the account
 	// model for its ID rules and its canonical ID. The loop above holds the
 	// other direction closed: account may never reach identity, because an

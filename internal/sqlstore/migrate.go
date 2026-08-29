@@ -97,7 +97,7 @@ func migrationNames(fsys fs.FS, dialect string) ([]string, error) {
 func (db *DB) migrationApplied(ctx context.Context, name string) (bool, error) {
 	var count int
 	err := db.QueryRowContext(ctx,
-		db.bind(`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`), name,
+		db.Bind(`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`), name,
 	).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("read schema_migrations: %w", err)
@@ -123,15 +123,16 @@ func (db *DB) applyMigration(ctx context.Context, fsys fs.FS, name string) error
 		return err
 	}
 	if _, err := tx.ExecContext(ctx,
-		db.bind(`INSERT INTO schema_migrations (name) VALUES (?)`), name); err != nil {
+		db.Bind(`INSERT INTO schema_migrations (name) VALUES (?)`), name); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-// bind rewrites ? placeholders into the dialect's form. PostgreSQL numbers
-// its placeholders; the other engines take ? as written.
-func (db *DB) bind(query string) string {
+// Bind rewrites ? placeholders into the dialect's form. PostgreSQL numbers
+// its placeholders; the other engines take ? as written. A repository on
+// this contract writes its statements once with ? and binds per dialect.
+func (db *DB) Bind(query string) string {
 	if db.dialect != TypePostgres {
 		return query
 	}
