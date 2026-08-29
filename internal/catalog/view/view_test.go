@@ -151,6 +151,19 @@ func TestProvidersProjectionContract(t *testing.T) {
 	require.False(t, unauth[0].RequiresAuth)
 }
 
+// TestProvidersSeparateTheWebsiteFromTheStatusPage holds the two links
+// apart: url is the provider's front door and status_page_url is where its
+// live service health is published. Before starmap named the website, the
+// status page stood in for both and the console's "Website" link lied.
+func TestProvidersSeparateTheWebsiteFromTheStatusPage(t *testing.T) {
+	snapshot := fixtureSnapshot(t, "anthropic")
+	providers := Providers(snapshot, nil)
+	require.Len(t, providers, 1)
+	provider := providers[0]
+	require.Equal(t, "https://www.anthropic.com", provider.URL)
+	require.Equal(t, "https://status.anthropic.com", provider.StatusPageURL)
+}
+
 func TestModelsCarryEveryOffering(t *testing.T) {
 	snapshot := fixtureSnapshot(t, "google-ai-studio", "google-vertex")
 	var multi *ModelInfo

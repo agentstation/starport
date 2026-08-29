@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, BookOpen, Globe } from "lucide-react";
+import { Activity, ArrowLeft, BookOpen, Globe } from "lucide-react";
 import { useMemo } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
@@ -153,6 +153,15 @@ function ProviderDetailPage() {
             className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
           >
             Documentation
+          </ExternalLink>
+        )}
+        {entry?.status_page_url && (
+          <ExternalLink
+            href={entry.status_page_url}
+            icon={Activity}
+            className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
+          >
+            Status
           </ExternalLink>
         )}
       </div>

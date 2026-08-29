@@ -4,7 +4,8 @@
     "name": "Anthropic",
     "description": "Anthropic serves the Claude model family with first-party APIs for messages, tools, and batch processing.",
     "docs_url": "https://docs.anthropic.com/",
-    "url": "https://status.anthropic.com",
+    "url": "https://www.anthropic.com",
+    "status_page_url": "https://status.anthropic.com",
     "models": [
       "anthropic/claude-fable-5",
       "anthropic/claude-haiku-4-5-20251001",
@@ -43,7 +44,8 @@
     "name": "Groq",
     "description": "Groq serves open-weight models on custom LPU hardware with very low latency.",
     "docs_url": "https://console.groq.com/docs",
-    "url": "https://status.groq.com",
+    "url": "https://groq.com",
+    "status_page_url": "https://groqstatus.com",
     "models": [
       "groq/canopylabs/orpheus-arabic-saudi",
       "groq/canopylabs/orpheus-v1-english",

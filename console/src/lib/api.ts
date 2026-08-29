@@ -309,6 +309,7 @@ export type ProviderCatalogEntry = {
   description?: string;
   docs_url?: string;
   url?: string;
+  status_page_url?: string;
   models?: string[];
   credential_fields?: CredentialField[];
   headquarters?: string;
