@@ -73,13 +73,19 @@ func Open(store storage.KVStore) (Repository, error) {
 }
 
 func (r *repository) Create(ctx context.Context, value Account) (Record, error) {
-	if err := value.Validate(); err != nil {
-		return Record{}, err
-	}
 	stored := accountRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      1,
 		Account:       cloneAccount(value),
+	}
+	// Creation time is a property of the record, not of the caller's payload.
+	// The timestamps are stamped before validation so the check reads the
+	// record this call actually writes.
+	created := r.now().UTC()
+	stored.Account.CreatedAt = created
+	stored.Account.UpdatedAt = created
+	if err := stored.Account.Validate(); err != nil {
+		return Record{}, err
 	}
 	data, err := json.Marshal(stored)
 	if err != nil {
@@ -104,7 +110,6 @@ func (r *repository) EnsureDefault(ctx context.Context) (Record, error) {
 	if !errors.Is(err, ErrNotFound) {
 		return Record{}, err
 	}
-	created := r.now().UTC()
 	// The strategy is written rather than left empty so the stored record
 	// states the policy instead of relying on a zero-value reading.
 	record, err := r.Create(ctx, Account{
@@ -112,8 +117,6 @@ func (r *repository) EnsureDefault(ctx context.Context) (Record, error) {
 		Name:               DefaultName,
 		CredentialStrategy: StrategyOperatorFirst,
 		Active:             true,
-		CreatedAt:          created,
-		UpdatedAt:          created,
 	})
 	if err == nil {
 		return record, nil

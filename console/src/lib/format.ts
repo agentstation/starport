@@ -57,7 +57,10 @@ export function formatWindow(seconds: number | undefined): string {
 export function formatRelativeTime(iso: string | undefined): string {
   if (!iso) return "—";
   const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) return "—";
+  // A zero-value Go time serializes as "0001-01-01T00:00:00Z", which parses
+  // to a finite pre-epoch instant. An absent stamp renders as absent, never
+  // as a first-century date.
+  if (!Number.isFinite(then) || then <= 0) return "—";
   const seconds = Math.round((Date.now() - then) / 1000);
   if (seconds < 60) return "just now";
   const minutes = Math.round(seconds / 60);
