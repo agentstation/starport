@@ -5,6 +5,7 @@ import { useGatewayAccessRejected } from "@/lib/useGatewayAccess";
 
 import { CommandBlock } from "./CommandBlock";
 import { destination } from "./destination";
+import { IdentitySignIn } from "./IdentitySignIn";
 import { trustScope } from "./trust";
 
 // FirstContact is the page a browser with no usable credential sees.
@@ -104,6 +105,8 @@ export function FirstContact({ next }: { next?: string }) {
           {pending ? "Opening…" : "Open console"}
         </button>
       </form>
+
+      <IdentitySignIn />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-text-2">On the machine running this gateway</h2>

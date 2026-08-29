@@ -41,10 +41,24 @@ func NewGate(token Token, bindHost string) *Gate {
 	gate.register(ticketGrant{token: token, tickets: tickets})
 	gate.register(newLocalTokenGrant(token, bindHost))
 	// Registered with no provider, so asking for it answers
-	// ErrIdentityProviderNotConfigured rather than "no such grant". Nothing in
-	// this repository supplies one.
+	// ErrIdentityProviderNotConfigured rather than "no such grant". The
+	// composition root fills the slot through UseIdentityProvider when an
+	// operator has configured identity; nothing else may.
 	gate.register(newIdentityGrant(token))
 	return gate
+}
+
+// UseIdentityProvider fills the identity grant's slot. It is the one way a
+// provider reaches the grant, so a deployment where nothing calls it keeps
+// the inert refusal, and a deployment where the composition root does gets
+// real sign-in through the same registered grant.
+func (g *Gate) UseIdentityProvider(provider IdentityProvider) {
+	if g == nil || provider == nil {
+		return
+	}
+	if grant, ok := g.grants[GrantIdentity].(*identityGrant); ok {
+		grant.provider = provider
+	}
 }
 
 // register files a grant under the kind it reports. A grant registered under a

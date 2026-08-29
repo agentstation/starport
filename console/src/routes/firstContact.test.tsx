@@ -103,11 +103,17 @@ afterEach(async () => {
 // got the shell: navigation to pages it could not read, and every panel behind
 // it firing a request the gateway would refuse. The reader learned they were
 // locked out from a wall of failures rather than from a page that told them.
-test("a browser with no credential meets the first-contact page and asks the gateway for nothing", async () => {
+//
+// One request is allowed, and it is the page's own: the identity-provider
+// list, which decides whether the page offers the operator-configured
+// identity providers. It carries no credential and the gateway answers it to
+// anyone, so it does not reopen what this test closed — the property held
+// here is that nothing behind the locked shell fires.
+test("a browser with no credential meets the first-contact page and asks only for the provider list", async () => {
   await open("/models");
 
   expect(await screen.findByRole("heading", { name: /open this console/i })).toBeTruthy();
-  expect(fetches).toEqual([]);
+  expect(fetches).toEqual(["/console/identity/providers"]);
 });
 
 // The redirect carries where the reader was going, so a deep link survives
@@ -166,8 +172,10 @@ test("pasting a token posts it to the session route and sends no bearer key", as
   fireEvent.change(field, { target: { value: "  starport_local_secret  " } });
   fireEvent.click(screen.getByRole("button", { name: /open console/i }));
 
-  await waitFor(() => expect(fetches).toEqual(["/console/session"]));
-  const sent = calls[0] ?? {};
+  await waitFor(() => expect(fetches).toContain("/console/session"));
+  // The provider-list read may land before or after the paste; the properties
+  // held here belong to the session request alone.
+  const sent = calls[fetches.indexOf("/console/session")] ?? {};
   expect(sent.method).toBe("POST");
   // Trimmed: an operator pasting from a terminal brings whitespace with it.
   expect(sent.body).toBe(JSON.stringify({ token: "starport_local_secret" }));

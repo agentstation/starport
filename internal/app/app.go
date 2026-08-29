@@ -25,6 +25,7 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/files"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/localauth"
@@ -39,6 +40,7 @@ import (
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/agentstation/starport/internal/tokenize"
@@ -182,6 +184,7 @@ type runtimeBuilder struct {
 	console      console.PageServer
 	auth         authRuntime
 	gate         *localauth.Gate
+	identityAuth *identity.Gothic
 }
 
 // authRuntime is the resolved authentication mode and the store that keeps a
@@ -203,6 +206,7 @@ func (b *runtimeBuilder) compose() error {
 		b.openCache,
 		b.buildGateway,
 		b.openConsole,
+		b.openIdentity,
 		b.openHTTPServer,
 	}
 	for _, step := range steps {
@@ -619,17 +623,61 @@ func (b *runtimeBuilder) fileBackend() string {
 	return b.application.blobStore.Backend()
 }
 
+// openIdentity turns on the OAuth acquisition path when the operator
+// configured one. It runs after openConcepts so the gate and the relational
+// store both exist. A deployment with no identity configuration skips all of
+// it: the identity grant stays inert and the console keeps its machine-local
+// grants.
+func (b *runtimeBuilder) openIdentity() error {
+	if !b.config.Identity.OAuth.Enabled() {
+		return nil
+	}
+	repositories, err := identity.Open(b.sqlDB)
+	if err != nil {
+		return fmt.Errorf("open identity repositories: %w", err)
+	}
+	oauth := b.config.Identity.RuntimeOAuth()
+	if oauth.CallbackBaseURL == "" {
+		// The bind address is the one URL this gateway certainly serves. An
+		// operator fronting it with a proxy sets the base explicitly.
+		oauth.CallbackBaseURL = fmt.Sprintf("http://%s:%d",
+			b.config.Server.Host, b.config.Server.Port)
+	}
+	acquisition, err := identity.NewGothic(oauth, repositories.Users)
+	if err != nil {
+		return fmt.Errorf("open OAuth identity: %w", err)
+	}
+	b.gate.UseIdentityProvider(acquisition)
+	b.identityAuth = acquisition
+	log.Info().
+		Strs("providers", acquisition.Providers()).
+		Msg("Identity OAuth acquisition ready")
+	return nil
+}
+
+// identityAuthenticator hands the acquisition path across as the server's
+// contract. The nil check matters: a nil *identity.Gothic wrapped in a
+// non-nil interface would make the routes call a nil receiver instead of
+// reading "not configured".
+func (b *runtimeBuilder) identityAuthenticator() controllers.IdentityAuthenticator {
+	if b.identityAuth == nil {
+		return nil
+	}
+	return b.identityAuth
+}
+
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config, b.auth), server.Dependencies{
 		Service: b.gateway, Identities: b.identities, Accounts: b.accounts,
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
-		Templates:   b.templates,
-		Files:       b.files,
-		Jobs:        b.jobs,
-		FileBackend: b.fileBackend(),
-		LocalGate:   b.gate,
+		Templates:    b.templates,
+		Files:        b.files,
+		Jobs:         b.jobs,
+		FileBackend:  b.fileBackend(),
+		LocalGate:    b.gate,
+		IdentityAuth: b.identityAuthenticator(),
 	})
 	if err != nil {
 		if httpServer != nil {

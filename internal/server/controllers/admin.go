@@ -469,7 +469,7 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 		"files": map[string]any{
 			"backend": h.fileStorage(),
 		},
-		"providers": map[string]any{
+		providersField: map[string]any{
 			responseCountField: systemInfoUnavailable,
 			"status":           systemInfoUnavailable,
 		},
@@ -606,7 +606,7 @@ func metricsFromSample(records []usage.Record, now time.Time) map[string]any {
 			"currency":              currency,
 			"requests_without_cost": uncosted,
 		},
-		"providers": providers,
+		providersField: providers,
 	}
 }
 

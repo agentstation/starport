@@ -111,6 +111,8 @@ func (r *userRepository) Create(ctx context.Context, value User) (UserRecord, er
 	if err != nil {
 		return UserRecord{}, fmt.Errorf("encode user record: %w", err)
 	}
+	// #nosec G701 -- The SQL is a compile-time constant; the OAuth-derived
+	// values only ever ride placeholders.
 	_, err = r.db.ExecContext(ctx,
 		r.db.Bind(`INSERT INTO users (id, subject, revision, record) VALUES (?, ?, ?, ?)`),
 		stored.User.ID, stored.User.Subject, stored.Revision, string(data))
@@ -130,21 +132,24 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (UserRecord, er
 	if id == "" {
 		return UserRecord{}, ErrMissingID
 	}
-	return r.getWhere(ctx, `id = ?`, id)
+	return r.getWhere(ctx, `SELECT record FROM users WHERE id = ?`, id)
 }
 
 func (r *userRepository) GetBySubject(ctx context.Context, subject string) (UserRecord, error) {
 	if subject == "" {
 		return UserRecord{}, ErrMissingSubject
 	}
-	return r.getWhere(ctx, `subject = ?`, subject)
+	return r.getWhere(ctx, `SELECT record FROM users WHERE subject = ?`, subject)
 }
 
-func (r *userRepository) getWhere(ctx context.Context, clause, argument string) (UserRecord, error) {
+// getWhere takes the whole query rather than a clause fragment so every SQL
+// string in this file is a compile-time constant; the argument only ever
+// rides a placeholder.
+func (r *userRepository) getWhere(ctx context.Context, query, argument string) (UserRecord, error) {
 	var data string
-	err := r.db.QueryRowContext(ctx,
-		r.db.Bind(`SELECT record FROM users WHERE `+clause), argument,
-	).Scan(&data)
+	// #nosec G701 -- Both callers pass a compile-time constant query; the
+	// argument only ever rides the placeholder.
+	err := r.db.QueryRowContext(ctx, r.db.Bind(query), argument).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return UserRecord{}, ErrUserNotFound
 	}
@@ -196,6 +201,8 @@ func (r *userRepository) Update(ctx context.Context, value User, expectedRevisio
 		return UserRecord{}, fmt.Errorf("encode user update: %w", err)
 	}
 	// The revision guard in the WHERE clause is the compare-and-swap.
+	// #nosec G701 -- The SQL is a compile-time constant; the OAuth-derived
+	// values only ever ride placeholders.
 	result, err := r.db.ExecContext(ctx,
 		r.db.Bind(`UPDATE users SET revision = ?, record = ? WHERE id = ? AND revision = ?`),
 		updated.Revision, string(data), updated.User.ID, expectedRevision)
@@ -227,6 +234,8 @@ func (r *userRepository) Delete(ctx context.Context, id string, expectedRevision
 
 func (r *userRepository) taken(ctx context.Context, id, subject string) (bool, error) {
 	var count int
+	// #nosec G701 -- The SQL is a compile-time constant; the OAuth-derived
+	// values only ever ride placeholders.
 	err := r.db.QueryRowContext(ctx,
 		r.db.Bind(`SELECT COUNT(*) FROM users WHERE id = ? OR subject = ?`), id, subject,
 	).Scan(&count)
