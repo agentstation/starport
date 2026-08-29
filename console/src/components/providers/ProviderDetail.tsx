@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
+import { ExternalLink } from "@/components/ui/ExternalLink";
 import type {
   ActivityRecord,
   ProviderCatalogEntry,
@@ -139,14 +140,12 @@ export function PolicySummary({
             <dt className="w-32 shrink-0 text-sm text-text-4">{fact.label}</dt>
             <dd className="min-w-0 text-sm text-text-2">
               {fact.href ? (
-                <a
+                <ExternalLink
                   href={fact.href}
-                  target="_blank"
-                  rel="noreferrer"
                   className="break-all text-accent-link transition-colors duration-150 ease-standard hover:underline"
                 >
                   {fact.value}
-                </a>
+                </ExternalLink>
               ) : (
                 fact.value
               )}

@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { ExternalLink } from "lucide-react";
+import { Globe } from "lucide-react";
+import type { ComponentType } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
+import { ExternalLink } from "@/components/ui/ExternalLink";
+import { GitHubMark, HuggingFaceMark, XMark } from "@/components/ui/icons";
 import type { CatalogAuthor, Model } from "@/lib/api";
 import { authorIdsOf } from "@/lib/modelFilter";
 import { formatCount } from "@/lib/format";
@@ -65,24 +68,32 @@ export function sortAuthors(
   );
 }
 
+// Each destination renders under its own mark so the row reads at a
+// glance; the shared anchor still appends the new-tab glyph.
+const LINK_MARKS: Record<string, ComponentType<{ className?: string }>> = {
+  website: Globe,
+  github: GitHubMark,
+  "hugging face": HuggingFaceMark,
+  twitter: XMark,
+};
+
 export function AuthorLinks({ author }: { author: CatalogAuthor }) {
   const links = authorExternalLinks(author);
   if (links.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-3">
       {links.map((link) => (
-        <a
+        <ExternalLink
           key={link.label}
           href={link.href}
-          target="_blank"
-          rel="noreferrer"
+          icon={LINK_MARKS[link.label]}
+          iconClassName="size-3 shrink-0"
           // relative lifts these above the card's stretched detail link,
           // which would otherwise swallow the click.
-          className="relative flex items-center gap-1 text-xs text-text-3 transition-colors duration-150 ease-standard hover:text-text-1"
+          className="relative text-xs text-text-3 transition-colors duration-150 ease-standard hover:text-text-1"
         >
-          <ExternalLink className="size-3" />
           {link.label}
-        </a>
+        </ExternalLink>
       ))}
     </div>
   );

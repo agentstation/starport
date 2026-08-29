@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen, Globe } from "lucide-react";
 import { useMemo } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
+import { ExternalLink } from "@/components/ui/ExternalLink";
 import { ServedCredentialPanel } from "@/components/credentials/ServedCredentialPanel";
 import {
   availableOfferings,
@@ -137,24 +138,22 @@ function ProviderDetailPage() {
           Browse models
         </Link>
         {entry?.url && (
-          <a
+          <ExternalLink
             href={entry.url}
-            target="_blank"
-            rel="noreferrer"
+            icon={Globe}
             className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
           >
             Website
-          </a>
+          </ExternalLink>
         )}
         {entry?.docs_url && (
-          <a
+          <ExternalLink
             href={entry.docs_url}
-            target="_blank"
-            rel="noreferrer"
+            icon={BookOpen}
             className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
           >
             Documentation
-          </a>
+          </ExternalLink>
         )}
       </div>
 
