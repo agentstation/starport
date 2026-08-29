@@ -46,6 +46,29 @@ func TestOfferingAvailabilityStateMachine(t *testing.T) {
 	require.GreaterOrEqual(t, len(publisher.snapshots), 4)
 }
 
+func TestUnreachableOpensTheCircuit(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(100, 0)}
+	tracker, err := New(Config{FailureThreshold: 2, OpenDuration: time.Minute}, clock, nil)
+	require.NoError(t, err)
+	route := routing.Route{CatalogGenerationID: "g1", ModelID: "model", ProviderID: "provider", ProviderModelID: "model-v1"}
+	unreachable := failure.New(
+		failure.Unreachable,
+		"no response",
+		true,
+		failure.ProviderDetails{StateScope: failure.ScopeOffering},
+		nil,
+	)
+
+	// A provider that never answers must trip the same breaker a responding
+	// erroring provider does, and the record must keep the no-response kind
+	// so the projection can tell the two apart.
+	tracker.RecordFailure(route, unreachable, time.Second)
+	tracker.RecordFailure(route, unreachable, time.Second)
+	record := tracker.Snapshot().Records[0]
+	require.Equal(t, StateOpen, record.State)
+	require.Equal(t, failure.Unreachable, record.FailureKind)
+}
+
 func TestNotFoundRequiresExplicitReset(t *testing.T) {
 	tracker, err := New(DefaultConfig(), nil, nil)
 	require.NoError(t, err)

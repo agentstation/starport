@@ -56,7 +56,9 @@ func NormalizeFailure(provider string, err error) *failure.Failure {
 	case errors.Is(err, ErrInvalidAPIKey):
 		return failure.New(failure.Authentication, "Provider authentication failed.", false, failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeCredential}, err)
 	default:
-		return failure.New(failure.ProviderUnavailable, "The provider request failed.", true, failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeOffering}, err)
+		// No APIError means no provider verdict came back: the transport
+		// failed before a response. That is unreachable, not unavailable.
+		return failure.New(failure.Unreachable, "The provider did not respond.", true, failure.ProviderDetails{Provider: provider, StateScope: failure.ScopeOffering}, err)
 	}
 }
 
@@ -133,6 +135,8 @@ func safeProviderMessage(kind failure.Kind) string {
 		return "The provider request timed out."
 	case failure.RateLimit:
 		return "The provider rate limit was reached."
+	case failure.Unreachable:
+		return "The provider did not respond."
 	default:
 		return "The provider request failed."
 	}

@@ -482,7 +482,8 @@ func CanFallback(providerFailure *failure.Failure) bool {
 	}
 	switch providerFailure.Kind() {
 	case failure.RateLimit, failure.Quota, failure.NotFound, failure.ContextLimit,
-		failure.ContentBlocked, failure.ProviderUnavailable, failure.Timeout:
+		failure.ContentBlocked, failure.ProviderUnavailable, failure.Unreachable,
+		failure.Timeout:
 		return true
 	default:
 		return false

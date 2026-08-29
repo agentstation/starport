@@ -236,7 +236,7 @@ func (t *Tracker) RecordFailure(route routing.Route, providerFailure *failure.Fa
 	entry := t.records[offering]
 	switch providerFailure.Kind() {
 	case failure.NotFound, failure.RateLimit, failure.Quota,
-		failure.ProviderUnavailable, failure.Timeout:
+		failure.ProviderUnavailable, failure.Unreachable, failure.Timeout:
 		if entry == nil {
 			value := entryValue(StateHealthy)
 			entry = &value
@@ -256,7 +256,8 @@ func (t *Tracker) RecordFailure(route routing.Route, providerFailure *failure.Fa
 		*entry = entryValue(StateUnavailable)
 		entry.failureKind = failure.NotFound
 		changed = true
-	case failure.RateLimit, failure.Quota, failure.ProviderUnavailable, failure.Timeout:
+	case failure.RateLimit, failure.Quota, failure.ProviderUnavailable,
+		failure.Unreachable, failure.Timeout:
 		entry.failureKind = providerFailure.Kind()
 		entry.consecutiveFailure++
 		entry.probeInFlight = false

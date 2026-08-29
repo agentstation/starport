@@ -75,6 +75,38 @@ func TestProviderStateProjectionContract(t *testing.T) {
 	require.Equal(t, ReasonAuthenticationUnsupported, anthropic.Adapter.Reason)
 }
 
+// TestUnreachableProjectsItsOwnReason proves the no-response failure kind
+// keeps its identity through projection: an operator reading the snapshot can
+// tell a provider that never answered from one that answered with an error.
+func TestUnreachableProjectsItsOwnReason(t *testing.T) {
+	catalog := embeddedCatalog(t)
+	openAIOfferings, err := catalog.ProviderOfferings(catalogs.ProviderIDOpenAI)
+	require.NoError(t, err)
+	require.NotEmpty(t, openAIOfferings)
+	modelID := openAIOfferings[0].ProviderModelID
+
+	store := New()
+	require.NoError(t, store.PublishCatalog("generation-1", catalog, catalogAdapterObservations(catalog,
+		AdapterObservation{ProviderID: catalogs.ProviderIDOpenAI, State: AdapterReady},
+	)))
+	require.NoError(t, store.PublishAvailability(availability.Snapshot{
+		Revision: 1,
+		Records: []availability.Record{{
+			Offering: availability.Offering{
+				ProviderID:      string(catalogs.ProviderIDOpenAI),
+				ProviderModelID: string(modelID),
+			},
+			State:       availability.StateOpen,
+			FailureKind: failure.Unreachable,
+		}},
+	}))
+
+	openAI := requireProvider(t, store.Snapshot(), catalogs.ProviderIDOpenAI)
+	offering := requireOffering(t, openAI, modelID)
+	require.Equal(t, availability.StateOpen, offering.State)
+	require.Equal(t, ReasonProviderUnreachable, offering.Reason)
+}
+
 // TestCredentialDetailRoundTripsAndDetectsChange proves the operator-facing
 // detail text survives projection into the snapshot and that a detail-only
 // change advances the revision.

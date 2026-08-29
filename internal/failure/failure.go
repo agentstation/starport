@@ -25,8 +25,13 @@ const (
 	ContextLimit Kind = "context_limit"
 	// ContentBlocked identifies a provider content-policy rejection.
 	ContentBlocked Kind = "content_blocked"
-	// ProviderUnavailable identifies a provider that cannot accept the attempt.
+	// ProviderUnavailable identifies a provider that responded and cannot
+	// accept the attempt.
 	ProviderUnavailable Kind = "provider_unavailable"
+	// Unreachable identifies a provider that returned no response at all:
+	// the request left the gateway and the transport failed before any
+	// provider verdict came back.
+	Unreachable Kind = "unreachable"
 	// Timeout identifies an elapsed request deadline.
 	Timeout Kind = "timeout"
 	// Canceled identifies caller cancellation.
