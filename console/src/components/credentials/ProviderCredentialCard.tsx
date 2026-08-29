@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
 import {
@@ -17,12 +17,12 @@ import { Select } from "@/components/ui/Select";
 import { SidePanel } from "@/components/ui/SidePanel";
 import {
   ApiError,
-  getGatewayCredential,
+  createSharedCredential,
   listAccounts,
+  listSharedCredentials,
   putBYOKCredential,
-  putGatewayCredential,
   validateBYOKCredential,
-  validateGatewayCredential,
+  validateSharedCredential,
   type CredentialField,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
@@ -33,10 +33,10 @@ import {
 // provider spends one row of the page instead of a column.
 //
 // The sources split into two owners. Shared credentials are the operator's
-// money — one read from the process environment, one stored through the
-// console (the keyring calls it the gateway credential; on screen the word is
-// "shared") — and every account's requests can use them. An account's own
-// credential pays that account alone and is managed on the accounts screen.
+// money — one read from the process environment, and the ones stored through
+// the console — and the deployment's accounts' requests can use them. An
+// account's own credential pays that account alone and is managed on the
+// accounts screen.
 // A request uses the first usable source in the keyring's default order
 // (internal/providers/keyring, operator_first): environment, then stored,
 // then the account's own.
@@ -62,16 +62,19 @@ export function ProviderCredentialCard({
   const queryClient = useQueryClient();
   const [managing, setManaging] = useState(false);
   const [settingShared, setSettingShared] = useState(false);
+  // The id the empty-state modal's validate call addresses; the create
+  // response supplies it, after apply and before validate.
+  const createdShared = useRef<string | null>(null);
 
   const stored = useQuery({
     queryKey: gatewayCredentialQueryKey(providerId),
-    queryFn: () => getGatewayCredential(providerId),
+    queryFn: () => listSharedCredentials(providerId),
     retry: false,
   });
 
   const envUsable = credential?.usable === true;
   const locked = stored.error instanceof ApiError && stored.error.needsKey;
-  const storedApplied = stored.data?.has_credentials === true;
+  const storedApplied = (stored.data?.length ?? 0) > 0;
   const [envName, prefixedEnvName] = operatorEnvNames(providerId);
 
   return (
@@ -159,12 +162,19 @@ export function ProviderCredentialCard({
           description={`The shared credential for ${name}. Every account's requests can use it; it is stored encrypted and never returned.`}
           fields={fields}
           apply={async (body) => {
-            await putGatewayCredential(providerId, body);
+            const created = await createSharedCredential(providerId, body);
+            createdShared.current = created.id;
             await queryClient.invalidateQueries({
               queryKey: gatewayCredentialQueryKey(providerId),
             });
           }}
-          validate={() => validateGatewayCredential(providerId)}
+          validate={() => {
+            const credentialId = createdShared.current;
+            if (!credentialId) {
+              return Promise.reject(new Error("no credential was applied"));
+            }
+            return validateSharedCredential(providerId, credentialId);
+          }}
           onClose={() => setSettingShared(false)}
         />
       )}

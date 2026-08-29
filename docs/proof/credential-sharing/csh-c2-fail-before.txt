@@ -1,0 +1,19 @@
+--- FAIL: TestSharedCredentialListAndItemRoutes (1.15s)
+    credential_routes_test.go:340: 
+        	Error Trace:	/Users/jack/src/github.com/agentstation/starport/internal/server/credential_routes_test.go:340
+        	Error:      	Not equal: 
+        	            	expected: 200
+        	            	actual  : 404
+        	Test:       	TestSharedCredentialListAndItemRoutes
+        	Messages:   	{"error":{"message":"Provider credential not found","type":"not_found_error"}}
+--- FAIL: TestSharedCredentialAccessInTheBodyReachesResolution (0.00s)
+    credential_routes_test.go:428: 
+        	Error Trace:	/Users/jack/src/github.com/agentstation/starport/internal/server/credential_routes_test.go:428
+        	Error:      	Not equal: 
+        	            	expected: 201
+        	            	actual  : 405
+        	Test:       	TestSharedCredentialAccessInTheBodyReachesResolution
+        	Messages:   	{"error":{"code":405,"message":"Method not allowed","metadata":{"error_type":"invalid_request_error"}}}
+FAIL
+FAIL	github.com/agentstation/starport/internal/server	1.608s
+FAIL

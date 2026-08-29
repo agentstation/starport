@@ -33,7 +33,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const gateway = vi.hoisted(() => ({
-  stored: null as { has_credentials: boolean; created_at: string } | null,
+  stored: [] as { id: string; has_credentials: boolean; created_at: string }[],
   locked: false,
 }));
 
@@ -41,14 +41,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    getGatewayCredential: async (provider: string) => {
+    listSharedCredentials: async (provider: string) => {
       if (gateway.locked) {
         throw new actual.ApiError(401, "admin scope required", null);
       }
-      if (!gateway.stored) {
-        throw new actual.ApiError(404, `no credential for ${provider}`, null);
-      }
-      return { provider, ...gateway.stored };
+      return gateway.stored.map((entry) => ({ provider, ...entry }));
     },
     listAccounts: async () => {
       if (gateway.locked) {
@@ -60,7 +57,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 });
 
 beforeEach(() => {
-  gateway.stored = null;
+  gateway.stored = [];
   gateway.locked = false;
 });
 
@@ -95,7 +92,9 @@ test("a usable environment credential is named as the payer", async () => {
 });
 
 test("a stored shared credential pays when the environment does not", async () => {
-  gateway.stored = { has_credentials: true, created_at: "2026-08-25T00:00:00Z" };
+  gateway.stored = [
+    { id: "shared-1", has_credentials: true, created_at: "2026-08-25T00:00:00Z" },
+  ];
   mount({ state: "not_configured", usable: false });
 
   await waitFor(() =>
@@ -136,7 +135,9 @@ test("a reader without the admin scope is sent to their own credential", async (
 });
 
 test("the manage drawer separates shared sources from the account's own", async () => {
-  gateway.stored = { has_credentials: true, created_at: "2026-08-25T00:00:00Z" };
+  gateway.stored = [
+    { id: "shared-1", has_credentials: true, created_at: "2026-08-25T00:00:00Z" },
+  ];
   const { container } = mount({ state: "ready", usable: true });
 
   await waitFor(() => expect(screen.getByText("manage…")).toBeTruthy());

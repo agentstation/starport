@@ -19,28 +19,33 @@ import { GatewayCredentialPanel } from "./GatewayCredentialPanel";
 // gateway to that — what was sent, and to which route.
 const gateway = vi.hoisted(() => ({
   applied: [] as { provider: string; body: unknown }[],
-  stored: null as { has_credentials: boolean; created_at: string } | null,
+  validated: [] as { provider: string; credentialId: string }[],
+  stored: [] as { id: string; has_credentials: boolean; created_at: string }[],
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    getGatewayCredential: async (provider: string) => {
-      if (!gateway.stored) {
-        throw new actual.ApiError(404, `no credential for ${provider}`, null);
-      }
-      return { provider, ...gateway.stored };
-    },
-    putGatewayCredential: async (provider: string, body: unknown) => {
+    listSharedCredentials: async (provider: string) =>
+      gateway.stored.map((entry) => ({ provider, ...entry })),
+    createSharedCredential: async (provider: string, body: unknown) => {
       gateway.applied.push({ provider, body });
-      gateway.stored = {
+      const entry = {
+        id: `shared-${gateway.stored.length + 1}`,
         has_credentials: true,
         created_at: "2026-08-25T00:00:00Z",
       };
-      return {};
+      gateway.stored.push(entry);
+      return { provider, ...entry };
     },
-    validateGatewayCredential: async () => ({ valid: true }),
+    validateSharedCredential: async (
+      provider: string,
+      credentialId: string,
+    ) => {
+      gateway.validated.push({ provider, credentialId });
+      return { valid: true };
+    },
   };
 });
 
@@ -51,7 +56,8 @@ const FIELDS: CredentialField[] = [
 
 beforeEach(() => {
   gateway.applied = [];
-  gateway.stored = null;
+  gateway.validated = [];
+  gateway.stored = [];
 });
 
 afterEach(cleanup);
@@ -79,9 +85,9 @@ async function openApplyModal() {
   fireEvent.click(screen.getByText("Set credential"));
 }
 
-// A 404 is the gateway saying "no credential here", which is a state to render
-// rather than a failure to report. Reading it as an error would put a red
-// message on every provider an operator has not configured yet.
+// An empty list is the gateway saying "no credential here", which is a state
+// to render rather than a failure to report. Reading it as an error would put
+// a red message on every provider an operator has not configured yet.
 test("reads a missing credential as a state, not a failure", async () => {
   mount();
 
@@ -121,10 +127,14 @@ test("applies the deployment credential without naming an account", async () => 
   ]);
 
   // Validation ran inside the dialog, so the operator learns the credential
-  // works before the modal closes.
+  // works before the modal closes — and it addressed the credential the
+  // create returned, not the whole plane.
   await waitFor(() =>
     expect(screen.getByText(/Applied and validated/)).toBeTruthy(),
   );
+  expect(gateway.validated).toEqual([
+    { provider: "groq", credentialId: "shared-1" },
+  ]);
 });
 
 // A secret with no value would rotate a working credential to nothing, and the

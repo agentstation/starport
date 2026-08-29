@@ -153,10 +153,14 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.Route("/providers/{provider}/credentials", func(r chi.Router) {
 				r.Use(s.requireAdmin)
 
-				r.Get("/", s.controllers.ProviderCredentials.SharedGet)
-				r.Put("/", s.controllers.ProviderCredentials.SharedPut)
-				r.Delete("/", s.controllers.ProviderCredentials.SharedDelete)
-				r.Post("/validate", s.controllers.ProviderCredentials.SharedValidate)
+				r.Get("/", s.controllers.ProviderCredentials.SharedList)
+				r.Post("/", s.controllers.ProviderCredentials.SharedCreate)
+				r.Route("/{credential_id}", func(r chi.Router) {
+					r.Get("/", s.controllers.ProviderCredentials.SharedGet)
+					r.Put("/", s.controllers.ProviderCredentials.SharedUpdate)
+					r.Delete("/", s.controllers.ProviderCredentials.SharedDelete)
+					r.Post("/validate", s.controllers.ProviderCredentials.SharedValidate)
+				})
 			})
 
 			// BYOK: a credential one account brings for itself. The path says
@@ -360,10 +364,12 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   DELETE /api/v1/presets/{name}   - Delete preset (presets:write)
 //
 // Provider Credentials, operator plane (admin):
-//   GET    /api/v1/providers/{provider}/credentials          - Read the deployment credential
-//   PUT    /api/v1/providers/{provider}/credentials          - Apply or rotate it
-//   DELETE /api/v1/providers/{provider}/credentials          - Remove it
-//   POST   /api/v1/providers/{provider}/credentials/validate - Check it against the catalog schema
+//   GET    /api/v1/providers/{provider}/credentials                          - List the shared credentials
+//   POST   /api/v1/providers/{provider}/credentials                          - Create one, access in the body
+//   GET    /api/v1/providers/{provider}/credentials/{credential_id}          - Read one
+//   PUT    /api/v1/providers/{provider}/credentials/{credential_id}          - Rotate or restate one
+//   DELETE /api/v1/providers/{provider}/credentials/{credential_id}          - Remove one
+//   POST   /api/v1/providers/{provider}/credentials/{credential_id}/validate - Check it against the catalog schema
 //
 // Provider Credentials, account plane (BYOK):
 //   GET    /api/v1/accounts/{account_id}/byok                       - List the account's own credentials

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
 import { SourcePill } from "@/components/credentials/SourcePill";
@@ -8,37 +8,35 @@ import { GhostButton, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
   ApiError,
-  deleteGatewayCredential,
-  getGatewayCredential,
-  putGatewayCredential,
-  validateGatewayCredential,
+  createSharedCredential,
+  deleteSharedCredential,
+  listSharedCredentials,
+  updateSharedCredential,
+  validateSharedCredential,
   type CredentialField,
 } from "@/lib/api";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 
-// The shared credential is the provider credential an operator shares with
-// the deployment's accounts. It belongs to no account, so it is addressed by
-// provider alone and edited here, on the provider's own screen, rather than
-// anywhere near a gateway API key. On screen the word is "shared" — the
-// stored half of the Shared group, beside the environment credential that is
-// the same operator's money — and the keyring and the wire now say "shared"
-// too (internal/providers/keyring).
+// A shared credential is a provider credential an operator shares with the
+// deployment's accounts. It belongs to no account, so it is addressed by
+// provider and the id the gateway assigned it, and edited here, on the
+// provider's own screen, rather than anywhere near a gateway API key. On
+// screen the word is "shared" — the stored half of the Shared group, beside
+// the environment credential that is the same operator's money — and the
+// keyring and the wire say "shared" too (internal/providers/keyring).
+//
+// A provider can hold several shared credentials. This panel still renders
+// the plane as one row — the first credential drives it — until the list UI
+// lands; the wire underneath is already the list.
 //
 // It is not BYOK. BYOK is a credential an account brings for itself, and it is
 // managed per account. The provider credential drawer may name accounts as the
 // third resolution source, but this panel never edits one and never names an
-// account: the credential it applies belongs to the deployment. The section
+// account: the credentials it applies belong to the deployment. The section
 // renders as a row of that drawer and carries no chrome of its own.
 
 export function gatewayCredentialQueryKey(providerId: string): string[] {
-  return ["gateway-credential", providerId];
-}
-
-// notApplied reads a 404 as the answer it is: this deployment has no gateway
-// credential for the provider. A missing record is a state to render, not a
-// failure to report.
-function notApplied(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 404;
+  return ["shared-credentials", providerId];
 }
 
 export function GatewayCredentialPanel({
@@ -62,6 +60,10 @@ export function GatewayCredentialPanel({
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
+  // The id the apply modal's validate call addresses. A replace knows it up
+  // front; a create learns it from the response, after apply and before
+  // validate, so a ref carries it across the two calls.
+  const applyTarget = useRef<string | null>(null);
 
   const say = (text: string, error = false) => setNotice({ text, error });
   const refresh = () =>
@@ -69,14 +71,17 @@ export function GatewayCredentialPanel({
       queryKey: gatewayCredentialQueryKey(providerId),
     });
 
-  const credential = useQuery({
+  const credentials = useQuery({
     queryKey: gatewayCredentialQueryKey(providerId),
-    queryFn: () => getGatewayCredential(providerId),
+    queryFn: () => listSharedCredentials(providerId),
     retry: false,
   });
 
+  const stored = credentials.data?.[0];
+
   const validate = useMutation({
-    mutationFn: () => validateGatewayCredential(providerId),
+    mutationFn: (credentialId: string) =>
+      validateSharedCredential(providerId, credentialId),
     onSuccess: (result) => {
       const valid = result?.valid !== false;
       say(
@@ -92,7 +97,8 @@ export function GatewayCredentialPanel({
   });
 
   const remove = useMutation({
-    mutationFn: () => deleteGatewayCredential(providerId),
+    mutationFn: (credentialId: string) =>
+      deleteSharedCredential(providerId, credentialId),
     onSuccess: async () => {
       setConfirmingRemove(false);
       say("Shared credential removed");
@@ -105,9 +111,9 @@ export function GatewayCredentialPanel({
   });
 
   const locked =
-    credential.error instanceof ApiError && credential.error.needsKey;
-  const missing = notApplied(credential.error);
-  const applied = credential.data?.has_credentials === true;
+    credentials.error instanceof ApiError && credentials.error.needsKey;
+  const applied = stored !== undefined;
+  const missing = credentials.data !== undefined && !applied;
 
   return (
     <section
@@ -131,7 +137,7 @@ export function GatewayCredentialPanel({
         {applied && (
           <div className="ml-auto flex items-center gap-1">
             <RowAction
-              onClick={() => validate.mutate()}
+              onClick={() => validate.mutate(stored.id)}
               disabled={validate.isPending}
             >
               validate
@@ -155,29 +161,29 @@ export function GatewayCredentialPanel({
         </p>
       )}
 
-      {credential.isPending ? (
+      {credentials.isPending ? (
         <p className="text-sm text-text-3">Loading credential…</p>
       ) : locked ? (
         <p className="text-sm text-text-3">
           Applied by an operator for the whole deployment. Only an operator key
           with the admin scope can read or apply it.
         </p>
-      ) : credential.error && !missing ? (
+      ) : credentials.error ? (
         <p className="text-sm text-text-3">
-          Failed to load the credential: {credential.error.message}
+          Failed to load the credential: {credentials.error.message}
         </p>
       ) : applied ? (
         <p className="text-sm text-text-2">
           Applied
-          {credential.data?.created_at
-            ? ` ${formatRelativeTime(credential.data.created_at)}`
+          {stored.created_at
+            ? ` ${formatRelativeTime(stored.created_at)}`
             : ""}{" "}
           for the whole deployment · stored encrypted and never returned
-          {credential.data?.last_used
-            ? ` · last used ${formatRelativeTime(credential.data.last_used)}`
+          {stored.last_used
+            ? ` · last used ${formatRelativeTime(stored.last_used)}`
             : ""}
-          {typeof credential.data?.usage_count === "number"
-            ? ` · ${formatCount(credential.data.usage_count)} requests`
+          {typeof stored.usage_count === "number"
+            ? ` · ${formatCount(stored.usage_count)} requests`
             : ""}
           .
         </p>
@@ -201,15 +207,27 @@ export function GatewayCredentialPanel({
           description={`The shared credential for ${name}. Every account's requests can use it; it is stored encrypted and never returned.`}
           fields={fields}
           apply={async (body) => {
-            await putGatewayCredential(providerId, body);
+            if (stored) {
+              applyTarget.current = stored.id;
+              await updateSharedCredential(providerId, stored.id, body);
+            } else {
+              const created = await createSharedCredential(providerId, body);
+              applyTarget.current = created.id;
+            }
             await refresh();
           }}
-          validate={() => validateGatewayCredential(providerId)}
+          validate={() => {
+            const credentialId = applyTarget.current;
+            if (!credentialId) {
+              return Promise.reject(new Error("no credential was applied"));
+            }
+            return validateSharedCredential(providerId, credentialId);
+          }}
           onClose={() => setSetting(false)}
         />
       )}
 
-      {confirmingRemove && (
+      {confirmingRemove && stored && (
         <Modal
           title="Remove shared credential"
           onClose={() => setConfirmingRemove(false)}
@@ -220,7 +238,7 @@ export function GatewayCredentialPanel({
               </GhostButton>
               <button
                 type="button"
-                onClick={() => remove.mutate()}
+                onClick={() => remove.mutate(stored.id)}
                 disabled={remove.isPending}
                 className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-opacity duration-150 ease-standard hover:opacity-90 disabled:opacity-50"
               >
