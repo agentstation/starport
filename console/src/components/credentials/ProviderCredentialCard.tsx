@@ -4,9 +4,9 @@ import { useRef, useState } from "react";
 
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
 import {
-  GatewayCredentialPanel,
-  gatewayCredentialQueryKey,
-} from "@/components/credentials/GatewayCredentialPanel";
+  SharedCredentialPanel,
+  sharedCredentialsQueryKey,
+} from "@/components/credentials/SharedCredentialPanel";
 import { SourcePill } from "@/components/credentials/SourcePill";
 import {
   EnvironmentCredentialPanel,
@@ -67,7 +67,7 @@ export function ProviderCredentialCard({
   const createdShared = useRef<string | null>(null);
 
   const stored = useQuery({
-    queryKey: gatewayCredentialQueryKey(providerId),
+    queryKey: sharedCredentialsQueryKey(providerId),
     queryFn: () => listSharedCredentials(providerId),
     retry: false,
   });
@@ -165,7 +165,7 @@ export function ProviderCredentialCard({
             const created = await createSharedCredential(providerId, body);
             createdShared.current = created.id;
             await queryClient.invalidateQueries({
-              queryKey: gatewayCredentialQueryKey(providerId),
+              queryKey: sharedCredentialsQueryKey(providerId),
             });
           }}
           validate={() => {
@@ -226,7 +226,7 @@ export function ProviderCredentialCard({
                 />
               </div>
               <div className="rounded-sm border border-border-1 bg-bg-panel p-3">
-                <GatewayCredentialPanel
+                <SharedCredentialPanel
                   providerId={providerId}
                   name={name}
                   fields={fields}

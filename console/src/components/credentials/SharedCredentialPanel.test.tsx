@@ -11,7 +11,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import type { CredentialField } from "@/lib/api";
 
-import { GatewayCredentialPanel } from "./GatewayCredentialPanel";
+import { SharedCredentialPanel } from "./SharedCredentialPanel";
 
 // The panel exists to make one claim true: an operator applies the
 // deployment's provider credential from the provider's own screen, without
@@ -68,7 +68,7 @@ function mount(fields: CredentialField[] = FIELDS) {
   });
   return render(
     <QueryClientProvider client={client}>
-      <GatewayCredentialPanel
+      <SharedCredentialPanel
         providerId="groq"
         name="Groq"
         fields={fields}
