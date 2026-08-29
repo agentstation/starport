@@ -40,7 +40,11 @@ func (h *LogosController) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	validator := `"` + etag + `"`
 	w.Header().Set("ETag", validator)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	// no-cache means revalidate, not skip the cache: browsers keep the
+	// bytes and send If-None-Match, so an unchanged mark costs a 304.
+	// A max-age would pin the old mark for its full window after an
+	// upgrade swaps the bundled set at the same URL.
+	w.Header().Set("Cache-Control", "public, no-cache")
 	if r.Header.Get("If-None-Match") == validator {
 		w.WriteHeader(http.StatusNotModified)
 		return
