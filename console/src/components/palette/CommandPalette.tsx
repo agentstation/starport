@@ -18,7 +18,9 @@ import {
   Sparkles,
   SquarePen,
   Sun,
+  UserRound,
   Users,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
@@ -51,6 +53,8 @@ const PAGES: { path: string; label: string; icon: typeof LayoutDashboard }[] = [
   { path: "/jobs", label: "Jobs", icon: Film },
   { path: "/documents", label: "Documents", icon: ScanText },
   { path: "/accounts", label: "Accounts", icon: Building2 },
+  { path: "/members", label: "Members", icon: UserRound },
+  { path: "/teams", label: "Teams", icon: UsersRound },
   { path: "/usage", label: "Usage", icon: BarChart3 },
   { path: "/presets", label: "Presets", icon: SlidersHorizontal },
   { path: "/settings", label: "Settings", icon: Settings },

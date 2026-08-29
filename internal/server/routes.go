@@ -250,6 +250,33 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 						r.Delete("/{template_id}", s.controllers.AccountTemplates.Delete)
 					})
 
+					// The people plane: the users an identity provider
+					// resolved, the teams an operator forms from them, and
+					// the account grants that give an account to either.
+					// On a deployment with no identity configured every
+					// route answers 503, loudly.
+					r.Route("/users", func(r chi.Router) {
+						r.Get("/", s.controllers.Members.ListUsers)
+						r.Get("/{user_id}/grants", s.controllers.Members.ListUserGrants)
+						r.Get("/{user_id}/accounts", s.controllers.Members.ReachableAccounts)
+					})
+					r.Route("/teams", func(r chi.Router) {
+						r.Get("/", s.controllers.Members.ListTeams)
+						r.Post("/", s.controllers.Members.CreateTeam)
+						r.Delete("/{team_id}", s.controllers.Members.DeleteTeam)
+						r.Get("/{team_id}/members", s.controllers.Members.ListTeamMembers)
+						r.Put("/{team_id}/members/{user_id}", s.controllers.Members.AddTeamMember)
+						r.Delete("/{team_id}/members/{user_id}", s.controllers.Members.RemoveTeamMember)
+						r.Get("/{team_id}/grants", s.controllers.Members.ListTeamGrants)
+					})
+					// An account grant's identity is the whole row, so the
+					// delete names it in the query string rather than a path
+					// segment.
+					r.Route("/account-grants", func(r chi.Router) {
+						r.Post("/", s.controllers.Members.CreateGrant)
+						r.Delete("/", s.controllers.Members.DeleteGrant)
+					})
+
 					// System information
 					r.Get("/info", s.controllers.Admin.SystemInfo)
 					r.Get("/metrics", s.controllers.Admin.Metrics)
@@ -420,6 +447,18 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /api/v1/admin/account-templates/{template_id}  - Get one template
 //   PUT    /api/v1/admin/account-templates/{template_id}  - Update a template, revision-checked
 //   DELETE /api/v1/admin/account-templates/{template_id}  - Delete a template
+//   GET    /api/v1/admin/users                            - List the users an identity provider resolved
+//   GET    /api/v1/admin/users/{user_id}/grants           - List one user's direct account grants
+//   GET    /api/v1/admin/users/{user_id}/accounts         - Every account the user's grants reach
+//   GET    /api/v1/admin/teams                            - List teams
+//   POST   /api/v1/admin/teams                            - Create a team
+//   DELETE /api/v1/admin/teams/{team_id}                  - Delete a team with its memberships and grants
+//   GET    /api/v1/admin/teams/{team_id}/members          - List a team's memberships
+//   PUT    /api/v1/admin/teams/{team_id}/members/{user_id}    - Put a user on a team
+//   DELETE /api/v1/admin/teams/{team_id}/members/{user_id}    - Take a user off a team
+//   GET    /api/v1/admin/teams/{team_id}/grants           - List a team's account grants
+//   POST   /api/v1/admin/account-grants                   - Grant an account to one user or one team
+//   DELETE /api/v1/admin/account-grants                   - Remove a grant named in the query string
 //   GET    /api/v1/admin/info              - System information
 //   GET    /api/v1/admin/metrics           - System metrics
 //   GET    /api/v1/admin/activity          - List request activity across keys

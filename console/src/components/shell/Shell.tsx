@@ -20,7 +20,9 @@ import {
   SlidersHorizontal,
   Sparkles,
   Sun,
+  UserRound,
   Users,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 
@@ -67,6 +69,8 @@ const NAV_SECTIONS: ReadonlyArray<{
     label: "Gateway",
     items: [
       { to: "/accounts", label: "Accounts", icon: Building2 },
+      { to: "/members", label: "Members", icon: UserRound },
+      { to: "/teams", label: "Teams", icon: UsersRound },
       { to: "/settings", label: "Settings", icon: Settings },
     ],
   },

@@ -185,6 +185,10 @@ type runtimeBuilder struct {
 	auth         authRuntime
 	gate         *localauth.Gate
 	identityAuth *identity.Authenticator
+	// identityRepos is the durable people plane openIdentity opened, or zero
+	// when this deployment configured no identity. The HTTP server receives
+	// it either way and degrades the members surface to 503 when zero.
+	identityRepos identity.Repositories
 }
 
 // authRuntime is the resolved authentication mode and the store that keeps a
@@ -654,6 +658,7 @@ func (b *runtimeBuilder) openIdentity() error {
 	}
 	b.gate.UseAccountResolver(resolver)
 	b.identityAuth = authenticator
+	b.identityRepos = repositories
 	log.Info().
 		Strs("providers", authenticator.Providers()).
 		Msg("Identity acquisition ready")
@@ -683,6 +688,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		FileBackend:  b.fileBackend(),
 		LocalGate:    b.gate,
 		IdentityAuth: b.identityAuthenticator(),
+		Identity:     b.identityRepos,
 	})
 	if err != nil {
 		if httpServer != nil {

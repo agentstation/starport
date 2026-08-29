@@ -14,6 +14,7 @@ import (
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
@@ -113,6 +114,11 @@ type Dependencies struct {
 	// deployment configured no identity provider. The identity routes stay
 	// mounted either way and refuse with the operator's answer when nil.
 	IdentityAuth controllers.IdentityAuthenticator
+	// Identity holds the durable people plane: users, teams, memberships,
+	// and account grants. Zero repositories — no identity configured —
+	// degrade the members and teams endpoints to 503, loudly, so the
+	// console reads "not configured" rather than "nobody is here".
+	Identity identity.Repositories
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -181,6 +187,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Console:            dependencies.Console,
 		LocalGate:          dependencies.LocalGate,
 		IdentityAuth:       dependencies.IdentityAuth,
+		Identity:           dependencies.Identity,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

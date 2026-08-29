@@ -122,9 +122,9 @@ func (h *SPAHandler) Assets(w http.ResponseWriter, r *http.Request) {
 // console/src/routes and fails when the two drift.
 var spaPagePaths = []string{
 	"/", "/accounts", "/auth", "/authors", "/authors/*", "/chat",
-	"/docs", "/documents", "/files", "/jobs", "/keys", "/models",
-	"/models/*", "/presets", "/providers", "/providers/*", "/settings",
-	"/usage",
+	"/docs", "/documents", "/files", "/jobs", "/keys", "/members",
+	"/models", "/models/*", "/presets", "/providers", "/providers/*",
+	"/settings", "/teams", "/usage",
 }
 
 // Register mounts the SPA page routes and hashed assets on the router.
