@@ -485,6 +485,18 @@ export type ProviderCredentialSummary = {
   usage_count?: number;
 };
 
+// SharedCredentialSummary is one entry of a provider's shared plane. A
+// provider can hold several, so each carries the id that addresses it and
+// the access rule that says which accounts may resolve it: "open" serves
+// every account, "granted" only the accounts in grants. Like every credential
+// summary, it never carries the secret.
+export type SharedCredentialSummary = ProviderCredentialSummary & {
+  id: string;
+  label?: string;
+  access?: "open" | "granted";
+  grants?: string[];
+};
+
 export type ActivityTokens = {
   input?: number;
   output?: number;
@@ -686,47 +698,94 @@ export function deleteKey(keyId: string): Promise<unknown> {
   });
 }
 
-// --- Gateway credentials: the provider credentials the operator applies ---
+// --- Shared credentials: the provider credentials the operator shares ---
 //
-// These serve the whole deployment and belong to nobody. They are addressed by
-// provider alone, because there is exactly one per provider and no account
-// owns it. They are not BYOK, and no screen that shows them says BYOK.
+// These serve the deployment's accounts and belong to nobody. A provider can
+// hold several — each addressed by the id the gateway assigned at creation —
+// and each one names its own access rule: open to every account, or granted
+// to a listed few. They are not BYOK, and no screen that shows them says BYOK.
 
-function gatewayCredentialPath(provider: string, suffix = ""): string {
+function sharedCredentialPath(provider: string, suffix = ""): string {
   return `/api/v1/providers/${encodeURIComponent(provider)}/credentials${suffix}`;
 }
 
-export function getGatewayCredential(
+function sharedCredentialItemPath(
   provider: string,
-): Promise<ProviderCredentialSummary> {
-  return request<ProviderCredentialSummary>(gatewayCredentialPath(provider));
+  credentialId: string,
+  suffix = "",
+): string {
+  return sharedCredentialPath(
+    provider,
+    `/${encodeURIComponent(credentialId)}${suffix}`,
+  );
 }
 
-// putGatewayCredential applies or rotates the deployment credential. PUT is an
-// upsert, so an operator rotating one does not first have to ask whether one is
-// already applied.
-export function putGatewayCredential(
+// listSharedCredentials reads the provider's whole shared plane. An empty
+// plane is an empty list, not an error: "no shared credential yet" is a state
+// to render.
+export async function listSharedCredentials(
+  provider: string,
+): Promise<SharedCredentialSummary[]> {
+  const body = await request<{ credentials?: SharedCredentialSummary[] }>(
+    sharedCredentialPath(provider),
+  );
+  return body?.credentials ?? [];
+}
+
+// createSharedCredential stores a new shared credential and returns its
+// summary — the id in it addresses every later read, rotation, and removal.
+// The access rule is chosen here, at creation; omitting it means open.
+export function createSharedCredential(
   provider: string,
   body: {
     credentials: Record<string, string>;
     config?: Record<string, string>;
+    label?: string;
+    access?: "open" | "granted";
+    grants?: string[];
   },
-): Promise<unknown> {
-  return request<unknown>(gatewayCredentialPath(provider), {
-    method: "PUT",
+): Promise<SharedCredentialSummary> {
+  return request<SharedCredentialSummary>(sharedCredentialPath(provider), {
+    method: "POST",
     body,
   });
 }
 
-export function deleteGatewayCredential(provider: string): Promise<unknown> {
-  return request<unknown>(gatewayCredentialPath(provider), { method: "DELETE" });
+// updateSharedCredential rotates or reconfigures one credential in place, so
+// its identity, grants, and usage history survive the new value. Absent
+// fields stay as they are.
+export function updateSharedCredential(
+  provider: string,
+  credentialId: string,
+  body: {
+    credentials?: Record<string, string>;
+    config?: Record<string, string>;
+    label?: string;
+    access?: "open" | "granted";
+    grants?: string[];
+  },
+): Promise<SharedCredentialSummary> {
+  return request<SharedCredentialSummary>(
+    sharedCredentialItemPath(provider, credentialId),
+    { method: "PUT", body },
+  );
 }
 
-export function validateGatewayCredential(
+export function deleteSharedCredential(
   provider: string,
+  credentialId: string,
+): Promise<unknown> {
+  return request<unknown>(sharedCredentialItemPath(provider, credentialId), {
+    method: "DELETE",
+  });
+}
+
+export function validateSharedCredential(
+  provider: string,
+  credentialId: string,
 ): Promise<{ valid?: boolean }> {
   return request<{ valid?: boolean }>(
-    gatewayCredentialPath(provider, "/validate"),
+    sharedCredentialItemPath(provider, credentialId, "/validate"),
     { method: "POST" },
   );
 }

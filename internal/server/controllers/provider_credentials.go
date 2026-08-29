@@ -39,74 +39,155 @@ type credentialRequest struct {
 
 // --- the operator's shared plane ---
 //
-// These routes address the provider's shared credential list through its first
-// entry, so an operator with one credential per provider keeps the surface
-// they had. The by-id surface that manages the whole list is the next task's.
+// The shared plane is a list per provider, and the routes address it as one:
+// the collection lists and creates, and each credential is reachable by the
+// id a create reported. Secrets never return on any of them.
 
-// SharedGet handles GET /api/v1/providers/{provider}/credentials.
+// fieldCredentialID is the item route parameter naming one shared credential.
+const fieldCredentialID = "credential_id" // #nosec G101 -- URL route parameter name, not credential material.
+
+// sharedCredentialRequest is the body a shared create accepts. Credentials
+// and config are the catalog-declared fields every credential write carries;
+// label, access, and grants are the sharing facts. An absent access is open:
+// a credential the operator applies without saying otherwise serves every
+// account.
+type sharedCredentialRequest struct {
+	Credentials map[string]any `json:"credentials"`
+	Config      map[string]any `json:"config,omitempty"`
+	Label       string         `json:"label,omitempty"`
+	Access      string         `json:"access,omitempty"`
+	Grants      []string       `json:"grants,omitempty"`
+}
+
+// sharedCredentialUpdateRequest is the body a shared item PUT accepts. Every
+// field is optional, so an operator can rotate a value, rename a credential,
+// or restate its grants without restating the rest. Grants replace the whole
+// list because a grant change is a statement of who may spend, not a diff.
+type sharedCredentialUpdateRequest struct {
+	Credentials map[string]any `json:"credentials,omitempty"`
+	Config      map[string]any `json:"config,omitempty"`
+	Label       *string        `json:"label,omitempty"`
+	Access      *string        `json:"access,omitempty"`
+	Grants      *[]string      `json:"grants,omitempty"`
+}
+
+// SharedList handles GET /api/v1/providers/{provider}/credentials. An empty
+// plane is an empty collection: "no credential is stored" is an answer about
+// the list, not a lookup failure.
+func (h *ProviderCredentialsController) SharedList(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	provider := chi.URLParam(r, providerField)
+	shared, err := h.providerKeys.GetSharedCredentials(r.Context(), provider)
+	if err != nil {
+		h.writeLookupError(w, err, provider, "list")
+		return
+	}
+	summaries := make([]map[string]any, len(shared))
+	for i := range shared {
+		summaries[i] = sharedCredentialSummary(provider, &shared[i])
+	}
+	writeCredentialResponse(w, http.StatusOK, map[string]any{
+		"credentials":      summaries,
+		responseCountField: len(summaries),
+	})
+}
+
+// SharedCreate handles POST /api/v1/providers/{provider}/credentials. The
+// response names the id that addresses the new credential from now on.
+func (h *ProviderCredentialsController) SharedCreate(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	provider := chi.URLParam(r, providerField)
+
+	var request sharedCredentialRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
+		return
+	}
+	fields, ok := credentialFields(w, request.Credentials, true)
+	if !ok {
+		return
+	}
+
+	credential, err := h.providerKeys.AddSharedCredential(r.Context(), provider, fields, request.Config,
+		keyring.SharedCredentialParams{
+			Label:  request.Label,
+			Access: credentials.Access(request.Access),
+			Grants: request.Grants,
+		})
+	if err != nil {
+		h.writeWriteError(w, err, provider, "store")
+		return
+	}
+	writeCredentialResponse(w, http.StatusCreated, sharedCredentialSummary(provider, credential))
+}
+
+// SharedGet handles GET /api/v1/providers/{provider}/credentials/{credential_id}.
 func (h *ProviderCredentialsController) SharedGet(w http.ResponseWriter, r *http.Request) {
 	if !h.ready(w) {
 		return
 	}
 	provider := chi.URLParam(r, providerField)
-	credential, ok := h.firstSharedCredential(w, r, provider)
+	credential, ok := h.sharedCredentialByID(w, r, provider)
 	if !ok {
 		return
 	}
-	writeCredentialResponse(w, http.StatusOK, credentialSummary(provider, credential.Config,
-		true, credential.CreatedAt, credential.LastUsed, credential.UsageCount))
+	writeCredentialResponse(w, http.StatusOK, sharedCredentialSummary(provider, credential))
 }
 
-// SharedPut handles PUT /api/v1/providers/{provider}/credentials. PUT is an
-// upsert: an operator rotating a deployment credential should not have to know
-// whether one is already applied. A new credential is open to every account,
-// which is the sharing default.
-func (h *ProviderCredentialsController) SharedPut(w http.ResponseWriter, r *http.Request) {
+// SharedUpdate handles PUT /api/v1/providers/{provider}/credentials/{credential_id}.
+func (h *ProviderCredentialsController) SharedUpdate(w http.ResponseWriter, r *http.Request) {
 	if !h.ready(w) {
 		return
 	}
-	ctx := r.Context()
 	provider := chi.URLParam(r, providerField)
-	fields, config, ok := decodeCredential(w, r)
-	if !ok {
+	credentialID := chi.URLParam(r, fieldCredentialID)
+
+	var request sharedCredentialUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
 		return
 	}
+	update := keyring.SharedCredentialUpdate{
+		Config: request.Config,
+		Label:  request.Label,
+		Grants: request.Grants,
+	}
+	if len(request.Credentials) > 0 {
+		fields, ok := credentialFields(w, request.Credentials, false)
+		if !ok {
+			return
+		}
+		update.Key = fields
+	}
+	if request.Access != nil {
+		access := credentials.Access(*request.Access)
+		update.Access = &access
+	}
 
-	existing, err := h.providerKeys.GetSharedCredentials(ctx, provider)
+	credential, err := h.providerKeys.UpdateSharedCredential(r.Context(), provider, credentialID, update)
 	if err != nil {
-		h.writeLookupError(w, err, provider, "read")
+		if errors.Is(err, keyring.ErrKeyNotFound) {
+			h.writeLookupError(w, err, provider, "update")
+			return
+		}
+		h.writeWriteError(w, err, provider, "update")
 		return
 	}
-	if len(existing) == 0 {
-		if _, addErr := h.providerKeys.AddSharedCredential(ctx, provider, fields, config, keyring.SharedCredentialParams{}); addErr != nil {
-			h.writeWriteError(w, addErr, provider, "store")
-			return
-		}
-	} else {
-		update := keyring.SharedCredentialUpdate{Key: fields, Config: config}
-		if _, updateErr := h.providerKeys.UpdateSharedCredential(ctx, provider, existing[0].ID, update); updateErr != nil {
-			h.writeWriteError(w, updateErr, provider, "update")
-			return
-		}
-	}
-
-	writeCredentialResponse(w, http.StatusOK, map[string]any{
-		responseMessageField: "Provider credential applied",
-		providerField:        provider,
-	})
+	writeCredentialResponse(w, http.StatusOK, sharedCredentialSummary(provider, credential))
 }
 
-// SharedDelete handles DELETE /api/v1/providers/{provider}/credentials.
+// SharedDelete handles DELETE /api/v1/providers/{provider}/credentials/{credential_id}.
 func (h *ProviderCredentialsController) SharedDelete(w http.ResponseWriter, r *http.Request) {
 	if !h.ready(w) {
 		return
 	}
 	provider := chi.URLParam(r, providerField)
-	credential, ok := h.firstSharedCredential(w, r, provider)
-	if !ok {
-		return
-	}
-	if err := h.providerKeys.DeleteSharedCredential(r.Context(), provider, credential.ID); err != nil {
+	credentialID := chi.URLParam(r, fieldCredentialID)
+	if err := h.providerKeys.DeleteSharedCredential(r.Context(), provider, credentialID); err != nil {
 		h.writeLookupError(w, err, provider, "delete")
 		return
 	}
@@ -116,13 +197,13 @@ func (h *ProviderCredentialsController) SharedDelete(w http.ResponseWriter, r *h
 	})
 }
 
-// SharedValidate handles POST /api/v1/providers/{provider}/credentials/validate.
+// SharedValidate handles POST /api/v1/providers/{provider}/credentials/{credential_id}/validate.
 func (h *ProviderCredentialsController) SharedValidate(w http.ResponseWriter, r *http.Request) {
 	if !h.ready(w) {
 		return
 	}
 	provider := chi.URLParam(r, providerField)
-	if _, ok := h.firstSharedCredential(w, r, provider); !ok {
+	if _, ok := h.sharedCredentialByID(w, r, provider); !ok {
 		return
 	}
 	writeCredentialResponse(w, http.StatusOK, map[string]any{
@@ -132,21 +213,49 @@ func (h *ProviderCredentialsController) SharedValidate(w http.ResponseWriter, r 
 	})
 }
 
-// firstSharedCredential reads the provider's shared list and addresses its
-// first entry. An empty list is the same 404 an absent record was.
-func (h *ProviderCredentialsController) firstSharedCredential(
+// sharedCredentialByID reads the provider's shared list and addresses the
+// entry the route names. An unknown id is the same 404 a missing record is.
+func (h *ProviderCredentialsController) sharedCredentialByID(
 	w http.ResponseWriter, r *http.Request, provider string,
 ) (*credentials.SharedCredential, bool) {
+	credentialID := chi.URLParam(r, fieldCredentialID)
 	shared, err := h.providerKeys.GetSharedCredentials(r.Context(), provider)
 	if err != nil {
 		h.writeLookupError(w, err, provider, "read")
 		return nil, false
 	}
-	if len(shared) == 0 {
-		h.writeLookupError(w, keyring.ErrKeyNotFound, provider, "read")
-		return nil, false
+	for i := range shared {
+		if shared[i].ID == credentialID {
+			return &shared[i], true
+		}
 	}
-	return &shared[0], true
+	h.writeLookupError(w, keyring.ErrKeyNotFound, provider, "read")
+	return nil, false
+}
+
+// sharedCredentialSummary is the only shape the shared plane returns for one
+// credential. It names the credential and its sharing facts and never carries
+// the encrypted value.
+func sharedCredentialSummary(provider string, credential *credentials.SharedCredential) map[string]any {
+	grants := credential.Grants
+	if grants == nil {
+		grants = []string{}
+	}
+	summary := map[string]any{
+		"id":              credential.ID,
+		providerField:     provider,
+		"label":           credential.Label,
+		"access":          string(credential.Access),
+		"grants":          grants,
+		"has_credentials": true,
+		"config":          credential.Config,
+		fieldCreatedAt:    credential.CreatedAt.UTC().Format(time.RFC3339),
+		"usage_count":     credential.UsageCount,
+	}
+	if credential.LastUsed != nil {
+		summary["last_used"] = credential.LastUsed.UTC().Format(time.RFC3339)
+	}
+	return summary
 }
 
 // --- the account's own plane ---
@@ -340,6 +449,10 @@ func (h *ProviderCredentialsController) writeWriteError(w http.ResponseWriter, e
 		dto.WriteValidationError(w, "credentials", validation.Error())
 		return
 	}
+	if errors.Is(err, credentials.ErrInvalidAccess) {
+		dto.WriteValidationError(w, "access", err.Error())
+		return
+	}
 	log.Error().Err(err).Str(providerField, provider).Msgf("Failed to %s provider credential", action)
 	dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError,
 		"Failed to "+action+" provider credential")
@@ -355,22 +468,35 @@ func decodeCredential(w http.ResponseWriter, r *http.Request) (map[string]string
 		return nil, nil, false
 	}
 
-	if len(request.Credentials) == 0 {
-		dto.WriteValidationError(w, "credentials", "Credentials are required")
+	fields, ok := credentialFields(w, request.Credentials, true)
+	if !ok {
 		return nil, nil, false
 	}
+	return fields, request.Config, true
+}
 
-	fields := make(map[string]string, len(request.Credentials))
-	for name, value := range request.Credentials {
+// credentialFields checks that every credential value is a string: a
+// credential field is a secret or a parameter, and neither is a nested
+// object. When required, an empty map is the caller's mistake too.
+func credentialFields(w http.ResponseWriter, values map[string]any, required bool) (map[string]string, bool) {
+	if len(values) == 0 {
+		if required {
+			dto.WriteValidationError(w, "credentials", "Credentials are required")
+			return nil, false
+		}
+		return nil, true
+	}
+
+	fields := make(map[string]string, len(values))
+	for name, value := range values {
 		text, ok := value.(string)
 		if !ok {
 			dto.WriteValidationError(w, "credentials."+name, "Credential values must be strings")
-			return nil, nil, false
+			return nil, false
 		}
 		fields[name] = text
 	}
-
-	return fields, request.Config, true
+	return fields, true
 }
 
 // credentialSummary is the only shape either surface returns for a stored

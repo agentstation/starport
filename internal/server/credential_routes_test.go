@@ -157,8 +157,12 @@ func TestOperatorAppliesASharedCredentialResolutionCanRead(t *testing.T) {
 	gateway := newCredentialGateway(t)
 	path := "/api/v1/providers/" + credentialTestProvider + "/credentials"
 
-	recorder := gateway.call(t, gateway.operator, http.MethodPut, path, credentialBody(sharedCredentialValue))
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	recorder := gateway.call(t, gateway.operator, http.MethodPost, path, credentialBody(sharedCredentialValue))
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+	var created map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &created))
+	credentialID, _ := created["id"].(string)
+	require.NotEmpty(t, credentialID)
 
 	material, err := gateway.server.providerKeys.ResolveSharedMaterial(
 		context.Background(), "", catalogProvider(t, credentialTestProvider),
@@ -168,10 +172,10 @@ func TestOperatorAppliesASharedCredentialResolutionCanRead(t *testing.T) {
 	require.True(t, present)
 	assert.Equal(t, sharedCredentialValue, value)
 
-	// PUT is an upsert on this surface: an operator replacing a rotated
-	// deployment credential should not have to know whether one is already
-	// applied.
-	recorder = gateway.call(t, gateway.operator, http.MethodPut, path, credentialBody(sharedCredentialValue+"-rotated"))
+	// A rotation addresses the credential it rotates, so the operator states
+	// which value changes rather than which happens to be first.
+	recorder = gateway.call(t, gateway.operator, http.MethodPut, path+"/"+credentialID,
+		credentialBody(sharedCredentialValue+"-rotated"))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	material, err = gateway.server.providerKeys.ResolveSharedMaterial(
 		context.Background(), "", catalogProvider(t, credentialTestProvider),
@@ -181,7 +185,7 @@ func TestOperatorAppliesASharedCredentialResolutionCanRead(t *testing.T) {
 	require.True(t, present)
 	assert.Equal(t, sharedCredentialValue+"-rotated", value)
 
-	recorder = gateway.call(t, gateway.operator, http.MethodDelete, path, "")
+	recorder = gateway.call(t, gateway.operator, http.MethodDelete, path+"/"+credentialID, "")
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	shared, err := gateway.server.providerKeys.GetSharedCredentials(context.Background(), credentialTestProvider)
 	require.NoError(t, err)
@@ -195,15 +199,22 @@ func TestSharedCredentialRouteRefusesANonAdmin(t *testing.T) {
 	gateway := newCredentialGateway(t)
 	path := "/api/v1/providers/" + credentialTestProvider + "/credentials"
 
-	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
-		t.Run(method, func(t *testing.T) {
-			recorder := gateway.call(t, gateway.acme, method, path, credentialBody(sharedCredentialValue))
+	for _, route := range []struct {
+		method string
+		suffix string
+	}{
+		{http.MethodGet, ""},
+		{http.MethodPost, ""},
+		{http.MethodGet, "/some-credential"},
+		{http.MethodPut, "/some-credential"},
+		{http.MethodDelete, "/some-credential"},
+		{http.MethodPost, "/some-credential/validate"},
+	} {
+		t.Run(route.method+path+route.suffix, func(t *testing.T) {
+			recorder := gateway.call(t, gateway.acme, route.method, path+route.suffix, credentialBody(sharedCredentialValue))
 			assert.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
 		})
 	}
-
-	recorder := gateway.call(t, gateway.acme, http.MethodPost, path+"/validate", "")
-	assert.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
 
 	// The refusal must be a refusal, not a silent no-op that stored nothing.
 	shared, err := gateway.server.providerKeys.GetSharedCredentials(context.Background(), credentialTestProvider)
@@ -267,15 +278,20 @@ func TestBYOKAndSharedCredentialsAreSeparateStores(t *testing.T) {
 		"/api/v1/accounts/acme/byok/"+credentialTestProvider, credentialBody(byokCredentialValue))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	// The deployment plane is still empty.
+	// The shared plane is still an empty list.
 	recorder = gateway.call(t, gateway.operator, http.MethodGet,
 		"/api/v1/providers/"+credentialTestProvider+"/credentials", "")
-	assert.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
-
-	// Applying the deployment credential does not disturb the account's.
-	recorder = gateway.call(t, gateway.operator, http.MethodPut,
-		"/api/v1/providers/"+credentialTestProvider+"/credentials", credentialBody(sharedCredentialValue))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	var listing struct {
+		Count int `json:"count"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &listing))
+	assert.Zero(t, listing.Count)
+
+	// Creating the shared credential does not disturb the account's.
+	recorder = gateway.call(t, gateway.operator, http.MethodPost,
+		"/api/v1/providers/"+credentialTestProvider+"/credentials", credentialBody(sharedCredentialValue))
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
 
 	accountMaterial, err := gateway.server.providerKeys.ResolveStoredMaterial(
 		context.Background(), keyring.AccountScope("acme"), catalogProvider(t, credentialTestProvider),
@@ -302,10 +318,20 @@ func TestNoCredentialResponseCarriesItsSecret(t *testing.T) {
 	providerPath := "/api/v1/providers/" + credentialTestProvider + "/credentials"
 	byokPath := "/api/v1/accounts/acme/byok"
 
+	createRecorder := gateway.call(t, gateway.operator, http.MethodPost, providerPath, credentialBody(sharedCredentialValue))
+	require.Equal(t, http.StatusCreated, createRecorder.Code, createRecorder.Body.String())
+	var created map[string]any
+	require.NoError(t, json.Unmarshal(createRecorder.Body.Bytes(), &created))
+	credentialID, _ := created["id"].(string)
+	require.NotEmpty(t, credentialID)
+	itemPath := providerPath + "/" + credentialID
+
 	responses := []*httptest.ResponseRecorder{
-		gateway.call(t, gateway.operator, http.MethodPut, providerPath, credentialBody(sharedCredentialValue)),
+		createRecorder,
 		gateway.call(t, gateway.operator, http.MethodGet, providerPath, ""),
-		gateway.call(t, gateway.operator, http.MethodPost, providerPath+"/validate", ""),
+		gateway.call(t, gateway.operator, http.MethodGet, itemPath, ""),
+		gateway.call(t, gateway.operator, http.MethodPut, itemPath, credentialBody(sharedCredentialValue)),
+		gateway.call(t, gateway.operator, http.MethodPost, itemPath+"/validate", ""),
 		gateway.call(t, gateway.acme, http.MethodPut, byokPath+"/"+credentialTestProvider, credentialBody(byokCredentialValue)),
 		gateway.call(t, gateway.acme, http.MethodGet, byokPath, ""),
 		gateway.call(t, gateway.acme, http.MethodGet, byokPath+"/"+credentialTestProvider, ""),
@@ -321,8 +347,129 @@ func TestNoCredentialResponseCarriesItsSecret(t *testing.T) {
 	// The read paths still report that a credential exists, or the surface
 	// would be useless to an operator deciding whether to apply one.
 	var detail map[string]any
-	require.NoError(t, json.Unmarshal(responses[1].Body.Bytes(), &detail))
+	require.NoError(t, json.Unmarshal(responses[2].Body.Bytes(), &detail))
 	assert.Equal(t, true, detail["has_credentials"])
+}
+
+// TestSharedCredentialListAndItemRoutes is the CSH-C2 fail-before case. The
+// shared plane holds a list, so the admin surface must address it as one: the
+// collection lists and creates, and each credential is reachable by its id.
+// On the baseline the collection answered only for its first entry and no
+// item path existed.
+func TestSharedCredentialListAndItemRoutes(t *testing.T) {
+	gateway := newCredentialGateway(t)
+	collection := "/api/v1/providers/" + credentialTestProvider + "/credentials"
+
+	// An empty plane is an empty collection, not a missing resource. "No
+	// credential is stored" is an answer about the list, not a lookup failure.
+	recorder := gateway.call(t, gateway.operator, http.MethodGet, collection, "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	var listing struct {
+		Credentials []map[string]any `json:"credentials"`
+		Count       int              `json:"count"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &listing))
+	assert.Zero(t, listing.Count)
+
+	// A create with no access statement is open: the sharing default.
+	recorder = gateway.call(t, gateway.operator, http.MethodPost, collection,
+		`{"credentials":{"`+credentialTestField+`":"`+sharedCredentialValue+`"},"label":"team-a"}`)
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+	var created map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &created))
+	openID, _ := created["id"].(string)
+	require.NotEmpty(t, openID, "a created credential must report the id that addresses it")
+	assert.Equal(t, "open", created["access"])
+
+	// A second create carries its access in the body.
+	recorder = gateway.call(t, gateway.operator, http.MethodPost, collection,
+		`{"credentials":{"`+credentialTestField+`":"`+sharedCredentialValue+`-granted"},"label":"team-b","access":"granted","grants":["acme"]}`)
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+	var granted map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &granted))
+	grantedID, _ := granted["id"].(string)
+	require.NotEmpty(t, grantedID)
+	assert.Equal(t, "granted", granted["access"])
+	assert.Equal(t, []any{"acme"}, granted["grants"])
+
+	// The collection lists both, in stored order, each naming its id.
+	recorder = gateway.call(t, gateway.operator, http.MethodGet, collection, "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &listing))
+	require.Equal(t, 2, listing.Count)
+	assert.Equal(t, openID, listing.Credentials[0]["id"])
+	assert.Equal(t, grantedID, listing.Credentials[1]["id"])
+
+	// An item is read, validated, and updated by its id.
+	recorder = gateway.call(t, gateway.operator, http.MethodGet, collection+"/"+grantedID, "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	var item map[string]any
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &item))
+	assert.Equal(t, "team-b", item["label"])
+
+	recorder = gateway.call(t, gateway.operator, http.MethodPost, collection+"/"+grantedID+"/validate", "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+
+	recorder = gateway.call(t, gateway.operator, http.MethodPut, collection+"/"+grantedID,
+		`{"grants":["acme","globex"]}`)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &item))
+	assert.Equal(t, []any{"acme", "globex"}, item["grants"],
+		"a grant update replaces the whole list")
+
+	// An unknown id is a missing resource on every item verb.
+	for _, route := range []struct {
+		method string
+		suffix string
+	}{
+		{http.MethodGet, ""},
+		{http.MethodPut, ""},
+		{http.MethodDelete, ""},
+		{http.MethodPost, "/validate"},
+	} {
+		recorder = gateway.call(t, gateway.operator, route.method,
+			collection+"/no-such-credential"+route.suffix, `{"label":"x"}`)
+		assert.Equal(t, http.StatusNotFound, recorder.Code, route.method+" "+route.suffix+": "+recorder.Body.String())
+	}
+
+	// Deleting one credential leaves the other serving.
+	recorder = gateway.call(t, gateway.operator, http.MethodDelete, collection+"/"+openID, "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	recorder = gateway.call(t, gateway.operator, http.MethodGet, collection, "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &listing))
+	require.Equal(t, 1, listing.Count)
+	assert.Equal(t, grantedID, listing.Credentials[0]["id"])
+}
+
+// TestSharedCredentialAccessInTheBodyReachesResolution proves the route body's
+// access facts are the ones resolution obeys: a credential granted to one
+// account through the HTTP surface serves that account and nobody else.
+func TestSharedCredentialAccessInTheBodyReachesResolution(t *testing.T) {
+	gateway := newCredentialGateway(t)
+	collection := "/api/v1/providers/" + credentialTestProvider + "/credentials"
+
+	recorder := gateway.call(t, gateway.operator, http.MethodPost, collection,
+		`{"credentials":{"`+credentialTestField+`":"`+sharedCredentialValue+`"},"access":"granted","grants":["acme"]}`)
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+
+	material, err := gateway.server.providerKeys.ResolveSharedMaterial(
+		context.Background(), "acme", catalogProvider(t, credentialTestProvider),
+	)
+	require.NoError(t, err, "the grantee must resolve the granted credential")
+	value, present := material.Value(credentialTestField)
+	require.True(t, present)
+	assert.Equal(t, sharedCredentialValue, value)
+
+	_, err = gateway.server.providerKeys.ResolveSharedMaterial(
+		context.Background(), "globex", catalogProvider(t, credentialTestProvider),
+	)
+	require.ErrorIs(t, err, keyring.ErrKeyNotFound, "a non-grantee never resolves it")
+
+	// An access word outside the vocabulary is the caller's mistake.
+	recorder = gateway.call(t, gateway.operator, http.MethodPost, collection,
+		`{"credentials":{"`+credentialTestField+`":"x"},"access":"everyone"}`)
+	assert.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
 }
 
 // catalogProvider reads one provider record from the same catalog the gateway

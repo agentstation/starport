@@ -125,10 +125,14 @@ func credentialRouter(store keyring.ProviderKeys) http.Handler {
 
 	router := chi.NewRouter()
 	router.Route("/api/v1/providers/{provider}/credentials", func(r chi.Router) {
-		r.Get("/", handler.SharedGet)
-		r.Put("/", handler.SharedPut)
-		r.Delete("/", handler.SharedDelete)
-		r.Post("/validate", handler.SharedValidate)
+		r.Get("/", handler.SharedList)
+		r.Post("/", handler.SharedCreate)
+		r.Route("/{credential_id}", func(r chi.Router) {
+			r.Get("/", handler.SharedGet)
+			r.Put("/", handler.SharedUpdate)
+			r.Delete("/", handler.SharedDelete)
+			r.Post("/validate", handler.SharedValidate)
+		})
 	})
 	router.Route("/api/v1/accounts/{account_id}/byok", func(r chi.Router) {
 		r.Get("/", handler.BYOKList)
@@ -175,9 +179,11 @@ func TestCredentialSurfacesDegradeLoudlyWithoutAStore(t *testing.T) {
 		body   string
 	}{
 		{http.MethodGet, "/api/v1/providers/openai/credentials", ""},
-		{http.MethodPut, "/api/v1/providers/openai/credentials", `{"credentials":{"api-key":"x"}}`},
-		{http.MethodDelete, "/api/v1/providers/openai/credentials", ""},
-		{http.MethodPost, "/api/v1/providers/openai/credentials/validate", ""},
+		{http.MethodPost, "/api/v1/providers/openai/credentials", `{"credentials":{"api-key":"x"}}`},
+		{http.MethodGet, "/api/v1/providers/openai/credentials/shared-1", ""},
+		{http.MethodPut, "/api/v1/providers/openai/credentials/shared-1", `{"credentials":{"api-key":"x"}}`},
+		{http.MethodDelete, "/api/v1/providers/openai/credentials/shared-1", ""},
+		{http.MethodPost, "/api/v1/providers/openai/credentials/shared-1/validate", ""},
 		{http.MethodGet, "/api/v1/accounts/acme/byok", ""},
 		{http.MethodGet, "/api/v1/accounts/acme/byok/openai", ""},
 		{http.MethodPut, "/api/v1/accounts/acme/byok/openai", `{"credentials":{"api-key":"x"}}`},
@@ -230,7 +236,7 @@ func TestACredentialBodyMustCarryStringFields(t *testing.T) {
 }
 
 // rejectingKeyManager fails writes with the error a test hands it, and reports
-// the credential as absent so a PUT takes the create branch.
+// an empty shared plane so a create meets the storage failure, not a conflict.
 type rejectingKeyManager struct {
 	mockKeyManager
 	err error
@@ -257,7 +263,7 @@ func TestASchemaRejectionIsTheCallersMistake(t *testing.T) {
 			Message:  "required credential is missing",
 		}}
 
-		recorder := callCredentialRoute(t, store, http.MethodPut,
+		recorder := callCredentialRoute(t, store, http.MethodPost,
 			"/api/v1/providers/openai/credentials", `{"credentials":{"organization":"acme"}}`)
 
 		require.Equal(t, http.StatusBadRequest, recorder.Code)
@@ -270,7 +276,7 @@ func TestASchemaRejectionIsTheCallersMistake(t *testing.T) {
 	t.Run("storage failure", func(t *testing.T) {
 		store := &rejectingKeyManager{err: errors.New("keyring is sealed")}
 
-		recorder := callCredentialRoute(t, store, http.MethodPut,
+		recorder := callCredentialRoute(t, store, http.MethodPost,
 			"/api/v1/providers/openai/credentials", `{"credentials":{"api-key":"secret-value-under-test"}}`)
 
 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
