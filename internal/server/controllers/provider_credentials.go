@@ -9,18 +9,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
 )
 
 // ProviderCredentialsController serves both stored provider-credential planes.
 //
-// A gateway credential belongs to the operator and serves the whole
-// deployment. A BYOK credential belongs to one account and serves only that
-// account. They differ in who owns them and therefore in which scope holds
-// them, and in nothing else, so one controller serves both and the scope is
-// always named by the route rather than derived from the gateway API key that
-// carried the request.
+// A shared credential belongs to the operator and serves the deployment's
+// accounts. A BYOK credential belongs to one account and serves only that
+// account. The plane is always named by the route rather than derived from the
+// gateway API key that carried the request.
 type ProviderCredentialsController struct {
 	providerKeys keyring.ProviderKeys
 }
@@ -38,28 +37,116 @@ type credentialRequest struct {
 	Config      map[string]any `json:"config,omitempty"`
 }
 
-// --- the operator's deployment plane ---
+// --- the operator's shared plane ---
+//
+// These routes address the provider's shared credential list through its first
+// entry, so an operator with one credential per provider keeps the surface
+// they had. The by-id surface that manages the whole list is the next task's.
 
-// GatewayGet handles GET /api/v1/providers/{provider}/credentials.
-func (h *ProviderCredentialsController) GatewayGet(w http.ResponseWriter, r *http.Request) {
-	h.get(w, r, keyring.GatewayScope)
+// SharedGet handles GET /api/v1/providers/{provider}/credentials.
+func (h *ProviderCredentialsController) SharedGet(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	provider := chi.URLParam(r, providerField)
+	credential, ok := h.firstSharedCredential(w, r, provider)
+	if !ok {
+		return
+	}
+	writeCredentialResponse(w, http.StatusOK, credentialSummary(provider, credential.Config,
+		true, credential.CreatedAt, credential.LastUsed, credential.UsageCount))
 }
 
-// GatewayPut handles PUT /api/v1/providers/{provider}/credentials. PUT is an
+// SharedPut handles PUT /api/v1/providers/{provider}/credentials. PUT is an
 // upsert: an operator rotating a deployment credential should not have to know
-// whether one is already applied.
-func (h *ProviderCredentialsController) GatewayPut(w http.ResponseWriter, r *http.Request) {
-	h.put(w, r, keyring.GatewayScope)
+// whether one is already applied. A new credential is open to every account,
+// which is the sharing default.
+func (h *ProviderCredentialsController) SharedPut(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	ctx := r.Context()
+	provider := chi.URLParam(r, providerField)
+	fields, config, ok := decodeCredential(w, r)
+	if !ok {
+		return
+	}
+
+	existing, err := h.providerKeys.GetSharedCredentials(ctx, provider)
+	if err != nil {
+		h.writeLookupError(w, err, provider, "read")
+		return
+	}
+	if len(existing) == 0 {
+		if _, addErr := h.providerKeys.AddSharedCredential(ctx, provider, fields, config, keyring.SharedCredentialParams{}); addErr != nil {
+			h.writeWriteError(w, addErr, provider, "store")
+			return
+		}
+	} else {
+		update := keyring.SharedCredentialUpdate{Key: fields, Config: config}
+		if _, updateErr := h.providerKeys.UpdateSharedCredential(ctx, provider, existing[0].ID, update); updateErr != nil {
+			h.writeWriteError(w, updateErr, provider, "update")
+			return
+		}
+	}
+
+	writeCredentialResponse(w, http.StatusOK, map[string]any{
+		responseMessageField: "Provider credential applied",
+		providerField:        provider,
+	})
 }
 
-// GatewayDelete handles DELETE /api/v1/providers/{provider}/credentials.
-func (h *ProviderCredentialsController) GatewayDelete(w http.ResponseWriter, r *http.Request) {
-	h.remove(w, r, keyring.GatewayScope)
+// SharedDelete handles DELETE /api/v1/providers/{provider}/credentials.
+func (h *ProviderCredentialsController) SharedDelete(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	provider := chi.URLParam(r, providerField)
+	credential, ok := h.firstSharedCredential(w, r, provider)
+	if !ok {
+		return
+	}
+	if err := h.providerKeys.DeleteSharedCredential(r.Context(), provider, credential.ID); err != nil {
+		h.writeLookupError(w, err, provider, "delete")
+		return
+	}
+	writeCredentialResponse(w, http.StatusOK, map[string]any{
+		responseMessageField: "Provider credential removed",
+		providerField:        provider,
+	})
 }
 
-// GatewayValidate handles POST /api/v1/providers/{provider}/credentials/validate.
-func (h *ProviderCredentialsController) GatewayValidate(w http.ResponseWriter, r *http.Request) {
-	h.validate(w, r, keyring.GatewayScope)
+// SharedValidate handles POST /api/v1/providers/{provider}/credentials/validate.
+func (h *ProviderCredentialsController) SharedValidate(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+	provider := chi.URLParam(r, providerField)
+	if _, ok := h.firstSharedCredential(w, r, provider); !ok {
+		return
+	}
+	writeCredentialResponse(w, http.StatusOK, map[string]any{
+		"valid":              true,
+		responseMessageField: "A credential is stored for this provider",
+		"note":               "Stored credentials are encrypted; this does not test them against the provider",
+	})
+}
+
+// firstSharedCredential reads the provider's shared list and addresses its
+// first entry. An empty list is the same 404 an absent record was.
+func (h *ProviderCredentialsController) firstSharedCredential(
+	w http.ResponseWriter, r *http.Request, provider string,
+) (*credentials.SharedCredential, bool) {
+	shared, err := h.providerKeys.GetSharedCredentials(r.Context(), provider)
+	if err != nil {
+		h.writeLookupError(w, err, provider, "read")
+		return nil, false
+	}
+	if len(shared) == 0 {
+		h.writeLookupError(w, keyring.ErrKeyNotFound, provider, "read")
+		return nil, false
+	}
+	return &shared[0], true
 }
 
 // --- the account's own plane ---

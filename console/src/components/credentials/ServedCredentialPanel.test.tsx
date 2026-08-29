@@ -38,8 +38,8 @@ test("a window served by more than one plane names each one and its count", () =
   render(
     <ServedCredentialPanel
       records={[
-        record("gateway"),
-        record("gateway"),
+        record("shared"),
+        record("shared"),
         record("byok"),
         record("environment"),
       ]}

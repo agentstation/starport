@@ -21,6 +21,9 @@ var (
 	ErrInvalidProvider = errors.New("invalid provider")
 	// ErrKeyNotFound is returned when a key is not found
 	ErrKeyNotFound = errors.New("key not found")
+	// ErrScopeIsShared is returned when an account-plane operation names the
+	// shared scope, whose record is a list served by the shared methods.
+	ErrScopeIsShared = errors.New("the shared scope holds a list of shared credentials; use the shared credential methods")
 	// ErrInvalidKeyFormat is returned when key format is invalid
 	ErrInvalidKeyFormat = errors.New("invalid key format")
 	// ErrEncryptionFailed is returned when encryption fails

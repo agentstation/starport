@@ -92,7 +92,7 @@ func WithAvailability(tracker *availability.Tracker) Option {
 }
 
 // WithStoredCredentials supplies the stored inference credential planes: the
-// operator's gateway credential and every account's own.
+// operator's shared credentials and every account's own.
 func WithStoredCredentials(resolver StoredCredentialResolver) Option {
 	return func(r *modelRouter) {
 		r.storedKeys = resolver

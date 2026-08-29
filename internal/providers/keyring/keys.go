@@ -1,9 +1,9 @@
 // Package keyring stores and resolves the provider credentials a request can
 // spend. Three sources feed it, and two of the three belong to the operator:
 // a credential read from the process environment, a credential the operator
-// applies for the whole deployment at the gateway scope, and a credential a
-// account brings for itself. Only the last of those is BYOK, which is why the
-// package is not named for it.
+// shares with the deployment's accounts at the shared scope, and a credential
+// an account brings for itself. Only the last of those is BYOK, which is why
+// the package is not named for it.
 package keyring
 
 import (
@@ -23,10 +23,11 @@ const (
 	// credential order.
 	StrategyMetadataKey = "provider_credential_strategy"
 	accountScopePrefix  = "account:"
-	// GatewayScope is the credential scope an operator applies once for the
-	// whole deployment. Every account that a strategy permits can spend it. The
-	// record layer owns the value, so the two can never drift apart.
-	GatewayScope = credentials.GatewayScope
+	// SharedScope is the credential scope that holds the operator's shared
+	// credentials. Each credential there is open to every account or granted
+	// to some. The record layer owns the value, so the two can never drift
+	// apart.
+	SharedScope = credentials.SharedScope
 )
 
 // CredentialSource identifies one request-bound inference credential plane.
@@ -38,9 +39,9 @@ const (
 	// SourceEnvironment selects a credential the deployment read from its
 	// process environment.
 	SourceEnvironment CredentialSource = "environment"
-	// SourceGateway selects a credential the operator applied for the whole
-	// deployment at GatewayScope.
-	SourceGateway CredentialSource = "gateway"
+	// SourceShared selects a credential the operator shared with the
+	// deployment's accounts at SharedScope.
+	SourceShared CredentialSource = "shared"
 	// SourceBYOK selects the credential the request's own account brought.
 	SourceBYOK CredentialSource = "byok"
 	// SourceAnonymous names an attempt a provider accepted with no credential
@@ -90,7 +91,7 @@ func ParseStrategy(value string) (Strategy, error) {
 }
 
 // AllowsOperatorCredentials reports whether this strategy may reach a
-// credential the operator owns, in the environment or at the gateway scope.
+// credential the operator owns, in the environment or at the shared scope.
 func (s Strategy) AllowsOperatorCredentials() bool { return s != BYOKOnly }
 
 // Narrow resolves the strategy one request actually runs under. The account's
@@ -133,15 +134,15 @@ func EffectiveStrategy(governing Strategy, metadata map[string]any) (Strategy, e
 
 // Sources returns a caller-owned credential order. The two operator planes
 // stay adjacent in every order, because an environment credential and a
-// gateway credential are the same operator's money.
+// shared credential are the same operator's money.
 func (s Strategy) Sources() []CredentialSource {
 	switch s {
 	case BYOKFirst:
-		return []CredentialSource{SourceBYOK, SourceEnvironment, SourceGateway}
+		return []CredentialSource{SourceBYOK, SourceEnvironment, SourceShared}
 	case BYOKOnly:
 		return []CredentialSource{SourceBYOK}
 	default:
-		return []CredentialSource{SourceEnvironment, SourceGateway, SourceBYOK}
+		return []CredentialSource{SourceEnvironment, SourceShared, SourceBYOK}
 	}
 }
 
@@ -185,7 +186,7 @@ type ProviderKey struct {
 	Config     map[string]any               `json:"config"`               // Provider-specific config
 	IsFallback bool                         `json:"is_fallback"`          // Use as fallback when rate limited
 	Priority   int                          `json:"priority"`             // Order preference (lower = higher priority)
-	RateLimit  *credentials.RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (for gateway keys)
+	RateLimit  *credentials.RateLimitConfig `json:"rate_limit,omitempty"` // Rate limits (for shared credentials)
 	CreatedAt  time.Time                    `json:"created_at"`
 	LastUsed   *time.Time                   `json:"last_used"`
 	UsageCount int64                        `json:"usage_count"`
@@ -203,10 +204,32 @@ type Usage struct {
 	Timestamp        time.Time `json:"timestamp"`
 }
 
+// SharedCredentialParams carries the sharing facts for one new shared
+// credential. A zero Access selects the open default: a credential the
+// operator applies without saying otherwise serves every account.
+type SharedCredentialParams struct {
+	Label     string
+	Access    credentials.Access
+	Grants    []string
+	RateLimit *credentials.RateLimitConfig
+}
+
+// SharedCredentialUpdate mutates one shared credential. A nil field leaves
+// its value alone; Grants replaces the whole grant list because a grant
+// change is a statement of who may spend, not a diff.
+type SharedCredentialUpdate struct {
+	Key       map[string]string
+	Config    map[string]any
+	Label     *string
+	Access    *credentials.Access
+	Grants    *[]string
+	RateLimit *credentials.RateLimitConfig
+}
+
 // ProviderKeys interface defines provider key management operations
 type ProviderKeys interface {
-	// Scoped key management. A scope is either GatewayScope or one
-	// AccountScope; the caller decides which, and the store treats them alike.
+	// Account key management. A scope names one account; the shared plane
+	// has its own methods because its record holds a list, not one value.
 	AddKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback bool, priority int) (*credentials.ProviderKey, error)
 	GetKey(ctx context.Context, scope, provider string) (*credentials.ProviderKey, error)
 	GetKeys(ctx context.Context, scope, provider string) ([]*credentials.ProviderKey, error) // Returns all keys for provider sorted by priority
@@ -214,17 +237,21 @@ type ProviderKeys interface {
 	UpdateKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback *bool, priority *int) (*credentials.ProviderKey, error)
 	DeleteKey(ctx context.Context, scope, provider string) error
 	ValidateKey(ctx context.Context, provider string, key map[string]string, config map[string]any) error
-	// ResolveStoredMaterial serves both stored planes. The scope decides which
-	// one, so a gateway credential and a BYOK credential resolve by the same
-	// rules and differ only in who owns them.
+	// ResolveStoredMaterial decrypts one exact account record against the
+	// provider contract.
 	ResolveStoredMaterial(ctx context.Context, scope string, provider catalogs.Provider) (credentials.Material, error)
 
-	// Gateway key management (scope = GatewayScope)
-	AddGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error)
-	GetGatewayKey(ctx context.Context, provider string) (*credentials.ProviderKey, error)
-	UpdateGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error)
-	DeleteGatewayKey(ctx context.Context, provider string) error
-	ListGatewayKeys(ctx context.Context) ([]*credentials.ProviderKey, error)
+	// Shared credential management (scope = SharedScope). One provider holds
+	// a list of shared credentials, each open to every account or granted to
+	// some, addressed by id.
+	AddSharedCredential(ctx context.Context, provider string, key map[string]string, config map[string]any, params SharedCredentialParams) (*credentials.SharedCredential, error)
+	GetSharedCredentials(ctx context.Context, provider string) ([]credentials.SharedCredential, error)
+	UpdateSharedCredential(ctx context.Context, provider, credentialID string, update SharedCredentialUpdate) (*credentials.SharedCredential, error)
+	DeleteSharedCredential(ctx context.Context, provider, credentialID string) error
+	ListShared(ctx context.Context) ([]*credentials.ProviderKey, error)
+	// ResolveSharedMaterial decrypts the first shared credential the named
+	// account may spend: open, or granted to that account.
+	ResolveSharedMaterial(ctx context.Context, accountID string, provider catalogs.Provider) (credentials.Material, error)
 
 	// Request accounting
 	RecordUsage(ctx context.Context, scope string, provider string, usage *Usage) error

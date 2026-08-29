@@ -16,24 +16,14 @@ import (
 
 func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 	ctx := t.Context()
-	store := storage.NewMockStore()
-	repository, err := credentials.Open(store)
-	require.NoError(t, err)
 	provider := syntheticCredentialProvider()
-	validator, err := NewCatalogCredentialValidator(func(id catalogs.ProviderID) (catalogs.Provider, bool) {
-		return provider, id == provider.ID
-	})
-	require.NoError(t, err)
-	masterKey, err := credentials.GenerateMasterKey()
-	require.NoError(t, err)
-	manager, err := NewProviderKeys(repository, masterKey, validator)
-	require.NoError(t, err)
+	manager := newSyntheticProviderKeys(t, provider)
 
 	for account, secret := range map[string]string{"account-a": "secret-a", "account-b": "secret-b"} {
 		_, err := manager.AddKey(ctx, AccountScope(account), string(provider.ID), map[string]string{"api-key": secret}, nil, false, 0)
 		require.NoError(t, err)
 	}
-	_, err = manager.AddGatewayKey(ctx, string(provider.ID), map[string]string{"api-key": "global-secret"}, nil, nil)
+	_, err := manager.AddSharedCredential(ctx, string(provider.ID), map[string]string{"api-key": "global-secret"}, nil, SharedCredentialParams{})
 	require.NoError(t, err)
 
 	var wait sync.WaitGroup
@@ -66,6 +56,25 @@ func TestSyntheticCatalogProviderOperatorSurfaces(t *testing.T) {
 	missing, err := manager.GetKeys(ctx, AccountScope("missing"), string(provider.ID))
 	require.NoError(t, err)
 	require.Empty(t, missing, "an exact account lookup must not merge global material")
+}
+
+// newSyntheticProviderKeys builds a manager whose validator knows exactly one
+// synthetic provider, so shared-credential resolution runs the real
+// catalog-contract path.
+func newSyntheticProviderKeys(t *testing.T, provider catalogs.Provider) ProviderKeys {
+	t.Helper()
+	store := storage.NewMockStore()
+	repository, err := credentials.Open(store)
+	require.NoError(t, err)
+	validator, err := NewCatalogCredentialValidator(func(id catalogs.ProviderID) (catalogs.Provider, bool) {
+		return provider, id == provider.ID
+	})
+	require.NoError(t, err)
+	masterKey, err := credentials.GenerateMasterKey()
+	require.NoError(t, err)
+	manager, err := NewProviderKeys(repository, masterKey, validator)
+	require.NoError(t, err)
+	return manager
 }
 
 func syntheticCredentialProvider() catalogs.Provider {
@@ -141,8 +150,9 @@ func TestListKeys(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestGatewayKeyOperations tests all gateway key operations
-func TestGatewayKeyOperations(t *testing.T) {
+// TestSharedCredentialOperations covers the argument contract of the
+// shared-credential surface.
+func TestSharedCredentialOperations(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
 	masterKey, _ := credentials.GenerateMasterKey()
@@ -152,44 +162,84 @@ func TestGatewayKeyOperations(t *testing.T) {
 	// Skip validation
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
-	// Test adding global key with empty provider
-	_, err = manager.AddGatewayKey(ctx, "", map[string]string{"api-key": "sk-test"}, nil, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "provider is required")
+	// Every shared operation requires a provider.
+	_, err = manager.AddSharedCredential(ctx, "", map[string]string{"api-key": "sk-test"}, nil, SharedCredentialParams{})
+	assert.ErrorIs(t, err, ErrProviderRequired)
+	_, err = manager.GetSharedCredentials(ctx, "")
+	assert.ErrorIs(t, err, ErrProviderRequired)
+	err = manager.DeleteSharedCredential(ctx, "", "some-id")
+	assert.ErrorIs(t, err, ErrProviderRequired)
 
-	// Test getting global key with empty provider
-	_, err = manager.GetGatewayKey(ctx, "")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "provider is required")
-
-	// Test deleting global key with empty provider
-	err = manager.DeleteGatewayKey(ctx, "")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "provider is required")
-
-	// Test with invalid key
-	_, err = manager.AddGatewayKey(ctx, "openai", map[string]string{}, nil, nil)
+	// An invalid key is refused before anything is stored.
+	_, err = manager.AddSharedCredential(ctx, "openai", map[string]string{}, nil, SharedCredentialParams{})
 	assert.Error(t, err)
 
-	// Test getting non-existent global key
-	_, err = manager.GetGatewayKey(ctx, "non-existent")
-	assert.Error(t, err)
+	// An unknown access word is refused.
+	_, err = manager.AddSharedCredential(ctx, "openai", map[string]string{"api-key": "sk-test"}, nil,
+		SharedCredentialParams{Access: "everyone"})
+	assert.ErrorIs(t, err, credentials.ErrInvalidAccess)
+
+	// A provider with no shared record lists empty rather than failing.
+	shared, err := manager.GetSharedCredentials(ctx, "non-existent")
+	assert.NoError(t, err)
+	assert.Empty(t, shared)
+
+	// Deleting or updating an absent credential reports not found.
+	err = manager.DeleteSharedCredential(ctx, "non-existent", "some-id")
 	assert.ErrorIs(t, err, ErrKeyNotFound)
-
-	// Test deleting non-existent global key
-	err = manager.DeleteGatewayKey(ctx, "non-existent")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "key not found")
+	_, err = manager.UpdateSharedCredential(ctx, "non-existent", "some-id", SharedCredentialUpdate{})
+	assert.ErrorIs(t, err, ErrKeyNotFound)
 }
 
-func TestListGatewayKeysReadsCanonicalRecord(t *testing.T) {
+// TestSharedScopeRefusesAccountOperations pins the seam split: the account
+// methods never read or write the shared record, whose shape is a list.
+func TestSharedScopeRefusesAccountOperations(t *testing.T) {
 	ctx, _, manager := newProviderCredentialFixture(t)
-	addGlobalProviderCredential(t, ctx, manager)
 
-	keys, err := manager.ListGatewayKeys(ctx)
+	_, err := manager.AddKey(ctx, SharedScope, "openai", map[string]string{"api-key": "sk-test"}, nil, false, 0)
+	assert.ErrorIs(t, err, ErrScopeIsShared)
+	_, err = manager.UpdateKey(ctx, SharedScope, "openai", nil, map[string]any{"region": "test"}, nil, nil)
+	assert.ErrorIs(t, err, ErrScopeIsShared)
+	err = manager.DeleteKey(ctx, SharedScope, "openai")
+	assert.ErrorIs(t, err, ErrScopeIsShared)
+	_, err = manager.ResolveStoredMaterial(ctx, SharedScope, syntheticCredentialProvider())
+	assert.ErrorIs(t, err, ErrScopeIsShared)
+}
+
+// TestOperatorStoresManySharedCredentialsForOneProvider is the CSH-C1
+// fail-before case. On the baseline the shared record held one credential, so
+// an operator's second key for the same provider drew a revision conflict.
+func TestOperatorStoresManySharedCredentialsForOneProvider(t *testing.T) {
+	ctx, _, manager := newProviderCredentialFixture(t)
+
+	first, err := manager.AddSharedCredential(ctx, "openai",
+		map[string]string{"api-key": "sk-first"}, nil, SharedCredentialParams{Label: "team-a"})
+	require.NoError(t, err)
+	second, err := manager.AddSharedCredential(ctx, "openai",
+		map[string]string{"api-key": "sk-second"}, nil, SharedCredentialParams{Label: "team-b"})
+	require.NoError(t, err)
+	require.NotEqual(t, first.ID, second.ID)
+
+	shared, err := manager.GetSharedCredentials(ctx, "openai")
+	require.NoError(t, err)
+	require.Len(t, shared, 2)
+	assert.Equal(t, []string{"team-a", "team-b"}, []string{shared[0].Label, shared[1].Label},
+		"the list keeps stored order")
+	for _, credential := range shared {
+		assert.Equal(t, credentials.AccessOpen, credential.Access,
+			"a credential added without an access choice is open to every account")
+	}
+}
+
+func TestListSharedReadsCanonicalRecord(t *testing.T) {
+	ctx, _, manager := newProviderCredentialFixture(t)
+	addSharedProviderCredential(t, ctx, manager)
+
+	keys, err := manager.ListShared(ctx)
 	require.NoError(t, err)
 	require.Len(t, keys, 1)
 	assert.Equal(t, "openai", keys[0].Provider)
+	require.Len(t, keys[0].Shared, 1)
 }
 
 func TestProviderCredentialRepositoryContract(t *testing.T) {
@@ -198,23 +248,30 @@ func TestProviderCredentialRepositoryContract(t *testing.T) {
 	assert.Equal(t, "credentials:v1:scope:Kg:provider:b3BlbmFp", credentials.StorageKey("*", "openai"))
 
 	ctx, store, manager := newProviderCredentialFixture(t)
-	addGlobalProviderCredential(t, ctx, manager)
+	created := addSharedProviderCredential(t, ctx, manager)
 
 	storageKeys, err := store.ScanWithPrefix(ctx, credentials.ScopePrefix("*"), providerCredentialScanLimit)
 	require.NoError(t, err)
 	assert.Equal(t, []string{credentials.StorageKey("*", "openai")}, storageKeys)
 
-	providerKey, err := manager.GetGatewayKey(ctx, "openai")
+	shared, err := manager.GetSharedCredentials(ctx, "openai")
 	require.NoError(t, err)
-	assert.Equal(t, "openai", providerKey.Provider)
+	require.Len(t, shared, 1)
+	assert.Equal(t, created.ID, shared[0].ID)
 
-	updated, err := manager.UpdateGatewayKey(ctx, "openai", nil, map[string]any{"region": "test"}, nil)
+	updated, err := manager.UpdateSharedCredential(ctx, "openai", created.ID,
+		SharedCredentialUpdate{Config: map[string]any{"region": "test"}})
 	require.NoError(t, err)
 	assert.Equal(t, map[string]any{"region": "test"}, updated.Config)
 
-	require.NoError(t, manager.DeleteGatewayKey(ctx, "openai"))
-	_, err = manager.GetGatewayKey(ctx, "openai")
-	assert.ErrorIs(t, err, ErrKeyNotFound)
+	// Deleting the last shared credential removes the provider's record.
+	require.NoError(t, manager.DeleteSharedCredential(ctx, "openai", created.ID))
+	shared, err = manager.GetSharedCredentials(ctx, "openai")
+	require.NoError(t, err)
+	assert.Empty(t, shared)
+	storageKeys, err = store.ScanWithPrefix(ctx, credentials.ScopePrefix("*"), providerCredentialScanLimit)
+	require.NoError(t, err)
+	assert.Empty(t, storageKeys)
 }
 
 func newProviderCredentialFixture(t *testing.T) (context.Context, *storage.MockStore, ProviderKeys) {
@@ -229,10 +286,57 @@ func newProviderCredentialFixture(t *testing.T) (context.Context, *storage.MockS
 	return ctx, store, manager
 }
 
-func addGlobalProviderCredential(t *testing.T, ctx context.Context, manager ProviderKeys) {
+func addSharedProviderCredential(t *testing.T, ctx context.Context, manager ProviderKeys) *credentials.SharedCredential {
 	t.Helper()
-	_, err := manager.AddGatewayKey(ctx, "openai", map[string]string{"api-key": "sk-test"}, nil, nil)
+	created, err := manager.AddSharedCredential(ctx, "openai", map[string]string{"api-key": "sk-test"}, nil, SharedCredentialParams{})
 	require.NoError(t, err)
+	return created
+}
+
+// TestGrantedSharedCredentialResolution proves the per-credential sharing
+// choice: a granted credential serves only its grantees, an open credential
+// serves everyone, and resolution walks the list in stored order.
+func TestGrantedSharedCredentialResolution(t *testing.T) {
+	ctx := t.Context()
+	provider := syntheticCredentialProvider()
+	manager := newSyntheticProviderKeys(t, provider)
+
+	granted, err := manager.AddSharedCredential(ctx, string(provider.ID),
+		map[string]string{"api-key": "secret-granted"}, nil,
+		SharedCredentialParams{Access: credentials.AccessGranted, Grants: []string{"account-a"}})
+	require.NoError(t, err)
+	open, err := manager.AddSharedCredential(ctx, string(provider.ID),
+		map[string]string{"api-key": "secret-open"}, nil, SharedCredentialParams{})
+	require.NoError(t, err)
+
+	resolveSecret := func(accountID string) string {
+		material, resolveErr := manager.ResolveSharedMaterial(ctx, accountID, provider)
+		require.NoError(t, resolveErr)
+		value, exists := material.Value("api-key")
+		require.True(t, exists)
+		return value
+	}
+
+	assert.Equal(t, "secret-granted", resolveSecret("account-a"),
+		"a granted account spends the first credential granted to it")
+	assert.Equal(t, "secret-open", resolveSecret("account-b"),
+		"an ungranted account falls through to the open credential")
+	assert.Equal(t, "secret-open", resolveSecret(""),
+		"an anonymous caller may spend only an open credential")
+
+	require.NoError(t, manager.DeleteSharedCredential(ctx, string(provider.ID), open.ID))
+	_, err = manager.ResolveSharedMaterial(ctx, "account-b", provider)
+	assert.ErrorIs(t, err, ErrKeyNotFound,
+		"with only a granted credential left, an ungranted account gets nothing")
+	assert.Equal(t, "secret-granted", resolveSecret("account-a"))
+
+	// Revoking the grant closes the last door.
+	noGrants := []string{}
+	_, err = manager.UpdateSharedCredential(ctx, string(provider.ID), granted.ID,
+		SharedCredentialUpdate{Grants: &noGrants})
+	require.NoError(t, err)
+	_, err = manager.ResolveSharedMaterial(ctx, "account-a", provider)
+	assert.ErrorIs(t, err, ErrKeyNotFound)
 }
 
 // TestRecordUsageErrors tests error cases in RecordUsage

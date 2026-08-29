@@ -16,13 +16,13 @@ func TestStrategyOrdersAllThreeSources(t *testing.T) {
 		{
 			strategy: OperatorFirst,
 			want: []CredentialSource{
-				SourceEnvironment, SourceGateway, SourceBYOK,
+				SourceEnvironment, SourceShared, SourceBYOK,
 			},
 		},
 		{
 			strategy: BYOKFirst,
 			want: []CredentialSource{
-				SourceBYOK, SourceEnvironment, SourceGateway,
+				SourceBYOK, SourceEnvironment, SourceShared,
 			},
 		},
 		{strategy: BYOKOnly, want: []CredentialSource{SourceBYOK}},
@@ -38,10 +38,10 @@ func TestStrategyOrdersAllThreeSources(t *testing.T) {
 	require.Equal(t, withoutOperator.Kind(), withOperator.Kind())
 	require.Equal(t, withoutOperator.SafeMessage(), withOperator.SafeMessage())
 	// byok_only is the whole of the deny story: it withholds both operator
-	// planes, because an environment credential and a gateway credential are
+	// planes, because an environment credential and a shared credential are
 	// the same operator's money.
 	require.NotContains(t, BYOKOnly.Sources(), SourceEnvironment)
-	require.NotContains(t, BYOKOnly.Sources(), SourceGateway)
+	require.NotContains(t, BYOKOnly.Sources(), SourceShared)
 	require.False(t, BYOKOnly.AllowsOperatorCredentials())
 	require.True(t, OperatorFirst.AllowsOperatorCredentials())
 	require.True(t, BYOKFirst.AllowsOperatorCredentials())

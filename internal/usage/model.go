@@ -120,7 +120,7 @@ type Record struct {
 	ModelUsed      string    `json:"model_used,omitempty"`
 	Provider       string    `json:"provider,omitempty"`
 	// CredentialSource names which credential plane paid for the request:
-	// `environment`, `gateway`, `byok`, or `anonymous` for a provider that
+	// `environment`, `shared`, `byok`, or `anonymous` for a provider that
 	// accepted the call without one. It is what lets an operator see an
 	// account drawing on the deployment's credential rather than its own. It
 	// is empty on a record written before a route was chosen, and on one

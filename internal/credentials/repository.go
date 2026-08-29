@@ -247,7 +247,38 @@ func cloneProviderKey(key ProviderKey) ProviderKey {
 		lastUsed := *key.LastUsed
 		key.LastUsed = &lastUsed
 	}
+	if key.Shared != nil {
+		shared := make([]SharedCredential, len(key.Shared))
+		for index, credential := range key.Shared {
+			shared[index] = CloneSharedCredential(credential)
+		}
+		key.Shared = shared
+	}
 	return key
+}
+
+// CloneSharedCredential returns a caller-owned copy of one shared credential,
+// so a mutation on a returned value never reaches the stored record.
+func CloneSharedCredential(credential SharedCredential) SharedCredential {
+	if credential.Config != nil {
+		config := make(map[string]any, len(credential.Config))
+		for name, value := range credential.Config {
+			config[name] = value
+		}
+		credential.Config = config
+	}
+	if credential.RateLimit != nil {
+		rateLimit := *credential.RateLimit
+		credential.RateLimit = &rateLimit
+	}
+	if credential.LastUsed != nil {
+		lastUsed := *credential.LastUsed
+		credential.LastUsed = &lastUsed
+	}
+	if credential.Grants != nil {
+		credential.Grants = append([]string(nil), credential.Grants...)
+	}
+	return credential
 }
 
 func mapReadError(action string, err error) error {

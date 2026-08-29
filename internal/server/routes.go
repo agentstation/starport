@@ -146,17 +146,17 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Metadata)
 			r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
 
-			// Gateway credentials: the operator applies one provider
-			// credential for the whole deployment. This needs the admin
-			// scope and no gateway API key of the operator's own, because
-			// a deployment credential is not a property of any key.
+			// Shared credentials: the operator shares provider credentials
+			// with the deployment's accounts. This needs the admin scope and
+			// no gateway API key of the operator's own, because a shared
+			// credential is not a property of any key.
 			r.Route("/providers/{provider}/credentials", func(r chi.Router) {
 				r.Use(s.requireAdmin)
 
-				r.Get("/", s.controllers.ProviderCredentials.GatewayGet)
-				r.Put("/", s.controllers.ProviderCredentials.GatewayPut)
-				r.Delete("/", s.controllers.ProviderCredentials.GatewayDelete)
-				r.Post("/validate", s.controllers.ProviderCredentials.GatewayValidate)
+				r.Get("/", s.controllers.ProviderCredentials.SharedGet)
+				r.Put("/", s.controllers.ProviderCredentials.SharedPut)
+				r.Delete("/", s.controllers.ProviderCredentials.SharedDelete)
+				r.Post("/validate", s.controllers.ProviderCredentials.SharedValidate)
 			})
 
 			// BYOK: a credential one account brings for itself. The path says

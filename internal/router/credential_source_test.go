@@ -104,11 +104,11 @@ func TestServedCredentialSourceNamesThePlaneThatPaid(t *testing.T) {
 			strategy: keyring.OperatorFirst, want: keyring.SourceEnvironment,
 		},
 		{
-			name: "gateway",
+			name: "shared",
 			stored: map[string]credentials.Material{
-				keyring.GatewayScope: embeddingTestMaterial("gw"),
+				keyring.SharedScope: embeddingTestMaterial("gw"),
 			},
-			strategy: keyring.OperatorFirst, want: keyring.SourceGateway,
+			strategy: keyring.OperatorFirst, want: keyring.SourceShared,
 		},
 		{
 			name: "byok",
@@ -131,13 +131,13 @@ func TestServedCredentialSourceNamesThePlaneThatPaid(t *testing.T) {
 
 // TestServedCredentialSourceFollowsTheFallback pins the case a per-request
 // field is easy to get wrong. The environment plane is tried first and the
-// provider refuses its credential, so the gateway plane is what actually paid.
+// provider refuses its credential, so the shared plane is what actually paid.
 // Recording the first plane the policy reached would report the deployment
 // running on a shell variable that in fact served nothing.
 func TestServedCredentialSourceFollowsTheFallback(t *testing.T) {
 	fixture := newCredentialSourceFixture(t, "env",
 		map[string]credentials.Material{
-			keyring.GatewayScope: embeddingTestMaterial("gw"),
+			keyring.SharedScope: embeddingTestMaterial("gw"),
 		},
 		"env",
 	)
@@ -146,5 +146,5 @@ func TestServedCredentialSourceFollowsTheFallback(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"env", "gw"}, fixture.offeredVersions(),
 		"the environment credential must be offered first and refused")
-	assert.Equal(t, string(keyring.SourceGateway), response.CredentialSource)
+	assert.Equal(t, string(keyring.SourceShared), response.CredentialSource)
 }

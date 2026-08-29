@@ -34,6 +34,18 @@ func (s *scopedCredentialStore) ResolveStoredMaterial(
 	scope string,
 	_ catalogs.Provider,
 ) (credentials.Material, error) {
+	return s.resolve(scope)
+}
+
+func (s *scopedCredentialStore) ResolveSharedMaterial(
+	_ context.Context,
+	_ string,
+	_ catalogs.Provider,
+) (credentials.Material, error) {
+	return s.resolve(credentials.SharedScope)
+}
+
+func (s *scopedCredentialStore) resolve(scope string) (credentials.Material, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.consulted = append(s.consulted, scope)
@@ -50,23 +62,23 @@ func (s *scopedCredentialStore) scopes() []string {
 	return append([]string(nil), s.consulted...)
 }
 
-// gatewayCredentialFixture builds a deployment whose environment holds no
+// sharedCredentialFixture builds a deployment whose environment holds no
 // credential for the provider, so every test here observes which stored plane
 // the strategy actually reaches.
-type gatewayCredentialFixture struct {
+type sharedCredentialFixture struct {
 	router   *modelRouter
 	runtime  *embeddingTestRuntime
 	store    *scopedCredentialStore
 	accepted []string
 }
 
-func newGatewayCredentialFixture(
+func newSharedCredentialFixture(
 	t *testing.T,
 	byScope map[string]credentials.Material,
-) *gatewayCredentialFixture {
+) *sharedCredentialFixture {
 	t.Helper()
 	plane := embeddingTestCatalogPlane(t)
-	fixture := &gatewayCredentialFixture{store: newScopedCredentialStore(byScope)}
+	fixture := &sharedCredentialFixture{store: newScopedCredentialStore(byScope)}
 	connector := &mockConnector{name: "acme"}
 	connector.embeddingsFunc = func(_ context.Context, req *connectors.EmbeddingsRequest) (*connectors.EmbeddingsResponse, error) {
 		fixture.accepted = append(fixture.accepted, req.Credential.Version())
@@ -90,7 +102,7 @@ func newGatewayCredentialFixture(
 	return fixture
 }
 
-func (f *gatewayCredentialFixture) route(
+func (f *sharedCredentialFixture) route(
 	t *testing.T,
 	strategy keyring.Strategy,
 ) (*EmbeddingResponse, error) {
@@ -102,31 +114,31 @@ func (f *gatewayCredentialFixture) route(
 	})
 }
 
-// TestGatewayCredentialServesARequestWithNoBYOK is the AON3 fail-before case.
+// TestSharedCredentialServesARequestWithNoBYOK is the AON3 fail-before case.
 // On the baseline the policy knew two planes, environment and account, so a
-// credential the operator applied for the whole deployment had no consumer at
-// all and this request failed as not configured.
-func TestGatewayCredentialServesARequestWithNoBYOK(t *testing.T) {
-	fixture := newGatewayCredentialFixture(t, map[string]credentials.Material{
-		keyring.GatewayScope: embeddingTestMaterial("gateway"),
+// credential the operator shared with the deployment's accounts had no
+// consumer at all and this request failed as not configured.
+func TestSharedCredentialServesARequestWithNoBYOK(t *testing.T) {
+	fixture := newSharedCredentialFixture(t, map[string]credentials.Material{
+		keyring.SharedScope: embeddingTestMaterial("shared"),
 	})
 
 	response, err := fixture.route(t, keyring.OperatorFirst)
 	require.NoError(t, err)
 	require.Equal(t, "acme/opaque/embed@002", response.ModelUsed)
-	assert.Equal(t, []string{"gateway"}, fixture.accepted,
-		"the request must be served by the operator's gateway credential")
-	assert.Equal(t, []string{keyring.GatewayScope}, fixture.store.scopes(),
-		"operator_first reaches the gateway plane before the account's own")
+	assert.Equal(t, []string{"shared"}, fixture.accepted,
+		"the request must be served by the operator's shared credential")
+	assert.Equal(t, []string{keyring.SharedScope}, fixture.store.scopes(),
+		"operator_first reaches the shared plane before the account's own")
 	assert.Equal(t, int64(1), fixture.runtime.operatorCalls.Load(),
 		"the environment plane is still tried first")
 }
 
-// TestBYOKWinsOverAGatewayCredentialUnderBYOKFirst proves the order is real
+// TestBYOKWinsOverASharedCredentialUnderBYOKFirst proves the order is real
 // and not an artifact of one plane being empty.
-func TestBYOKWinsOverAGatewayCredentialUnderBYOKFirst(t *testing.T) {
-	fixture := newGatewayCredentialFixture(t, map[string]credentials.Material{
-		keyring.GatewayScope:               embeddingTestMaterial("gateway"),
+func TestBYOKWinsOverASharedCredentialUnderBYOKFirst(t *testing.T) {
+	fixture := newSharedCredentialFixture(t, map[string]credentials.Material{
+		keyring.SharedScope:                embeddingTestMaterial("shared"),
 		keyring.AccountScope("account-a"):  embeddingTestMaterial("byok"),
 		keyring.AccountScope("other-acct"): embeddingTestMaterial("other-byok"),
 	})
@@ -135,17 +147,17 @@ func TestBYOKWinsOverAGatewayCredentialUnderBYOKFirst(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"byok"}, fixture.accepted)
 	assert.Equal(t, []string{keyring.AccountScope("account-a")}, fixture.store.scopes(),
-		"a served BYOK credential must not cause the gateway plane to be read")
+		"a served BYOK credential must not cause the shared plane to be read")
 	assert.Zero(t, fixture.runtime.operatorCalls.Load(),
 		"byok_first must not probe the environment when the account's own credential serves")
 }
 
-// TestBYOKOnlyNeverReachesAGatewayCredential is the deny story. An operator
+// TestBYOKOnlyNeverReachesASharedCredential is the deny story. An operator
 // who sets an account to byok_only is withholding the deployment's money, and
-// a gateway credential is exactly that money.
-func TestBYOKOnlyNeverReachesAGatewayCredential(t *testing.T) {
-	fixture := newGatewayCredentialFixture(t, map[string]credentials.Material{
-		keyring.GatewayScope: embeddingTestMaterial("gateway"),
+// a shared credential is exactly that money.
+func TestBYOKOnlyNeverReachesASharedCredential(t *testing.T) {
+	fixture := newSharedCredentialFixture(t, map[string]credentials.Material{
+		keyring.SharedScope: embeddingTestMaterial("shared"),
 	})
 
 	_, err := fixture.route(t, keyring.BYOKOnly)
@@ -155,7 +167,7 @@ func TestBYOKOnlyNeverReachesAGatewayCredential(t *testing.T) {
 	assert.Equal(t, "Provider credentials are not configured.", providerFailure.SafeMessage())
 	assert.Empty(t, fixture.accepted, "no attempt may be paid for by the operator")
 	assert.Equal(t, []string{keyring.AccountScope("account-a")}, fixture.store.scopes(),
-		"byok_only must never read the gateway scope")
+		"byok_only must never read the shared scope")
 	assert.Zero(t, fixture.runtime.operatorCalls.Load())
 }
 
@@ -163,7 +175,7 @@ func TestBYOKOnlyNeverReachesAGatewayCredential(t *testing.T) {
 // three planes are consulted in order and the caller still gets the one
 // external not-configured shape rather than a panic or an internal error.
 func TestNoCredentialInAnySourceReportsNotConfigured(t *testing.T) {
-	fixture := newGatewayCredentialFixture(t, nil)
+	fixture := newSharedCredentialFixture(t, nil)
 
 	_, err := fixture.route(t, keyring.OperatorFirst)
 	require.Error(t, err)
@@ -173,20 +185,20 @@ func TestNoCredentialInAnySourceReportsNotConfigured(t *testing.T) {
 	assert.Equal(t, "Provider credentials are not configured.", providerFailure.SafeMessage())
 	assert.Equal(t, int64(1), fixture.runtime.operatorCalls.Load())
 	assert.Equal(t,
-		[]string{keyring.GatewayScope, keyring.AccountScope("account-a")},
+		[]string{keyring.SharedScope, keyring.AccountScope("account-a")},
 		fixture.store.scopes(),
-		"operator_first orders environment, then gateway, then BYOK")
+		"operator_first orders environment, then shared, then BYOK")
 }
 
-// TestGatewayCredentialIsAttributedToTheOperator guards usage attribution. A
-// gateway credential is the operator's money even though it is stored rather
+// TestSharedCredentialIsAttributedToTheOperator guards usage attribution. A
+// shared credential is the operator's money even though it is stored rather
 // than read from the environment, so recording it as account-owned would bill
 // the wrong party for every request an operator paid for.
-func TestGatewayCredentialIsAttributedToTheOperator(t *testing.T) {
+func TestSharedCredentialIsAttributedToTheOperator(t *testing.T) {
 	material := embeddingTestMaterial("v1")
 	for source, want := range map[keyring.CredentialSource]execution.CredentialOwner{
 		keyring.SourceEnvironment: execution.CredentialOwnerOperator,
-		keyring.SourceGateway:     execution.CredentialOwnerOperator,
+		keyring.SourceShared:      execution.CredentialOwnerOperator,
 		keyring.SourceBYOK:        execution.CredentialOwnerAccount,
 	} {
 		t.Run(string(source), func(t *testing.T) {
@@ -220,7 +232,7 @@ func TestUnreachableStoredPlanesNeverWidenAStrategy(t *testing.T) {
 			name: "no account drops only the BYOK plane", strategy: keyring.OperatorFirst,
 			hasStore: true, accountID: "",
 			want: []keyring.CredentialSource{
-				keyring.SourceEnvironment, keyring.SourceGateway,
+				keyring.SourceEnvironment, keyring.SourceShared,
 			},
 		},
 		{

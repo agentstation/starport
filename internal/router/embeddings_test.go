@@ -187,6 +187,15 @@ func (r *embeddingUserResolver) ResolveStoredMaterial(
 	return r.material, r.err
 }
 
+func (r *embeddingUserResolver) ResolveSharedMaterial(
+	context.Context,
+	string,
+	catalogs.Provider,
+) (credentials.Material, error) {
+	r.calls.Add(1)
+	return r.material, r.err
+}
+
 func embeddingTestMaterial(version string) credentials.Material {
 	return credentials.NewMaterial(
 		catalogs.ProviderCredentialProfile{ID: "none", Primitive: catalogs.ProviderAuthenticationNone},
