@@ -116,10 +116,15 @@ func (h *SPAHandler) Assets(w http.ResponseWriter, r *http.Request) {
 // spaPagePaths lists every console page route, including the nested
 // detail routes the client router owns. The gateway serves the same
 // shell for each path and the client router renders the matching page.
+// A page path missing here breaks only direct loads and reloads: the
+// client router still reaches the page, so the gap hides until someone
+// refreshes. TestSPAPagePathsCoverClientRoutes derives this list from
+// console/src/routes and fails when the two drift.
 var spaPagePaths = []string{
-	"/", "/chat", "/presets", "/models", "/models/*", "/providers",
-	"/providers/*", "/authors", "/authors/*", "/keys", "/usage",
-	"/settings",
+	"/", "/auth", "/authors", "/authors/*", "/chat", "/docs",
+	"/documents", "/files", "/jobs", "/keys", "/models", "/models/*",
+	"/presets", "/providers", "/providers/*", "/settings", "/tenants",
+	"/usage",
 }
 
 // Register mounts the SPA page routes and hashed assets on the router.

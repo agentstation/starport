@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -34,7 +36,11 @@ func newSPARouter(t *testing.T, dist fstest.MapFS) *chi.Mux {
 
 func TestSPAHandlerServesIndexForEveryPagePath(t *testing.T) {
 	router := newSPARouter(t, builtDist())
-	for _, path := range []string{"/", "/chat", "/presets", "/models", "/providers", "/keys", "/usage", "/settings"} {
+	for _, path := range []string{
+		"/", "/auth", "/chat", "/docs", "/documents", "/files", "/jobs",
+		"/keys", "/models", "/presets", "/providers", "/settings",
+		"/tenants", "/usage",
+	} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, request)
@@ -75,6 +81,59 @@ func TestSPAHandlerServesIndexForNestedPagePaths(t *testing.T) {
 		body, _ := io.ReadAll(recorder.Body)
 		if !strings.Contains(string(body), "id=\"root\"") {
 			t.Fatalf("GET %s did not serve the SPA index", path)
+		}
+	}
+}
+
+// TestSPAPagePathsCoverClientRoutes derives the page paths from the
+// console route files and requires spaPagePaths to match them exactly.
+// A route missing from the allowlist breaks only direct loads and
+// reloads — client-side navigation still works — so the gap does not
+// show up in normal console use.
+func TestSPAPagePathsCoverClientRoutes(t *testing.T) {
+	routesDir := filepath.Join("..", "..", "console", "src", "routes")
+	entries, err := os.ReadDir(routesDir)
+	if err != nil {
+		t.Skipf("console route sources unavailable: %v", err)
+	}
+	want := map[string]bool{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".tsx") ||
+			strings.Contains(name, ".test.") ||
+			strings.HasPrefix(name, "__") {
+			continue
+		}
+		name = strings.TrimSuffix(name, ".tsx")
+		if name == "index" {
+			want["/"] = true
+			continue
+		}
+		// TanStack Router file names: dots nest path segments, a
+		// trailing underscore detaches a segment from its layout, and a
+		// $param segment is a wildcard to the server.
+		segments := strings.Split(name, ".")
+		for i, segment := range segments {
+			segment = strings.TrimSuffix(segment, "_")
+			if strings.HasPrefix(segment, "$") {
+				segment = "*"
+			}
+			segments[i] = segment
+		}
+		want["/"+strings.Join(segments, "/")] = true
+	}
+	registered := map[string]bool{}
+	for _, path := range spaPagePaths {
+		registered[path] = true
+	}
+	for path := range want {
+		if !registered[path] {
+			t.Errorf("client route %s is missing from spaPagePaths; a direct load of it gets the API 404", path)
+		}
+	}
+	for path := range registered {
+		if !want[path] {
+			t.Errorf("spaPagePaths lists %s but no console route file serves it", path)
 		}
 	}
 }
