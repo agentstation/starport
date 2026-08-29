@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/catalog/view"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/requestctx"
@@ -77,7 +77,7 @@ func TestEmbeddingsControllerOpenAIContract(t *testing.T) {
 		`{"model":"openai/text-embedding-3-small","input":"hello"}`,
 	))
 	ctx := requestctx.WithAPIKey(request.Context(), "test-key")
-	ctx = requestctx.WithAPIKeyModel(ctx, &identity.APIKey{AllowedModels: []string{"openai/text-embedding-3-small"}})
+	ctx = requestctx.WithAPIKeyModel(ctx, &apikey.APIKey{AllowedModels: []string{"openai/text-embedding-3-small"}})
 	ctx = context.WithValue(ctx, middleware.RequestIDKey, "request-1")
 	request = request.WithContext(ctx)
 	recorder := httptest.NewRecorder()

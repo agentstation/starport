@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -51,7 +51,7 @@ func authenticate(t *testing.T, middleware *AuthMiddleware, secret string) (requ
 // cached responses.
 func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := identity.Open(store)
+	identities, err := apikey.Open(store)
 	require.NoError(t, err)
 	accounts, err := account.Open(store)
 	require.NoError(t, err)
@@ -60,14 +60,14 @@ func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 	_, err = accounts.Create(ctx, account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
 
-	issuer, err := identity.NewIssuer(identities, identity.WithAccountChecker(accounts))
+	issuer, err := apikey.NewIssuer(identities, apikey.WithAccountChecker(accounts))
 	require.NoError(t, err)
 
-	first, err := issuer.Issue(ctx, identity.IssueRequest{
+	first, err := issuer.Issue(ctx, apikey.IssueRequest{
 		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
-	second, err := issuer.Issue(ctx, identity.IssueRequest{
+	second, err := issuer.Issue(ctx, apikey.IssueRequest{
 		Name: "Acme-Laptop", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
@@ -99,11 +99,11 @@ func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 // read time and not only at issue time.
 func TestKeyWithNoAccountResolvesToDefault(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := identity.Open(store)
+	identities, err := apikey.Open(store)
 	require.NoError(t, err)
 
 	secret := "sk-starport-unaccounted"
-	_, err = identities.Create(context.Background(), identity.APIKey{
+	_, err = identities.Create(context.Background(), apikey.APIKey{
 		ID:     "STARPORT_unaccounted",
 		Name:   "Unaccounted",
 		Hash:   hashSecret(secret),

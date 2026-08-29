@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/dto"
 )
@@ -31,7 +31,7 @@ const (
 // method rather than the identity repository: deleting an account must be able
 // to find out whether a key still names it, and nothing more.
 type KeyLister interface {
-	List(ctx context.Context, limit, offset int) ([]identity.Record, error)
+	List(ctx context.Context, limit, offset int) ([]apikey.Record, error)
 }
 
 // AccountsController serves the operator's account plane: the accounts that

@@ -15,8 +15,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server/requestctx"
 )
@@ -146,7 +146,7 @@ type AccountReader interface {
 
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
-	identities identity.Repository
+	identities apikey.Repository
 	accounts   AccountReader
 	// policy is the live authentication mode. It is read once per request, not
 	// once per router build, because the console can change the mode without a
@@ -157,7 +157,7 @@ type AuthMiddleware struct {
 	// anonymous is the identity a request runs as while the mode is disabled.
 	// The scope set is the operator's and does not change at runtime, so it is
 	// resolved once.
-	anonymous identity.APIKey
+	anonymous apikey.APIKey
 	// sessions verifies console sessions opened by `starport ui`. A nil gate
 	// means this gateway has no local admin token to check them against, so
 	// every session cookie is refused and only bearer keys authenticate.
@@ -168,7 +168,7 @@ type AuthMiddleware struct {
 // is optional: without it a request still authenticates and runs under the
 // default credential policy, because a key is a valid identity whether or not
 // the deployment can read the account behind it.
-func NewAuthMiddleware(identities identity.Repository, accounts ...AccountReader) *AuthMiddleware {
+func NewAuthMiddleware(identities apikey.Repository, accounts ...AccountReader) *AuthMiddleware {
 	middleware := &AuthMiddleware{identities: identities}
 	if len(accounts) > 0 {
 		middleware.accounts = accounts[0]
@@ -178,14 +178,14 @@ func NewAuthMiddleware(identities identity.Repository, accounts ...AccountReader
 
 // Govern binds the live authentication policy and the identity a request runs
 // as while that policy is disabled. An empty scope list means
-// identity.DefaultAnonymousScopes.
+// apikey.DefaultAnonymousScopes.
 //
 // The operator decides both; nothing in a request can. Passing them together
 // is the point: a policy without an anonymous identity would disable the key
 // check and leave every downstream seam without a subject to meter.
 func (m *AuthMiddleware) Govern(policy *authmode.Policy, scopes []string) {
 	m.policy = policy
-	m.anonymous = identity.Anonymous(scopes)
+	m.anonymous = apikey.Anonymous(scopes)
 }
 
 // AcceptSessions binds the gate that verifies console sessions.
@@ -233,7 +233,7 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 
 		record, err := m.identities.GetByHash(r.Context(), hashStr)
 		if err != nil {
-			if errors.Is(err, identity.ErrNotFound) {
+			if errors.Is(err, apikey.ErrNotFound) {
 				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 				return
 			}
@@ -327,7 +327,7 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 	if _, err := m.sessions.Verify(cookie.Value, time.Now()); err != nil {
 		return nil, err
 	}
-	operator := identity.LocalOperator()
+	operator := apikey.LocalOperator()
 	ctx := requestctx.WithAPIKeyID(r.Context(), operator.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, &operator)
 	accountID := operator.EffectiveAccountID()

@@ -2,10 +2,10 @@ package controllers
 
 import (
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
@@ -51,7 +51,7 @@ type Controllers struct {
 type Config struct {
 	Service            proxy.Proxy
 	ProviderKeys       keyring.ProviderKeys
-	Identities         identity.Repository
+	Identities         apikey.Repository
 	Accounts           account.Repository
 	Usage              usage.Repository
 	ProviderOperations ProviderOperations

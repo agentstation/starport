@@ -14,9 +14,9 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -79,7 +79,7 @@ func New(paths config.Paths) *Service {
 	}
 }
 
-// Initialize creates local configuration and one named gateway identity.
+// Initialize creates local configuration and one named gateway apikey.
 // It never replaces an existing configuration file or identity store.
 func (s *Service) Initialize(ctx context.Context, request Request) (Result, error) {
 	if err := s.validate(request); err != nil {
@@ -222,7 +222,7 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 	if err != nil {
 		return fmt.Errorf("open isolated identity store for rollback: %w", err)
 	}
-	repository, err := identity.Open(store)
+	repository, err := apikey.Open(store)
 	if err != nil {
 		_ = store.Close()
 		return fmt.Errorf("open initialized identity repository for rollback: %w", err)
@@ -246,7 +246,7 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 		return fmt.Errorf("%w: storage contains %d records, want 4", ErrRollbackRefused, len(keys))
 	}
 	for _, key := range keys {
-		if !strings.HasPrefix(key, identity.StoragePrefix) {
+		if !strings.HasPrefix(key, apikey.StoragePrefix) {
 			return fmt.Errorf("%w: storage contains application state", ErrRollbackRefused)
 		}
 	}
@@ -304,7 +304,7 @@ func (s *Service) validate(request Request) error {
 	if !filepath.IsAbs(s.paths.ConfigDir) || s.paths != expected {
 		return ErrPathsRequired
 	}
-	if err := (identity.APIKey{ID: "validation", Name: request.IdentityName, Hash: "validation", Scopes: []string{"*"}}).Validate(); err != nil {
+	if err := (apikey.APIKey{ID: "validation", Name: request.IdentityName, Hash: "validation", Scopes: []string{"*"}}).Validate(); err != nil {
 		return fmt.Errorf("identity name: %w", err)
 	}
 	return nil
@@ -337,54 +337,54 @@ func (s *Service) createIdentity(
 	ctx context.Context,
 	path string,
 	name string,
-) (identity.IssueResult, error) {
+) (apikey.IssueResult, error) {
 	store, err := s.openStore(path)
 	if err != nil {
-		return identity.IssueResult{}, fmt.Errorf("open staged identity store: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("open staged identity store: %w", err)
 	}
 	issued, issueErr := InitializeIdentity(ctx, store, name)
 	closeErr := store.Close()
 	if issueErr != nil {
-		return identity.IssueResult{}, issueErr
+		return apikey.IssueResult{}, issueErr
 	}
 	if closeErr != nil {
-		return identity.IssueResult{}, fmt.Errorf("close staged identity store: %w", closeErr)
+		return apikey.IssueResult{}, fmt.Errorf("close staged identity store: %w", closeErr)
 	}
 	return issued, nil
 }
 
 // InitializeIdentity creates the first named identity in configured storage.
-// It refuses a repository that already contains an identity.
+// It refuses a repository that already contains an apikey.
 func InitializeIdentity(
 	ctx context.Context,
 	store storage.KVStore,
 	name string,
-) (identity.IssueResult, error) {
-	repository, err := identity.Open(store)
+) (apikey.IssueResult, error) {
+	repository, err := apikey.Open(store)
 	if err != nil {
-		return identity.IssueResult{}, fmt.Errorf("open identity repository: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("open identity repository: %w", err)
 	}
 	records, err := repository.List(ctx, 1, 0)
 	if err != nil {
-		return identity.IssueResult{}, fmt.Errorf("inspect identity repository: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("inspect identity repository: %w", err)
 	}
 	if len(records) != 0 {
-		return identity.IssueResult{}, ErrAlreadyInitialized
+		return apikey.IssueResult{}, ErrAlreadyInitialized
 	}
 	// The initial key names no account, so it resolves to the canonical account at
 	// read time. Setup deliberately writes nothing but identity records, and the
 	// gateway ensures the canonical account at boot, so this path needs no account
 	// checker: it never accepts a caller-supplied account to check.
-	issuer, err := identity.NewIssuer(repository)
+	issuer, err := apikey.NewIssuer(repository)
 	if err != nil {
-		return identity.IssueResult{}, fmt.Errorf("open identity issuer: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("open identity issuer: %w", err)
 	}
-	issued, err := issuer.IssueInitial(ctx, identity.IssueRequest{
+	issued, err := issuer.IssueInitial(ctx, apikey.IssueRequest{
 		Name: name, Scopes: []string{"*"}, Metadata: map[string]any{"source": "setup"},
 	})
 	if err != nil {
-		if errors.Is(err, identity.ErrConflict) {
-			return identity.IssueResult{}, fmt.Errorf("%w: initial identity was already claimed", ErrAlreadyInitialized)
+		if errors.Is(err, apikey.ErrConflict) {
+			return apikey.IssueResult{}, fmt.Errorf("%w: initial identity was already claimed", ErrAlreadyInitialized)
 		}
 		return issued, fmt.Errorf("create named identity: %w", err)
 	}
@@ -393,7 +393,7 @@ func InitializeIdentity(
 
 // ReleaseIdentity removes an unpublished initial identity and its setup claim.
 func ReleaseIdentity(ctx context.Context, store storage.KVStore, id string) error {
-	repository, err := identity.Open(store)
+	repository, err := apikey.Open(store)
 	if err != nil {
 		return fmt.Errorf("open identity repository: %w", err)
 	}

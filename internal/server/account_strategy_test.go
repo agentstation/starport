@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -43,7 +43,7 @@ func resolveStrategy(
 // would be the only strategy the gateway ever saw, and an account could widen it.
 func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := identity.Open(store)
+	identities, err := apikey.Open(store)
 	require.NoError(t, err)
 	accounts, err := account.Open(store)
 	require.NoError(t, err)
@@ -54,9 +54,9 @@ func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 		CredentialStrategy: account.StrategyBYOKOnly,
 	})
 	require.NoError(t, err)
-	issuer, err := identity.NewIssuer(identities, identity.WithAccountChecker(accounts))
+	issuer, err := apikey.NewIssuer(identities, apikey.WithAccountChecker(accounts))
 	require.NoError(t, err)
-	issued, err := issuer.Issue(ctx, identity.IssueRequest{
+	issued, err := issuer.Issue(ctx, apikey.IssueRequest{
 		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
@@ -72,11 +72,11 @@ func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 // which is the one the operator gets by not choosing.
 func TestUnreadableAccountStillServesTheRequest(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := identity.Open(store)
+	identities, err := apikey.Open(store)
 	require.NoError(t, err)
 
 	secret := "test-secret-for-unreadable-account"
-	_, err = identities.Create(context.Background(), identity.APIKey{
+	_, err = identities.Create(context.Background(), apikey.APIKey{
 		ID: "STARPORT_unreadable", Name: "Unreadable", Hash: hashSecret(secret),
 		AccountID: "acme", Scopes: []string{"chat:write"}, Active: true,
 	})

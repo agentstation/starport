@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/agentstation/starport/internal/usage"
@@ -195,7 +195,7 @@ func TestAdminMetricsReflectRecordedUsage(t *testing.T) {
 	third.LatencyMS = 500
 	seedActivityRecords(t, repository, first, second, third)
 
-	identities, err := identity.Open(storage.NewMockStore())
+	identities, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	handler := NewAdminController(identities, newAdminTestAccounts(t), repository)
 

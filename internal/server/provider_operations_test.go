@@ -16,7 +16,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/providers"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
 )
@@ -227,7 +227,7 @@ func createServerIdentity(t *testing.T, server *Server, id string, scopes []stri
 	t.Helper()
 	secret := "secret-" + id
 	hash := sha256.Sum256([]byte(secret))
-	_, err := server.identities.Create(t.Context(), identity.APIKey{
+	_, err := server.identities.Create(t.Context(), apikey.APIKey{
 		ID: id, Name: strings.ReplaceAll(id, "-", "_"),
 		Hash: hex.EncodeToString(hash[:]), Scopes: scopes, Active: true,
 		CreatedAt: time.Now().UTC(),

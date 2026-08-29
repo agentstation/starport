@@ -133,7 +133,7 @@ test-integration: ## Run Valkey integration tests with Docker Compose
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/cache -run TestValkey; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v ./internal/app -run TestAppWithValkey; \
 		TEST_VALKEY_URL=valkey://localhost:$(VALKEY_INTEGRATION_PORT) $(GO) test -count=1 -v \
-			./internal/credentials ./internal/identity ./internal/presets ./internal/ratelimit \
+			./internal/credentials ./internal/apikey ./internal/presets ./internal/ratelimit \
 			-run RepositoryContract
 
 .PHONY: check

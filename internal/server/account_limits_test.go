@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/usage"
@@ -23,7 +23,7 @@ import (
 // numbers would let N keys each spend the key limit and overrun the account
 // cap N-fold. These tests hold that separation at both enforcement points.
 
-func accountLimitedRequest(apiKey *identity.APIKey, account *account.Account) *http.Request {
+func accountLimitedRequest(apiKey *apikey.APIKey, account *account.Account) *http.Request {
 	req := httptest.NewRequest(http.MethodPost, "/test", nil)
 	ctx := requestctx.WithAPIKeyID(req.Context(), apiKey.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, apiKey)
@@ -55,7 +55,7 @@ func TestAccountRequestLimitBindsBelowAKeyLimit(t *testing.T) {
 			Requests: &limits.RequestLimit{Limit: 1, WindowSeconds: 60},
 		},
 	}
-	apiKey := &identity.APIKey{
+	apiKey := &apikey.APIKey{
 		ID:        "key-generous",
 		Name:      "generous",
 		AccountID: account.ID,
@@ -103,11 +103,11 @@ func TestAAccountRequestLimitCountsEveryKeyInTheAccount(t *testing.T) {
 		},
 	}
 	keyLimits := &limits.Limits{Requests: &limits.RequestLimit{Limit: 10, WindowSeconds: 60}}
-	first := &identity.APIKey{
+	first := &apikey.APIKey{
 		ID: "key-one", Name: "one", AccountID: account.ID,
 		Scopes: []string{"*"}, Active: true, Limits: keyLimits,
 	}
-	second := &identity.APIKey{
+	second := &apikey.APIKey{
 		ID: "key-two", Name: "two", AccountID: account.ID,
 		Scopes: []string{"*"}, Active: true, Limits: keyLimits,
 	}
@@ -139,12 +139,12 @@ func TestAKeyLimitStillBindsUnderAGenerousAccount(t *testing.T) {
 		ID: "acme", Name: "Acme", Active: true,
 		Limits: &limits.Limits{Requests: &limits.RequestLimit{Limit: 100, WindowSeconds: 60}},
 	}
-	restricted := &identity.APIKey{
+	restricted := &apikey.APIKey{
 		ID: "key-restricted", Name: "restricted", AccountID: account.ID,
 		Scopes: []string{"*"}, Active: true,
 		Limits: &limits.Limits{Requests: &limits.RequestLimit{Limit: 1, WindowSeconds: 60}},
 	}
-	sibling := &identity.APIKey{
+	sibling := &apikey.APIKey{
 		ID: "key-sibling", Name: "sibling", AccountID: account.ID,
 		Scopes: []string{"*"}, Active: true,
 	}
@@ -193,7 +193,7 @@ func TestAccountSpendBindsOnTheAccountTotal(t *testing.T) {
 			Spend: &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalMonth},
 		},
 	}
-	apiKey := &identity.APIKey{
+	apiKey := &apikey.APIKey{
 		ID: "key-modest", Name: "modest", AccountID: account.ID,
 		Scopes: []string{"*"}, Active: true,
 		Limits: &limits.Limits{
@@ -232,7 +232,7 @@ func TestAKeyBudgetStillBindsUnderAGenerousAccount(t *testing.T) {
 			Spend: &limits.Budget{Limit: 10_000_000_000, Interval: limits.IntervalMonth},
 		},
 	}
-	apiKey := &identity.APIKey{
+	apiKey := &apikey.APIKey{
 		ID: "key-spent", Name: "spent", AccountID: account.ID,
 		Scopes: []string{"*"}, Active: true,
 		Limits: &limits.Limits{

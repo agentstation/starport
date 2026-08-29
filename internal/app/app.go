@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/availability"
 	"github.com/agentstation/starport/internal/blob"
@@ -24,7 +25,6 @@ import (
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/files"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/localauth"
@@ -168,7 +168,7 @@ type runtimeBuilder struct {
 	application  *App
 	config       *config.Config
 	factories    runtimeFactories
-	identities   identity.Repository
+	identities   apikey.Repository
 	accounts     account.Repository
 	providerKeys keyring.ProviderKeys
 	rateLimits   ratelimit.Repository
@@ -427,7 +427,7 @@ func (b *runtimeBuilder) openAccountIdentity() error {
 	if _, err := b.accounts.EnsureDefault(context.Background()); err != nil {
 		return fmt.Errorf("ensure the default account: %w", err)
 	}
-	b.identities, err = identity.Open(b.application.store)
+	b.identities, err = apikey.Open(b.application.store)
 	if err != nil {
 		return fmt.Errorf("open identity repository: %w", err)
 	}
@@ -625,7 +625,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
-		Templates: b.templates,
+		Templates:   b.templates,
 		Files:       b.files,
 		Jobs:        b.jobs,
 		FileBackend: b.fileBackend(),
@@ -658,7 +658,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 // With authentication disabled the same empty store is the expected state:
 // there is nothing to authenticate, and an operator trying Starport for the
 // first time has not issued a key yet. That is the whole point of the mode.
-func requireIdentity(ctx context.Context, identities identity.Repository, mode authmode.Mode) error {
+func requireIdentity(ctx context.Context, identities apikey.Repository, mode authmode.Mode) error {
 	if mode.Effective() == authmode.Disabled {
 		return nil
 	}

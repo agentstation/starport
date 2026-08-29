@@ -10,9 +10,9 @@ import (
 
 	urfavecli "github.com/urfave/cli/v3"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/diagnosis"
-	"github.com/agentstation/starport/internal/identity"
 )
 
 const (
@@ -231,7 +231,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			}
 			configuredStorage := cmd.Bool("configured-storage")
 			identityName := cmd.String("name")
-			if err := identity.ValidateName(identityName); err != nil {
+			if err := apikey.ValidateName(identityName); err != nil {
 				return urfavecli.Exit(err.Error(), ExitCodeUsage)
 			}
 			result, initializeErr := deps.Initialize(ctx, InitOptions{

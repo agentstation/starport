@@ -12,11 +12,11 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/app"
 	starportcli "github.com/agentstation/starport/internal/cli"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/diagnosis"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/setup"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -169,7 +169,7 @@ func initializeConfiguredStorage(
 func configuredInitResult(
 	storageConfig storage.Config,
 	identityName string,
-	issued identity.IssueResult,
+	issued apikey.IssueResult,
 ) starportcli.InitResult {
 	if issued.Secret == "" {
 		return starportcli.InitResult{}

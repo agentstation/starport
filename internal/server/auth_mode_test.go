@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -58,7 +58,7 @@ func TestDisabledAuthenticationMetersTheAnonymousIdentity(t *testing.T) {
 	resolved, status := authenticate(t, middleware, "")
 
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, identity.AnonymousKeyID, resolved.keyID)
+	assert.Equal(t, apikey.AnonymousKeyID, resolved.keyID)
 	assert.Equal(t, account.DefaultID, resolved.accountID)
 }
 
@@ -69,7 +69,7 @@ func TestDisabledAuthenticationMetersTheAnonymousIdentity(t *testing.T) {
 // limits, budgets, and credentials, and the caller would have no way to see it.
 func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := identity.Open(store)
+	identities, err := apikey.Open(store)
 	require.NoError(t, err)
 	accounts, err := account.Open(store)
 	require.NoError(t, err)
@@ -77,9 +77,9 @@ func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	_, err = accounts.Create(ctx, account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
 
-	issuer, err := identity.NewIssuer(identities, identity.WithAccountChecker(accounts))
+	issuer, err := apikey.NewIssuer(identities, apikey.WithAccountChecker(accounts))
 	require.NoError(t, err)
-	issued, err := issuer.Issue(ctx, identity.IssueRequest{
+	issued, err := issuer.Issue(ctx, apikey.IssueRequest{
 		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	resolved, status := authenticate(t, middleware, issued.Secret)
 
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, identity.AnonymousKeyID, resolved.keyID)
+	assert.Equal(t, apikey.AnonymousKeyID, resolved.keyID)
 	assert.Equal(t, account.DefaultID, resolved.accountID)
 }
 
@@ -165,7 +165,7 @@ func TestAuthModeRouteAnswersWithoutAKey(t *testing.T) {
 // tests above prove the current route table; this proves the policy, so
 // widening the set stays a deliberate edit rather than a side effect.
 func TestAnonymousScopesExcludeAdmin(t *testing.T) {
-	anonymous := identity.Anonymous(nil)
+	anonymous := apikey.Anonymous(nil)
 
 	assert.False(t, anonymous.HasScope("admin"))
 	assert.False(t, anonymous.HasScope("*"))

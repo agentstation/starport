@@ -14,17 +14,17 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/apikey"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/server"
 	"github.com/agentstation/starport/internal/storage"
 )
 
 func TestRuntimeRequiresNamedIdentity(t *testing.T) {
-	identities, err := identity.Open(storage.NewMockStore())
+	identities, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	require.ErrorIs(t, requireIdentity(context.Background(), identities, ""), ErrIdentityRequired)
 	require.ErrorIs(t,
@@ -317,7 +317,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 func explicitTestFactories() runtimeFactories {
 	factories := defaultRuntimeFactories()
 	store := storage.NewMockStore()
-	identities, _ := identity.Open(store)
+	identities, _ := apikey.Open(store)
 	_, _ = identities.Create(context.Background(), testIdentity())
 	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
 		return store, nil
@@ -332,8 +332,8 @@ func explicitTestFactories() runtimeFactories {
 	return factories
 }
 
-func testIdentity() identity.APIKey {
-	return identity.APIKey{
+func testIdentity() apikey.APIKey {
+	return apikey.APIKey{
 		ID: "STARPORT_TEST", Name: "test-admin", Hash: "test-hash",
 		Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
 		Metadata: map[string]any{"source": "test"},

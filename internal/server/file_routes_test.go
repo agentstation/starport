@@ -18,8 +18,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/blob"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/controllers"
 )
@@ -333,7 +333,7 @@ func storeFileTestKeyWithLimits(
 	t.Helper()
 	secret := "sk-starport-" + id
 	hash := sha256.Sum256([]byte(secret))
-	_, err := server.identities.Create(t.Context(), identity.APIKey{
+	_, err := server.identities.Create(t.Context(), apikey.APIKey{
 		ID:        id,
 		Name:      id,
 		Hash:      hex.EncodeToString(hash[:]),
@@ -353,7 +353,7 @@ func storeFileTestKeyForAccount(t *testing.T, server *Server, id, accountID stri
 	t.Helper()
 	secret := "sk-starport-" + id
 	hash := sha256.Sum256([]byte(secret))
-	_, err := server.identities.Create(t.Context(), identity.APIKey{
+	_, err := server.identities.Create(t.Context(), apikey.APIKey{
 		ID:        id,
 		Name:      id,
 		Hash:      hex.EncodeToString(hash[:]),

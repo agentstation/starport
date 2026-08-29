@@ -10,10 +10,10 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
@@ -49,7 +49,7 @@ type Server struct {
 
 	// Ready application dependencies
 	service            proxy.Proxy
-	identities         identity.Repository
+	identities         apikey.Repository
 	accounts           account.Repository
 	providerKeys       keyring.ProviderKeys
 	rateLimits         ratelimit.Repository
@@ -71,7 +71,7 @@ type Server struct {
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
 	Service            proxy.Proxy
-	Identities         identity.Repository
+	Identities         apikey.Repository
 	Accounts           account.Repository
 	ProviderKeys       keyring.ProviderKeys
 	RateLimits         ratelimit.Repository

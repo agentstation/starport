@@ -206,7 +206,7 @@ check MMD-V21 "a route test walks the router and names the eight media paths" \
   media_routes_registered
 
 check MMD-V22 "the media scopes exist and the anonymous identity carries them" \
-  all_present 'images:write' 'audio:write' -- internal/identity/anonymous.go
+  all_present 'images:write' 'audio:write' -- internal/apikey/anonymous.go
 
 check MMD-V23 "a transcription upload is read as multipart form data" \
   grep_q 'ParseMultipartForm' internal/server/controllers

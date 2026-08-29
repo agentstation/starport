@@ -1,151 +1,133 @@
-// Package identity owns gateway API-key identity and persistence.
+// Package identity owns the humans a deployment knows: users, the teams
+// they form, and the memberships that tie them together. A user arrives
+// through an acquisition path — OAuth or enterprise SSO — that resolves an
+// external subject to the one user model here; this package holds the
+// models and their durable repositories. The routes that authenticate a
+// person live with the identity grant, not here.
+//
+// Identity is optional. A deployment with no identity configured has no
+// rows here, and every account works exactly as it does without users.
 package identity
 
 import (
 	"errors"
-	"fmt"
-	"regexp"
 	"time"
-
-	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/limits"
 )
 
-// APIKey is one gateway authentication identity. It authenticates a request
-// and carries scopes. What the request may reach and how much it may spend
-// belong to the account this key names.
-type APIKey struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Hash string `json:"hash"`
-	// AccountID names the account this key belongs to. An empty value means
-	// the canonical account; see ResolveAccountID.
-	AccountID     string         `json:"account_id,omitempty"`
-	Scopes        []string       `json:"scopes"`
-	AllowedModels []string       `json:"allowed_models,omitempty"`
-	Limits        *limits.Limits `json:"limits,omitempty"`
-	Metadata      map[string]any `json:"metadata,omitempty"`
-	Active        bool           `json:"active"`
-	CreatedAt     time.Time      `json:"created_at"`
-	ExpiresAt     *time.Time     `json:"expires_at,omitempty"`
+// User is one human the deployment knows. The subject is the external
+// identity an acquisition path resolved — the provider-qualified subject
+// an OAuth or SSO callback names — and it is unique: the same subject
+// returning is the same user.
+type User struct {
+	ID string `json:"id"`
+	// Subject is the provider-qualified external identity subject, such as
+	// "google:114380...". It never changes for the life of the user.
+	Subject     string    `json:"subject"`
+	Email       string    `json:"email,omitempty"`
+	DisplayName string    `json:"display_name,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// ResolveAccountID maps a key's stored account to the account a request runs
-// under. An empty value resolves to the canonical account. This is a permanent
-// contract rather than a compatibility shim: a key that names no account
-// belongs to the default account, at issue time and at read time alike.
-func ResolveAccountID(value string) string {
-	if value == "" {
-		return account.DefaultID
-	}
-	return value
+// Team is a named group of users. Access granted to a team reaches every
+// member, so a team is the unit an operator manages instead of people.
+type Team struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// EffectiveAccountID returns the account this key runs under.
-func (k APIKey) EffectiveAccountID() string { return ResolveAccountID(k.AccountID) }
+// Membership ties one user to one team. It carries no state of its own
+// beyond when it was made: what a membership grants comes from what the
+// team is granted.
+type Membership struct {
+	UserID    string    `json:"user_id"`
+	TeamID    string    `json:"team_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// maxIDLength bounds every identity ID and the external subject. The bound
+// is the MySQL indexed-column width, so an ID that validates here fits
+// every backend the sqlstore serves.
+const maxIDLength = 191
+
+// maxNameLength bounds the human-readable fields.
+const maxNameLength = 255
 
 var (
-	// ErrMissingID reports an identity without a durable ID.
+	// ErrMissingID reports an empty or oversized identifier.
 	ErrMissingID = errors.New("missing id")
-	// ErrMissingHash reports an identity without a key hash.
-	ErrMissingHash = errors.New("missing hash")
-	// ErrMissingScopes reports an identity without any granted scope.
-	ErrMissingScopes = errors.New("missing scopes")
-	// ErrInvalidName reports an invalid identity name.
+	// ErrMissingSubject reports a user without an external subject.
+	ErrMissingSubject = errors.New("missing external identity subject")
+	// ErrInvalidName reports an empty or oversized human-readable name.
 	ErrInvalidName = errors.New("invalid name: must be 1-255 characters")
-	// ErrInvalidScope reports an empty identity scope.
-	ErrInvalidScope = errors.New("invalid scope: must be non-empty")
-	// ErrInvalidModel reports an empty allowed-model entry.
-	ErrInvalidModel = errors.New("invalid model: must be non-empty")
-	// ErrInvalidExpiration reports an expiration before identity creation.
-	ErrInvalidExpiration = errors.New("expires_at must be after created_at")
-	// ErrUnknownAccount reports a key that names an account that does not exist.
-	ErrUnknownAccount = errors.New("api key names an account that does not exist")
+	// ErrInvalidTimestamps reports an update that precedes creation.
+	ErrInvalidTimestamps = errors.New("updated_at must not be before created_at")
+
+	// ErrUserNotFound reports a missing user.
+	ErrUserNotFound = errors.New("user not found")
+	// ErrUserConflict reports an existing user, a taken subject, or a
+	// stale revision.
+	ErrUserConflict = errors.New("user revision conflict")
+	// ErrCorruptUser reports invalid durable user data.
+	ErrCorruptUser = errors.New("user record is invalid")
+
+	// ErrTeamNotFound reports a missing team.
+	ErrTeamNotFound = errors.New("team not found")
+	// ErrTeamConflict reports an existing team or a stale revision.
+	ErrTeamConflict = errors.New("team revision conflict")
+	// ErrCorruptTeam reports invalid durable team data.
+	ErrCorruptTeam = errors.New("team record is invalid")
+
+	// ErrMembershipNotFound reports a membership that does not exist.
+	ErrMembershipNotFound = errors.New("membership not found")
+	// ErrMembershipConflict reports a membership that already exists.
+	ErrMembershipConflict = errors.New("membership already exists")
 )
 
-var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
-
-// ValidateName checks the public identity-name contract.
-func ValidateName(name string) error {
-	if name == "" || len(name) > 255 {
-		return ErrInvalidName
-	}
-	if !validNameRegex.MatchString(name) {
-		return fmt.Errorf("%w: must contain only alphanumeric characters, hyphens, and underscores", ErrInvalidName)
-	}
-	return nil
+func validID(value string) bool {
+	return value != "" && len(value) <= maxIDLength
 }
 
-// Validate checks the API-key invariants.
-func (k APIKey) Validate() error {
-	if k.ID == "" {
+// Validate checks the user invariants.
+func (u User) Validate() error {
+	if !validID(u.ID) {
 		return ErrMissingID
 	}
-	if err := ValidateName(k.Name); err != nil {
-		return err
+	if !validID(u.Subject) {
+		return ErrMissingSubject
 	}
-	if k.Hash == "" {
-		return ErrMissingHash
+	if len(u.Email) > maxNameLength {
+		return ErrInvalidName
 	}
-	if len(k.Scopes) == 0 {
-		return ErrMissingScopes
+	if len(u.DisplayName) > maxNameLength {
+		return ErrInvalidName
 	}
-	for _, scope := range k.Scopes {
-		if scope == "" {
-			return ErrInvalidScope
-		}
-	}
-	for _, model := range k.AllowedModels {
-		if model == "" {
-			return ErrInvalidModel
-		}
-	}
-	if k.AccountID != "" {
-		if err := account.ValidateID(k.AccountID); err != nil {
-			return err
-		}
-	}
-	if k.ExpiresAt != nil && k.ExpiresAt.Before(k.CreatedAt) {
-		return ErrInvalidExpiration
-	}
-	if err := k.Limits.Validate(); err != nil {
-		return err
+	if !u.UpdatedAt.IsZero() && u.UpdatedAt.Before(u.CreatedAt) {
+		return ErrInvalidTimestamps
 	}
 	return nil
 }
 
-// IsExpiredAt reports whether the identity expired at the supplied time.
-func (k APIKey) IsExpiredAt(now time.Time) bool {
-	return k.ExpiresAt != nil && now.After(*k.ExpiresAt)
+// Validate checks the team invariants.
+func (t Team) Validate() error {
+	if !validID(t.ID) {
+		return ErrMissingID
+	}
+	if t.Name == "" || len(t.Name) > maxNameLength {
+		return ErrInvalidName
+	}
+	if !t.UpdatedAt.IsZero() && t.UpdatedAt.Before(t.CreatedAt) {
+		return ErrInvalidTimestamps
+	}
+	return nil
 }
 
-// IsExpired reports whether the identity is expired now.
-func (k APIKey) IsExpired() bool {
-	return k.IsExpiredAt(time.Now())
-}
-
-// HasScope reports whether the identity grants a scope.
-func (k APIKey) HasScope(scope string) bool {
-	if scope == "" {
-		return false
+// Validate checks the membership invariants.
+func (m Membership) Validate() error {
+	if !validID(m.UserID) || !validID(m.TeamID) {
+		return ErrMissingID
 	}
-	for _, candidate := range k.Scopes {
-		if candidate == scope || candidate == "*" {
-			return true
-		}
-	}
-	return false
-}
-
-// CanUseModel reports whether the identity can use a model.
-func (k APIKey) CanUseModel(model string) bool {
-	if len(k.AllowedModels) == 0 {
-		return true
-	}
-	for _, candidate := range k.AllowedModels {
-		if candidate == model || candidate == "*" {
-			return true
-		}
-	}
-	return false
+	return nil
 }

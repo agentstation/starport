@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -116,7 +116,7 @@ func TestRequireIdentityJudgesTheResolvedMode(t *testing.T) {
 		Source: authmode.SourceConsole,
 	})
 
-	identities, err := identity.Open(storage.NewMockStore())
+	identities, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 
 	require.Equal(t, authmode.Disabled, resolved.Mode)

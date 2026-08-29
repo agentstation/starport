@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/usage"
@@ -33,15 +33,15 @@ func (s stubUsageTotals) Totals(context.Context, usage.Scope, string, time.Time)
 	return s.totals, s.err
 }
 
-func budgetTestRequest(apiKey *identity.APIKey) *http.Request {
+func budgetTestRequest(apiKey *apikey.APIKey) *http.Request {
 	req := httptest.NewRequest(http.MethodPost, "/test", nil)
 	ctx := requestctx.WithAPIKeyModel(req.Context(), apiKey)
 	ctx = requestctx.WithAPIKeyID(ctx, apiKey.ID)
 	return req.WithContext(ctx)
 }
 
-func budgetTestKey(limits *limits.Limits) *identity.APIKey {
-	return &identity.APIKey{
+func budgetTestKey(limits *limits.Limits) *apikey.APIKey {
+	return &apikey.APIKey{
 		ID:     "key-budget",
 		Name:   "budget-key",
 		Scopes: []string{"*"},

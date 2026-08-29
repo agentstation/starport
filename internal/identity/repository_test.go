@@ -2,285 +2,255 @@ package identity
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"sync/atomic"
 	"testing"
-	"time"
 
-	"github.com/agentstation/starport/internal/repotest"
-	"github.com/agentstation/starport/internal/storage"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
+	"github.com/agentstation/starport/internal/sqlstore"
 )
 
-func TestIdentityRepositoryContract(t *testing.T) {
-	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
-		ctx := context.Background()
-		repository, err := Open(store)
-		require.NoError(t, err)
-		suffix := uuid.NewString()
-		apiKey := APIKey{
-			ID:        "key-" + suffix,
-			Name:      "contract-key",
-			Hash:      "hash-" + suffix,
-			Scopes:    []string{"chat:write"},
-			Active:    true,
-			CreatedAt: time.Unix(100, 0).UTC(),
-			Metadata:  map[string]any{"account": "account-a"},
-		}
+// newTestRepositories opens an in-memory relational store, migrates it, and
+// returns the identity repositories on it — the same composition the
+// runtime builds, minus the file.
+func newTestRepositories(t *testing.T) Repositories {
+	t.Helper()
+	db, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypeSQLite})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := db.Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	repositories, err := Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return repositories
+}
 
-		created, err := repository.Create(ctx, apiKey)
-		require.NoError(t, err)
-		require.EqualValues(t, 1, created.Revision)
-		require.Equal(t, apiKey.ID, created.APIKey.ID)
+func TestOpenRefusesNilStore(t *testing.T) {
+	if _, err := Open(nil); !errors.Is(err, ErrRepositoryRequired) {
+		t.Fatalf("Open(nil) = %v, want ErrRepositoryRequired", err)
+	}
+}
 
-		byID, err := repository.GetByID(ctx, apiKey.ID)
-		require.NoError(t, err)
-		byHash, err := repository.GetByHash(ctx, apiKey.Hash)
-		require.NoError(t, err)
-		require.Equal(t, byID, byHash)
+// TestUserRepositoryCRUD proves the durable contract: what was created is
+// what reads back — by id and by external subject — an update moves the
+// revision without moving the subject, and a delete removes the row.
+func TestUserRepositoryCRUD(t *testing.T) {
+	repositories := newTestRepositories(t)
+	users := repositories.Users
+	ctx := context.Background()
 
-		keys, err := store.ScanWithPrefix(ctx, StoragePrefix, 0)
-		require.NoError(t, err)
-		require.Len(t, keys, 3)
-		primaryData, err := store.Get(ctx, identityStorageKey(apiKey.ID))
-		require.NoError(t, err)
-		var schema map[string]any
-		require.NoError(t, json.Unmarshal(primaryData, &schema))
-		require.EqualValues(t, StorageSchemaVersion, schema["schema_version"])
-
-		_, err = repository.Create(ctx, apiKey)
-		require.ErrorIs(t, err, ErrConflict)
-		duplicateHash := apiKey
-		duplicateHash.ID = "other-" + suffix
-		_, err = repository.Create(ctx, duplicateHash)
-		require.ErrorIs(t, err, ErrConflict)
-		_, err = repository.GetByID(ctx, duplicateHash.ID)
-		require.ErrorIs(t, err, ErrNotFound)
-
-		listed, err := repository.List(ctx, 10, 0)
-		require.NoError(t, err)
-		require.Len(t, listed, 1)
-
-		apiKey.Active = false
-		updated, err := repository.Update(ctx, apiKey, created.Revision)
-		require.NoError(t, err)
-		require.EqualValues(t, 2, updated.Revision)
-		require.False(t, updated.APIKey.Active)
-		_, err = repository.Update(ctx, apiKey, created.Revision)
-		require.ErrorIs(t, err, ErrConflict)
-		changedHash := apiKey
-		changedHash.Hash = "changed-" + suffix
-		_, err = repository.Update(ctx, changedHash, updated.Revision)
-		require.ErrorIs(t, err, ErrHashImmutable)
-
-		require.ErrorIs(t, repository.Delete(ctx, apiKey.ID, created.Revision), ErrConflict)
-		require.NoError(t, repository.Delete(ctx, apiKey.ID, updated.Revision))
-		_, err = repository.GetByID(ctx, apiKey.ID)
-		require.ErrorIs(t, err, ErrNotFound)
-		_, err = repository.GetByHash(ctx, apiKey.Hash)
-		require.ErrorIs(t, err, ErrNotFound)
-
-		initial := apiKey
-		initial.ID = "initial-" + suffix
-		initial.Name = "initial-key"
-		initial.Hash = "initial-hash-" + suffix
-		initial.Active = true
-		_, err = repository.CreateInitial(ctx, initial)
-		require.NoError(t, err)
-		require.NoError(t, repository.ReleaseInitial(ctx, initial.ID))
-		_, err = repository.CreateInitial(ctx, initial)
-		require.NoError(t, err)
-
-		corruptID := "corrupt-" + suffix
-		require.NoError(t, store.Set(ctx, identityStorageKey(corruptID), []byte(`{"schema_version":2}`)))
-		_, err = repository.GetByID(ctx, corruptID)
-		require.True(t, errors.Is(err, ErrCorruptRecord))
+	created, err := users.Create(ctx, User{
+		ID:          "u-1",
+		Subject:     "google:114380",
+		Email:       "ada@example.com",
+		DisplayName: "Ada",
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Revision != 1 {
+		t.Fatalf("create revision = %d", created.Revision)
+	}
+	if created.User.CreatedAt.IsZero() || created.User.UpdatedAt.IsZero() {
+		t.Fatal("create must stamp timestamps")
+	}
+
+	byID, err := users.GetByID(ctx, "u-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byID.User.Email != "ada@example.com" || byID.User.DisplayName != "Ada" {
+		t.Fatalf("read back %+v", byID.User)
+	}
+
+	bySubject, err := users.GetBySubject(ctx, "google:114380")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bySubject.User.ID != "u-1" {
+		t.Fatalf("subject resolved to %q", bySubject.User.ID)
+	}
+
+	edited := byID.User
+	edited.DisplayName = "Ada Lovelace"
+	edited.Subject = "attacker:overwrite"
+	updated, err := users.Update(ctx, edited, byID.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Revision != 2 {
+		t.Fatalf("update revision = %d", updated.Revision)
+	}
+	if updated.User.Subject != "google:114380" {
+		t.Fatal("update must never move the external subject")
+	}
+	if !updated.User.CreatedAt.Equal(byID.User.CreatedAt) {
+		t.Fatal("update must preserve creation time")
+	}
+
+	listed, err := users.List(ctx, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].User.DisplayName != "Ada Lovelace" {
+		t.Fatalf("list = %+v", listed)
+	}
+
+	if err := users.Delete(ctx, "u-1", updated.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := users.GetByID(ctx, "u-1"); !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("get after delete = %v", err)
+	}
 }
 
-func TestIdentityDeleteUsesStoredHashIndexBytes(t *testing.T) {
+// TestUserRepositoryConflicts proves both unique constraints and the
+// revision guard surface as ErrUserConflict.
+func TestUserRepositoryConflicts(t *testing.T) {
+	repositories := newTestRepositories(t)
+	users := repositories.Users
 	ctx := context.Background()
-	store := storage.NewMockStore()
-	repository, err := Open(store)
-	require.NoError(t, err)
-	apiKey := APIKey{
-		ID: "key-delete-exact", Name: "delete-exact", Hash: "hash-delete-exact",
-		Scopes: []string{"chat:write"}, Active: true, CreatedAt: time.Unix(100, 0).UTC(),
-	}
-	created, err := repository.Create(ctx, apiKey)
-	require.NoError(t, err)
 
-	// The record is semantically identical, but its bytes differ from json.Marshal.
-	indexData := []byte("{\n  \"identity_id\": \"key-delete-exact\",\n  \"schema_version\": 1\n}")
-	require.NoError(t, store.Set(ctx, hashStorageKey(apiKey.Hash), indexData))
-	require.NoError(t, repository.Delete(ctx, apiKey.ID, created.Revision))
-	_, err = repository.GetByID(ctx, apiKey.ID)
-	require.ErrorIs(t, err, ErrNotFound)
-	_, err = repository.GetByHash(ctx, apiKey.Hash)
-	require.ErrorIs(t, err, ErrNotFound)
+	first, err := users.Create(ctx, User{ID: "u-1", Subject: "google:1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := users.Create(ctx, User{ID: "u-1", Subject: "google:other"}); !errors.Is(err, ErrUserConflict) {
+		t.Fatalf("duplicate id = %v", err)
+	}
+	if _, err := users.Create(ctx, User{ID: "u-2", Subject: "google:1"}); !errors.Is(err, ErrUserConflict) {
+		t.Fatalf("duplicate subject = %v", err)
+	}
+	if _, err := users.Update(ctx, first.User, first.Revision+7); !errors.Is(err, ErrUserConflict) {
+		t.Fatalf("stale revision = %v", err)
+	}
+	if err := users.Delete(ctx, "u-1", first.Revision+7); !errors.Is(err, ErrUserConflict) {
+		t.Fatalf("stale delete = %v", err)
+	}
+	if _, err := users.GetBySubject(ctx, "nobody:0"); !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("unknown subject = %v", err)
+	}
 }
 
-func TestIdentityDeleteToleratesMissingHashIndex(t *testing.T) {
+// TestTeamRepositoryCRUD proves the team contract mirrors the user one.
+func TestTeamRepositoryCRUD(t *testing.T) {
+	repositories := newTestRepositories(t)
+	teams := repositories.Teams
 	ctx := context.Background()
-	store := storage.NewMockStore()
-	repository, err := Open(store)
-	require.NoError(t, err)
-	apiKey := APIKey{
-		ID: "key-delete-missing", Name: "delete-missing", Hash: "hash-delete-missing",
-		Scopes: []string{"chat:write"}, Active: true, CreatedAt: time.Unix(100, 0).UTC(),
+
+	created, err := teams.Create(ctx, Team{ID: "t-1", Name: "Platform"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	created, err := repository.Create(ctx, apiKey)
-	require.NoError(t, err)
-	require.NoError(t, store.Delete(ctx, hashStorageKey(apiKey.Hash)))
-	require.NoError(t, repository.Delete(ctx, apiKey.ID, created.Revision))
-	_, err = repository.GetByID(ctx, apiKey.ID)
-	require.ErrorIs(t, err, ErrNotFound)
+	if created.Revision != 1 {
+		t.Fatalf("create revision = %d", created.Revision)
+	}
+	if _, err := teams.Create(ctx, Team{ID: "t-1", Name: "Twin"}); !errors.Is(err, ErrTeamConflict) {
+		t.Fatalf("duplicate id = %v", err)
+	}
+
+	edited := created.Team
+	edited.Name = "Platform Guild"
+	updated, err := teams.Update(ctx, edited, created.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Revision != 2 || updated.Team.Name != "Platform Guild" {
+		t.Fatalf("update = %+v", updated)
+	}
+	if _, err := teams.Update(ctx, edited, created.Revision); !errors.Is(err, ErrTeamConflict) {
+		t.Fatalf("stale revision = %v", err)
+	}
+
+	listed, err := teams.List(ctx, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("list = %+v", listed)
+	}
+
+	if err := teams.Delete(ctx, "t-1", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := teams.GetByID(ctx, "t-1"); !errors.Is(err, ErrTeamNotFound) {
+		t.Fatalf("get after delete = %v", err)
+	}
 }
 
-func TestCreateInitialClaimsRepositoryOnce(t *testing.T) {
-	repository, err := Open(storage.NewMockStore())
-	require.NoError(t, err)
-	first := APIKey{
-		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
-		Active: true, CreatedAt: time.Now().UTC(),
+// TestMembershipRepository proves a membership ties two existing rows, is
+// listed from both ends, refuses a duplicate, and never outlives its team.
+func TestMembershipRepository(t *testing.T) {
+	repositories := newTestRepositories(t)
+	ctx := context.Background()
+
+	if _, err := repositories.Users.Create(ctx, User{ID: "u-1", Subject: "google:1"}); err != nil {
+		t.Fatal(err)
 	}
-	_, err = repository.CreateInitial(context.Background(), first)
-	require.NoError(t, err)
-
-	second := first
-	second.ID = "second"
-	second.Name = "second"
-	second.Hash = "second-hash"
-	_, err = repository.CreateInitial(context.Background(), second)
-	require.ErrorIs(t, err, ErrConflict)
-	records, err := repository.List(context.Background(), 10, 0)
-	require.NoError(t, err)
-	require.Len(t, records, 1)
-	require.Equal(t, first.ID, records[0].APIKey.ID)
-}
-
-func TestConcurrentCreatesRetryCollectionContention(t *testing.T) {
-	store := &collectionReadBarrierStore{
-		KVStore: storage.NewMockStore(),
-		ready:   make(chan struct{}, 2),
-		release: make(chan struct{}),
+	if _, err := repositories.Users.Create(ctx, User{ID: "u-2", Subject: "google:2"}); err != nil {
+		t.Fatal(err)
 	}
-	repository, err := Open(store)
-	require.NoError(t, err)
-	results := make(chan error, 2)
-	for index := range 2 {
-		index := index
-		go func() {
-			apiKey := APIKey{
-				ID:     "identity-" + string(rune('A'+index)),
-				Name:   "identity-" + string(rune('A'+index)),
-				Hash:   "hash-" + string(rune('A'+index)),
-				Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
-			}
-			_, createErr := repository.Create(context.Background(), apiKey)
-			results <- createErr
-		}()
+	team, err := repositories.Teams.Create(ctx, Team{ID: "t-1", Name: "Platform"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	<-store.ready
-	<-store.ready
-	close(store.release)
-	for range 2 {
-		if err := <-results; err != nil {
-			t.Fatalf("concurrent create error = %v", err)
-		}
+
+	memberships := repositories.Memberships
+	if _, err := memberships.Add(ctx, Membership{UserID: "ghost", TeamID: "t-1"}); !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("ghost user = %v", err)
 	}
-	records, err := repository.List(context.Background(), 2, 0)
-	require.NoError(t, err)
-	require.Len(t, records, 2)
-}
-
-func TestCreateInitialRefusesNonemptyCollection(t *testing.T) {
-	repository, err := Open(storage.NewMockStore())
-	require.NoError(t, err)
-	first := APIKey{
-		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
-		Active: true, CreatedAt: time.Now().UTC(),
+	if _, err := memberships.Add(ctx, Membership{UserID: "u-1", TeamID: "ghost"}); !errors.Is(err, ErrTeamNotFound) {
+		t.Fatalf("ghost team = %v", err)
 	}
-	_, err = repository.Create(context.Background(), first)
-	require.NoError(t, err)
-	second := first
-	second.ID = "second"
-	second.Name = "second"
-	second.Hash = "second-hash"
-	_, err = repository.CreateInitial(context.Background(), second)
-	require.ErrorIs(t, err, ErrConflict)
-}
 
-func TestCreateInitialReclaimsMissingInitialIdentity(t *testing.T) {
-	repository, err := Open(storage.NewMockStore())
-	require.NoError(t, err)
-	first := APIKey{
-		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
-		Active: true, CreatedAt: time.Now().UTC(),
+	added, err := memberships.Add(ctx, Membership{UserID: "u-1", TeamID: "t-1"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	created, err := repository.CreateInitial(context.Background(), first)
-	require.NoError(t, err)
-	require.NoError(t, repository.Delete(context.Background(), first.ID, created.Revision))
-
-	second := first
-	second.ID = "second"
-	second.Name = "second"
-	second.Hash = "second-hash"
-	_, err = repository.CreateInitial(context.Background(), second)
-	require.NoError(t, err)
-}
-
-func TestReleaseInitialAllowsSafeRetry(t *testing.T) {
-	repository, err := Open(storage.NewMockStore())
-	require.NoError(t, err)
-	first := APIKey{
-		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
-		Active: true, CreatedAt: time.Now().UTC(),
+	if added.CreatedAt.IsZero() {
+		t.Fatal("add must stamp creation time")
 	}
-	_, err = repository.CreateInitial(context.Background(), first)
-	require.NoError(t, err)
-	require.NoError(t, repository.ReleaseInitial(context.Background(), first.ID))
-	_, err = repository.GetByID(context.Background(), first.ID)
-	require.ErrorIs(t, err, ErrNotFound)
-	_, err = repository.GetByHash(context.Background(), first.Hash)
-	require.ErrorIs(t, err, ErrNotFound)
-
-	second := first
-	second.ID = "second"
-	second.Name = "second"
-	second.Hash = "second-hash"
-	_, err = repository.CreateInitial(context.Background(), second)
-	require.NoError(t, err)
-}
-
-func TestReleaseInitialRefusesAnotherIdentity(t *testing.T) {
-	repository, err := Open(storage.NewMockStore())
-	require.NoError(t, err)
-	first := APIKey{
-		ID: "first", Name: "first", Hash: "first-hash", Scopes: []string{"*"},
-		Active: true, CreatedAt: time.Now().UTC(),
+	if _, err := memberships.Add(ctx, Membership{UserID: "u-1", TeamID: "t-1"}); !errors.Is(err, ErrMembershipConflict) {
+		t.Fatalf("duplicate membership = %v", err)
 	}
-	_, err = repository.CreateInitial(context.Background(), first)
-	require.NoError(t, err)
-	require.ErrorIs(t, repository.ReleaseInitial(context.Background(), "other"), ErrConflict)
-	_, err = repository.GetByID(context.Background(), first.ID)
-	require.NoError(t, err)
-}
-
-type collectionReadBarrierStore struct {
-	storage.KVStore
-	ready   chan struct{}
-	release chan struct{}
-	reads   atomic.Int32
-}
-
-func (store *collectionReadBarrierStore) Get(ctx context.Context, key string) ([]byte, error) {
-	value, err := store.KVStore.Get(ctx, key)
-	if key == collectionKey && store.reads.Add(1) <= 2 {
-		store.ready <- struct{}{}
-		<-store.release
+	if _, err := memberships.Add(ctx, Membership{UserID: "u-2", TeamID: "t-1"}); err != nil {
+		t.Fatal(err)
 	}
-	return value, err
+
+	byTeam, err := memberships.ListByTeam(ctx, "t-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byTeam) != 2 || byTeam[0].UserID != "u-1" || byTeam[1].UserID != "u-2" {
+		t.Fatalf("by team = %+v", byTeam)
+	}
+	byUser, err := memberships.ListByUser(ctx, "u-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byUser) != 1 || byUser[0].TeamID != "t-1" {
+		t.Fatalf("by user = %+v", byUser)
+	}
+
+	if err := memberships.Remove(ctx, "u-1", "t-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := memberships.Remove(ctx, "u-1", "t-1"); !errors.Is(err, ErrMembershipNotFound) {
+		t.Fatalf("second remove = %v", err)
+	}
+
+	// Deleting the team sweeps the remaining membership with it.
+	if err := repositories.Teams.Delete(ctx, "t-1", team.Revision); err != nil {
+		t.Fatal(err)
+	}
+	remaining, err := memberships.ListByUser(ctx, "u-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 0 {
+		t.Fatalf("membership outlived its team: %+v", remaining)
+	}
 }

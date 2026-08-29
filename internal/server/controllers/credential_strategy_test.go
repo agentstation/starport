@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/server/requestctx"
@@ -90,7 +90,7 @@ func TestKeyWithoutStrategyInheritsTheAccountStrategy(t *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", chatBody())
-	ctx := requestctx.WithAPIKeyModel(request.Context(), &identity.APIKey{})
+	ctx := requestctx.WithAPIKeyModel(request.Context(), &apikey.APIKey{})
 	ctx = requestctx.WithAccountRecord(ctx, &account.Account{
 		ID: "account-a", CredentialStrategy: account.StrategyBYOKOnly,
 	})
@@ -106,7 +106,7 @@ func chatRequestWithStrategy(
 	keyValue any,
 ) *http.Request {
 	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", chatBody())
-	ctx := requestctx.WithAPIKeyModel(request.Context(), &identity.APIKey{
+	ctx := requestctx.WithAPIKeyModel(request.Context(), &apikey.APIKey{
 		Metadata: map[string]any{keyring.StrategyMetadataKey: keyValue},
 	})
 	ctx = requestctx.WithAccountRecord(ctx, &account.Account{
