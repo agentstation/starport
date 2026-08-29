@@ -46,11 +46,13 @@ export function CredentialPill({
 // one verdict both the card and the detail header lead with. It reports
 // liveness only — a missing credential is the credential pill's story, even
 // though it is often why nothing is available. The console has one
-// user-facing health vocabulary: healthy, degraded, unavailable ("down"
-// is reserved for a verdict confirmed by the provider's own status page,
-// which nothing reports yet).
+// user-facing health vocabulary: healthy, degraded, unreachable,
+// unavailable. Unreachable means the gateway's own requests got no response
+// back; unavailable means the provider responded and refused or erred
+// ("down" is reserved for a verdict confirmed by the provider's own status
+// page, which nothing reports yet).
 export type ProviderHealth = {
-  state: "healthy" | "degraded" | "unavailable" | "no_models";
+  state: "healthy" | "degraded" | "unreachable" | "unavailable" | "no_models";
   label: string;
 };
 
@@ -64,7 +66,21 @@ export function providerHealth(status: ProviderRuntimeStatus): ProviderHealth {
     return { state: "unavailable", label: "unavailable" };
   }
   const available = availableOfferings(offerings);
-  if (available === 0) return { state: "unavailable", label: "unavailable" };
+  if (available === 0) {
+    // The offering reason records the failure that tripped each circuit.
+    // When everything that failed did so without any provider response, the
+    // provider is unreachable, not refusing.
+    const reasons = offerings
+      .map((offering) => offering.reason)
+      .filter((reason): reason is string => Boolean(reason));
+    if (
+      reasons.length > 0 &&
+      reasons.every((reason) => reason === "provider_unreachable")
+    ) {
+      return { state: "unreachable", label: "unreachable" };
+    }
+    return { state: "unavailable", label: "unavailable" };
+  }
   if (available < offerings.length) {
     return { state: "degraded", label: "degraded" };
   }
@@ -74,6 +90,7 @@ export function providerHealth(status: ProviderRuntimeStatus): ProviderHealth {
 const HEALTH_DOTS: Record<ProviderHealth["state"], string> = {
   healthy: "bg-success",
   degraded: "bg-warning",
+  unreachable: "bg-error",
   unavailable: "bg-error",
   no_models: "bg-text-4",
 };

@@ -357,6 +357,8 @@ func normalizedFailureShape(kind failure.Kind) (int, string) {
 		return http.StatusRequestTimeout, errorTypeInvalidRequest
 	case failure.ProviderUnavailable:
 		return http.StatusServiceUnavailable, errorTypeServiceUnavailable
+	case failure.Unreachable:
+		return http.StatusBadGateway, errorTypeServiceUnavailable
 	default:
 		return http.StatusInternalServerError, errorTypeServer
 	}

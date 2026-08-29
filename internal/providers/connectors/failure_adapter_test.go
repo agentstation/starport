@@ -54,6 +54,27 @@ func TestNormalizeFailureClassifiesExecutionPolicyFailures(t *testing.T) {
 	}
 }
 
+func TestNormalizeFailureMarksNoResponseAsUnreachable(t *testing.T) {
+	// A transport failure carries no APIError because no provider verdict
+	// came back. That is unreachable; a responded 5xx stays unavailable.
+	transportError := errors.New("dial tcp 10.0.0.1:443: connect: connection refused")
+	normalized := NormalizeFailure("openai", transportError)
+	if normalized.Kind() != failure.Unreachable || !normalized.Retryable() {
+		t.Fatalf("got kind %q retryable %t, want unreachable and retryable", normalized.Kind(), normalized.Retryable())
+	}
+	if normalized.StateScope() != failure.ScopeOffering {
+		t.Fatalf("got scope %q, want offering", normalized.StateScope())
+	}
+	if strings.Contains(normalized.Error(), "10.0.0.1") {
+		t.Fatal("safe error exposed transport diagnostics")
+	}
+
+	responded := NormalizeFailure("openai", &APIError{StatusCode: 503, Message: "down"})
+	if responded.Kind() != failure.ProviderUnavailable {
+		t.Fatalf("got kind %q for a responded 503, want provider_unavailable", responded.Kind())
+	}
+}
+
 func TestNormalizeFailurePreservesCanonicalFailure(t *testing.T) {
 	want := failure.New(failure.ContentBlocked, "blocked", false, failure.ProviderDetails{Provider: "provider"}, errors.New("cause"))
 	wrapped := fmt.Errorf("adapter context: %w", want)

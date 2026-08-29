@@ -479,6 +479,8 @@ func usageStatusForKind(kind failure.Kind) int {
 		return http.StatusRequestTimeout
 	case failure.ProviderUnavailable:
 		return http.StatusServiceUnavailable
+	case failure.Unreachable:
+		return http.StatusBadGateway
 	default:
 		return http.StatusInternalServerError
 	}

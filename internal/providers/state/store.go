@@ -79,6 +79,7 @@ const (
 	ReasonOfferingNotFound          ReasonCode = "offering_not_found"
 	ReasonRateLimited               ReasonCode = "rate_limited"
 	ReasonProviderUnavailable       ReasonCode = "provider_unavailable"
+	ReasonProviderUnreachable       ReasonCode = "provider_unreachable"
 	ReasonProviderTimeout           ReasonCode = "provider_timeout"
 	ReasonAdapterNotReady           ReasonCode = "adapter_not_ready"
 	ReasonOfferingUnavailable       ReasonCode = "offering_unavailable"
@@ -652,6 +653,8 @@ func offeringReason(kind failure.Kind) ReasonCode {
 		return ReasonProviderTimeout
 	case failure.ProviderUnavailable:
 		return ReasonProviderUnavailable
+	case failure.Unreachable:
+		return ReasonProviderUnreachable
 	default:
 		return ReasonNone
 	}

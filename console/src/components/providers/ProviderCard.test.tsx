@@ -128,6 +128,38 @@ test("rolls adapter, circuit, and routing into one health verdict", () => {
   ).toBe("no_models");
 });
 
+test("separates a provider that never answered from one that refused", () => {
+  // Every tripped circuit records the no-response reason: the gateway's own
+  // requests got nothing back, so the verdict is unreachable.
+  expect(
+    providerHealth(
+      runtime({
+        offerings: [
+          { provider_model_id: "a", state: "open", reason: "provider_unreachable" },
+          { provider_model_id: "b", state: "open", reason: "provider_unreachable" },
+        ],
+      }),
+    ).state,
+  ).toBe("unreachable");
+  // A provider that responded with errors — or a mix — stays unavailable.
+  expect(
+    providerHealth(
+      runtime({
+        offerings: [
+          { provider_model_id: "a", state: "open", reason: "provider_unreachable" },
+          { provider_model_id: "b", state: "open", reason: "provider_unavailable" },
+        ],
+      }),
+    ).state,
+  ).toBe("unavailable");
+  // No recorded reason gives no evidence to upgrade the verdict.
+  expect(
+    providerHealth(
+      runtime({ offerings: [{ provider_model_id: "a", state: "open" }] }),
+    ).state,
+  ).toBe("unavailable");
+});
+
 test("labels a missing credential 'no credential'", () => {
   render(
     <ProviderCard
