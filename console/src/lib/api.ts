@@ -877,11 +877,33 @@ export type AccountLimits = {
   stored_bytes?: number | null;
 };
 
+// AccountBYOKPolicy is the operator's answer to whether this account may
+// bring its own provider credentials. No policy stored means yes, for every
+// provider; "selected" narrows that to the listed providers; "none" refuses
+// BYOK outright. Sending `{"mode":"all"}` with no providers clears the
+// stored policy back to the default.
+export type AccountBYOKPolicy = {
+  mode: "all" | "selected" | "none";
+  providers?: string[];
+};
+
+// AccountProviderAccess grants the account one provider, optionally narrowed
+// to specific models. An empty or absent models list grants every model the
+// provider serves — model granularity is an opt-in, not the default.
+export type AccountProviderAccess = {
+  provider: string;
+  models?: string[];
+};
+
 export type Account = {
   id: string;
   name?: string;
   limits?: AccountLimits | null;
   credential_strategy?: CredentialStrategy;
+  byok_policy?: AccountBYOKPolicy | null;
+  // access names the providers this account may reach. Absent means every
+  // provider and every model; sending `[]` clears a stored list back to that.
+  access?: AccountProviderAccess[] | null;
   metadata?: Record<string, unknown> | null;
   active?: boolean;
   created_at?: string;
@@ -913,6 +935,8 @@ export function updateAccount(
     name?: string;
     credential_strategy?: CredentialStrategy;
     limits?: AccountLimits | null;
+    byok_policy?: AccountBYOKPolicy;
+    access?: AccountProviderAccess[];
     active?: boolean;
   },
 ): Promise<Account> {
