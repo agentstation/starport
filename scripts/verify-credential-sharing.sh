@@ -19,9 +19,10 @@
 #     localauth identity grant mints the session,
 #   - the console renders each surface with the campaign's vocabulary.
 #
-# Authored red at baseline b00c47d (CSH-A0): a failing condition names work
-# a later CSH task closes, and the count becomes terminal at CSH-H1. It
-# reports every condition and exits nonzero while any condition fails.
+# Authored red at baseline b00c47d (CSH-A0): each condition turned green as
+# its CSH task closed. The gate is terminal at 23 conditions (CSH-V01
+# through CSH-V23) and runs in CI. It reports every condition and exits
+# nonzero while any condition fails.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

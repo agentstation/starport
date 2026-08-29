@@ -12,6 +12,8 @@ Implemented:
 - Header-only API-key authentication using SHA-256 hash lookup. Query-string API keys are intentionally rejected.
 - Per-API-key rate-limit enforcement using authenticated API key ID and an atomic rate-limit repository.
 - Badger and Valkey KV storage backends behind a shared `KVStore` interface.
+- An embedded, cgo-free SQLite relational store with a PostgreSQL or MySQL
+  connect behind the `internal/sqlstore` contract, the way Badger pairs with Valkey.
 - Versioned repositories for API keys, provider credentials, rate limits, and presets.
 - Account-safe response caching with canonical chat and embedding records, catalog-generation invalidation, and stream reconstruction.
 - Catalog-driven provider activation over the compiled OpenAI-compatible,
@@ -150,8 +152,9 @@ starport/
 ├── internal/usage/            # request records, usage aggregation, and repository
 ├── internal/console/          # embedded web console (single-page app build and handler)
 ├── internal/storage/          # KVStore adapter interface and implementations
+├── internal/sqlstore/         # relational contract: embedded SQLite, PostgreSQL/MySQL connect, per-dialect migrations
 ├── internal/config/           # environment/.env config loading and validation
-├── internal/setup/            # safe first-run configuration and identity creation
+├── internal/setup/            # safe first-run configuration and API key creation
 ├── internal/diagnosis/        # read-only startup checks and exact check results
 └── internal/architecture/     # executable import and package-boundary rules
 ```
@@ -187,14 +190,14 @@ value to adapter configuration. It then constructs storage, the Starmap
 control plane, repositories, providers, cache, routing, and HTTP.
 
 `internal/diagnosis` checks the same configuration, Starmap catalog, adapter
-registry, storage, and identity contracts without server construction. Its
+registry, storage, and API key contracts without server construction. Its
 default checks are passive. An explicit probe opens storage through a
 write-blocking adapter. The diagnostic report uses stable check IDs and never
 contains a configured secret.
 
 Production needs storage, a catalog, and a credential master key. Operator
-provider credentials are optional. Production also needs one named identity in storage. The
-`starport init --configured-storage` command creates that identity before the
+provider credentials are optional. Production also needs one named gateway API key in storage. The
+`starport init --configured-storage` command creates that key before the
 first process starts. Production composition never selects mock dependencies.
 Tests can replace factories through an explicit test-only builder.
 
@@ -269,6 +272,13 @@ Backends:
 
 The default contract suite tests mock and Badger storage. Set
 `TEST_VALKEY_URL` to test Valkey with the same suite.
+
+Relational state lives apart from the KV plane. `internal/sqlstore` owns the
+SQL contract and its per-dialect migrations: an embedded, cgo-free SQLite
+database rides the binary by default, and a configured PostgreSQL or MySQL
+connect scales it for multi-node deployments, the way Badger pairs with
+Valkey. The people plane in `internal/identity` (users, teams, memberships,
+and account grants) is its first tenant.
 
 Concept repositories own these version 1 namespaces:
 
@@ -493,15 +503,15 @@ must represent location failover.
 
 Implemented:
 
-- The identity repository owns the SHA-256 hash index and atomic identity changes.
-- A versioned collection record joins every identity create and delete transaction. Initial setup uses it to prove repository emptiness atomically.
-- Independent identity creation retries collection-record contention without weakening duplicate-key conflicts.
-- The identity issuer owns gateway-key generation, hashing, and one-time secret return.
-- Local initialization writes an owner-only configuration file and creates one named wildcard identity directly.
+- The API key repository owns the SHA-256 hash index and atomic key changes.
+- A versioned collection record joins every API key create and delete transaction. Initial setup uses it to prove repository emptiness atomically.
+- Independent API key creation retries collection-record contention without weakening duplicate-key conflicts.
+- The API key issuer owns gateway-key generation, hashing, and one-time secret return.
+- Local initialization writes an owner-only configuration file and creates one named wildcard API key directly.
 - Platform-native no-replace rename operations install local state without replacing an existing directory.
 - Directory synchronization makes staged contents and the installed rename durable before the command reports success.
-- Configured-storage initialization creates the first named identity without a temporary startup credential.
-- Failed credential output isolates local state before deletion. Rollback requires the original layout and only the initial identity records.
+- Configured-storage initialization creates the first named API key without a temporary startup credential.
+- Failed credential output isolates local state before deletion. Rollback requires the original layout and only the initial API key records.
 - Configured storage atomically releases the API key claim after an output failure.
 - An initial claim names its API key. Setup can reclaim the claim only when the repository is empty and that key is absent.
 - Startup rejects empty API key storage and does not create a key.
