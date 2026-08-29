@@ -1,24 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Plus, Trash2 } from "lucide-react";
+import { LayoutTemplate, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AccountPolicyPanel } from "@/components/accounts/AccountPolicyPanel";
+import { AccountTemplatesPanel } from "@/components/accounts/AccountTemplatesPanel";
+import { CreateAccountModal } from "@/components/accounts/CreateAccountModal";
 import { ByokPanel } from "@/components/credentials/ByokPanel";
-import {
-  Field,
-  GhostButton,
-  INPUT_CLASS,
-  PrimaryButton,
-  RowAction,
-} from "@/components/ui/Form";
+import { Field, GhostButton, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { Modal } from "@/components/ui/Modal";
 import { SidePanel } from "@/components/ui/SidePanel";
 import {
   accessMessage,
   ApiError,
-  createAccount,
   CREDENTIAL_STRATEGY_LABELS,
   DEFAULT_ACCOUNT_ID,
   deleteAccount,
@@ -202,93 +196,6 @@ function AccountDetail({
   );
 }
 
-// --- Create ---
-
-function CreateAccountModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (account: Account) => void;
-}) {
-  const [id, setId] = useState("");
-  const [name, setName] = useState("");
-  const [strategy, setStrategy] =
-    useState<CredentialStrategy>("operator_first");
-  const [error, setError] = useState<string | null>(null);
-
-  const create = useMutation({
-    mutationFn: () =>
-      createAccount({
-        id: id.trim(),
-        name: name.trim() || undefined,
-        credential_strategy: strategy,
-      }),
-    onSuccess: onCreated,
-    onError: (problem) =>
-      setError(problem instanceof Error ? problem.message : String(problem)),
-  });
-
-  return (
-    <Modal
-      title="New account"
-      onClose={onClose}
-      footer={
-        <>
-          <GhostButton onClick={onClose}>Cancel</GhostButton>
-          <PrimaryButton
-            onClick={() => create.mutate()}
-            disabled={!id.trim() || create.isPending}
-          >
-            Create account
-          </PrimaryButton>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <Field
-          label="Account ID"
-          hint="The identifier keys and BYOK credentials are addressed by. It cannot change later."
-        >
-          <input
-            value={id}
-            onChange={(event) => setId(event.target.value)}
-            placeholder="acme"
-            autoComplete="off"
-            spellCheck={false}
-            className={`${INPUT_CLASS} font-mono`}
-          />
-        </Field>
-        <Field label="Name" hint="What a person calls this account. Optional.">
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Acme Corp"
-            autoComplete="off"
-            className={INPUT_CLASS}
-          />
-        </Field>
-        <Field label="Credential strategy">
-          <Select
-            value={strategy}
-            onChange={(event) =>
-              setStrategy(event.target.value as CredentialStrategy)
-            }
-            aria-label="Credential strategy"
-          >
-            {STRATEGIES.map((option) => (
-              <option key={option} value={option}>
-                {CREDENTIAL_STRATEGY_LABELS[option]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        {error && <p className="text-sm text-error">{error}</p>}
-      </div>
-    </Modal>
-  );
-}
-
 // --- Page ---
 
 function AccountsPage() {
@@ -296,6 +203,7 @@ function AccountsPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [managingTemplates, setManagingTemplates] = useState(false);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -426,10 +334,21 @@ function AccountsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <Header />
-        <PrimaryButton onClick={() => setCreating(true)}>
-          <Plus className="size-4" />
-          New account
-        </PrimaryButton>
+        <div className="flex items-center gap-2">
+          <GhostButton
+            onClick={() => {
+              setSelected(null);
+              setManagingTemplates(true);
+            }}
+          >
+            <LayoutTemplate className="size-4" />
+            Templates
+          </GhostButton>
+          <PrimaryButton onClick={() => setCreating(true)}>
+            <Plus className="size-4" />
+            New account
+          </PrimaryButton>
+        </div>
       </div>
       {notice && (
         <p className={`text-sm ${notice.error ? "text-error" : "text-success"}`}>
@@ -437,7 +356,10 @@ function AccountsPage() {
         </p>
       )}
       {body}
-      {open && (
+      {managingTemplates && (
+        <AccountTemplatesPanel onClose={() => setManagingTemplates(false)} />
+      )}
+      {!managingTemplates && open && (
         <AccountDetail
           account={open}
           keys={keysFor(open.id)}

@@ -194,7 +194,20 @@ function ModelNarrowing({
   );
 }
 
-export function AccountPolicyPanel({ account }: { account: Account }) {
+export function AccountPolicyPanel({
+  account,
+  saveBody,
+}: {
+  // The policy shape, not necessarily an account: an account template holds
+  // the same two rules, and this panel edits either.
+  account: Pick<Account, "id" | "byok_policy" | "access">;
+  // saveBody redirects where the rules land. The default writes the account;
+  // the templates view passes its own writer.
+  saveBody?: (body: {
+    byok_policy?: AccountBYOKPolicy;
+    access?: AccountProviderAccess[];
+  }) => Promise<unknown>;
+}) {
   const queryClient = useQueryClient();
   const [byok, setByok] = useState(() => byokDraftOf(account.byok_policy));
   const [access, setAccess] = useState(() => accessDraftOf(account.access));
@@ -213,7 +226,7 @@ export function AccountPolicyPanel({ account }: { account: Account }) {
     mutationFn: (body: {
       byok_policy?: AccountBYOKPolicy;
       access?: AccountProviderAccess[];
-    }) => updateAccount(account.id, body),
+    }) => (saveBody ? saveBody(body) : updateAccount(account.id, body)),
     onSuccess: async () => {
       setNotice({ text: "Policy saved" });
       await queryClient.invalidateQueries({ queryKey: ["accounts"] });
