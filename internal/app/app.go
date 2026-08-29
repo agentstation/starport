@@ -35,6 +35,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
+	"github.com/agentstation/starport/internal/providers/statuspage"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/registry"
@@ -844,6 +845,21 @@ func (a *App) Run(ctx context.Context) error {
 		go func() {
 			defer a.runtimeWG.Done()
 			a.jobSweepLoop(runCtx)
+		}()
+	}
+	if a.providerStates != nil && a.catalog != nil {
+		incidentPoller, err := statuspage.New(
+			statuspage.DefaultConfig(),
+			catalogStatusPageSource{catalog: a.catalog},
+			providerIncidentPublisher{states: a.providerStates},
+		)
+		if err != nil {
+			return errors.Join(fmt.Errorf("open status-page poller: %w", err), a.closeWithTimeout())
+		}
+		a.runtimeWG.Add(1)
+		go func() {
+			defer a.runtimeWG.Done()
+			incidentPoller.Run(runCtx)
 		}()
 	}
 	if a.catalogUpdates != nil {

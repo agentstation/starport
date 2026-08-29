@@ -23,7 +23,7 @@ import {
   listProviderCatalog,
   providerStatus,
 } from "@/lib/api";
-import { formatCount, providerLabel } from "@/lib/format";
+import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/providers_/$providerId")({
@@ -112,6 +112,15 @@ function ProviderDetailPage() {
         </div>
         {runtime && <HealthBadge health={providerHealth(runtime)} />}
       </div>
+
+      {runtime?.incident && (
+        <p data-testid="provider-incident" className="text-sm text-warning">
+          {runtime.incident.description ||
+            "The provider reports a service incident."}
+          {runtime.incident.checked_at &&
+            ` · checked ${formatRelativeTime(runtime.incident.checked_at)}`}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-4 text-sm text-text-2">
         {runtime && (

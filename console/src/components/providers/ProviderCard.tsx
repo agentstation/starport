@@ -47,12 +47,18 @@ export function CredentialPill({
 // liveness only — a missing credential is the credential pill's story, even
 // though it is often why nothing is available. The console has one
 // user-facing health vocabulary: healthy, degraded, unreachable,
-// unavailable. Unreachable means the gateway's own requests got no response
-// back; unavailable means the provider responded and refused or erred
-// ("down" is reserved for a verdict confirmed by the provider's own status
-// page, which nothing reports yet).
+// unavailable, down. Unreachable means the gateway's own requests got no
+// response back; unavailable means the provider responded and refused or
+// erred; down means nothing is available AND the provider's own status page
+// confirms a major or critical incident.
 export type ProviderHealth = {
-  state: "healthy" | "degraded" | "unreachable" | "unavailable" | "no_models";
+  state:
+    | "healthy"
+    | "degraded"
+    | "unreachable"
+    | "unavailable"
+    | "down"
+    | "no_models";
   label: string;
 };
 
@@ -67,6 +73,13 @@ export function providerHealth(status: ProviderRuntimeStatus): ProviderHealth {
   }
   const available = availableOfferings(offerings);
   if (available === 0) {
+    // The provider's own status page is the strongest evidence: when the
+    // gateway can serve nothing and the provider itself confirms a major
+    // incident, the verdict is down, not a guess from failed requests.
+    const indicator = status.incident?.indicator;
+    if (indicator === "major" || indicator === "critical") {
+      return { state: "down", label: "down" };
+    }
     // The offering reason records the failure that tripped each circuit.
     // When everything that failed did so without any provider response, the
     // provider is unreachable, not refusing.
@@ -92,6 +105,7 @@ const HEALTH_DOTS: Record<ProviderHealth["state"], string> = {
   degraded: "bg-warning",
   unreachable: "bg-error",
   unavailable: "bg-error",
+  down: "bg-error",
   no_models: "bg-text-4",
 };
 
@@ -178,6 +192,11 @@ export function ProviderCard({
       {description && (
         <p className="line-clamp-2 text-xs leading-relaxed text-text-3">
           {description}
+        </p>
+      )}
+      {status.incident && (
+        <p data-testid="provider-incident" className="text-xs text-warning">
+          {status.incident.description || "provider reports a service incident"}
         </p>
       )}
       {(credentialReason || adapterReason) && (

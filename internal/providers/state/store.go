@@ -176,12 +176,31 @@ type RoutingObservation struct {
 	Reason          ReasonCode
 }
 
+// IncidentStatus is a provider's own status-page verdict: the summary
+// indicator the provider publishes about itself, read by this gateway.
+type IncidentStatus struct {
+	Indicator   string    `json:"indicator"`
+	Description string    `json:"description,omitempty"`
+	CheckedAt   time.Time `json:"checked_at"`
+}
+
+// IncidentObservation is one provider's status-page reading in state-owned
+// terms, so this package depends on no status-page reader.
+type IncidentObservation struct {
+	ProviderID  catalogs.ProviderID
+	Indicator   string
+	Description string
+	CheckedAt   time.Time
+}
+
 // ProviderStatus separates adapter, operator credential, and offering state.
+// Incident is present only while the provider's own status page reports one.
 type ProviderStatus struct {
 	ProviderID         catalogs.ProviderID `json:"provider_id"`
 	Adapter            AdapterStatus       `json:"adapter"`
 	OperatorCredential CredentialStatus    `json:"operator_credential"`
 	Offerings          []OfferingStatus    `json:"offerings"`
+	Incident           *IncidentStatus     `json:"incident,omitempty"`
 }
 
 // Snapshot is one caller-owned immutable provider-state generation.
@@ -221,6 +240,8 @@ type Store struct {
 	// drop it and a republish for a new generation cannot silently keep it.
 	routingGenerationID string
 	routing             map[availability.Offering]RoutingStatus
+
+	incidents map[catalogs.ProviderID]IncidentStatus
 }
 
 // New creates an empty provider-state projection.
@@ -237,6 +258,7 @@ func newWithClock(source clock) *Store {
 		catalogOfferings: make(map[availability.Offering]OfferingStatus),
 		offerings:        make(map[availability.Offering]OfferingStatus),
 		routing:          make(map[availability.Offering]RoutingStatus),
+		incidents:        make(map[catalogs.ProviderID]IncidentStatus),
 	}
 }
 
@@ -527,6 +549,53 @@ func (s *Store) PublishAvailability(snapshot availability.Snapshot) error {
 	return nil
 }
 
+// PublishIncidents replaces the complete status-page projection with one
+// observation pass. A "none" indicator means the provider reports no
+// incident, so it clears rather than shows; a provider absent from the pass
+// stops asserting anything at all.
+func (s *Store) PublishIncidents(observations []IncidentObservation) {
+	if s == nil {
+		return
+	}
+	next := make(map[catalogs.ProviderID]IncidentStatus)
+	for _, observation := range observations {
+		if observation.Indicator == "" || observation.Indicator == "none" {
+			continue
+		}
+		next[observation.ProviderID] = IncidentStatus{
+			Indicator:   observation.Indicator,
+			Description: observation.Description,
+			CheckedAt:   observation.CheckedAt,
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if equalIncidents(s.incidents, next) {
+		// The pass re-confirmed what the projection already says: keep the
+		// fresh CheckedAt without announcing a change.
+		s.incidents = next
+		return
+	}
+	s.incidents = next
+	s.revision++
+}
+
+func equalIncidents(current, next map[catalogs.ProviderID]IncidentStatus) bool {
+	if len(current) != len(next) {
+		return false
+	}
+	for providerID, incident := range next {
+		existing, exists := current[providerID]
+		// CheckedAt advances every pass; comparing it would bump the
+		// revision each poll while nothing an operator sees has changed.
+		if !exists || existing.Indicator != incident.Indicator ||
+			existing.Description != incident.Description {
+			return false
+		}
+	}
+	return true
+}
+
 // PublishOutcome applies only explicitly scoped operator credential evidence.
 func (s *Store) PublishOutcome(outcome execution.AttemptOutcome) {
 	if s == nil || outcome.Credential.Owner != execution.CredentialOwnerOperator ||
@@ -608,6 +677,10 @@ func (s *Store) Snapshot() Snapshot {
 		provider := ProviderStatus{
 			ProviderID: providerID, Adapter: s.adapters[providerID],
 			OperatorCredential: credential,
+		}
+		if incident, exists := s.incidents[providerID]; exists {
+			incidentCopy := incident
+			provider.Incident = &incidentCopy
 		}
 		for identity, offering := range s.offerings {
 			if identity.ProviderID != string(providerID) {

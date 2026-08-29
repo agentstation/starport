@@ -270,6 +270,9 @@ export type ProviderRuntimeStatus = {
     updated_at?: string;
   };
   offerings?: ProviderOfferingStatus[];
+  // The provider's own status-page verdict, present only while the
+  // provider reports an incident about itself.
+  incident?: { indicator?: string; description?: string; checked_at?: string };
 };
 
 // ProviderStatus is the safe provider-state snapshot from

@@ -160,6 +160,51 @@ test("separates a provider that never answered from one that refused", () => {
   ).toBe("unavailable");
 });
 
+test("calls a provider down only on the word of its own status page", () => {
+  const failed = {
+    offerings: [
+      { provider_model_id: "a", state: "open", reason: "provider_unreachable" },
+    ],
+  };
+  // Nothing available and the provider itself confirms a major incident:
+  // the status-page-confirmed verdict replaces the gateway's guess.
+  expect(
+    providerHealth(
+      runtime({ ...failed, incident: { indicator: "major" } }),
+    ).state,
+  ).toBe("down");
+  expect(
+    providerHealth(
+      runtime({ ...failed, incident: { indicator: "critical" } }),
+    ).state,
+  ).toBe("down");
+  // A minor incident is context, not confirmation of an outage.
+  expect(
+    providerHealth(
+      runtime({ ...failed, incident: { indicator: "minor" } }),
+    ).state,
+  ).toBe("unreachable");
+  // A major incident alone never downgrades a provider that still serves.
+  expect(
+    providerHealth(runtime({ incident: { indicator: "major" } })).state,
+  ).toBe("degraded");
+});
+
+test("shows the provider's own incident description on the card", () => {
+  render(
+    <ProviderCard
+      status={runtime({
+        incident: { indicator: "minor", description: "Elevated error rates" },
+      })}
+      entry={entry}
+    />,
+  );
+
+  expect(screen.getByTestId("provider-incident").textContent).toBe(
+    "Elevated error rates",
+  );
+});
+
 test("labels a missing credential 'no credential'", () => {
   render(
     <ProviderCard
