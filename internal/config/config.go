@@ -292,7 +292,22 @@ type SecurityConfig struct {
 	// An operator who needs the file elsewhere moves everything with
 	// STARPORT_CONFIG_DIR.
 	LocalTokenPath string `json:"local_token_path"`
+
+	// localTokenReadOnly forbids this process from writing the local admin
+	// token file. Only ConfigureDevelopmentRuntime sets it: a development
+	// gateway promises to create no files, so it reads the machine's token
+	// when one exists — keeping `starport auth token` and the console paste
+	// path in agreement with it — and holds an ephemeral in-memory token
+	// when the machine has none. It is unexported so no environment variable
+	// or configuration file can select it for a serving gateway, whose token
+	// the CLI must always find in the file.
+	localTokenReadOnly bool
 }
+
+// LocalTokenReadOnly reports whether this process must not write the local
+// admin token file: read the machine's token if it exists, hold an ephemeral
+// one otherwise.
+func (c SecurityConfig) LocalTokenReadOnly() bool { return c.localTokenReadOnly }
 
 // LoggingConfig defines logging settings
 type LoggingConfig struct {

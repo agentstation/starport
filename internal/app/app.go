@@ -796,6 +796,31 @@ func (b *runtimeBuilder) resolveAuthMode(ctx context.Context) error {
 // on one token, so the value an operator reads is the value both processes
 // accept.
 func (b *runtimeBuilder) resolveLocalToken(ctx context.Context) error {
+	// A development gateway never writes the token file. It reads the
+	// machine's token when one exists, so `starport auth token` and the
+	// console paste path agree with it; a machine that holds none gets an
+	// ephemeral in-memory token, minted at startup and gone with the
+	// process, because writing the file would break the development promise
+	// that nothing lands on disk.
+	if b.config.Security.LocalTokenReadOnly() {
+		token, held, err := peekMachineToken(ctx, b.config.Security.LocalTokenPath)
+		if err != nil {
+			return err
+		}
+		if !localauth.AllowsExposure(b.config.Server.Host, token) {
+			return fmt.Errorf(
+				"%w and this gateway binds %s: a read-only token is never rotated here, so it serves loopback alone",
+				ErrLocalTokenExposed, b.config.Server.Host,
+			)
+		}
+		b.gate = localauth.NewGate(token, b.config.Server.Host)
+		b.application.localGate = b.gate
+		log.Info().
+			Uint64("generation", token.Generation).
+			Bool("machine_token", held).
+			Msg("Local admin token ready: read-only, nothing written to disk")
+		return nil
+	}
 	if b.config.Security.LocalTokenPath == "" {
 		return ErrLocalTokenPathRequired
 	}
@@ -829,6 +854,33 @@ func (b *runtimeBuilder) resolveLocalToken(ctx context.Context) error {
 		Bool("minted", minted).
 		Msg("Local admin token ready")
 	return nil
+}
+
+// peekMachineToken reads the machine's local admin token without touching the
+// disk, and mints an ephemeral one when the machine holds none. The second
+// return value reports whether the token is the machine's, so the log can say
+// which credential the paste path will accept. A token file that exists but
+// does not read is an error, not a mint: an ephemeral token would silently
+// disagree with the one `starport auth token` refuses to print.
+func peekMachineToken(ctx context.Context, path string) (localauth.Token, bool, error) {
+	if path != "" {
+		store, err := localauth.NewStore(path)
+		if err != nil {
+			return localauth.Token{}, false, fmt.Errorf("open the local admin token: %w", err)
+		}
+		token, err := store.Peek(ctx)
+		switch {
+		case err == nil:
+			return token, true, nil
+		case !errors.Is(err, localauth.ErrNotFound):
+			return localauth.Token{}, false, fmt.Errorf("read the local admin token: %w", err)
+		}
+	}
+	token, err := localauth.Mint(1, time.Now())
+	if err != nil {
+		return localauth.Token{}, false, fmt.Errorf("mint an ephemeral local admin token: %w", err)
+	}
+	return token, false, nil
 }
 
 // Run starts explicit runtime work and closes all dependencies on exit.

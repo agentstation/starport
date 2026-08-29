@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
@@ -23,6 +24,10 @@ type Development struct {
 	application *App
 	url         string
 	apiKey      string
+	// filesRoot is the session-owned scratch directory holding stored file
+	// bytes. The session removes it on close, so a development gateway leaves
+	// nothing behind.
+	filesRoot string
 }
 
 // NewDevelopment creates an in-memory gateway bound to loopback.
@@ -43,13 +48,23 @@ func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, erro
 		return nil, fmt.Errorf("generate development master key: %w", err)
 	}
 	cfg.Security.MasterKey = base64.RawURLEncoding.EncodeToString(masterKey)
+	// Stored file bytes have no in-memory backend, so the session owns a
+	// temporary directory instead and removes it on close. What matters for
+	// the development promise is that the shared data directory stays
+	// untouched: a scratch directory the session deletes is working memory,
+	// not configuration another run would inherit.
+	filesRoot, err := os.MkdirTemp("", "starport-dev-files-")
+	if err != nil {
+		return nil, fmt.Errorf("create development file storage: %w", err)
+	}
+	cfg.Files.Path = filesRoot
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("validate development config: %w", err)
+		return nil, errors.Join(fmt.Errorf("validate development config: %w", err), os.RemoveAll(filesRoot))
 	}
 
 	store, err := storage.Open(cfg.Storage.RuntimeStorage())
 	if err != nil {
-		return nil, fmt.Errorf("open development storage: %w", err)
+		return nil, errors.Join(fmt.Errorf("open development storage: %w", err), os.RemoveAll(filesRoot))
 	}
 	// A key is issued only when one is needed. With authentication disabled
 	// the session has nothing to print and nothing to paste, and minting a key
@@ -74,13 +89,14 @@ func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, erro
 		if !claimed {
 			err = errors.Join(err, store.Close())
 		}
-		return nil, fmt.Errorf("create development application: %w", err)
+		return nil, errors.Join(fmt.Errorf("create development application: %w", err), os.RemoveAll(filesRoot))
 	}
 
 	return &Development{
 		application: application,
 		url:         "http://" + net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
 		apiKey:      apiKey,
+		filesRoot:   filesRoot,
 	}, nil
 }
 
@@ -126,10 +142,15 @@ func (runtime *Development) Run(ctx context.Context) error {
 	return runtime.application.Run(ctx)
 }
 
-// Close releases a development gateway that did not start.
+// Close releases the development gateway and removes its scratch file
+// storage. The CLI calls it on every exit path, started or not.
 func (runtime *Development) Close(ctx context.Context) error {
 	if runtime == nil || runtime.application == nil {
 		return nil
 	}
-	return runtime.application.Close(ctx)
+	err := runtime.application.Close(ctx)
+	if runtime.filesRoot != "" {
+		err = errors.Join(err, os.RemoveAll(runtime.filesRoot))
+	}
+	return err
 }

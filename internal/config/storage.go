@@ -63,6 +63,11 @@ func (c *Config) ConfigureDevelopmentRuntime() {
 		// in-memory Badger above.
 		SQL: SQLConfig{Mode: sqlModeSQLite},
 	}
+	// The local admin token file is read but never written. The path stays
+	// so a machine that already holds a token keeps `starport auth token`
+	// and the console paste path in agreement with a development gateway;
+	// the read-only mark keeps a machine that holds none exactly as it was.
+	c.Security.localTokenReadOnly = true
 	c.Security.MasterKey = ""
 	c.Security.EnableTLS = false
 	c.Security.TLSCertPath = ""

@@ -108,3 +108,19 @@ func TestConfigureDevelopmentRuntimeSelectsInMemorySQL(t *testing.T) {
 		t.Errorf("development SQLite path = %q, want empty (in-memory)", cfg.Storage.SQL.SQLite.Path)
 	}
 }
+
+// The local admin token is the third store the development runtime must keep
+// from writing: the path stays, so a machine that already holds a token keeps
+// the CLI and the gateway in agreement, and the read-only mark keeps a machine
+// that holds none untouched.
+func TestConfigureDevelopmentRuntimeMarksTheLocalTokenReadOnly(t *testing.T) {
+	cfg := &Config{}
+	cfg.Security.LocalTokenPath = "/somewhere/data/local-admin-token.json"
+	cfg.ConfigureDevelopmentRuntime()
+	if cfg.Security.LocalTokenPath != "/somewhere/data/local-admin-token.json" {
+		t.Errorf("development local token path = %q, want the loader's path preserved", cfg.Security.LocalTokenPath)
+	}
+	if !cfg.Security.LocalTokenReadOnly() {
+		t.Error("development runtime did not mark the local admin token read-only")
+	}
+}

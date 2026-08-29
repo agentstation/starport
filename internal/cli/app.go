@@ -183,7 +183,10 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			if err := writeDevelopmentResult(cmd.Writer, session); err != nil {
 				return runtimeFailure{cause: closeDevelopmentSession(ctx, session, err)}
 			}
-			greetOnce(cmd.Writer, deps)
+			// No greeting here: the session output above already carries the
+			// console link and the key, and the welcome's stamp would be a
+			// file a mode that promises statelessness leaves behind. Only
+			// `serve` greets.
 			if session.ConsoleURL != "" && !cmd.Bool(flagNoOpen) {
 				if reason := browserSuppressed(deps, cmd.Writer); reason != "" {
 					if _, err := fmt.Fprintf(cmd.Writer, "Did not open a browser: %s.\n", reason); err != nil {
