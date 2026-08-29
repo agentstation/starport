@@ -283,6 +283,7 @@ func validProductionConfig(t *testing.T) *config.Config {
 				Path: t.TempDir(), Compression: "snappy", GCInterval: time.Minute,
 				GCDiscardRatio: 0.5,
 			},
+			SQL: config.SQLConfig{Mode: "sqlite"},
 		},
 		Providers: config.ProvidersConfig{
 			catalogs.ProviderIDOpenAI: {
