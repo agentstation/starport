@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Guard for the credential-sharing and identity campaign (plan prefix CSH,
-# plan file docs/credential-sharing-plan.html). Each condition asserts one
-# structural property of the target design:
+# Guard for the credential-sharing and identity campaign (ID prefix CSH).
+# Each condition asserts one structural property of the target design:
 #
 #   - internal/sqlstore owns the relational contract: an embedded SQLite
 #     backend rides the binary with no cgo, and a PostgreSQL or MySQL
