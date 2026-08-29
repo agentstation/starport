@@ -35,11 +35,11 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 // account: the credentials it applies belong to the deployment. The section
 // renders as a row of that drawer and carries no chrome of its own.
 
-export function gatewayCredentialQueryKey(providerId: string): string[] {
+export function sharedCredentialsQueryKey(providerId: string): string[] {
   return ["shared-credentials", providerId];
 }
 
-export function GatewayCredentialPanel({
+export function SharedCredentialPanel({
   providerId,
   name,
   fields,
@@ -68,11 +68,11 @@ export function GatewayCredentialPanel({
   const say = (text: string, error = false) => setNotice({ text, error });
   const refresh = () =>
     queryClient.invalidateQueries({
-      queryKey: gatewayCredentialQueryKey(providerId),
+      queryKey: sharedCredentialsQueryKey(providerId),
     });
 
   const credentials = useQuery({
-    queryKey: gatewayCredentialQueryKey(providerId),
+    queryKey: sharedCredentialsQueryKey(providerId),
     queryFn: () => listSharedCredentials(providerId),
     retry: false,
   });
