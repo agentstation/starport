@@ -175,6 +175,7 @@ func defaultConfig(paths Paths) *Config {
 	return &Config{
 		Storage: StorageConfig{
 			Badger: BadgerConfig{Path: paths.BadgerDir},
+			SQL:    SQLConfig{SQLite: SQLiteConfig{Path: paths.SQLiteFile}},
 		},
 		Files:    FilesConfig{Path: paths.FilesDir},
 		Security: SecurityConfig{LocalTokenPath: paths.LocalTokenFile},

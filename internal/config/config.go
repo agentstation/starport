@@ -102,11 +102,27 @@ type ServerConfig struct {
 	EnableHealthCheck bool          `env:"ENABLE_HEALTH_CHECK,default=true"`
 }
 
-// StorageConfig defines storage backend settings
+// StorageConfig defines storage backend settings. Mode selects the
+// key-value store; SQL selects its relational twin, which pairs an embedded
+// SQLite database with a network connect the way Badger pairs with Valkey.
 type StorageConfig struct {
 	Mode   string       `env:"MODE,default=badger"`
 	Badger BadgerConfig `env:",prefix=BADGER_"`
 	Valkey ValkeyConfig `env:",prefix=VALKEY_"`
+	SQL    SQLConfig    `env:",prefix=SQL_"`
+}
+
+// SQLConfig defines relational store settings.
+type SQLConfig struct {
+	Mode   string       `env:"MODE,default=sqlite"`
+	SQLite SQLiteConfig `env:",prefix=SQLITE_"`
+}
+
+// SQLiteConfig defines the embedded relational store's settings. An empty
+// path keeps the database in memory, which is the development runtime's
+// choice.
+type SQLiteConfig struct {
+	Path string `env:"PATH,overwrite"`
 }
 
 // BadgerConfig defines Badger DB settings

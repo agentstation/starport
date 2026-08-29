@@ -67,6 +67,9 @@ func (c *ServerConfig) Validate() error {
 
 // Validate validates StorageConfig
 func (c *StorageConfig) Validate() error {
+	if err := c.SQL.Validate(); err != nil {
+		return err
+	}
 	switch c.Mode {
 	case storageModeBadger:
 		return c.Badger.Validate()
@@ -74,6 +77,16 @@ func (c *StorageConfig) Validate() error {
 		return c.Valkey.Validate()
 	default:
 		return fmt.Errorf("unsupported storage mode: %s", c.Mode)
+	}
+}
+
+// Validate validates SQLConfig
+func (c *SQLConfig) Validate() error {
+	switch c.Mode {
+	case sqlModeSQLite:
+		return nil
+	default:
+		return fmt.Errorf("unsupported sql store mode: %s", c.Mode)
 	}
 }
 

@@ -1,11 +1,24 @@
 package config
 
-import "github.com/agentstation/starport/internal/storage"
+import (
+	"github.com/agentstation/starport/internal/sqlstore"
+	"github.com/agentstation/starport/internal/storage"
+)
 
 const (
 	storageModeBadger = storage.StorageTypeBadger
+	sqlModeSQLite     = sqlstore.TypeSQLite
 	compressionNone   = "none"
 )
+
+// RuntimeSQL projects the relational settings into the sqlstore contract,
+// the way RuntimeStorage projects the key-value ones.
+func (c StorageConfig) RuntimeSQL() sqlstore.Config {
+	return sqlstore.Config{
+		Type:   c.SQL.Mode,
+		SQLite: sqlstore.SQLiteConfig{Path: c.SQL.SQLite.Path},
+	}
+}
 
 // RuntimeStorage projects external storage settings into the storage adapter contract.
 func (c StorageConfig) RuntimeStorage() storage.Config {
@@ -41,6 +54,10 @@ func (c *Config) ConfigureDevelopmentRuntime() {
 		Badger: BadgerConfig{
 			Compression: compressionNone, inMemory: true,
 		},
+		// An empty SQLite path is the in-memory database: real schema,
+		// no file, gone with the process — the relational twin of the
+		// in-memory Badger above.
+		SQL: SQLConfig{Mode: sqlModeSQLite},
 	}
 	c.Security.MasterKey = ""
 	c.Security.EnableTLS = false

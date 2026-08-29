@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -47,5 +48,30 @@ func TestRuntimeStorageProjectsAdapterSettings(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			test.check(t, test.input.RuntimeStorage())
 		})
+	}
+}
+
+func TestRuntimeSQLProjectsStoreSettings(t *testing.T) {
+	input := StorageConfig{SQL: SQLConfig{
+		Mode:   "sqlite",
+		SQLite: SQLiteConfig{Path: "/data/sqlite/starport.db"},
+	}}
+	got := input.RuntimeSQL()
+	if got.Type != sqlstore.TypeSQLite || got.SQLite.Path != "/data/sqlite/starport.db" {
+		t.Errorf("SQL runtime configuration = %#v", got)
+	}
+}
+
+// The development runtime must reset the relational store with the key-value
+// one: an in-memory SQLite database (empty path) that validates, so a
+// development gateway leaves no file behind.
+func TestConfigureDevelopmentRuntimeSelectsInMemorySQL(t *testing.T) {
+	cfg := &Config{}
+	cfg.ConfigureDevelopmentRuntime()
+	if err := cfg.Storage.SQL.Validate(); err != nil {
+		t.Fatalf("development SQL settings invalid: %v", err)
+	}
+	if cfg.Storage.SQL.SQLite.Path != "" {
+		t.Errorf("development SQLite path = %q, want empty (in-memory)", cfg.Storage.SQL.SQLite.Path)
 	}
 }

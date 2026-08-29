@@ -16,6 +16,10 @@ type Paths struct {
 	ConfigFile string `json:"config_file"`
 	DataDir    string `json:"data_dir"`
 	BadgerDir  string `json:"badger_dir"`
+	// SQLiteFile holds the embedded relational database. It sits in the data
+	// directory beside the Badger store: the same machine state, the other
+	// shape.
+	SQLiteFile string `json:"sqlite_file"`
 	// FilesDir roots the filesystem blob backend. It sits in the data
 	// directory beside the record store, because the bytes are state this
 	// machine holds rather than a decision an operator wrote down.
@@ -59,6 +63,7 @@ func PathsForConfigDir(configDir string) Paths {
 		ConfigFile:       filepath.Join(configDir, "config.env"),
 		DataDir:          dataDir,
 		BadgerDir:        filepath.Join(dataDir, "badger"),
+		SQLiteFile:       filepath.Join(dataDir, "sqlite", "starport.db"),
 		FilesDir:         filepath.Join(dataDir, "files"),
 		LocalTokenFile:   filepath.Join(dataDir, "local-admin-token.json"),
 		WelcomeStampFile: filepath.Join(dataDir, "welcomed"),

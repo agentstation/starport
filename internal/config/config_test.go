@@ -37,6 +37,7 @@ func TestConfig_Validate(t *testing.T) {
 						GCInterval:     5 * time.Minute,
 						GCDiscardRatio: 0.5,
 					},
+					SQL: SQLConfig{Mode: "sqlite"},
 				},
 				RateLimiting: RateLimitingConfig{
 					DefaultRequestsPerMinute: 60,
@@ -77,6 +78,7 @@ func TestConfig_Validate(t *testing.T) {
 						GCInterval:     5 * time.Minute,
 						GCDiscardRatio: 0.5,
 					},
+					SQL: SQLConfig{Mode: "sqlite"},
 				},
 				RateLimiting: RateLimitingConfig{
 					DefaultRequestsPerMinute: 60,
@@ -112,6 +114,7 @@ func TestConfig_Validate(t *testing.T) {
 				},
 				Storage: StorageConfig{
 					Mode: "invalid", // Invalid storage mode
+					SQL:  SQLConfig{Mode: "sqlite"},
 				},
 				RateLimiting: RateLimitingConfig{
 					DefaultRequestsPerMinute: 60,
@@ -153,6 +156,7 @@ func TestConfig_Validate(t *testing.T) {
 						GCInterval:     5 * time.Minute,
 						GCDiscardRatio: 0.5,
 					},
+					SQL: SQLConfig{Mode: "sqlite"},
 				},
 				RateLimiting: RateLimitingConfig{
 					DefaultRequestsPerMinute: 60,
