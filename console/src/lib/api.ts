@@ -925,6 +925,10 @@ export function createAccount(body: {
   id: string;
   name?: string;
   credential_strategy?: CredentialStrategy;
+  // template names an account template whose defaults stamp the new account.
+  // It is read only at creation, and any explicit field in this same body
+  // wins over what the template would have stamped.
+  template?: string;
 }): Promise<Account> {
   return request<Account>("/api/v1/admin/accounts", { method: "POST", body });
 }
@@ -949,6 +953,67 @@ export function updateAccount(
 export function deleteAccount(accountId: string): Promise<unknown> {
   return request<unknown>(
     `/api/v1/admin/accounts/${encodeURIComponent(accountId)}`,
+    { method: "DELETE" },
+  );
+}
+
+// --- Account templates ---
+
+// AccountTemplate names creation defaults once: an account template holds
+// the limits, credential strategy, BYOK policy, and provider access that a
+// new account starts with. The stamp is a copy — editing a template later
+// never rewrites an account it already created.
+export type AccountTemplate = {
+  id: string;
+  name?: string;
+  limits?: AccountLimits | null;
+  credential_strategy?: CredentialStrategy;
+  byok_policy?: AccountBYOKPolicy | null;
+  access?: AccountProviderAccess[] | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+// AccountTemplateBody is what a create or update may set. The clearing
+// sentinels are the account's: `{"mode":"all"}` erases a stored BYOK policy
+// and `[]` erases stored access grants.
+export type AccountTemplateBody = {
+  name?: string;
+  credential_strategy?: CredentialStrategy;
+  limits?: AccountLimits | null;
+  byok_policy?: AccountBYOKPolicy;
+  access?: AccountProviderAccess[];
+};
+
+export async function listAccountTemplates(): Promise<AccountTemplate[]> {
+  const body = await request<{ templates?: AccountTemplate[] }>(
+    "/api/v1/admin/account-templates",
+  );
+  return body?.templates ?? [];
+}
+
+export function createAccountTemplate(
+  body: AccountTemplateBody & { id: string },
+): Promise<AccountTemplate> {
+  return request<AccountTemplate>("/api/v1/admin/account-templates", {
+    method: "POST",
+    body,
+  });
+}
+
+export function updateAccountTemplate(
+  templateId: string,
+  body: AccountTemplateBody,
+): Promise<AccountTemplate> {
+  return request<AccountTemplate>(
+    `/api/v1/admin/account-templates/${encodeURIComponent(templateId)}`,
+    { method: "PUT", body },
+  );
+}
+
+export function deleteAccountTemplate(templateId: string): Promise<unknown> {
+  return request<unknown>(
+    `/api/v1/admin/account-templates/${encodeURIComponent(templateId)}`,
     { method: "DELETE" },
   );
 }
