@@ -4,6 +4,8 @@ import { Download, Eye, EyeOff, Monitor, Moon, Sun, Trash2 } from "lucide-react"
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { AuthModeControl } from "@/components/settings/AuthModeControl";
+import { ExternalLink } from "@/components/ui/ExternalLink";
+import { GitHubMark } from "@/components/ui/icons";
 import { GhostButton, INPUT_CLASS, PrimaryButton } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -390,14 +392,14 @@ function AboutSection() {
           </>
         )}
       </dl>
-      <a
+      <ExternalLink
         href="https://github.com/agentstation/starport"
-        target="_blank"
-        rel="noreferrer"
-        className="mt-4 inline-flex h-9 items-center rounded-sm px-3 text-sm text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover"
+        icon={GitHubMark}
+        iconClassName="size-4 shrink-0"
+        className="mt-4 h-9 rounded-sm px-3 text-sm text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover"
       >
-        agentstation/starport ↗
-      </a>
+        agentstation/starport
+      </ExternalLink>
     </Section>
   );
 }
