@@ -139,7 +139,7 @@ starport/
 ├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
 ├── internal/apikey/           # gateway API-key model and versioned repository
-├── internal/identity/          # users, teams, memberships; acquisition via gothic OAuth and WorkOS SSO
+├── internal/identity/          # users, teams, memberships, account grants; acquisition via gothic OAuth and WorkOS SSO
 ├── internal/account/           # account identity, account-wide limits, credential strategy
 ├── internal/limits/           # request-rate and consumption vocabulary shared by key and account
 ├── internal/authmode/         # whether the gateway requires a gateway API key

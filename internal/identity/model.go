@@ -47,6 +47,19 @@ type Membership struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// AccountGrant maps who may use which account: it gives one account to one
+// user or one team. Exactly one grantee side is set. Granting to a team
+// reaches every member through their memberships, so an operator manages
+// the team, not each person. The account itself lives in internal/account;
+// this row only names it, the way a shared credential's grant list names
+// accounts without owning them.
+type AccountGrant struct {
+	AccountID string    `json:"account_id"`
+	UserID    string    `json:"user_id,omitempty"`
+	TeamID    string    `json:"team_id,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // maxIDLength bounds every identity ID and the external subject. The bound
 // is the MySQL indexed-column width, so an ID that validates here fits
 // every backend the sqlstore serves.
@@ -84,6 +97,15 @@ var (
 	ErrMembershipNotFound = errors.New("membership not found")
 	// ErrMembershipConflict reports a membership that already exists.
 	ErrMembershipConflict = errors.New("membership already exists")
+
+	// ErrGranteeRequired reports an account grant that names no grantee or
+	// both kinds at once: a grant gives an account to exactly one user or
+	// exactly one team.
+	ErrGranteeRequired = errors.New("an account grant names one user or one team")
+	// ErrAccountGrantNotFound reports an account grant that does not exist.
+	ErrAccountGrantNotFound = errors.New("account grant not found")
+	// ErrAccountGrantConflict reports an account grant that already exists.
+	ErrAccountGrantConflict = errors.New("account grant already exists")
 )
 
 func validID(value string) bool {
@@ -127,6 +149,24 @@ func (t Team) Validate() error {
 // Validate checks the membership invariants.
 func (m Membership) Validate() error {
 	if !validID(m.UserID) || !validID(m.TeamID) {
+		return ErrMissingID
+	}
+	return nil
+}
+
+// Validate checks the account-grant invariants: a real account on one side,
+// exactly one valid grantee on the other.
+func (g AccountGrant) Validate() error {
+	if !validID(g.AccountID) {
+		return ErrMissingID
+	}
+	if (g.UserID == "") == (g.TeamID == "") {
+		return ErrGranteeRequired
+	}
+	if g.UserID != "" && !validID(g.UserID) {
+		return ErrMissingID
+	}
+	if g.TeamID != "" && !validID(g.TeamID) {
 		return ErrMissingID
 	}
 	return nil
