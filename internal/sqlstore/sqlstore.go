@@ -27,6 +27,11 @@ const (
 	// deployment's other data, created on first open. An empty path keeps
 	// the database in memory, which is the development runtime's choice.
 	TypeSQLite = "sqlite"
+	// TypePostgres is the PostgreSQL connect for a multi-node deployment,
+	// the relational counterpart of the Valkey connect.
+	TypePostgres = "postgres"
+	// TypeMySQL is the MySQL connect for a multi-node deployment.
+	TypeMySQL = "mysql"
 )
 
 // Common errors returned by sqlstore operations.
@@ -41,8 +46,10 @@ var (
 // Config selects and configures a relational backend, the way
 // storage.Config selects a key-value one.
 type Config struct {
-	Type   string       `env:"TYPE,default=sqlite"`
-	SQLite SQLiteConfig `env:",prefix=SQLITE_"`
+	Type     string         `env:"TYPE,default=sqlite"`
+	SQLite   SQLiteConfig   `env:",prefix=SQLITE_"`
+	Postgres PostgresConfig `env:",prefix=POSTGRES_"`
+	MySQL    MySQLConfig    `env:",prefix=MYSQL_"`
 }
 
 // SQLiteConfig configures the embedded backend.
@@ -52,10 +59,34 @@ type SQLiteConfig struct {
 	Path string `env:"PATH"`
 }
 
+// PostgresConfig configures the PostgreSQL connect.
+type PostgresConfig struct {
+	// URL is a postgres:// connection URL, database and credentials
+	// included.
+	URL string `env:"URL"`
+}
+
+// MySQLConfig configures the MySQL connect.
+type MySQLConfig struct {
+	// DSN is a go-sql-driver DSN such as
+	// user:password@tcp(host:3306)/starport.
+	DSN string `env:"DSN"`
+}
+
 // Validate reports a configuration this package cannot open.
 func (c Config) Validate() error {
 	switch c.Type {
 	case TypeSQLite:
+		return nil
+	case TypePostgres:
+		if c.Postgres.URL == "" {
+			return fmt.Errorf("postgres sqlstore requires a URL")
+		}
+		return nil
+	case TypeMySQL:
+		if c.MySQL.DSN == "" {
+			return fmt.Errorf("mysql sqlstore requires a DSN")
+		}
 		return nil
 	case "":
 		return fmt.Errorf("%w: empty", ErrUnknownType)
