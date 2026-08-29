@@ -17,7 +17,7 @@ import (
 // StoredCredentialResolver resolves one exact stored record against the
 // provider contract retained by the request's runtime generation. One
 // resolver serves both stored planes: the scope decides whether the record is
-// the operator's gateway credential or the tenant's own.
+// the operator's gateway credential or the account's own.
 type StoredCredentialResolver interface {
 	ResolveStoredMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error)
 }
@@ -26,7 +26,7 @@ type credentialPolicy struct {
 	runtime    connectors.RuntimeLease
 	storedKeys StoredCredentialResolver
 	gate       OperatorCredentialGate
-	tenantID   string
+	accountID  string
 	sources    []keyring.CredentialSource
 	states     map[string]credentialRouteState
 }
@@ -43,7 +43,7 @@ type credentialSelection struct {
 
 func newCredentialPolicy(
 	strategy keyring.Strategy,
-	tenantID string,
+	accountID string,
 	runtime connectors.RuntimeLease,
 	storedKeys StoredCredentialResolver,
 	gate OperatorCredentialGate,
@@ -53,20 +53,20 @@ func newCredentialPolicy(
 		return nil, failure.New(failure.Validation, "The provider credential strategy is invalid.", false, failure.ProviderDetails{}, err)
 	}
 	return &credentialPolicy{
-		runtime: runtime, storedKeys: storedKeys, gate: gate, tenantID: tenantID,
-		sources: reachableSources(parsedStrategy, tenantID, storedKeys),
+		runtime: runtime, storedKeys: storedKeys, gate: gate, accountID: accountID,
+		sources: reachableSources(parsedStrategy, accountID, storedKeys),
 		states:  make(map[string]credentialRouteState),
 	}, nil
 }
 
 // reachableSources drops the planes this deployment cannot read at all, so the
 // policy never spends an attempt on a source that has no store behind it.
-// A strategy is never widened here: a tenant on BYOKOnly whose BYOK plane is
+// A strategy is never widened here: an account on BYOKOnly whose BYOK plane is
 // unreachable resolves to no source and gets the not-configured failure, and
 // never falls through to an operator credential.
 func reachableSources(
 	strategy keyring.Strategy,
-	tenantID string,
+	accountID string,
 	storedKeys StoredCredentialResolver,
 ) []keyring.CredentialSource {
 	reachable := make([]keyring.CredentialSource, 0, 3)
@@ -77,7 +77,7 @@ func reachableSources(
 				continue
 			}
 		case keyring.SourceBYOK:
-			if storedKeys == nil || tenantID == "" {
+			if storedKeys == nil || accountID == "" {
 				continue
 			}
 		}
@@ -90,7 +90,7 @@ func credentialRequestPolicy(request *Request) (keyring.Strategy, string) {
 	if request == nil {
 		return keyring.OperatorFirst, ""
 	}
-	return request.APIKeyConfig.credentialStrategy(), request.TenantID
+	return request.APIKeyConfig.credentialStrategy(), request.AccountID
 }
 
 // credentialStrategy reports the effective strategy the HTTP seam already
@@ -121,7 +121,7 @@ func (p *credentialPolicy) resolve(
 	case keyring.SourceGateway:
 		material, err = p.resolveStored(ctx, keyring.GatewayScope, route.ProviderID)
 	case keyring.SourceBYOK:
-		material, err = p.resolveStored(ctx, keyring.TenantScope(p.tenantID), route.ProviderID)
+		material, err = p.resolveStored(ctx, keyring.AccountScope(p.accountID), route.ProviderID)
 	default:
 		err = errors.New("unsupported credential source")
 	}
@@ -205,7 +205,7 @@ func credentialEvidence(
 	case keyring.SourceEnvironment, keyring.SourceGateway:
 		owner = execution.CredentialOwnerOperator
 	case keyring.SourceBYOK:
-		owner = execution.CredentialOwnerTenant
+		owner = execution.CredentialOwnerAccount
 	}
 	return execution.CredentialEvidence{
 		Owner: owner, Source: string(source), MaterialVersion: material.Version(),

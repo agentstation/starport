@@ -11,18 +11,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // requestIdentity is what one authenticated request resolved to. The two
-// values are separate on purpose: the key authenticates, and the tenant
+// values are separate on purpose: the key authenticates, and the account
 // decides what the request may reach.
 type requestIdentity struct {
-	tenantID string
-	keyID    string
+	accountID string
+	keyID     string
 }
 
 // authenticate runs one secret through RequireAPIKey and reports the identity
@@ -32,7 +32,7 @@ func authenticate(t *testing.T, middleware *AuthMiddleware, secret string) (requ
 
 	var resolved requestIdentity
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		resolved.tenantID = requestctx.TenantIDOrDefault(r.Context())
+		resolved.accountID = requestctx.AccountIDOrDefault(r.Context())
 		resolved.keyID, _ = requestctx.GetAPIKeyID(r.Context())
 	}))
 
@@ -45,30 +45,30 @@ func authenticate(t *testing.T, middleware *AuthMiddleware, secret string) (requ
 	return resolved, recorder.Code
 }
 
-// TestTwoKeysInOneTenantShareARequestTenant is the AON2 acceptance case. On the
-// baseline the request tenant was the API key ID, so two keys in one account
+// TestTwoKeysInOneAccountShareARequestAccount is the AON2 acceptance case. On the
+// baseline the request account was the API key ID, so two keys in one account
 // could never agree on anything scoped to the account: credentials, limits, or
 // cached responses.
-func TestTwoKeysInOneTenantShareARequestTenant(t *testing.T) {
+func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 	store := storage.NewMockStore()
 	identities, err := identity.Open(store)
 	require.NoError(t, err)
-	tenants, err := tenant.Open(store)
+	accounts, err := account.Open(store)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	_, err = tenants.Create(ctx, tenant.Tenant{ID: "acme", Name: "Acme", Active: true})
+	_, err = accounts.Create(ctx, account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
 
-	issuer, err := identity.NewIssuer(identities, identity.WithTenantChecker(tenants))
+	issuer, err := identity.NewIssuer(identities, identity.WithAccountChecker(accounts))
 	require.NoError(t, err)
 
 	first, err := issuer.Issue(ctx, identity.IssueRequest{
-		Name: "Acme-CI", TenantID: "acme", Scopes: []string{"chat:write"},
+		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
 	second, err := issuer.Issue(ctx, identity.IssueRequest{
-		Name: "Acme-Laptop", TenantID: "acme", Scopes: []string{"chat:write"},
+		Name: "Acme-Laptop", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
 	require.NotEqual(t, first.APIKey.ID, second.APIKey.ID, "the two keys must be distinct identities")
@@ -80,32 +80,32 @@ func TestTwoKeysInOneTenantShareARequestTenant(t *testing.T) {
 	secondRequest, status := authenticate(t, middleware, second.Secret)
 	require.Equal(t, http.StatusOK, status)
 
-	assert.Equal(t, "acme", firstRequest.tenantID)
-	assert.Equal(t, "acme", secondRequest.tenantID)
-	assert.Equal(t, firstRequest.tenantID, secondRequest.tenantID,
-		"two keys issued to one tenant must produce one request tenant")
+	assert.Equal(t, "acme", firstRequest.accountID)
+	assert.Equal(t, "acme", secondRequest.accountID)
+	assert.Equal(t, firstRequest.accountID, secondRequest.accountID,
+		"two keys issued to one account must produce one request account")
 
-	// The key still travels, and it is not the tenant. Usage attribution and
+	// The key still travels, and it is not the account. Usage attribution and
 	// per-key limits read this value, so collapsing the two would silently
 	// re-key every usage record onto the account.
 	assert.Equal(t, first.APIKey.ID, firstRequest.keyID)
 	assert.Equal(t, second.APIKey.ID, secondRequest.keyID)
 	assert.NotEqual(t, firstRequest.keyID, secondRequest.keyID)
-	assert.NotEqual(t, firstRequest.keyID, firstRequest.tenantID,
-		"the request key ID and the request tenant must stay distinct values")
+	assert.NotEqual(t, firstRequest.keyID, firstRequest.accountID,
+		"the request key ID and the request account must stay distinct values")
 }
 
-// TestKeyWithNoTenantResolvesToDefault proves the resolution contract holds at
+// TestKeyWithNoAccountResolvesToDefault proves the resolution contract holds at
 // read time and not only at issue time.
-func TestKeyWithNoTenantResolvesToDefault(t *testing.T) {
+func TestKeyWithNoAccountResolvesToDefault(t *testing.T) {
 	store := storage.NewMockStore()
 	identities, err := identity.Open(store)
 	require.NoError(t, err)
 
-	secret := "sk-starport-untenanted"
+	secret := "sk-starport-unaccounted"
 	_, err = identities.Create(context.Background(), identity.APIKey{
-		ID:     "STARPORT_untenanted",
-		Name:   "Untenanted",
+		ID:     "STARPORT_unaccounted",
+		Name:   "Unaccounted",
 		Hash:   hashSecret(secret),
 		Scopes: []string{"chat:write"},
 		Active: true,
@@ -114,16 +114,16 @@ func TestKeyWithNoTenantResolvesToDefault(t *testing.T) {
 
 	resolved, status := authenticate(t, NewAuthMiddleware(identities), secret)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, tenant.DefaultID, resolved.tenantID)
-	assert.Equal(t, "STARPORT_untenanted", resolved.keyID)
+	assert.Equal(t, account.DefaultID, resolved.accountID)
+	assert.Equal(t, "STARPORT_unaccounted", resolved.keyID)
 }
 
-// TestUnauthenticatedRequestTenantIsDecidedInOnePlace pins the seam AON6
+// TestUnauthenticatedRequestAccountIsDecidedInOnePlace pins the seam AON6
 // extends when an operator disables authentication. A request with no
 // authenticated identity still has to attribute usage and select credentials,
-// and TenantIDOrDefault is the only place that decides which account it uses.
-func TestUnauthenticatedRequestTenantIsDecidedInOnePlace(t *testing.T) {
-	assert.Equal(t, tenant.DefaultID, requestctx.TenantIDOrDefault(context.Background()))
+// and AccountIDOrDefault is the only place that decides which account it uses.
+func TestUnauthenticatedRequestAccountIsDecidedInOnePlace(t *testing.T) {
+	assert.Equal(t, account.DefaultID, requestctx.AccountIDOrDefault(context.Background()))
 }
 
 // hashSecret mirrors how RequireAPIKey looks a secret up.

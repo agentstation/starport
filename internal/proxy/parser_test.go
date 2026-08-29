@@ -73,7 +73,7 @@ func (r *recognizingRouter) RouteDocumentRecognition(
 func parsedRequest(t *testing.T, fixture string, engine inference.ParserEngine) *ChatCompletionRequest {
 	t.Helper()
 	request := &ChatCompletionRequest{
-		TenantID: "tenant-a",
+		AccountID: "account-a",
 		Request: inference.ChatRequest{
 			Model: "openai/gpt-4o",
 			Messages: []inference.Message{{
@@ -143,7 +143,7 @@ func TestAScannedDocumentReachesRecognitionThenTheChatModel(t *testing.T) {
 		"the recognizer was not told how many pages it must return")
 	require.Empty(t, router.asked.Request.Model,
 		"a named model here would be an engine table beside the catalog's")
-	require.Equal(t, "tenant-a", router.asked.TenantID,
+	require.Equal(t, "account-a", router.asked.AccountID,
 		"the recognition read was charged to no account")
 
 	sent := sentText(t, router.req)

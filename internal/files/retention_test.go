@@ -56,20 +56,20 @@ func TestDeleteMarksTheRecordBeforeItRemovesTheBytes(t *testing.T) {
 	service, records := newServiceOver(t, bytes)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	blobKey := file.blobKey
 
 	// The byte store refuses, so the delete stops between its two writes.
 	bytes.refuseKey = blobKey
-	require.Error(t, service.Delete(ctx, "tenant-a", file.ID))
+	require.Error(t, service.Delete(ctx, "account-a", file.ID))
 
 	// The record survives, marked, and no caller reads it.
-	stopped, err := records.Get(ctx, "tenant-a", file.ID)
+	stopped, err := records.Get(ctx, "account-a", file.ID)
 	require.NoError(t, err)
 	require.Equal(t, FileStateDeleting, stopped.State)
-	_, err = service.Get(ctx, "tenant-a", file.ID)
+	_, err = service.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
-	listed, err := service.List(ctx, "tenant-a", 0)
+	listed, err := service.List(ctx, "account-a", 0)
 	require.NoError(t, err)
 	require.Empty(t, listed)
 
@@ -81,7 +81,7 @@ func TestDeleteMarksTheRecordBeforeItRemovesTheBytes(t *testing.T) {
 
 	_, err = bytes.Stat(ctx, blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
-	_, err = records.Get(ctx, "tenant-a", file.ID)
+	_, err = records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 
 	// A second sweep is safe. The gateway runs it on a ticker.
@@ -98,12 +98,12 @@ func TestDeleteRemovesBothWritesWhenNothingFails(t *testing.T) {
 	service, records, bytes := newService(t)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
-	require.NoError(t, service.Delete(ctx, "tenant-a", file.ID))
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
+	require.NoError(t, service.Delete(ctx, "account-a", file.ID))
 
 	_, err := bytes.Stat(ctx, file.blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
-	_, err = records.Get(ctx, "tenant-a", file.ID)
+	_, err = records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 }
 
@@ -122,28 +122,28 @@ func TestExpiredFileReadsAsNotFoundBeforeTheSweep(t *testing.T) {
 	)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	require.Equal(t, created.Add(24*time.Hour), file.ExpiresAt)
 
 	// One second before the window closes the file still reads.
 	clock = file.ExpiresAt.Add(-time.Second)
-	found, err := service.Get(ctx, "tenant-a", file.ID)
+	found, err := service.Get(ctx, "account-a", file.ID)
 	require.NoError(t, err)
 	require.Equal(t, file.ID, found.ID)
 
 	// At the window it stops, with no sweep between the two reads.
 	clock = file.ExpiresAt
-	_, err = service.Get(ctx, "tenant-a", file.ID)
+	_, err = service.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
-	_, _, err = service.Open(ctx, "tenant-a", file.ID)
+	_, _, err = service.Open(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
-	listed, err := service.List(ctx, "tenant-a", 0)
+	listed, err := service.List(ctx, "account-a", 0)
 	require.NoError(t, err)
 	require.Empty(t, listed)
 
 	// The record and its bytes are still there, because only the sweep
 	// reclaims storage.
-	_, err = records.Get(ctx, "tenant-a", file.ID)
+	_, err = records.Get(ctx, "account-a", file.ID)
 	require.NoError(t, err)
 	_, err = bytes.Stat(ctx, file.blobKey)
 	require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestExpiredFileReadsAsNotFoundBeforeTheSweep(t *testing.T) {
 	require.Equal(t, 1, result.Expired)
 	_, err = bytes.Stat(ctx, file.blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
-	_, err = records.Get(ctx, "tenant-a", file.ID)
+	_, err = records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 }
 
@@ -171,7 +171,7 @@ func TestUploadShortensTheWindowAndNeverExtendsIt(t *testing.T) {
 	ctx := context.Background()
 
 	shortened, err := service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "notes.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "notes.txt", Purpose: PurposeUserData,
 		Retention: 2 * time.Hour,
 	}, strings.NewReader("the payload"))
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestUploadShortensTheWindowAndNeverExtendsIt(t *testing.T) {
 	// A longer window is refused rather than clamped. A caller that asked for a
 	// year and silently got a day would find out when the file stopped reading.
 	_, err = service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "notes.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "notes.txt", Purpose: PurposeUserData,
 		Retention: 365 * 24 * time.Hour,
 	}, strings.NewReader("the payload"))
 	require.ErrorIs(t, err, ErrRetentionTooLong)
@@ -188,7 +188,7 @@ func TestUploadShortensTheWindowAndNeverExtendsIt(t *testing.T) {
 	// A window shorter than an hour would expire a file while the request that
 	// stored it is still running.
 	_, err = service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "notes.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "notes.txt", Purpose: PurposeUserData,
 		Retention: time.Minute,
 	}, strings.NewReader("the payload"))
 	require.ErrorIs(t, err, ErrRetentionTooShort)
@@ -202,7 +202,7 @@ func TestEveryStoredFileStatesAWindow(t *testing.T) {
 	created := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 	service, _, _ := newService(t, WithClock(func() time.Time { return created }))
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	require.False(t, file.ExpiresAt.IsZero(), "the record states no window")
 	require.Equal(t, created.Add(DefaultRetention), file.ExpiresAt)
 }
@@ -227,7 +227,7 @@ func TestSweepContinuesPastAFailingRecord(t *testing.T) {
 	ctx := context.Background()
 
 	stuck, err := service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "stuck.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "stuck.txt", Purpose: PurposeUserData,
 	}, strings.NewReader("the payload"))
 	require.NoError(t, err)
 
@@ -235,13 +235,13 @@ func TestSweepContinuesPastAFailingRecord(t *testing.T) {
 	// what decides which one the sweep reaches.
 	clock = created.Add(time.Second)
 	healthy, err := service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "healthy.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "healthy.txt", Purpose: PurposeUserData,
 	}, strings.NewReader("the payload"))
 	require.NoError(t, err)
 
 	// The delete of the first one stops, which leaves it marked and failing.
 	bytes.refuseKey = stuck.blobKey
-	require.Error(t, service.Delete(ctx, "tenant-a", stuck.ID))
+	require.Error(t, service.Delete(ctx, "account-a", stuck.ID))
 
 	// Both files are now past the window, and the byte store still refuses one.
 	clock = created.Add(2 * time.Hour)
@@ -252,9 +252,9 @@ func TestSweepContinuesPastAFailingRecord(t *testing.T) {
 	// The healthy record went, and only the failing one stayed.
 	require.Equal(t, 1, result.Expired)
 	require.Equal(t, 0, result.Resumed)
-	_, err = records.Get(ctx, "tenant-a", healthy.ID)
+	_, err = records.Get(ctx, "account-a", healthy.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
-	remaining, err := records.Get(ctx, "tenant-a", stuck.ID)
+	remaining, err := records.Get(ctx, "account-a", stuck.ID)
 	require.NoError(t, err)
 	require.Equal(t, FileStateDeleting, remaining.State)
 }

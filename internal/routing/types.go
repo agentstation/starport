@@ -116,8 +116,8 @@ type Snapshot struct {
 	Candidates           []Candidate
 }
 
-// TenantPolicy defines the caller's hard model and provider boundaries.
-type TenantPolicy struct {
+// AccountPolicy defines the caller's hard model and provider boundaries.
+type AccountPolicy struct {
 	AllowedModels    []string
 	AllowedProviders []string
 	ModelOverrides   map[string]string
@@ -155,7 +155,7 @@ type Request struct {
 	RequiredContextTokens int
 	EstimatedInputTokens  int
 	EstimatedOutputTokens int
-	Tenant                TenantPolicy
+	Account               AccountPolicy
 	Providers             ProviderPolicy
 	AffinityProvider      string
 	Optimization          OptimizationPolicy
@@ -191,10 +191,10 @@ const (
 	RejectionUnavailable RejectionCode = "unavailable"
 	// RejectionUnhealthy means runtime health disabled the offering.
 	RejectionUnhealthy RejectionCode = "unhealthy"
-	// RejectionTenantModel means tenant policy denied the model.
-	RejectionTenantModel RejectionCode = "tenant_model"
-	// RejectionTenantProvider means tenant policy denied the provider.
-	RejectionTenantProvider RejectionCode = "tenant_provider"
+	// RejectionAccountModel means account policy denied the model.
+	RejectionAccountModel RejectionCode = "account_model"
+	// RejectionAccountProvider means account policy denied the provider.
+	RejectionAccountProvider RejectionCode = "account_provider"
 	// RejectionProviderPolicy means request provider policy denied the route.
 	RejectionProviderPolicy RejectionCode = "provider_policy"
 	// RejectionMissingCapability means the route lacks a required capability.

@@ -26,7 +26,7 @@ var (
 	// local admin token belongs.
 	//
 	// It is deliberately a distinct answer. The two credentials are different
-	// ideas — one authenticates a tenant's inference request, the other is a
+	// ideas — one authenticates an account's inference request, the other is a
 	// claim about sitting at this machine — and a reader who has confused them
 	// learns nothing from a refusal that also covers a wrong secret. Naming the
 	// mistake narrows no search space, because the prefix the reader typed is

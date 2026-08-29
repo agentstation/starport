@@ -7,20 +7,20 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/limits"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // APIKey is one gateway authentication identity. It authenticates a request
 // and carries scopes. What the request may reach and how much it may spend
-// belong to the tenant this key names.
+// belong to the account this key names.
 type APIKey struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Hash string `json:"hash"`
-	// TenantID names the account this key belongs to. An empty value means
-	// the canonical tenant; see ResolveTenantID.
-	TenantID      string         `json:"tenant_id,omitempty"`
+	// AccountID names the account this key belongs to. An empty value means
+	// the canonical account; see ResolveAccountID.
+	AccountID     string         `json:"account_id,omitempty"`
 	Scopes        []string       `json:"scopes"`
 	AllowedModels []string       `json:"allowed_models,omitempty"`
 	Limits        *limits.Limits `json:"limits,omitempty"`
@@ -30,19 +30,19 @@ type APIKey struct {
 	ExpiresAt     *time.Time     `json:"expires_at,omitempty"`
 }
 
-// ResolveTenantID maps a key's stored tenant to the tenant a request runs
-// under. An empty value resolves to the canonical tenant. This is a permanent
+// ResolveAccountID maps a key's stored account to the account a request runs
+// under. An empty value resolves to the canonical account. This is a permanent
 // contract rather than a compatibility shim: a key that names no account
 // belongs to the default account, at issue time and at read time alike.
-func ResolveTenantID(value string) string {
+func ResolveAccountID(value string) string {
 	if value == "" {
-		return tenant.DefaultID
+		return account.DefaultID
 	}
 	return value
 }
 
-// EffectiveTenantID returns the tenant this key runs under.
-func (k APIKey) EffectiveTenantID() string { return ResolveTenantID(k.TenantID) }
+// EffectiveAccountID returns the account this key runs under.
+func (k APIKey) EffectiveAccountID() string { return ResolveAccountID(k.AccountID) }
 
 var (
 	// ErrMissingID reports an identity without a durable ID.
@@ -59,8 +59,8 @@ var (
 	ErrInvalidModel = errors.New("invalid model: must be non-empty")
 	// ErrInvalidExpiration reports an expiration before identity creation.
 	ErrInvalidExpiration = errors.New("expires_at must be after created_at")
-	// ErrUnknownTenant reports a key that names an account that does not exist.
-	ErrUnknownTenant = errors.New("api key names a tenant that does not exist")
+	// ErrUnknownAccount reports a key that names an account that does not exist.
+	ErrUnknownAccount = errors.New("api key names an account that does not exist")
 )
 
 var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
@@ -100,8 +100,8 @@ func (k APIKey) Validate() error {
 			return ErrInvalidModel
 		}
 	}
-	if k.TenantID != "" {
-		if err := tenant.ValidateID(k.TenantID); err != nil {
+	if k.AccountID != "" {
+		if err := account.ValidateID(k.AccountID); err != nil {
 			return err
 		}
 	}

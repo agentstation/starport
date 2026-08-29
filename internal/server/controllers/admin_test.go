@@ -9,10 +9,10 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
-	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -25,18 +25,18 @@ func newAdminTestController(t *testing.T) (*AdminController, identity.Repository
 	require.NoError(t, err)
 	usageRecords, err := usage.Open(storage.NewMockStore(), usage.Options{})
 	require.NoError(t, err)
-	return NewAdminController(repository, newAdminTestTenants(t), usageRecords), repository
+	return NewAdminController(repository, newAdminTestAccounts(t), usageRecords), repository
 }
 
-// newAdminTestTenants returns a tenant repository holding the canonical tenant,
-// which is what every key issued without an explicit tenant resolves to.
-func newAdminTestTenants(t *testing.T) tenant.Repository {
+// newAdminTestAccounts returns an account repository holding the canonical account,
+// which is what every key issued without an explicit account resolves to.
+func newAdminTestAccounts(t *testing.T) account.Repository {
 	t.Helper()
-	tenants, err := tenant.Open(storage.NewMockStore())
+	accounts, err := account.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	_, err = tenants.EnsureDefault(context.Background())
+	_, err = accounts.EnsureDefault(context.Background())
 	require.NoError(t, err)
-	return tenants
+	return accounts
 }
 
 func createAdminTestIdentity(t *testing.T, repository identity.Repository, apiKey identity.APIKey) {
@@ -83,7 +83,7 @@ func TestAdminHandler_SystemInfo(t *testing.T) {
 func TestSystemInfoNamesTheFileBackend(t *testing.T) {
 	repository, err := identity.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	handler := NewAdminController(repository, newAdminTestTenants(t), nil,
+	handler := NewAdminController(repository, newAdminTestAccounts(t), nil,
 		WithFileStorage("filesystem"))
 
 	response := httptest.NewRecorder()
@@ -430,14 +430,14 @@ func createKeyRequest(t *testing.T, handler *AdminController, body map[string]an
 	return recorder
 }
 
-// TestAdminCreateKeyReportsTheOwningTenant proves the account a key belongs to
-// is visible on the wire. Without it an operator cannot tell which tenant's
+// TestAdminCreateKeyReportsTheOwningAccount proves the account a key belongs to
+// is visible on the wire. Without it an operator cannot tell which account's
 // limits and credentials a key will resolve to.
-func TestAdminCreateKeyReportsTheOwningTenant(t *testing.T) {
+func TestAdminCreateKeyReportsTheOwningAccount(t *testing.T) {
 	handler, _ := newAdminTestController(t)
 
 	recorder := createKeyRequest(t, handler, map[string]any{
-		"name":   "Default-Tenant-Key",
+		"name":   "Default-Account-Key",
 		"scopes": []string{"chat:write"},
 	})
 	require.Equal(t, http.StatusCreated, recorder.Code)
@@ -448,19 +448,19 @@ func TestAdminCreateKeyReportsTheOwningTenant(t *testing.T) {
 	require.True(t, ok)
 	// A key that names no account belongs to the canonical one, and the
 	// response says so rather than leaving the field empty.
-	assert.Equal(t, tenant.DefaultID, keyInfo["tenant_id"])
+	assert.Equal(t, account.DefaultID, keyInfo["account_id"])
 }
 
-// TestAdminCreateKeyRefusesAnUnknownTenant is the AON2 acceptance case at the
+// TestAdminCreateKeyRefusesAnUnknownAccount is the AON2 acceptance case at the
 // HTTP boundary. Naming an account that does not exist is the caller's mistake,
 // so it answers 400 rather than 500 and stores nothing.
-func TestAdminCreateKeyRefusesAnUnknownTenant(t *testing.T) {
+func TestAdminCreateKeyRefusesAnUnknownAccount(t *testing.T) {
 	handler, identities := newAdminTestController(t)
 
 	recorder := createKeyRequest(t, handler, map[string]any{
-		"name":      "Ghost-Key",
-		"tenant_id": "does-not-exist",
-		"scopes":    []string{"chat:write"},
+		"name":       "Ghost-Key",
+		"account_id": "does-not-exist",
+		"scopes":     []string{"chat:write"},
 	})
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 
@@ -469,18 +469,18 @@ func TestAdminCreateKeyRefusesAnUnknownTenant(t *testing.T) {
 	assert.Empty(t, records, "a refused creation must store no key")
 }
 
-// TestAdminCreateKeyRefusesAMalformedTenantID guards the credential storage
-// key. A tenant ID becomes part of a credential scope, so a separator or a
+// TestAdminCreateKeyRefusesAMalformedAccountID guards the credential storage
+// key. An account ID becomes part of a credential scope, so a separator or a
 // wildcard inside one must never reach storage.
-func TestAdminCreateKeyRefusesAMalformedTenantID(t *testing.T) {
+func TestAdminCreateKeyRefusesAMalformedAccountID(t *testing.T) {
 	handler, _ := newAdminTestController(t)
 
-	for _, tenantID := range []string{"acme corp", "acme/eu", "*", "tenant:acme"} {
+	for _, accountID := range []string{"acme corp", "acme/eu", "*", "account:acme"} {
 		recorder := createKeyRequest(t, handler, map[string]any{
-			"name":      "Bad-Key",
-			"tenant_id": tenantID,
-			"scopes":    []string{"chat:write"},
+			"name":       "Bad-Key",
+			"account_id": accountID,
+			"scopes":     []string{"chat:write"},
 		})
-		assert.Equalf(t, http.StatusBadRequest, recorder.Code, "tenant %q", tenantID)
+		assert.Equalf(t, http.StatusBadRequest, recorder.Code, "account %q", accountID)
 	}
 }

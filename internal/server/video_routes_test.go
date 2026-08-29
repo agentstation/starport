@@ -130,7 +130,7 @@ func TestVideoJobOfAnotherAccountIsNotFound(t *testing.T) {
 	_, err = records.Get(t.Context(), "globex", owned.ID)
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 
-	stranger := storeFileTestKeyForTenant(t, server, "video-stranger", "globex", "videos:write")
+	stranger := storeFileTestKeyForAccount(t, server, "video-stranger", "globex", "videos:write")
 	for _, path := range []string{
 		"/v1/videos/" + owned.ID,
 		"/v1/videos/" + owned.ID + "/content",
@@ -147,7 +147,7 @@ func TestVideoJobOfAnotherAccountIsNotFound(t *testing.T) {
 
 	// The owner still reads its own job, so the answer above is about the
 	// account and not about a record no one can reach.
-	owner := storeFileTestKeyForTenant(t, server, "video-owner", "acme", "videos:write")
+	owner := storeFileTestKeyForAccount(t, server, "video-owner", "acme", "videos:write")
 	listed := videoRequest(server, http.MethodGet, "/v1/videos", owner)
 	require.Equal(t, http.StatusOK, listed.Code, listed.Body.String())
 	require.Contains(t, listed.Body.String(), owned.ID)

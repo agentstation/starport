@@ -90,7 +90,7 @@ func cacheFixture(t *testing.T) (*document.Cache, *memoryStore, *testClock) {
 
 func recognitionKey() document.CacheKey {
 	return document.CacheKey{
-		AccountID:   "tenant-a",
+		AccountID:   "account-a",
 		ContentHash: document.ContentHash([]byte("%PDF-1.7 scanned invoice")),
 		Engine:      "mistral-ocr",
 		Generation:  "catalog-generation-7",
@@ -127,8 +127,8 @@ func TestTheSameBytesAreReadOnceForOneAccountEngineAndGeneration(t *testing.T) {
 }
 
 // TestAnotherAccountGetsItsOwnEntry holds the account scope. The bytes are
-// identical and the read still happens again, because one tenant's upload is
-// not another tenant's to read back.
+// identical and the read still happens again, because one account's upload is
+// not another account's to read back.
 func TestAnotherAccountGetsItsOwnEntry(t *testing.T) {
 	t.Parallel()
 	cache, _, _ := cacheFixture(t)
@@ -137,7 +137,7 @@ func TestAnotherAccountGetsItsOwnEntry(t *testing.T) {
 	require.NoError(t, cache.Put(ctx, paid, document.Reading{Text: "Invoice 4021", Pages: 3}))
 
 	other := paid
-	other.AccountID = "tenant-b"
+	other.AccountID = "account-b"
 	require.Equal(t, paid.ContentHash, other.ContentHash)
 
 	_, found, err := cache.Get(ctx, other)
@@ -275,7 +275,7 @@ func TestACorruptRecordIsAMissRatherThanText(t *testing.T) {
 	// key it names is what proves the store returned the entry that was asked
 	// for.
 	other := recognitionKey()
-	other.AccountID = "tenant-b"
+	other.AccountID = "account-b"
 	require.NoError(t, cache.Put(ctx, other, document.Reading{Text: "Invoice 4021"}))
 	stolen, found, err := store.Get(ctx, other.String())
 	require.NoError(t, err)
@@ -328,13 +328,13 @@ func TestTheStoreKeyRevealsNoDocument(t *testing.T) {
 	require.NotContains(t, stored, key.Generation)
 
 	confusable := document.CacheKey{
-		AccountID:   "tenant",
+		AccountID:   "account",
 		ContentHash: "a:b",
 		Engine:      "native",
 		Generation:  "gen",
 	}
 	shifted := document.CacheKey{
-		AccountID:   "tenant",
+		AccountID:   "account",
 		ContentHash: "a",
 		Engine:      "b:native",
 		Generation:  "gen",

@@ -1,4 +1,4 @@
-package tenant
+package account
 
 import (
 	"context"
@@ -14,42 +14,42 @@ import (
 )
 
 const (
-	// StorageSchemaVersion identifies the only supported tenant schema.
+	// StorageSchemaVersion identifies the only supported account schema.
 	StorageSchemaVersion = 1
-	// StoragePrefix is the tenant v1 storage namespace.
-	StoragePrefix = "tenant:v1:"
+	// StoragePrefix is the account v1 storage namespace.
+	StoragePrefix = "account:v1:"
 
-	tenantKeyPrefix  = StoragePrefix + "tenant:"
+	accountKeyPrefix = StoragePrefix + "account:"
 	defaultListLimit = 1000
 )
 
 var (
 	// ErrRepositoryRequired reports a missing storage adapter.
-	ErrRepositoryRequired = errors.New("tenant storage is required")
-	// ErrNotFound reports a missing tenant.
-	ErrNotFound = errors.New("tenant not found")
-	// ErrConflict reports an existing tenant or a stale revision.
-	ErrConflict = errors.New("tenant revision conflict")
-	// ErrCorruptRecord reports invalid durable tenant data.
-	ErrCorruptRecord = errors.New("tenant record is invalid")
-	// ErrDefaultImmutable reports an attempt to delete the canonical tenant.
-	ErrDefaultImmutable = errors.New("the default tenant cannot be deleted")
+	ErrRepositoryRequired = errors.New("account storage is required")
+	// ErrNotFound reports a missing account.
+	ErrNotFound = errors.New("account not found")
+	// ErrConflict reports an existing account or a stale revision.
+	ErrConflict = errors.New("account revision conflict")
+	// ErrCorruptRecord reports invalid durable account data.
+	ErrCorruptRecord = errors.New("account record is invalid")
+	// ErrDefaultImmutable reports an attempt to delete the canonical account.
+	ErrDefaultImmutable = errors.New("the default account cannot be deleted")
 )
 
-// Record is one versioned tenant repository value.
+// Record is one versioned account repository value.
 type Record struct {
 	Revision uint64
-	Tenant   Tenant
+	Account  Account
 }
 
-// Repository is the durable tenant contract.
+// Repository is the durable account contract.
 type Repository interface {
-	Create(context.Context, Tenant) (Record, error)
+	Create(context.Context, Account) (Record, error)
 	EnsureDefault(context.Context) (Record, error)
 	GetByID(context.Context, string) (Record, error)
 	Exists(context.Context, string) (bool, error)
 	List(context.Context, int, int) ([]Record, error)
-	Update(context.Context, Tenant, uint64) (Record, error)
+	Update(context.Context, Account, uint64) (Record, error)
 	Delete(context.Context, string, uint64) error
 }
 
@@ -58,13 +58,13 @@ type repository struct {
 	now   func() time.Time
 }
 
-type tenantRecord struct {
-	SchemaVersion int    `json:"schema_version"`
-	Revision      uint64 `json:"revision"`
-	Tenant        Tenant `json:"tenant"`
+type accountRecord struct {
+	SchemaVersion int     `json:"schema_version"`
+	Revision      uint64  `json:"revision"`
+	Account       Account `json:"account"`
 }
 
-// Open returns a storage-backed tenant repository.
+// Open returns a storage-backed account repository.
 func Open(store storage.KVStore) (Repository, error) {
 	if store == nil {
 		return nil, ErrRepositoryRequired
@@ -72,28 +72,28 @@ func Open(store storage.KVStore) (Repository, error) {
 	return &repository{store: store, now: time.Now}, nil
 }
 
-func (r *repository) Create(ctx context.Context, value Tenant) (Record, error) {
+func (r *repository) Create(ctx context.Context, value Account) (Record, error) {
 	if err := value.Validate(); err != nil {
 		return Record{}, err
 	}
-	stored := tenantRecord{
+	stored := accountRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      1,
-		Tenant:        cloneTenant(value),
+		Account:       cloneAccount(value),
 	}
 	data, err := json.Marshal(stored)
 	if err != nil {
-		return Record{}, fmt.Errorf("encode tenant record: %w", err)
+		return Record{}, fmt.Errorf("encode account record: %w", err)
 	}
 	// A nil ExpectedValue on an absent key creates. On a present key it
 	// conflicts, so two concurrent creates cannot both win.
-	if err := r.store.CompareAndSwap(ctx, tenantStorageKey(value.ID), nil, data); err != nil {
-		return Record{}, mapConflict("create tenant", err)
+	if err := r.store.CompareAndSwap(ctx, accountStorageKey(value.ID), nil, data); err != nil {
+		return Record{}, mapConflict("create account", err)
 	}
-	return Record{Revision: stored.Revision, Tenant: stored.Tenant}, nil
+	return Record{Revision: stored.Revision, Account: stored.Account}, nil
 }
 
-// EnsureDefault creates the canonical tenant once and is safe to call on every
+// EnsureDefault creates the canonical account once and is safe to call on every
 // boot and from concurrent processes. A create that loses the race reads the
 // winner rather than failing startup.
 func (r *repository) EnsureDefault(ctx context.Context) (Record, error) {
@@ -107,7 +107,7 @@ func (r *repository) EnsureDefault(ctx context.Context) (Record, error) {
 	created := r.now().UTC()
 	// The strategy is written rather than left empty so the stored record
 	// states the policy instead of relying on a zero-value reading.
-	record, err := r.Create(ctx, Tenant{
+	record, err := r.Create(ctx, Account{
 		ID:                 DefaultID,
 		Name:               DefaultName,
 		CredentialStrategy: StrategyOperatorFirst,
@@ -128,21 +128,21 @@ func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {
 	if strings.TrimSpace(id) == "" {
 		return Record{}, ErrMissingID
 	}
-	data, err := r.store.Get(ctx, tenantStorageKey(id))
+	data, err := r.store.Get(ctx, accountStorageKey(id))
 	if err != nil {
-		return Record{}, mapReadError("get tenant", err)
+		return Record{}, mapReadError("get account", err)
 	}
-	stored, err := decodeTenant(data)
+	stored, err := decodeAccount(data)
 	if err != nil {
 		return Record{}, err
 	}
-	if stored.Tenant.ID != id {
-		return Record{}, fmt.Errorf("%w: tenant ID does not match its key", ErrCorruptRecord)
+	if stored.Account.ID != id {
+		return Record{}, fmt.Errorf("%w: account ID does not match its key", ErrCorruptRecord)
 	}
-	return Record{Revision: stored.Revision, Tenant: stored.Tenant}, nil
+	return Record{Revision: stored.Revision, Account: stored.Account}, nil
 }
 
-// Exists reports whether a tenant is present. A caller that only needs the
+// Exists reports whether an account is present. A caller that only needs the
 // answer should not have to distinguish ErrNotFound from a storage failure.
 func (r *repository) Exists(ctx context.Context, id string) (bool, error) {
 	if _, err := r.GetByID(ctx, id); err != nil {
@@ -163,9 +163,9 @@ func (r *repository) List(ctx context.Context, limit, offset int) ([]Record, err
 	}
 	// The store scan order is not a contract, so stable pagination needs the
 	// full sorted key set before slicing.
-	keys, err := r.store.ScanWithPrefix(ctx, tenantKeyPrefix, 0)
+	keys, err := r.store.ScanWithPrefix(ctx, accountKeyPrefix, 0)
 	if err != nil {
-		return nil, fmt.Errorf("list tenant keys: %w", err)
+		return nil, fmt.Errorf("list account keys: %w", err)
 	}
 	sort.Strings(keys)
 	if offset >= len(keys) {
@@ -179,110 +179,110 @@ func (r *repository) List(ctx context.Context, limit, offset int) ([]Record, err
 	for _, key := range keys {
 		data, err := r.store.Get(ctx, key)
 		if err != nil {
-			return nil, mapReadError("read listed tenant", err)
+			return nil, mapReadError("read listed account", err)
 		}
-		stored, err := decodeTenant(data)
+		stored, err := decodeAccount(data)
 		if err != nil {
 			return nil, err
 		}
-		records = append(records, Record{Revision: stored.Revision, Tenant: stored.Tenant})
+		records = append(records, Record{Revision: stored.Revision, Account: stored.Account})
 	}
 	return records, nil
 }
 
-func (r *repository) Update(ctx context.Context, value Tenant, expectedRevision uint64) (Record, error) {
+func (r *repository) Update(ctx context.Context, value Account, expectedRevision uint64) (Record, error) {
 	if err := ValidateID(value.ID); err != nil {
 		return Record{}, err
 	}
-	currentData, err := r.store.Get(ctx, tenantStorageKey(value.ID))
+	currentData, err := r.store.Get(ctx, accountStorageKey(value.ID))
 	if err != nil {
-		return Record{}, mapReadError("get tenant for update", err)
+		return Record{}, mapReadError("get account for update", err)
 	}
-	current, err := decodeTenant(currentData)
+	current, err := decodeAccount(currentData)
 	if err != nil {
 		return Record{}, err
 	}
 	if current.Revision != expectedRevision {
 		return Record{}, ErrConflict
 	}
-	updatedTenant := cloneTenant(value)
+	updatedAccount := cloneAccount(value)
 	// Creation time is a property of the record, not of the caller's payload.
 	// The timestamps are stamped before validation so the check reads the
 	// record this call actually writes.
-	updatedTenant.CreatedAt = current.Tenant.CreatedAt
-	updatedTenant.UpdatedAt = r.now().UTC()
-	if err := updatedTenant.Validate(); err != nil {
+	updatedAccount.CreatedAt = current.Account.CreatedAt
+	updatedAccount.UpdatedAt = r.now().UTC()
+	if err := updatedAccount.Validate(); err != nil {
 		return Record{}, err
 	}
-	updated := tenantRecord{
+	updated := accountRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      current.Revision + 1,
-		Tenant:        updatedTenant,
+		Account:       updatedAccount,
 	}
 	updatedData, err := json.Marshal(updated)
 	if err != nil {
-		return Record{}, fmt.Errorf("encode tenant update: %w", err)
+		return Record{}, fmt.Errorf("encode account update: %w", err)
 	}
-	if err := r.store.CompareAndSwap(ctx, tenantStorageKey(value.ID), currentData, updatedData); err != nil {
-		return Record{}, mapConflict("update tenant", err)
+	if err := r.store.CompareAndSwap(ctx, accountStorageKey(value.ID), currentData, updatedData); err != nil {
+		return Record{}, mapConflict("update account", err)
 	}
-	return Record{Revision: updated.Revision, Tenant: updated.Tenant}, nil
+	return Record{Revision: updated.Revision, Account: updated.Account}, nil
 }
 
 func (r *repository) Delete(ctx context.Context, id string, expectedRevision uint64) error {
 	if strings.TrimSpace(id) == "" {
 		return ErrMissingID
 	}
-	// Every gateway API key resolves to a tenant, and a key with no explicit
-	// tenant resolves to this one. Removing it would strand those keys.
+	// Every gateway API key resolves to an account, and a key with no explicit
+	// account resolves to this one. Removing it would strand those keys.
 	if id == DefaultID {
 		return ErrDefaultImmutable
 	}
-	data, err := r.store.Get(ctx, tenantStorageKey(id))
+	data, err := r.store.Get(ctx, accountStorageKey(id))
 	if err != nil {
-		return mapReadError("get tenant for delete", err)
+		return mapReadError("get account for delete", err)
 	}
-	stored, err := decodeTenant(data)
+	stored, err := decodeAccount(data)
 	if err != nil {
 		return err
 	}
 	if expectedRevision != 0 && stored.Revision != expectedRevision {
 		return ErrConflict
 	}
-	if err := r.store.CompareAndSwap(ctx, tenantStorageKey(id), data, nil); err != nil {
-		return mapConflict("delete tenant", err)
+	if err := r.store.CompareAndSwap(ctx, accountStorageKey(id), data, nil); err != nil {
+		return mapConflict("delete account", err)
 	}
 	return nil
 }
 
-func decodeTenant(data []byte) (tenantRecord, error) {
-	var stored tenantRecord
+func decodeAccount(data []byte) (accountRecord, error) {
+	var stored accountRecord
 	if err := json.Unmarshal(data, &stored); err != nil {
-		return tenantRecord{}, fmt.Errorf("%w: %s", ErrCorruptRecord, err)
+		return accountRecord{}, fmt.Errorf("%w: %s", ErrCorruptRecord, err)
 	}
 	if stored.SchemaVersion != StorageSchemaVersion {
-		return tenantRecord{}, fmt.Errorf(
+		return accountRecord{}, fmt.Errorf(
 			"%w: unsupported schema version %d",
 			ErrCorruptRecord,
 			stored.SchemaVersion,
 		)
 	}
 	if stored.Revision == 0 {
-		return tenantRecord{}, fmt.Errorf("%w: tenant revision is zero", ErrCorruptRecord)
+		return accountRecord{}, fmt.Errorf("%w: account revision is zero", ErrCorruptRecord)
 	}
-	if err := stored.Tenant.Validate(); err != nil {
-		return tenantRecord{}, fmt.Errorf("%w: %s", ErrCorruptRecord, err)
+	if err := stored.Account.Validate(); err != nil {
+		return accountRecord{}, fmt.Errorf("%w: %s", ErrCorruptRecord, err)
 	}
 	return stored, nil
 }
 
-func tenantStorageKey(id string) string { return tenantKeyPrefix + encodePart(id) }
+func accountStorageKey(id string) string { return accountKeyPrefix + encodePart(id) }
 
 func encodePart(value string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(value))
 }
 
-func cloneTenant(value Tenant) Tenant {
+func cloneAccount(value Account) Account {
 	clone := value
 	clone.Limits = value.Limits.Clone()
 	clone.Metadata = cloneMap(value.Metadata)

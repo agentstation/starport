@@ -88,7 +88,7 @@ func keyedFields() []keyedField {
 // baselineIdentity is one eligible text request that every case starts from.
 func baselineIdentity() ChatIdentity {
 	return ChatIdentity{
-		TenantID:          "tenant",
+		AccountID:         "account",
 		CatalogGeneration: "generation",
 		Request: inference.ChatRequest{
 			Model: "openai/gpt-4.1",

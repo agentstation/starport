@@ -76,7 +76,7 @@ func (f *credentialSourceFixture) route(
 	t.Helper()
 	return f.router.RouteEmbeddings(t.Context(), &EmbeddingRequest{
 		EmbeddingsRequest: &connectors.EmbeddingsRequest{Model: "author/embed", Input: "hello"},
-		TenantID:          "tenant-a",
+		AccountID:         "account-a",
 		APIKeyConfig:      &APIKeyConfig{CredentialStrategy: strategy},
 	})
 }
@@ -113,7 +113,7 @@ func TestServedCredentialSourceNamesThePlaneThatPaid(t *testing.T) {
 		{
 			name: "byok",
 			stored: map[string]credentials.Material{
-				keyring.TenantScope("tenant-a"): embeddingTestMaterial("byok"),
+				keyring.AccountScope("account-a"): embeddingTestMaterial("byok"),
 			},
 			strategy: keyring.BYOKFirst, want: keyring.SourceBYOK,
 		},

@@ -14,11 +14,11 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server/requestctx"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // Context key type for middleware values.
@@ -137,17 +137,17 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 	})
 }
 
-// TenantReader reads one account by ID. The middleware holds this single
-// method rather than the tenant repository, so the HTTP seam never learns how
+// AccountReader reads one account by ID. The middleware holds this single
+// method rather than the account repository, so the HTTP seam never learns how
 // an account is stored or gains the power to write one.
-type TenantReader interface {
-	GetByID(ctx context.Context, id string) (tenant.Record, error)
+type AccountReader interface {
+	GetByID(ctx context.Context, id string) (account.Record, error)
 }
 
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
 	identities identity.Repository
-	tenants    TenantReader
+	accounts   AccountReader
 	// policy is the live authentication mode. It is read once per request, not
 	// once per router build, because the console can change the mode without a
 	// restart and "disabled" must not come to mean "disabled at boot". A nil
@@ -164,14 +164,14 @@ type AuthMiddleware struct {
 	sessions *localauth.Gate
 }
 
-// NewAuthMiddleware creates a new authentication middleware. The tenant reader
+// NewAuthMiddleware creates a new authentication middleware. The account reader
 // is optional: without it a request still authenticates and runs under the
 // default credential policy, because a key is a valid identity whether or not
 // the deployment can read the account behind it.
-func NewAuthMiddleware(identities identity.Repository, tenants ...TenantReader) *AuthMiddleware {
+func NewAuthMiddleware(identities identity.Repository, accounts ...AccountReader) *AuthMiddleware {
 	middleware := &AuthMiddleware{identities: identities}
-	if len(tenants) > 0 {
-		middleware.tenants = tenants[0]
+	if len(accounts) > 0 {
+		middleware.accounts = accounts[0]
 	}
 	return middleware
 }
@@ -259,12 +259,12 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		ctx := requestctx.WithAPIKey(r.Context(), apiKey)
 		ctx = requestctx.WithAPIKeyID(ctx, apiKeyModel.ID)
 		ctx = requestctx.WithAPIKeyModel(ctx, &apiKeyModel)
-		// The key authenticates. The tenant behind it decides what the request
+		// The key authenticates. The account behind it decides what the request
 		// may reach, so both travel and neither stands in for the other.
-		tenantID := apiKeyModel.EffectiveTenantID()
-		ctx = requestctx.WithTenantID(ctx, tenantID)
-		if record, ok := m.readTenant(ctx, tenantID); ok {
-			ctx = requestctx.WithTenantRecord(ctx, record)
+		accountID := apiKeyModel.EffectiveAccountID()
+		ctx = requestctx.WithAccountID(ctx, accountID)
+		if record, ok := m.readAccount(ctx, accountID); ok {
+			ctx = requestctx.WithAccountRecord(ctx, record)
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -287,10 +287,10 @@ func (m *AuthMiddleware) anonymousContext(ctx context.Context) context.Context {
 	anonymous := m.anonymous
 	ctx = requestctx.WithAPIKeyID(ctx, anonymous.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, &anonymous)
-	tenantID := anonymous.EffectiveTenantID()
-	ctx = requestctx.WithTenantID(ctx, tenantID)
-	if record, ok := m.readTenant(ctx, tenantID); ok {
-		ctx = requestctx.WithTenantRecord(ctx, record)
+	accountID := anonymous.EffectiveAccountID()
+	ctx = requestctx.WithAccountID(ctx, accountID)
+	if record, ok := m.readAccount(ctx, accountID); ok {
+		ctx = requestctx.WithAccountRecord(ctx, record)
 	}
 	return ctx
 }
@@ -330,42 +330,42 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 	operator := identity.LocalOperator()
 	ctx := requestctx.WithAPIKeyID(r.Context(), operator.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, &operator)
-	tenantID := operator.EffectiveTenantID()
-	ctx = requestctx.WithTenantID(ctx, tenantID)
-	if record, ok := m.readTenant(ctx, tenantID); ok {
-		ctx = requestctx.WithTenantRecord(ctx, record)
+	accountID := operator.EffectiveAccountID()
+	ctx = requestctx.WithAccountID(ctx, accountID)
+	if record, ok := m.readAccount(ctx, accountID); ok {
+		ctx = requestctx.WithAccountRecord(ctx, record)
 	}
 	return ctx, nil
 }
 
-// readTenant loads the account behind an authenticated key. A missing or
+// readAccount loads the account behind an authenticated key. A missing or
 // unreadable account never fails the request: the key authenticated, and the
 // governing policy falls back to the default. Refusing here would take a
 // working deployment offline for a storage fault that has a safe default.
-func (m *AuthMiddleware) readTenant(ctx context.Context, tenantID string) (*tenant.Tenant, bool) {
-	if m.tenants == nil || tenantID == "" {
+func (m *AuthMiddleware) readAccount(ctx context.Context, accountID string) (*account.Account, bool) {
+	if m.accounts == nil || accountID == "" {
 		return nil, false
 	}
-	record, err := m.tenants.GetByID(ctx, tenantID)
+	record, err := m.accounts.GetByID(ctx, accountID)
 	if err != nil {
-		if !errors.Is(err, tenant.ErrNotFound) {
-			log.Error().Err(err).Str("tenant_id", tenantID).
+		if !errors.Is(err, account.ErrNotFound) {
+			log.Error().Err(err).Str("account_id", accountID).
 				Msg("Failed to read the account behind an authenticated key")
 		}
 		return nil, false
 	}
-	governing := record.Tenant
+	governing := record.Account
 	return &governing, true
 }
 
-// RequireTenantAccess guards a route addressed by account. A caller reaches
+// RequireAccountAccess guards a route addressed by account. A caller reaches
 // its own account, and an operator holding admin reaches any account, because
-// applying a credential on a tenant's behalf is a support operation an
+// applying a credential on an account's behalf is a support operation an
 // operator has to be able to perform. Nothing else passes.
 //
 // An operator naming an account that does not exist gets 404 rather than a
-// silent write into a scope no tenant owns.
-func (m *AuthMiddleware) RequireTenantAccess(next http.Handler) http.Handler {
+// silent write into a scope no account owns.
+func (m *AuthMiddleware) RequireAccountAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKeyModel, ok := requestctx.GetAPIKeyModel(r.Context())
 		if !ok || apiKeyModel == nil {
@@ -373,13 +373,13 @@ func (m *AuthMiddleware) RequireTenantAccess(next http.Handler) http.Handler {
 			return
 		}
 
-		urlTenantID := chi.URLParam(r, "tenant_id")
-		if urlTenantID == "" {
-			writeProtocolError(w, r, http.StatusBadRequest, "invalid_request_error", "Missing tenant ID")
+		urlAccountID := chi.URLParam(r, "account_id")
+		if urlAccountID == "" {
+			writeProtocolError(w, r, http.StatusBadRequest, "invalid_request_error", "Missing account ID")
 			return
 		}
 
-		if urlTenantID == requestctx.TenantIDOrDefault(r.Context()) {
+		if urlAccountID == requestctx.AccountIDOrDefault(r.Context()) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -389,18 +389,18 @@ func (m *AuthMiddleware) RequireTenantAccess(next http.Handler) http.Handler {
 			return
 		}
 
-		// Without a tenant reader the deployment cannot tell a real account
+		// Without an account reader the deployment cannot tell a real account
 		// from a typo, and the same rule as elsewhere applies: a key is a
 		// valid identity whether or not accounts are readable.
-		if m.tenants != nil {
-			if _, err := m.tenants.GetByID(r.Context(), urlTenantID); err != nil {
-				if errors.Is(err, tenant.ErrNotFound) {
-					writeProtocolError(w, r, http.StatusNotFound, "not_found_error", "Tenant not found")
+		if m.accounts != nil {
+			if _, err := m.accounts.GetByID(r.Context(), urlAccountID); err != nil {
+				if errors.Is(err, account.ErrNotFound) {
+					writeProtocolError(w, r, http.StatusNotFound, "not_found_error", "Account not found")
 					return
 				}
-				log.Error().Err(err).Str("tenant_id", urlTenantID).
+				log.Error().Err(err).Str("account_id", urlAccountID).
 					Msg("Failed to read the account named by a credential route")
-				writeProtocolError(w, r, http.StatusInternalServerError, "api_error", "Failed to read tenant")
+				writeProtocolError(w, r, http.StatusInternalServerError, "api_error", "Failed to read account")
 				return
 			}
 		}

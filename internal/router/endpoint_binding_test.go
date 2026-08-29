@@ -18,29 +18,29 @@ import (
 	"github.com/agentstation/starport/internal/registry"
 )
 
-func TestTenantOnlyBindsEndpointFromTenantMaterial(t *testing.T) {
+func TestAccountOnlyBindsEndpointFromAccountMaterial(t *testing.T) {
 	fixture := newEndpointBindingFixture(t)
 	response, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.BYOKOnly))
 	require.NoError(t, err)
 	require.Equal(t, "acme/opaque/model@001", response.ModelUsed)
 	require.Equal(t, []string{
-		"https://tenant.example/projects/tenant-project/models/opaque/model@001/chat/completions",
+		"https://account.example/projects/account-project/models/opaque/model@001/chat/completions",
 	}, fixture.endpoints())
-	require.Equal(t, []string{"tenant"}, fixture.materialVersions())
+	require.Equal(t, []string{"account"}, fixture.materialVersions())
 	require.Zero(t, fixture.operator.calls.Load())
 }
 
-func TestOperatorAndTenantBindingsDoNotCross(t *testing.T) {
+func TestOperatorAndAccountBindingsDoNotCross(t *testing.T) {
 	fixture := newEndpointBindingFixture(t)
 	_, err := fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.BYOKOnly))
 	require.NoError(t, err)
 	_, err = fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.OperatorFirst))
 	require.NoError(t, err)
 	require.Equal(t, []string{
-		"https://tenant.example/projects/tenant-project/models/opaque/model@001/chat/completions",
+		"https://account.example/projects/account-project/models/opaque/model@001/chat/completions",
 		"https://operator.example/projects/operator-project/models/opaque/model@001/chat/completions",
 	}, fixture.endpoints())
-	require.Equal(t, []string{"tenant", "operator"}, fixture.materialVersions())
+	require.Equal(t, []string{"account", "operator"}, fixture.materialVersions())
 	require.Equal(t, int64(1), fixture.operator.calls.Load())
 }
 
@@ -90,7 +90,7 @@ func newEndpointBindingFixture(t *testing.T) *endpointBindingFixture {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, runtimeRegistry.Close()) })
 	user := &embeddingUserResolver{material: endpointBindingMaterial(
-		profile, "tenant", "https://tenant.example", "tenant-project",
+		profile, "account", "https://account.example", "account-project",
 	)}
 	adapter := &endpointBindingRegistry{registry: runtimeRegistry}
 	fixture.router = New(adapter, WithCatalog(plane), WithStoredCredentials(user))
@@ -103,7 +103,7 @@ func (f *endpointBindingFixture) request(strategy keyring.Strategy) *Request {
 			Model:    "author/model",
 			Messages: []connectors.Message{{Role: connectors.RoleUser, Content: "hello"}},
 		},
-		TenantID: "tenant-a",
+		AccountID: "account-a",
 		APIKeyConfig: &APIKeyConfig{
 			CredentialStrategy: strategy,
 			AllowedModels:      []string{"author/model"},

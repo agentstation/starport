@@ -4,8 +4,8 @@
 #
 #   - a gateway API key authenticates and owns nothing else,
 #   - a provider credential comes from the environment, from the gateway,
-#     or from a tenant, and only the tenant one is called BYOK,
-#   - a tenant carries the limits and the credential policy that let an
+#     or from an account, and only the account one is called BYOK,
+#   - an account carries the limits and the credential policy that let an
 #     operator govern use of a gateway credential,
 #   - authentication is required unless an operator disables it,
 #   - the console reaches the gateway without holding a gateway key.
@@ -35,23 +35,23 @@ grep_q() { grep -Rq -- "$1" "${@:2}"; }
 absent() { ! grep -Rq -- "$1" "${@:2}"; }
 no_dir() { ! test -d "$1"; }
 
-# --- AON1: the tenant seam and the shared limits vocabulary ---
-check AON-V01 "internal/tenant owns the tenant model" \
-  test -f internal/tenant/model.go
-check AON-V02 "tenant storage namespace is versioned tenant:v1:" \
-  grep_q 'tenant:v1:' internal/tenant
-check AON-V03 "composition ensures the canonical default tenant" \
+# --- AON1: the account seam and the shared limits vocabulary ---
+check AON-V01 "internal/account owns the account model" \
+  test -f internal/account/model.go
+check AON-V02 "account storage namespace is versioned account:v1:" \
+  grep_q 'account:v1:' internal/account
+check AON-V03 "composition ensures the canonical default account" \
   grep_q 'EnsureDefault' internal/app
-check AON-V04 "a tenant carries the credential strategy the operator governs" \
-  grep_q 'CredentialStrategy' internal/tenant
-check AON-V05 "the limits vocabulary has its own owner, shared by key and tenant" \
+check AON-V04 "an account carries the credential strategy the operator governs" \
+  grep_q 'CredentialStrategy' internal/account
+check AON-V05 "the limits vocabulary has its own owner, shared by key and account" \
   test -f internal/limits/limits.go
 
-# --- AON2: a key belongs to a tenant ---
-check AON-V06 "identity.APIKey carries a tenant" \
-  grep_q 'TenantID' internal/identity/model.go
-check AON-V07 "the request context carries a tenant identity" \
-  grep_q 'Tenant' internal/server/requestctx
+# --- AON2: a key belongs to an account ---
+check AON-V06 "identity.APIKey carries an account" \
+  grep_q 'AccountID' internal/identity/model.go
+check AON-V07 "the request context carries an account identity" \
+  grep_q 'Account' internal/server/requestctx
 check AON-V08 "no controller derives a credential scope from an API key ID" \
   absent '"user:" *+' internal/server/controllers
 
@@ -60,8 +60,8 @@ check AON-V09 "the provider credential package is named for all three sources" \
   test -d internal/providers/keyring
 check AON-V10 "no package still calls the whole credential subsystem byok" \
   no_dir internal/providers/byok
-check AON-V11 "the BYOK plane is scoped to a tenant, not to a key" \
-  grep_q 'TenantScope' internal/providers/keyring
+check AON-V11 "the BYOK plane is scoped to an account, not to a key" \
+  grep_q 'AccountScope' internal/providers/keyring
 check AON-V12 "the gateway credential plane has a named scope" \
   grep_q 'GatewayScope' internal/providers/keyring
 check AON-V13 "credential resolution consults the gateway source" \
@@ -70,21 +70,21 @@ check AON-V13 "credential resolution consults the gateway source" \
 # --- AON4: credential routes ---
 check AON-V14 "an operator applies a gateway credential on the provider route" \
   grep_q '{provider}/credentials' internal/server/routes.go
-check AON-V15 "the tenant-brought credential route is named byok" \
+check AON-V15 "the account-brought credential route is named byok" \
   grep_q '/byok' internal/server/routes.go
 check AON-V16 "the key-nested credential routes are gone" \
   absent 'provider-keys' internal/server/routes.go
 
-# --- AON5: tenant governance ---
+# --- AON5: account governance ---
 # The condition names the controller symbol and not the path. The BYOK plane is
-# mounted at /tenants/{tenant_id}/byok, so a path match would report this
-# condition green before a single admin tenant route exists. The account plane
+# mounted at /accounts/{account_id}/byok, so a path match would report this
+# condition green before a single admin account route exists. The account plane
 # is its own controller rather than a growth of AdminController, so the symbol
-# is Tenants.List.
-check AON-V17 "admin tenant routes are registered" \
-  grep_q 'Tenants.List' internal/server/routes.go
-check AON-V18 "the budget path resolves a tenant limit" \
-  grep_q 'TenantScope' internal/server/budget.go
+# is Accounts.List.
+check AON-V17 "admin account routes are registered" \
+  grep_q 'Accounts.List' internal/server/routes.go
+check AON-V18 "the budget path resolves an account limit" \
+  grep_q 'AccountScope' internal/server/budget.go
 
 # --- AON6: the authentication mode ---
 check AON-V19 "config owns the gateway authentication mode" \

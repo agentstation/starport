@@ -22,7 +22,7 @@ func processOperation[Request, Response any](
 	result, err := route(ctx, &router.OperationRequest[Request]{
 		Request:      req.Request,
 		APIKeyConfig: transformAPIKeyConfig(req.APIKeyConfig),
-		TenantID:     req.TenantID,
+		AccountID:    req.AccountID,
 	})
 	if err != nil {
 		return nil, routeFailure(model, err)

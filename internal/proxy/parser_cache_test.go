@@ -104,8 +104,8 @@ func TestTheSameDocumentIsRecognizedOnceAcrossTurns(t *testing.T) {
 }
 
 // TestACachedReadCrossesNoAccount states the boundary that makes the cache safe
-// to run at all. Two tenants can hold the same contract, and one tenant's read
-// is not the other tenant's to collect: the second account pays for its own.
+// to run at all. Two accounts can hold the same contract, and one account's read
+// is not the other account's to collect: the second account pays for its own.
 func TestACachedReadCrossesNoAccount(t *testing.T) {
 	t.Parallel()
 	service, router := cachingProxy(t, "recognized page")
@@ -116,14 +116,14 @@ func TestACachedReadCrossesNoAccount(t *testing.T) {
 	require.NoError(t, err)
 
 	other := parsedRequest(t, "scanned.pdf", inference.ParserEngineRecognition)
-	other.TenantID = "tenant-b"
+	other.AccountID = "account-b"
 	response, err := service.ProcessChatCompletion(ctx, other)
 	require.NoError(t, err)
 
 	require.Equal(t, 2, router.calls,
 		"one account read a document another account paid to read")
 	require.False(t, response.ExtractionCached)
-	require.Equal(t, "tenant-b", router.asked.TenantID)
+	require.Equal(t, "account-b", router.asked.AccountID)
 }
 
 // TestANativeReadIsCachedWithoutCallingARecognizer states that the cheap engine

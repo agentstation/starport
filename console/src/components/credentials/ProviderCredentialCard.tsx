@@ -13,7 +13,7 @@ import { Field, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import {
   ApiError,
-  listTenants,
+  listAccounts,
   putBYOKCredential,
   validateBYOKCredential,
   type CredentialField,
@@ -117,20 +117,20 @@ function AccountCredentialRow({
   fields: CredentialField[];
 }) {
   const [adding, setAdding] = useState(false);
-  const [tenantId, setTenantId] = useState("");
+  const [accountId, setAccountId] = useState("");
 
-  const tenants = useQuery({
-    queryKey: ["tenants"],
-    queryFn: listTenants,
+  const accounts = useQuery({
+    queryKey: ["accounts"],
+    queryFn: listAccounts,
     retry: false,
   });
-  const locked = tenants.error instanceof ApiError && tenants.error.needsKey;
+  const locked = accounts.error instanceof ApiError && accounts.error.needsKey;
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-medium text-text-1">Accounts</h3>
-        {!locked && tenants.data && (
+        {!locked && accounts.data && (
           <RowAction onClick={() => setAdding(true)}>
             add for an account…
           </RowAction>
@@ -141,7 +141,7 @@ function AccountCredentialRow({
         requests only, billed to the account directly, and is managed per
         account on the{" "}
         <Link
-          to="/tenants"
+          to="/accounts"
           className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
         >
           Accounts
@@ -151,29 +151,29 @@ function AccountCredentialRow({
 
       {adding && (
         <CredentialApplyModal
-          key={tenantId}
+          key={accountId}
           title={`Add account credential for ${name}`}
           description="Stored against the chosen account, encrypted and never returned. Only that account's requests use it."
           fields={fields}
           applyLabel="Store credential"
-          ready={tenantId !== ""}
-          apply={(body) => putBYOKCredential(tenantId, providerId, body)}
-          validate={() => validateBYOKCredential(tenantId, providerId)}
+          ready={accountId !== ""}
+          apply={(body) => putBYOKCredential(accountId, providerId, body)}
+          validate={() => validateBYOKCredential(accountId, providerId)}
           onClose={() => {
             setAdding(false);
-            setTenantId("");
+            setAccountId("");
           }}
         >
           <Field label="Account">
             <Select
-              value={tenantId}
-              onChange={(event) => setTenantId(event.target.value)}
+              value={accountId}
+              onChange={(event) => setAccountId(event.target.value)}
               aria-label="Account"
             >
               <option value="">Select an account…</option>
-              {(tenants.data ?? []).map((tenant) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name || tenant.id}
+              {(accounts.data ?? []).map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name || account.id}
                 </option>
               ))}
             </Select>

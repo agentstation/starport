@@ -16,8 +16,8 @@ import (
 // ProviderCredentialsController serves both stored provider-credential planes.
 //
 // A gateway credential belongs to the operator and serves the whole
-// deployment. A BYOK credential belongs to one tenant and serves only that
-// tenant. They differ in who owns them and therefore in which scope holds
+// deployment. A BYOK credential belongs to one account and serves only that
+// account. They differ in who owns them and therefore in which scope holds
 // them, and in nothing else, so one controller serves both and the scope is
 // always named by the route rather than derived from the gateway API key that
 // carried the request.
@@ -62,37 +62,37 @@ func (h *ProviderCredentialsController) GatewayValidate(w http.ResponseWriter, r
 	h.validate(w, r, keyring.GatewayScope)
 }
 
-// --- the tenant's own plane ---
+// --- the account's own plane ---
 
-// BYOKList handles GET /api/v1/tenants/{tenant_id}/byok.
+// BYOKList handles GET /api/v1/accounts/{account_id}/byok.
 func (h *ProviderCredentialsController) BYOKList(w http.ResponseWriter, r *http.Request) {
 	h.list(w, r, byokScope(r))
 }
 
-// BYOKGet handles GET /api/v1/tenants/{tenant_id}/byok/{provider}.
+// BYOKGet handles GET /api/v1/accounts/{account_id}/byok/{provider}.
 func (h *ProviderCredentialsController) BYOKGet(w http.ResponseWriter, r *http.Request) {
 	h.get(w, r, byokScope(r))
 }
 
-// BYOKPut handles PUT /api/v1/tenants/{tenant_id}/byok/{provider}.
+// BYOKPut handles PUT /api/v1/accounts/{account_id}/byok/{provider}.
 func (h *ProviderCredentialsController) BYOKPut(w http.ResponseWriter, r *http.Request) {
 	h.put(w, r, byokScope(r))
 }
 
-// BYOKDelete handles DELETE /api/v1/tenants/{tenant_id}/byok/{provider}.
+// BYOKDelete handles DELETE /api/v1/accounts/{account_id}/byok/{provider}.
 func (h *ProviderCredentialsController) BYOKDelete(w http.ResponseWriter, r *http.Request) {
 	h.remove(w, r, byokScope(r))
 }
 
-// BYOKValidate handles POST /api/v1/tenants/{tenant_id}/byok/{provider}/validate.
+// BYOKValidate handles POST /api/v1/accounts/{account_id}/byok/{provider}/validate.
 func (h *ProviderCredentialsController) BYOKValidate(w http.ResponseWriter, r *http.Request) {
 	h.validate(w, r, byokScope(r))
 }
 
-// byokScope names the account the route addresses. RequireTenantAccess has
+// byokScope names the account the route addresses. RequireAccountAccess has
 // already decided the caller may reach it.
 func byokScope(r *http.Request) string {
-	return keyring.TenantScope(chi.URLParam(r, fieldTenantID))
+	return keyring.AccountScope(chi.URLParam(r, fieldAccountID))
 }
 
 // --- the shared implementations ---

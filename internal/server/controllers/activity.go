@@ -152,7 +152,7 @@ type providerUsageSummary struct {
 	RequestsWithoutCost int64        `json:"requests_without_cost"`
 }
 
-// ByProvider handles GET /api/v1/tenants/{tenant_id}/usage/providers. It
+// ByProvider handles GET /api/v1/accounts/{account_id}/usage/providers. It
 // groups one account's recorded requests by the provider that served them.
 // The grouping is by provider and not by credential: a record names which
 // provider answered, never which of the three credential sources paid.
@@ -167,7 +167,7 @@ func (h *ActivityController) ByProvider(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ctx := r.Context()
-	tenantID := chi.URLParam(r, fieldTenantID)
+	accountID := chi.URLParam(r, fieldAccountID)
 	until := time.Now().UTC()
 	since := until.Add(-providerUsageWindow)
 
@@ -176,13 +176,13 @@ func (h *ActivityController) ByProvider(w http.ResponseWriter, r *http.Request) 
 	cursor := ""
 	for page := 0; page < providerUsageMaxPages; page++ {
 		result, err := h.usageRecords.List(ctx, usage.Query{
-			TenantID: tenantID,
-			Since:    since,
-			Limit:    usage.MaxListLimit,
-			Cursor:   cursor,
+			AccountID: accountID,
+			Since:     since,
+			Limit:     usage.MaxListLimit,
+			Cursor:    cursor,
 		})
 		if err != nil {
-			log.Error().Err(err).Str(fieldTenantID, tenantID).Msg("Failed to aggregate provider usage")
+			log.Error().Err(err).Str(fieldAccountID, accountID).Msg("Failed to aggregate provider usage")
 			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to aggregate provider usage")
 			return
 		}

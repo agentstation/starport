@@ -25,7 +25,7 @@ const (
 
 // PollPolicy bounds what one job costs in provider requests.
 //
-// Polling spends the tenant's own credential on asking rather than on work, so
+// Polling spends the account's own credential on asking rather than on work, so
 // two separate bounds apply. Backoff spreads the requests across the wait, and
 // Lifetime stops them: without it a provider that never reaches a terminal
 // state would leave a job polling for as long as the process runs.

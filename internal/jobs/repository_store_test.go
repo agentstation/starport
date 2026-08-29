@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	tenantA = "tenant_a"
-	tenantB = "tenant_b"
+	accountA = "account_a"
+	accountB = "account_b"
 )
 
 func newRepository(t *testing.T) (jobs.Repository, storage.KVStore) {
@@ -25,11 +25,11 @@ func newRepository(t *testing.T) (jobs.Repository, storage.KVStore) {
 	return records, store
 }
 
-func storedJob(t *testing.T, id, tenant string, created time.Time) jobs.Job {
+func storedJob(t *testing.T, id, account string, created time.Time) jobs.Job {
 	t.Helper()
 	job, err := jobs.New(
 		id,
-		tenant,
+		account,
 		"deepinfra",
 		"black-forest-labs/FLUX-1-dev",
 		routing.OperationImagesGenerations,
@@ -46,37 +46,37 @@ func TestOpenRepositoryRefusesAnAbsentStore(t *testing.T) {
 	require.ErrorIs(t, err, jobs.ErrRepositoryRequired)
 }
 
-// TestAJobIsUnreadableByAnotherTenant holds the isolation the whole seam rests
+// TestAJobIsUnreadableByAnotherAccount holds the isolation the whole seam rests
 // on. The answer is not found rather than forbidden, because a refusal would
 // confirm that the identifier exists.
-func TestAJobIsUnreadableByAnotherTenant(t *testing.T) {
+func TestAJobIsUnreadableByAnotherAccount(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	records, _ := newRepository(t)
-	job := storedJob(t, "job_01", tenantA, submitted)
+	job := storedJob(t, "job_01", accountA, submitted)
 	require.NoError(t, records.Create(ctx, job))
 
-	read, err := records.Get(ctx, tenantA, job.ID)
+	read, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, job.ID, read.ID)
 
-	_, err = records.Get(ctx, tenantB, job.ID)
+	_, err = records.Get(ctx, accountB, job.ID)
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 
-	listed, err := records.List(ctx, tenantB, 0)
+	listed, err := records.List(ctx, accountB, 0)
 	require.NoError(t, err)
 	require.Empty(t, listed)
 
-	// A delete by the wrong tenant reports success and removes nothing. The
+	// A delete by the wrong account reports success and removes nothing. The
 	// owner still reads its job afterwards.
-	require.NoError(t, records.Delete(ctx, tenantB, job.ID))
-	_, err = records.Get(ctx, tenantA, job.ID)
+	require.NoError(t, records.Delete(ctx, accountB, job.ID))
+	_, err = records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 
-	// A replace by the wrong tenant finds no record to replace.
+	// A replace by the wrong account finds no record to replace.
 	stolen := job
-	stolen.Tenant = tenantB
+	stolen.Account = accountB
 	require.ErrorIs(t, records.Replace(ctx, stolen), jobs.ErrJobNotFound)
 }
 
@@ -85,7 +85,7 @@ func TestCreateRefusesAnIdentifierAlreadyInUse(t *testing.T) {
 
 	ctx := context.Background()
 	records, _ := newRepository(t)
-	job := storedJob(t, "job_01", tenantA, submitted)
+	job := storedJob(t, "job_01", accountA, submitted)
 	require.NoError(t, records.Create(ctx, job))
 	require.ErrorIs(t, records.Create(ctx, job), jobs.ErrJobExists)
 }
@@ -110,19 +110,19 @@ func TestAListingKeepsItsOrderAcrossAReopen(t *testing.T) {
 		{id: "job_aa", created: submitted.Add(2 * time.Minute)},
 	}
 	for _, submission := range submissions {
-		require.NoError(t, records.Create(ctx, storedJob(t, submission.id, tenantA, submission.created)))
+		require.NoError(t, records.Create(ctx, storedJob(t, submission.id, accountA, submission.created)))
 	}
 
 	newestFirst := []string{"job_aa", "job_mm", "job_zz"}
 
-	listed, err := records.List(ctx, tenantA, 0)
+	listed, err := records.List(ctx, accountA, 0)
 	require.NoError(t, err)
 	require.Equal(t, newestFirst, identifiers(listed))
 
 	// A second repository over the same store is what a restart looks like.
 	reopened, err := jobs.OpenRepository(store)
 	require.NoError(t, err)
-	afterReopen, err := reopened.List(ctx, tenantA, 0)
+	afterReopen, err := reopened.List(ctx, accountA, 0)
 	require.NoError(t, err)
 	require.Equal(t, newestFirst, identifiers(afterReopen))
 }
@@ -135,11 +135,11 @@ func TestATieOnTheSubmissionTimeStillOrdersStably(t *testing.T) {
 	ctx := context.Background()
 	records, _ := newRepository(t)
 	for _, id := range []string{"job_02", "job_01", "job_03"} {
-		require.NoError(t, records.Create(ctx, storedJob(t, id, tenantA, submitted)))
+		require.NoError(t, records.Create(ctx, storedJob(t, id, accountA, submitted)))
 	}
 
 	for range 3 {
-		listed, err := records.List(ctx, tenantA, 0)
+		listed, err := records.List(ctx, accountA, 0)
 		require.NoError(t, err)
 		require.Equal(t, []string{"job_01", "job_02", "job_03"}, identifiers(listed))
 	}
@@ -153,7 +153,7 @@ func TestAnIllegalStateWriteFailsAtTheRepository(t *testing.T) {
 
 	ctx := context.Background()
 	records, store := newRepository(t)
-	job := storedJob(t, "job_01", tenantA, submitted)
+	job := storedJob(t, "job_01", accountA, submitted)
 	require.NoError(t, records.Create(ctx, job))
 
 	ended := submitted.Add(time.Minute)
@@ -175,7 +175,7 @@ func TestAnIllegalStateWriteFailsAtTheRepository(t *testing.T) {
 	require.ErrorIs(t, records.Replace(ctx, restated), jobs.ErrIllegalTransition)
 
 	// The refused writes changed nothing.
-	read, err := records.Get(ctx, tenantA, job.ID)
+	read, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCompleted, read.State)
 	require.Equal(t, ended, read.TerminalAt)
@@ -194,14 +194,14 @@ func TestReplaceAcceptsAChangeThatKeepsTheState(t *testing.T) {
 
 	ctx := context.Background()
 	records, _ := newRepository(t)
-	job := storedJob(t, "job_01", tenantA, submitted)
+	job := storedJob(t, "job_01", accountA, submitted)
 	require.NoError(t, records.Create(ctx, job))
 
 	adopted := job
 	require.NoError(t, adopted.AdoptProviderJob("video_4f19c0a7"))
 	require.NoError(t, records.Replace(ctx, adopted))
 
-	read, err := records.Get(ctx, tenantA, job.ID)
+	read, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateQueued, read.State)
 	require.True(t, read.HasProviderJob(), "the provider job identifier did not survive the round trip")
@@ -212,7 +212,7 @@ func TestReplaceFindsNoRecordForAnUnknownJob(t *testing.T) {
 
 	ctx := context.Background()
 	records, _ := newRepository(t)
-	require.ErrorIs(t, records.Replace(ctx, storedJob(t, "job_01", tenantA, submitted)), jobs.ErrJobNotFound)
+	require.ErrorIs(t, records.Replace(ctx, storedJob(t, "job_01", accountA, submitted)), jobs.ErrJobNotFound)
 }
 
 func TestARepeatedDeleteIsSafe(t *testing.T) {
@@ -220,33 +220,33 @@ func TestARepeatedDeleteIsSafe(t *testing.T) {
 
 	ctx := context.Background()
 	records, _ := newRepository(t)
-	job := storedJob(t, "job_01", tenantA, submitted)
+	job := storedJob(t, "job_01", accountA, submitted)
 	require.NoError(t, records.Create(ctx, job))
-	require.NoError(t, records.Delete(ctx, tenantA, job.ID))
-	require.NoError(t, records.Delete(ctx, tenantA, job.ID))
-	_, err := records.Get(ctx, tenantA, job.ID)
+	require.NoError(t, records.Delete(ctx, accountA, job.ID))
+	require.NoError(t, records.Delete(ctx, accountA, job.ID))
+	_, err := records.Get(ctx, accountA, job.ID)
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 }
 
-func TestGetRefusesAnEmptyTenantOrIdentifier(t *testing.T) {
+func TestGetRefusesAnEmptyAccountOrIdentifier(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	records, _ := newRepository(t)
 	_, err := records.Get(ctx, "", "job_01")
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
-	_, err = records.Get(ctx, tenantA, " ")
+	_, err = records.Get(ctx, accountA, " ")
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 }
 
 // TestACorruptRecordReportsItselfRatherThanDecodingHalfway keeps a hand-edited
-// or half-written value from becoming a job with an empty tenant.
+// or half-written value from becoming a job with an empty account.
 func TestACorruptRecordReportsItselfRatherThanDecodingHalfway(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	records, store := newRepository(t)
-	job := storedJob(t, "job_01", tenantA, submitted)
+	job := storedJob(t, "job_01", accountA, submitted)
 	require.NoError(t, records.Create(ctx, job))
 
 	keys, err := store.ScanWithPrefix(ctx, jobs.StoragePrefix, 100)
@@ -255,11 +255,11 @@ func TestACorruptRecordReportsItselfRatherThanDecodingHalfway(t *testing.T) {
 
 	for _, corrupt := range [][]byte{
 		[]byte("{"),
-		[]byte(`{"schema_version":2,"id":"job_01","tenant":"tenant_a"}`),
-		[]byte(`{"schema_version":1,"id":"job_01","tenant":"","state":"queued"}`),
+		[]byte(`{"schema_version":2,"id":"job_01","account":"account_a"}`),
+		[]byte(`{"schema_version":1,"id":"job_01","account":"","state":"queued"}`),
 	} {
 		require.NoError(t, store.Set(ctx, keys[0], corrupt))
-		_, err := records.Get(ctx, tenantA, job.ID)
+		_, err := records.Get(ctx, accountA, job.ID)
 		require.ErrorIs(t, err, jobs.ErrCorruptRecord)
 	}
 }

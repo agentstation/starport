@@ -10,8 +10,8 @@ import (
 
 	"github.com/agentstation/uuidkey"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/storage"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 func TestGeneratedCredentialUsesParseableUUIDKeyFormat(t *testing.T) {
@@ -178,34 +178,34 @@ func TestIssueInitialHasOneConcurrentWinner(t *testing.T) {
 	}
 }
 
-// TestIssuerRefusesAnUnknownTenant is the AON2 acceptance case. A key issued
-// against a tenant that does not exist would authenticate and then resolve to
+// TestIssuerRefusesAnUnknownAccount is the AON2 acceptance case. A key issued
+// against an account that does not exist would authenticate and then resolve to
 // no limits and no credential policy, which is a worse failure than refusing
 // the key at issue time.
-func TestIssuerRefusesAnUnknownTenant(t *testing.T) {
+func TestIssuerRefusesAnUnknownAccount(t *testing.T) {
 	store := storage.NewMockStore()
 	repository, err := Open(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tenants, err := tenant.Open(store)
+	accounts, err := account.Open(store)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	if _, err := tenants.EnsureDefault(ctx); err != nil {
+	if _, err := accounts.EnsureDefault(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	issuer, err := NewIssuer(repository, WithTenantChecker(tenants))
+	issuer, err := NewIssuer(repository, WithAccountChecker(accounts))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if _, err := issuer.Issue(ctx, IssueRequest{
-		Name: "Ghost", TenantID: "does-not-exist", Scopes: []string{"chat:write"},
-	}); !errors.Is(err, ErrUnknownTenant) {
-		t.Fatalf("issue against a missing tenant = %v, want ErrUnknownTenant", err)
+		Name: "Ghost", AccountID: "does-not-exist", Scopes: []string{"chat:write"},
+	}); !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("issue against a missing account = %v, want ErrUnknownAccount", err)
 	}
 
 	records, err := repository.List(ctx, 10, 0)
@@ -216,40 +216,40 @@ func TestIssuerRefusesAnUnknownTenant(t *testing.T) {
 		t.Fatalf("refused issue stored %d keys, want 0", len(records))
 	}
 
-	// An unset tenant is the canonical tenant, not a missing one, so the same
+	// An unset account is the canonical account, not a missing one, so the same
 	// issuer accepts a request that names no account at all.
 	issued, err := issuer.Issue(ctx, IssueRequest{Name: "Default-Key", Scopes: []string{"chat:write"}})
 	if err != nil {
-		t.Fatalf("issue with no tenant: %v", err)
+		t.Fatalf("issue with no account: %v", err)
 	}
-	if issued.APIKey.TenantID != tenant.DefaultID {
-		t.Fatalf("issued tenant = %q, want %q", issued.APIKey.TenantID, tenant.DefaultID)
+	if issued.APIKey.AccountID != account.DefaultID {
+		t.Fatalf("issued account = %q, want %q", issued.APIKey.AccountID, account.DefaultID)
 	}
 }
 
-// TestIssuerRefusesAMalformedTenantID guards the credential storage key. A
-// tenant ID reaches a credential scope, so a separator or a wildcard inside one
+// TestIssuerRefusesAMalformedAccountID guards the credential storage key. A
+// account ID reaches a credential scope, so a separator or a wildcard inside one
 // must never survive to storage.
-func TestIssuerRefusesAMalformedTenantID(t *testing.T) {
+func TestIssuerRefusesAMalformedAccountID(t *testing.T) {
 	store := storage.NewMockStore()
 	repository, err := Open(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tenants, err := tenant.Open(store)
+	accounts, err := account.Open(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	issuer, err := NewIssuer(repository, WithTenantChecker(tenants))
+	issuer, err := NewIssuer(repository, WithAccountChecker(accounts))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, tenantID := range []string{"acme corp", "acme/eu", "*", "tenant:acme"} {
+	for _, accountID := range []string{"acme corp", "acme/eu", "*", "account:acme"} {
 		if _, err := issuer.Issue(context.Background(), IssueRequest{
-			Name: "Bad", TenantID: tenantID, Scopes: []string{"chat:write"},
+			Name: "Bad", AccountID: accountID, Scopes: []string{"chat:write"},
 		}); err == nil {
-			t.Errorf("issue with tenant %q succeeded, want a refusal", tenantID)
+			t.Errorf("issue with account %q succeeded, want a refusal", accountID)
 		}
 	}
 }

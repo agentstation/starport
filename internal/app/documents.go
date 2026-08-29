@@ -22,13 +22,13 @@ type storedDocuments struct {
 //
 // A file this account does not hold reports absent rather than an error, and a
 // file another account holds reaches the same answer through the same path:
-// Open takes the tenant, so a foreign identifier is a miss inside the service
+// Open takes the account, so a foreign identifier is a miss inside the service
 // rather than a check this adapter could forget to make.
 func (d storedDocuments) ResolveDocument(
 	ctx context.Context,
-	tenant, id string,
+	account, id string,
 ) (proxy.StoredDocument, bool, error) {
-	record, reader, err := d.service.Open(ctx, tenant, id)
+	record, reader, err := d.service.Open(ctx, account, id)
 	if errors.Is(err, files.ErrFileNotFound) {
 		return proxy.StoredDocument{}, false, nil
 	}

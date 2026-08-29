@@ -24,11 +24,11 @@ import { formatRelativeTime, providerLabel } from "@/lib/format";
 // question both answer is whose provider account pays for the call, and a
 // screen that shows two answers at once has taught nobody the difference.
 
-export function byokQueryKey(tenantId: string): string[] {
-  return ["byok", tenantId];
+export function byokQueryKey(accountId: string): string[] {
+  return ["byok", accountId];
 }
 
-export function ByokPanel({ tenantId }: { tenantId: string }) {
+export function ByokPanel({ accountId }: { accountId: string }) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [provider, setProvider] = useState("");
@@ -38,11 +38,11 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
 
   const say = (text: string, error = false) => setNotice({ text, error });
   const reload = () =>
-    queryClient.invalidateQueries({ queryKey: byokQueryKey(tenantId) });
+    queryClient.invalidateQueries({ queryKey: byokQueryKey(accountId) });
 
   const credentials = useQuery({
-    queryKey: byokQueryKey(tenantId),
-    queryFn: () => listBYOKCredentials(tenantId),
+    queryKey: byokQueryKey(accountId),
+    queryFn: () => listBYOKCredentials(accountId),
     retry: false,
   });
   const catalog = useQuery({
@@ -62,7 +62,7 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
     [];
 
   const validate = useMutation({
-    mutationFn: (target: string) => validateBYOKCredential(tenantId, target),
+    mutationFn: (target: string) => validateBYOKCredential(accountId, target),
     onSuccess: (result, target) => {
       const valid = result?.valid !== false;
       say(
@@ -78,7 +78,7 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
   });
 
   const remove = useMutation({
-    mutationFn: (target: string) => deleteBYOKCredential(tenantId, target),
+    mutationFn: (target: string) => deleteBYOKCredential(accountId, target),
     onSuccess: async (_result, target) => {
       say(`${nameOf(target)} BYOK credential removed`);
       await reload();
@@ -172,10 +172,10 @@ export function ByokPanel({ tenantId }: { tenantId: string }) {
           applyLabel="Store credential"
           ready={provider !== ""}
           apply={async (body) => {
-            await putBYOKCredential(tenantId, provider, body);
+            await putBYOKCredential(accountId, provider, body);
             await reload();
           }}
-          validate={() => validateBYOKCredential(tenantId, provider)}
+          validate={() => validateBYOKCredential(accountId, provider)}
           onClose={() => {
             setAdding(false);
             setProvider("");

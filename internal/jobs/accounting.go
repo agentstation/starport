@@ -18,13 +18,13 @@ import (
 // leaves this package. Invariant J1 keeps it inside.
 type AccountingEntry struct {
 	JobID     string
-	Tenant    string
+	Account   string
 	KeyID     string
 	Provider  string
 	Model     string
 	Operation routing.Operation
 	State     JobState
-	// Chargeable reports whether this end produced work the tenant pays for.
+	// Chargeable reports whether this end produced work the account pays for.
 	// The recipient still decides what it costs, and may find no price at all.
 	Chargeable bool
 	// SubmittedAt and TerminalAt bound the work. A record of the two is what
@@ -69,7 +69,7 @@ type Meter interface {
 // The other direction of that trade is that a report lost between the stamp and
 // the recipient is lost for good. That is the correct half to give up. The usage
 // seam is best-effort by construction and drops records under load already,
-// while a duplicated charge is money a tenant did not spend.
+// while a duplicated charge is money an account did not spend.
 func (s *Service) settle(ctx context.Context, job Job) Job {
 	if !job.State.Terminal() || job.Accounted() {
 		return job
@@ -93,7 +93,7 @@ func (s *Service) settle(ctx context.Context, job Job) Job {
 func entryFor(job Job) AccountingEntry {
 	return AccountingEntry{
 		JobID:       job.ID,
-		Tenant:      job.Tenant,
+		Account:     job.Account,
 		KeyID:       job.KeyID,
 		Provider:    job.Provider,
 		Model:       job.Model,
@@ -109,12 +109,12 @@ func entryFor(job Job) AccountingEntry {
 //
 // The claim happens before the provider call. A submission refused for being
 // over the limit must not have spent provider work first, or the limit would
-// bound what a tenant reads rather than what it pays for.
-func (s *Service) reserveSlot(ctx context.Context, tenant string, bound int64) error {
+// bound what an account reads rather than what it pays for.
+func (s *Service) reserveSlot(ctx context.Context, account string, bound int64) error {
 	if s.meter == nil {
 		return nil
 	}
-	return s.meter.Reserve(ctx, tenant, 1, bound)
+	return s.meter.Reserve(ctx, account, 1, bound)
 }
 
 // releaseSlot gives one slot back and reports nothing.
@@ -127,5 +127,5 @@ func (s *Service) releaseSlot(ctx context.Context, job Job) {
 	if s.meter == nil {
 		return
 	}
-	_ = s.meter.Release(ctx, job.Tenant, 1)
+	_ = s.meter.Release(ctx, job.Account, 1)
 }

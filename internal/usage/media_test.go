@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A tenant spend budget bounds a turn only through the cost on its record. A
+// An account spend budget bounds a turn only through the cost on its record. A
 // media turn whose cost is missing therefore spends nothing against the cap, so
 // the two facts below are one fact: what the record carries is what the budget
 // meters.
@@ -24,7 +24,7 @@ func mediaRecord(requestID string, at time.Time) Record {
 }
 
 // TestAPricedMediaTurnCountsAgainstTheSpendBudget is the acceptance case. The
-// counter this reads is the one internal/server subtracts from a tenant spend
+// counter this reads is the one internal/server subtracts from an account spend
 // limit, so a media turn that reached it as zero would be unbounded.
 func TestAPricedMediaTurnCountsAgainstTheSpendBudget(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {

@@ -371,9 +371,9 @@ func InitializeIdentity(
 	if len(records) != 0 {
 		return identity.IssueResult{}, ErrAlreadyInitialized
 	}
-	// The initial key names no tenant, so it resolves to the canonical tenant at
+	// The initial key names no account, so it resolves to the canonical account at
 	// read time. Setup deliberately writes nothing but identity records, and the
-	// gateway ensures the canonical tenant at boot, so this path needs no tenant
+	// gateway ensures the canonical account at boot, so this path needs no account
 	// checker: it never accepts a caller-supplied account to check.
 	issuer, err := identity.NewIssuer(repository)
 	if err != nil {

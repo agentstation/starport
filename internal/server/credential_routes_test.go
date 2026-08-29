@@ -16,9 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers/keyring"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // credentialTestProvider is the catalog provider these tests apply credentials
@@ -34,12 +34,12 @@ const credentialTestField = "api-key"
 // plane leaked it.
 const (
 	gatewayCredentialValue = "gateway-plane-value-under-test"
-	byokCredentialValue    = "tenant-plane-value-under-test"
+	byokCredentialValue    = "account-plane-value-under-test"
 )
 
 // credentialGateway is a running gateway plus the three identities a
 // credential test needs: an operator who holds admin and owns the deployment,
-// and two tenants who own only their own BYOK.
+// and two accounts who own only their own BYOK.
 type credentialGateway struct {
 	server   *Server
 	operator string
@@ -56,21 +56,21 @@ func newCredentialGateway(t *testing.T) *credentialGateway {
 	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20})
 	ctx := context.Background()
 	for _, id := range []string{"acme", "globex"} {
-		_, err := server.tenants.Create(ctx, tenant.Tenant{ID: id, Name: id, Active: true})
+		_, err := server.accounts.Create(ctx, account.Account{ID: id, Name: id, Active: true})
 		require.NoError(t, err)
 	}
 
 	return &credentialGateway{
 		server:   server,
-		operator: mintCredentialKey(t, server, "operator", tenant.DefaultID, "admin"),
+		operator: mintCredentialKey(t, server, "operator", account.DefaultID, "admin"),
 		acme:     mintCredentialKey(t, server, "acme-key", "acme", "provider_keys:read", "provider_keys:write"),
 		globex:   mintCredentialKey(t, server, "globex-key", "globex", "provider_keys:read", "provider_keys:write"),
 	}
 }
 
-// mintCredentialKey issues one active gateway API key in one tenant and
+// mintCredentialKey issues one active gateway API key in one account and
 // returns its bearer token.
-func mintCredentialKey(t *testing.T, server *Server, id, tenantID string, scopes ...string) string {
+func mintCredentialKey(t *testing.T, server *Server, id, accountID string, scopes ...string) string {
 	t.Helper()
 
 	token := "token-" + id
@@ -79,7 +79,7 @@ func mintCredentialKey(t *testing.T, server *Server, id, tenantID string, scopes
 		ID:        id,
 		Name:      strings.ReplaceAll(id, "-", "_"),
 		Hash:      hex.EncodeToString(hash[:]),
-		TenantID:  tenantID,
+		AccountID: accountID,
 		Scopes:    scopes,
 		Active:    true,
 		CreatedAt: time.Now(),
@@ -186,7 +186,7 @@ func TestOperatorAppliesAGatewayCredentialResolutionCanRead(t *testing.T) {
 }
 
 // TestGatewayCredentialRouteRefusesANonAdmin holds the boundary that makes the
-// deployment credential the operator's. A tenant with full BYOK scopes still
+// deployment credential the operator's. An account with full BYOK scopes still
 // has no say over what the whole deployment spends.
 func TestGatewayCredentialRouteRefusesANonAdmin(t *testing.T) {
 	gateway := newCredentialGateway(t)
@@ -207,23 +207,23 @@ func TestGatewayCredentialRouteRefusesANonAdmin(t *testing.T) {
 	assert.ErrorIs(t, err, keyring.ErrKeyNotFound)
 }
 
-// TestBYOKBelongsToItsTenant is the tenant half. A tenant reaches its own
-// credentials and no others; an operator reaches any tenant's, because
-// applying a credential on a tenant's behalf is a support operation an
+// TestBYOKBelongsToItsAccount is the account half. An account reaches its own
+// credentials and no others; an operator reaches any account's, because
+// applying a credential on an account's behalf is a support operation an
 // operator has to be able to perform.
-func TestBYOKBelongsToItsTenant(t *testing.T) {
+func TestBYOKBelongsToItsAccount(t *testing.T) {
 	gateway := newCredentialGateway(t)
-	acmePath := "/api/v1/tenants/acme/byok"
+	acmePath := "/api/v1/accounts/acme/byok"
 
 	recorder := gateway.call(t, gateway.acme, http.MethodPut,
 		acmePath+"/"+credentialTestProvider, credentialBody(byokCredentialValue))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	// The tenant's own key reads it back.
+	// The account's own key reads it back.
 	recorder = gateway.call(t, gateway.acme, http.MethodGet, acmePath+"/"+credentialTestProvider, "")
 	assert.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	// Another tenant does not, on any method.
+	// Another account does not, on any method.
 	for _, route := range []struct {
 		method string
 		path   string
@@ -241,7 +241,7 @@ func TestBYOKBelongsToItsTenant(t *testing.T) {
 
 	// The intruder changed nothing.
 	stored, err := gateway.server.providerKeys.ResolveStoredMaterial(
-		context.Background(), keyring.TenantScope("acme"), catalogProvider(t, credentialTestProvider),
+		context.Background(), keyring.AccountScope("acme"), catalogProvider(t, credentialTestProvider),
 	)
 	require.NoError(t, err)
 	value, present := stored.Value(credentialTestField)
@@ -260,7 +260,7 @@ func TestBYOKAndGatewayCredentialsAreSeparateStores(t *testing.T) {
 	gateway := newCredentialGateway(t)
 
 	recorder := gateway.call(t, gateway.acme, http.MethodPut,
-		"/api/v1/tenants/acme/byok/"+credentialTestProvider, credentialBody(byokCredentialValue))
+		"/api/v1/accounts/acme/byok/"+credentialTestProvider, credentialBody(byokCredentialValue))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	// The deployment plane is still empty.
@@ -268,18 +268,18 @@ func TestBYOKAndGatewayCredentialsAreSeparateStores(t *testing.T) {
 		"/api/v1/providers/"+credentialTestProvider+"/credentials", "")
 	assert.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
 
-	// Applying the deployment credential does not disturb the tenant's.
+	// Applying the deployment credential does not disturb the account's.
 	recorder = gateway.call(t, gateway.operator, http.MethodPut,
 		"/api/v1/providers/"+credentialTestProvider+"/credentials", credentialBody(gatewayCredentialValue))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	tenantMaterial, err := gateway.server.providerKeys.ResolveStoredMaterial(
-		context.Background(), keyring.TenantScope("acme"), catalogProvider(t, credentialTestProvider),
+	accountMaterial, err := gateway.server.providerKeys.ResolveStoredMaterial(
+		context.Background(), keyring.AccountScope("acme"), catalogProvider(t, credentialTestProvider),
 	)
 	require.NoError(t, err)
-	tenantValue, present := tenantMaterial.Value(credentialTestField)
+	accountValue, present := accountMaterial.Value(credentialTestField)
 	require.True(t, present)
-	assert.Equal(t, byokCredentialValue, tenantValue)
+	assert.Equal(t, byokCredentialValue, accountValue)
 
 	gatewayMaterial, err := gateway.server.providerKeys.ResolveStoredMaterial(
 		context.Background(), keyring.GatewayScope, catalogProvider(t, credentialTestProvider),
@@ -296,7 +296,7 @@ func TestBYOKAndGatewayCredentialsAreSeparateStores(t *testing.T) {
 func TestNoCredentialResponseCarriesItsSecret(t *testing.T) {
 	gateway := newCredentialGateway(t)
 	providerPath := "/api/v1/providers/" + credentialTestProvider + "/credentials"
-	byokPath := "/api/v1/tenants/acme/byok"
+	byokPath := "/api/v1/accounts/acme/byok"
 
 	responses := []*httptest.ResponseRecorder{
 		gateway.call(t, gateway.operator, http.MethodPut, providerPath, credentialBody(gatewayCredentialValue)),

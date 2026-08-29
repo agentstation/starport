@@ -75,7 +75,7 @@ func TestConcurrentReservationsCannotBothPassABoundThatAdmitsOne(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			results[i] = meter.Reserve(ctx, "tenant-a", size, bound)
+			results[i] = meter.Reserve(ctx, "account-a", size, bound)
 		}()
 	}
 	close(start)
@@ -94,50 +94,50 @@ func TestConcurrentReservationsCannotBothPassABoundThatAdmitsOne(t *testing.T) {
 	// Every refusal gave its claim back, so the total counts only the bytes
 	// that landed. A refusal that kept its claim would leave the holder
 	// permanently short by the size of every upload it ever tried.
-	total, err := meter.Total(ctx, "tenant-a")
+	total, err := meter.Total(ctx, "account-a")
 	require.NoError(t, err)
 	require.Equal(t, int64(size), total)
-	require.Equal(t, int64(size), counter.values[StoredBytesPrefix+"tenant-a"])
+	require.Equal(t, int64(size), counter.values[StoredBytesPrefix+"account-a"])
 }
 
 // TestReleaseLowersTheTotalByTheFileSize states the other half of the pair. A
-// delete has to give the bytes back, or a tenant that stayed under its bound
+// delete has to give the bytes back, or an account that stayed under its bound
 // would still run out of room after enough uploads and deletes.
 func TestReleaseLowersTheTotalByTheFileSize(t *testing.T) {
 	t.Parallel()
 	meter, _ := newTestMeter(t)
 	ctx := context.Background()
 
-	require.NoError(t, meter.Reserve(ctx, "tenant-a", 400, 1000))
-	require.NoError(t, meter.Reserve(ctx, "tenant-a", 500, 1000))
-	total, err := meter.Total(ctx, "tenant-a")
+	require.NoError(t, meter.Reserve(ctx, "account-a", 400, 1000))
+	require.NoError(t, meter.Reserve(ctx, "account-a", 500, 1000))
+	total, err := meter.Total(ctx, "account-a")
 	require.NoError(t, err)
 	require.Equal(t, int64(900), total)
 
-	require.NoError(t, meter.Release(ctx, "tenant-a", 400))
-	total, err = meter.Total(ctx, "tenant-a")
+	require.NoError(t, meter.Release(ctx, "account-a", 400))
+	total, err = meter.Total(ctx, "account-a")
 	require.NoError(t, err)
 	require.Equal(t, int64(500), total)
 
 	// The room the delete gave back is usable room, not just a smaller number.
-	require.NoError(t, meter.Reserve(ctx, "tenant-a", 400, 1000))
+	require.NoError(t, meter.Reserve(ctx, "account-a", 400, 1000))
 }
 
 // TestEachHolderCountsOnlyItsOwnBytes states the isolation the bound depends
-// on. One shared counter would let a busy tenant exhaust every other tenant.
+// on. One shared counter would let a busy account exhaust every other account.
 func TestEachHolderCountsOnlyItsOwnBytes(t *testing.T) {
 	t.Parallel()
 	meter, _ := newTestMeter(t)
 	ctx := context.Background()
 
-	require.NoError(t, meter.Reserve(ctx, "tenant-a", 900, 1000))
-	require.NoError(t, meter.Reserve(ctx, "tenant-b", 900, 1000))
+	require.NoError(t, meter.Reserve(ctx, "account-a", 900, 1000))
+	require.NoError(t, meter.Reserve(ctx, "account-b", 900, 1000))
 
-	total, err := meter.Total(ctx, "tenant-b")
+	total, err := meter.Total(ctx, "account-b")
 	require.NoError(t, err)
 	require.Equal(t, int64(900), total)
-	require.ErrorIs(t, meter.Reserve(ctx, "tenant-a", 200, 1000), ErrStorageFull)
-	require.NoError(t, meter.Reserve(ctx, "tenant-b", 100, 1000))
+	require.ErrorIs(t, meter.Reserve(ctx, "account-a", 200, 1000), ErrStorageFull)
+	require.NoError(t, meter.Reserve(ctx, "account-b", 100, 1000))
 }
 
 // TestAnUnboundedHolderStillCountsItsBytes states why the meter runs even when
@@ -148,8 +148,8 @@ func TestAnUnboundedHolderStillCountsItsBytes(t *testing.T) {
 	meter, _ := newTestMeter(t)
 	ctx := context.Background()
 
-	require.NoError(t, meter.Reserve(ctx, "tenant-a", 5000, 0))
-	total, err := meter.Total(ctx, "tenant-a")
+	require.NoError(t, meter.Reserve(ctx, "account-a", 5000, 0))
+	total, err := meter.Total(ctx, "account-a")
 	require.NoError(t, err)
 	require.Equal(t, int64(5000), total)
 }
@@ -162,7 +162,7 @@ func TestReserveReportsACounterFailure(t *testing.T) {
 	meter, counter := newTestMeter(t)
 	counter.fail = errors.New("counter unreachable")
 
-	require.Error(t, meter.Reserve(context.Background(), "tenant-a", 100, 1000))
+	require.Error(t, meter.Reserve(context.Background(), "account-a", 100, 1000))
 }
 
 // TestTheMeterNamesItsHolder states the guard. A reservation under an empty

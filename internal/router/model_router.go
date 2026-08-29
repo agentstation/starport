@@ -78,9 +78,9 @@ type Request struct {
 	// API key configuration (for provider restrictions)
 	APIKeyConfig *APIKeyConfig
 
-	// TenantID selects the account whose BYOK credential record the request
+	// AccountID selects the account whose BYOK credential record the request
 	// may read. It is never a gateway API key ID.
-	TenantID string
+	AccountID string
 
 	// Request metadata for routing decisions
 	Metadata *RequestMetadata
@@ -168,7 +168,7 @@ type Response struct {
 
 	// CredentialSource names which credential plane paid for the attempt
 	// that answered: the operator's environment, the operator's applied
-	// gateway credential, the tenant's own BYOK, or no credential at all.
+	// gateway credential, the account's own BYOK, or no credential at all.
 	CredentialSource string `json:"credential_source,omitempty"`
 
 	// Number of attempts made
@@ -183,11 +183,11 @@ type Response struct {
 }
 
 // EmbeddingRequest contains one provider-neutral embedding request plus
-// tenant routing and credential policy.
+// account routing and credential policy.
 type EmbeddingRequest struct {
 	*connectors.EmbeddingsRequest
 	APIKeyConfig *APIKeyConfig
-	TenantID     string
+	AccountID    string
 }
 
 // EmbeddingResponse wraps one embedding result with route evidence.

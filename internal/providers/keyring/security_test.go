@@ -25,8 +25,8 @@ func TestEncryptionIsolation(t *testing.T) {
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
 	// Add keys for different API keys
-	scope1 := TenantScope("key1")
-	scope2 := TenantScope("key2")
+	scope1 := AccountScope("key1")
+	scope2 := AccountScope("key2")
 	provider := "openai"
 	secretKey1 := "sk-key1-secret-123456789"
 	secretKey2 := "sk-key2-secret-987654321"
@@ -205,11 +205,11 @@ func TestKeyLeakage(t *testing.T) {
 
 	// Add key with validation skip
 	ctx = context.WithValue(ctx, "skip_validation", true)
-	_, err = manager.AddKey(ctx, TenantScope("test-key"), "openai", sensitiveData, nil, false, 0)
+	_, err = manager.AddKey(ctx, AccountScope("test-key"), "openai", sensitiveData, nil, false, 0)
 	require.NoError(t, err)
 
 	// Verify stored data doesn't contain plaintext
-	key := credentials.StorageKey(TenantScope("test-key"), "openai")
+	key := credentials.StorageKey(AccountScope("test-key"), "openai")
 	rawData, err := store.Get(ctx, key)
 	require.NoError(t, err)
 
@@ -311,7 +311,7 @@ func TestConcurrentAccess(t *testing.T) {
 	ctx = context.WithValue(ctx, "skip_validation", true)
 
 	// Add initial key
-	scope := TenantScope("test-key")
+	scope := AccountScope("test-key")
 	provider := "openai"
 	_, err = manager.AddKey(ctx, scope, provider, map[string]string{"api-key": "sk-initial"}, nil, false, 0)
 	require.NoError(t, err)

@@ -159,15 +159,15 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 				r.Post("/validate", s.controllers.ProviderCredentials.GatewayValidate)
 			})
 
-			// BYOK: a credential one tenant brings for itself. The path says
-			// byok because only a tenant-brought credential lives here.
+			// BYOK: a credential one account brings for itself. The path says
+			// byok because only an account-brought credential lives here.
 			//
 			// The admin scope appears in each scope list because an operator
-			// supporting a tenant reaches the tenant's plane by holding admin,
-			// not by holding the tenant's own provider scopes. Only "*" is a
+			// supporting an account reaches the account's plane by holding admin,
+			// not by holding the account's own provider scopes. Only "*" is a
 			// wildcard in a key's scope set, so admin has to be named here.
-			r.Route("/tenants/{tenant_id}/byok", func(r chi.Router) {
-				r.Use(s.requireTenantAccess)
+			r.Route("/accounts/{account_id}/byok", func(r chi.Router) {
+				r.Use(s.requireAccountAccess)
 
 				r.With(s.requireAnyScope("provider_keys:read", "admin")).Get("/", s.controllers.ProviderCredentials.BYOKList)
 				r.With(s.requireAnyScope("provider_keys:read", "admin")).Get("/{provider}", s.controllers.ProviderCredentials.BYOKGet)
@@ -179,8 +179,8 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			// Per-provider usage for one account. Spend is an account
 			// question: an account holds many keys and no key's total
 			// answers for it. It is not a credential route.
-			r.Route("/tenants/{tenant_id}/usage", func(r chi.Router) {
-				r.Use(s.requireTenantAccess)
+			r.Route("/accounts/{account_id}/usage", func(r chi.Router) {
+				r.Use(s.requireAccountAccess)
 
 				r.With(s.requireAnyScope("activity:read", "admin")).Get("/providers", s.controllers.Activity.ByProvider)
 			})
@@ -226,12 +226,12 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					// Account management. An account owns limits, the
 					// credential strategy, and the keys issued under it, so
 					// it is a separate plane from key management above.
-					r.Route("/tenants", func(r chi.Router) {
-						r.Get("/", s.controllers.Tenants.List)
-						r.Post("/", s.controllers.Tenants.Create)
-						r.Get("/{tenant_id}", s.controllers.Tenants.Get)
-						r.Put("/{tenant_id}", s.controllers.Tenants.Update)
-						r.Delete("/{tenant_id}", s.controllers.Tenants.Delete)
+					r.Route("/accounts", func(r chi.Router) {
+						r.Get("/", s.controllers.Accounts.List)
+						r.Post("/", s.controllers.Accounts.Create)
+						r.Get("/{account_id}", s.controllers.Accounts.Get)
+						r.Put("/{account_id}", s.controllers.Accounts.Update)
+						r.Delete("/{account_id}", s.controllers.Accounts.Delete)
 					})
 
 					// System information
@@ -365,15 +365,15 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   DELETE /api/v1/providers/{provider}/credentials          - Remove it
 //   POST   /api/v1/providers/{provider}/credentials/validate - Check it against the catalog schema
 //
-// Provider Credentials, tenant plane (BYOK):
-//   GET    /api/v1/tenants/{tenant_id}/byok                       - List the tenant's own credentials
-//   GET    /api/v1/tenants/{tenant_id}/byok/{provider}            - Read one
-//   PUT    /api/v1/tenants/{tenant_id}/byok/{provider}            - Apply or rotate one
-//   DELETE /api/v1/tenants/{tenant_id}/byok/{provider}            - Remove one
-//   POST   /api/v1/tenants/{tenant_id}/byok/{provider}/validate   - Check one against the catalog schema
+// Provider Credentials, account plane (BYOK):
+//   GET    /api/v1/accounts/{account_id}/byok                       - List the account's own credentials
+//   GET    /api/v1/accounts/{account_id}/byok/{provider}            - Read one
+//   PUT    /api/v1/accounts/{account_id}/byok/{provider}            - Apply or rotate one
+//   DELETE /api/v1/accounts/{account_id}/byok/{provider}            - Remove one
+//   POST   /api/v1/accounts/{account_id}/byok/{provider}/validate   - Check one against the catalog schema
 //
 // Account Usage:
-//   GET    /api/v1/tenants/{tenant_id}/usage/providers - One account's spend grouped by serving provider
+//   GET    /api/v1/accounts/{account_id}/usage/providers - One account's spend grouped by serving provider
 //
 // Admin API:
 //   GET    /api/v1/admin/keys              - List all API keys
@@ -381,11 +381,11 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /api/v1/admin/keys/{key_id}     - Get API key details
 //   PUT    /api/v1/admin/keys/{key_id}     - Update API key
 //   DELETE /api/v1/admin/keys/{key_id}     - Delete API key
-//   GET    /api/v1/admin/tenants           - List accounts
-//   POST   /api/v1/admin/tenants           - Create an account
-//   GET    /api/v1/admin/tenants/{tenant_id}    - Get account details
-//   PUT    /api/v1/admin/tenants/{tenant_id}    - Update an account, revision-checked
-//   DELETE /api/v1/admin/tenants/{tenant_id}    - Delete an account that holds no keys
+//   GET    /api/v1/admin/accounts           - List accounts
+//   POST   /api/v1/admin/accounts           - Create an account
+//   GET    /api/v1/admin/accounts/{account_id}    - Get account details
+//   PUT    /api/v1/admin/accounts/{account_id}    - Update an account, revision-checked
+//   DELETE /api/v1/admin/accounts/{account_id}    - Delete an account that holds no keys
 //   GET    /api/v1/admin/info              - System information
 //   GET    /api/v1/admin/metrics           - System metrics
 //   GET    /api/v1/admin/activity          - List request activity across keys

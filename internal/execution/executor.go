@@ -277,10 +277,10 @@ func (s *session) succeed(evidenceIndex int, credential CredentialEvidence) {
 	evidence.Duration = nonNegativeDuration(evidence.StartedAt, now)
 	evidence.Credential = credential
 	evidence.Transitions = append(evidence.Transitions, Transition{From: StateRunning, To: StateSucceeded, At: now})
-	if s.executor.availability != nil && credential.Owner != CredentialOwnerTenant {
+	if s.executor.availability != nil && credential.Owner != CredentialOwnerAccount {
 		s.executor.availability.RecordSuccess(evidence.Route, evidence.Duration)
 		s.availabilityHeld = false
-	} else if credential.Owner == CredentialOwnerTenant {
+	} else if credential.Owner == CredentialOwnerAccount {
 		s.releaseAvailability()
 	}
 	s.publishOutcome(evidence.Route, credential, nil)
@@ -356,7 +356,7 @@ func (s *session) recordFailure(
 	if s.executor.availability == nil {
 		return
 	}
-	if credential.Owner == CredentialOwnerTenant {
+	if credential.Owner == CredentialOwnerAccount {
 		s.releaseAvailability()
 		return
 	}

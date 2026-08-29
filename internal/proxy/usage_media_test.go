@@ -19,7 +19,7 @@ import (
 // A media turn produces units no token total describes. A generated image is
 // metered per image and a provider reports no tokens for it, so a cost that
 // reads tokens alone reports zero for a turn that charged real money. Zero is
-// also the number a tenant spend budget subtracts, which makes an unpriced
+// also the number an account spend budget subtracts, which makes an unpriced
 // media turn unbounded rather than merely unbilled.
 
 // syntheticPricingSource carries one hand-built catalog into the control plane.

@@ -127,9 +127,9 @@ func usageChatRequest() *ChatCompletionRequest {
 				Content: []inference.ContentPart{{Kind: inference.ContentText, Text: "hello"}},
 			}},
 		},
-		// The tenant and the key are deliberately different values. Usage is
+		// The account and the key are deliberately different values. Usage is
 		// attributed to the key, never to the account it belongs to.
-		TenantID:  "acme",
+		AccountID: "acme",
 		KeyID:     "key-1",
 		RequestID: "req-1",
 		Protocol:  "openai",
@@ -152,11 +152,11 @@ func TestChatCompletionWritesUsageRecord(t *testing.T) {
 	require.Len(t, records, 1)
 	record := records[0]
 	require.Equal(t, "req-1", record.RequestID)
-	// A usage record is keyed by the gateway API key, not by the tenant. A
-	// tenant's consumption is the sum of its keys, so re-keying the record onto
+	// A usage record is keyed by the gateway API key, not by the account. A
+	// account's consumption is the sum of its keys, so re-keying the record onto
 	// the account would erase which key spent what.
 	require.Equal(t, "key-1", record.KeyID)
-	require.NotEqual(t, request.TenantID, record.KeyID)
+	require.NotEqual(t, request.AccountID, record.KeyID)
 	require.Equal(t, "openai", record.Protocol)
 	require.Equal(t, usage.OperationChat, record.Operation)
 	require.Equal(t, "openai/gpt-4o", record.ModelRequested)

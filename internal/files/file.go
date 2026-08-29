@@ -78,7 +78,7 @@ const (
 // carry it out of this package by accident.
 type File struct {
 	ID        string
-	Tenant    string
+	Account   string
 	Filename  string
 	Purpose   Purpose
 	Bytes     int64
@@ -94,8 +94,8 @@ func (f File) Validate() error {
 	switch {
 	case strings.TrimSpace(f.ID) == "":
 		return fmt.Errorf("%w: it has no identifier", ErrInvalidFile)
-	case strings.TrimSpace(f.Tenant) == "":
-		return fmt.Errorf("%w: it names no tenant", ErrInvalidFile)
+	case strings.TrimSpace(f.Account) == "":
+		return fmt.Errorf("%w: it names no account", ErrInvalidFile)
 	case f.blobKey == "":
 		return fmt.Errorf("%w: it names no stored bytes", ErrInvalidFile)
 	case f.Bytes < 0:

@@ -32,7 +32,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../inference",
 		"../failure",
 		"../identity",
-		"../tenant",
+		"../account",
 		"../limits",
 		"../credentials",
 		"../ratelimit",
@@ -55,7 +55,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
 		"github.com/agentstation/starport/internal/identity",
-		"github.com/agentstation/starport/internal/tenant",
+		"github.com/agentstation/starport/internal/account",
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
@@ -99,7 +99,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 	// A repository-owning concept reaches durable storage and the shared
 	// limits vocabulary, and nothing else inside the module.
 	for _, packagePath := range []string{
-		"github.com/agentstation/starport/internal/tenant",
+		"github.com/agentstation/starport/internal/account",
 		"github.com/agentstation/starport/internal/credentials",
 		"github.com/agentstation/starport/internal/ratelimit",
 		"github.com/agentstation/starport/internal/presets",
@@ -110,16 +110,16 @@ func TestImportGraphArchitecture(t *testing.T) {
 			"github.com/agentstation/starport/internal/limits",
 		)
 	}
-	// A gateway API key belongs to a tenant, so identity reaches the account
+	// A gateway API key belongs to an account, so identity reaches the account
 	// model for its ID rules and its canonical ID. The loop above holds the
-	// other direction closed: tenant may never reach identity, because an
+	// other direction closed: account may never reach identity, because an
 	// account exists whether or not a key names it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/identity"],
 		"github.com/agentstation/starport/internal/storage",
 		"github.com/agentstation/starport/internal/limits",
-		"github.com/agentstation/starport/internal/tenant",
+		"github.com/agentstation/starport/internal/account",
 	)
-	// Limits is the vocabulary both a gateway API key and a tenant hold. It
+	// Limits is the vocabulary both a gateway API key and an account hold. It
 	// stays a leaf so neither owner can reach the other through it.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/limits"])
 	// Blob stores opaque bytes at an opaque key. It is a leaf with no internal

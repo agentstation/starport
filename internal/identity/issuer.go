@@ -26,29 +26,29 @@ var gatewayEntropyEncoding = base32.NewEncoding("0123456789ABCDEFGHJKMNPQRSTVWXY
 // ErrIssuerRequired reports an absent identity repository.
 var ErrIssuerRequired = errors.New("identity issuer repository is required")
 
-// TenantChecker reports whether a tenant exists. The issuer holds this
-// rather than a tenant repository so the key concept never learns how an
+// AccountChecker reports whether an account exists. The issuer holds this
+// rather than an account repository so the key concept never learns how an
 // account is stored.
-type TenantChecker interface {
-	Exists(ctx context.Context, tenantID string) (bool, error)
+type AccountChecker interface {
+	Exists(ctx context.Context, accountID string) (bool, error)
 }
 
 // IssuerOption configures an issuer.
 type IssuerOption func(*Issuer)
 
-// WithTenantChecker makes the issuer refuse a key that names an account that
-// does not exist. An issuer built without one validates the tenant ID format
+// WithAccountChecker makes the issuer refuse a key that names an account that
+// does not exist. An issuer built without one validates the account ID format
 // but cannot confirm the account, so every production call site supplies it.
-func WithTenantChecker(checker TenantChecker) IssuerOption {
-	return func(i *Issuer) { i.tenants = checker }
+func WithAccountChecker(checker AccountChecker) IssuerOption {
+	return func(i *Issuer) { i.accounts = checker }
 }
 
 // IssueRequest contains the durable attributes for a new gateway identity.
 type IssueRequest struct {
 	Name string
-	// TenantID names the owning account. An empty value issues the key to the
-	// canonical tenant.
-	TenantID      string
+	// AccountID names the owning account. An empty value issues the key to the
+	// canonical account.
+	AccountID     string
 	Scopes        []string
 	AllowedModels []string
 	Limits        *limits.Limits
@@ -66,7 +66,7 @@ type IssueResult struct {
 // Issuer creates gateway credentials and their durable identity records.
 type Issuer struct {
 	repository Repository
-	tenants    TenantChecker
+	accounts   AccountChecker
 	generate   func() (generatedCredential, error)
 	now        func() time.Time
 }
@@ -120,8 +120,8 @@ func (i *Issuer) issue(
 		return IssueResult{}, err
 	}
 
-	tenantID := ResolveTenantID(request.TenantID)
-	if err := i.requireTenant(ctx, tenantID); err != nil {
+	accountID := ResolveAccountID(request.AccountID)
+	if err := i.requireAccount(ctx, accountID); err != nil {
 		return IssueResult{}, err
 	}
 
@@ -134,7 +134,7 @@ func (i *Issuer) issue(
 		ID:            credential.id,
 		Name:          request.Name,
 		Hash:          hex.EncodeToString(digest[:]),
-		TenantID:      tenantID,
+		AccountID:     accountID,
 		Scopes:        append([]string(nil), request.Scopes...),
 		AllowedModels: append([]string(nil), request.AllowedModels...),
 		Limits:        request.Limits.Clone(),
@@ -153,19 +153,19 @@ func (i *Issuer) issue(
 	return IssueResult{APIKey: record.APIKey, Secret: credential.secret}, nil
 }
 
-// requireTenant refuses a key that names an account that does not exist. A key
-// issued against a missing tenant would authenticate and then resolve to no
+// requireAccount refuses a key that names an account that does not exist. A key
+// issued against a missing account would authenticate and then resolve to no
 // limits and no credential policy, which is worse than refusing it here.
-func (i *Issuer) requireTenant(ctx context.Context, tenantID string) error {
-	if i.tenants == nil {
+func (i *Issuer) requireAccount(ctx context.Context, accountID string) error {
+	if i.accounts == nil {
 		return nil
 	}
-	exists, err := i.tenants.Exists(ctx, tenantID)
+	exists, err := i.accounts.Exists(ctx, accountID)
 	if err != nil {
-		return fmt.Errorf("check tenant %q: %w", tenantID, err)
+		return fmt.Errorf("check account %q: %w", accountID, err)
 	}
 	if !exists {
-		return fmt.Errorf("%w: %s", ErrUnknownTenant, tenantID)
+		return fmt.Errorf("%w: %s", ErrUnknownAccount, accountID)
 	}
 	return nil
 }

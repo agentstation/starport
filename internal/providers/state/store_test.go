@@ -154,7 +154,7 @@ func TestFailureTransitionsRespectDocumentedScope(t *testing.T) {
 	store.PublishOutcome(execution.AttemptOutcome{
 		Route: route,
 		Credential: execution.CredentialEvidence{
-			Owner: execution.CredentialOwnerTenant, MaterialVersion: "tenant-v1",
+			Owner: execution.CredentialOwnerAccount, MaterialVersion: "account-v1",
 		},
 		Failure: scopedFailure(failure.Authentication, failure.ScopeCredential),
 	})

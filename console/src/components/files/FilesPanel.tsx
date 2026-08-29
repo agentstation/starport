@@ -8,11 +8,11 @@ import { Modal } from "@/components/ui/Modal";
 import {
   accessMessage,
   ApiError,
-  DEFAULT_TENANT_ID,
+  DEFAULT_ACCOUNT_ID,
   deleteFile,
   hasSession,
   listFiles,
-  listTenants,
+  listAccounts,
   uploadFile,
   type StoredFile,
 } from "@/lib/api";
@@ -128,13 +128,13 @@ export function FilesPanel() {
   // The account limit is readable only through the admin surface, and only a
   // console session names the account it applies to.
   const accounts = useQuery({
-    queryKey: ["tenants"],
-    queryFn: listTenants,
+    queryKey: ["accounts"],
+    queryFn: listAccounts,
     enabled: access && hasSession(),
     retry: false,
   });
   const bound =
-    (accounts.data ?? []).find((account) => account.id === DEFAULT_TENANT_ID)
+    (accounts.data ?? []).find((account) => account.id === DEFAULT_ACCOUNT_ID)
       ?.limits?.stored_bytes ?? null;
 
   const upload = useMutation({

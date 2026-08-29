@@ -13,7 +13,7 @@ import (
 //
 // It is the only route that turns something an operator can hold into
 // something a browser can hold, and it exists so the browser never has to hold
-// a gateway API key. A key pasted into a console is a long-lived tenant
+// a gateway API key. A key pasted into a console is a long-lived account
 // credential sitting in local storage, where a copied URL, a shared profile, or
 // a browser extension can reach it and nothing can revoke it individually.
 type LaunchController struct {

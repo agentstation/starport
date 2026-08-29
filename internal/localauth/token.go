@@ -1,6 +1,6 @@
 // Package localauth owns the local operator credential.
 //
-// A gateway API key belongs to a tenant and travels: it is issued, stored in a
+// A gateway API key belongs to an account and travels: it is issued, stored in a
 // browser, pasted into an SDK, and revoked. The local admin token belongs to
 // nobody and does not travel. It is a file on the machine running the gateway,
 // readable only by the account that runs it, and holding it is a claim about

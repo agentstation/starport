@@ -9,7 +9,7 @@ import (
 
 // TestEffectiveStrategyNarrowsButNeverWidens pins the rule that decides who
 // pays. The operator sets the account's strategy; a gateway API key may ask for
-// a narrower one, so a tenant the operator denied every operator credential
+// a narrower one, so an account the operator denied every operator credential
 // cannot buy one back by stamping a wider value on its own key.
 func TestEffectiveStrategyNarrowsButNeverWidens(t *testing.T) {
 	tests := []struct {
@@ -80,12 +80,12 @@ func TestEffectiveStrategyNarrowsButNeverWidens(t *testing.T) {
 	}
 }
 
-// TestTenantScopeNamesTheAccount guards the AON3 move off key-scoped storage. A
-// tenant's BYOK credentials must outlive any one gateway API key, so the scope
+// TestAccountScopeNamesTheAccount guards the AON3 move off key-scoped storage. A
+// account's BYOK credentials must outlive any one gateway API key, so the scope
 // names the account and nothing else.
-func TestTenantScopeNamesTheAccount(t *testing.T) {
-	assert.Equal(t, "tenant:acct-1", TenantScope("acct-1"))
-	assert.NotEqual(t, GatewayScope, TenantScope("acct-1"))
+func TestAccountScopeNamesTheAccount(t *testing.T) {
+	assert.Equal(t, "account:acct-1", AccountScope("acct-1"))
+	assert.NotEqual(t, GatewayScope, AccountScope("acct-1"))
 	assert.Equal(t, "*", GatewayScope)
 }
 

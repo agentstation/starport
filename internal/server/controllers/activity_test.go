@@ -197,7 +197,7 @@ func TestAdminMetricsReflectRecordedUsage(t *testing.T) {
 
 	identities, err := identity.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	handler := NewAdminController(identities, newAdminTestTenants(t), repository)
+	handler := NewAdminController(identities, newAdminTestAccounts(t), repository)
 
 	recorder := httptest.NewRecorder()
 	handler.Metrics(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/metrics", nil))
@@ -255,26 +255,26 @@ func TestActivityByProviderAggregates(t *testing.T) {
 	repository := newActivityTestRepository(t)
 	base := time.Now().Add(-time.Minute)
 	priced := activityTestRecord("key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusOK, base)
-	priced.TenantID = "acme"
+	priced.AccountID = "acme"
 	unpriced := activityTestRecord("key-a", "req-2", "openai/gpt-4o", "openai", usage.StatusOK, base.Add(time.Second))
-	unpriced.TenantID = "acme"
+	unpriced.AccountID = "acme"
 	unpriced.Cost = nil
 	unpriced.CostUnavailableReason = usage.CostReasonNoPricing
 	// A second key under the same account. Its spend counts.
 	sibling := activityTestRecord("key-b", "req-3", "groq/llama-3.3-70b", "groq", usage.StatusOK, base.Add(2*time.Second))
-	sibling.TenantID = "acme"
+	sibling.AccountID = "acme"
 	// A different account. Its spend must not appear.
 	foreign := activityTestRecord("key-c", "req-4", "openai/gpt-4o", "openai", usage.StatusOK, base.Add(3*time.Second))
-	foreign.TenantID = "globex"
+	foreign.AccountID = "globex"
 	seedActivityRecords(t, repository, priced, unpriced, sibling, foreign)
 
 	controller := NewActivityController(repository)
 
 	router := chi.NewRouter()
-	router.Get("/api/v1/tenants/{tenant_id}/usage/providers", controller.ByProvider)
+	router.Get("/api/v1/accounts/{account_id}/usage/providers", controller.ByProvider)
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/tenants/acme/usage/providers", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/accounts/acme/usage/providers", nil))
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	var response struct {
@@ -313,14 +313,14 @@ func TestActivityByProviderAggregates(t *testing.T) {
 func TestActivityByProviderExcludesOtherAccounts(t *testing.T) {
 	repository := newActivityTestRepository(t)
 	record := activityTestRecord("key-a", "req-1", "openai/gpt-4o", "openai", usage.StatusOK, time.Now().Add(-time.Minute))
-	record.TenantID = "acme"
+	record.AccountID = "acme"
 	seedActivityRecords(t, repository, record)
 
 	router := chi.NewRouter()
-	router.Get("/api/v1/tenants/{tenant_id}/usage/providers", NewActivityController(repository).ByProvider)
+	router.Get("/api/v1/accounts/{account_id}/usage/providers", NewActivityController(repository).ByProvider)
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/tenants/globex/usage/providers", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/accounts/globex/usage/providers", nil))
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	var response struct {

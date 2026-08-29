@@ -1,8 +1,8 @@
-// Package tenant owns the account identity that holds gateway API keys,
+// Package account owns the account identity that holds gateway API keys,
 // limits, and a provider credential policy. A gateway API key authenticates
-// a request. The tenant behind that key owns what the request may reach and
+// a request. The account behind that key owns what the request may reach and
 // how much of it the request may spend.
-package tenant
+package account
 
 import (
 	"errors"
@@ -13,11 +13,11 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 )
 
-// DefaultID is the canonical tenant. Every deployment has it from first boot,
-// and a gateway API key with no explicit tenant belongs to it.
+// DefaultID is the canonical account. Every deployment has it from first boot,
+// and a gateway API key with no explicit account belongs to it.
 const DefaultID = "default"
 
-// DefaultName is the display name of the canonical tenant.
+// DefaultName is the display name of the canonical account.
 const DefaultName = "Default"
 
 // DefaultOutstandingJobs bounds how many asynchronous jobs one account may
@@ -35,35 +35,35 @@ const DefaultName = "Default"
 const DefaultOutstandingJobs int64 = 8
 
 // CredentialStrategy names which provider credential sources serve this
-// tenant, and in which order. The tenant owns this value because it is how
+// account, and in which order. The account owns this value because it is how
 // an operator says whether an account may draw on the deployment's own
-// provider credentials. A request may narrow the tenant's strategy. It may
+// provider credentials. A request may narrow the account's strategy. It may
 // never widen it.
 type CredentialStrategy string
 
 const (
 	// StrategyOperatorFirst spends the operator's credentials before the
-	// tenant's own: environment, then gateway, then BYOK. It is the default.
+	// account's own: environment, then gateway, then BYOK. It is the default.
 	StrategyOperatorFirst CredentialStrategy = "operator_first"
-	// StrategyBYOKFirst prefers the tenant's own credential and falls back
+	// StrategyBYOKFirst prefers the account's own credential and falls back
 	// to the operator's: BYOK, then environment, then gateway.
 	StrategyBYOKFirst CredentialStrategy = "byok_first"
-	// StrategyBYOKOnly serves this tenant from its own credentials alone. It
+	// StrategyBYOKOnly serves this account from its own credentials alone. It
 	// is how an operator denies an account every operator credential.
 	StrategyBYOKOnly CredentialStrategy = "byok_only"
 )
 
-// Tenant is one account identity.
-type Tenant struct {
+// Account is one account identity.
+type Account struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	// Limits is the account-wide cap. It meters the sum over every key this
-	// tenant holds, so it is not a per-key ceiling: a key limit bounds one
+	// account holds, so it is not a per-key ceiling: a key limit bounds one
 	// key and never raises or lowers what the account may spend in total. A
 	// request satisfies both meters. A nil value sets no account-wide cap.
 	Limits *limits.Limits `json:"limits,omitempty"`
 	// CredentialStrategy is the default provider credential policy for every
-	// request this tenant makes. An empty value reads as StrategyOperatorFirst.
+	// request this account makes. An empty value reads as StrategyOperatorFirst.
 	CredentialStrategy CredentialStrategy `json:"credential_strategy,omitempty"`
 	Metadata           map[string]any     `json:"metadata,omitempty"`
 	Active             bool               `json:"active"`
@@ -72,12 +72,12 @@ type Tenant struct {
 }
 
 var (
-	// ErrMissingID reports a tenant without a durable ID.
-	ErrMissingID = errors.New("missing tenant id")
-	// ErrInvalidID reports a tenant ID outside the public contract.
-	ErrInvalidID = errors.New("invalid tenant id: must be 1-255 characters")
-	// ErrInvalidName reports an invalid tenant name.
-	ErrInvalidName = errors.New("invalid tenant name: must be 1-255 characters")
+	// ErrMissingID reports an account without a durable ID.
+	ErrMissingID = errors.New("missing account id")
+	// ErrInvalidID reports an account ID outside the public contract.
+	ErrInvalidID = errors.New("invalid account id: must be 1-255 characters")
+	// ErrInvalidName reports an invalid account name.
+	ErrInvalidName = errors.New("invalid account name: must be 1-255 characters")
 	// ErrInvalidTimestamps reports an update recorded before creation.
 	ErrInvalidTimestamps = errors.New("updated_at must not precede created_at")
 	// ErrInvalidCredentialStrategy reports an unknown credential strategy.
@@ -86,12 +86,12 @@ var (
 	)
 )
 
-// A tenant ID reaches a credential storage key and a request log field, so it
+// An account ID reaches a credential storage key and a request log field, so it
 // stays inside the same character set the gateway already accepts for an
 // identity name.
 var validIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-// ValidateID checks the public tenant-ID contract.
+// ValidateID checks the public account-ID contract.
 func ValidateID(id string) error {
 	if id == "" || len(id) > 255 {
 		return ErrInvalidID
@@ -105,8 +105,8 @@ func ValidateID(id string) error {
 	return nil
 }
 
-// Validate checks the tenant invariants.
-func (t Tenant) Validate() error {
+// Validate checks the account invariants.
+func (t Account) Validate() error {
 	if t.ID == "" {
 		return ErrMissingID
 	}
@@ -128,12 +128,12 @@ func (t Tenant) Validate() error {
 	return nil
 }
 
-// IsDefault reports whether this is the canonical tenant.
-func (t Tenant) IsDefault() bool { return t.ID == DefaultID }
+// IsDefault reports whether this is the canonical account.
+func (t Account) IsDefault() bool { return t.ID == DefaultID }
 
 // OutstandingJobsBound resolves how many jobs this account may hold open,
 // treating an unset limit as the default rather than as unlimited.
-func (t Tenant) OutstandingJobsBound() int64 {
+func (t Account) OutstandingJobsBound() int64 {
 	if t.Limits == nil || t.Limits.OutstandingJobs == nil {
 		return DefaultOutstandingJobs
 	}
@@ -142,7 +142,7 @@ func (t Tenant) OutstandingJobsBound() int64 {
 
 // EffectiveCredentialStrategy resolves the stored value, treating an unset
 // strategy as the default rather than as an error.
-func (t Tenant) EffectiveCredentialStrategy() CredentialStrategy {
+func (t Account) EffectiveCredentialStrategy() CredentialStrategy {
 	if t.CredentialStrategy == "" {
 		return StrategyOperatorFirst
 	}

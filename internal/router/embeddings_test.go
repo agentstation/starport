@@ -44,7 +44,7 @@ func TestRouteEmbeddingsUsesRequestCredentialPolicy(t *testing.T) {
 
 	response, err := modelRouter.RouteEmbeddings(t.Context(), &EmbeddingRequest{
 		EmbeddingsRequest: &connectors.EmbeddingsRequest{Model: "author/embed", Input: "hello"},
-		TenantID:          "tenant-a",
+		AccountID:         "account-a",
 		APIKeyConfig: &APIKeyConfig{
 			AllowedModels: []string{"author/embed"}, AllowedProviders: []string{"acme"},
 			CredentialStrategy: keyring.BYOKFirst,
@@ -74,7 +74,7 @@ func TestRouteEmbeddingsUserOnlyNeverProbesOperatorMaterial(t *testing.T) {
 
 	_, err := modelRouter.RouteEmbeddings(t.Context(), &EmbeddingRequest{
 		EmbeddingsRequest: &connectors.EmbeddingsRequest{Model: "author/embed", Input: "hello"},
-		TenantID:          "tenant-a",
+		AccountID:         "account-a",
 		APIKeyConfig:      &APIKeyConfig{CredentialStrategy: keyring.BYOKOnly},
 	})
 	require.Error(t, err)

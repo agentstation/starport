@@ -125,7 +125,7 @@ export function FirstContact({ next }: { next?: string }) {
           <p className="text-sm text-text-3">
             The token above belongs to the machine running the gateway, so a browser somewhere else
             cannot print it. Use a gateway API key instead. It is a different credential: it
-            authenticates a caller to this gateway and is metered against a tenant, where the token
+            authenticates a caller to this gateway and is metered against an account, where the token
             above is the operator of the machine. It stays in this browser.
           </p>
           <form

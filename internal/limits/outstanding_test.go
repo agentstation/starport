@@ -36,7 +36,7 @@ func TestConcurrentSubmissionsCannotBothPassABoundThatAdmitsOne(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[index] = meter.Reserve(ctx, "tenant_a", 1, 1)
+			results[index] = meter.Reserve(ctx, "account_a", 1, 1)
 		}()
 	}
 	wg.Wait()
@@ -51,7 +51,7 @@ func TestConcurrentSubmissionsCannotBothPassABoundThatAdmitsOne(t *testing.T) {
 	}
 	require.Equal(t, 1, admitted)
 
-	total, err := meter.Total(ctx, "tenant_a")
+	total, err := meter.Total(ctx, "account_a")
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total, "the refused claim came back out")
 }
@@ -65,10 +65,10 @@ func TestAFinishedJobLetsTheNextOneIn(t *testing.T) {
 	ctx := context.Background()
 	meter, _ := newTestJobMeter(t)
 
-	require.NoError(t, meter.Reserve(ctx, "tenant_a", 1, 1))
-	require.ErrorIs(t, meter.Reserve(ctx, "tenant_a", 1, 1), ErrTooManyOutstandingJobs)
-	require.NoError(t, meter.Release(ctx, "tenant_a", 1))
-	require.NoError(t, meter.Reserve(ctx, "tenant_a", 1, 1))
+	require.NoError(t, meter.Reserve(ctx, "account_a", 1, 1))
+	require.ErrorIs(t, meter.Reserve(ctx, "account_a", 1, 1), ErrTooManyOutstandingJobs)
+	require.NoError(t, meter.Release(ctx, "account_a", 1))
+	require.NoError(t, meter.Reserve(ctx, "account_a", 1, 1))
 }
 
 // TestTheRefusalStatesTheBound is what the 429 body reads. An operator raising
@@ -79,8 +79,8 @@ func TestTheRefusalStatesTheBound(t *testing.T) {
 	ctx := context.Background()
 	meter, _ := newTestJobMeter(t)
 
-	require.NoError(t, meter.Reserve(ctx, "tenant_a", 2, 2))
-	err := meter.Reserve(ctx, "tenant_a", 1, 2)
+	require.NoError(t, meter.Reserve(ctx, "account_a", 2, 2))
+	err := meter.Reserve(ctx, "account_a", 1, 2)
 	require.ErrorIs(t, err, ErrTooManyOutstandingJobs)
 	require.Contains(t, err.Error(), strconv.Itoa(2))
 	require.Contains(t, err.Error(), "outstanding job")
@@ -93,10 +93,10 @@ func TestEachAccountHoldsItsOwnSlots(t *testing.T) {
 	ctx := context.Background()
 	meter, _ := newTestJobMeter(t)
 
-	require.NoError(t, meter.Reserve(ctx, "tenant_a", 1, 1))
-	require.NoError(t, meter.Reserve(ctx, "tenant_b", 1, 1))
+	require.NoError(t, meter.Reserve(ctx, "account_a", 1, 1))
+	require.NoError(t, meter.Reserve(ctx, "account_b", 1, 1))
 
-	total, err := meter.Total(ctx, "tenant_b")
+	total, err := meter.Total(ctx, "account_b")
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
 }
@@ -121,7 +121,7 @@ func TestTheTighterOfTheTwoBoundsRefusesFirst(t *testing.T) {
 	rule, bounded = TightestOutstandingJobs(&Limits{OutstandingJobs: &accountBound}, nil)
 	require.True(t, bounded)
 	require.Equal(t, accountBound, rule.Limit)
-	require.Equal(t, ScopeTenant, rule.Scope)
+	require.Equal(t, ScopeAccount, rule.Scope)
 
 	_, bounded = TightestOutstandingJobs(nil, nil)
 	require.False(t, bounded, "an account that states no bound is not bounded by this package")

@@ -53,7 +53,7 @@ func (a *JobAccountant) RecordJob(ctx context.Context, entry jobs.AccountingEntr
 	record := usage.Record{
 		RequestID:      entry.JobID,
 		KeyID:          orAnonymous(entry.KeyID, usageAnonymousKeyID),
-		TenantID:       orAnonymous(entry.Tenant, usageAnonymousTenantID),
+		AccountID:      orAnonymous(entry.Account, usageAnonymousAccountID),
 		Timestamp:      entry.TerminalAt,
 		Operation:      usage.OperationVideos,
 		ModelRequested: entry.Model,

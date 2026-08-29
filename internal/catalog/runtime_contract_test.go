@@ -60,13 +60,13 @@ func (*capturingAcquisitionSyncer) PublishObservations(
 	return starmap.Publication{}, nil
 }
 
-func TestTenantOfferingsEnterCatalogGeneration(t *testing.T) {
+func TestAccountOfferingsEnterCatalogGeneration(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
 	runtime, err := OpenRuntime(ctx, store, "")
 	require.NoError(t, err)
 
-	observation := tenantOfferingObservation(t, runtime.ControlPlane().Current().Catalog())
+	observation := accountOfferingObservation(t, runtime.ControlPlane().Current().Catalog())
 	before := runtime.ControlPlane().Current().GenerationID()
 	publication, err := runtime.PublishObservations(ctx, observation)
 	require.NoError(t, err)
@@ -76,41 +76,41 @@ func TestTenantOfferingsEnterCatalogGeneration(t *testing.T) {
 
 	offering, err := runtime.ControlPlane().Current().Catalog().Offering(
 		catalogs.ProviderIDOllama,
-		"tenant-deployment",
+		"account-deployment",
 	)
 	require.NoError(t, err)
 	require.NoError(t, runtime.ControlPlane().SetAdapter(
 		testAdapterAvailability(catalogs.ProviderIDOllama, offering, true),
 	))
-	route, found := runtime.ControlPlane().Current().ResolveRoute("ollama/tenant-deployment")
+	route, found := runtime.ControlPlane().Current().ResolveRoute("ollama/account-deployment")
 	require.True(t, found)
-	require.Equal(t, catalogs.ModelDefinitionID("tenant/local-chat"), route.DefinitionID)
+	require.Equal(t, catalogs.ModelDefinitionID("account/local-chat"), route.DefinitionID)
 
 	reopened, err := OpenRuntime(ctx, store, "")
 	require.NoError(t, err)
 	require.Equal(t, publication.GenerationID, reopened.ControlPlane().Current().GenerationID())
 	_, err = reopened.ControlPlane().Current().Catalog().Offering(
 		catalogs.ProviderIDOllama,
-		"tenant-deployment",
+		"account-deployment",
 	)
 	require.NoError(t, err)
 }
 
-func tenantOfferingObservation(t *testing.T, baseline *catalogs.Catalog) sources.Observation {
+func accountOfferingObservation(t *testing.T, baseline *catalogs.Catalog) sources.Observation {
 	t.Helper()
 	builder, err := catalogs.NewBuilderFrom(baseline)
 	require.NoError(t, err)
-	require.NoError(t, builder.SetAuthor(catalogs.Author{ID: "tenant", Name: "Tenant"}))
-	require.NoError(t, builder.SetAuthorModel("tenant", catalogs.Model{
+	require.NoError(t, builder.SetAuthor(catalogs.Author{ID: "account", Name: "Account"}))
+	require.NoError(t, builder.SetAuthorModel("account", catalogs.Model{
 		ID: "local-chat", Name: "Local Chat",
-		Authors: []catalogs.Author{{ID: "tenant", Name: "Tenant"}},
+		Authors: []catalogs.Author{{ID: "account", Name: "Account"}},
 		Features: &catalogs.ModelFeatures{Modalities: catalogs.ModelModalities{
 			Input:  []catalogs.ModelModality{catalogs.ModelModalityText},
 			Output: []catalogs.ModelModality{catalogs.ModelModalityText},
 		}},
 	}))
 	require.NoError(t, builder.SetProviderModel(catalogs.ProviderIDOllama, catalogs.Model{
-		ID: "tenant-deployment", ModelRef: "tenant/local-chat", Name: "Tenant deployment",
+		ID: "account-deployment", ModelRef: "account/local-chat", Name: "Account deployment",
 		Status: catalogs.ModelStatusActive,
 		Features: &catalogs.ModelFeatures{Modalities: catalogs.ModelModalities{
 			Input:  []catalogs.ModelModality{catalogs.ModelModalityText},

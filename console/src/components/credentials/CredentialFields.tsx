@@ -3,8 +3,8 @@ import { INPUT_CLASS } from "@/components/ui/Form";
 
 // The catalog declares what a provider's credential is made of, so neither
 // credential plane assumes an "api key". This module owns that contract for
-// both: the operator's gateway credential on a provider screen, and a tenant's
-// BYOK credential on the tenants screen. They differ in who owns the value and
+// both: the operator's gateway credential on a provider screen, and an account's
+// BYOK credential on the accounts screen. They differ in who owns the value and
 // which route stores it. The fields a provider declares are the same either
 // way, and stating them twice would let the two drift.
 

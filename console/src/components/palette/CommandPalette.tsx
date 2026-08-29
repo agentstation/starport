@@ -50,7 +50,7 @@ const PAGES: { path: string; label: string; icon: typeof LayoutDashboard }[] = [
   { path: "/files", label: "Files", icon: FileText },
   { path: "/jobs", label: "Jobs", icon: Film },
   { path: "/documents", label: "Documents", icon: ScanText },
-  { path: "/tenants", label: "Accounts", icon: Building2 },
+  { path: "/accounts", label: "Accounts", icon: Building2 },
   { path: "/usage", label: "Usage", icon: BarChart3 },
   { path: "/presets", label: "Presets", icon: SlidersHorizontal },
   { path: "/settings", label: "Settings", icon: Settings },

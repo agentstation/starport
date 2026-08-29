@@ -96,7 +96,7 @@ func TestProcessChatCompletionPassesProviderPreferences(t *testing.T) {
 	require.Positive(t, router.req.Metadata.EstimatedTokens)
 }
 
-func TestProcessEmbeddingsDelegatesTenantCredentialAndRoutingPolicy(t *testing.T) {
+func TestProcessEmbeddingsDelegatesAccountCredentialAndRoutingPolicy(t *testing.T) {
 	router := &capturingRouter{}
 	service := &proxy{router: router}
 
@@ -104,14 +104,14 @@ func TestProcessEmbeddingsDelegatesTenantCredentialAndRoutingPolicy(t *testing.T
 		Request: inference.EmbeddingRequest{
 			Model: "acme/opaque/embed@002", Input: inference.EmbeddingInput{Texts: []string{"hello"}},
 		},
-		TenantID: "tenant-a",
+		AccountID: "account-a",
 		APIKeyConfig: &APIKeyRoutingConfig{
 			AllowedModels: []string{"acme/opaque/embed@002"}, AllowedProviders: []string{"acme"},
 		},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, router.embeddingReq)
-	require.Equal(t, "tenant-a", router.embeddingReq.TenantID)
+	require.Equal(t, "account-a", router.embeddingReq.AccountID)
 	require.Equal(t, []string{"acme"}, router.embeddingReq.APIKeyConfig.AllowedProviders)
 	require.Equal(t, []string{"acme/opaque/embed@002"}, router.embeddingReq.APIKeyConfig.AllowedModels)
 	require.Equal(t, "acme/opaque/embed@002", response.Response.Model)

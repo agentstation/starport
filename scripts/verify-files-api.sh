@@ -4,7 +4,7 @@
 #
 #   - one blob contract stores opaque bytes over streams, and two backends
 #     satisfy it without an interface change,
-#   - a file record names its bytes, belongs to one tenant, and survives a
+#   - a file record names its bytes, belongs to one account, and survives a
 #     crash between the two stores,
 #   - five routes serve the OpenAI file object behind two scopes, with a
 #     retention window and a stored byte bound that hold,
@@ -128,7 +128,7 @@ check FIL-V06 "an incomplete object store configuration refuses startup" \
 
 # --- Phase B, the record and the routes ---
 
-check FIL-V07 "a read for another tenant returns a not-found result" \
+check FIL-V07 "a read for another account returns a not-found result" \
   in_tests ErrFileNotFound internal/files
 
 check FIL-V08 "a crash before the commit leaves no reachable file" \

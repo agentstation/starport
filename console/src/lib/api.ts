@@ -37,7 +37,7 @@ export function hasSession(): boolean {
 
 // Credential is what this browser will present on the next request. The two
 // kinds are deliberately unalike: a session belongs to a person at this
-// machine and expires; a gateway API key belongs to a tenant and does not.
+// machine and expires; a gateway API key belongs to an account and does not.
 export type Credential =
   | { kind: "session" }
   | { kind: "key"; value: string }
@@ -45,7 +45,7 @@ export type Credential =
 
 // credential prefers a session over a stored key. A browser holding both got
 // the session more recently and from the machine itself, and sending a bearer
-// key beside it would meter the request against a tenant when the reader is
+// key beside it would meter the request against an account when the reader is
 // the operator of the machine.
 export function credential(): Credential {
   if (hasSession()) return { kind: "session" };
@@ -426,10 +426,10 @@ export type KeyLimits = {
 export type GatewayKey = {
   id: string;
   name?: string;
-  // tenant_id names the account the key belongs to. Anything the account
+  // account_id names the account the key belongs to. Anything the account
   // owns — its BYOK credentials, its limits — is addressed by this and never
   // by the key ID.
-  tenant_id?: string;
+  account_id?: string;
   scopes?: string[];
   allowed_models?: string[];
   limits?: KeyLimits | null;
@@ -731,27 +731,27 @@ export function validateGatewayCredential(
   );
 }
 
-// --- BYOK: the provider credentials one tenant brings for itself ---
+// --- BYOK: the provider credentials one account brings for itself ---
 //
-// These are addressed by tenant, never by gateway API key. A tenant's
-// credentials outlive any key it rotates, and a second key in the same tenant
+// These are addressed by account, never by gateway API key. An account's
+// credentials outlive any key it rotates, and a second key in the same account
 // reaches the same set. The deployment-wide credential an operator applies is
 // a separate plane on the provider itself and is not BYOK.
 
-// DEFAULT_TENANT_ID is the canonical account every deployment has from first
+// DEFAULT_ACCOUNT_ID is the canonical account every deployment has from first
 // boot. A key that names no account runs under it.
-export const DEFAULT_TENANT_ID = "default";
+export const DEFAULT_ACCOUNT_ID = "default";
 
-function byokPath(tenantId: string, provider?: string): string {
-  const base = `/api/v1/tenants/${encodeURIComponent(tenantId)}/byok`;
+function byokPath(accountId: string, provider?: string): string {
+  const base = `/api/v1/accounts/${encodeURIComponent(accountId)}/byok`;
   return provider ? `${base}/${encodeURIComponent(provider)}` : base;
 }
 
 export async function listBYOKCredentials(
-  tenantId: string,
+  accountId: string,
 ): Promise<ProviderCredentialSummary[]> {
   const body = await request<{ credentials?: ProviderCredentialSummary[] }>(
-    byokPath(tenantId),
+    byokPath(accountId),
   );
   return body?.credentials ?? [];
 }
@@ -760,37 +760,37 @@ export async function listBYOKCredentials(
 // upsert, so the caller states what the credential should be without first
 // asking whether one is already stored.
 export function putBYOKCredential(
-  tenantId: string,
+  accountId: string,
   provider: string,
   body: {
     credentials: Record<string, string>;
     config?: Record<string, string>;
   },
 ): Promise<unknown> {
-  return request<unknown>(byokPath(tenantId, provider), {
+  return request<unknown>(byokPath(accountId, provider), {
     method: "PUT",
     body,
   });
 }
 
 export function deleteBYOKCredential(
-  tenantId: string,
+  accountId: string,
   provider: string,
 ): Promise<unknown> {
-  return request<unknown>(byokPath(tenantId, provider), { method: "DELETE" });
+  return request<unknown>(byokPath(accountId, provider), { method: "DELETE" });
 }
 
 export function validateBYOKCredential(
-  tenantId: string,
+  accountId: string,
   provider: string,
 ): Promise<{ valid?: boolean }> {
   return request<{ valid?: boolean }>(
-    `${byokPath(tenantId, provider)}/validate`,
+    `${byokPath(accountId, provider)}/validate`,
     { method: "POST" },
   );
 }
 
-// --- Tenants: the accounts an operator governs ---
+// --- Accounts: the accounts an operator governs ---
 
 // CredentialStrategy names which credential sources serve an account, and in
 // which order. It is the operator's lever for whether an account may draw on
@@ -806,9 +806,9 @@ export const CREDENTIAL_STRATEGY_LABELS: Record<CredentialStrategy, string> = {
   byok_only: "This account's own credentials only",
 };
 
-// TenantLimits meters the sum over every key the account holds. It is not a
+// AccountLimits meters the sum over every key the account holds. It is not a
 // per-key ceiling: a key limit bounds one key, and a request satisfies both.
-export type TenantLimits = {
+export type AccountLimits = {
   requests?: { limit?: number; window_seconds?: number } | null;
   spend?: { limit?: number; interval?: string } | null;
   tokens?: { limit?: number; interval?: string } | null;
@@ -818,10 +818,10 @@ export type TenantLimits = {
   stored_bytes?: number | null;
 };
 
-export type Tenant = {
+export type Account = {
   id: string;
   name?: string;
-  limits?: TenantLimits | null;
+  limits?: AccountLimits | null;
   credential_strategy?: CredentialStrategy;
   metadata?: Record<string, unknown> | null;
   active?: boolean;
@@ -829,43 +829,43 @@ export type Tenant = {
   updated_at?: string;
 };
 
-export async function listTenants(): Promise<Tenant[]> {
-  const body = await request<{ tenants?: Tenant[] }>("/api/v1/admin/tenants");
-  return body?.tenants ?? [];
+export async function listAccounts(): Promise<Account[]> {
+  const body = await request<{ accounts?: Account[] }>("/api/v1/admin/accounts");
+  return body?.accounts ?? [];
 }
 
-export function getTenant(tenantId: string): Promise<Tenant> {
-  return request<Tenant>(
-    `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}`,
+export function getAccount(accountId: string): Promise<Account> {
+  return request<Account>(
+    `/api/v1/admin/accounts/${encodeURIComponent(accountId)}`,
   );
 }
 
-export function createTenant(body: {
+export function createAccount(body: {
   id: string;
   name?: string;
   credential_strategy?: CredentialStrategy;
-}): Promise<Tenant> {
-  return request<Tenant>("/api/v1/admin/tenants", { method: "POST", body });
+}): Promise<Account> {
+  return request<Account>("/api/v1/admin/accounts", { method: "POST", body });
 }
 
-export function updateTenant(
-  tenantId: string,
+export function updateAccount(
+  accountId: string,
   body: {
     name?: string;
     credential_strategy?: CredentialStrategy;
-    limits?: TenantLimits | null;
+    limits?: AccountLimits | null;
     active?: boolean;
   },
-): Promise<Tenant> {
-  return request<Tenant>(
-    `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}`,
+): Promise<Account> {
+  return request<Account>(
+    `/api/v1/admin/accounts/${encodeURIComponent(accountId)}`,
     { method: "PUT", body },
   );
 }
 
-export function deleteTenant(tenantId: string): Promise<unknown> {
+export function deleteAccount(accountId: string): Promise<unknown> {
   return request<unknown>(
-    `/api/v1/admin/tenants/${encodeURIComponent(tenantId)}`,
+    `/api/v1/admin/accounts/${encodeURIComponent(accountId)}`,
     { method: "DELETE" },
   );
 }

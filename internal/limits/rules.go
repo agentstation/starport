@@ -1,6 +1,6 @@
 package limits
 
-// A tenant limit and a key limit are not two candidate values for one meter.
+// An account limit and a key limit are not two candidate values for one meter.
 // They meter different populations: the account meter counts every key the
 // account holds, and the key meter counts one key. Resolving them to whichever
 // number is smaller would let an account with N keys spend N times its own cap,
@@ -14,9 +14,9 @@ package limits
 type Scope string
 
 const (
-	// ScopeTenant is an account-wide limit. It meters every key the account
+	// ScopeAccount is an account-wide limit. It meters every key the account
 	// holds, so it is the operator's cap on what the account may spend.
-	ScopeTenant Scope = "tenant"
+	ScopeAccount Scope = "account"
 	// ScopeKey is one gateway API key's own limit.
 	ScopeKey Scope = "key"
 )
@@ -48,10 +48,10 @@ type BudgetRule struct {
 // applies at key scope only when the key sets no request limit of its own,
 // because an explicit key limit is admin intent about that key. Pass nil when
 // the deployment has no global window.
-func RequestRules(tenantLimits, keyLimits *Limits, deploymentDefault *RequestLimit) []RequestRule {
+func RequestRules(accountLimits, keyLimits *Limits, deploymentDefault *RequestLimit) []RequestRule {
 	rules := make([]RequestRule, 0, 2)
-	if tenantLimits != nil && tenantLimits.Requests != nil {
-		rules = append(rules, RequestRule{Scope: ScopeTenant, Limit: *tenantLimits.Requests})
+	if accountLimits != nil && accountLimits.Requests != nil {
+		rules = append(rules, RequestRule{Scope: ScopeAccount, Limit: *accountLimits.Requests})
 	}
 	switch {
 	case keyLimits != nil && keyLimits.Requests != nil:
@@ -64,13 +64,13 @@ func RequestRules(tenantLimits, keyLimits *Limits, deploymentDefault *RequestLim
 
 // BudgetRules returns every consumption meter one request must satisfy for one
 // dimension, account before key.
-func BudgetRules(tenantLimits, keyLimits *Limits, dimension Dimension) []BudgetRule {
+func BudgetRules(accountLimits, keyLimits *Limits, dimension Dimension) []BudgetRule {
 	rules := make([]BudgetRule, 0, 2)
 	for _, holder := range []struct {
 		scope  Scope
 		limits *Limits
 	}{
-		{ScopeTenant, tenantLimits},
+		{ScopeAccount, accountLimits},
 		{ScopeKey, keyLimits},
 	} {
 		if budget := holder.limits.budget(dimension); budget != nil {
@@ -121,8 +121,8 @@ type OutstandingJobsRule = LevelRule
 // A key bound is an operator asking that this key not push the account past a
 // tighter number than the account's own. The returned scope names which holder
 // set the bound, so a refusal can name the owner an operator has to talk to.
-func TightestStoredBytes(tenantLimits, keyLimits *Limits) (StoredBytesRule, bool) {
-	return tightestLevel(tenantLimits, keyLimits, func(l *Limits) *int64 { return l.StoredBytes })
+func TightestStoredBytes(accountLimits, keyLimits *Limits) (StoredBytesRule, bool) {
+	return tightestLevel(accountLimits, keyLimits, func(l *Limits) *int64 { return l.StoredBytes })
 }
 
 // TightestOutstandingJobs reports the outstanding job bound a submission must
@@ -132,20 +132,20 @@ func TightestStoredBytes(tenantLimits, keyLimits *Limits) (StoredBytesRule, bool
 // belongs to an account, so both bounds read one counter and the smaller of
 // them satisfies the larger. A key bound is an operator asking that this key
 // not fill the account's queue on its own.
-func TightestOutstandingJobs(tenantLimits, keyLimits *Limits) (OutstandingJobsRule, bool) {
-	return tightestLevel(tenantLimits, keyLimits, func(l *Limits) *int64 { return l.OutstandingJobs })
+func TightestOutstandingJobs(accountLimits, keyLimits *Limits) (OutstandingJobsRule, bool) {
+	return tightestLevel(accountLimits, keyLimits, func(l *Limits) *int64 { return l.OutstandingJobs })
 }
 
 // tightestLevel picks the smaller of the account bound and the key bound for
 // one level dimension, and reports which holder set it.
-func tightestLevel(tenantLimits, keyLimits *Limits, read func(*Limits) *int64) (LevelRule, bool) {
+func tightestLevel(accountLimits, keyLimits *Limits, read func(*Limits) *int64) (LevelRule, bool) {
 	var tightest LevelRule
 	found := false
 	for _, holder := range []struct {
 		scope  Scope
 		limits *Limits
 	}{
-		{ScopeTenant, tenantLimits},
+		{ScopeAccount, accountLimits},
 		{ScopeKey, keyLimits},
 	} {
 		if holder.limits == nil {

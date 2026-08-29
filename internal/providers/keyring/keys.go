@@ -2,7 +2,7 @@
 // spend. Three sources feed it, and two of the three belong to the operator:
 // a credential read from the process environment, a credential the operator
 // applies for the whole deployment at the gateway scope, and a credential a
-// tenant brings for itself. Only the last of those is BYOK, which is why the
+// account brings for itself. Only the last of those is BYOK, which is why the
 // package is not named for it.
 package keyring
 
@@ -22,16 +22,16 @@ const (
 	// StrategyMetadataKey is the API-key metadata field that selects inference
 	// credential order.
 	StrategyMetadataKey = "provider_credential_strategy"
-	tenantScopePrefix   = "tenant:"
+	accountScopePrefix  = "account:"
 	// GatewayScope is the credential scope an operator applies once for the
-	// whole deployment. Every tenant that a strategy permits can spend it. The
+	// whole deployment. Every account that a strategy permits can spend it. The
 	// record layer owns the value, so the two can never drift apart.
 	GatewayScope = credentials.GatewayScope
 )
 
 // CredentialSource identifies one request-bound inference credential plane.
 // The first two planes hold operator credentials. Only SourceBYOK holds a
-// credential a tenant brought for itself.
+// credential an account brought for itself.
 type CredentialSource string
 
 const (
@@ -41,7 +41,7 @@ const (
 	// SourceGateway selects a credential the operator applied for the whole
 	// deployment at GatewayScope.
 	SourceGateway CredentialSource = "gateway"
-	// SourceBYOK selects the credential the request's own tenant brought.
+	// SourceBYOK selects the credential the request's own account brought.
 	SourceBYOK CredentialSource = "byok"
 	// SourceAnonymous names an attempt a provider accepted with no credential
 	// at all. No strategy selects it and no plane holds it; it is here so that
@@ -54,12 +54,12 @@ const (
 type Strategy string
 
 const (
-	// OperatorFirst spends the operator's credentials before the tenant's own.
+	// OperatorFirst spends the operator's credentials before the account's own.
 	OperatorFirst Strategy = "operator_first"
-	// BYOKFirst prefers the tenant's own credential and falls back to the
+	// BYOKFirst prefers the account's own credential and falls back to the
 	// operator's.
 	BYOKFirst Strategy = "byok_first"
-	// BYOKOnly serves the request from the tenant's own credential alone. It
+	// BYOKOnly serves the request from the account's own credential alone. It
 	// is how an operator denies an account every operator credential.
 	BYOKOnly Strategy = "byok_only"
 )
@@ -68,9 +68,9 @@ var (
 	// ErrInvalidStrategy reports an unknown request credential strategy.
 	ErrInvalidStrategy = errors.New("invalid provider credential strategy")
 	// ErrStrategyWidens reports a per-request strategy that would reach a
-	// credential source the tenant's own strategy withholds.
+	// credential source the account's own strategy withholds.
 	ErrStrategyWidens = errors.New(
-		"request credential strategy may narrow the tenant's, not widen it",
+		"request credential strategy may narrow the account's, not widen it",
 	)
 )
 
@@ -93,17 +93,17 @@ func ParseStrategy(value string) (Strategy, error) {
 // credential the operator owns, in the environment or at the gateway scope.
 func (s Strategy) AllowsOperatorCredentials() bool { return s != BYOKOnly }
 
-// Narrow resolves the strategy one request actually runs under. The tenant's
+// Narrow resolves the strategy one request actually runs under. The account's
 // strategy is the ceiling because it is how an operator says whether an
 // account may spend the deployment's own money. A request may reorder the
 // sources it is already allowed and may give up an operator credential it
-// holds, but a request that would reach a source the tenant withholds is
+// holds, but a request that would reach a source the account withholds is
 // refused rather than silently downgraded.
-func Narrow(tenantStrategy, requestStrategy Strategy) (Strategy, error) {
-	if !tenantStrategy.AllowsOperatorCredentials() && requestStrategy.AllowsOperatorCredentials() {
+func Narrow(accountStrategy, requestStrategy Strategy) (Strategy, error) {
+	if !accountStrategy.AllowsOperatorCredentials() && requestStrategy.AllowsOperatorCredentials() {
 		return "", fmt.Errorf(
-			"%w: tenant is %q and the request asked for %q",
-			ErrStrategyWidens, tenantStrategy, requestStrategy,
+			"%w: account is %q and the request asked for %q",
+			ErrStrategyWidens, accountStrategy, requestStrategy,
 		)
 	}
 	return requestStrategy, nil
@@ -173,10 +173,10 @@ func UnavailableFailure(providerID string, cause error) *failure.Failure {
 	)
 }
 
-// TenantScope returns the exact credential repository scope that holds one
-// tenant's BYOK credentials. The scope names the account, never a gateway API
-// key, so deleting a key never strands the credentials its tenant applied.
-func TenantScope(tenantID string) string { return tenantScopePrefix + tenantID }
+// AccountScope returns the exact credential repository scope that holds one
+// account's BYOK credentials. The scope names the account, never a gateway API
+// key, so deleting a key never strands the credentials its account applied.
+func AccountScope(accountID string) string { return accountScopePrefix + accountID }
 
 // ProviderKey represents a decrypted provider key with metadata
 type ProviderKey struct {
@@ -206,7 +206,7 @@ type Usage struct {
 // ProviderKeys interface defines provider key management operations
 type ProviderKeys interface {
 	// Scoped key management. A scope is either GatewayScope or one
-	// TenantScope; the caller decides which, and the store treats them alike.
+	// AccountScope; the caller decides which, and the store treats them alike.
 	AddKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback bool, priority int) (*credentials.ProviderKey, error)
 	GetKey(ctx context.Context, scope, provider string) (*credentials.ProviderKey, error)
 	GetKeys(ctx context.Context, scope, provider string) ([]*credentials.ProviderKey, error) // Returns all keys for provider sorted by priority

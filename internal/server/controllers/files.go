@@ -97,7 +97,7 @@ func (h *FilesController) Create(w http.ResponseWriter, r *http.Request) {
 	// so the header states the real size rather than a caller's claim. The
 	// service still reconciles it against what the write lands.
 	record, err := h.service.Upload(r.Context(), files.UploadRequest{
-		Tenant:           requestctx.TenantIDOrDefault(r.Context()),
+		Account:          requestctx.AccountIDOrDefault(r.Context()),
 		Filename:         header.Filename,
 		Purpose:          files.Purpose(strings.TrimSpace(r.FormValue("purpose"))),
 		Retention:        retention,
@@ -123,7 +123,7 @@ func (h *FilesController) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	records, err := h.service.List(r.Context(), requestctx.TenantIDOrDefault(r.Context()), maxFileListLimit)
+	records, err := h.service.List(r.Context(), requestctx.AccountIDOrDefault(r.Context()), maxFileListLimit)
 	if err != nil {
 		h.writeError(w, "list files", err)
 		return
@@ -144,7 +144,7 @@ func (h *FilesController) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	record, err := h.service.Get(r.Context(),
-		requestctx.TenantIDOrDefault(r.Context()), chi.URLParam(r, "file_id"))
+		requestctx.AccountIDOrDefault(r.Context()), chi.URLParam(r, "file_id"))
 	if err != nil {
 		h.writeError(w, "read a file record", err)
 		return
@@ -158,7 +158,7 @@ func (h *FilesController) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "file_id")
-	if err := h.service.Delete(r.Context(), requestctx.TenantIDOrDefault(r.Context()), id); err != nil {
+	if err := h.service.Delete(r.Context(), requestctx.AccountIDOrDefault(r.Context()), id); err != nil {
 		h.writeError(w, "delete a file", err)
 		return
 	}
@@ -175,7 +175,7 @@ func (h *FilesController) Content(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	record, reader, err := h.service.Open(r.Context(),
-		requestctx.TenantIDOrDefault(r.Context()), chi.URLParam(r, "file_id"))
+		requestctx.AccountIDOrDefault(r.Context()), chi.URLParam(r, "file_id"))
 	if err != nil {
 		h.writeError(w, "read file content", err)
 		return
@@ -222,14 +222,14 @@ func (h *FilesController) writeUploadError(w http.ResponseWriter, err error) {
 // Both the account and the key travel in the request context from
 // authentication, so neither read reaches storage on the upload path.
 func storedBytesBound(r *http.Request) int64 {
-	var tenantLimits, keyLimits *limits.Limits
-	if record, ok := requestctx.GetTenantRecord(r.Context()); ok && record != nil {
-		tenantLimits = record.Limits
+	var accountLimits, keyLimits *limits.Limits
+	if record, ok := requestctx.GetAccountRecord(r.Context()); ok && record != nil {
+		accountLimits = record.Limits
 	}
 	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil {
 		keyLimits = apiKey.Limits
 	}
-	rule, bounded := limits.TightestStoredBytes(tenantLimits, keyLimits)
+	rule, bounded := limits.TightestStoredBytes(accountLimits, keyLimits)
 	if !bounded {
 		return 0
 	}
@@ -240,7 +240,7 @@ func storedBytesBound(r *http.Request) int64 {
 func (h *FilesController) writeError(w http.ResponseWriter, action string, err error) {
 	switch {
 	case errors.Is(err, files.ErrFileNotFound):
-		// A file another tenant owns reads the same way as a file that never
+		// A file another account owns reads the same way as a file that never
 		// existed. Any other answer would report that the identifier is real.
 		dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "No such File object")
 	case errors.Is(err, files.ErrInvalidPurpose):

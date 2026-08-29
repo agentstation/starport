@@ -98,11 +98,11 @@ type ChatCompletionRequest struct {
 
 	// Internal fields
 	APIKey string `json:"-"`
-	// TenantID is the account the request runs under. Credential selection,
-	// response cache scope, and tenant limits read this.
-	TenantID string `json:"-"`
+	// AccountID is the account the request runs under. Credential selection,
+	// response cache scope, and account limits read this.
+	AccountID string `json:"-"`
 	// KeyID is the gateway API key that authenticated the request. Usage
-	// attribution and per-key limits read this. Many keys share one tenant, so
+	// attribution and per-key limits read this. Many keys share one account, so
 	// the two values are distinct and neither substitutes for the other.
 	KeyID        string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
@@ -168,11 +168,11 @@ type EmbeddingsRequest struct {
 
 	// Internal fields
 	APIKey string `json:"-"`
-	// TenantID is the account the request runs under. Credential selection,
-	// response cache scope, and tenant limits read this.
-	TenantID string `json:"-"`
+	// AccountID is the account the request runs under. Credential selection,
+	// response cache scope, and account limits read this.
+	AccountID string `json:"-"`
 	// KeyID is the gateway API key that authenticated the request. Usage
-	// attribution and per-key limits read this. Many keys share one tenant, so
+	// attribution and per-key limits read this. Many keys share one account, so
 	// the two values are distinct and neither substitutes for the other.
 	KeyID        string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
@@ -206,9 +206,9 @@ type OperationRequest[Request any] struct {
 	Request Request
 
 	APIKey string `json:"-"`
-	// TenantID is the account the request runs under. Credential selection
-	// and tenant limits read this.
-	TenantID string `json:"-"`
+	// AccountID is the account the request runs under. Credential selection
+	// and account limits read this.
+	AccountID string `json:"-"`
 	// KeyID is the gateway API key that authenticated the request. Usage
 	// attribution and per-key limits read this.
 	KeyID        string               `json:"-"`

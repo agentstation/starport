@@ -58,7 +58,7 @@ func (h *RerankController) Create(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := &proxy.RerankRequest{Request: decoding.request}
 	req.APIKey = h.getAPIKey(ctx)
-	req.TenantID = h.getTenantID(ctx)
+	req.AccountID = h.getAccountID(ctx)
 	req.KeyID = h.getAPIKeyID(ctx)
 	req.APIKeyConfig, err = h.getAPIKeyRoutingConfig(ctx)
 	if err != nil {

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
@@ -10,7 +11,6 @@ import (
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
-	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -33,7 +33,7 @@ type Controllers struct {
 	ProviderCredentials  *ProviderCredentialsController
 	Activity             *ActivityController
 	Admin                *AdminController
-	Tenants              *TenantsController
+	Accounts             *AccountsController
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
 	Files                *FilesController
@@ -51,7 +51,7 @@ type Config struct {
 	Service            proxy.Proxy
 	ProviderKeys       keyring.ProviderKeys
 	Identities         identity.Repository
-	Tenants            tenant.Repository
+	Accounts           account.Repository
 	Usage              usage.Repository
 	ProviderOperations ProviderOperations
 	Catalog            CatalogOperations
@@ -108,9 +108,9 @@ func NewControllers(cfg Config) *Controllers {
 		Logos:                NewLogosController(cfg.Service),
 		ProviderCredentials:  NewProviderCredentialsController(cfg.ProviderKeys),
 		Activity:             NewActivityController(cfg.Usage),
-		Admin: NewAdminController(cfg.Identities, cfg.Tenants, cfg.Usage,
+		Admin: NewAdminController(cfg.Identities, cfg.Accounts, cfg.Usage,
 			WithFileStorage(cfg.FileBackend)),
-		Tenants:            NewTenantsController(cfg.Tenants, cfg.Identities),
+		Accounts:           NewAccountsController(cfg.Accounts, cfg.Identities),
 		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:            NewCatalogController(cfg.Catalog),
 		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),

@@ -67,8 +67,8 @@ func ContentHash(data []byte) string {
 // because that is what decides which offerings serve the recognition operation
 // at all.
 type CacheKey struct {
-	// AccountID is the tenant that paid for the read. An entry never crosses
-	// accounts: one tenant's upload is not another tenant's to read back.
+	// AccountID is the account that paid for the read. An entry never crosses
+	// accounts: one account's upload is not another account's to read back.
 	AccountID string
 	// ContentHash is the digest of the document bytes.
 	ContentHash string

@@ -121,7 +121,7 @@ func (m *keyManager) GetKey(ctx context.Context, scope, provider string) (*crede
 
 // GetKeys retrieves provider keys from one exact scope. A gateway credential
 // is managed through the explicit gateway-key methods and is never merged into
-// a tenant lookup; credential order across scopes belongs to the router.
+// an account lookup; credential order across scopes belongs to the router.
 func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*credentials.ProviderKey, error) {
 	if scope == "" || provider == "" {
 		return nil, ErrScopeAndProviderRequired
@@ -150,7 +150,7 @@ func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*cr
 	return keys, nil
 }
 
-// ResolveStoredMaterial decrypts and validates one exact tenant record against
+// ResolveStoredMaterial decrypts and validates one exact account record against
 // the provider contract from the leased runtime generation.
 func (m *keyManager) ResolveStoredMaterial(
 	ctx context.Context,
@@ -300,7 +300,7 @@ func (m *keyManager) AddGatewayKey(ctx context.Context, provider string, key map
 		EncryptedCredential: encryptedKey,
 		Config:              config,
 		RateLimit:           rateLimit,
-		Priority:            100, // Lower priority than a tenant BYOK key
+		Priority:            100, // Lower priority than an account BYOK key
 		CreatedAt:           time.Now(),
 		UpdatedAt:           time.Now(),
 	}

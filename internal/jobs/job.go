@@ -74,7 +74,7 @@ func (s JobState) Terminal() bool {
 	return s.Valid() && len(legalTransitions[s]) == 0
 }
 
-// Chargeable reports whether a job in this state produced work a tenant pays
+// Chargeable reports whether a job in this state produced work an account pays
 // for. Only a completed job did. A failed job produced no asset, and a
 // cancelled job is a caller stopping its own work, so neither draws a cost.
 func (s JobState) Chargeable() bool { return s == JobStateCompleted }
@@ -127,8 +127,8 @@ func CanTransition(from, to JobState) bool {
 // learned it could poll the provider directly, outside every limit and every
 // usage record Starport keeps.
 type Job struct {
-	ID     string
-	Tenant string
+	ID      string
+	Account string
 	// KeyID names the gateway API key that submitted the work. A usage record
 	// attributes spend to a key, and a job outlives the request that carried
 	// one, so the record holds it. It is optional: a deployment with
@@ -184,8 +184,8 @@ type Job struct {
 // whole job. Keeping the field unexported is not enough on its own.
 func (j Job) String() string {
 	return fmt.Sprintf(
-		"job %s tenant %s provider %s model %s operation %s state %s",
-		j.ID, j.Tenant, j.Provider, j.Model, j.Operation, j.State,
+		"job %s account %s provider %s model %s operation %s state %s",
+		j.ID, j.Account, j.Provider, j.Model, j.Operation, j.State,
 	)
 }
 
@@ -194,8 +194,8 @@ func (j Job) Validate() error {
 	switch {
 	case strings.TrimSpace(j.ID) == "":
 		return fmt.Errorf("%w: it has no identifier", ErrInvalidJob)
-	case strings.TrimSpace(j.Tenant) == "":
-		return fmt.Errorf("%w: it names no tenant", ErrInvalidJob)
+	case strings.TrimSpace(j.Account) == "":
+		return fmt.Errorf("%w: it names no account", ErrInvalidJob)
 	case strings.TrimSpace(j.Model) == "":
 		return fmt.Errorf("%w: it names no model", ErrInvalidJob)
 	case strings.TrimSpace(j.Provider) == "":
@@ -230,10 +230,10 @@ func (j Job) Validate() error {
 
 // New returns a queued job. A job starts queued because a provider has already
 // accepted it by the time a record exists.
-func New(id, tenant, provider, model string, operation routing.Operation, now time.Time) (Job, error) {
+func New(id, account, provider, model string, operation routing.Operation, now time.Time) (Job, error) {
 	job := Job{
 		ID:        id,
-		Tenant:    tenant,
+		Account:   account,
 		Model:     model,
 		Operation: operation,
 		Provider:  provider,
@@ -320,7 +320,7 @@ func (j *Job) StoreAsset(key, contentType string, size int64, expiresAt time.Tim
 	case expiresAt.IsZero():
 		return fmt.Errorf("%w: the stored asset states no retention window", ErrInvalidJob)
 	case j.AssetKey != "":
-		// A second fetch would spend the tenant's credential again and
+		// A second fetch would spend the account's credential again and
 		// overwrite bytes a caller may be reading.
 		return fmt.Errorf("%w: %s already holds an asset", ErrInvalidJob, j.ID)
 	}
@@ -334,7 +334,7 @@ func (j *Job) StoreAsset(key, contentType string, size int64, expiresAt time.Tim
 // ExpireAsset marks the stored bytes gone and keeps the record.
 //
 // The state does not move. A completed job stays completed after its asset
-// expires, because the work happened and the tenant paid for it. Only the
+// expires, because the work happened and the account paid for it. Only the
 // answer the content route gives changes.
 func (j *Job) ExpireAsset(now time.Time) error {
 	if j.AssetKey == "" {

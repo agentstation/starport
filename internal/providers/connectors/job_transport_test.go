@@ -256,7 +256,7 @@ func TestAFailedJobAlwaysStatesAReason(t *testing.T) {
 			// The record is the reader of the reason, so the decoded answer has
 			// to survive the record's own rule.
 			submitted := time.Date(2026, time.August, 27, 12, 0, 0, 0, time.UTC)
-			job, err := jobs.New("job_01", "tenant_a", "deepinfra", polled.ID, "videos-generations", submitted)
+			job, err := jobs.New("job_01", "account_a", "deepinfra", polled.ID, "videos-generations", submitted)
 			require.NoError(t, err)
 			require.NoError(t, job.Fail(polled.Reason, submitted.Add(time.Minute)))
 			require.NoError(t, job.Validate())

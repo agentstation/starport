@@ -87,7 +87,7 @@ func newAccountedService(t *testing.T) (*jobs.Service, *recordingAccountant, *co
 //
 // A caller polls until it sees a terminal answer, and a client that retries or
 // a browser tab left open polls well past that. Every one of those reads is a
-// read of the same finished work. A per-read charge would bill a tenant for
+// read of the same finished work. A per-read charge would bill an account for
 // asking how much it had already been billed.
 func TestACompletedJobDrawsOneRecordHoweverOftenACallerPolls(t *testing.T) {
 	t.Parallel()
@@ -97,12 +97,12 @@ func TestACompletedJobDrawsOneRecordHoweverOftenACallerPolls(t *testing.T) {
 	runner := acceptedRunner()
 	runner.poll = jobs.Report{State: jobs.JobStateCompleted}
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 	require.Empty(t, accountant.all(), "a queued job has not ended and prices nothing")
 
 	for range 10 {
-		polled, err := service.Refresh(ctx, runner, tenantA, job.ID)
+		polled, err := service.Refresh(ctx, runner, accountA, job.ID)
 		require.NoError(t, err)
 		require.Equal(t, jobs.JobStateCompleted, polled.State)
 		require.True(t, polled.Accounted())
@@ -111,7 +111,7 @@ func TestACompletedJobDrawsOneRecordHoweverOftenACallerPolls(t *testing.T) {
 	entries := accountant.all()
 	require.Len(t, entries, 1)
 	require.Equal(t, job.ID, entries[0].JobID)
-	require.Equal(t, tenantA, entries[0].Tenant)
+	require.Equal(t, accountA, entries[0].Account)
 	require.Equal(t, jobs.JobStateCompleted, entries[0].State)
 	require.True(t, entries[0].Chargeable)
 	require.Equal(t, "deepinfra", entries[0].Provider)
@@ -119,7 +119,7 @@ func TestACompletedJobDrawsOneRecordHoweverOftenACallerPolls(t *testing.T) {
 }
 
 // TestAFailedJobDrawsNoCost states the rule a caller cares about most. The
-// provider produced nothing, so the tenant owes nothing, and the entry says so
+// provider produced nothing, so the account owes nothing, and the entry says so
 // in the flag rather than by being absent.
 func TestAFailedJobDrawsNoCost(t *testing.T) {
 	t.Parallel()
@@ -129,9 +129,9 @@ func TestAFailedJobDrawsNoCost(t *testing.T) {
 	runner := acceptedRunner()
 	runner.poll = jobs.Report{State: jobs.JobStateFailed, Reason: "the provider rejected the prompt"}
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-	failed, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	failed, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateFailed, failed.State)
 
@@ -151,9 +151,9 @@ func TestACancelledJobDrawsNoCost(t *testing.T) {
 	service, accountant, _ := newAccountedService(t)
 	runner := acceptedRunner()
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-	stopped, err := service.Cancel(ctx, runner, tenantA, job.ID)
+	stopped, err := service.Cancel(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCancelled, stopped.State)
 
@@ -174,7 +174,7 @@ func TestATerminalJobFreesOneSlot(t *testing.T) {
 	runner := acceptedRunner()
 	runner.poll = jobs.Report{State: jobs.JobStateCompleted}
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 	reserves, releases := meter.counts()
 	require.Equal(t, 1, reserves)
@@ -183,7 +183,7 @@ func TestATerminalJobFreesOneSlot(t *testing.T) {
 	// Poll past the terminal answer. The slot comes back once, on the same
 	// stamp that draws the one usage record.
 	for range 3 {
-		_, err := service.Refresh(ctx, runner, tenantA, job.ID)
+		_, err := service.Refresh(ctx, runner, accountA, job.ID)
 		require.NoError(t, err)
 	}
 	reserves, releases = meter.counts()
@@ -193,7 +193,7 @@ func TestATerminalJobFreesOneSlot(t *testing.T) {
 
 // TestASubmissionOverTheLimitReachesNoProvider is why the claim happens before
 // the runner is built. Building one resolves a route and a credential, so a
-// refusal that had already done that would bound what a tenant reads rather
+// refusal that had already done that would bound what an account reads rather
 // than what it pays for, which is the opposite of what the limit is for.
 func TestASubmissionOverTheLimitReachesNoProvider(t *testing.T) {
 	t.Parallel()
@@ -210,7 +210,7 @@ func TestASubmissionOverTheLimitReachesNoProvider(t *testing.T) {
 		built++
 		return runner, nil
 	}, jobs.Submission{
-		Tenant:           tenantA,
+		Account:          accountA,
 		Operation:        routing.OperationVideosGenerations,
 		OutstandingBound: 1,
 	})
@@ -218,7 +218,7 @@ func TestASubmissionOverTheLimitReachesNoProvider(t *testing.T) {
 	require.Zero(t, built, "a refused submission resolves no route and no credential")
 	require.Zero(t, runner.submits, "a refused submission spends no provider work")
 
-	_, err = records.Get(ctx, tenantA, "job_service_01")
+	_, err = records.Get(ctx, accountA, "job_service_01")
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 }
 
@@ -234,7 +234,7 @@ func TestARefusedProviderGivesTheSlotBack(t *testing.T) {
 	runner := acceptedRunner()
 	runner.submitErr = errors.New("the provider refused the prompt")
 
-	_, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.Error(t, err)
 
 	reserves, releases := meter.counts()
@@ -259,7 +259,7 @@ func TestTheSweepClosesAJobNobodyCameBackFor(t *testing.T) {
 		jobs.WithClock(clock.read))
 	runner := acceptedRunner()
 
-	_, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
 	// Move past the polling budget. A provider that has not answered by then is

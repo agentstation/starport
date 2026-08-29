@@ -39,9 +39,9 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		}
 		return nil, err
 	}
-	strategy, tenantID := credentialRequestPolicy(req)
+	strategy, accountID := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, tenantID, runtime, r.storedKeys, r.credentialGate,
+		strategy, accountID, runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
 		if owned {

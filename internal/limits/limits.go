@@ -1,5 +1,5 @@
 // Package limits owns the request-rate and consumption vocabulary that
-// bounds what a holder may spend. Both a gateway API key and a tenant hold
+// bounds what a holder may spend. Both a gateway API key and an account hold
 // limits, so the vocabulary lives here rather than inside either owner.
 package limits
 
