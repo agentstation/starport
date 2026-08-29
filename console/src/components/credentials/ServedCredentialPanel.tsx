@@ -10,15 +10,17 @@ import { formatCount } from "@/lib/format";
 // their own can see, here, that every request is still drawing on the
 // deployment's money.
 //
-// The names are the gateway's own (`internal/providers/keyring`), read from
-// the activity log's `credential_source`. A record written before the gateway
-// recorded planes carries none, and is counted as unrecorded rather than
-// folded into a plane it may not have used.
+// The sources are the gateway's own (`internal/providers/keyring`), read from
+// the activity log's `credential_source`; the labels wear the console's
+// ownership words — the two shared sources are the operator's money, the
+// account's own is not. A record written before the gateway recorded planes
+// carries none, and is counted as unrecorded rather than folded into a plane
+// it may not have used.
 
 const SOURCE_LABELS: Record<string, string> = {
-  environment: "Environment",
-  gateway: "Gateway credential",
-  byok: "BYOK",
+  environment: "Shared · environment",
+  gateway: "Shared · stored",
+  byok: "Account's own",
   anonymous: "No credential",
 };
 

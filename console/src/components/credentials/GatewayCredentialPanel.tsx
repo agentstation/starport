@@ -19,13 +19,16 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 // The gateway credential is the provider credential an operator applies for
 // the whole deployment. It belongs to no account, so it is addressed by
 // provider alone and edited here, on the provider's own screen, rather than
-// anywhere near a gateway API key.
+// anywhere near a gateway API key. On screen the word is "shared" — the
+// stored half of the Shared group, beside the environment credential that is
+// the same operator's money — while the keyring and the wire keep "gateway"
+// (internal/providers/keyring).
 //
 // It is not BYOK. BYOK is a credential an account brings for itself, and it is
-// managed per account. The provider credential card may name accounts as the
+// managed per account. The provider credential drawer may name accounts as the
 // third resolution source, but this panel never edits one and never names an
 // account: the credential it applies belongs to the deployment. The section
-// renders as a row of that card and carries no chrome of its own.
+// renders as a row of that drawer and carries no chrome of its own.
 
 export function gatewayCredentialQueryKey(providerId: string): string[] {
   return ["gateway-credential", providerId];
@@ -77,7 +80,7 @@ export function GatewayCredentialPanel({
     onSuccess: (result) => {
       const valid = result?.valid !== false;
       say(
-        valid ? "Gateway credential is valid" : "Gateway credential is invalid",
+        valid ? "Shared credential is valid" : "Shared credential is invalid",
         !valid,
       );
     },
@@ -92,7 +95,7 @@ export function GatewayCredentialPanel({
     mutationFn: () => deleteGatewayCredential(providerId),
     onSuccess: async () => {
       setConfirmingRemove(false);
-      say("Gateway credential removed");
+      say("Shared credential removed");
       await refresh();
     },
     onError: (error) => {
@@ -112,7 +115,7 @@ export function GatewayCredentialPanel({
       className="flex min-w-0 flex-1 flex-col gap-2"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-medium text-text-1">Gateway</h3>
+        <h3 className="text-sm font-medium text-text-1">Stored</h3>
         {applied && (
           <SourcePill
             label={active ? "Active" : "Applied"}
@@ -137,7 +140,7 @@ export function GatewayCredentialPanel({
             <button
               type="button"
               onClick={() => setConfirmingRemove(true)}
-              aria-label={`Remove the ${providerId} gateway credential`}
+              aria-label={`Remove the ${providerId} shared credential`}
               className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
             >
               <Trash2 className="size-3.5" />
@@ -181,9 +184,8 @@ export function GatewayCredentialPanel({
       ) : (
         <>
           <p className="text-sm text-text-2">
-            No gateway credential is applied for this provider. One applied
-            here pays every account's requests, stored encrypted and never
-            returned.
+            No shared credential is stored for this provider. One stored here
+            pays every account's requests, encrypted and never returned.
           </p>
           <div>
             <PrimaryButton onClick={() => setSetting(true)}>
@@ -195,8 +197,8 @@ export function GatewayCredentialPanel({
 
       {setting && (
         <CredentialApplyModal
-          title={applied ? "Replace gateway credential" : "Set gateway credential"}
-          description={`The deployment credential for ${name}. Every account's requests can use it; it is stored encrypted and never returned.`}
+          title={applied ? "Replace shared credential" : "Set shared credential"}
+          description={`The shared credential for ${name}. Every account's requests can use it; it is stored encrypted and never returned.`}
           fields={fields}
           apply={async (body) => {
             await putGatewayCredential(providerId, body);
@@ -209,7 +211,7 @@ export function GatewayCredentialPanel({
 
       {confirmingRemove && (
         <Modal
-          title="Remove gateway credential"
+          title="Remove shared credential"
           onClose={() => setConfirmingRemove(false)}
           footer={
             <>
@@ -228,7 +230,7 @@ export function GatewayCredentialPanel({
           }
         >
           <p className="text-sm text-text-2">
-            This removes the deployment credential for{" "}
+            This removes the shared credential for{" "}
             <strong className="font-semibold text-text-1">{name}</strong>.
             Requests stop using it immediately; accounts fall back to the
             environment credential or their own. The stored value cannot be

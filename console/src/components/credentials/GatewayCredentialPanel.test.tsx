@@ -87,7 +87,7 @@ test("reads a missing credential as a state, not a failure", async () => {
 
   await waitFor(() =>
     expect(
-      screen.getByText(/No gateway credential is applied for this provider/),
+      screen.getByText(/No shared credential is stored for this provider/),
     ).toBeTruthy(),
   );
   expect(screen.queryByText(/Failed to load/)).toBeNull();
@@ -151,10 +151,10 @@ test("never calls the deployment credential BYOK", async () => {
   const { container } = mount();
   await waitFor(() =>
     expect(
-      screen.getByText(/No gateway credential is applied for this provider/),
+      screen.getByText(/No shared credential is stored for this provider/),
     ).toBeTruthy(),
   );
 
-  expect(container.textContent?.toLowerCase()).toContain("gateway credential");
+  expect(container.textContent?.toLowerCase()).toContain("shared credential");
   expect(container.textContent?.toLowerCase()).not.toContain("byok");
 });

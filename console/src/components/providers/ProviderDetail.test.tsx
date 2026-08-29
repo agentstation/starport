@@ -167,7 +167,7 @@ test("names the variables to set and sends nobody to the keys page", () => {
   expect(screen.getByText("GROQ_API_KEY")).toBeDefined();
   expect(screen.getByText("STARPORT_GROQ_API_KEY")).toBeDefined();
   expect(
-    screen.getByText(/apply a gateway credential below/),
+    screen.getByText(/store a shared credential below/),
   ).toBeDefined();
   noKeysLink(container);
 });
