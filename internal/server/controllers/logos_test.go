@@ -44,7 +44,9 @@ func TestLogosControllerServesSVG(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, "image/svg+xml", recorder.Header().Get("Content-Type"))
-	require.Equal(t, "public, max-age=86400", recorder.Header().Get("Cache-Control"))
+	// Revalidation, not a freshness window: a max-age would keep serving
+	// the old mark from browser caches after an upgrade swaps the bundle.
+	require.Equal(t, "public, no-cache", recorder.Header().Get("Cache-Control"))
 	require.NotEmpty(t, recorder.Header().Get("ETag"))
 	require.Contains(t, recorder.Body.String(), "<svg")
 }
