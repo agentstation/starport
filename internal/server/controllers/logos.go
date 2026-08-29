@@ -12,10 +12,12 @@ import (
 	"github.com/agentstation/starport/internal/proxy"
 )
 
-// LogosController serves catalog identity marks. Catalog-carried logo
-// bytes lead; the bundled SVG set is the offline fallback. The route is
-// public: logos are static brand assets the console loads without
-// credentials, like the health probes.
+// LogosController serves catalog identity marks. The bundled SVG set
+// leads: it is curated color-first from one icon family, so marks render
+// consistently, where catalog-carried bytes mix monochrome and color
+// glyphs. Catalog bytes fill the gaps the bundle does not cover. The
+// route is public: logos are static brand assets the console loads
+// without credentials, like the health probes.
 type LogosController struct {
 	*BaseHandler
 }
@@ -28,9 +30,9 @@ func NewLogosController(service proxy.Proxy) *LogosController {
 // Get handles GET /api/v1/logos/{kind}/{id}.svg.
 func (h *LogosController) Get(w http.ResponseWriter, r *http.Request) {
 	kind, id := chi.URLParam(r, "kind"), chi.URLParam(r, "id")
-	svg, etag, ok := h.catalogLogo(r, kind, id)
+	svg, etag, ok := logos.Bytes(logos.Kind(kind), id)
 	if !ok {
-		svg, etag, ok = logos.Bytes(logos.Kind(kind), id)
+		svg, etag, ok = h.catalogLogo(r, kind, id)
 	}
 	if !ok {
 		h.writeError(w, &proxy.ProviderError{Code: errorCodeNotFound, Message: "Logo not found"})
@@ -48,8 +50,8 @@ func (h *LogosController) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // catalogLogo returns the catalog-carried mark for this kind and ID. ok
-// is false when no service is wired or the catalog has no bytes, so the
-// caller falls back to the bundled set.
+// is false when no service is wired or the catalog has no bytes; the
+// caller has already missed the bundled set, so a miss here is a 404.
 func (h *LogosController) catalogLogo(r *http.Request, kind, id string) (svg []byte, etag string, ok bool) {
 	if h.service == nil {
 		return nil, "", false

@@ -1,8 +1,9 @@
 // Package logos serves the bundled catalog identity marks.
 //
-// The SVG set under svg/ is an interim, clean-license bundle (see
-// NOTICE.md) keyed by catalog ID. Once the Starmap payload carries logo
-// bytes, callers prefer those and fall back to this set, so the console
+// The SVG set under svg/ is a curated, clean-license bundle (see
+// NOTICE.md) keyed by catalog ID, color-first from one icon family so
+// marks render consistently. Callers prefer this set and fall back to
+// catalog-carried bytes for IDs it does not cover, so the console
 // renders identity without any external request.
 package logos
 
