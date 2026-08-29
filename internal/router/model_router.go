@@ -167,8 +167,8 @@ type Response struct {
 	ProviderUsed string `json:"provider_used"`
 
 	// CredentialSource names which credential plane paid for the attempt
-	// that answered: the operator's environment, the operator's applied
-	// gateway credential, the account's own BYOK, or no credential at all.
+	// that answered: the operator's environment, the operator's shared
+	// credential, the account's own BYOK, or no credential at all.
 	CredentialSource string `json:"credential_source,omitempty"`
 
 	// Number of attempts made

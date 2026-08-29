@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/credentials"
-	"github.com/rs/zerolog/log"
 )
 
 // keyManager implements the KeyManager interface
@@ -49,31 +50,22 @@ func NewProviderKeys(
 	}, nil
 }
 
-// AddKey adds a new provider key for a scope
+// AddKey adds a new provider key for an account scope
 func (m *keyManager) AddKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback bool, priority int) (*credentials.ProviderKey, error) {
 	// Validate inputs
 	if scope == "" {
 		return nil, ErrScopeRequired
 	}
+	if scope == SharedScope {
+		return nil, ErrScopeIsShared
+	}
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
 
-	// Validate key format for provider
-	if err := m.ValidateKey(ctx, provider, key, config); err != nil {
+	encryptedKey, err := m.encryptKey(ctx, provider, key, config)
+	if err != nil {
 		return nil, err
-	}
-
-	// Serialize key data
-	keyJSON, err := json.Marshal(key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize key: %w", err)
-	}
-
-	// Encrypt key
-	encryptedKey, err := m.encryption.EncryptCredential(string(keyJSON))
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt key: %w", err)
 	}
 
 	// Create provider key model
@@ -119,9 +111,10 @@ func (m *keyManager) GetKey(ctx context.Context, scope, provider string) (*crede
 	return keys[0], nil
 }
 
-// GetKeys retrieves provider keys from one exact scope. A gateway credential
-// is managed through the explicit gateway-key methods and is never merged into
-// an account lookup; credential order across scopes belongs to the router.
+// GetKeys retrieves provider keys from one exact scope. A shared credential
+// is managed through the explicit shared-credential methods and is never
+// merged into an account lookup; credential order across scopes belongs to
+// the router.
 func (m *keyManager) GetKeys(ctx context.Context, scope, provider string) ([]*credentials.ProviderKey, error) {
 	if scope == "" || provider == "" {
 		return nil, ErrScopeAndProviderRequired
@@ -160,6 +153,9 @@ func (m *keyManager) ResolveStoredMaterial(
 	if scope == "" {
 		return credentials.Material{}, ErrScopeRequired
 	}
+	if scope == SharedScope {
+		return credentials.Material{}, ErrScopeIsShared
+	}
 	if provider.ID == "" {
 		return credentials.Material{}, ErrProviderRequired
 	}
@@ -170,22 +166,62 @@ func (m *keyManager) ResolveStoredMaterial(
 		}
 		return credentials.Material{}, fmt.Errorf("read scoped provider credential: %w", err)
 	}
-	decrypted, err := m.encryption.DecryptCredential(record.Key.EncryptedCredential)
+	return m.decryptMaterial(provider, record.Key.EncryptedCredential, record.Key.Config,
+		fmt.Sprintf("stored:%d", record.Revision))
+}
+
+// ResolveSharedMaterial decrypts the first shared credential the named
+// account may spend: open, or granted to that account. An empty account is an
+// anonymous caller, which only an open credential serves.
+func (m *keyManager) ResolveSharedMaterial(
+	ctx context.Context,
+	accountID string,
+	provider catalogs.Provider,
+) (credentials.Material, error) {
+	if provider.ID == "" {
+		return credentials.Material{}, ErrProviderRequired
+	}
+	record, err := m.repository.Get(ctx, SharedScope, string(provider.ID))
 	if err != nil {
-		return credentials.Material{}, fmt.Errorf("%w: decrypt scoped provider credential", ErrDecryptionFailed)
+		if errors.Is(err, credentials.ErrNotFound) {
+			return credentials.Material{}, ErrKeyNotFound
+		}
+		return credentials.Material{}, fmt.Errorf("read shared provider credential: %w", err)
+	}
+	for _, credential := range record.Key.Shared {
+		if !credential.Usable(accountID) {
+			continue
+		}
+		return m.decryptMaterial(provider, credential.EncryptedCredential, credential.Config,
+			fmt.Sprintf("stored:%d:%s", record.Revision, credential.ID))
+	}
+	return credentials.Material{}, ErrKeyNotFound
+}
+
+// decryptMaterial turns one encrypted credential value into request-bound
+// material under the provider's catalog contract.
+func (m *keyManager) decryptMaterial(
+	provider catalogs.Provider,
+	encryptedCredential string,
+	config map[string]any,
+	version string,
+) (credentials.Material, error) {
+	decrypted, err := m.encryption.DecryptCredential(encryptedCredential)
+	if err != nil {
+		return credentials.Material{}, fmt.Errorf("%w: decrypt stored provider credential", ErrDecryptionFailed)
 	}
 	var secretValues map[string]string
 	if err := json.Unmarshal([]byte(decrypted), &secretValues); err != nil {
-		return credentials.Material{}, fmt.Errorf("%w: decode scoped provider credential", ErrDecryptionFailed)
+		return credentials.Material{}, fmt.Errorf("%w: decode stored provider credential", ErrDecryptionFailed)
 	}
-	material, err := buildCredentialMaterial(provider, secretValues, record.Key.Config)
+	material, err := buildCredentialMaterial(provider, secretValues, config)
 	if err != nil {
 		return credentials.Material{}, err
 	}
 	return credentials.NewMaterial(
 		material.Profile(),
 		materialValues(material),
-		credentials.MaterialMetadata{Version: fmt.Sprintf("stored:%d", record.Revision)},
+		credentials.MaterialMetadata{Version: version},
 	), nil
 }
 
@@ -202,23 +238,16 @@ func (m *keyManager) ListKeys(ctx context.Context, scope string) ([]*credentials
 	return providerKeysFromRecords(records), nil
 }
 
-// UpdateKey updates an existing provider key
+// UpdateKey updates an existing provider key at an account scope
 func (m *keyManager) UpdateKey(ctx context.Context, scope, provider string, key map[string]string, config map[string]any, isFallback *bool, priority *int) (*credentials.ProviderKey, error) {
+	if scope == SharedScope {
+		return nil, ErrScopeIsShared
+	}
 	var encryptedKey string
 	if len(key) > 0 {
-		if err := m.ValidateKey(ctx, provider, key, config); err != nil {
+		encrypted, err := m.encryptKey(ctx, provider, key, config)
+		if err != nil {
 			return nil, err
-		}
-
-		// Serialize and encrypt new key
-		keyJSON, err := json.Marshal(key)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize key: %w", err)
-		}
-
-		encrypted, err := m.encryption.EncryptCredential(string(keyJSON))
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt key: %w", err)
 		}
 		encryptedKey = encrypted
 	}
@@ -250,10 +279,13 @@ func (m *keyManager) UpdateKey(ctx context.Context, scope, provider string, key 
 	return updated, nil
 }
 
-// DeleteKey removes a provider key
+// DeleteKey removes a provider key at an account scope
 func (m *keyManager) DeleteKey(ctx context.Context, scope, provider string) error {
 	if scope == "" || provider == "" {
 		return fmt.Errorf("%w and %w", ErrScopeRequired, ErrProviderRequired)
+	}
+	if scope == SharedScope {
+		return ErrScopeIsShared
 	}
 
 	if err := m.repository.Delete(ctx, scope, provider, 0); err != nil {
@@ -271,148 +303,254 @@ func (m *keyManager) DeleteKey(ctx context.Context, scope, provider string) erro
 	return nil
 }
 
-// AddGatewayKey adds a gateway-wide key for a provider
-func (m *keyManager) AddGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+// AddSharedCredential appends one shared credential to the provider's list at
+// SharedScope, creating the record when the provider holds none yet. Access
+// defaults to open: a credential the operator applies without saying
+// otherwise serves every account.
+func (m *keyManager) AddSharedCredential(ctx context.Context, provider string, key map[string]string, config map[string]any, params SharedCredentialParams) (*credentials.SharedCredential, error) {
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
-
-	// Validate key
-	if err := m.ValidateKey(ctx, provider, key, config); err != nil {
+	access, err := credentials.ParseAccess(string(params.Access))
+	if err != nil {
+		return nil, err
+	}
+	encryptedKey, err := m.encryptKey(ctx, provider, key, config)
+	if err != nil {
 		return nil, err
 	}
 
-	// Serialize and encrypt key
-	keyJSON, err := json.Marshal(key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize key: %w", err)
-	}
-
-	encryptedKey, err := m.encryption.EncryptCredential(string(keyJSON))
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt key: %w", err)
-	}
-
-	// Create the gateway key as a ProviderKey at GatewayScope
-	gatewayKey := &credentials.ProviderKey{
-		Scope:               GatewayScope,
-		Provider:            provider,
+	now := time.Now()
+	credential := credentials.SharedCredential{
+		ID:                  uuid.NewString(),
+		Label:               params.Label,
 		EncryptedCredential: encryptedKey,
 		Config:              config,
-		RateLimit:           rateLimit,
-		Priority:            100, // Lower priority than an account BYOK key
-		CreatedAt:           time.Now(),
-		UpdatedAt:           time.Now(),
+		RateLimit:           params.RateLimit,
+		Access:              access,
+		Grants:              append([]string(nil), params.Grants...),
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+	if err := credential.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid shared credential: %w", err)
 	}
 
-	// Validate model
-	if err := gatewayKey.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid gateway key: %w", err)
+	for attempt := 0; attempt < maxCredentialUpdateAttempts; attempt++ {
+		record, err := m.repository.Get(ctx, SharedScope, provider)
+		switch {
+		case errors.Is(err, credentials.ErrNotFound):
+			created := credentials.ProviderKey{
+				Scope:     SharedScope,
+				Provider:  provider,
+				Shared:    []credentials.SharedCredential{credential},
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if _, err := m.repository.Create(ctx, created); err != nil {
+				if errors.Is(err, credentials.ErrConflict) {
+					// Another writer created the record first; append instead.
+					continue
+				}
+				return nil, fmt.Errorf("failed to store shared credential: %w", err)
+			}
+		case err != nil:
+			return nil, fmt.Errorf("read shared provider credential: %w", err)
+		default:
+			record.Key.Shared = append(record.Key.Shared, credential)
+			record.Key.UpdatedAt = now
+			if err := record.Key.Validate(); err != nil {
+				return nil, fmt.Errorf("invalid shared credential: %w", err)
+			}
+			if _, err := m.repository.Update(ctx, record.Key, record.Revision); err != nil {
+				if errors.Is(err, credentials.ErrConflict) {
+					if waitErr := waitCredentialConflict(ctx, attempt); waitErr != nil {
+						return nil, waitErr
+					}
+					continue
+				}
+				return nil, fmt.Errorf("failed to store shared credential: %w", err)
+			}
+		}
+
+		log.Info().
+			Str("provider", provider).
+			Str("access", string(access)).
+			Msg("Shared provider credential added")
+		result := credentials.CloneSharedCredential(credential)
+		return &result, nil
 	}
-
-	created, err := m.repository.Create(ctx, *gatewayKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to store gateway key: %w", err)
-	}
-
-	log.Info().
-		Str("provider", provider).
-		Msg("Gateway provider key set")
-
-	return &created.Key, nil
+	return nil, credentials.ErrConflict
 }
 
-// GetGatewayKey retrieves the gateway key for a provider
-func (m *keyManager) GetGatewayKey(ctx context.Context, provider string) (*credentials.ProviderKey, error) {
+// GetSharedCredentials lists the provider's shared credentials in stored
+// order. A provider with no shared record has an empty list, not an error.
+func (m *keyManager) GetSharedCredentials(ctx context.Context, provider string) ([]credentials.SharedCredential, error) {
 	if provider == "" {
 		return nil, ErrProviderRequired
 	}
-
-	record, err := m.repository.Get(ctx, GatewayScope, provider)
+	record, err := m.repository.Get(ctx, SharedScope, provider)
 	if err != nil {
 		if errors.Is(err, credentials.ErrNotFound) {
-			return nil, ErrKeyNotFound
+			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get gateway key: %w", err)
+		return nil, fmt.Errorf("read shared provider credential: %w", err)
 	}
-
-	return &record.Key, nil
+	return record.Key.Shared, nil
 }
 
-// UpdateGatewayKey updates an existing gateway provider key
-func (m *keyManager) UpdateGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
+// UpdateSharedCredential mutates one shared credential by id.
+func (m *keyManager) UpdateSharedCredential(ctx context.Context, provider, credentialID string, update SharedCredentialUpdate) (*credentials.SharedCredential, error) {
+	if provider == "" {
+		return nil, ErrProviderRequired
+	}
+	if credentialID == "" {
+		return nil, ErrKeyNotFound
+	}
 	var encryptedKey string
-	if len(key) > 0 {
-		if err := m.ValidateKey(ctx, provider, key, config); err != nil {
+	if len(update.Key) > 0 {
+		encrypted, err := m.encryptKey(ctx, provider, update.Key, update.Config)
+		if err != nil {
 			return nil, err
-		}
-
-		// Serialize and encrypt new key
-		keyJSON, err := json.Marshal(key)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize key: %w", err)
-		}
-
-		encrypted, err := m.encryption.EncryptCredential(string(keyJSON))
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt key: %w", err)
 		}
 		encryptedKey = encrypted
 	}
-	updated, err := m.updateCredential(ctx, GatewayScope, provider, func(gatewayKey *credentials.ProviderKey) error {
+	if update.Access != nil {
+		if _, err := credentials.ParseAccess(string(*update.Access)); err != nil {
+			return nil, err
+		}
+	}
+
+	updated, err := m.updateCredential(ctx, SharedScope, provider, func(providerKey *credentials.ProviderKey) error {
+		index := indexOfSharedCredential(providerKey.Shared, credentialID)
+		if index < 0 {
+			return ErrKeyNotFound
+		}
+		credential := &providerKey.Shared[index]
 		if encryptedKey != "" {
-			gatewayKey.EncryptedCredential = encryptedKey
+			credential.EncryptedCredential = encryptedKey
 		}
-		if config != nil {
-			gatewayKey.Config = config
+		if update.Config != nil {
+			credential.Config = update.Config
 		}
-		if rateLimit != nil {
-			gatewayKey.RateLimit = rateLimit
+		if update.Label != nil {
+			credential.Label = *update.Label
 		}
-		gatewayKey.UpdatedAt = time.Now()
-		return gatewayKey.Validate()
+		if update.Access != nil {
+			credential.Access = *update.Access
+		}
+		if update.Grants != nil {
+			credential.Grants = append([]string(nil), (*update.Grants)...)
+		}
+		if update.RateLimit != nil {
+			credential.RateLimit = update.RateLimit
+		}
+		now := time.Now()
+		credential.UpdatedAt = now
+		providerKey.UpdatedAt = now
+		return providerKey.Validate()
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to store gateway key: %w", err)
+		if errors.Is(err, ErrKeyNotFound) {
+			return nil, ErrKeyNotFound
+		}
+		return nil, fmt.Errorf("failed to store shared credential: %w", err)
 	}
 
 	log.Info().
 		Str("provider", provider).
-		Msg("Gateway provider key updated")
+		Msg("Shared provider credential updated")
 
-	return updated, nil
+	index := indexOfSharedCredential(updated.Shared, credentialID)
+	if index < 0 {
+		return nil, ErrKeyNotFound
+	}
+	result := credentials.CloneSharedCredential(updated.Shared[index])
+	return &result, nil
 }
 
-// DeleteGatewayKey removes a gateway key
-func (m *keyManager) DeleteGatewayKey(ctx context.Context, provider string) error {
+// DeleteSharedCredential removes one shared credential by id, and removes the
+// provider's record when its last credential goes.
+func (m *keyManager) DeleteSharedCredential(ctx context.Context, provider, credentialID string) error {
 	if provider == "" {
 		return ErrProviderRequired
 	}
-
-	if err := m.repository.Delete(ctx, GatewayScope, provider, 0); err != nil {
-		if errors.Is(err, credentials.ErrNotFound) {
+	if credentialID == "" {
+		return ErrKeyNotFound
+	}
+	for attempt := 0; attempt < maxCredentialUpdateAttempts; attempt++ {
+		record, err := m.repository.Get(ctx, SharedScope, provider)
+		if err != nil {
+			if errors.Is(err, credentials.ErrNotFound) {
+				return ErrKeyNotFound
+			}
+			return fmt.Errorf("read shared provider credential: %w", err)
+		}
+		index := indexOfSharedCredential(record.Key.Shared, credentialID)
+		if index < 0 {
 			return ErrKeyNotFound
 		}
-		return fmt.Errorf("failed to delete gateway key: %w", err)
+		if len(record.Key.Shared) == 1 {
+			err = m.repository.Delete(ctx, SharedScope, provider, record.Revision)
+		} else {
+			record.Key.Shared = append(record.Key.Shared[:index], record.Key.Shared[index+1:]...)
+			record.Key.UpdatedAt = time.Now()
+			_, err = m.repository.Update(ctx, record.Key, record.Revision)
+		}
+		if err != nil {
+			if errors.Is(err, credentials.ErrConflict) {
+				if waitErr := waitCredentialConflict(ctx, attempt); waitErr != nil {
+					return waitErr
+				}
+				continue
+			}
+			return fmt.Errorf("failed to delete shared credential: %w", err)
+		}
+
+		log.Info().
+			Str("provider", provider).
+			Msg("Shared provider credential deleted")
+		return nil
 	}
-
-	log.Info().
-		Str("provider", provider).
-		Msg("Gateway provider key deleted")
-
-	return nil
+	return credentials.ErrConflict
 }
 
-// ListGatewayKeys lists all gateway keys
-func (m *keyManager) ListGatewayKeys(ctx context.Context) ([]*credentials.ProviderKey, error) {
-	records, err := m.repository.ListScope(ctx, GatewayScope, providerCredentialScanLimit)
+// ListShared lists every provider's shared record, sorted by provider.
+func (m *keyManager) ListShared(ctx context.Context) ([]*credentials.ProviderKey, error) {
+	records, err := m.repository.ListScope(ctx, SharedScope, providerCredentialScanLimit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list gateway keys: %w", err)
+		return nil, fmt.Errorf("failed to list shared credentials: %w", err)
 	}
 	keys := providerKeysFromRecords(records)
 	sort.Slice(keys, func(i, j int) bool { return keys[i].Provider < keys[j].Provider })
 
 	return keys, nil
+}
+
+func indexOfSharedCredential(shared []credentials.SharedCredential, credentialID string) int {
+	for index := range shared {
+		if shared[index].ID == credentialID {
+			return index
+		}
+	}
+	return -1
+}
+
+// encryptKey validates one credential value against the provider's catalog
+// contract, then serializes and encrypts it.
+func (m *keyManager) encryptKey(ctx context.Context, provider string, key map[string]string, config map[string]any) (string, error) {
+	if err := m.ValidateKey(ctx, provider, key, config); err != nil {
+		return "", err
+	}
+	keyJSON, err := json.Marshal(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize key: %w", err)
+	}
+	encrypted, err := m.encryption.EncryptCredential(string(keyJSON))
+	if err != nil {
+		return "", fmt.Errorf("failed to encrypt key: %w", err)
+	}
+	return encrypted, nil
 }
 
 // RecordUsage records usage of a provider key
@@ -458,18 +596,8 @@ func (m *keyManager) updateCredential(
 		}
 		updated, err := m.repository.Update(ctx, record.Key, record.Revision)
 		if errors.Is(err, credentials.ErrConflict) {
-			backoff := credentialConflictBackoff(attempt)
-			timer := time.NewTimer(backoff)
-			select {
-			case <-ctx.Done():
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				return nil, ctx.Err()
-			case <-timer.C:
+			if waitErr := waitCredentialConflict(ctx, attempt); waitErr != nil {
+				return nil, waitErr
 			}
 			continue
 		}
@@ -479,6 +607,24 @@ func (m *keyManager) updateCredential(
 		return &updated.Key, nil
 	}
 	return nil, credentials.ErrConflict
+}
+
+// waitCredentialConflict sleeps one conflict backoff or returns the context's
+// cancellation, whichever comes first.
+func waitCredentialConflict(ctx context.Context, attempt int) error {
+	timer := time.NewTimer(credentialConflictBackoff(attempt))
+	select {
+	case <-ctx.Done():
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func credentialConflictBackoff(attempt int) time.Duration {

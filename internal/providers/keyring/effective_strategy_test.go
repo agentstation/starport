@@ -85,8 +85,8 @@ func TestEffectiveStrategyNarrowsButNeverWidens(t *testing.T) {
 // names the account and nothing else.
 func TestAccountScopeNamesTheAccount(t *testing.T) {
 	assert.Equal(t, "account:acct-1", AccountScope("acct-1"))
-	assert.NotEqual(t, GatewayScope, AccountScope("acct-1"))
-	assert.Equal(t, "*", GatewayScope)
+	assert.NotEqual(t, SharedScope, AccountScope("acct-1"))
+	assert.Equal(t, "*", SharedScope)
 }
 
 func strategyMetadata(value any) map[string]any {

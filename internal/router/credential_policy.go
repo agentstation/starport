@@ -14,12 +14,14 @@ import (
 	"github.com/agentstation/starport/internal/routing"
 )
 
-// StoredCredentialResolver resolves one exact stored record against the
-// provider contract retained by the request's runtime generation. One
-// resolver serves both stored planes: the scope decides whether the record is
-// the operator's gateway credential or the account's own.
+// StoredCredentialResolver resolves stored credentials against the provider
+// contract retained by the request's runtime generation. The two stored planes
+// have different shapes, so each has its own method: the account plane reads
+// one exact scoped record, and the shared plane picks the first shared
+// credential the account may spend.
 type StoredCredentialResolver interface {
 	ResolveStoredMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error)
+	ResolveSharedMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error)
 }
 
 type credentialPolicy struct {
@@ -72,7 +74,7 @@ func reachableSources(
 	reachable := make([]keyring.CredentialSource, 0, 3)
 	for _, source := range strategy.Sources() {
 		switch source {
-		case keyring.SourceGateway:
+		case keyring.SourceShared:
 			if storedKeys == nil {
 				continue
 			}
@@ -118,8 +120,8 @@ func (p *credentialPolicy) resolve(
 	switch source {
 	case keyring.SourceEnvironment:
 		material, err = p.runtime.ResolveMaterial(ctx, route.ProviderID)
-	case keyring.SourceGateway:
-		material, err = p.resolveStored(ctx, keyring.GatewayScope, route.ProviderID)
+	case keyring.SourceShared:
+		material, err = p.resolveShared(ctx, route.ProviderID)
 	case keyring.SourceBYOK:
 		material, err = p.resolveStored(ctx, keyring.AccountScope(p.accountID), route.ProviderID)
 	default:
@@ -169,30 +171,47 @@ func (p *credentialPolicy) resolve(
 	return credentialSelection{}, providerFailure, execution.AttemptActionStop
 }
 
-// resolveStored reads one stored plane. The gateway plane and the BYOK plane
-// differ only in their scope, so they share this path and cannot drift apart
-// in how they look a provider up or how they fail.
+// resolveStored reads the BYOK plane: one exact account-scoped record.
 func (p *credentialPolicy) resolveStored(
 	ctx context.Context,
 	scope string,
 	providerID string,
 ) (credentials.Material, error) {
-	if p.storedKeys == nil {
-		return credentials.Material{}, keyring.ErrKeyNotFound
-	}
-	snapshot := p.runtime.Snapshot()
-	if snapshot == nil || snapshot.Catalog() == nil {
-		return credentials.Material{}, errors.New("runtime catalog is unavailable")
-	}
-	provider, err := snapshot.Catalog().Provider(catalogs.ProviderID(providerID))
+	provider, err := p.storedProvider(providerID)
 	if err != nil {
 		return credentials.Material{}, err
 	}
 	return p.storedKeys.ResolveStoredMaterial(ctx, scope, provider)
 }
 
+// resolveShared reads the shared plane: the first shared credential this
+// request's account may spend, open or granted.
+func (p *credentialPolicy) resolveShared(
+	ctx context.Context,
+	providerID string,
+) (credentials.Material, error) {
+	provider, err := p.storedProvider(providerID)
+	if err != nil {
+		return credentials.Material{}, err
+	}
+	return p.storedKeys.ResolveSharedMaterial(ctx, p.accountID, provider)
+}
+
+// storedProvider resolves the provider contract both stored planes validate
+// against, from the request's own runtime generation.
+func (p *credentialPolicy) storedProvider(providerID string) (catalogs.Provider, error) {
+	if p.storedKeys == nil {
+		return catalogs.Provider{}, keyring.ErrKeyNotFound
+	}
+	snapshot := p.runtime.Snapshot()
+	if snapshot == nil || snapshot.Catalog() == nil {
+		return catalogs.Provider{}, errors.New("runtime catalog is unavailable")
+	}
+	return snapshot.Catalog().Provider(catalogs.ProviderID(providerID))
+}
+
 // credentialEvidence reports who paid for the attempt, and out of which of
-// their planes. An environment credential and a gateway credential are both
+// their planes. An environment credential and a shared credential are both
 // the operator's, so they record the same owner; the source is what tells
 // them apart, and an operator needs it to see whether the deployment is
 // running on a shell variable or on a credential someone applied.
@@ -202,7 +221,7 @@ func credentialEvidence(
 ) execution.CredentialEvidence {
 	owner := execution.CredentialOwner("")
 	switch source {
-	case keyring.SourceEnvironment, keyring.SourceGateway:
+	case keyring.SourceEnvironment, keyring.SourceShared:
 		owner = execution.CredentialOwnerOperator
 	case keyring.SourceBYOK:
 		owner = execution.CredentialOwnerAccount

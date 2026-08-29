@@ -3,10 +3,10 @@
 # condition asserts one structural property of the target design:
 #
 #   - a gateway API key authenticates and owns nothing else,
-#   - a provider credential comes from the environment, from the gateway,
-#     or from an account, and only the account one is called BYOK,
+#   - a provider credential comes from the environment, from the operator's
+#     shared plane, or from an account, and only the account one is called BYOK,
 #   - an account carries the limits and the credential policy that let an
-#     operator govern use of a gateway credential,
+#     operator govern use of a shared credential,
 #   - authentication is required unless an operator disables it,
 #   - the console reaches the gateway without holding a gateway key.
 #
@@ -62,13 +62,13 @@ check AON-V10 "no package still calls the whole credential subsystem byok" \
   no_dir internal/providers/byok
 check AON-V11 "the BYOK plane is scoped to an account, not to a key" \
   grep_q 'AccountScope' internal/providers/keyring
-check AON-V12 "the gateway credential plane has a named scope" \
-  grep_q 'GatewayScope' internal/providers/keyring
-check AON-V13 "credential resolution consults the gateway source" \
-  grep_q 'SourceGateway' internal/router
+check AON-V12 "the shared credential plane has a named scope" \
+  grep_q 'SharedScope' internal/providers/keyring
+check AON-V13 "credential resolution consults the shared source" \
+  grep_q 'SourceShared' internal/router
 
 # --- AON4: credential routes ---
-check AON-V14 "an operator applies a gateway credential on the provider route" \
+check AON-V14 "an operator applies a shared credential on the provider route" \
   grep_q '{provider}/credentials' internal/server/routes.go
 check AON-V15 "the account-brought credential route is named byok" \
   grep_q '/byok' internal/server/routes.go

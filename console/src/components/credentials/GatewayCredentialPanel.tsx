@@ -16,13 +16,13 @@ import {
 } from "@/lib/api";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 
-// The gateway credential is the provider credential an operator applies for
-// the whole deployment. It belongs to no account, so it is addressed by
+// The shared credential is the provider credential an operator shares with
+// the deployment's accounts. It belongs to no account, so it is addressed by
 // provider alone and edited here, on the provider's own screen, rather than
 // anywhere near a gateway API key. On screen the word is "shared" — the
 // stored half of the Shared group, beside the environment credential that is
-// the same operator's money — while the keyring and the wire keep "gateway"
-// (internal/providers/keyring).
+// the same operator's money — and the keyring and the wire now say "shared"
+// too (internal/providers/keyring).
 //
 // It is not BYOK. BYOK is a credential an account brings for itself, and it is
 // managed per account. The provider credential drawer may name accounts as the

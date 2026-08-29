@@ -28,8 +28,8 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Keep gateway API keys separate from provider credentials. A gateway API key
   authenticates a caller to Starport. A provider credential pays a provider.
 - Use BYOK only for a provider credential an account brings for itself. A
-  provider credential the operator applies for the whole deployment is a
-  gateway credential, and one read from the process environment is an
+  provider credential the operator shares with the deployment's accounts is a
+  shared credential, and one read from the process environment is an
   environment credential.
 - Keep Starmap acquisition, source, and sync option imports in
   `internal/catalog`. Application composition uses the catalog-owned refresh
@@ -45,7 +45,7 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Put request credential placement in `internal/providers/auth`.
 - Put the provider credential sources, their scopes, and the selection
   strategies in `internal/providers/keyring`. It owns the words `environment`,
-  `gateway`, `byok`, and `anonymous`. No other package restates them.
+  `shared`, `byok`, and `anonymous`. No other package restates them.
 - Put account identity, account-wide limits, and the default credential
   strategy in `internal/account`. Put the limit vocabulary itself in
   `internal/limits`, which both a gateway API key and an account use.
@@ -125,8 +125,8 @@ when OpenRouter publishes a route outside the media surface.
 
 `scripts/verify-auth-onboarding.sh` guards the separation of the credential
 ideas: a gateway API key authenticates and owns nothing else, a provider
-credential comes from the environment, the gateway, or an account, only the
-account one is BYOK, authentication is required unless an operator disables it,
+credential comes from the environment, the operator's shared plane, or an
+account, only the account one is BYOK, authentication is required unless an operator disables it,
 and the console reaches the gateway without holding a gateway key. It is
 terminal at 26 conditions (`AON-V01` through `AON-V26`) and runs in CI.
 

@@ -29,12 +29,12 @@ const credentialTestProvider = "openai"
 // credentialTestField is the catalog-declared field id for that provider.
 const credentialTestField = "api-key"
 
-// gatewayCredentialValue and byokCredentialValue are the two secrets under
+// sharedCredentialValue and byokCredentialValue are the two secrets under
 // test. They are distinct so a response body leaking either one names which
 // plane leaked it.
 const (
-	gatewayCredentialValue = "gateway-plane-value-under-test"
-	byokCredentialValue    = "account-plane-value-under-test"
+	sharedCredentialValue = "shared-plane-value-under-test"
+	byokCredentialValue   = "account-plane-value-under-test"
 )
 
 // credentialGateway is a running gateway plus the three identities a
@@ -148,53 +148,56 @@ func TestKeyNestedCredentialRoutesAreGone(t *testing.T) {
 	}
 }
 
-// TestOperatorAppliesAGatewayCredentialResolutionCanRead is the route half of
-// the gateway plane. AON3 proved resolution reads scope *; this proves the
+// TestOperatorAppliesASharedCredentialResolutionCanRead is the route half of
+// the shared plane. AON3 proved resolution reads scope *; this proves the
 // operator route writes the value resolution reads, so the two halves meet.
-func TestOperatorAppliesAGatewayCredentialResolutionCanRead(t *testing.T) {
+// Resolution runs as an anonymous caller because a credential applied through
+// this route is open to every account by default.
+func TestOperatorAppliesASharedCredentialResolutionCanRead(t *testing.T) {
 	gateway := newCredentialGateway(t)
 	path := "/api/v1/providers/" + credentialTestProvider + "/credentials"
 
-	recorder := gateway.call(t, gateway.operator, http.MethodPut, path, credentialBody(gatewayCredentialValue))
+	recorder := gateway.call(t, gateway.operator, http.MethodPut, path, credentialBody(sharedCredentialValue))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
-	material, err := gateway.server.providerKeys.ResolveStoredMaterial(
-		context.Background(), keyring.GatewayScope, catalogProvider(t, credentialTestProvider),
+	material, err := gateway.server.providerKeys.ResolveSharedMaterial(
+		context.Background(), "", catalogProvider(t, credentialTestProvider),
 	)
 	require.NoError(t, err, "the operator route must write where resolution reads")
 	value, present := material.Value(credentialTestField)
 	require.True(t, present)
-	assert.Equal(t, gatewayCredentialValue, value)
+	assert.Equal(t, sharedCredentialValue, value)
 
 	// PUT is an upsert on this surface: an operator replacing a rotated
 	// deployment credential should not have to know whether one is already
 	// applied.
-	recorder = gateway.call(t, gateway.operator, http.MethodPut, path, credentialBody(gatewayCredentialValue+"-rotated"))
+	recorder = gateway.call(t, gateway.operator, http.MethodPut, path, credentialBody(sharedCredentialValue+"-rotated"))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	material, err = gateway.server.providerKeys.ResolveStoredMaterial(
-		context.Background(), keyring.GatewayScope, catalogProvider(t, credentialTestProvider),
+	material, err = gateway.server.providerKeys.ResolveSharedMaterial(
+		context.Background(), "", catalogProvider(t, credentialTestProvider),
 	)
 	require.NoError(t, err)
 	value, present = material.Value(credentialTestField)
 	require.True(t, present)
-	assert.Equal(t, gatewayCredentialValue+"-rotated", value)
+	assert.Equal(t, sharedCredentialValue+"-rotated", value)
 
 	recorder = gateway.call(t, gateway.operator, http.MethodDelete, path, "")
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	_, err = gateway.server.providerKeys.GetGatewayKey(context.Background(), credentialTestProvider)
-	assert.ErrorIs(t, err, keyring.ErrKeyNotFound)
+	shared, err := gateway.server.providerKeys.GetSharedCredentials(context.Background(), credentialTestProvider)
+	require.NoError(t, err)
+	assert.Empty(t, shared)
 }
 
-// TestGatewayCredentialRouteRefusesANonAdmin holds the boundary that makes the
+// TestSharedCredentialRouteRefusesANonAdmin holds the boundary that makes the
 // deployment credential the operator's. An account with full BYOK scopes still
 // has no say over what the whole deployment spends.
-func TestGatewayCredentialRouteRefusesANonAdmin(t *testing.T) {
+func TestSharedCredentialRouteRefusesANonAdmin(t *testing.T) {
 	gateway := newCredentialGateway(t)
 	path := "/api/v1/providers/" + credentialTestProvider + "/credentials"
 
 	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
-			recorder := gateway.call(t, gateway.acme, method, path, credentialBody(gatewayCredentialValue))
+			recorder := gateway.call(t, gateway.acme, method, path, credentialBody(sharedCredentialValue))
 			assert.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
 		})
 	}
@@ -203,8 +206,9 @@ func TestGatewayCredentialRouteRefusesANonAdmin(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
 
 	// The refusal must be a refusal, not a silent no-op that stored nothing.
-	_, err := gateway.server.providerKeys.GetGatewayKey(context.Background(), credentialTestProvider)
-	assert.ErrorIs(t, err, keyring.ErrKeyNotFound)
+	shared, err := gateway.server.providerKeys.GetSharedCredentials(context.Background(), credentialTestProvider)
+	require.NoError(t, err)
+	assert.Empty(t, shared)
 }
 
 // TestBYOKBelongsToItsAccount is the account half. An account reaches its own
@@ -253,10 +257,10 @@ func TestBYOKBelongsToItsAccount(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 }
 
-// TestBYOKAndGatewayCredentialsAreSeparateStores proves the two planes do not
+// TestBYOKAndSharedCredentialsAreSeparateStores proves the two planes do not
 // alias. Writing one must never be readable as the other, or the vocabulary is
 // only a naming convention.
-func TestBYOKAndGatewayCredentialsAreSeparateStores(t *testing.T) {
+func TestBYOKAndSharedCredentialsAreSeparateStores(t *testing.T) {
 	gateway := newCredentialGateway(t)
 
 	recorder := gateway.call(t, gateway.acme, http.MethodPut,
@@ -270,7 +274,7 @@ func TestBYOKAndGatewayCredentialsAreSeparateStores(t *testing.T) {
 
 	// Applying the deployment credential does not disturb the account's.
 	recorder = gateway.call(t, gateway.operator, http.MethodPut,
-		"/api/v1/providers/"+credentialTestProvider+"/credentials", credentialBody(gatewayCredentialValue))
+		"/api/v1/providers/"+credentialTestProvider+"/credentials", credentialBody(sharedCredentialValue))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	accountMaterial, err := gateway.server.providerKeys.ResolveStoredMaterial(
@@ -281,13 +285,13 @@ func TestBYOKAndGatewayCredentialsAreSeparateStores(t *testing.T) {
 	require.True(t, present)
 	assert.Equal(t, byokCredentialValue, accountValue)
 
-	gatewayMaterial, err := gateway.server.providerKeys.ResolveStoredMaterial(
-		context.Background(), keyring.GatewayScope, catalogProvider(t, credentialTestProvider),
+	sharedMaterial, err := gateway.server.providerKeys.ResolveSharedMaterial(
+		context.Background(), "", catalogProvider(t, credentialTestProvider),
 	)
 	require.NoError(t, err)
-	gatewayValue, present := gatewayMaterial.Value(credentialTestField)
+	sharedValue, present := sharedMaterial.Value(credentialTestField)
 	require.True(t, present)
-	assert.Equal(t, gatewayCredentialValue, gatewayValue)
+	assert.Equal(t, sharedCredentialValue, sharedValue)
 }
 
 // TestNoCredentialResponseCarriesItsSecret extends the existing security
@@ -299,7 +303,7 @@ func TestNoCredentialResponseCarriesItsSecret(t *testing.T) {
 	byokPath := "/api/v1/accounts/acme/byok"
 
 	responses := []*httptest.ResponseRecorder{
-		gateway.call(t, gateway.operator, http.MethodPut, providerPath, credentialBody(gatewayCredentialValue)),
+		gateway.call(t, gateway.operator, http.MethodPut, providerPath, credentialBody(sharedCredentialValue)),
 		gateway.call(t, gateway.operator, http.MethodGet, providerPath, ""),
 		gateway.call(t, gateway.operator, http.MethodPost, providerPath+"/validate", ""),
 		gateway.call(t, gateway.acme, http.MethodPut, byokPath+"/"+credentialTestProvider, credentialBody(byokCredentialValue)),
@@ -310,7 +314,7 @@ func TestNoCredentialResponseCarriesItsSecret(t *testing.T) {
 
 	for _, recorder := range responses {
 		body := recorder.Body.String()
-		assert.NotContains(t, body, gatewayCredentialValue)
+		assert.NotContains(t, body, sharedCredentialValue)
 		assert.NotContains(t, body, byokCredentialValue)
 	}
 

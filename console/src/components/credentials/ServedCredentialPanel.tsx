@@ -6,7 +6,7 @@ import { formatCount } from "@/lib/format";
 //
 // The provider credential card beside this one reports what is configured.
 // This one reports what was spent, and the difference is the point: an
-// operator who applied a gateway credential expecting accounts to bring
+// operator who shared a credential expecting accounts to bring
 // their own can see, here, that every request is still drawing on the
 // deployment's money.
 //
@@ -19,12 +19,12 @@ import { formatCount } from "@/lib/format";
 
 const SOURCE_LABELS: Record<string, string> = {
   environment: "Shared · environment",
-  gateway: "Shared · stored",
+  shared: "Shared · stored",
   byok: "Account's own",
   anonymous: "No credential",
 };
 
-const SOURCE_ORDER = ["environment", "gateway", "byok", "anonymous"];
+const SOURCE_ORDER = ["environment", "shared", "byok", "anonymous"];
 
 const UNRECORDED = "unrecorded";
 

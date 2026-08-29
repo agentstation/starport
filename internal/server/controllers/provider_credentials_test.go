@@ -77,41 +77,36 @@ func (m *mockKeyManager) ValidateKey(ctx context.Context, provider string, key m
 	return nil
 }
 
-func (m *mockKeyManager) AddGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
-	return &credentials.ProviderKey{
-		Scope:    keyring.GatewayScope,
-		Provider: provider,
-	}, nil
+func (m *mockKeyManager) AddSharedCredential(ctx context.Context, provider string, key map[string]string, config map[string]any, params keyring.SharedCredentialParams) (*credentials.SharedCredential, error) {
+	return &credentials.SharedCredential{ID: "shared-1", Access: credentials.AccessOpen}, nil
 }
 
-func (m *mockKeyManager) GetGatewayKey(ctx context.Context, provider string) (*credentials.ProviderKey, error) {
-	return &credentials.ProviderKey{
-		Scope:    keyring.GatewayScope,
-		Provider: provider,
-	}, nil
+func (m *mockKeyManager) GetSharedCredentials(ctx context.Context, provider string) ([]credentials.SharedCredential, error) {
+	return []credentials.SharedCredential{{ID: "shared-1", Access: credentials.AccessOpen}}, nil
 }
 
-func (m *mockKeyManager) UpdateGatewayKey(ctx context.Context, provider string, key map[string]string, config map[string]any, rateLimit *credentials.RateLimitConfig) (*credentials.ProviderKey, error) {
-	return &credentials.ProviderKey{
-		Scope:    keyring.GatewayScope,
-		Provider: provider,
-	}, nil
+func (m *mockKeyManager) UpdateSharedCredential(ctx context.Context, provider, credentialID string, update keyring.SharedCredentialUpdate) (*credentials.SharedCredential, error) {
+	return &credentials.SharedCredential{ID: credentialID, Access: credentials.AccessOpen}, nil
 }
 
-func (m *mockKeyManager) DeleteGatewayKey(ctx context.Context, provider string) error {
+func (m *mockKeyManager) DeleteSharedCredential(ctx context.Context, provider, credentialID string) error {
 	return nil
 }
 
-func (m *mockKeyManager) ListGatewayKeys(ctx context.Context) ([]*credentials.ProviderKey, error) {
+func (m *mockKeyManager) ListShared(ctx context.Context) ([]*credentials.ProviderKey, error) {
 	return []*credentials.ProviderKey{
 		{
-			Scope:    keyring.GatewayScope,
+			Scope:    keyring.SharedScope,
 			Provider: "openai",
 		},
 	}, nil
 }
 
 func (m *mockKeyManager) ResolveStoredMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error) {
+	return credentials.Material{}, nil
+}
+
+func (m *mockKeyManager) ResolveSharedMaterial(context.Context, string, catalogs.Provider) (credentials.Material, error) {
 	return credentials.Material{}, nil
 }
 
@@ -130,10 +125,10 @@ func credentialRouter(store keyring.ProviderKeys) http.Handler {
 
 	router := chi.NewRouter()
 	router.Route("/api/v1/providers/{provider}/credentials", func(r chi.Router) {
-		r.Get("/", handler.GatewayGet)
-		r.Put("/", handler.GatewayPut)
-		r.Delete("/", handler.GatewayDelete)
-		r.Post("/validate", handler.GatewayValidate)
+		r.Get("/", handler.SharedGet)
+		r.Put("/", handler.SharedPut)
+		r.Delete("/", handler.SharedDelete)
+		r.Post("/validate", handler.SharedValidate)
 	})
 	router.Route("/api/v1/accounts/{account_id}/byok", func(r chi.Router) {
 		r.Get("/", handler.BYOKList)
@@ -241,11 +236,11 @@ type rejectingKeyManager struct {
 	err error
 }
 
-func (m *rejectingKeyManager) GetKey(context.Context, string, string) (*credentials.ProviderKey, error) {
-	return nil, keyring.ErrKeyNotFound
+func (m *rejectingKeyManager) GetSharedCredentials(context.Context, string) ([]credentials.SharedCredential, error) {
+	return nil, nil
 }
 
-func (m *rejectingKeyManager) AddKey(context.Context, string, string, map[string]string, map[string]any, bool, int) (*credentials.ProviderKey, error) {
+func (m *rejectingKeyManager) AddSharedCredential(context.Context, string, map[string]string, map[string]any, keyring.SharedCredentialParams) (*credentials.SharedCredential, error) {
 	return nil, m.err
 }
 
