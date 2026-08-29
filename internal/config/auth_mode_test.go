@@ -96,7 +96,7 @@ func validExposureConfig() *Config {
 			ReadTimeout: 30_000_000_000, WriteTimeout: 30_000_000_000,
 			IdleTimeout: 120_000_000_000, MaxHeaderBytes: 1 << 20,
 		},
-		Storage:      StorageConfig{Mode: storageModeBadger, Badger: BadgerConfig{Path: "/tmp/starport-test", GCInterval: 300_000_000_000, GCDiscardRatio: 0.5}},
+		Storage:      StorageConfig{Mode: storageModeBadger, Badger: BadgerConfig{Path: "/tmp/starport-test", GCInterval: 300_000_000_000, GCDiscardRatio: 0.5}, SQL: SQLConfig{Mode: sqlModeSQLite}},
 		RateLimiting: RateLimitingConfig{DefaultRequestsPerMinute: 60, WindowSize: 60_000_000_000},
 		Security:     SecurityConfig{AllowedOrigins: "*"},
 		Logging:      LoggingConfig{Level: "info", Format: "json", Output: "stdout", MaxSize: 100},
