@@ -40,3 +40,8 @@ Seams changed:
 go test ./internal/account/... ./internal/providers/keyring/... ./internal/routing/...
   ./internal/router/... ./internal/proxy/... ./internal/response/... ./internal/server/... : all ok
 verify-credential-sharing.sh: 14 passed, 9 failed (V11-V14 flipped green; V15-V23 are later tasks)
+
+Full gate list (29 gates): ALL GATES GREEN (23 verify scripts, benchmark-overhead,
+go test, go vet, lint, build, smoke-openrouter-sdks).
+autoreview --gate pre-pr --mode auto: clean, Sol high, overall 0.98, 60240-byte bundle,
+no accepted findings, attestation stored.
