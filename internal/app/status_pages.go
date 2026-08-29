@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"strings"
+	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/rs/zerolog/log"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
@@ -53,10 +56,18 @@ func (s catalogHealthAPISource) HealthAPIs() map[catalogs.ProviderID]statuspage.
 
 // providerIncidentPublisher carries status-page observations into the
 // state-owned projection, mirroring providerAvailabilityPublisher, so the
-// state package depends on no status-page reader.
+// state package depends on no status-page reader. The transitions the
+// projection reports back go to the durable repository: the live verdict
+// stays in memory where routing reads it, and only the record of changes
+// touches relational storage — on the poller's goroutine, never a
+// request's.
 type providerIncidentPublisher struct {
-	states *providerstate.Store
+	states      *providerstate.Store
+	transitions providerstate.TransitionRepository
 }
+
+// incidentRecordTimeout bounds one durable write of observed transitions.
+const incidentRecordTimeout = 10 * time.Second
 
 func (p providerIncidentPublisher) PublishIncidents(observations []statuspage.Observation) {
 	if p.states == nil {
@@ -71,5 +82,41 @@ func (p providerIncidentPublisher) PublishIncidents(observations []statuspage.Ob
 			CheckedAt:   observation.CheckedAt,
 		})
 	}
-	p.states.PublishIncidents(projected)
+	transitions := p.states.PublishIncidents(projected)
+	if len(transitions) == 0 || p.transitions == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), incidentRecordTimeout)
+	defer cancel()
+	if err := p.transitions.Record(ctx, transitions); err != nil {
+		// The projection already holds the live verdict; losing one durable
+		// record is worth a log line, not a failed poll pass.
+		log.Warn().Err(err).Msg("record incident transitions failed")
+	}
+}
+
+// ProviderIncidentLog answers one provider's published incident log. The
+// second return reports whether the catalog knows the provider at all, so
+// the HTTP surface can separate "unknown provider" from "no log".
+func (a *App) ProviderIncidentLog(ctx context.Context, providerID catalogs.ProviderID) (statuspage.History, bool) {
+	if a == nil || a.catalog == nil {
+		return statuspage.History{Availability: statuspage.HistoryUnreachable}, false
+	}
+	snapshot := a.catalog.Current()
+	if snapshot == nil {
+		return statuspage.History{Availability: statuspage.HistoryUnreachable}, false
+	}
+	if _, err := snapshot.Catalog().Provider(providerID); err != nil {
+		return statuspage.History{}, false
+	}
+	return a.incidentHistory.History(ctx, providerID), true
+}
+
+// ProviderIncidentTransitions answers the durable record of indicator
+// changes this gateway observed for one provider, newest first.
+func (a *App) ProviderIncidentTransitions(ctx context.Context, providerID catalogs.ProviderID) ([]providerstate.IncidentTransition, error) {
+	if a == nil || a.incidentTransitions == nil {
+		return nil, nil
+	}
+	return a.incidentTransitions.Transitions(ctx, providerID)
 }

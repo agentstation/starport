@@ -222,12 +222,18 @@ func (p *Poller) read(ctx context.Context, target Target) (verdict, bool) {
 // fetch reads one URL up to maxBytes. Anything but a 200 with a readable
 // body is no evidence at all.
 func (p *Poller) fetch(ctx context.Context, url string, maxBytes int64) ([]byte, bool) {
+	return fetchDocument(ctx, p.client, url, maxBytes)
+}
+
+// fetchDocument is the one health-API read both the poller and the history
+// reader use, so every convention shares the same evidence rule.
+func fetchDocument(ctx context.Context, client *http.Client, url string, maxBytes int64) ([]byte, bool) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, false
 	}
 	request.Header.Set("Accept", "application/json, application/rss+xml, application/atom+xml, application/xml")
-	response, err := p.client.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return nil, false
 	}

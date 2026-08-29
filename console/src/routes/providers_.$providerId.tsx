@@ -12,6 +12,7 @@ import {
   providerHealth,
 } from "@/components/providers/ProviderCard";
 import { ProviderCredentialCard } from "@/components/credentials/ProviderCredentialCard";
+import { IncidentLog } from "@/components/providers/IncidentLog";
 import {
   HealthPanel,
   OfferingsTable,
@@ -22,6 +23,7 @@ import {
   listActivity,
   listAdminActivity,
   listProviderCatalog,
+  providerIncidentLog,
   providerStatus,
 } from "@/lib/api";
 import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
@@ -66,6 +68,13 @@ function ProviderDetailPage() {
       }
       return listActivity(filters);
     },
+    enabled: keyUsable,
+    retry: false,
+  });
+
+  const incidents = useQuery({
+    queryKey: ["provider-incidents", providerId],
+    queryFn: () => providerIncidentLog(providerId),
     enabled: keyUsable,
     retry: false,
   });
@@ -180,6 +189,12 @@ function ProviderDetailPage() {
             <ServedCredentialPanel records={activity.data?.data} />
           </div>
           <HealthPanel offerings={offerings} records={activity.data?.data} />
+          <IncidentLog
+            name={name}
+            statusPageUrl={entry?.status_page_url}
+            report={incidents.data}
+            failed={incidents.isError}
+          />
         </>
       )}
 

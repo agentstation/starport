@@ -282,6 +282,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					r.Get("/metrics", s.controllers.Admin.Metrics)
 					r.Get("/activity", s.controllers.Activity.AdminList)
 					r.Get("/providers", s.controllers.ProviderOperations.Status)
+					r.Get("/providers/{provider}/incidents", s.controllers.ProviderOperations.Incidents)
 					r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
 					r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
 				})
@@ -463,5 +464,6 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /api/v1/admin/metrics           - System metrics
 //   GET    /api/v1/admin/activity          - List request activity across keys
 //   GET    /api/v1/admin/providers         - Provider runtime status
+//   GET    /api/v1/admin/providers/{provider}/incidents - Provider incident log and observed transitions
 //   POST   /api/v1/admin/providers/refresh - Reconcile provider credentials
 //   PUT    /api/v1/admin/auth/mode        - Require or stop requiring a gateway API key

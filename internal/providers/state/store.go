@@ -193,6 +193,19 @@ type IncidentObservation struct {
 	CheckedAt   time.Time
 }
 
+// IncidentTransition is one change this gateway observed in a provider's
+// own status-page verdict: the indicator it moved to and when the gateway
+// saw it. It is the gateway's evidence beside the provider's log — the
+// record that answers "what did the status page say when my requests were
+// failing", which the provider's own history cannot answer for this
+// deployment's clock.
+type IncidentTransition struct {
+	ProviderID  catalogs.ProviderID `json:"provider_id"`
+	Indicator   string              `json:"indicator"`
+	Description string              `json:"description,omitempty"`
+	ObservedAt  time.Time           `json:"observed_at"`
+}
+
 // ProviderStatus separates adapter, operator credential, and offering state.
 // Incident is present only while the provider's own status page reports one.
 type ProviderStatus struct {
@@ -242,6 +255,13 @@ type Store struct {
 	routing             map[availability.Offering]RoutingStatus
 
 	incidents map[catalogs.ProviderID]IncidentStatus
+	// observedIndicators is the transition-detection memory: the last
+	// indicator each provider's API answered with. It is separate from the
+	// live projection because the projection drops a provider whose API
+	// stops answering, while the record of what was last observed must
+	// survive that silence — otherwise a recovery seen after a gap could
+	// never record the close.
+	observedIndicators map[catalogs.ProviderID]string
 }
 
 // New creates an empty provider-state projection.
@@ -258,7 +278,8 @@ func newWithClock(source clock) *Store {
 		catalogOfferings: make(map[availability.Offering]OfferingStatus),
 		offerings:        make(map[availability.Offering]OfferingStatus),
 		routing:          make(map[availability.Offering]RoutingStatus),
-		incidents:        make(map[catalogs.ProviderID]IncidentStatus),
+		incidents:          make(map[catalogs.ProviderID]IncidentStatus),
+		observedIndicators: make(map[catalogs.ProviderID]string),
 	}
 }
 
@@ -549,17 +570,23 @@ func (s *Store) PublishAvailability(snapshot availability.Snapshot) error {
 	return nil
 }
 
+// indicatorNone is the indicator a provider reports when no incident
+// stands; an empty indicator normalizes to it.
+const indicatorNone = "none"
+
 // PublishIncidents replaces the complete status-page projection with one
 // observation pass. A "none" indicator means the provider reports no
 // incident, so it clears rather than shows; a provider absent from the pass
-// stops asserting anything at all.
-func (s *Store) PublishIncidents(observations []IncidentObservation) {
+// stops asserting anything at all. The return value is each indicator
+// change this pass observed — the caller owns making that record durable,
+// so the projection stays a pure in-memory read on the routing path.
+func (s *Store) PublishIncidents(observations []IncidentObservation) []IncidentTransition {
 	if s == nil {
-		return
+		return nil
 	}
 	next := make(map[catalogs.ProviderID]IncidentStatus)
 	for _, observation := range observations {
-		if observation.Indicator == "" || observation.Indicator == "none" {
+		if observation.Indicator == "" || observation.Indicator == indicatorNone {
 			continue
 		}
 		next[observation.ProviderID] = IncidentStatus{
@@ -570,14 +597,53 @@ func (s *Store) PublishIncidents(observations []IncidentObservation) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	transitions := s.incidentTransitions(observations)
 	if equalIncidents(s.incidents, next) {
 		// The pass re-confirmed what the projection already says: keep the
 		// fresh CheckedAt without announcing a change.
 		s.incidents = next
-		return
+		return transitions
 	}
 	s.incidents = next
 	s.revision++
+	return transitions
+}
+
+// incidentTransitions names each indicator change one pass observed
+// against the last answered indicator per provider. Only an answered
+// observation moves that memory: a provider absent from the pass means its
+// API did not answer, and silence is not recovery. A clear verdict records
+// only when it closes a standing incident, so a healthy provider
+// accumulates no record at all.
+func (s *Store) incidentTransitions(observations []IncidentObservation) []IncidentTransition {
+	var transitions []IncidentTransition
+	for _, observation := range observations {
+		if observation.ProviderID == "" {
+			continue
+		}
+		indicator := observation.Indicator
+		description := observation.Description
+		if indicator == "" || indicator == indicatorNone {
+			indicator = indicatorNone
+			description = ""
+		}
+		previous, seen := s.observedIndicators[observation.ProviderID]
+		s.observedIndicators[observation.ProviderID] = indicator
+		if indicator == previous || (indicator == indicatorNone && !seen) {
+			continue
+		}
+		transition := IncidentTransition{
+			ProviderID:  observation.ProviderID,
+			Indicator:   indicator,
+			Description: description,
+			ObservedAt:  observation.CheckedAt,
+		}
+		if transition.ObservedAt.IsZero() {
+			transition.ObservedAt = s.clock.Now()
+		}
+		transitions = append(transitions, transition)
+	}
+	return transitions
 }
 
 func equalIncidents(current, next map[catalogs.ProviderID]IncidentStatus) bool {

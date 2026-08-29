@@ -84,24 +84,26 @@ type lifecycleEntry struct {
 
 // App owns all constructed runtime dependencies.
 type App struct {
-	config             *config.Config
-	providerSettings   config.ProvidersConfig
-	httpServer         httpRuntime
-	registry           *registry.Registry
-	catalogRuntime     catalogRuntime
-	catalogUpdates     catalogUpdateRuntime
-	catalog            *runtimecatalog.ControlPlane
-	catalogFreshness   *runtimecatalog.FreshnessService
-	store              storage.KVStore
-	blobStore          blob.Store
-	files              *files.Service
-	jobs               *jobs.Service
-	cacheManager       *cache.Manager
-	transports         *connectors.TransportRegistry
-	authentication     *providerauth.Registry
-	providerReconciler *providers.Reconciler
-	providerStates     *providerstate.Store
-	availability       *availability.Tracker
+	config              *config.Config
+	providerSettings    config.ProvidersConfig
+	httpServer          httpRuntime
+	registry            *registry.Registry
+	catalogRuntime      catalogRuntime
+	catalogUpdates      catalogUpdateRuntime
+	catalog             *runtimecatalog.ControlPlane
+	catalogFreshness    *runtimecatalog.FreshnessService
+	store               storage.KVStore
+	blobStore           blob.Store
+	files               *files.Service
+	jobs                *jobs.Service
+	cacheManager        *cache.Manager
+	transports          *connectors.TransportRegistry
+	authentication      *providerauth.Registry
+	providerReconciler  *providers.Reconciler
+	providerStates      *providerstate.Store
+	incidentHistory     *statuspage.HistoryReader
+	incidentTransitions providerstate.TransitionRepository
+	availability        *availability.Tracker
 	// localGate mints and redeems console launch tickets against this
 	// machine's local admin token. The runtime keeps it so a caller that owns
 	// the process — `starport dev` — can sign a browser in without reading the
@@ -324,6 +326,19 @@ func (b *runtimeBuilder) openConcepts() error {
 		}
 	}
 	b.application.providerStates = providerstate.New()
+	incidentTransitions, err := providerstate.OpenTransitions(b.sqlDB)
+	if err != nil {
+		return fmt.Errorf("open incident transition storage: %w", err)
+	}
+	b.application.incidentTransitions = incidentTransitions
+	incidentHistory, err := statuspage.NewHistoryReader(
+		statuspage.DefaultConfig(),
+		catalogHealthAPISource{catalog: b.application.catalog},
+	)
+	if err != nil {
+		return fmt.Errorf("open incident history reader: %w", err)
+	}
+	b.application.incidentHistory = incidentHistory
 	if err := b.application.publishProviderCatalogState(); err != nil {
 		return fmt.Errorf("project provider catalog state: %w", err)
 	}
@@ -851,7 +866,7 @@ func (a *App) Run(ctx context.Context) error {
 		incidentPoller, err := statuspage.New(
 			statuspage.DefaultConfig(),
 			catalogHealthAPISource{catalog: a.catalog},
-			providerIncidentPublisher{states: a.providerStates},
+			providerIncidentPublisher{states: a.providerStates, transitions: a.incidentTransitions},
 		)
 		if err != nil {
 			return errors.Join(fmt.Errorf("open status-page poller: %w", err), a.closeWithTimeout())

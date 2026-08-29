@@ -151,6 +151,64 @@ func TestIncidentProjectionShowsClearsAndCountsChange(t *testing.T) {
 	require.Nil(t, requireProvider(t, snapshot, catalogs.ProviderIDOpenAI).Incident)
 }
 
+// TestPublishIncidentsReportsObservedTransitions proves the transition
+// record the projection hands back to the caller: only an indicator change
+// records, a clear records only when it closes a standing incident, a
+// description-only change is not a transition, and silence records nothing.
+func TestPublishIncidentsReportsObservedTransitions(t *testing.T) {
+	store := New()
+	checked := time.Unix(300, 0).UTC()
+	observe := func(indicator, description string, at time.Time) []IncidentTransition {
+		return store.PublishIncidents([]IncidentObservation{{
+			ProviderID:  catalogs.ProviderIDOpenAI,
+			Indicator:   indicator,
+			Description: description,
+			CheckedAt:   at,
+		}})
+	}
+
+	// A clean pass over a healthy provider accumulates no record at all.
+	require.Empty(t, observe("none", "", checked))
+
+	opened := observe("minor", "Degraded latency", checked.Add(time.Minute))
+	require.Len(t, opened, 1)
+	require.Equal(t, catalogs.ProviderIDOpenAI, opened[0].ProviderID)
+	require.Equal(t, "minor", opened[0].Indicator)
+	require.Equal(t, "Degraded latency", opened[0].Description)
+	require.Equal(t, checked.Add(time.Minute), opened[0].ObservedAt)
+
+	// The same indicator with new prose confirms; it does not transition.
+	require.Empty(t, observe("minor", "Still degraded", checked.Add(2*time.Minute)))
+
+	worsened := observe("major", "Elevated error rates", checked.Add(3*time.Minute))
+	require.Len(t, worsened, 1)
+	require.Equal(t, "major", worsened[0].Indicator)
+
+	// A provider absent from the pass means its API did not answer, and
+	// silence is not recovery.
+	require.Empty(t, store.PublishIncidents(nil))
+
+	cleared := observe("none", "ignored", checked.Add(5*time.Minute))
+	require.Len(t, cleared, 1)
+	require.Equal(t, "none", cleared[0].Indicator)
+	require.Empty(t, cleared[0].Description)
+
+	// Clear on an already-clear provider records nothing.
+	require.Empty(t, observe("none", "", checked.Add(6*time.Minute)))
+}
+
+// TestPublishIncidentsStampsZeroObservationTimes proves a transition never
+// leaves without a clock reading.
+func TestPublishIncidentsStampsZeroObservationTimes(t *testing.T) {
+	store := New()
+	transitions := store.PublishIncidents([]IncidentObservation{{
+		ProviderID: catalogs.ProviderIDOpenAI,
+		Indicator:  "minor",
+	}})
+	require.Len(t, transitions, 1)
+	require.False(t, transitions[0].ObservedAt.IsZero())
+}
+
 // TestCredentialDetailRoundTripsAndDetectsChange proves the operator-facing
 // detail text survives projection into the snapshot and that a detail-only
 // change advances the revision.
