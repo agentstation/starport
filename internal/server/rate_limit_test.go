@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/requestctx"
@@ -111,7 +111,7 @@ func TestPerKeyRequestLimitOverridesGlobal(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	limited := &identity.APIKey{
+	limited := &apikey.APIKey{
 		ID:     "key-limited",
 		Name:   "limited",
 		Scopes: []string{"*"},
@@ -132,7 +132,7 @@ func TestPerKeyRequestLimitOverridesGlobal(t *testing.T) {
 	require.Equal(t, http.StatusTooManyRequests, second.Code)
 
 	// A key without an override still uses the global window.
-	unlimited := &identity.APIKey{ID: "key-global", Name: "global", Scopes: []string{"*"}, Active: true}
+	unlimited := &apikey.APIKey{ID: "key-global", Name: "global", Scopes: []string{"*"}, Active: true}
 	global := httptest.NewRecorder()
 	handler.ServeHTTP(global, rateLimitRequestWithModel(unlimited))
 	require.Equal(t, http.StatusOK, global.Code)
@@ -149,7 +149,7 @@ func TestPerKeyRequestLimitAppliesWhenGlobalDisabled(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	limited := &identity.APIKey{
+	limited := &apikey.APIKey{
 		ID:     "key-explicit",
 		Name:   "explicit",
 		Scopes: []string{"*"},
@@ -169,7 +169,7 @@ func TestPerKeyRequestLimitAppliesWhenGlobalDisabled(t *testing.T) {
 		"an explicit per-key limit is admin intent and applies without the global default")
 }
 
-func rateLimitRequestWithModel(apiKey *identity.APIKey) *http.Request {
+func rateLimitRequestWithModel(apiKey *apikey.APIKey) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	ctx := requestctx.WithAPIKeyID(req.Context(), apiKey.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, apiKey)

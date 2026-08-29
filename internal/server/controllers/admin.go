@@ -16,7 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
@@ -27,9 +27,9 @@ const systemInfoUnavailable = "unavailable"
 
 // AdminController handles administrative endpoints
 type AdminController struct {
-	identities   identity.Repository
+	identities   apikey.Repository
 	accounts     account.Repository
-	issuer       *identity.Issuer
+	issuer       *apikey.Issuer
 	usageRecords usage.Repository
 	fileBackend  string
 }
@@ -47,16 +47,16 @@ func WithFileStorage(backend string) AdminOption {
 // NewAdminController creates a new admin controller. The account repository
 // lets the issuer refuse a key that names an account that does not exist.
 func NewAdminController(
-	identities identity.Repository,
+	identities apikey.Repository,
 	accounts account.Repository,
 	usageRecords usage.Repository,
 	options ...AdminOption,
 ) *AdminController {
-	issuerOptions := []identity.IssuerOption{}
+	issuerOptions := []apikey.IssuerOption{}
 	if accounts != nil {
-		issuerOptions = append(issuerOptions, identity.WithAccountChecker(accounts))
+		issuerOptions = append(issuerOptions, apikey.WithAccountChecker(accounts))
 	}
-	issuer, _ := identity.NewIssuer(identities, issuerOptions...)
+	issuer, _ := apikey.NewIssuer(identities, issuerOptions...)
 	controller := &AdminController{
 		identities:   identities,
 		accounts:     accounts,
@@ -102,7 +102,7 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 		records = records[:limit]
 	}
 
-	apiKeys := make([]identity.APIKey, 0, len(records))
+	apiKeys := make([]apikey.APIKey, 0, len(records))
 	for _, record := range records {
 		apiKey := record.APIKey
 		apiKey.Hash = ""
@@ -168,7 +168,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		req.Limits = nil
 	}
 
-	issued, err := h.issuer.Issue(ctx, identity.IssueRequest{
+	issued, err := h.issuer.Issue(ctx, apikey.IssueRequest{
 		Name:          req.Name,
 		AccountID:     req.AccountID,
 		Scopes:        req.Scopes,
@@ -217,7 +217,7 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 
 	record, err := h.identities.GetByID(ctx, keyID)
 	if err != nil {
-		if errors.Is(err, identity.ErrNotFound) {
+		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return
 		}
@@ -250,7 +250,7 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 
 // keyUsage reads the key's consumption for the current fixed UTC windows
 // and, for each configured budget, the remaining allowance.
-func (h *AdminController) keyUsage(ctx context.Context, apiKey identity.APIKey) map[string]any {
+func (h *AdminController) keyUsage(ctx context.Context, apiKey apikey.APIKey) map[string]any {
 	if h.usageRecords == nil {
 		return nil
 	}
@@ -315,14 +315,14 @@ func budgetUsage(
 
 // isKeyValidationError reports whether err is a caller-shaped identity error.
 func isKeyValidationError(err error) bool {
-	return errors.Is(err, identity.ErrInvalidName) ||
-		errors.Is(err, identity.ErrMissingScopes) ||
-		errors.Is(err, identity.ErrInvalidScope) ||
-		errors.Is(err, identity.ErrInvalidModel) ||
-		errors.Is(err, identity.ErrInvalidExpiration) ||
+	return errors.Is(err, apikey.ErrInvalidName) ||
+		errors.Is(err, apikey.ErrMissingScopes) ||
+		errors.Is(err, apikey.ErrInvalidScope) ||
+		errors.Is(err, apikey.ErrInvalidModel) ||
+		errors.Is(err, apikey.ErrInvalidExpiration) ||
 		// Naming an account that does not exist is the caller's mistake, not
 		// a gateway failure, so it answers 400 rather than 500.
-		errors.Is(err, identity.ErrUnknownAccount) ||
+		errors.Is(err, apikey.ErrUnknownAccount) ||
 		errors.Is(err, account.ErrInvalidID) ||
 		errors.Is(err, limits.ErrInvalidRequestLimit) ||
 		errors.Is(err, limits.ErrInvalidRequestWindow) ||
@@ -337,7 +337,7 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 
 	record, err := h.identities.GetByID(ctx, keyID)
 	if err != nil {
-		if errors.Is(err, identity.ErrNotFound) {
+		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return
 		}
@@ -406,7 +406,7 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.identities.Update(ctx, apiKey, record.Revision)
 	if err != nil {
-		if errors.Is(err, identity.ErrConflict) {
+		if errors.Is(err, apikey.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "API key changed during update")
 			return
 		}
@@ -429,7 +429,7 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "key_id")
 
 	if err := h.identities.Delete(ctx, keyID, 0); err != nil {
-		if errors.Is(err, identity.ErrNotFound) {
+		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return
 		}

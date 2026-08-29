@@ -8,12 +8,12 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 
 	"github.com/agentstation/starport/internal/account"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/blob"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/files"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/presets"
@@ -117,7 +117,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		tb.Fatal(err)
 	}
 
-	identities, err := identity.Open(testConfig.store)
+	identities, err := apikey.Open(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/agentstation/starport/internal/usage"
@@ -19,9 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newAdminTestController(t *testing.T) (*AdminController, identity.Repository) {
+func newAdminTestController(t *testing.T) (*AdminController, apikey.Repository) {
 	t.Helper()
-	repository, err := identity.Open(storage.NewMockStore())
+	repository, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	usageRecords, err := usage.Open(storage.NewMockStore(), usage.Options{})
 	require.NoError(t, err)
@@ -39,7 +39,7 @@ func newAdminTestAccounts(t *testing.T) account.Repository {
 	return accounts
 }
 
-func createAdminTestIdentity(t *testing.T, repository identity.Repository, apiKey identity.APIKey) {
+func createAdminTestIdentity(t *testing.T, repository apikey.Repository, apiKey apikey.APIKey) {
 	t.Helper()
 	if len(apiKey.Scopes) == 0 {
 		apiKey.Scopes = []string{"test"}
@@ -81,7 +81,7 @@ func TestAdminHandler_SystemInfo(t *testing.T) {
 // that no file route reveals: where the bytes land. An operator reads it to
 // confirm the destination without opening the process configuration.
 func TestSystemInfoNamesTheFileBackend(t *testing.T) {
-	repository, err := identity.Open(storage.NewMockStore())
+	repository, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	handler := NewAdminController(repository, newAdminTestAccounts(t), nil,
 		WithFileStorage("filesystem"))
@@ -143,7 +143,7 @@ func TestAdminHandler_ListKeys(t *testing.T) {
 	handler, identities := newAdminTestController(t)
 
 	// Add some test keys
-	apiKey := &identity.APIKey{
+	apiKey := &apikey.APIKey{
 		ID:     "test-key-1",
 		Name:   "Test-Key-1",
 		Active: true,
@@ -208,7 +208,7 @@ func TestAdminHandler_GetKey(t *testing.T) {
 	handler, identities := newAdminTestController(t)
 
 	// Add a test key
-	apiKey := &identity.APIKey{
+	apiKey := &apikey.APIKey{
 		ID:     "test-key-1",
 		Name:   "Test-Key-1",
 		Active: true,
@@ -231,7 +231,7 @@ func TestAdminHandler_GetKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Check response
-	var resp identity.APIKey
+	var resp apikey.APIKey
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, "test-key-1", resp.ID)
@@ -244,7 +244,7 @@ func TestAdminHandler_DeleteKey(t *testing.T) {
 	handler, identities := newAdminTestController(t)
 
 	// Add a test key
-	apiKey := &identity.APIKey{
+	apiKey := &apikey.APIKey{
 		ID:     "test-key-1",
 		Name:   "Test-Key-1",
 		Active: true,
@@ -274,7 +274,7 @@ func TestAdminHandler_DeleteKey(t *testing.T) {
 
 	// Verify key was deleted
 	_, err = identities.GetByID(context.Background(), apiKey.ID)
-	assert.ErrorIs(t, err, identity.ErrNotFound)
+	assert.ErrorIs(t, err, apikey.ErrNotFound)
 }
 
 func TestAdminKeySetsLimitsAndExpiry(t *testing.T) {
@@ -371,7 +371,7 @@ func TestAdminKeyRejectsInvalidLimits(t *testing.T) {
 func TestKeyListPagination(t *testing.T) {
 	handler, repository := newAdminTestController(t)
 	for _, id := range []string{"key-a", "key-b", "key-c", "key-d", "key-e"} {
-		createAdminTestIdentity(t, repository, identity.APIKey{ID: id, Name: id, Active: true})
+		createAdminTestIdentity(t, repository, apikey.APIKey{ID: id, Name: id, Active: true})
 	}
 
 	page := func(query string) (keys []map[string]any, pagination map[string]any) {

@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 )
 
 // Key is the typed context key used for server request metadata.
@@ -39,7 +39,7 @@ func WithAPIKeyID(ctx context.Context, value string) context.Context {
 }
 
 // WithAPIKeyModel stores the API key model in the context.
-func WithAPIKeyModel(ctx context.Context, value *identity.APIKey) context.Context {
+func WithAPIKeyModel(ctx context.Context, value *apikey.APIKey) context.Context {
 	return context.WithValue(ctx, APIKeyModel, value)
 }
 
@@ -103,7 +103,7 @@ func GetAPIKeyID(ctx context.Context) (string, bool) {
 }
 
 // GetAPIKeyModel returns the API key model from the context.
-func GetAPIKeyModel(ctx context.Context) (*identity.APIKey, bool) {
-	value, ok := ctx.Value(APIKeyModel).(*identity.APIKey)
+func GetAPIKeyModel(ctx context.Context) (*apikey.APIKey, bool) {
+	value, ok := ctx.Value(APIKeyModel).(*apikey.APIKey)
 	return value, ok
 }

@@ -14,8 +14,8 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -69,7 +69,7 @@ func TestInitializeCreatesNamedIdentity(t *testing.T) {
 		t.Fatalf("reopen identity store: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	repository, err := identity.Open(store)
+	repository, err := apikey.Open(store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,15 +236,15 @@ func TestRollbackRefusesChangedIdentityStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	repository, err := identity.Open(store)
+	repository, err := apikey.Open(store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	issuer, err := identity.NewIssuer(repository)
+	issuer, err := apikey.NewIssuer(repository)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = issuer.Issue(context.Background(), identity.IssueRequest{
+	_, err = issuer.Issue(context.Background(), apikey.IssueRequest{
 		Name: "second-admin", Scopes: []string{"*"},
 	})
 	if err != nil {
@@ -345,8 +345,8 @@ func TestInitializeConcurrentSingleWinner(t *testing.T) {
 func TestInitializeValidatesBeforeWriting(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	_, err := New(paths).Initialize(context.Background(), Request{IdentityName: "invalid name"})
-	if !errors.Is(err, identity.ErrInvalidName) {
-		t.Fatalf("initialize error = %v, want %v", err, identity.ErrInvalidName)
+	if !errors.Is(err, apikey.ErrInvalidName) {
+		t.Fatalf("initialize error = %v, want %v", err, apikey.ErrInvalidName)
 	}
 	if _, statErr := os.Stat(paths.ConfigDir); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("configuration directory exists after validation failure: %v", statErr)

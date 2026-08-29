@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 )
 
 func TestAppWithValkey(t *testing.T) {
@@ -28,10 +28,10 @@ func TestAppWithValkey(t *testing.T) {
 	cfg.Cache.Enabled = true
 	store, err := openStorage(cfg.Storage)
 	require.NoError(t, err)
-	identities, err := identity.Open(store)
+	identities, err := apikey.Open(store)
 	require.NoError(t, err)
 	_, err = identities.Create(context.Background(), testIdentity())
-	if err != nil && !errors.Is(err, identity.ErrConflict) {
+	if err != nil && !errors.Is(err, apikey.ErrConflict) {
 		t.Fatalf("seed Valkey identity: %v", err)
 	}
 	require.NoError(t, store.Close())

@@ -134,7 +134,7 @@ check RNK-V10 "POST /v1/rerank is registered behind the rerank:write scope" \
   all_present '"/rerank"' 'rerank:write' -- internal/server/routes.go
 
 check RNK-V11 "the anonymous identity carries rerank:write when an operator disables authentication" \
-  all_present 'rerank:write' -- internal/identity/anonymous.go
+  all_present 'rerank:write' -- internal/apikey/anonymous.go
 
 check RNK-V12 "an uncatalogued rerank model is refused before any provider call" \
   tests_all_present 'rerank' -- internal/server

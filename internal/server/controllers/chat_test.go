@@ -10,8 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/catalog/view"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/controllers"
@@ -72,7 +72,7 @@ func TestChatControllerOpenAIContract(t *testing.T) {
 		`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],"max_completion_tokens":100}`,
 	))
 	ctx := requestctx.WithAPIKey(request.Context(), "test-key")
-	ctx = requestctx.WithAPIKeyModel(ctx, &identity.APIKey{AllowedModels: []string{"openai/gpt-4.1"}})
+	ctx = requestctx.WithAPIKeyModel(ctx, &apikey.APIKey{AllowedModels: []string{"openai/gpt-4.1"}})
 	request = request.WithContext(ctx)
 	recorder := httptest.NewRecorder()
 

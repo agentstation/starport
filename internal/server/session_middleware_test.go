@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
@@ -20,7 +20,7 @@ import (
 // so a request that passes did so on its session alone.
 func sessionHarness(t *testing.T, gate *localauth.Gate) *AuthMiddleware {
 	t.Helper()
-	identities, err := identity.Open(storage.NewMockStore())
+	identities, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	middleware := NewAuthMiddleware(identities)
 	middleware.AcceptSessions(gate)
@@ -47,8 +47,8 @@ func sessionToken(t *testing.T, generation uint64) localauth.Token {
 func callWithSession(
 	middleware *AuthMiddleware,
 	cookie string,
-) (int, *identity.APIKey, string, bool) {
-	var seen *identity.APIKey
+) (int, *apikey.APIKey, string, bool) {
+	var seen *apikey.APIKey
 	var seenAccount string
 	var seenSecret bool
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func TestASessionAuthenticatesWithNoBearerKey(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, status)
 	require.NotNil(t, seen)
-	assert.Equal(t, identity.LocalOperatorKeyID, seen.ID)
+	assert.Equal(t, apikey.LocalOperatorKeyID, seen.ID)
 	assert.True(t, seen.HasScope("admin"), "a session holder is the machine's operator")
 	assert.Equal(t, "default", accountID)
 	// Nothing downstream may believe a bearer key was presented. A reader that

@@ -1,4 +1,4 @@
-package identity
+package apikey
 
 // LocalOperatorKeyID names the identity of a request that carried a console
 // session rather than a gateway API key. Like AnonymousKeyID it is not a key:

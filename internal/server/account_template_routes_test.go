@@ -13,7 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 )
 
 // newTemplateTestKey mints one active admin identity and returns its bearer
@@ -22,7 +22,7 @@ func newTemplateTestKey(t *testing.T, server *Server, id string) string {
 	t.Helper()
 	token := "test-" + id
 	hash := sha256.Sum256([]byte(token))
-	_, err := server.identities.Create(context.Background(), identity.APIKey{
+	_, err := server.identities.Create(context.Background(), apikey.APIKey{
 		ID:        id,
 		Name:      strings.ReplaceAll(id, "-", "_"),
 		Hash:      hex.EncodeToString(hash[:]),

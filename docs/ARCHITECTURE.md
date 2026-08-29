@@ -102,7 +102,7 @@ graph TD
   Proxy --> CacheManager["proxy.CacheManager contract"]
   CacheManager --> Cache["internal/cache byte storage"]
   ResponseCache --> CacheManager
-  Auth --> IdentityRepo["internal/identity repository"]
+  Auth --> IdentityRepo["internal/apikey repository"]
   RateLimit --> RateLimitRepo["internal/ratelimit repository"]
   Cache --> Storage
   Server --> ProviderKeys["provider credential handlers"]
@@ -138,7 +138,8 @@ starport/
 ├── internal/credentials/cloudchain/ # renewable cloud credential acquisition
 ├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
-├── internal/identity/         # gateway identity model and versioned repository
+├── internal/apikey/           # gateway API-key model and versioned repository
+├── internal/identity/          # users, teams, memberships on the relational store
 ├── internal/account/           # account identity, account-wide limits, credential strategy
 ├── internal/limits/           # request-rate and consumption vocabulary shared by key and account
 ├── internal/authmode/         # whether the gateway requires a gateway API key
@@ -271,7 +272,7 @@ The default contract suite tests mock and Badger storage. Set
 
 Concept repositories own these version 1 namespaces:
 
-- `internal/identity`: `identity:v1:`
+- `internal/apikey`: `identity:v1:`
 - `internal/credentials`: `credentials:v1:`
 - `internal/ratelimit`: `ratelimit:v1:subject:`
 - `internal/presets`: `presets:v1:name:`

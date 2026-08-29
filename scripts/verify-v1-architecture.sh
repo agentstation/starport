@@ -57,16 +57,16 @@ check V05 'attempt state and retry budget contract' sh -c '
 
 check V06 'versioned concept repository contracts' sh -c '
 	scripts/require-no-match.sh grep -R -q -E --include="*.go" '\''"(apikey:|apikey:hash:|ratelimit:|preset:|providerkey:|provider_key:)"'\'' internal &&
-	grep -q -E "StorageSchemaVersion = 1" internal/identity/repository.go &&
+	grep -q -E "StorageSchemaVersion = 1" internal/apikey/repository.go &&
 	grep -q -E "ProviderCredentialStorageSchemaVersion = 1" internal/credentials/repository.go &&
 	grep -q -E "StorageSchemaVersion = 1" internal/ratelimit/repository.go &&
 	grep -q -E "StorageSchemaVersion = 1" internal/presets/repository.go &&
-	grep -R -q -E --include="*_test.go" "^func TestIdentityRepositoryContract" internal/identity &&
+	grep -R -q -E --include="*_test.go" "^func TestIdentityRepositoryContract" internal/apikey &&
 	grep -R -q -E --include="*_test.go" "^func TestProviderCredentialRepositoryContract" internal/credentials &&
 	grep -R -q -E --include="*_test.go" "^func TestRateLimitRepositoryContract" internal/ratelimit &&
 	grep -R -q -E --include="*_test.go" "^func TestPresetRepositoryContract" internal/presets &&
 	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "internal/storage" internal/server/controllers internal/server/middleware.go internal/console internal/providers/keyring &&
-	go test ./internal/identity ./internal/credentials ./internal/ratelimit ./internal/presets -run "^Test(Identity|ProviderCredential|RateLimit|Preset)RepositoryContract$"
+	go test ./internal/apikey ./internal/credentials ./internal/ratelimit ./internal/presets -run "^Test(Identity|ProviderCredential|RateLimit|Preset)RepositoryContract$"
 '
 
 check V07 'response cache semantic identity contract' sh -c '

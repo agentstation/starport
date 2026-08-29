@@ -1,4 +1,4 @@
-package identity
+package apikey
 
 // AnonymousKeyID names the identity of a request that carried no gateway API
 // key. It is not a key: nothing issues it, nothing stores it, and no hash

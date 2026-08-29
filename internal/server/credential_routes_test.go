@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/providers/keyring"
 )
 
@@ -75,7 +75,7 @@ func mintCredentialKey(t *testing.T, server *Server, id, accountID string, scope
 
 	token := "token-" + id
 	hash := sha256.Sum256([]byte(token))
-	_, err := server.identities.Create(context.Background(), identity.APIKey{
+	_, err := server.identities.Create(context.Background(), apikey.APIKey{
 		ID:        id,
 		Name:      strings.ReplaceAll(id, "-", "_"),
 		Hash:      hex.EncodeToString(hash[:]),

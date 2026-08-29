@@ -2,581 +2,555 @@ package identity
 
 import (
 	"context"
-	"encoding/base64"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
-	"strings"
+	"time"
 
-	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/sqlstore"
 )
 
-const (
-	// StorageSchemaVersion identifies the only supported identity schema.
-	StorageSchemaVersion = 1
-	// StoragePrefix is the identity v1 storage namespace.
-	StoragePrefix = "identity:v1:"
+// StorageSchemaVersion identifies the only supported identity record schema.
+const StorageSchemaVersion = 1
 
-	identityKeyPrefix = StoragePrefix + "key:"
-	hashKeyPrefix     = StoragePrefix + "hash:"
-	initialKey        = StoragePrefix + "initial"
-	collectionKey     = StoragePrefix + "collection"
-	defaultListLimit  = 1000
-	collectionRetries = 32
-)
+const defaultListLimit = 1000
 
-var (
-	// ErrRepositoryRequired reports a missing storage adapter.
-	ErrRepositoryRequired = errors.New("identity storage is required")
-	// ErrNotFound reports a missing identity.
-	ErrNotFound = errors.New("identity not found")
-	// ErrConflict reports an existing identity or stale revision.
-	ErrConflict = errors.New("identity revision conflict")
-	// ErrCorruptRecord reports invalid durable identity data.
-	ErrCorruptRecord = errors.New("identity record is invalid")
-	// ErrHashImmutable reports an attempted hash mutation.
-	ErrHashImmutable = errors.New("identity hash is immutable")
-)
+// ErrRepositoryRequired reports a missing relational store.
+var ErrRepositoryRequired = errors.New("identity storage is required")
 
-// Record is one versioned identity repository value.
-type Record struct {
+// UserRecord is one versioned user repository value.
+type UserRecord struct {
 	Revision uint64
-	APIKey   APIKey
+	User     User
 }
 
-// Repository is the durable identity contract.
-type Repository interface {
-	Create(context.Context, APIKey) (Record, error)
-	CreateInitial(context.Context, APIKey) (Record, error)
-	ReleaseInitial(context.Context, string) error
-	GetByID(context.Context, string) (Record, error)
-	GetByHash(context.Context, string) (Record, error)
-	List(context.Context, int, int) ([]Record, error)
-	Update(context.Context, APIKey, uint64) (Record, error)
+// TeamRecord is one versioned team repository value.
+type TeamRecord struct {
+	Revision uint64
+	Team     Team
+}
+
+// UserRepository is the durable user contract. Users are relational — a
+// subject lookup, memberships, and later grants all join on them — so the
+// repository rides sqlstore.
+type UserRepository interface {
+	Create(context.Context, User) (UserRecord, error)
+	GetByID(context.Context, string) (UserRecord, error)
+	// GetBySubject resolves the external identity subject an acquisition
+	// path hands back to the one user it names.
+	GetBySubject(context.Context, string) (UserRecord, error)
+	List(context.Context, int, int) ([]UserRecord, error)
+	Update(context.Context, User, uint64) (UserRecord, error)
 	Delete(context.Context, string, uint64) error
 }
 
-type repository struct {
-	store storage.KVStore
+// TeamRepository is the durable team contract.
+type TeamRepository interface {
+	Create(context.Context, Team) (TeamRecord, error)
+	GetByID(context.Context, string) (TeamRecord, error)
+	List(context.Context, int, int) ([]TeamRecord, error)
+	Update(context.Context, Team, uint64) (TeamRecord, error)
+	Delete(context.Context, string, uint64) error
 }
 
-type identityRecord struct {
+// MembershipRepository is the durable membership contract. A membership is
+// a link row: it is added and removed, never edited, so it carries no
+// revision.
+type MembershipRepository interface {
+	Add(context.Context, Membership) (Membership, error)
+	Remove(ctx context.Context, userID, teamID string) error
+	ListByUser(context.Context, string) ([]Membership, error)
+	ListByTeam(context.Context, string) ([]Membership, error)
+}
+
+// Repositories bundles the three identity repositories one store opens.
+type Repositories struct {
+	Users       UserRepository
+	Teams       TeamRepository
+	Memberships MembershipRepository
+}
+
+// Open returns sqlstore-backed identity repositories. The caller has
+// already migrated the store; this constructor only refuses a nil one.
+func Open(db *sqlstore.DB) (Repositories, error) {
+	if db == nil {
+		return Repositories{}, ErrRepositoryRequired
+	}
+	now := time.Now
+	return Repositories{
+		Users:       &userRepository{db: db, now: now},
+		Teams:       &teamRepository{db: db, now: now},
+		Memberships: &membershipRepository{db: db, now: now},
+	}, nil
+}
+
+// userRecord is the stored JSON document. The id, subject, and revision
+// also live in their own columns so SQL can address and guard them; the
+// record column stays the one source of the user's content.
+type userRecord struct {
 	SchemaVersion int    `json:"schema_version"`
 	Revision      uint64 `json:"revision"`
-	APIKey        APIKey `json:"api_key"`
+	User          User   `json:"user"`
 }
 
-type hashRecord struct {
-	SchemaVersion int    `json:"schema_version"`
-	IdentityID    string `json:"identity_id"`
+type userRepository struct {
+	db  *sqlstore.DB
+	now func() time.Time
 }
 
-type initialIdentityRecord struct {
-	SchemaVersion int    `json:"schema_version"`
-	IdentityID    string `json:"identity_id"`
-}
-
-type identityCollectionRecord struct {
-	SchemaVersion int    `json:"schema_version"`
-	Revision      uint64 `json:"revision"`
-	Count         uint64 `json:"count"`
-}
-
-// Open returns a storage-backed identity repository.
-func Open(store storage.KVStore) (Repository, error) {
-	if store == nil {
-		return nil, ErrRepositoryRequired
+func (r *userRepository) Create(ctx context.Context, value User) (UserRecord, error) {
+	stored := userRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, User: value}
+	created := r.now().UTC()
+	stored.User.CreatedAt = created
+	stored.User.UpdatedAt = created
+	if err := stored.User.Validate(); err != nil {
+		return UserRecord{}, err
 	}
-	return &repository{store: store}, nil
-}
-
-func (r *repository) Create(ctx context.Context, apiKey APIKey) (Record, error) {
-	for range collectionRetries {
-		record, err := r.create(ctx, apiKey, false)
-		if !errors.Is(err, ErrConflict) {
-			return record, err
-		}
-		collision, checkErr := r.identityOrHashExists(ctx, apiKey)
-		if checkErr != nil {
-			return Record{}, checkErr
-		}
-		if collision {
-			return Record{}, ErrConflict
-		}
-	}
-	return Record{}, ErrConflict
-}
-
-// CreateInitial atomically claims initialization and creates the first identity.
-func (r *repository) CreateInitial(ctx context.Context, apiKey APIKey) (Record, error) {
-	return r.create(ctx, apiKey, true)
-}
-
-func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (Record, error) {
-	if err := apiKey.Validate(); err != nil {
-		return Record{}, err
-	}
-	stored := identityRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, APIKey: cloneAPIKey(apiKey)}
 	data, err := json.Marshal(stored)
 	if err != nil {
-		return Record{}, fmt.Errorf("encode identity record: %w", err)
+		return UserRecord{}, fmt.Errorf("encode user record: %w", err)
 	}
-	indexData, err := json.Marshal(hashRecord{SchemaVersion: StorageSchemaVersion, IdentityID: apiKey.ID})
+	_, err = r.db.ExecContext(ctx,
+		r.db.Bind(`INSERT INTO users (id, subject, revision, record) VALUES (?, ?, ?, ?)`),
+		stored.User.ID, stored.User.Subject, stored.Revision, string(data))
 	if err != nil {
-		return Record{}, fmt.Errorf("encode identity hash record: %w", err)
+		// The insert has two unique constraints — the id and the subject —
+		// and violating either is the duplicate-create conflict, whatever
+		// the dialect's word for it.
+		if taken, takenErr := r.taken(ctx, stored.User.ID, stored.User.Subject); takenErr == nil && taken {
+			return UserRecord{}, ErrUserConflict
+		}
+		return UserRecord{}, fmt.Errorf("create user: %w", err)
 	}
-	collection, collectionData, err := r.readCollection(ctx)
-	if err != nil {
-		return Record{}, err
-	}
-	if initial && collection.Count != 0 {
-		return Record{}, ErrConflict
-	}
-	updatedCollection := identityCollectionRecord{
-		SchemaVersion: StorageSchemaVersion,
-		Revision:      collection.Revision + 1,
-		Count:         collection.Count + 1,
-	}
-	updatedCollectionData, err := json.Marshal(updatedCollection)
-	if err != nil {
-		return Record{}, fmt.Errorf("encode identity collection record: %w", err)
-	}
+	return UserRecord{Revision: stored.Revision, User: stored.User}, nil
+}
 
-	mutations := []storage.CompareAndSwapMutation{
-		{Key: identityStorageKey(apiKey.ID), NewValue: data},
-		{Key: hashStorageKey(apiKey.Hash), NewValue: indexData},
-		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
+func (r *userRepository) GetByID(ctx context.Context, id string) (UserRecord, error) {
+	if id == "" {
+		return UserRecord{}, ErrMissingID
 	}
-	var markerData []byte
-	if initial {
-		markerData, err = json.Marshal(initialIdentityRecord{
-			SchemaVersion: StorageSchemaVersion,
-			IdentityID:    apiKey.ID,
+	return r.getWhere(ctx, `id = ?`, id)
+}
+
+func (r *userRepository) GetBySubject(ctx context.Context, subject string) (UserRecord, error) {
+	if subject == "" {
+		return UserRecord{}, ErrMissingSubject
+	}
+	return r.getWhere(ctx, `subject = ?`, subject)
+}
+
+func (r *userRepository) getWhere(ctx context.Context, clause, argument string) (UserRecord, error) {
+	var data string
+	err := r.db.QueryRowContext(ctx,
+		r.db.Bind(`SELECT record FROM users WHERE `+clause), argument,
+	).Scan(&data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return UserRecord{}, ErrUserNotFound
+	}
+	if err != nil {
+		return UserRecord{}, fmt.Errorf("get user: %w", err)
+	}
+	stored, err := decodeUser(data)
+	if err != nil {
+		return UserRecord{}, err
+	}
+	return UserRecord{Revision: stored.Revision, User: stored.User}, nil
+}
+
+func (r *userRepository) List(ctx context.Context, limit, offset int) ([]UserRecord, error) {
+	return listRecords(ctx, r.db,
+		`SELECT record FROM users ORDER BY id LIMIT ? OFFSET ?`, "users",
+		limit, offset, func(data string) (UserRecord, error) {
+			stored, err := decodeUser(data)
+			if err != nil {
+				return UserRecord{}, err
+			}
+			return UserRecord{Revision: stored.Revision, User: stored.User}, nil
 		})
-		if err != nil {
-			return Record{}, fmt.Errorf("encode initial identity claim: %w", err)
-		}
-		mutations = append([]storage.CompareAndSwapMutation{{
-			Key: initialKey, NewValue: markerData,
-		}}, mutations...)
-	}
-	if err := r.store.CompareAndSwapBatch(ctx, mutations); err != nil {
-		if initial && errors.Is(err, storage.ErrConflict) {
-			return r.replaceMissingInitial(ctx, stored, data, indexData, markerData)
-		}
-		return Record{}, mapConflict("create identity, hash index, and collection record", err)
-	}
-	return recordFromIdentity(stored), nil
 }
 
-func (r *repository) identityOrHashExists(ctx context.Context, apiKey APIKey) (bool, error) {
-	if _, err := r.GetByID(ctx, apiKey.ID); err == nil {
-		return true, nil
-	} else if !errors.Is(err, ErrNotFound) {
-		return false, err
-	}
-	if _, err := r.GetByHash(ctx, apiKey.Hash); err == nil {
-		return true, nil
-	} else if !errors.Is(err, ErrNotFound) {
-		return false, err
-	}
-	return false, nil
-}
-
-func (r *repository) replaceMissingInitial(
-	ctx context.Context,
-	stored identityRecord,
-	identityData []byte,
-	hashData []byte,
-	markerData []byte,
-) (Record, error) {
-	currentMarkerData, err := r.store.Get(ctx, initialKey)
+func (r *userRepository) Update(ctx context.Context, value User, expectedRevision uint64) (UserRecord, error) {
+	current, err := r.GetByID(ctx, value.ID)
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return Record{}, ErrConflict
-		}
-		return Record{}, mapConflict("create identity and hash index", err)
+		return UserRecord{}, err
 	}
-	currentMarker, err := decodeInitialIdentityRecord(currentMarkerData)
-	if err != nil {
-		return Record{}, err
+	if current.Revision != expectedRevision {
+		return UserRecord{}, ErrUserConflict
 	}
-	if _, err := r.store.Get(ctx, identityStorageKey(currentMarker.IdentityID)); err == nil {
-		return Record{}, ErrConflict
-	} else if !errors.Is(err, storage.ErrNotFound) {
-		return Record{}, mapReadError("get claimed initial identity", err)
-	}
-	records, err := r.List(ctx, 1, 0)
-	if err != nil {
-		return Record{}, err
-	}
-	if len(records) != 0 {
-		return Record{}, ErrConflict
-	}
-	collection, collectionData, err := r.readCollection(ctx)
-	if err != nil {
-		return Record{}, err
-	}
-	if collection.Count != 0 {
-		return Record{}, ErrConflict
-	}
-	updatedCollectionData, err := json.Marshal(identityCollectionRecord{
+	updated := userRecord{
 		SchemaVersion: StorageSchemaVersion,
-		Revision:      collection.Revision + 1,
-		Count:         1,
-	})
+		Revision:      current.Revision + 1,
+		User:          value,
+	}
+	// The subject and creation time belong to the record, not the caller's
+	// payload: a user's external identity never changes.
+	updated.User.Subject = current.User.Subject
+	updated.User.CreatedAt = current.User.CreatedAt
+	updated.User.UpdatedAt = r.now().UTC()
+	if err := updated.User.Validate(); err != nil {
+		return UserRecord{}, err
+	}
+	data, err := json.Marshal(updated)
 	if err != nil {
-		return Record{}, fmt.Errorf("encode replacement identity collection record: %w", err)
+		return UserRecord{}, fmt.Errorf("encode user update: %w", err)
 	}
-	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
-		{Key: initialKey, ExpectedValue: currentMarkerData, NewValue: markerData},
-		{Key: identityStorageKey(stored.APIKey.ID), NewValue: identityData},
-		{Key: hashStorageKey(stored.APIKey.Hash), NewValue: hashData},
-		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
-	}); err != nil {
-		return Record{}, mapConflict("replace missing initial identity", err)
+	// The revision guard in the WHERE clause is the compare-and-swap.
+	result, err := r.db.ExecContext(ctx,
+		r.db.Bind(`UPDATE users SET revision = ?, record = ? WHERE id = ? AND revision = ?`),
+		updated.Revision, string(data), updated.User.ID, expectedRevision)
+	if err != nil {
+		return UserRecord{}, fmt.Errorf("update user: %w", err)
 	}
-	return recordFromIdentity(stored), nil
+	if err := oneRowMoved(result, ErrUserConflict); err != nil {
+		return UserRecord{}, err
+	}
+	return UserRecord{Revision: updated.Revision, User: updated.User}, nil
 }
 
-// ReleaseInitial atomically deletes the initial identity and its setup claim.
-// Call it only when the one-time credential could not be returned.
-func (r *repository) ReleaseInitial(ctx context.Context, id string) error {
-	if strings.TrimSpace(id) == "" {
+func (r *userRepository) Delete(ctx context.Context, id string, expectedRevision uint64) error {
+	current, err := r.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if expectedRevision != 0 && current.Revision != expectedRevision {
+		return ErrUserConflict
+	}
+	result, err := r.db.ExecContext(ctx,
+		r.db.Bind(`DELETE FROM users WHERE id = ? AND revision = ?`),
+		id, current.Revision)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return oneRowMoved(result, ErrUserConflict)
+}
+
+func (r *userRepository) taken(ctx context.Context, id, subject string) (bool, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		r.db.Bind(`SELECT COUNT(*) FROM users WHERE id = ? OR subject = ?`), id, subject,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func decodeUser(data string) (userRecord, error) {
+	var stored userRecord
+	if err := json.Unmarshal([]byte(data), &stored); err != nil {
+		return userRecord{}, fmt.Errorf("%w: %s", ErrCorruptUser, err)
+	}
+	if stored.SchemaVersion != StorageSchemaVersion {
+		return userRecord{}, fmt.Errorf("%w: unsupported schema version %d", ErrCorruptUser, stored.SchemaVersion)
+	}
+	if stored.Revision == 0 {
+		return userRecord{}, fmt.Errorf("%w: user revision is zero", ErrCorruptUser)
+	}
+	if err := stored.User.Validate(); err != nil {
+		return userRecord{}, fmt.Errorf("%w: %s", ErrCorruptUser, err)
+	}
+	return stored, nil
+}
+
+// teamRecord is the stored JSON document, shaped like userRecord.
+type teamRecord struct {
+	SchemaVersion int    `json:"schema_version"`
+	Revision      uint64 `json:"revision"`
+	Team          Team   `json:"team"`
+}
+
+type teamRepository struct {
+	db  *sqlstore.DB
+	now func() time.Time
+}
+
+func (r *teamRepository) Create(ctx context.Context, value Team) (TeamRecord, error) {
+	stored := teamRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, Team: value}
+	created := r.now().UTC()
+	stored.Team.CreatedAt = created
+	stored.Team.UpdatedAt = created
+	if err := stored.Team.Validate(); err != nil {
+		return TeamRecord{}, err
+	}
+	data, err := json.Marshal(stored)
+	if err != nil {
+		return TeamRecord{}, fmt.Errorf("encode team record: %w", err)
+	}
+	_, err = r.db.ExecContext(ctx,
+		r.db.Bind(`INSERT INTO teams (id, revision, record) VALUES (?, ?, ?)`),
+		stored.Team.ID, stored.Revision, string(data))
+	if err != nil {
+		if exists, existsErr := r.exists(ctx, stored.Team.ID); existsErr == nil && exists {
+			return TeamRecord{}, ErrTeamConflict
+		}
+		return TeamRecord{}, fmt.Errorf("create team: %w", err)
+	}
+	return TeamRecord{Revision: stored.Revision, Team: stored.Team}, nil
+}
+
+func (r *teamRepository) GetByID(ctx context.Context, id string) (TeamRecord, error) {
+	if id == "" {
+		return TeamRecord{}, ErrMissingID
+	}
+	var data string
+	err := r.db.QueryRowContext(ctx,
+		r.db.Bind(`SELECT record FROM teams WHERE id = ?`), id,
+	).Scan(&data)
+	if errors.Is(err, sql.ErrNoRows) {
+		return TeamRecord{}, ErrTeamNotFound
+	}
+	if err != nil {
+		return TeamRecord{}, fmt.Errorf("get team: %w", err)
+	}
+	stored, err := decodeTeam(data)
+	if err != nil {
+		return TeamRecord{}, err
+	}
+	return TeamRecord{Revision: stored.Revision, Team: stored.Team}, nil
+}
+
+func (r *teamRepository) List(ctx context.Context, limit, offset int) ([]TeamRecord, error) {
+	return listRecords(ctx, r.db,
+		`SELECT record FROM teams ORDER BY id LIMIT ? OFFSET ?`, "teams",
+		limit, offset, func(data string) (TeamRecord, error) {
+			stored, err := decodeTeam(data)
+			if err != nil {
+				return TeamRecord{}, err
+			}
+			return TeamRecord{Revision: stored.Revision, Team: stored.Team}, nil
+		})
+}
+
+func (r *teamRepository) Update(ctx context.Context, value Team, expectedRevision uint64) (TeamRecord, error) {
+	current, err := r.GetByID(ctx, value.ID)
+	if err != nil {
+		return TeamRecord{}, err
+	}
+	if current.Revision != expectedRevision {
+		return TeamRecord{}, ErrTeamConflict
+	}
+	updated := teamRecord{
+		SchemaVersion: StorageSchemaVersion,
+		Revision:      current.Revision + 1,
+		Team:          value,
+	}
+	updated.Team.CreatedAt = current.Team.CreatedAt
+	updated.Team.UpdatedAt = r.now().UTC()
+	if err := updated.Team.Validate(); err != nil {
+		return TeamRecord{}, err
+	}
+	data, err := json.Marshal(updated)
+	if err != nil {
+		return TeamRecord{}, fmt.Errorf("encode team update: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx,
+		r.db.Bind(`UPDATE teams SET revision = ?, record = ? WHERE id = ? AND revision = ?`),
+		updated.Revision, string(data), updated.Team.ID, expectedRevision)
+	if err != nil {
+		return TeamRecord{}, fmt.Errorf("update team: %w", err)
+	}
+	if err := oneRowMoved(result, ErrTeamConflict); err != nil {
+		return TeamRecord{}, err
+	}
+	return TeamRecord{Revision: updated.Revision, Team: updated.Team}, nil
+}
+
+func (r *teamRepository) Delete(ctx context.Context, id string, expectedRevision uint64) error {
+	current, err := r.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if expectedRevision != 0 && current.Revision != expectedRevision {
+		return ErrTeamConflict
+	}
+	// Members belong to the team, so removing the team removes them: a
+	// membership must never outlive either end it ties.
+	if _, err := r.db.ExecContext(ctx,
+		r.db.Bind(`DELETE FROM team_memberships WHERE team_id = ?`), id); err != nil {
+		return fmt.Errorf("delete team memberships: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx,
+		r.db.Bind(`DELETE FROM teams WHERE id = ? AND revision = ?`),
+		id, current.Revision)
+	if err != nil {
+		return fmt.Errorf("delete team: %w", err)
+	}
+	return oneRowMoved(result, ErrTeamConflict)
+}
+
+func (r *teamRepository) exists(ctx context.Context, id string) (bool, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		r.db.Bind(`SELECT COUNT(*) FROM teams WHERE id = ?`), id,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func decodeTeam(data string) (teamRecord, error) {
+	var stored teamRecord
+	if err := json.Unmarshal([]byte(data), &stored); err != nil {
+		return teamRecord{}, fmt.Errorf("%w: %s", ErrCorruptTeam, err)
+	}
+	if stored.SchemaVersion != StorageSchemaVersion {
+		return teamRecord{}, fmt.Errorf("%w: unsupported schema version %d", ErrCorruptTeam, stored.SchemaVersion)
+	}
+	if stored.Revision == 0 {
+		return teamRecord{}, fmt.Errorf("%w: team revision is zero", ErrCorruptTeam)
+	}
+	if err := stored.Team.Validate(); err != nil {
+		return teamRecord{}, fmt.Errorf("%w: %s", ErrCorruptTeam, err)
+	}
+	return stored, nil
+}
+
+type membershipRepository struct {
+	db  *sqlstore.DB
+	now func() time.Time
+}
+
+func (r *membershipRepository) Add(ctx context.Context, value Membership) (Membership, error) {
+	if err := value.Validate(); err != nil {
+		return Membership{}, err
+	}
+	value.CreatedAt = r.now().UTC()
+	// Both ends must exist: a membership names a real user on a real team.
+	if _, err := (&userRepository{db: r.db, now: r.now}).GetByID(ctx, value.UserID); err != nil {
+		return Membership{}, err
+	}
+	if _, err := (&teamRepository{db: r.db, now: r.now}).GetByID(ctx, value.TeamID); err != nil {
+		return Membership{}, err
+	}
+	_, err := r.db.ExecContext(ctx,
+		r.db.Bind(`INSERT INTO team_memberships (user_id, team_id, created_at) VALUES (?, ?, ?)`),
+		value.UserID, value.TeamID, value.CreatedAt.Format(time.RFC3339Nano))
+	if err != nil {
+		if exists, existsErr := r.exists(ctx, value.UserID, value.TeamID); existsErr == nil && exists {
+			return Membership{}, ErrMembershipConflict
+		}
+		return Membership{}, fmt.Errorf("add membership: %w", err)
+	}
+	return value, nil
+}
+
+func (r *membershipRepository) Remove(ctx context.Context, userID, teamID string) error {
+	if !validID(userID) || !validID(teamID) {
 		return ErrMissingID
 	}
-	markerData, err := r.store.Get(ctx, initialKey)
+	result, err := r.db.ExecContext(ctx,
+		r.db.Bind(`DELETE FROM team_memberships WHERE user_id = ? AND team_id = ?`),
+		userID, teamID)
 	if err != nil {
-		return mapReadError("get initial identity claim", err)
+		return fmt.Errorf("remove membership: %w", err)
 	}
-	marker, err := decodeInitialIdentityRecord(markerData)
-	if err != nil {
-		return err
-	}
-	if marker.IdentityID != id {
-		return ErrConflict
-	}
-	identityKey := identityStorageKey(id)
-	identityData, err := r.store.Get(ctx, identityKey)
-	if err != nil {
-		return mapReadError("get initial identity", err)
-	}
-	stored, err := decodeIdentity(identityData)
-	if err != nil {
-		return err
-	}
-	if stored.APIKey.ID != id {
-		return fmt.Errorf("%w: initial identity ID does not match its key", ErrCorruptRecord)
-	}
-	hashKey := hashStorageKey(stored.APIKey.Hash)
-	hashData, err := r.store.Get(ctx, hashKey)
-	if err != nil {
-		return mapReadError("get initial identity hash", err)
-	}
-	index, err := decodeHashRecord(hashData)
-	if err != nil {
-		return err
-	}
-	if index.IdentityID != id {
-		return fmt.Errorf("%w: initial identity hash target does not match", ErrCorruptRecord)
-	}
-	collection, collectionData, err := r.readCollection(ctx)
-	if err != nil {
-		return err
-	}
-	if collection.Count == 0 {
-		return fmt.Errorf("%w: identity collection count is zero", ErrCorruptRecord)
-	}
-	updatedCollectionData, err := json.Marshal(identityCollectionRecord{
-		SchemaVersion: StorageSchemaVersion,
-		Revision:      collection.Revision + 1,
-		Count:         collection.Count - 1,
-	})
-	if err != nil {
-		return fmt.Errorf("encode released identity collection record: %w", err)
-	}
-	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
-		{Key: initialKey, ExpectedValue: markerData},
-		{Key: identityKey, ExpectedValue: identityData},
-		{Key: hashKey, ExpectedValue: hashData},
-		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
-	}); err != nil {
-		return mapConflict("release initial identity and setup claim", err)
-	}
-	return nil
+	return oneRowMoved(result, ErrMembershipNotFound)
 }
 
-func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {
-	if strings.TrimSpace(id) == "" {
-		return Record{}, ErrMissingID
+func (r *membershipRepository) ListByUser(ctx context.Context, userID string) ([]Membership, error) {
+	if userID == "" {
+		return nil, ErrMissingID
 	}
-	data, err := r.store.Get(ctx, identityStorageKey(id))
-	if err != nil {
-		return Record{}, mapReadError("get identity", err)
-	}
-	stored, err := decodeIdentity(data)
-	if err != nil {
-		return Record{}, err
-	}
-	if stored.APIKey.ID != id {
-		return Record{}, fmt.Errorf("%w: identity ID does not match its key", ErrCorruptRecord)
-	}
-	return recordFromIdentity(stored), nil
+	return r.list(ctx, `user_id = ? ORDER BY team_id`, userID)
 }
 
-func (r *repository) GetByHash(ctx context.Context, hash string) (Record, error) {
-	if strings.TrimSpace(hash) == "" {
-		return Record{}, ErrMissingHash
+func (r *membershipRepository) ListByTeam(ctx context.Context, teamID string) ([]Membership, error) {
+	if teamID == "" {
+		return nil, ErrMissingID
 	}
-	data, err := r.store.Get(ctx, hashStorageKey(hash))
-	if err != nil {
-		return Record{}, mapReadError("get identity hash", err)
-	}
-	index, err := decodeHashRecord(data)
-	if err != nil {
-		return Record{}, err
-	}
-	record, err := r.GetByID(ctx, index.IdentityID)
-	if err != nil {
-		return Record{}, err
-	}
-	if record.APIKey.Hash != hash {
-		return Record{}, fmt.Errorf("%w: hash index target does not match", ErrCorruptRecord)
-	}
-	return record, nil
+	return r.list(ctx, `team_id = ? ORDER BY user_id`, teamID)
 }
 
-func (r *repository) List(ctx context.Context, limit, offset int) ([]Record, error) {
+func (r *membershipRepository) list(ctx context.Context, clause, argument string) ([]Membership, error) {
+	rows, err := r.db.QueryContext(ctx,
+		r.db.Bind(`SELECT user_id, team_id, created_at FROM team_memberships WHERE `+clause),
+		argument)
+	if err != nil {
+		return nil, fmt.Errorf("list memberships: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	memberships := make([]Membership, 0)
+	for rows.Next() {
+		var userID, teamID, created string
+		if err := rows.Scan(&userID, &teamID, &created); err != nil {
+			return nil, fmt.Errorf("read listed membership: %w", err)
+		}
+		createdAt, err := time.Parse(time.RFC3339Nano, created)
+		if err != nil {
+			return nil, fmt.Errorf("read listed membership: %w", err)
+		}
+		memberships = append(memberships, Membership{UserID: userID, TeamID: teamID, CreatedAt: createdAt})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list memberships: %w", err)
+	}
+	return memberships, nil
+}
+
+func (r *membershipRepository) exists(ctx context.Context, userID, teamID string) (bool, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		r.db.Bind(`SELECT COUNT(*) FROM team_memberships WHERE user_id = ? AND team_id = ?`),
+		userID, teamID,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// listRecords pages one record column and decodes each row, so the user
+// and team listings share the loop instead of restating it.
+func listRecords[T any](
+	ctx context.Context,
+	db *sqlstore.DB,
+	query, noun string,
+	limit, offset int,
+	decode func(string) (T, error),
+) ([]T, error) {
+	limit, offset = listWindow(limit, offset)
+	rows, err := db.QueryContext(ctx, db.Bind(query), limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list %s: %w", noun, err)
+	}
+	defer func() { _ = rows.Close() }()
+	records := make([]T, 0)
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, fmt.Errorf("read listed %s record: %w", noun, err)
+		}
+		record, err := decode(data)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list %s: %w", noun, err)
+	}
+	return records, nil
+}
+
+func listWindow(limit, offset int) (int, int) {
 	if limit <= 0 {
 		limit = defaultListLimit
 	}
 	if offset < 0 {
 		offset = 0
 	}
-	// Scan every identity key: the store scan order is not a contract, so
-	// stable pagination needs the full sorted key set before slicing.
-	keys, err := r.store.ScanWithPrefix(ctx, identityKeyPrefix, 0)
-	if err != nil {
-		return nil, fmt.Errorf("list identity keys: %w", err)
-	}
-	sort.Strings(keys)
-	if offset >= len(keys) {
-		return []Record{}, nil
-	}
-	keys = keys[offset:]
-	if len(keys) > limit {
-		keys = keys[:limit]
-	}
-	records := make([]Record, 0, len(keys))
-	for _, key := range keys {
-		data, err := r.store.Get(ctx, key)
-		if err != nil {
-			return nil, mapReadError("read listed identity", err)
-		}
-		stored, err := decodeIdentity(data)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, recordFromIdentity(stored))
-	}
-	return records, nil
+	return limit, offset
 }
 
-func (r *repository) Update(ctx context.Context, apiKey APIKey, expectedRevision uint64) (Record, error) {
-	if err := apiKey.Validate(); err != nil {
-		return Record{}, err
-	}
-	currentData, err := r.store.Get(ctx, identityStorageKey(apiKey.ID))
-	if err != nil {
-		return Record{}, mapReadError("get identity for update", err)
-	}
-	current, err := decodeIdentity(currentData)
-	if err != nil {
-		return Record{}, err
-	}
-	if current.Revision != expectedRevision {
-		return Record{}, ErrConflict
-	}
-	if current.APIKey.Hash != apiKey.Hash {
-		return Record{}, ErrHashImmutable
-	}
-	updated := identityRecord{
-		SchemaVersion: StorageSchemaVersion,
-		Revision:      current.Revision + 1,
-		APIKey:        cloneAPIKey(apiKey),
-	}
-	updatedData, err := json.Marshal(updated)
-	if err != nil {
-		return Record{}, fmt.Errorf("encode identity update: %w", err)
-	}
-	if err := r.store.CompareAndSwap(ctx, identityStorageKey(apiKey.ID), currentData, updatedData); err != nil {
-		return Record{}, mapConflict("update identity", err)
-	}
-	return recordFromIdentity(updated), nil
-}
-
-func (r *repository) Delete(ctx context.Context, id string, expectedRevision uint64) error {
-	if strings.TrimSpace(id) == "" {
-		return ErrMissingID
-	}
-	data, err := r.store.Get(ctx, identityStorageKey(id))
-	if err != nil {
-		return mapReadError("get identity for delete", err)
-	}
-	stored, err := decodeIdentity(data)
+func oneRowMoved(result sql.Result, conflict error) error {
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
-	if expectedRevision != 0 && stored.Revision != expectedRevision {
-		return ErrConflict
-	}
-	collection, collectionData, err := r.readCollection(ctx)
-	if err != nil {
-		return err
-	}
-	if collection.Count == 0 {
-		return fmt.Errorf("%w: identity collection count is zero", ErrCorruptRecord)
-	}
-	updatedCollectionData, err := json.Marshal(identityCollectionRecord{
-		SchemaVersion: StorageSchemaVersion,
-		Revision:      collection.Revision + 1,
-		Count:         collection.Count - 1,
-	})
-	if err != nil {
-		return fmt.Errorf("encode deleted identity collection record: %w", err)
-	}
-	indexKey := hashStorageKey(stored.APIKey.Hash)
-	indexData, err := r.store.Get(ctx, indexKey)
-	if err != nil && !errors.Is(err, storage.ErrNotFound) {
-		return mapReadError("get identity hash for delete", err)
-	}
-	mutations := []storage.CompareAndSwapMutation{
-		{Key: identityStorageKey(id), ExpectedValue: data},
-		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
-	}
-	if err == nil {
-		index, decodeErr := decodeHashRecord(indexData)
-		if decodeErr != nil {
-			return decodeErr
-		}
-		if index.IdentityID != id {
-			return fmt.Errorf("%w: hash index target does not match identity", ErrCorruptRecord)
-		}
-		mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey, ExpectedValue: indexData})
-	} else {
-		// Keep the missing-index observation in the atomic condition. A concurrent
-		// repair must make this delete conflict instead of leaving a dangling index.
-		mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey})
-	}
-	if err := r.store.CompareAndSwapBatch(ctx, mutations); err != nil {
-		return mapConflict("delete identity, hash index, and collection record", err)
+	if affected == 0 {
+		return conflict
 	}
 	return nil
-}
-
-func decodeHashRecord(data []byte) (hashRecord, error) {
-	var index hashRecord
-	if err := json.Unmarshal(data, &index); err != nil ||
-		index.SchemaVersion != StorageSchemaVersion || index.IdentityID == "" {
-		return hashRecord{}, fmt.Errorf("%w: hash index", ErrCorruptRecord)
-	}
-	return index, nil
-}
-
-func decodeInitialIdentityRecord(data []byte) (initialIdentityRecord, error) {
-	var record initialIdentityRecord
-	if err := json.Unmarshal(data, &record); err != nil ||
-		record.SchemaVersion != StorageSchemaVersion || record.IdentityID == "" {
-		return initialIdentityRecord{}, fmt.Errorf("%w: initial identity claim", ErrCorruptRecord)
-	}
-	return record, nil
-}
-
-func (r *repository) readCollection(
-	ctx context.Context,
-) (identityCollectionRecord, []byte, error) {
-	data, err := r.store.Get(ctx, collectionKey)
-	if errors.Is(err, storage.ErrNotFound) {
-		return identityCollectionRecord{SchemaVersion: StorageSchemaVersion}, nil, nil
-	}
-	if err != nil {
-		return identityCollectionRecord{}, nil, mapReadError("get identity collection record", err)
-	}
-	record, err := decodeIdentityCollectionRecord(data)
-	if err != nil {
-		return identityCollectionRecord{}, nil, err
-	}
-	return record, data, nil
-}
-
-func decodeIdentityCollectionRecord(data []byte) (identityCollectionRecord, error) {
-	var record identityCollectionRecord
-	if err := json.Unmarshal(data, &record); err != nil ||
-		record.SchemaVersion != StorageSchemaVersion || record.Revision == 0 {
-		return identityCollectionRecord{}, fmt.Errorf("%w: identity collection record", ErrCorruptRecord)
-	}
-	return record, nil
-}
-
-func decodeIdentity(data []byte) (identityRecord, error) {
-	var stored identityRecord
-	if err := json.Unmarshal(data, &stored); err != nil {
-		return identityRecord{}, fmt.Errorf("%w: decode: %v", ErrCorruptRecord, err)
-	}
-	if stored.SchemaVersion != StorageSchemaVersion || stored.Revision == 0 {
-		return identityRecord{}, fmt.Errorf("%w: unsupported schema or revision", ErrCorruptRecord)
-	}
-	if err := stored.APIKey.Validate(); err != nil {
-		return identityRecord{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)
-	}
-	return stored, nil
-}
-
-func identityStorageKey(id string) string { return identityKeyPrefix + encodePart(id) }
-func hashStorageKey(hash string) string   { return hashKeyPrefix + encodePart(hash) }
-
-func encodePart(value string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(value))
-}
-
-func recordFromIdentity(stored identityRecord) Record {
-	return Record{Revision: stored.Revision, APIKey: cloneAPIKey(stored.APIKey)}
-}
-
-func cloneAPIKey(apiKey APIKey) APIKey {
-	apiKey.Scopes = append([]string(nil), apiKey.Scopes...)
-	apiKey.AllowedModels = append([]string(nil), apiKey.AllowedModels...)
-	apiKey.Limits = apiKey.Limits.Clone()
-	apiKey.Metadata = cloneMap(apiKey.Metadata)
-	if apiKey.ExpiresAt != nil {
-		expiresAt := *apiKey.ExpiresAt
-		apiKey.ExpiresAt = &expiresAt
-	}
-	return apiKey
-}
-
-func cloneMap(source map[string]any) map[string]any {
-	if source == nil {
-		return nil
-	}
-	result := make(map[string]any, len(source))
-	for key, value := range source {
-		result[key] = value
-	}
-	return result
-}
-
-func mapReadError(action string, err error) error {
-	if errors.Is(err, storage.ErrNotFound) {
-		return ErrNotFound
-	}
-	return fmt.Errorf("%s: %w", action, err)
-}
-
-func mapConflict(action string, err error) error {
-	if errors.Is(err, storage.ErrConflict) {
-		return ErrConflict
-	}
-	return fmt.Errorf("%s: %w", action, err)
 }

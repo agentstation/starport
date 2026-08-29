@@ -1,0 +1,46 @@
+CSH-F1 fail-before proof
+Baseline: main 5299aba (branch codex/csh-f1-identity-models)
+
+1. The human models do not exist on baseline. internal/identity holds
+gateway API-key identity (APIKey, Issuer, Repository on the KV store):
+$ grep -l 'type User struct' internal/identity
+(no match)
+$ grep -rn '^type ' internal/identity/model.go
+type APIKey struct {
+
+2. Verifier on baseline:
+FAIL CSH-V17 internal/identity owns users, teams, and memberships
+Summary: 16 passed, 7 failed
+
+--- After implementation ---
+
+3. The rename (decision 6): internal/identity -> internal/apikey via git mv,
+package clause and 41 importer files retargeted mechanically. No route or
+behavior change: the stored namespace stays identity:v1: so existing gateway
+API keys keep working, and every gate that greps the API-key package
+(auth-onboarding, model-modalities, reranking, v1-architecture, Makefile
+valkey target) was retargeted to internal/apikey with its conditions
+unchanged.
+
+4. The new internal/identity owns the humans: User (external identity
+subject, email, display name), Team, Membership; UserRepository,
+TeamRepository, MembershipRepository on the sqlstore contract; migration
+0003_identity in all three dialects (users with a unique subject column,
+teams, team_memberships link rows).
+
+5. Tests:
+$ go test ./internal/identity/...
+ok (6 top-level tests: user/team/membership validation, user CRUD with
+subject lookup and subject immutability on update, user conflicts on both
+unique constraints and stale revisions, team CRUD, membership add/remove/
+list-both-ends with existence checks, and a team delete sweeping its
+memberships). go test ./... all green.
+
+6. Architecture fitness: internal/identity registered; asserted to import
+only internal/sqlstore. internal/apikey keeps the storage+limits+account
+allowlist under its new name.
+
+7. Verifier after:
+PASS CSH-V17 internal/identity owns users, teams, and memberships
+Summary: 17 passed, 6 failed (V18 gothic, V19 workos, V20-V23 owned by
+F2/F3/G/H tasks)

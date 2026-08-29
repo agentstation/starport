@@ -11,9 +11,9 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 
+	"github.com/agentstation/starport/internal/apikey"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/providers"
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/connectors"
@@ -127,7 +127,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 			report.addSkip("identities", "storage is unavailable")
 		default:
 			report.addPass("storage", "configured storage opened in read-only mode")
-			repository, openErr := identity.Open(store)
+			repository, openErr := apikey.Open(store)
 			if openErr != nil {
 				report.addFailure("identities", "gateway identity repository could not be opened")
 			} else {

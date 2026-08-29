@@ -31,6 +31,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"../jobs",
 		"../inference",
 		"../failure",
+		"../apikey",
 		"../identity",
 		"../account",
 		"../sqlstore",
@@ -55,6 +56,7 @@ func TestImportGraphArchitecture(t *testing.T) {
 		"github.com/agentstation/starport/internal/jobs",
 		"github.com/agentstation/starport/internal/inference",
 		"github.com/agentstation/starport/internal/failure",
+		"github.com/agentstation/starport/internal/apikey",
 		"github.com/agentstation/starport/internal/identity",
 		"github.com/agentstation/starport/internal/account",
 		"github.com/agentstation/starport/internal/sqlstore",
@@ -114,14 +116,20 @@ func TestImportGraphArchitecture(t *testing.T) {
 			"github.com/agentstation/starport/internal/limits",
 		)
 	}
+	// The humans a deployment knows are purely relational: identity
+	// reaches the relational store and nothing else inside the module, so
+	// no concept can smuggle behavior in through a user or a team.
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/identity"],
+		"github.com/agentstation/starport/internal/sqlstore",
+	)
 	// The relational store is a leaf beside the key-value store: it holds
 	// rows for the concepts that own them and reads no meaning of its own.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/sqlstore"])
-	// A gateway API key belongs to an account, so identity reaches the account
+	// A gateway API key belongs to an account, so apikey reaches the account
 	// model for its ID rules and its canonical ID. The loop above holds the
-	// other direction closed: account may never reach identity, because an
+	// other direction closed: account may never reach apikey, because an
 	// account exists whether or not a key names it.
-	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/identity"],
+	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/apikey"],
 		"github.com/agentstation/starport/internal/storage",
 		"github.com/agentstation/starport/internal/limits",
 		"github.com/agentstation/starport/internal/account",

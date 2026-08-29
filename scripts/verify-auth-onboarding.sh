@@ -49,7 +49,7 @@ check AON-V05 "the limits vocabulary has its own owner, shared by key and accoun
 
 # --- AON2: a key belongs to an account ---
 check AON-V06 "identity.APIKey carries an account" \
-  grep_q 'AccountID' internal/identity/model.go
+  grep_q 'AccountID' internal/apikey/model.go
 check AON-V07 "the request context carries an account identity" \
   grep_q 'Account' internal/server/requestctx
 check AON-V08 "no controller derives a credential scope from an API key ID" \

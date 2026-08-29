@@ -17,9 +17,9 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/apikey"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
-	"github.com/agentstation/starport/internal/identity"
 	providerauth "github.com/agentstation/starport/internal/providers/auth"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/setup"
@@ -130,7 +130,7 @@ func TestProbeReadsIdentityWithoutChangingIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
-	repository, err := identity.Open(reopened)
+	repository, err := apikey.Open(reopened)
 	if err != nil {
 		t.Fatal(err)
 	}

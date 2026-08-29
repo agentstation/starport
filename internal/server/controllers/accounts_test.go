@@ -13,21 +13,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/account"
-	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/storage"
 )
 
 // newAccountsTestController wires the account plane over real storage. The
 // guards under test are about what the repositories actually hold, so a fake
 // repository would prove nothing here.
-func newAccountsTestController(t *testing.T) (*AccountsController, account.Repository, identity.Repository) {
+func newAccountsTestController(t *testing.T) (*AccountsController, account.Repository, apikey.Repository) {
 	t.Helper()
 	accounts, err := account.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	_, err = accounts.EnsureDefault(context.Background())
 	require.NoError(t, err)
 
-	keys, err := identity.Open(storage.NewMockStore())
+	keys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 
 	return NewAccountsController(accounts, keys, nil), accounts, keys
@@ -66,7 +66,7 @@ func TestDeletingAnAccountThatStillHoldsKeysIsRefused(t *testing.T) {
 
 	_, err := accounts.Create(context.Background(), account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
-	_, err = keys.Create(context.Background(), identity.APIKey{
+	_, err = keys.Create(context.Background(), apikey.APIKey{
 		ID: "key-a", Name: "acme-key", Hash: "hash-a", Scopes: []string{"chat:write"},
 		AccountID: "acme", Active: true,
 	})
