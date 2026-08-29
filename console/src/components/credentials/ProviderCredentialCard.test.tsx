@@ -33,7 +33,12 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const gateway = vi.hoisted(() => ({
-  stored: [] as { id: string; has_credentials: boolean; created_at: string }[],
+  stored: [] as {
+    id: string;
+    label?: string;
+    has_credentials: boolean;
+    created_at: string;
+  }[],
   locked: false,
 }));
 
@@ -93,7 +98,12 @@ test("a usable environment credential is named as the payer", async () => {
 
 test("a stored shared credential pays when the environment does not", async () => {
   gateway.stored = [
-    { id: "shared-1", has_credentials: true, created_at: "2026-08-25T00:00:00Z" },
+    {
+      id: "shared-1",
+      label: "team-a",
+      has_credentials: true,
+      created_at: "2026-08-25T00:00:00Z",
+    },
   ];
   mount({ state: "not_configured", usable: false });
 
@@ -102,6 +112,9 @@ test("a stored shared credential pays when the environment does not", async () =
       screen.getByText(/Paid by the shared credential stored on this gateway/),
     ).toBeTruthy(),
   );
+  // A provider can hold several shared credentials, so the payer line names
+  // the one requests reach first.
+  expect(screen.getByText("team-a")).toBeTruthy();
 });
 
 // The empty state is the setup lesson. It teaches all three sources and leads

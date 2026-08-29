@@ -4,16 +4,18 @@ import { useRef, useState } from "react";
 
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
 import { SourcePill } from "@/components/credentials/SourcePill";
-import { GhostButton, PrimaryButton, RowAction } from "@/components/ui/Form";
+import { Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import {
   ApiError,
   createSharedCredential,
   deleteSharedCredential,
+  listAccounts,
   listSharedCredentials,
   updateSharedCredential,
   validateSharedCredential,
   type CredentialField,
+  type SharedCredentialSummary,
 } from "@/lib/api";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 
@@ -25,18 +27,134 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 // the environment credential that is the same operator's money — and the
 // keyring and the wire say "shared" too (internal/providers/keyring).
 //
-// A provider can hold several shared credentials. This panel still renders
-// the plane as one row — the first credential drives it — until the list UI
-// lands; the wire underneath is already the list.
+// A provider can hold several shared credentials, and this panel shows the
+// whole plane: each credential with its label and its access rule — open to
+// every account, or granted to a listed few. The access question is asked at
+// creation and defaults to every account; the grants stay editable per
+// credential afterward. A request uses the first usable credential in list
+// order, so the first row wears the Active pill when no earlier source (the
+// environment credential) shadows the plane.
 //
-// It is not BYOK. BYOK is a credential an account brings for itself, and it is
-// managed per account. The provider credential drawer may name accounts as the
-// third resolution source, but this panel never edits one and never names an
-// account: the credentials it applies belong to the deployment. The section
-// renders as a row of that drawer and carries no chrome of its own.
+// It is not BYOK. BYOK is a credential an account brings for itself, and it
+// is managed per account. The provider credential drawer may name accounts as
+// the third resolution source, but this panel edits no account credential:
+// everything it stores belongs to the deployment. The section renders as a
+// row of that drawer and carries no chrome of its own.
 
 export function sharedCredentialsQueryKey(providerId: string): string[] {
   return ["shared-credentials", providerId];
+}
+
+type Access = "open" | "granted";
+
+// AccessChoice is the access question, asked at creation and re-asked when
+// the operator edits a credential's grants: every account, or only granted
+// accounts — with open as the default, because the shared plane's promise is
+// that one stored credential serves the deployment unless the operator
+// narrows it.
+function AccessChoice({
+  access,
+  grants,
+  onChange,
+}: {
+  access: Access;
+  grants: string[];
+  onChange: (access: Access, grants: string[]) => void;
+}) {
+  const accounts = useQuery({
+    queryKey: ["accounts"],
+    queryFn: listAccounts,
+    retry: false,
+  });
+
+  const toggleGrant = (accountId: string) => {
+    const next = grants.includes(accountId)
+      ? grants.filter((grant) => grant !== accountId)
+      : [...grants, accountId];
+    onChange("granted", next);
+  };
+
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="text-xs font-medium text-text-2">
+        Which accounts can use it?
+      </legend>
+      <label className="flex items-start gap-2 text-sm text-text-2">
+        <input
+          type="radio"
+          name="shared-access"
+          checked={access === "open"}
+          onChange={() => onChange("open", [])}
+          className="mt-1"
+        />
+        <span>
+          Every account
+          <span className="block text-xs text-text-4">
+            Any account&rsquo;s requests can use this credential.
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm text-text-2">
+        <input
+          type="radio"
+          name="shared-access"
+          checked={access === "granted"}
+          onChange={() => onChange("granted", grants)}
+          className="mt-1"
+        />
+        <span>
+          Only granted accounts
+          <span className="block text-xs text-text-4">
+            Only the accounts chosen below can use it; everyone else resolves
+            past it.
+          </span>
+        </span>
+      </label>
+      {access === "granted" &&
+        (accounts.error ? (
+          <p className="pl-6 text-xs text-text-4">
+            Could not list accounts:{" "}
+            {accounts.error instanceof Error
+              ? accounts.error.message
+              : String(accounts.error)}
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1 pl-6">
+            {(accounts.data ?? []).map((account) => (
+              <label
+                key={account.id}
+                className="flex items-center gap-2 text-sm text-text-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={grants.includes(account.id)}
+                  onChange={() => toggleGrant(account.id)}
+                />
+                {account.name || account.id}
+              </label>
+            ))}
+            {accounts.data?.length === 0 && (
+              <p className="text-xs text-text-4">
+                No accounts exist yet to grant.
+              </p>
+            )}
+          </div>
+        ))}
+    </fieldset>
+  );
+}
+
+// accessWords is the row's one-line answer to who a credential serves. The
+// vocabulary matches the create flow's question, so the list teaches the
+// same words it asks with.
+function accessWords(credential: SharedCredentialSummary): string {
+  if (credential.access === "granted") {
+    const grants = credential.grants ?? [];
+    return grants.length > 0
+      ? `Only granted accounts: ${grants.join(", ")}`
+      : "Only granted accounts — none granted yet";
+  }
+  return "Every account";
 }
 
 export function SharedCredentialPanel({
@@ -44,9 +162,9 @@ export function SharedCredentialPanel({
   name,
   fields,
   // Whether requests would use this source: true when no earlier source
-  // (the environment credential) is usable. An applied credential behind a
-  // usable environment credential is stored but shadowed, and its pill says
-  // Applied rather than Active.
+  // (the environment credential) is usable. A stored credential behind a
+  // usable environment credential is stored but shadowed, and the first
+  // row's pill says Applied rather than Active.
   active,
 }: {
   providerId: string;
@@ -55,8 +173,18 @@ export function SharedCredentialPanel({
   active: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [setting, setSetting] = useState(false);
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createLabel, setCreateLabel] = useState("");
+  const [createAccess, setCreateAccess] = useState<Access>("open");
+  const [createGrants, setCreateGrants] = useState<string[]>([]);
+  const [replacing, setReplacing] = useState<SharedCredentialSummary | null>(
+    null,
+  );
+  const [editingAccess, setEditingAccess] =
+    useState<SharedCredentialSummary | null>(null);
+  const [removing, setRemoving] = useState<SharedCredentialSummary | null>(
+    null,
+  );
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -77,17 +205,13 @@ export function SharedCredentialPanel({
     retry: false,
   });
 
-  const stored = credentials.data?.[0];
-
   const validate = useMutation({
-    mutationFn: (credentialId: string) =>
-      validateSharedCredential(providerId, credentialId),
-    onSuccess: (result) => {
+    mutationFn: (credential: SharedCredentialSummary) =>
+      validateSharedCredential(providerId, credential.id),
+    onSuccess: (result, credential) => {
       const valid = result?.valid !== false;
-      say(
-        valid ? "Shared credential is valid" : "Shared credential is invalid",
-        !valid,
-      );
+      const who = credential.label || "The shared credential";
+      say(valid ? `${who} is valid` : `${who} is invalid`, !valid);
     },
     onError: (error) =>
       say(
@@ -97,60 +221,43 @@ export function SharedCredentialPanel({
   });
 
   const remove = useMutation({
-    mutationFn: (credentialId: string) =>
-      deleteSharedCredential(providerId, credentialId),
+    mutationFn: (credential: SharedCredentialSummary) =>
+      deleteSharedCredential(providerId, credential.id),
     onSuccess: async () => {
-      setConfirmingRemove(false);
+      setRemoving(null);
       say("Shared credential removed");
       await refresh();
     },
     onError: (error) => {
-      setConfirmingRemove(false);
+      setRemoving(null);
       say(`Remove failed: ${error instanceof Error ? error.message : error}`, true);
     },
   });
 
   const locked =
     credentials.error instanceof ApiError && credentials.error.needsKey;
-  const applied = stored !== undefined;
+  const stored = credentials.data ?? [];
+  const applied = stored.length > 0;
   const missing = credentials.data !== undefined && !applied;
+
+  const openCreate = () => {
+    setCreateLabel("");
+    setCreateAccess("open");
+    setCreateGrants([]);
+    setCreating(true);
+  };
 
   return (
     <section
-      data-testid="gateway-credential-panel"
+      data-testid="shared-credential-panel"
       className="flex min-w-0 flex-1 flex-col gap-2"
     >
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-medium text-text-1">Stored</h3>
-        {applied && (
-          <SourcePill
-            label={active ? "Active" : "Applied"}
-            tone={active ? "success" : "info"}
-            title={
-              active
-                ? "Requests use this credential"
-                : "Stored, but the environment credential is used first"
-            }
-          />
-        )}
         {missing && <SourcePill label="Not set" tone="neutral" />}
         {applied && (
-          <div className="ml-auto flex items-center gap-1">
-            <RowAction
-              onClick={() => validate.mutate(stored.id)}
-              disabled={validate.isPending}
-            >
-              validate
-            </RowAction>
-            <RowAction onClick={() => setSetting(true)}>replace</RowAction>
-            <button
-              type="button"
-              onClick={() => setConfirmingRemove(true)}
-              aria-label={`Remove the ${providerId} shared credential`}
-              className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
+          <div className="ml-auto">
+            <RowAction onClick={openCreate}>add credential…</RowAction>
           </div>
         )}
       </div>
@@ -162,58 +269,109 @@ export function SharedCredentialPanel({
       )}
 
       {credentials.isPending ? (
-        <p className="text-sm text-text-3">Loading credential…</p>
+        <p className="text-sm text-text-3">Loading credentials…</p>
       ) : locked ? (
         <p className="text-sm text-text-3">
           Applied by an operator for the whole deployment. Only an operator key
-          with the admin scope can read or apply it.
+          with the admin scope can read or apply one.
         </p>
       ) : credentials.error ? (
         <p className="text-sm text-text-3">
-          Failed to load the credential: {credentials.error.message}
+          Failed to load the credentials: {credentials.error.message}
         </p>
       ) : applied ? (
-        <p className="text-sm text-text-2">
-          Applied
-          {stored.created_at
-            ? ` ${formatRelativeTime(stored.created_at)}`
-            : ""}{" "}
-          for the whole deployment · stored encrypted and never returned
-          {stored.last_used
-            ? ` · last used ${formatRelativeTime(stored.last_used)}`
-            : ""}
-          {typeof stored.usage_count === "number"
-            ? ` · ${formatCount(stored.usage_count)} requests`
-            : ""}
-          .
-        </p>
+        <ul className="flex flex-col gap-2">
+          {stored.map((credential, index) => (
+            <li
+              key={credential.id}
+              className="flex flex-col gap-1 rounded-xs border border-border-1 p-2"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-text-1">
+                  {credential.label || "Unlabeled"}
+                </span>
+                {index === 0 && (
+                  <SourcePill
+                    label={active ? "Active" : "Applied"}
+                    tone={active ? "success" : "info"}
+                    title={
+                      active
+                        ? "Requests use this credential first"
+                        : "Stored, but the environment credential is used first"
+                    }
+                  />
+                )}
+                <div className="ml-auto flex items-center gap-1">
+                  <RowAction
+                    onClick={() => validate.mutate(credential)}
+                    disabled={validate.isPending}
+                  >
+                    validate
+                  </RowAction>
+                  <RowAction
+                    onClick={() => {
+                      applyTarget.current = credential.id;
+                      setReplacing(credential);
+                    }}
+                  >
+                    replace
+                  </RowAction>
+                  <RowAction onClick={() => setEditingAccess(credential)}>
+                    access…
+                  </RowAction>
+                  <button
+                    type="button"
+                    onClick={() => setRemoving(credential)}
+                    aria-label={`Remove the ${credential.label || providerId} shared credential`}
+                    className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-text-3">{accessWords(credential)}</p>
+              <p className="text-xs text-text-4">
+                Stored encrypted and never returned
+                {credential.created_at
+                  ? ` · applied ${formatRelativeTime(credential.created_at)}`
+                  : ""}
+                {credential.last_used
+                  ? ` · last used ${formatRelativeTime(credential.last_used)}`
+                  : ""}
+                {typeof credential.usage_count === "number"
+                  ? ` · ${formatCount(credential.usage_count)} requests`
+                  : ""}
+                .
+              </p>
+            </li>
+          ))}
+        </ul>
       ) : (
         <>
           <p className="text-sm text-text-2">
             No shared credential is stored for this provider. One stored here
-            pays every account's requests, encrypted and never returned.
+            pays the deployment&rsquo;s requests — every account by default,
+            or only the accounts you grant — encrypted and never returned.
           </p>
           <div>
-            <PrimaryButton onClick={() => setSetting(true)}>
-              Set credential
-            </PrimaryButton>
+            <PrimaryButton onClick={openCreate}>Set credential</PrimaryButton>
           </div>
         </>
       )}
 
-      {setting && (
+      {creating && (
         <CredentialApplyModal
-          title={applied ? "Replace shared credential" : "Set shared credential"}
-          description={`The shared credential for ${name}. Every account's requests can use it; it is stored encrypted and never returned.`}
+          title={applied ? "Add shared credential" : "Set shared credential"}
+          description={`A shared credential for ${name}, stored encrypted and never returned.`}
           fields={fields}
           apply={async (body) => {
-            if (stored) {
-              applyTarget.current = stored.id;
-              await updateSharedCredential(providerId, stored.id, body);
-            } else {
-              const created = await createSharedCredential(providerId, body);
-              applyTarget.current = created.id;
-            }
+            const created = await createSharedCredential(providerId, {
+              ...body,
+              label: createLabel.trim() || undefined,
+              access: createAccess,
+              grants: createAccess === "granted" ? createGrants : undefined,
+            });
+            applyTarget.current = created.id;
             await refresh();
           }}
           validate={() => {
@@ -223,22 +381,73 @@ export function SharedCredentialPanel({
             }
             return validateSharedCredential(providerId, credentialId);
           }}
-          onClose={() => setSetting(false)}
+          onClose={() => setCreating(false)}
+        >
+          <Field label="Label" hint="How the list and the payer line name it.">
+            <input
+              className={INPUT_CLASS}
+              value={createLabel}
+              onChange={(event) => setCreateLabel(event.target.value)}
+              placeholder="e.g. team-a"
+              aria-label="Label"
+            />
+          </Field>
+          <AccessChoice
+            access={createAccess}
+            grants={createGrants}
+            onChange={(access, grants) => {
+              setCreateAccess(access);
+              setCreateGrants(grants);
+            }}
+          />
+        </CredentialApplyModal>
+      )}
+
+      {replacing && (
+        <CredentialApplyModal
+          title="Replace shared credential"
+          description={`A new value for ${replacing.label || "this credential"}. Its grants and usage history stay; only the stored secret changes.`}
+          fields={fields}
+          apply={async (body) => {
+            await updateSharedCredential(providerId, replacing.id, body);
+            await refresh();
+          }}
+          validate={() => validateSharedCredential(providerId, replacing.id)}
+          onClose={() => setReplacing(null)}
         />
       )}
 
-      {confirmingRemove && stored && (
+      {editingAccess && (
+        <AccessEditModal
+          providerId={providerId}
+          credential={editingAccess}
+          onSaved={async () => {
+            setEditingAccess(null);
+            say("Access updated");
+            await refresh();
+          }}
+          onError={(error) =>
+            say(
+              `Access update failed: ${error instanceof Error ? error.message : error}`,
+              true,
+            )
+          }
+          onClose={() => setEditingAccess(null)}
+        />
+      )}
+
+      {removing && (
         <Modal
           title="Remove shared credential"
-          onClose={() => setConfirmingRemove(false)}
+          onClose={() => setRemoving(null)}
           footer={
             <>
-              <GhostButton onClick={() => setConfirmingRemove(false)}>
+              <GhostButton onClick={() => setRemoving(null)}>
                 Cancel
               </GhostButton>
               <button
                 type="button"
-                onClick={() => remove.mutate(stored.id)}
+                onClick={() => remove.mutate(removing)}
                 disabled={remove.isPending}
                 className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-opacity duration-150 ease-standard hover:opacity-90 disabled:opacity-50"
               >
@@ -248,14 +457,82 @@ export function SharedCredentialPanel({
           }
         >
           <p className="text-sm text-text-2">
-            This removes the shared credential for{" "}
-            <strong className="font-semibold text-text-1">{name}</strong>.
-            Requests stop using it immediately; accounts fall back to the
-            environment credential or their own. The stored value cannot be
-            recovered.
+            This removes{" "}
+            <strong className="font-semibold text-text-1">
+              {removing.label || "the shared credential"}
+            </strong>{" "}
+            for {name}. Requests stop using it immediately; accounts fall back
+            to the remaining shared credentials, the environment credential,
+            or their own. The stored value cannot be recovered.
           </p>
         </Modal>
       )}
     </section>
+  );
+}
+
+// AccessEditModal re-asks the access question for one stored credential. The
+// answer replaces the whole rule — the access word and the grant list
+// together — so what the operator sees checked is exactly what the gateway
+// enforces after Save.
+function AccessEditModal({
+  providerId,
+  credential,
+  onSaved,
+  onError,
+  onClose,
+}: {
+  providerId: string;
+  credential: SharedCredentialSummary;
+  onSaved: () => Promise<void>;
+  onError: (error: unknown) => void;
+  onClose: () => void;
+}) {
+  const [access, setAccess] = useState<Access>(
+    credential.access === "granted" ? "granted" : "open",
+  );
+  const [grants, setGrants] = useState<string[]>(credential.grants ?? []);
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await updateSharedCredential(providerId, credential.id, {
+        access,
+        grants: access === "granted" ? grants : [],
+      });
+    } catch (error) {
+      setBusy(false);
+      onError(error);
+      return;
+    }
+    setBusy(false);
+    await onSaved();
+  };
+
+  return (
+    <Modal
+      title={`Access for ${credential.label || "the shared credential"}`}
+      onClose={onClose}
+      footer={
+        <>
+          <GhostButton onClick={onClose} disabled={busy}>
+            Cancel
+          </GhostButton>
+          <PrimaryButton onClick={() => void save()} disabled={busy}>
+            {busy ? "Saving…" : "Save access"}
+          </PrimaryButton>
+        </>
+      }
+    >
+      <AccessChoice
+        access={access}
+        grants={grants}
+        onChange={(nextAccess, nextGrants) => {
+          setAccess(nextAccess);
+          setGrants(nextGrants);
+        }}
+      />
+    </Modal>
   );
 }
