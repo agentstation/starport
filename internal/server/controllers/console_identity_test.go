@@ -115,7 +115,7 @@ func TestAnUnconfiguredDeploymentAnswersTheOperator(t *testing.T) {
 
 	began := identityGet(mux, "/console/identity/google")
 	assert.Equal(t, http.StatusServiceUnavailable, began.Code)
-	assert.Contains(t, refusalMessage(t, began.Result()), "IDENTITY_OAUTH_")
+	assert.Contains(t, refusalMessage(t, began.Result()), "STARPORT_IDENTITY_")
 
 	called := identityGet(mux, "/console/identity/google/callback")
 	assert.Equal(t, http.StatusServiceUnavailable, called.Code)

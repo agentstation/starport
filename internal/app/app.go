@@ -184,7 +184,7 @@ type runtimeBuilder struct {
 	console      console.PageServer
 	auth         authRuntime
 	gate         *localauth.Gate
-	identityAuth *identity.Gothic
+	identityAuth *identity.Authenticator
 }
 
 // authRuntime is the resolved authentication mode and the store that keeps a
@@ -623,40 +623,40 @@ func (b *runtimeBuilder) fileBackend() string {
 	return b.application.blobStore.Backend()
 }
 
-// openIdentity turns on the OAuth acquisition path when the operator
-// configured one. It runs after openConcepts so the gate and the relational
-// store both exist. A deployment with no identity configuration skips all of
-// it: the identity grant stays inert and the console keeps its machine-local
-// grants.
+// openIdentity turns on the identity seam when the operator configured any
+// acquisition path — OAuth applications, WorkOS SSO, or both. It runs after
+// openConcepts so the gate and the relational store both exist. A deployment
+// with no identity configuration skips all of it: the identity grant stays
+// inert and the console keeps its machine-local grants.
 func (b *runtimeBuilder) openIdentity() error {
-	if !b.config.Identity.OAuth.Enabled() {
+	if !b.config.Identity.Enabled() {
 		return nil
 	}
 	repositories, err := identity.Open(b.sqlDB)
 	if err != nil {
 		return fmt.Errorf("open identity repositories: %w", err)
 	}
-	oauth := b.config.Identity.RuntimeOAuth()
-	if oauth.CallbackBaseURL == "" {
+	acquisition := b.config.Identity.RuntimeAcquisition()
+	if acquisition.CallbackBaseURL == "" {
 		// The bind address is the one URL this gateway certainly serves. An
 		// operator fronting it with a proxy sets the base explicitly.
-		oauth.CallbackBaseURL = fmt.Sprintf("http://%s:%d",
+		acquisition.CallbackBaseURL = fmt.Sprintf("http://%s:%d",
 			b.config.Server.Host, b.config.Server.Port)
 	}
-	acquisition, err := identity.NewGothic(oauth, repositories.Users)
+	authenticator, err := identity.NewAuthenticator(acquisition, repositories.Users)
 	if err != nil {
-		return fmt.Errorf("open OAuth identity: %w", err)
+		return fmt.Errorf("open identity acquisition: %w", err)
 	}
-	b.gate.UseIdentityProvider(acquisition)
-	b.identityAuth = acquisition
+	b.gate.UseIdentityProvider(authenticator)
+	b.identityAuth = authenticator
 	log.Info().
-		Strs("providers", acquisition.Providers()).
-		Msg("Identity OAuth acquisition ready")
+		Strs("providers", authenticator.Providers()).
+		Msg("Identity acquisition ready")
 	return nil
 }
 
-// identityAuthenticator hands the acquisition path across as the server's
-// contract. The nil check matters: a nil *identity.Gothic wrapped in a
+// identityAuthenticator hands the acquisition seam across as the server's
+// contract. The nil check matters: a nil *identity.Authenticator wrapped in a
 // non-nil interface would make the routes call a nil receiver instead of
 // reading "not configured".
 func (b *runtimeBuilder) identityAuthenticator() controllers.IdentityAuthenticator {

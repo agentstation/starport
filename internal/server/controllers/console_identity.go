@@ -52,7 +52,7 @@ func NewConsoleIdentityController(
 // identity provider. It is the operator's answer, so it names the operator's
 // lever.
 const identityUnconfigured = "No identity provider is configured for this gateway.\n\n" +
-	"An operator turns one on with the STARPORT_IDENTITY_OAUTH_* settings.\n"
+	"An operator turns one on with the STARPORT_IDENTITY_* settings.\n"
 
 // identityRefusal is the one message for a dance that did not complete. The
 // cause is logged for the operator; a browser mid-redirect can only start

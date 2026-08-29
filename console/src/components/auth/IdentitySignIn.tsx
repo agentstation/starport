@@ -8,6 +8,7 @@ import { identityBeginPath, identityProviders } from "@/lib/api";
 const labels: Record<string, string> = {
   google: "Google",
   github: "GitHub",
+  workos: "SSO",
 };
 
 export function providerLabel(name: string): string {

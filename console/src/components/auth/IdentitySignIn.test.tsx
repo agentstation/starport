@@ -42,5 +42,6 @@ test("an unconfigured deployment draws nothing", async () => {
 test("a provider outside the label map still renders", () => {
   expect(providerLabel("google")).toBe("Google");
   expect(providerLabel("github")).toBe("GitHub");
+  expect(providerLabel("workos")).toBe("SSO");
   expect(providerLabel("okta")).toBe("Okta");
 });
