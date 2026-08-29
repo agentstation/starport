@@ -273,6 +273,14 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 	// reaches it from TypeScript.
 	mux.Post("/console/session", s.controllers.ConsoleSession.Create)
 
+	// The identity grant's acquisition surface. The static providers route
+	// wins over the {provider} pattern, so a provider cannot be named
+	// "providers". Like the two routes above, these sit outside every
+	// authentication group: a caller here has no session yet by definition.
+	mux.Get("/console/identity/providers", s.controllers.ConsoleIdentity.Providers)
+	mux.Get("/console/identity/{provider}", s.controllers.ConsoleIdentity.Begin)
+	mux.Get("/console/identity/{provider}/callback", s.controllers.ConsoleIdentity.Callback)
+
 	// Console pages and assets (optional feature)
 	if s.controllers.Console != nil {
 		s.controllers.Console.Register(mux)
@@ -323,6 +331,9 @@ func carriesOwnBodyBound(r *http.Request) bool {
 // Console Session Grants:
 //   GET /launch?lt=<ticket>     - Spend a one-time launch ticket for a session
 //   POST /console/session       - Exchange a pasted local admin token for one
+//   GET /console/identity/providers            - List configured OAuth providers
+//   GET /console/identity/{provider}           - Start the provider's consent flow
+//   GET /console/identity/{provider}/callback  - Finish it and mint a session
 //
 // OpenAI-Compatible API (v1):
 //   POST /v1/chat/completions   - Create chat completion

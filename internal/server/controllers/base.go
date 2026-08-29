@@ -40,6 +40,7 @@ const (
 	errorCodeNotFound           = "not_found"
 	openRouterErrorTypeField    = "error_type"
 	providerField               = "provider"
+	providersField              = "providers"
 	responseCountField          = "count"
 	responseMessageField        = "message"
 	responsePaginationField     = "pagination"

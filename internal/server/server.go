@@ -109,6 +109,10 @@ type Dependencies struct {
 	// launch and every session cookie, which is the right answer for a
 	// gateway assembled without one: the bearer key path is unaffected.
 	LocalGate *localauth.Gate
+	// IdentityAuth is the OAuth acquisition path, or nil when this
+	// deployment configured no identity provider. The identity routes stay
+	// mounted either way and refuse with the operator's answer when nil.
+	IdentityAuth controllers.IdentityAuthenticator
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -176,6 +180,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		AllowRemoteNoAuth:  config.AllowRemoteNoAuth,
 		Console:            dependencies.Console,
 		LocalGate:          dependencies.LocalGate,
+		IdentityAuth:       dependencies.IdentityAuth,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

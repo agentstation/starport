@@ -44,6 +44,7 @@ type Controllers struct {
 	Auth                 *AuthController
 	Launch               *LaunchController
 	ConsoleSession       *ConsoleSessionController
+	ConsoleIdentity      *ConsoleIdentityController
 	Console              console.PageServer
 }
 
@@ -91,6 +92,10 @@ type Config struct {
 	// LocalGate redeems console launch tickets. A nil gate refuses every
 	// launch, which is what a gateway with no local admin token should do.
 	LocalGate *localauth.Gate
+	// IdentityAuth is the OAuth acquisition path, or nil on a deployment
+	// with no identity provider configured. Nil keeps the identity routes
+	// mounted and refusing with the operator's answer.
+	IdentityAuth IdentityAuthenticator
 }
 
 // NewControllers creates a new controller collection
@@ -125,6 +130,7 @@ func NewControllers(cfg Config) *Controllers {
 		Auth:               NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
 		Launch:             NewLaunchController(cfg.LocalGate),
 		ConsoleSession:     NewConsoleSessionController(cfg.LocalGate),
+		ConsoleIdentity:    NewConsoleIdentityController(cfg.IdentityAuth, cfg.LocalGate),
 		Console:            cfg.Console,
 	}
 

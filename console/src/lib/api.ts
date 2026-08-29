@@ -107,6 +107,36 @@ export async function openSession(token: string): Promise<void> {
   for (const listener of credentialListeners) listener();
 }
 
+// IDENTITY_PATH is the acquisition surface an operator can configure: the
+// provider list the first-contact page reads before drawing anything, and the
+// per-provider path a browser navigates to when the reader picks one. Like
+// SESSION_PATH, it is addressed literally rather than through `request`,
+// because the reader holds no credential yet.
+const IDENTITY_PATH = "/console/identity";
+
+// identityProviders reports which identity providers this deployment
+// configured. An unconfigured deployment answers with an empty list, and so
+// does any failure here: first contact renders the same page either way, just
+// without the provider choices.
+export async function identityProviders(): Promise<string[]> {
+  try {
+    const response = await fetch(`${IDENTITY_PATH}/providers`);
+    if (!response.ok) return [];
+    const parsed = (await response.json()) as { providers?: unknown };
+    if (!Array.isArray(parsed.providers)) return [];
+    return parsed.providers.filter((name): name is string => typeof name === "string");
+  } catch {
+    return [];
+  }
+}
+
+// identityBeginPath is where a browser goes to authenticate through a named
+// provider. It is a full navigation, not a fetch: the gateway answers with a
+// redirect to the provider's consent page, and the browser must follow it.
+export function identityBeginPath(provider: string): string {
+  return `${IDENTITY_PATH}/${encodeURIComponent(provider)}`;
+}
+
 // authorization names the credential to the gateway. A session sends no header
 // at all: the browser attaches its cookie, and this code cannot read it.
 function authorization(held: Credential): Record<string, string> {

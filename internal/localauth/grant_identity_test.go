@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// providerStub stands in for the thing no shipped build has. It exists so the
+// providerStub stands in for a configured acquisition path. It exists so the
 // wired path is proved rather than described: a seam whose only tested state is
 // "refuses" is a seam nobody has checked can be filled.
 type providerStub struct {
@@ -19,12 +19,12 @@ type providerStub struct {
 
 func (p providerStub) Authenticate(string) (string, error) { return p.subject, p.err }
 
-// TestTheShippedGatewayConfiguresNoIdentityProvider holds the state this task
-// ships, and holds it as two separate facts. The grant has to be *registered* —
-// otherwise adding a provider means reopening the seam — and it has to refuse
-// with the error that says "not configured here" rather than the one that says
-// "no such thing", because those are different answers to give an operator.
-func TestTheShippedGatewayConfiguresNoIdentityProvider(t *testing.T) {
+// TestAnUnconfiguredGatewayRefusesIdentitySignIn holds the default state, and
+// holds it as two separate facts. The grant has to be *registered* — otherwise
+// adding a provider means reopening the seam — and it has to refuse with the
+// error that says "not configured here" rather than the one that says "no such
+// thing", because those are different answers to give an operator.
+func TestAnUnconfiguredGatewayRefusesIdentitySignIn(t *testing.T) {
 	gate := NewGate(testToken(t, 1), "127.0.0.1")
 
 	grant, err := gate.Grant(GrantIdentity)
@@ -34,6 +34,31 @@ func TestTheShippedGatewayConfiguresNoIdentityProvider(t *testing.T) {
 	_, _, err = gate.MintSession(GrantIdentity, GrantRequest{Claim: "any-code"}, time.Now())
 	require.ErrorIs(t, err, ErrIdentityProviderNotConfigured)
 	require.NotErrorIs(t, err, ErrGrantUnknown)
+}
+
+// TestUseIdentityProviderFillsTheSlot proves the composition root's one call
+// turns the inert grant into real sign-in, through the same registered grant
+// and the same minting path every other grant uses.
+func TestUseIdentityProviderFillsTheSlot(t *testing.T) {
+	token := testToken(t, 1)
+	gate := NewGate(token, "127.0.0.1")
+	gate.UseIdentityProvider(providerStub{subject: "google:114380"})
+
+	now := time.Now()
+	cookie, session, err := gate.MintSession(GrantIdentity, GrantRequest{Claim: "a-claim"}, now)
+	require.NoError(t, err)
+	require.Equal(t, GrantIdentity, session.Grant)
+	require.Equal(t, "google:114380", session.Subject)
+
+	verified, err := gate.Verify(cookie, now)
+	require.NoError(t, err)
+	require.Equal(t, "google:114380", verified.Subject)
+
+	// A nil provider is a no-op, not a reset: nothing may empty a filled slot
+	// back to inert by accident.
+	gate.UseIdentityProvider(nil)
+	_, _, err = gate.MintSession(GrantIdentity, GrantRequest{Claim: "a-claim"}, now)
+	require.NotErrorIs(t, err, ErrIdentityProviderNotConfigured)
 }
 
 // TestAProviderVouchedSessionCarriesItsSubject proves the seam can be filled.

@@ -12,6 +12,18 @@
 #     states its trust scope and never stores the token it accepts,
 #   - the words "sign in" belong to the identity grant alone.
 #
+# Revised for CSH-F2 (credential-sharing plan): the identity slot is now
+# fillable — internal/identity resolves an OAuth callback to a user and the
+# composition root hands it to the gate — so the surfaces that ARE the
+# identity grant may now spend its words. The V16 exceptions widened from the
+# two files that state the reservation to the identity acquisition surface:
+# internal/identity, the gate file whose UseIdentityProvider doc names what
+# the slot becomes, the identity grant's own test, the console-identity
+# controller, and the console component that draws the provider choices.
+# Every machine-local surface (launch, session paste, CLI, first-contact
+# copy) stays in the scan. The grant still ships inert: an unconfigured
+# deployment refuses, which CSG-V09 continues to hold.
+#
 # It reports every condition and exits nonzero while any condition fails.
 set -u
 
@@ -86,8 +98,11 @@ check CSG-V15 "the gateway key card no longer stands in for first contact" \
 # reserved_words_respected reports that no machine-local surface spends the
 # words the identity grant owns. A launch ticket and a pasted token say where
 # you are; only an identity provider says who you are, and only it may call
-# that signing in. The exceptions are the files that own the reservation --
-# grant_identity.go and the line in grant.go that states it.
+# that signing in. The exceptions are the surfaces that are the identity
+# grant: the files that state the reservation (grant_identity.go, grant.go),
+# the grant's test and the gate slot that fills it, the identity package that
+# performs the OAuth dance, its HTTP controller, and the console component
+# that renders the provider choices (see the CSH-F2 revision above).
 #
 # The trailing word boundary is what makes the condition usable: without it,
 # every HMAC "signing key" and the phrase "catalog intersection" report as
@@ -99,7 +114,7 @@ reserved_words_respected() {
       --include='*.go' --include='*.ts' --include='*.tsx' --include='*.md' \
       --exclude='routeTree.gen.ts' \
       internal cmd console/src README.md docs/OPERATOR-GUIDE.md \
-    | grep -vE 'internal/localauth/(grant_identity|grant)\.go' \
+    | grep -vE 'internal/localauth/(grant_identity(_test)?|grant|gate)\.go|internal/identity/|internal/server/controllers/console_identity(_test)?\.go|console/src/components/auth/IdentitySignIn' \
     | grep -q .
 }
 

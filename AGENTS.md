@@ -133,10 +133,12 @@ terminal at 26 conditions (`AON-V01` through `AON-V26`) and runs in CI.
 `scripts/verify-console-session-grants.sh` guards how a console session is
 minted: one registered set of grants, two machine-local ones that ship (a
 launch ticket and the local admin token a reader pastes), an identity grant
-that is registered and inert, one first-contact page outside the shell that
-states its trust scope, and the words *sign in* reserved for the identity
-grant alone. It is terminal at 16 conditions (`CSG-V01` through `CSG-V16`) and
-runs in CI.
+that ships inert and is filled only when an operator configures an identity
+provider (`internal/identity` performs the OAuth dance and the composition
+root fills the slot), one first-contact page outside the shell that states
+its trust scope, and the words *sign in* reserved for the identity grant's
+own surfaces alone. It is terminal at 16 conditions (`CSG-V01` through
+`CSG-V16`) and runs in CI.
 
 `scripts/verify-model-modalities.sh` guards the media surface: the modality
 vocabulary, the operation set, the catalog projection that names what each

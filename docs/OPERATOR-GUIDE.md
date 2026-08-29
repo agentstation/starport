@@ -140,7 +140,7 @@ registered, and the console session route accepts them by name:
 | --- | --- | --- | --- |
 | `ticket` | a one-time launch ticket in the URL | where you are | yes |
 | `local-token` | the local admin token, pasted | where you are | yes |
-| `identity` | an identity provider assertion | who you are | registered, no provider |
+| `identity` | an identity provider assertion | who you are | inert until configured |
 
 The first two are machine-local by construction. A launch ticket is minted from
 the token file by `starport ui` or printed at start, and the paste path compares
@@ -155,18 +155,56 @@ starport auth token --copy   # the token, on this machine's clipboard
 starport auth url --open     # a launch link, opened here
 ```
 
-The third grant is registered and refuses every request with
-`ErrIdentityProviderNotConfigured`. No provider ships. It exists so that an
-enterprise deployment adds a provider to a route that is already there, with
-its refusal already held by a contract test, rather than reopening the seam.
-It is also the only grant allowed to describe itself in the vocabulary of
-identity; no machine-local surface uses those words, and
-`scripts/verify-console-session-grants.sh` enforces that.
+The third grant ships inert: with nothing configured it refuses every request
+with `ErrIdentityProviderNotConfigured`, and the routes answer that this
+deployment configured no identity provider. An operator fills the slot with
+the `STARPORT_IDENTITY_OAUTH_*` settings below. It is also the only grant
+allowed to describe itself in the vocabulary of identity; no machine-local
+surface uses those words, and `scripts/verify-console-session-grants.sh`
+enforces that.
 
 For a deployment where the operator is not at the machine, the console takes a
 gateway API key instead. That is a different credential with different
 consequences: it authenticates a caller and is metered against an account, where
 the token above is the operator of the machine.
+
+### Identity providers
+
+An enterprise deployment lets people authenticate through an identity
+provider the operator registers with that provider. Two are supported, and
+either or both may be configured:
+
+```bash
+# Where the provider sends the browser back. Defaults to the gateway's own
+# bind address, which is right for local use; a deployment behind a proxy or
+# a domain sets the address the browser actually reaches.
+STARPORT_IDENTITY_OAUTH_CALLBACK_BASE_URL=https://gateway.example.com
+
+STARPORT_IDENTITY_OAUTH_GOOGLE_CLIENT_ID=…
+STARPORT_IDENTITY_OAUTH_GOOGLE_CLIENT_SECRET=…
+
+STARPORT_IDENTITY_OAUTH_GITHUB_CLIENT_ID=…
+STARPORT_IDENTITY_OAUTH_GITHUB_CLIENT_SECRET=…
+```
+
+Register the callback address with the provider as
+`<base>/console/identity/<provider>/callback`. A configured provider appears
+on the first-contact page as a choice; choosing it runs the provider's
+consent flow and comes back with the same session cookie every other grant
+mints, recording the provider-issued subject it was minted for. The person's
+record — subject, email, display name — is upserted in the identity store on
+each pass, so a returning person is the same user.
+
+The identity records live in the relational store — the embedded SQLite by
+default, or the configured Postgres or MySQL. A half-configured provider (an
+ID without its secret, or the reverse) is refused at start rather than
+silently skipped.
+
+The identity routes stay mounted on every deployment.
+`GET /console/identity/providers` answers with the configured list — empty
+when there is none — and the other identity routes answer 503 naming these
+settings, so a reader learns the deployment has no identity provider rather
+than guessing at an absent feature.
 
 ### Rotation
 

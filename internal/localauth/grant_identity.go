@@ -53,17 +53,20 @@ type IdentityProvider interface {
 
 // identityGrant admits a browser an identity provider vouched for.
 //
-// It ships registered and inert. That is deliberate: an unregistered grant is a
-// refactor waiting to happen, and the two machine-local grants would grow into
-// the enterprise case by accident and take the word "sign in" with them. A
-// registered grant that refuses with a named error is a state a test can hold,
-// so adding a provider fills a slot instead of reopening this seam.
+// It ships registered and inert by default. That is deliberate: an
+// unregistered grant is a refactor waiting to happen, and the two
+// machine-local grants would grow into the enterprise case by accident and
+// take the word "sign in" with them. A registered grant that refuses with a
+// named error is a state a test can hold, and filling the slot is one call —
+// Gate.UseIdentityProvider — made only by the composition root when an
+// operator has configured a provider.
 type identityGrant struct {
 	token Token
 
-	// provider is nil in every shipped build. Nothing in this repository sets
-	// it, and identity_test.go asserts that, so the inert state is a decision
-	// rather than an omission.
+	// provider is nil until the composition root supplies one through
+	// Gate.UseIdentityProvider. A deployment with no identity configuration
+	// never sets it, and the inert refusal below is that deployment's whole
+	// identity surface.
 	provider IdentityProvider
 }
 

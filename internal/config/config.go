@@ -28,6 +28,7 @@ type Config struct {
 	Files             FilesConfig        `env:",prefix=FILES_"`
 	Jobs              JobsConfig         `env:",prefix=JOBS_"`
 	Console           ConsoleConfig      `env:",prefix=CONSOLE_"`
+	Identity          IdentityConfig     `env:",prefix=IDENTITY_"`
 
 	providerEnvironment  environmentLookup
 	credentialResolver   *credentials.Resolver
