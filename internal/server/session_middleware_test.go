@@ -49,11 +49,11 @@ func callWithSession(
 	cookie string,
 ) (int, *identity.APIKey, string, bool) {
 	var seen *identity.APIKey
-	var seenTenant string
+	var seenAccount string
 	var seenSecret bool
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen, _ = requestctx.GetAPIKeyModel(r.Context())
-		seenTenant = requestctx.TenantIDOrDefault(r.Context())
+		seenAccount = requestctx.AccountIDOrDefault(r.Context())
 		_, seenSecret = requestctx.GetAPIKey(r.Context())
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -63,20 +63,20 @@ func callWithSession(
 	}
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	return recorder.Code, seen, seenTenant, seenSecret
+	return recorder.Code, seen, seenAccount, seenSecret
 }
 
 func TestASessionAuthenticatesWithNoBearerKey(t *testing.T) {
 	token := sessionToken(t, 2)
 	middleware := sessionHarness(t, localauth.NewGate(token, "127.0.0.1"))
 
-	status, seen, tenantID, carriedSecret := callWithSession(middleware, openSession(t, token))
+	status, seen, accountID, carriedSecret := callWithSession(middleware, openSession(t, token))
 
 	require.Equal(t, http.StatusOK, status)
 	require.NotNil(t, seen)
 	assert.Equal(t, identity.LocalOperatorKeyID, seen.ID)
 	assert.True(t, seen.HasScope("admin"), "a session holder is the machine's operator")
-	assert.Equal(t, "default", tenantID)
+	assert.Equal(t, "default", accountID)
 	// Nothing downstream may believe a bearer key was presented. A reader that
 	// found one here would be holding the session cookie and free to forward it.
 	assert.False(t, carriedSecret, "a session must not appear as a gateway API key")

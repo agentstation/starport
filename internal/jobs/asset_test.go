@@ -64,7 +64,7 @@ func finishingRunner() *recordingRunner {
 // TestAFinishedJobFetchesItsAssetOnce is the property the whole retention rule
 // rests on. A caller polls until it sees a terminal answer and usually once
 // more after that. Each of those reads has to cost no second provider request,
-// no second use of the tenant's credential, and no second stored copy.
+// no second use of the account's credential, and no second stored copy.
 func TestAFinishedJobFetchesItsAssetOnce(t *testing.T) {
 	t.Parallel()
 
@@ -72,10 +72,10 @@ func TestAFinishedJobFetchesItsAssetOnce(t *testing.T) {
 	service, _, store, _ := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
-	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	finished, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCompleted, finished.State)
 	require.NotEmpty(t, finished.AssetKey)
@@ -89,7 +89,7 @@ func TestAFinishedJobFetchesItsAssetOnce(t *testing.T) {
 	require.Equal(t, []int64{assetBound}, runner.bounds)
 
 	for range 5 {
-		polled, err := service.Refresh(ctx, runner, tenantA, job.ID)
+		polled, err := service.Refresh(ctx, runner, accountA, job.ID)
 		require.NoError(t, err)
 		require.Equal(t, finished.AssetKey, polled.AssetKey)
 	}
@@ -97,7 +97,7 @@ func TestAFinishedJobFetchesItsAssetOnce(t *testing.T) {
 
 	// One key, one object. A second fetch would have written a second one and
 	// left the first unreachable.
-	stored, reader, err := service.Open(ctx, tenantA, job.ID)
+	stored, reader, err := service.Open(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	defer func() { _ = reader.Close() }()
 	bytes, err := io.ReadAll(reader)
@@ -122,20 +122,20 @@ func TestAFailedFetchLeavesACompletedJobAndRetries(t *testing.T) {
 	runner := finishingRunner()
 	runner.fetchErr = errProviderUnreachable
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
-	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	finished, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCompleted, finished.State)
 	require.Empty(t, finished.AssetKey)
 	require.Equal(t, 1, runner.fetches)
 
-	_, _, err = service.Open(ctx, tenantA, job.ID)
+	_, _, err = service.Open(ctx, accountA, job.ID)
 	require.ErrorIs(t, err, jobs.ErrAssetNotFound)
 
 	runner.fetchErr = nil
-	collected, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	collected, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, collected.AssetKey)
 	require.Equal(t, 2, runner.fetches)
@@ -143,7 +143,7 @@ func TestAFailedFetchLeavesACompletedJobAndRetries(t *testing.T) {
 
 // TestTheSweepDeletesAnAssetPastItsWindow is the retention rule. The bytes go
 // and the record stays: a completed job stays completed after its asset
-// expires, because the work happened and the tenant paid for it. The expired
+// expires, because the work happened and the account paid for it. The expired
 // marker is what separates that from a job that never produced an asset.
 func TestTheSweepDeletesAnAssetPastItsWindow(t *testing.T) {
 	t.Parallel()
@@ -152,9 +152,9 @@ func TestTheSweepDeletesAnAssetPastItsWindow(t *testing.T) {
 	service, records, store, clock := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	finished, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.True(t, finished.HasAsset())
 
@@ -172,7 +172,7 @@ func TestTheSweepDeletesAnAssetPastItsWindow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Expired)
 
-	expired, err := records.Get(ctx, tenantA, job.ID)
+	expired, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCompleted, expired.State)
 	require.Equal(t, clock.now, expired.AssetExpiredAt)
@@ -199,13 +199,13 @@ func TestAnAssetPastItsWindowIsRefusedBeforeTheSweepRuns(t *testing.T) {
 	service, _, store, clock := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	finished, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 
 	clock.now = finished.AssetExpiresAt.Add(time.Second)
-	expired, reader, err := service.Open(ctx, tenantA, job.ID)
+	expired, reader, err := service.Open(ctx, accountA, job.ID)
 	require.ErrorIs(t, err, jobs.ErrAssetExpired)
 	require.Nil(t, reader)
 	require.False(t, expired.AssetExpiredAt.IsZero())
@@ -226,12 +226,12 @@ func TestAJobKeepsTheWindowItWasPromised(t *testing.T) {
 	service, records, _, _ := newAssetService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	finished, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 
-	stored, err := records.Get(ctx, tenantA, job.ID)
+	stored, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, finished.AssetExpiresAt, stored.AssetExpiresAt)
 	require.Equal(t, retentionWindow, service.Retention())
@@ -247,9 +247,9 @@ func TestAJobWithNoByteStoreCollectsNothing(t *testing.T) {
 	service, _ := newService(t)
 	runner := finishingRunner()
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
-	finished, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	finished, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCompleted, finished.State)
 	require.Empty(t, finished.AssetKey)

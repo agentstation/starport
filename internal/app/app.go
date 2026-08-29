@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/availability"
 	"github.com/agentstation/starport/internal/blob"
@@ -39,7 +40,6 @@ import (
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server"
 	"github.com/agentstation/starport/internal/storage"
-	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/tokenize"
 	"github.com/agentstation/starport/internal/usage"
 )
@@ -168,7 +168,7 @@ type runtimeBuilder struct {
 	config       *config.Config
 	factories    runtimeFactories
 	identities   identity.Repository
-	tenants      tenant.Repository
+	accounts     account.Repository
 	providerKeys keyring.ProviderKeys
 	rateLimits   ratelimit.Repository
 	usageRecords usage.Repository
@@ -382,19 +382,19 @@ func (b *runtimeBuilder) openConcepts() error {
 //
 // The four steps run together because each one is unreadable without the ones
 // before it: a gateway API key names an identity, an identity resolves to a
-// tenant, and the authentication mode decides whether a deployment is allowed
+// account, and the authentication mode decides whether a deployment is allowed
 // to hold no identity at all.
 func (b *runtimeBuilder) openAccountIdentity() error {
 	var err error
-	b.tenants, err = tenant.Open(b.application.store)
+	b.accounts, err = account.Open(b.application.store)
 	if err != nil {
-		return fmt.Errorf("open tenant repository: %w", err)
+		return fmt.Errorf("open account repository: %w", err)
 	}
-	// Every gateway API key resolves to a tenant, so the canonical tenant has
+	// Every gateway API key resolves to an account, so the canonical account has
 	// to exist before the first key is read. The call is idempotent and safe
 	// against a concurrent boot.
-	if _, err := b.tenants.EnsureDefault(context.Background()); err != nil {
-		return fmt.Errorf("ensure the default tenant: %w", err)
+	if _, err := b.accounts.EnsureDefault(context.Background()); err != nil {
+		return fmt.Errorf("ensure the default account: %w", err)
 	}
 	b.identities, err = identity.Open(b.application.store)
 	if err != nil {
@@ -417,7 +417,7 @@ func (b *runtimeBuilder) openFileService() error {
 	if err != nil {
 		return fmt.Errorf("open file repository: %w", err)
 	}
-	// The meter counts every tenant's stored bytes whether or not a bound is
+	// The meter counts every account's stored bytes whether or not a bound is
 	// set. A deployment that sets one later reads a true total rather than a
 	// zero over storage that is already full.
 	meter, err := limits.NewStorageMeter(b.application.store)
@@ -590,7 +590,7 @@ func (b *runtimeBuilder) fileBackend() string {
 
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config, b.auth), server.Dependencies{
-		Service: b.gateway, Identities: b.identities, Tenants: b.tenants,
+		Service: b.gateway, Identities: b.identities, Accounts: b.accounts,
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,

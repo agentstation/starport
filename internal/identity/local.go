@@ -18,7 +18,7 @@ const LocalOperatorKeyID = "local-operator"
 // Granting it less than everything would not withhold any power; it would only
 // send an operator to a terminal to do what the console refused.
 //
-// It names no account, so it resolves to the canonical tenant through the same
+// It names no account, so it resolves to the canonical account through the same
 // rule every issued key uses. An operator who wants a session metered against a
 // different account changes what that rule returns rather than what a cookie
 // claims.

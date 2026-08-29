@@ -17,17 +17,17 @@ import { SidePanel } from "@/components/ui/SidePanel";
 import {
   accessMessage,
   ApiError,
-  createTenant,
+  createAccount,
   CREDENTIAL_STRATEGY_LABELS,
-  DEFAULT_TENANT_ID,
-  deleteTenant,
+  DEFAULT_ACCOUNT_ID,
+  deleteAccount,
   listKeys,
-  listTenants,
-  updateTenant,
+  listAccounts,
+  updateAccount,
   type CredentialStrategy,
   type GatewayKey,
-  type Tenant,
-  type TenantLimits,
+  type Account,
+  type AccountLimits,
 } from "@/lib/api";
 import {
   formatCount,
@@ -43,22 +43,22 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 // BYOK is here and on no other screen: the deployment-wide credential an
 // operator applies belongs to no account and is edited on the provider itself.
 //
-// "Account" is the word on screen and `tenant_id` is the identifier on the
-// wire. The wire word is the one the gateway, the keys, and the routes already
-// use, so renaming it in the console would cost a translation at every seam.
+// "Account" is the one word, on screen and on the wire (`account_id`). It is
+// deliberately not "tenant": a tenant connotes allocated compute, while this
+// unit carries identity, limits, and credential policy.
 
-export const Route = createFileRoute("/tenants")({
-  component: TenantsPage,
+export const Route = createFileRoute("/accounts")({
+  component: AccountsPage,
 });
 
 const STRATEGIES = Object.keys(CREDENTIAL_STRATEGY_LABELS) as CredentialStrategy[];
 
-const TENANTS_KEY = ["tenants"];
+const ACCOUNTS_KEY = ["accounts"];
 
 // LimitChips states the account ceiling. It is not a key's ceiling: a request
 // from any key in the account counts against these, and a key with its own
 // limit satisfies both.
-function LimitChips({ limits }: { limits: TenantLimits | null | undefined }) {
+function LimitChips({ limits }: { limits: AccountLimits | null | undefined }) {
   const chips: string[] = [];
   if (limits?.requests?.limit) {
     chips.push(
@@ -90,12 +90,12 @@ function LimitChips({ limits }: { limits: TenantLimits | null | undefined }) {
 
 // --- Account detail ---
 
-function TenantDetail({
-  tenant,
+function AccountDetail({
+  account,
   keys,
   onClose,
 }: {
-  tenant: Tenant;
+  account: Account;
   keys: GatewayKey[];
   onClose: () => void;
 }) {
@@ -104,23 +104,23 @@ function TenantDetail({
 
   const strategy = useMutation({
     mutationFn: (next: CredentialStrategy) =>
-      updateTenant(tenant.id, { credential_strategy: next }),
+      updateAccount(account.id, { credential_strategy: next }),
     onSuccess: async () => {
       setStrategyError(null);
-      await queryClient.invalidateQueries({ queryKey: TENANTS_KEY });
+      await queryClient.invalidateQueries({ queryKey: ACCOUNTS_KEY });
     },
     onError: (error) =>
       setStrategyError(error instanceof Error ? error.message : String(error)),
   });
 
   return (
-    <SidePanel title={tenant.name || tenant.id} onClose={onClose}>
+    <SidePanel title={account.name || account.id} onClose={onClose}>
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-text-2">Account ID</span>
-          <span className="font-mono text-sm text-text-1">{tenant.id}</span>
+          <span className="font-mono text-sm text-text-1">{account.id}</span>
           <span className="text-xs text-text-4">
-            created {formatRelativeTime(tenant.created_at)}
+            created {formatRelativeTime(account.created_at)}
           </span>
         </div>
 
@@ -129,7 +129,7 @@ function TenantDetail({
           hint="Which credentials serve this account, and in which order."
         >
           <Select
-            value={tenant.credential_strategy ?? "operator_first"}
+            value={account.credential_strategy ?? "operator_first"}
             onChange={(event) =>
               strategy.mutate(event.target.value as CredentialStrategy)
             }
@@ -149,7 +149,7 @@ function TenantDetail({
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-text-2">Account limits</span>
-          <LimitChips limits={tenant.limits} />
+          <LimitChips limits={account.limits} />
           <span className="text-xs text-text-4">
             Metered across every key in the account. A key with its own limit
             satisfies both.
@@ -191,7 +191,7 @@ function TenantDetail({
           </Link>
         </div>
 
-        <ByokPanel tenantId={tenant.id} />
+        <ByokPanel accountId={account.id} />
       </div>
     </SidePanel>
   );
@@ -199,12 +199,12 @@ function TenantDetail({
 
 // --- Create ---
 
-function CreateTenantModal({
+function CreateAccountModal({
   onClose,
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: (tenant: Tenant) => void;
+  onCreated: (account: Account) => void;
 }) {
   const [id, setId] = useState("");
   const [name, setName] = useState("");
@@ -214,7 +214,7 @@ function CreateTenantModal({
 
   const create = useMutation({
     mutationFn: () =>
-      createTenant({
+      createAccount({
         id: id.trim(),
         name: name.trim() || undefined,
         credential_strategy: strategy,
@@ -286,7 +286,7 @@ function CreateTenantModal({
 
 // --- Page ---
 
-function TenantsPage() {
+function AccountsPage() {
   const access = useGatewayAccess();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
@@ -295,9 +295,9 @@ function TenantsPage() {
     null,
   );
 
-  const tenants = useQuery({
-    queryKey: TENANTS_KEY,
-    queryFn: listTenants,
+  const accounts = useQuery({
+    queryKey: ACCOUNTS_KEY,
+    queryFn: listAccounts,
     enabled: access,
     retry: false,
   });
@@ -309,11 +309,11 @@ function TenantsPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (tenantId: string) => deleteTenant(tenantId),
-    onSuccess: async (_result, tenantId) => {
-      setNotice({ text: `Account ${tenantId} deleted` });
+    mutationFn: (accountId: string) => deleteAccount(accountId),
+    onSuccess: async (_result, accountId) => {
+      setNotice({ text: `Account ${accountId} deleted` });
       setSelected(null);
-      await queryClient.invalidateQueries({ queryKey: TENANTS_KEY });
+      await queryClient.invalidateQueries({ queryKey: ACCOUNTS_KEY });
     },
     onError: (error) =>
       setNotice({
@@ -323,22 +323,22 @@ function TenantsPage() {
   });
 
 
-  const rows = tenants.data ?? [];
-  const keysFor = (tenantId: string) =>
+  const rows = accounts.data ?? [];
+  const keysFor = (accountId: string) =>
     (keys.data ?? []).filter(
-      (apiKey) => (apiKey.tenant_id || DEFAULT_TENANT_ID) === tenantId,
+      (apiKey) => (apiKey.account_id || DEFAULT_ACCOUNT_ID) === accountId,
     );
 
   let body: ReactNode;
-  if (tenants.error) {
+  if (accounts.error) {
     body = (
       <p className="text-base text-text-3">
-        {tenants.error instanceof ApiError && tenants.error.needsKey
-          ? accessMessage(tenants.error, "admin")
-          : `Failed to load accounts: ${tenants.error.message}`}
+        {accounts.error instanceof ApiError && accounts.error.needsKey
+          ? accessMessage(accounts.error, "admin")
+          : `Failed to load accounts: ${accounts.error.message}`}
       </p>
     );
-  } else if (tenants.isPending) {
+  } else if (accounts.isPending) {
     body = <p className="text-base text-text-3">Loading accounts…</p>;
   } else {
     body = (
@@ -355,51 +355,51 @@ function TenantsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((tenant) => (
+            {rows.map((account) => (
               <tr
-                key={tenant.id}
-                data-testid="tenant-row"
+                key={account.id}
+                data-testid="account-row"
                 className="border-b border-border-1 last:border-0"
               >
                 <td className="px-4 py-2">
                   <button
                     type="button"
-                    onClick={() => setSelected(tenant.id)}
+                    onClick={() => setSelected(account.id)}
                     className="font-mono text-xs text-accent-link transition-colors duration-150 ease-standard hover:underline"
                   >
-                    {tenant.id}
+                    {account.id}
                   </button>
-                  {tenant.id === DEFAULT_TENANT_ID && (
+                  {account.id === DEFAULT_ACCOUNT_ID && (
                     <span className="ml-2 inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 text-xs text-text-3">
                       canonical
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-text-2">{tenant.name || "—"}</td>
+                <td className="px-4 py-2 text-text-2">{account.name || "—"}</td>
                 <td className="px-4 py-2 text-xs text-text-3">
                   {
                     CREDENTIAL_STRATEGY_LABELS[
-                      tenant.credential_strategy ?? "operator_first"
+                      account.credential_strategy ?? "operator_first"
                     ]
                   }
                 </td>
                 <td className="px-4 py-2">
-                  <LimitChips limits={tenant.limits} />
+                  <LimitChips limits={account.limits} />
                 </td>
                 <td className="px-4 py-2 tabular-nums text-text-2">
-                  {formatCount(keysFor(tenant.id).length)}
+                  {formatCount(keysFor(account.id).length)}
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-1">
-                    <RowAction onClick={() => setSelected(tenant.id)}>
+                    <RowAction onClick={() => setSelected(account.id)}>
                       open
                     </RowAction>
-                    {tenant.id !== DEFAULT_TENANT_ID && (
+                    {account.id !== DEFAULT_ACCOUNT_ID && (
                       <button
                         type="button"
-                        onClick={() => remove.mutate(tenant.id)}
+                        onClick={() => remove.mutate(account.id)}
                         disabled={remove.isPending}
-                        aria-label={`Delete the ${tenant.id} account`}
+                        aria-label={`Delete the ${account.id} account`}
                         className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
                       >
                         <Trash2 className="size-3.5" />
@@ -415,7 +415,7 @@ function TenantsPage() {
     );
   }
 
-  const open = rows.find((tenant) => tenant.id === selected);
+  const open = rows.find((account) => account.id === selected);
 
   return (
     <div className="flex flex-col gap-4">
@@ -433,20 +433,20 @@ function TenantsPage() {
       )}
       {body}
       {open && (
-        <TenantDetail
-          tenant={open}
+        <AccountDetail
+          account={open}
           keys={keysFor(open.id)}
           onClose={() => setSelected(null)}
         />
       )}
       {creating && (
-        <CreateTenantModal
+        <CreateAccountModal
           onClose={() => setCreating(false)}
-          onCreated={async (tenant) => {
+          onCreated={async (account) => {
             setCreating(false);
-            setNotice({ text: `Account ${tenant.id} created` });
-            await queryClient.invalidateQueries({ queryKey: TENANTS_KEY });
-            setSelected(tenant.id);
+            setNotice({ text: `Account ${account.id} created` });
+            await queryClient.invalidateQueries({ queryKey: ACCOUNTS_KEY });
+            setSelected(account.id);
           }}
         />
       )}

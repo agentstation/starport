@@ -27,7 +27,7 @@ func TestIdentityRepositoryContract(t *testing.T) {
 			Scopes:    []string{"chat:write"},
 			Active:    true,
 			CreatedAt: time.Unix(100, 0).UTC(),
-			Metadata:  map[string]any{"tenant": "tenant-a"},
+			Metadata:  map[string]any{"account": "account-a"},
 		}
 
 		created, err := repository.Create(ctx, apiKey)

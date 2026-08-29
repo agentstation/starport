@@ -246,7 +246,7 @@ func TestPutRejectsInvalidRecords(t *testing.T) {
 
 	// A scope that names no subject reads no counter set. Answering it with
 	// the gateway total would report every account's spend as one account's.
-	_, err = repository.Totals(ctx, TenantScope(""), IntervalDay, testBase)
+	_, err = repository.Totals(ctx, AccountScope(""), IntervalDay, testBase)
 	require.ErrorIs(t, err, ErrInvalidScope)
 }
 
@@ -260,13 +260,13 @@ func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
 		repository, err := Open(store, Options{})
 		require.NoError(t, err)
 
-		for _, spec := range []struct{ keyID, requestID, tenantID string }{
+		for _, spec := range []struct{ keyID, requestID, accountID string }{
 			{"key-a", "req-1", "acme"},
 			{"key-b", "req-2", "acme"},
 			{"key-c", "req-3", "globex"},
 		} {
 			record := testRecord(spec.keyID, spec.requestID, testBase)
-			record.TenantID = spec.tenantID
+			record.AccountID = spec.accountID
 			require.NoError(t, repository.Put(ctx, record))
 		}
 
@@ -274,12 +274,12 @@ func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, Totals{Requests: 1, Tokens: 150, SpendNanoUSD: 1_250_000}, perKey)
 
-		account, err := repository.Totals(ctx, TenantScope("acme"), IntervalDay, testBase)
+		account, err := repository.Totals(ctx, AccountScope("acme"), IntervalDay, testBase)
 		require.NoError(t, err)
 		require.Equal(t, Totals{Requests: 2, Tokens: 300, SpendNanoUSD: 2_500_000}, account,
 			"the account total must be the sum over every key it holds")
 
-		other, err := repository.Totals(ctx, TenantScope("globex"), IntervalDay, testBase)
+		other, err := repository.Totals(ctx, AccountScope("globex"), IntervalDay, testBase)
 		require.NoError(t, err)
 		require.Equal(t, Totals{Requests: 1, Tokens: 150, SpendNanoUSD: 1_250_000}, other,
 			"one account's traffic must not reach another account's counter")
@@ -295,17 +295,17 @@ func TestListByAccountSpansEveryKey(t *testing.T) {
 		repository, err := Open(store, Options{})
 		require.NoError(t, err)
 
-		for _, spec := range []struct{ keyID, requestID, tenantID string }{
+		for _, spec := range []struct{ keyID, requestID, accountID string }{
 			{"key-a", "req-1", "acme"},
 			{"key-b", "req-2", "acme"},
 			{"key-c", "req-3", "globex"},
 		} {
 			record := testRecord(spec.keyID, spec.requestID, testBase)
-			record.TenantID = spec.tenantID
+			record.AccountID = spec.accountID
 			require.NoError(t, repository.Put(ctx, record))
 		}
 
-		page, err := repository.List(ctx, Query{TenantID: "acme"})
+		page, err := repository.List(ctx, Query{AccountID: "acme"})
 		require.NoError(t, err)
 		require.Len(t, page.Records, 2)
 

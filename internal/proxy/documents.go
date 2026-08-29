@@ -29,12 +29,12 @@ type StoredDocument struct {
 // concept that owns a stored file keeps its own vocabulary and the proxy keeps
 // the one shape it needs.
 //
-// The tenant argument is not advisory. A resolver reports an identifier
+// The account argument is not advisory. A resolver reports an identifier
 // belonging to another account as absent, exactly as it reports an unknown
 // identifier, because an answer that distinguished the two would tell one
 // account which identifiers another account holds.
 type FileResolver interface {
-	ResolveDocument(ctx context.Context, tenant, id string) (StoredDocument, bool, error)
+	ResolveDocument(ctx context.Context, account, id string) (StoredDocument, bool, error)
 }
 
 // resolveDocuments returns the request the router runs, with every stored
@@ -68,7 +68,7 @@ func (p *proxy) resolveDocuments(ctx context.Context, req *ChatCompletionRequest
 	for messageIndex := range resolved.Request.Messages {
 		content := resolved.Request.Messages[messageIndex].Content
 		for partIndex := range content {
-			if err := p.resolvePart(ctx, resolved.TenantID, &content[partIndex], seen); err != nil {
+			if err := p.resolvePart(ctx, resolved.AccountID, &content[partIndex], seen); err != nil {
 				return nil, err
 			}
 		}
@@ -81,7 +81,7 @@ func (p *proxy) resolveDocuments(ctx context.Context, req *ChatCompletionRequest
 // untouched by this seam.
 func (p *proxy) resolvePart(
 	ctx context.Context,
-	tenant string,
+	account string,
 	part *inference.ContentPart,
 	seen map[string]StoredDocument,
 ) error {
@@ -94,7 +94,7 @@ func (p *proxy) resolvePart(
 	if !cached {
 		var found bool
 		var err error
-		stored, found, err = p.files.ResolveDocument(ctx, tenant, id)
+		stored, found, err = p.files.ResolveDocument(ctx, account, id)
 		if err != nil {
 			return fmt.Errorf("resolve stored file %q: %w", id, err)
 		}

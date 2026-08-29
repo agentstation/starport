@@ -163,7 +163,7 @@ check RNK-V14 "the refusal names the model and the operation rather than a provi
 check RNK-V15 "a rerank turn records a search unit count and a nonzero cost" \
   tests_all_present 'SearchUnits' 'record.Cost' -- internal/proxy
 
-check RNK-V16 "a tenant at its spend bound is refused before the provider call" \
+check RNK-V16 "an account at its spend bound is refused before the provider call" \
   tests_all_present 'LowestSearchUnitPrice' 'ErrSpendLimitExceeded' -- internal/proxy
 
 check RNK-V17 "a turn on an unpriced rerank offering fails rather than reporting zero" \

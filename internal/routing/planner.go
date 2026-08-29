@@ -26,8 +26,8 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 
 	modelRanks := requestedModelRanks(request)
 	providerRanks := orderedRanks(request.Providers.Order)
-	tenantModels := tenantModelSet(request.Tenant)
-	tenantProviders := normalizedSet(request.Tenant.AllowedProviders)
+	accountModels := accountModelSet(request.Account)
+	accountProviders := normalizedSet(request.Account.AllowedProviders)
 	onlyProviders := normalizedSet(request.Providers.Only)
 	ignoredProviders := normalizedSet(request.Providers.Ignore)
 	requiredCapabilities := normalizedSet(request.RequiredCapabilities)
@@ -47,8 +47,8 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 		if rejection, rejected := rejectCandidate(
 			candidate,
 			request,
-			tenantModels,
-			tenantProviders,
+			accountModels,
+			accountProviders,
 			onlyProviders,
 			ignoredProviders,
 			providerRanks,
@@ -211,7 +211,7 @@ type modelSelection struct {
 func requestedModelRanks(request Request) modelSelection {
 	models := append([]string(nil), request.Models...)
 	for index, modelID := range models {
-		if override, exists := request.Tenant.ModelOverrides[modelID]; exists && override != "" {
+		if override, exists := request.Account.ModelOverrides[modelID]; exists && override != "" {
 			models[index] = override
 		}
 	}
@@ -284,8 +284,8 @@ func unmatchedModelRejections(
 func rejectCandidate(
 	candidate Candidate,
 	request Request,
-	tenantModels map[string]struct{},
-	tenantProviders map[string]struct{},
+	accountModels map[string]struct{},
+	accountProviders map[string]struct{},
 	onlyProviders map[string]struct{},
 	ignoredProviders map[string]struct{},
 	providerRanks map[string]int,
@@ -310,12 +310,12 @@ func rejectCandidate(
 			return reject(RejectionMissingEndpoint, "offering has no usable operation endpoint")
 		}
 	}
-	if !modelAllowed(candidate.Route, tenantModels) {
-		return reject(RejectionTenantModel, "tenant policy denied the model")
+	if !modelAllowed(candidate.Route, accountModels) {
+		return reject(RejectionAccountModel, "account policy denied the model")
 	}
 	providerID := normalize(candidate.Route.ProviderID)
-	if !setAllows(providerID, tenantProviders) {
-		return reject(RejectionTenantProvider, "tenant policy denied the provider")
+	if !setAllows(providerID, accountProviders) {
+		return reject(RejectionAccountProvider, "account policy denied the provider")
 	}
 	if !setAllows(providerID, onlyProviders) {
 		return reject(RejectionProviderPolicy, "provider is not in the only list")
@@ -514,7 +514,7 @@ func exactSet(values []string) map[string]struct{} {
 	return result
 }
 
-func tenantModelSet(policy TenantPolicy) map[string]struct{} {
+func accountModelSet(policy AccountPolicy) map[string]struct{} {
 	allowed := exactSet(policy.AllowedModels)
 	for source, target := range policy.ModelOverrides {
 		if target == "" {

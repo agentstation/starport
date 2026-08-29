@@ -147,7 +147,7 @@ func (r *Runtime) Sync(
 	return result, state, nil
 }
 
-// PublishObservations reconciles tenant or operator observations through
+// PublishObservations reconciles account or operator observations through
 // Starmap, then activates the resulting immutable generation.
 func (r *Runtime) PublishObservations(
 	ctx context.Context,

@@ -312,7 +312,7 @@ Version 1 includes:
 - Reranking at `/v1/rerank` and `/api/v1/rerank`, which scores a document list
   against one query. It needs the `rerank:write` scope, and Starmap owns the
   offerings, the billing basis, and the price.
-- Tenant-safe response caching.
+- Account-safe response caching.
 - Badger storage for one process and Valkey storage for multiple processes.
 
 Starport uses direct changes and has no legacy provider aliases or storage

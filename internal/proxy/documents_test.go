@@ -18,7 +18,7 @@ import (
 // the point: the gateway promises one read for each request, and only a
 // counter separates that from one read for each attempt.
 type countingResolver struct {
-	tenant   string
+	account  string
 	files    map[string]StoredDocument
 	reads    int
 	failWith error
@@ -26,13 +26,13 @@ type countingResolver struct {
 
 func (r *countingResolver) ResolveDocument(
 	_ context.Context,
-	tenant, id string,
+	account, id string,
 ) (StoredDocument, bool, error) {
 	r.reads++
 	if r.failWith != nil {
 		return StoredDocument{}, false, r.failWith
 	}
-	if tenant != r.tenant {
+	if account != r.account {
 		return StoredDocument{}, false, nil
 	}
 	stored, ok := r.files[id]
@@ -42,7 +42,7 @@ func (r *countingResolver) ResolveDocument(
 // documentRequest builds a chat request whose single part names one document.
 // A nil fileID sends the bytes inline instead, which is the shape the stored
 // path has to reproduce exactly.
-func documentRequest(tenant, fileID, filename string, inline []byte) *ChatCompletionRequest {
+func documentRequest(account, fileID, filename string, inline []byte) *ChatCompletionRequest {
 	document := &inference.Document{Filename: filename}
 	if fileID != "" {
 		document.FileID = fileID
@@ -50,7 +50,7 @@ func documentRequest(tenant, fileID, filename string, inline []byte) *ChatComple
 		document.URL = documentDataURL(StoredDocument{Filename: filename, Data: inline})
 	}
 	return &ChatCompletionRequest{
-		TenantID: tenant,
+		AccountID: account,
 		Request: inference.ChatRequest{
 			Model: "openai/gpt-4o",
 			Messages: []inference.Message{{
@@ -73,51 +73,51 @@ func TestAStoredFileReachesTheProviderAsInlineBytesDo(t *testing.T) {
 	t.Parallel()
 	payload := []byte("%PDF-1.7 quarterly results")
 	resolver := &countingResolver{
-		tenant: "tenant-a",
-		files:  map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: payload}},
+		account: "account-a",
+		files:   map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: payload}},
 	}
 
 	storedRouter := &capturingRouter{}
 	stored := &proxy{router: storedRouter, files: resolver}
 	_, err := stored.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-a", "file-1", "report.pdf", nil))
+		documentRequest("account-a", "file-1", "report.pdf", nil))
 	require.NoError(t, err)
 
 	inlineRouter := &capturingRouter{}
 	inline := &proxy{router: inlineRouter}
 	_, err = inline.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-a", "", "report.pdf", payload))
+		documentRequest("account-a", "", "report.pdf", payload))
 	require.NoError(t, err)
 
 	require.Equal(t, inlineRouter.req.ChatRequest, storedRouter.req.ChatRequest,
 		"a stored document reached the provider as a different request")
 }
 
-// TestAnotherTenantsFileIsNotFoundBeforeAnyProviderCall holds the second half
+// TestAnotherAccountsFileIsNotFoundBeforeAnyProviderCall holds the second half
 // of FIL-V18.
 //
 // The refusal has to land before routing, not as a provider failure, because a
 // request that reached a provider has already spent a credential and a
 // caller's money on a file the caller may not read. The identifier exists;
 // the answer must not say so.
-func TestAnotherTenantsFileIsNotFoundBeforeAnyProviderCall(t *testing.T) {
+func TestAnotherAccountsFileIsNotFoundBeforeAnyProviderCall(t *testing.T) {
 	t.Parallel()
 	resolver := &countingResolver{
-		tenant: "tenant-a",
-		files:  map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("private")}},
+		account: "account-a",
+		files:   map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("private")}},
 	}
 	router := &capturingRouter{}
 	service := &proxy{router: router, files: resolver}
 
 	_, err := service.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-b", "file-1", "report.pdf", nil))
+		documentRequest("account-b", "file-1", "report.pdf", nil))
 	require.ErrorIs(t, err, ErrStoredFileNotFound)
 	require.Nil(t, router.req, "the refused request reached the router")
 
 	// An identifier nobody holds reads exactly the same way, so the refusal
 	// tells a caller nothing about which identifiers exist.
 	_, unknownErr := service.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-a", "file-404", "report.pdf", nil))
+		documentRequest("account-a", "file-404", "report.pdf", nil))
 	require.ErrorIs(t, unknownErr, ErrStoredFileNotFound)
 }
 
@@ -171,14 +171,14 @@ func (r *retryingRouter) RouteEmbeddings(context.Context, *routepkg.EmbeddingReq
 func TestARetryReadsTheStoredBytesOnce(t *testing.T) {
 	t.Parallel()
 	resolver := &countingResolver{
-		tenant: "tenant-a",
-		files:  map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("bytes")}},
+		account: "account-a",
+		files:   map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("bytes")}},
 	}
 	router := &retryingRouter{}
 	service := &proxy{router: router, files: resolver}
 
 	_, err := service.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-a", "file-1", "report.pdf", nil))
+		documentRequest("account-a", "file-1", "report.pdf", nil))
 	require.NoError(t, err)
 	require.Equal(t, 3, router.attempts, "the router did not retry")
 	require.Equal(t, 1, resolver.reads)
@@ -190,12 +190,12 @@ func TestARetryReadsTheStoredBytesOnce(t *testing.T) {
 func TestOneRequestNamingAFileTwiceReadsItOnce(t *testing.T) {
 	t.Parallel()
 	resolver := &countingResolver{
-		tenant: "tenant-a",
-		files:  map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("bytes")}},
+		account: "account-a",
+		files:   map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("bytes")}},
 	}
 	service := &proxy{router: &capturingRouter{}, files: resolver}
 
-	request := documentRequest("tenant-a", "file-1", "report.pdf", nil)
+	request := documentRequest("account-a", "file-1", "report.pdf", nil)
 	request.Request.Messages = append(request.Request.Messages, inference.Message{
 		Role: inference.RoleUser,
 		Content: []inference.ContentPart{{
@@ -214,12 +214,12 @@ func TestOneRequestNamingAFileTwiceReadsItOnce(t *testing.T) {
 func TestResolutionLeavesTheCallersRequestAlone(t *testing.T) {
 	t.Parallel()
 	resolver := &countingResolver{
-		tenant: "tenant-a",
-		files:  map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("bytes")}},
+		account: "account-a",
+		files:   map[string]StoredDocument{"file-1": {Filename: "report.pdf", Data: []byte("bytes")}},
 	}
 	service := &proxy{router: &capturingRouter{}, files: resolver}
 
-	request := documentRequest("tenant-a", "file-1", "report.pdf", nil)
+	request := documentRequest("account-a", "file-1", "report.pdf", nil)
 	_, err := service.ProcessChatCompletion(context.Background(), request)
 	require.NoError(t, err)
 
@@ -233,11 +233,11 @@ func TestResolutionLeavesTheCallersRequestAlone(t *testing.T) {
 // stored files: no clone, no map, and no resolver call.
 func TestAnInlineRequestNeverReachesTheResolver(t *testing.T) {
 	t.Parallel()
-	resolver := &countingResolver{tenant: "tenant-a"}
+	resolver := &countingResolver{account: "account-a"}
 	service := &proxy{router: &capturingRouter{}, files: resolver}
 
 	_, err := service.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-a", "", "report.pdf", []byte("inline")))
+		documentRequest("account-a", "", "report.pdf", []byte("inline")))
 	require.NoError(t, err)
 	require.Equal(t, 0, resolver.reads)
 }
@@ -251,7 +251,7 @@ func TestAGatewayWithoutFileStorageRefusesAFileReference(t *testing.T) {
 	service := &proxy{router: router}
 
 	_, err := service.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-a", "file-1", "report.pdf", nil))
+		documentRequest("account-a", "file-1", "report.pdf", nil))
 	var invalid *ValidationError
 	require.ErrorAs(t, err, &invalid)
 	require.Nil(t, router.req)
@@ -262,11 +262,11 @@ func TestAGatewayWithoutFileStorageRefusesAFileReference(t *testing.T) {
 // stop retrying a request that a working store would answer.
 func TestAnUnreachableFileStoreFailsTheRequest(t *testing.T) {
 	t.Parallel()
-	resolver := &countingResolver{tenant: "tenant-a", failWith: errors.New("store unreachable")}
+	resolver := &countingResolver{account: "account-a", failWith: errors.New("store unreachable")}
 	service := &proxy{router: &capturingRouter{}, files: resolver}
 
 	_, err := service.ProcessChatCompletion(context.Background(),
-		documentRequest("tenant-a", "file-1", "report.pdf", nil))
+		documentRequest("account-a", "file-1", "report.pdf", nil))
 	require.Error(t, err)
 	require.NotErrorIs(t, err, ErrStoredFileNotFound)
 }
@@ -279,7 +279,7 @@ func TestARequestNamingTwoDocumentSourcesIsRefused(t *testing.T) {
 	router := &capturingRouter{}
 	service := &proxy{router: router}
 
-	request := documentRequest("tenant-a", "", "report.pdf", []byte("inline"))
+	request := documentRequest("account-a", "", "report.pdf", []byte("inline"))
 	request.Request.Messages[0].Content[1].Document.FileID = "file-1"
 
 	_, err := service.ProcessChatCompletion(context.Background(), request)

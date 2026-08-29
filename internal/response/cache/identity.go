@@ -25,13 +25,15 @@ import (
 // Version 4 added the stored document reference.
 // Version 5 added the document parser the caller asked for. The same bytes
 // read by two engines are two different inputs to the model.
-const SemanticKeyVersion = 5
+// Version 6 renamed the tenant identity to account, which renamed the
+// tagged account_id and policy fields the payload encodes.
+const SemanticKeyVersion = 6
 
 var (
 	// ErrIneligible reports a request whose identity is not cache-safe.
 	ErrIneligible = errors.New("request is not eligible for response caching")
-	// ErrTenantRequired reports a request without tenant identity.
-	ErrTenantRequired = errors.New("cache tenant ID is required")
+	// ErrAccountRequired reports a request without account identity.
+	ErrAccountRequired = errors.New("cache account ID is required")
 	// ErrGenerationRequired reports a request without catalog identity.
 	ErrGenerationRequired = errors.New("catalog generation ID is required")
 	// ErrMutableMedia reports a remote media input that can change without a
@@ -59,8 +61,8 @@ type ProviderPolicy struct {
 	MaxCompletionPricePer1M float64 `json:"max_completion_price_per_1m,omitempty"`
 }
 
-// TenantPolicy contains tenant-scoped route restrictions.
-type TenantPolicy struct {
+// AccountPolicy contains account-scoped route restrictions.
+type AccountPolicy struct {
 	AllowedModels      []string `json:"allowed_models,omitempty"`
 	AllowedProviders   []string `json:"allowed_providers,omitempty"`
 	RateLimitTier      string   `json:"rate_limit_tier,omitempty"`
@@ -70,12 +72,12 @@ type TenantPolicy struct {
 // Policy contains all routing policy that can change a response.
 type Policy struct {
 	Provider ProviderPolicy `json:"provider"`
-	Tenant   TenantPolicy   `json:"tenant"`
+	Account  AccountPolicy  `json:"account"`
 }
 
 // ChatIdentity contains all semantic inputs for one chat cache entry.
 type ChatIdentity struct {
-	TenantID          string
+	AccountID         string
 	CatalogGeneration string
 	Request           inference.ChatRequest
 	Policy            Policy
@@ -83,7 +85,7 @@ type ChatIdentity struct {
 
 // EmbeddingIdentity contains all semantic inputs for one embedding cache entry.
 type EmbeddingIdentity struct {
-	TenantID          string
+	AccountID         string
 	CatalogGeneration string
 	Request           inference.EmbeddingRequest
 	Policy            Policy
@@ -105,13 +107,13 @@ func ChatKey(identity ChatIdentity) (string, error) {
 	digests := foldInlineMedia(&request)
 	payload := struct {
 		Version           int                   `json:"version"`
-		TenantID          string                `json:"tenant_id"`
+		AccountID         string                `json:"account_id"`
 		CatalogGeneration string                `json:"catalog_generation"`
 		Request           inference.ChatRequest `json:"request"`
 		MediaDigests      []string              `json:"media_digests,omitempty"`
 		Policy            Policy                `json:"policy"`
 	}{
-		SemanticKeyVersion, identity.TenantID, identity.CatalogGeneration,
+		SemanticKeyVersion, identity.AccountID, identity.CatalogGeneration,
 		request, digests, normalizePolicy(identity.Policy),
 	}
 	return semanticKey("chat", payload)
@@ -119,21 +121,21 @@ func ChatKey(identity ChatIdentity) (string, error) {
 
 // EmbeddingKey returns the versioned semantic key for an eligible embedding request.
 func EmbeddingKey(identity EmbeddingIdentity) (string, error) {
-	if err := commonEligibility(identity.TenantID, identity.CatalogGeneration); err != nil {
+	if err := commonEligibility(identity.AccountID, identity.CatalogGeneration); err != nil {
 		return "", err
 	}
 	payload := struct {
 		Version           int                        `json:"version"`
-		TenantID          string                     `json:"tenant_id"`
+		AccountID         string                     `json:"account_id"`
 		CatalogGeneration string                     `json:"catalog_generation"`
 		Request           inference.EmbeddingRequest `json:"request"`
 		Policy            Policy                     `json:"policy"`
-	}{SemanticKeyVersion, identity.TenantID, identity.CatalogGeneration, identity.Request.Clone(), normalizePolicy(identity.Policy)}
+	}{SemanticKeyVersion, identity.AccountID, identity.CatalogGeneration, identity.Request.Clone(), normalizePolicy(identity.Policy)}
 	return semanticKey("embedding", payload)
 }
 
 func chatEligibility(identity ChatIdentity) error {
-	if err := commonEligibility(identity.TenantID, identity.CatalogGeneration); err != nil {
+	if err := commonEligibility(identity.AccountID, identity.CatalogGeneration); err != nil {
 		return err
 	}
 	if len(identity.Request.Extensions) > 0 {
@@ -157,9 +159,9 @@ func chatEligibility(identity ChatIdentity) error {
 	return nil
 }
 
-func commonEligibility(tenantID, generation string) error {
-	if strings.TrimSpace(tenantID) == "" {
-		return fmt.Errorf("%w: %w", ErrIneligible, ErrTenantRequired)
+func commonEligibility(accountID, generation string) error {
+	if strings.TrimSpace(accountID) == "" {
+		return fmt.Errorf("%w: %w", ErrIneligible, ErrAccountRequired)
 	}
 	if strings.TrimSpace(generation) == "" {
 		return fmt.Errorf("%w: %w", ErrIneligible, ErrGenerationRequired)
@@ -194,8 +196,8 @@ func normalizePolicy(policy Policy) Policy {
 	policy.Provider.Order = append([]string(nil), policy.Provider.Order...)
 	policy.Provider.Only = sortedCopy(policy.Provider.Only)
 	policy.Provider.Ignore = sortedCopy(policy.Provider.Ignore)
-	policy.Tenant.AllowedModels = sortedCopy(policy.Tenant.AllowedModels)
-	policy.Tenant.AllowedProviders = sortedCopy(policy.Tenant.AllowedProviders)
+	policy.Account.AllowedModels = sortedCopy(policy.Account.AllowedModels)
+	policy.Account.AllowedProviders = sortedCopy(policy.Account.AllowedProviders)
 	if policy.Provider.ModelOverrides != nil {
 		cloned := make(map[string]string, len(policy.Provider.ModelOverrides))
 		for model, override := range policy.Provider.ModelOverrides {

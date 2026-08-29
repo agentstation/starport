@@ -128,7 +128,7 @@ Status values: `todo`, `in_progress`, `blocked`, `done`.
 - Streaming requests use provider/request contexts and server-level read/write/idle timeouts rather than racing writes.
 - API-key extraction rejects query parameters.
 - Rate limiting:
-  - keys by API key ID or tenant-ready identity, not raw secret.
+  - keys by API key ID or account-ready identity, not raw secret.
   - uses atomic storage operations.
   - returns 429 with compatible JSON error.
   - includes useful rate-limit headers when available.

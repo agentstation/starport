@@ -17,7 +17,7 @@ import {
   accessMessage,
   ApiError,
   createKey,
-  DEFAULT_TENANT_ID,
+  DEFAULT_ACCOUNT_ID,
   deleteKey,
   getKeyDetail,
   listKeys,
@@ -777,10 +777,10 @@ function KeysPage() {
                 </td>
                 <td className="px-4 py-2">
                   <Link
-                    to="/tenants"
+                    to="/accounts"
                     className="font-mono text-xs text-accent-link transition-colors duration-150 ease-standard hover:underline"
                   >
-                    {apiKey.tenant_id || DEFAULT_TENANT_ID}
+                    {apiKey.account_id || DEFAULT_ACCOUNT_ID}
                   </Link>
                 </td>
                 <td className="px-4 py-2">

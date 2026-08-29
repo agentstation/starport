@@ -386,7 +386,7 @@ func TestExecutionPublishesCredentialOutcome(t *testing.T) {
 	require.Equal(t, failure.Authentication, outcomes.outcomes[0].Failure.Kind())
 }
 
-func TestTenantCredentialOutcomeDoesNotChangeOfferingAvailability(t *testing.T) {
+func TestAccountCredentialOutcomeDoesNotChangeOfferingAvailability(t *testing.T) {
 	tracker, err := availability.New(
 		availability.Config{FailureThreshold: 1, OpenDuration: time.Minute}, nil, nil,
 	)
@@ -400,7 +400,7 @@ func TestTenantCredentialOutcomeDoesNotChangeOfferingAvailability(t *testing.T) 
 		plan,
 		func(ctx context.Context, _ routing.Attempt) (*inference.ChatResponse, *failure.Failure, AttemptAction) {
 			RecordCredential(ctx, CredentialEvidence{
-				Owner: CredentialOwnerTenant, MaterialVersion: "tenant-v1",
+				Owner: CredentialOwnerAccount, MaterialVersion: "account-v1",
 			})
 			return nil, failure.New(
 				failure.RateLimit,

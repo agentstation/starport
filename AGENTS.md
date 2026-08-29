@@ -19,7 +19,7 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
   capabilities, and prices.
 - Starmap also owns catalog-acquisition authentication, status sources, and the
   immutable catalog generation.
-- Starport owns inference credentials, tenant identity, routing policy,
+- Starport owns inference credentials, account identity, routing policy,
   availability state, execution, caching, rate limits, and HTTP protocols.
 - Derive provider and model facts from one Starmap snapshot. Do not add local
   provider switches, endpoint tables, model lists, or price defaults.
@@ -27,7 +27,7 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
 - Keep catalog-acquisition credentials separate from inference credentials.
 - Keep gateway API keys separate from provider credentials. A gateway API key
   authenticates a caller to Starport. A provider credential pays a provider.
-- Use BYOK only for a provider credential a tenant brings for itself. A
+- Use BYOK only for a provider credential an account brings for itself. A
   provider credential the operator applies for the whole deployment is a
   gateway credential, and one read from the process environment is an
   environment credential.
@@ -47,8 +47,8 @@ Starport is an LLM inference gateway. It provides OpenAI-compatible routes at
   strategies in `internal/providers/keyring`. It owns the words `environment`,
   `gateway`, `byok`, and `anonymous`. No other package restates them.
 - Put account identity, account-wide limits, and the default credential
-  strategy in `internal/tenant`. Put the limit vocabulary itself in
-  `internal/limits`, which both a gateway API key and a tenant use.
+  strategy in `internal/account`. Put the limit vocabulary itself in
+  `internal/limits`, which both a gateway API key and an account use.
 - Put the gateway authentication mode and its exposure rule in
   `internal/authmode`. Put the local admin token, launch tickets, and console
   sessions in `internal/localauth`.
@@ -125,8 +125,8 @@ when OpenRouter publishes a route outside the media surface.
 
 `scripts/verify-auth-onboarding.sh` guards the separation of the credential
 ideas: a gateway API key authenticates and owns nothing else, a provider
-credential comes from the environment, the gateway, or a tenant, only the
-tenant one is BYOK, authentication is required unless an operator disables it,
+credential comes from the environment, the gateway, or an account, only the
+account one is BYOK, authentication is required unless an operator disables it,
 and the console reaches the gateway without holding a gateway key. It is
 terminal at 26 conditions (`AON-V01` through `AON-V26`) and runs in CI.
 

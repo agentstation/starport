@@ -35,8 +35,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
     onCredentialChange: () => () => {},
     hasSession: () => gateway.session,
     listFiles: async () => ({ files: gateway.files, hasMore: gateway.hasMore }),
-    listTenants: async () => [
-      { id: actual.DEFAULT_TENANT_ID, limits: { stored_bytes: gateway.bound } },
+    listAccounts: async () => [
+      { id: actual.DEFAULT_ACCOUNT_ID, limits: { stored_bytes: gateway.bound } },
     ],
     uploadFile: async () => {
       if (gateway.uploadRefusal) throw gateway.uploadRefusal;

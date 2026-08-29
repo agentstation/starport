@@ -110,7 +110,7 @@ recognition_priced_per_page() {
 extraction_cached_once() {
   [ -d internal/document ] || return 1
   tests_all_present ContentHash Engine Generation -- internal/document || return 1
-  # A tenant that did not pay for an extraction must not read it.
+  # An account that did not pay for an extraction must not read it.
   tests_all_present AccountID -- internal/document
 }
 

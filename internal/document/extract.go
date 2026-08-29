@@ -10,7 +10,7 @@ import (
 // Extractor reads text out of a document inside this process.
 //
 // It holds bounds and nothing else. There is no client, no cache, and no
-// account: PLG5 owns the cache and scopes it to the tenant that paid, and this
+// account: PLG5 owns the cache and scopes it to the account that paid, and this
 // seam stays the part that turns bytes into text.
 type Extractor struct {
 	limits Limits

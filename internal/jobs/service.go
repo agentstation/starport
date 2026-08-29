@@ -193,12 +193,12 @@ func (s *Service) Retention() time.Duration { return s.retention }
 // Submission is who is asking for the work and what bounds them.
 //
 // It is a struct rather than a parameter list because the three values that
-// travel with a submission come from three different places: the tenant and the
+// travel with a submission come from three different places: the account and the
 // key from the authenticated request, the operation from the route, and the
 // bound from the tightest of the account's and the key's limits. A positional
 // list of four strings and a number is the shape that quietly transposes.
 type Submission struct {
-	Tenant string
+	Account string
 	// KeyID names the gateway API key that signed the request. It is optional:
 	// a deployment with authentication off submits jobs no key signed.
 	KeyID     string
@@ -224,18 +224,18 @@ type OpenRunner func(ctx context.Context) (Runner, error)
 //
 // The slot claim comes before everything, for the opposite reason. A submission
 // this gateway is about to refuse must not spend routing, credential
-// resolution, or provider work first, or the limit would bound what a tenant
+// resolution, or provider work first, or the limit would bound what an account
 // reads rather than what it pays for. Every path that then fails to reach a
 // stored record gives the slot back.
 func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submission) (Job, error) {
 	if open == nil {
 		return Job{}, ErrRunnerRequired
 	}
-	tenant := strings.TrimSpace(submission.Tenant)
-	if tenant == "" {
-		return Job{}, fmt.Errorf("%w: it names no tenant", ErrInvalidJob)
+	account := strings.TrimSpace(submission.Account)
+	if account == "" {
+		return Job{}, fmt.Errorf("%w: it names no account", ErrInvalidJob)
 	}
-	if err := s.reserveSlot(ctx, tenant, submission.OutstandingBound); err != nil {
+	if err := s.reserveSlot(ctx, account, submission.OutstandingBound); err != nil {
 		return Job{}, err
 	}
 	// kept turns true once a stored record holds the slot. Until then this
@@ -243,7 +243,7 @@ func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submis
 	kept := false
 	defer func() {
 		if !kept {
-			s.releaseSlot(ctx, Job{Tenant: tenant})
+			s.releaseSlot(ctx, Job{Account: account})
 		}
 	}()
 	runner, err := open(ctx)
@@ -258,7 +258,7 @@ func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submis
 		return Job{}, err
 	}
 	now := s.now()
-	job, err := New(s.mint(), tenant, accepted.Provider, accepted.Model, submission.Operation, now)
+	job, err := New(s.mint(), account, accepted.Provider, accepted.Model, submission.Operation, now)
 	if err != nil {
 		return Job{}, err
 	}
@@ -282,13 +282,13 @@ func (s *Service) Submit(ctx context.Context, open OpenRunner, submission Submis
 
 // Get reads one job without asking its provider anything. It is what a listing
 // and an ownership check read.
-func (s *Service) Get(ctx context.Context, tenant, id string) (Job, error) {
-	return s.records.Get(ctx, tenant, id)
+func (s *Service) Get(ctx context.Context, account, id string) (Job, error) {
+	return s.records.Get(ctx, account, id)
 }
 
-// List answers one tenant's jobs, newest first.
-func (s *Service) List(ctx context.Context, tenant string, limit int) ([]Job, error) {
-	return s.records.List(ctx, tenant, limit)
+// List answers one account's jobs, newest first.
+func (s *Service) List(ctx context.Context, account string, limit int) ([]Job, error) {
+	return s.records.List(ctx, account, limit)
 }
 
 // Refresh answers the current state, asking the provider only when the answer
@@ -296,10 +296,10 @@ func (s *Service) List(ctx context.Context, tenant string, limit int) ([]Job, er
 //
 // A terminal job answers from the record. That is what makes a repeated poll
 // free: the caller may ask as often as it likes, and neither the provider nor
-// the tenant's credential is spent again, and the single usage record a
+// the account's credential is spent again, and the single usage record a
 // terminal job draws is not drawn twice.
-func (s *Service) Refresh(ctx context.Context, runner Runner, tenant, id string) (Job, error) {
-	job, err := s.records.Get(ctx, tenant, id)
+func (s *Service) Refresh(ctx context.Context, runner Runner, account, id string) (Job, error) {
+	job, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return Job{}, err
 	}
@@ -340,14 +340,14 @@ func (s *Service) Refresh(ctx context.Context, runner Runner, tenant, id string)
 // Cancel stops one running job.
 //
 // A job that already ended answers ErrJobAlreadyEnded rather than moving
-// again. A completed job holds an asset the tenant paid for, and a cancellation
+// again. A completed job holds an asset the account paid for, and a cancellation
 // that rewrote it to cancelled would discard the answer and the cost record
 // that goes with it.
-func (s *Service) Cancel(ctx context.Context, runner Runner, tenant, id string) (Job, error) {
+func (s *Service) Cancel(ctx context.Context, runner Runner, account, id string) (Job, error) {
 	if runner == nil {
 		return Job{}, ErrRunnerRequired
 	}
-	job, err := s.records.Get(ctx, tenant, id)
+	job, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return Job{}, err
 	}

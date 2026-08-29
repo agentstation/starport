@@ -72,16 +72,16 @@ func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 			return
 		}
 
-		var tenantLimits *limits.Limits
-		if record, ok := requestctx.GetTenantRecord(r.Context()); ok && record != nil {
-			tenantLimits = record.Limits
+		var accountLimits *limits.Limits
+		if record, ok := requestctx.GetAccountRecord(r.Context()); ok && record != nil {
+			accountLimits = record.Limits
 		}
-		tenantID := requestctx.TenantIDOrDefault(r.Context())
+		accountID := requestctx.AccountIDOrDefault(r.Context())
 
 		now := time.Now().UTC()
 		for _, dimension := range budgetDimensions {
-			rules := limits.BudgetRules(tenantLimits, apiKey.Limits, dimension.name)
-			binding, allowed := s.allowBudget(w, r, dimension, rules, tenantID, apiKey.ID, now)
+			rules := limits.BudgetRules(accountLimits, apiKey.Limits, dimension.name)
+			binding, allowed := s.allowBudget(w, r, dimension, rules, accountID, apiKey.ID, now)
 			if !allowed {
 				return
 			}
@@ -129,14 +129,14 @@ func (s *Server) allowBudget(
 	r *http.Request,
 	dimension budgetDimension,
 	rules []limits.BudgetRule,
-	tenantID, keyID string,
+	accountID, keyID string,
 	now time.Time,
 ) (scopedBudget, bool) {
 	var binding scopedBudget
 	var bound bool
 
 	for _, rule := range rules {
-		scope := budgetScope(rule.Scope, tenantID, keyID)
+		scope := budgetScope(rule.Scope, accountID, keyID)
 		totals, err := s.usage.Totals(r.Context(), scope, rule.Budget.Interval, now)
 		if err != nil {
 			// Fail open: a budget read failure must not reject traffic.
@@ -191,9 +191,9 @@ func (s *Server) allowBudget(
 }
 
 // budgetScope names the counter set one budget meter reads.
-func budgetScope(scope limits.Scope, tenantID, keyID string) usage.Scope {
-	if scope == limits.ScopeTenant {
-		return usage.TenantScope(tenantID)
+func budgetScope(scope limits.Scope, accountID, keyID string) usage.Scope {
+	if scope == limits.ScopeAccount {
+		return usage.AccountScope(accountID)
 	}
 	return usage.KeyScope(keyID)
 }

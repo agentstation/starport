@@ -29,7 +29,7 @@ test("BYOK is the word for a credential an account brings, and for nothing else"
   expect(saysByok("../routes/keys.tsx")).toBe(false);
 
   // The provider screens show the two credentials an operator owns. Naming
-  // either of them BYOK would put a tenant's word on the deployment's key.
+  // either of them BYOK would put an account's word on the deployment's key.
   const providerScreens = Object.keys(SOURCE)
     .filter((path) => path.startsWith("../components/providers/"))
     .filter(saysByok);

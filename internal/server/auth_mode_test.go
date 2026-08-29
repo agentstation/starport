@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/storage"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // unauthenticatedConfig is a server configured the way `serve --no-auth` and
@@ -59,7 +59,7 @@ func TestDisabledAuthenticationMetersTheAnonymousIdentity(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, identity.AnonymousKeyID, resolved.keyID)
-	assert.Equal(t, tenant.DefaultID, resolved.tenantID)
+	assert.Equal(t, account.DefaultID, resolved.accountID)
 }
 
 // TestDisabledAuthenticationIgnoresAPresentedKey pins the rule that makes the
@@ -71,27 +71,27 @@ func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	store := storage.NewMockStore()
 	identities, err := identity.Open(store)
 	require.NoError(t, err)
-	tenants, err := tenant.Open(store)
+	accounts, err := account.Open(store)
 	require.NoError(t, err)
 	ctx := context.Background()
-	_, err = tenants.Create(ctx, tenant.Tenant{ID: "acme", Name: "Acme", Active: true})
+	_, err = accounts.Create(ctx, account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
 
-	issuer, err := identity.NewIssuer(identities, identity.WithTenantChecker(tenants))
+	issuer, err := identity.NewIssuer(identities, identity.WithAccountChecker(accounts))
 	require.NoError(t, err)
 	issued, err := issuer.Issue(ctx, identity.IssueRequest{
-		Name: "Acme-CI", TenantID: "acme", Scopes: []string{"chat:write"},
+		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
 
-	middleware := NewAuthMiddleware(identities, tenants)
+	middleware := NewAuthMiddleware(identities, accounts)
 	middleware.Govern(authmode.NewPolicy(authmode.Setting{Mode: authmode.Disabled}), nil)
 
 	resolved, status := authenticate(t, middleware, issued.Secret)
 
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, identity.AnonymousKeyID, resolved.keyID)
-	assert.Equal(t, tenant.DefaultID, resolved.tenantID)
+	assert.Equal(t, account.DefaultID, resolved.accountID)
 }
 
 // TestDisabledAuthenticationKeepsTheAdminPlaneClosed is the security boundary

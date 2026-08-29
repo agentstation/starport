@@ -11,7 +11,7 @@ import (
 
 // TestAJobPastItsLifetimeReachesAFailedStateWithAReason is the stop on an
 // unbounded poll. A provider that never reports a terminal word would otherwise
-// leave a job polling for as long as the process runs, spending the tenant's
+// leave a job polling for as long as the process runs, spending the account's
 // own credential on asking rather than on work.
 func TestAJobPastItsLifetimeReachesAFailedStateWithAReason(t *testing.T) {
 	t.Parallel()
@@ -45,7 +45,7 @@ func TestAJobPastItsLifetimeReachesAFailedStateWithAReason(t *testing.T) {
 
 // TestATerminalJobIsNeverSpent keeps the lifetime from rewriting an answer the
 // caller already has. A completed job that outlived the polling budget still
-// produced its asset, and moving it to failed would discard work the tenant
+// produced its asset, and moving it to failed would discard work the account
 // paid for.
 func TestATerminalJobIsNeverSpent(t *testing.T) {
 	t.Parallel()

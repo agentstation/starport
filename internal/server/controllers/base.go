@@ -45,10 +45,10 @@ const (
 	fieldError                  = "error"
 	fieldRequests               = "requests"
 	fieldTokens                 = "tokens"
-	// fieldTenantID is the one wire name for an account: the URL parameter
+	// fieldAccountID is the one wire name for an account: the URL parameter
 	// that addresses one, the response field that reports one, and the log
 	// field that records one.
-	fieldTenantID = "tenant_id"
+	fieldAccountID = "account_id"
 )
 
 // BaseHandler provides common functionality for all handlers
@@ -83,14 +83,14 @@ func (h *BaseHandler) getAPIKey(ctx context.Context) string {
 	return ""
 }
 
-// getTenantID extracts the account the request runs under. Many keys can
-// belong to one tenant, so this is not the API key ID.
-func (h *BaseHandler) getTenantID(ctx context.Context) string {
-	return requestctx.TenantIDOrDefault(ctx)
+// getAccountID extracts the account the request runs under. Many keys can
+// belong to one account, so this is not the API key ID.
+func (h *BaseHandler) getAccountID(ctx context.Context) string {
+	return requestctx.AccountIDOrDefault(ctx)
 }
 
 // getAPIKeyID extracts the authenticated key. Usage attribution and per-key
-// limits read this, not the tenant.
+// limits read this, not the account.
 func (h *BaseHandler) getAPIKeyID(ctx context.Context) string {
 	if keyID, ok := requestctx.GetAPIKeyID(ctx); ok {
 		return keyID
@@ -158,10 +158,10 @@ func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) (*proxy.APIKey
 	}
 
 	// The operator sets the account's strategy. The key may narrow it, so a
-	// tenant denied every operator credential cannot buy one back by putting a
+	// account denied every operator credential cannot buy one back by putting a
 	// wider value in its own key metadata.
 	governing, err := keyring.ParseStrategy(
-		string(requestctx.TenantCredentialStrategyOrDefault(ctx)),
+		string(requestctx.AccountCredentialStrategyOrDefault(ctx)),
 	)
 	if err != nil {
 		return nil, err

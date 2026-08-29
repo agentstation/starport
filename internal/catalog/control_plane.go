@@ -35,7 +35,7 @@ var (
 	// Recognition is the one operation whose unit is neither a token nor a
 	// request, so a token price says nothing about what a page costs. An
 	// offering the gateway cannot price is one it would serve for free against
-	// real provider time, and a spend limit set on that tenant would never
+	// real provider time, and a spend limit set on that account would never
 	// fire. Planning drops the operation instead of guessing a price.
 	ErrMissingPagePrice = errors.New("offering serves document recognition with no page price")
 	// ErrRerankUnpriced reports an offering that serves reranking and states

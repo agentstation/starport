@@ -80,7 +80,7 @@ func TestCachedServiceProcessChatCompletion(t *testing.T) {
 		service: upstream, generation: "catalog-1", cacheManager: cacheManager,
 		cacheConfig: CacheConfig{EnableChatCache: true},
 	}
-	request := testChatRequest("tenant-1")
+	request := testChatRequest("account-1")
 
 	first, err := service.ProcessChatCompletion(context.Background(), request)
 	require.NoError(t, err)
@@ -94,22 +94,22 @@ func TestCachedServiceProcessChatCompletion(t *testing.T) {
 	require.Equal(t, 1, upstream.calls["ProcessChatCompletion"])
 }
 
-func TestCachedService_TenantAndGenerationIsolation(t *testing.T) {
+func TestCachedService_AccountAndGenerationIsolation(t *testing.T) {
 	cacheManager := newMockCacheManager()
 	upstream := &mockProxyImpl{chatResponse: canonicalChatResponse()}
 	service := &cachedService{
 		service: upstream, generation: "catalog-1", cacheManager: cacheManager,
 		cacheConfig: CacheConfig{EnableChatCache: true},
 	}
-	request := testChatRequest("tenant-1")
+	request := testChatRequest("account-1")
 
 	_, err := service.ProcessChatCompletion(context.Background(), request)
 	require.NoError(t, err)
 	_, err = service.ProcessChatCompletion(context.Background(), request)
 	require.NoError(t, err)
 
-	otherTenant := testChatRequest("tenant-2")
-	response, err := service.ProcessChatCompletion(context.Background(), otherTenant)
+	otherAccount := testChatRequest("account-2")
+	response, err := service.ProcessChatCompletion(context.Background(), otherAccount)
 	require.NoError(t, err)
 	require.Equal(t, CacheStatusMiss, response.CacheStatus)
 
@@ -127,7 +127,7 @@ func TestCachedServicePreservesCanonicalResponse(t *testing.T) {
 		service: upstream, generation: "catalog-1", cacheManager: cacheManager,
 		cacheConfig: CacheConfig{EnableChatCache: true},
 	}
-	request := testChatRequest("tenant-1")
+	request := testChatRequest("account-1")
 
 	_, err := service.ProcessChatCompletion(context.Background(), request)
 	require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestCachedServiceCachesCompleteStream(t *testing.T) {
 		service: upstream, generation: "catalog-1", cacheManager: cacheManager,
 		cacheConfig: CacheConfig{EnableChatCache: true},
 	}
-	request := testChatRequest("tenant-1")
+	request := testChatRequest("account-1")
 	request.Request.Stream = true
 	request.Request.StreamOptions.IncludeUsage = true
 
@@ -218,7 +218,7 @@ func TestCachedServiceRetainsOneRuntimeGeneration(t *testing.T) {
 			cacheConfig: CacheConfig{EnableChatCache: true},
 		}
 
-		_, err := service.ProcessChatCompletion(t.Context(), testChatRequest("tenant-1"))
+		_, err := service.ProcessChatCompletion(t.Context(), testChatRequest("account-1"))
 		require.NoError(t, err)
 		require.True(t, source.lastLease(t).released.Load())
 	})
@@ -231,7 +231,7 @@ func TestCachedServiceRetainsOneRuntimeGeneration(t *testing.T) {
 			service: upstream, runtime: source, cacheManager: newMockCacheManager(),
 			cacheConfig: CacheConfig{EnableChatCache: true},
 		}
-		request := testChatRequest("tenant-1")
+		request := testChatRequest("account-1")
 		request.Request.Stream = true
 
 		stream, err := service.ProcessChatCompletionStream(t.Context(), request)
@@ -272,7 +272,7 @@ func assertBorrowedCacheRuntime(
 	}
 }
 
-func testChatRequest(tenantID string) *ChatCompletionRequest {
+func testChatRequest(accountID string) *ChatCompletionRequest {
 	return &ChatCompletionRequest{
 		Request: inference.ChatRequest{
 			Model: "openai/gpt-4.1",
@@ -281,7 +281,7 @@ func testChatRequest(tenantID string) *ChatCompletionRequest {
 				Content: []inference.ContentPart{{Kind: inference.ContentText, Text: "question"}},
 			}},
 		},
-		TenantID: tenantID,
+		AccountID: accountID,
 	}
 }
 

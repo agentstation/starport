@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
@@ -20,7 +21,6 @@ import (
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/controllers"
-	"github.com/agentstation/starport/internal/tenant"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -31,8 +31,8 @@ var (
 	ErrServiceRequired = errors.New("gateway service is required")
 	// ErrIdentitiesRequired reports an absent identity repository.
 	ErrIdentitiesRequired = errors.New("identity repository is required")
-	// ErrTenantsRequired reports an absent tenant repository.
-	ErrTenantsRequired = errors.New("tenant repository is required")
+	// ErrAccountsRequired reports an absent account repository.
+	ErrAccountsRequired = errors.New("account repository is required")
 	// ErrProviderKeysRequired reports an absent provider-key service.
 	ErrProviderKeysRequired = errors.New("provider key service is required")
 	// ErrRateLimitsRequired reports an absent rate-limit repository.
@@ -50,7 +50,7 @@ type Server struct {
 	// Ready application dependencies
 	service            proxy.Proxy
 	identities         identity.Repository
-	tenants            tenant.Repository
+	accounts           account.Repository
 	providerKeys       keyring.ProviderKeys
 	rateLimits         ratelimit.Repository
 	usage              usage.Repository
@@ -72,7 +72,7 @@ type Server struct {
 type Dependencies struct {
 	Service            proxy.Proxy
 	Identities         identity.Repository
-	Tenants            tenant.Repository
+	Accounts           account.Repository
 	ProviderKeys       keyring.ProviderKeys
 	RateLimits         ratelimit.Repository
 	ProviderOperations controllers.ProviderOperations
@@ -118,8 +118,8 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	if dependencies.Identities == nil {
 		return nil, ErrIdentitiesRequired
 	}
-	if dependencies.Tenants == nil {
-		return nil, ErrTenantsRequired
+	if dependencies.Accounts == nil {
+		return nil, ErrAccountsRequired
 	}
 	if dependencies.ProviderKeys == nil {
 		return nil, ErrProviderKeysRequired
@@ -136,7 +136,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		cfg:                config,
 		service:            dependencies.Service,
 		identities:         dependencies.Identities,
-		tenants:            dependencies.Tenants,
+		accounts:           dependencies.Accounts,
 		providerKeys:       dependencies.ProviderKeys,
 		rateLimits:         dependencies.RateLimits,
 		usage:              dependencies.Usage,
@@ -146,7 +146,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Mode:   config.AuthMode,
 		Source: config.AuthModeSource,
 	})
-	s.auth = NewAuthMiddleware(s.identities, s.tenants)
+	s.auth = NewAuthMiddleware(s.identities, s.accounts)
 	s.auth.Govern(s.authPolicy, config.UnauthenticatedScopes)
 	s.auth.AcceptSessions(dependencies.LocalGate)
 
@@ -154,7 +154,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Service:            s.service,
 		ProviderKeys:       s.providerKeys,
 		Identities:         s.identities,
-		Tenants:            s.tenants,
+		Accounts:           s.accounts,
 		Usage:              dependencies.Usage,
 		ProviderOperations: s.providerOperations,
 		Catalog:            dependencies.Catalog,
@@ -196,8 +196,8 @@ func (s *Server) requireAPIKey(next http.Handler) http.Handler {
 	return s.auth.RequireAPIKey(next)
 }
 
-func (s *Server) requireTenantAccess(next http.Handler) http.Handler {
-	return s.auth.RequireTenantAccess(next)
+func (s *Server) requireAccountAccess(next http.Handler) http.Handler {
+	return s.auth.RequireAccountAccess(next)
 }
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {

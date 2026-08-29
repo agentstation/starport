@@ -98,8 +98,8 @@ func (s *Service) collect(ctx context.Context, runner Runner, job Job) Job {
 // Expiry is decided on the read rather than by the sweep. The sweep runs on an
 // interval, and an asset that answered for the length of that interval past its
 // stated window would make the window a suggestion.
-func (s *Service) Open(ctx context.Context, tenant, id string) (Job, io.ReadCloser, error) {
-	job, err := s.records.Get(ctx, tenant, id)
+func (s *Service) Open(ctx context.Context, account, id string) (Job, io.ReadCloser, error) {
+	job, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return Job{}, nil, err
 	}
@@ -147,7 +147,7 @@ type SweepResult struct {
 // forever.
 //
 // The record stays. A completed job stays completed after its bytes go, because
-// the work happened and the tenant paid for it, and the expiry marker is what
+// the work happened and the account paid for it, and the expiry marker is what
 // separates the two answers a caller reads.
 //
 // One failing record does not stop the pass. A sweep that returned on the first

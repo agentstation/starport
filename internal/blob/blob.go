@@ -6,7 +6,7 @@
 // multi-megabyte value would move through every one of those operations, so
 // file bytes get their own contract.
 //
-// The contract is deliberately narrow. A store knows nothing about tenants,
+// The contract is deliberately narrow. A store knows nothing about accounts,
 // files, purposes, or expiry. It reads and writes bytes at a key. The owner of
 // the key holds every meaning the bytes carry.
 package blob

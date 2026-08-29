@@ -184,7 +184,7 @@ func (r *modelRouter) toPlanningRequest(req *Request) routing.Request {
 		}
 	}
 	if req.APIKeyConfig != nil {
-		request.Tenant = routing.TenantPolicy{
+		request.Account = routing.AccountPolicy{
 			AllowedModels:    wildcardAsUnrestricted(req.APIKeyConfig.AllowedModels),
 			AllowedProviders: normalizeProviders(req.APIKeyConfig.AllowedProviders),
 			ModelOverrides:   cloneModelOverrides(req.APIKeyConfig.ModelOverrides),

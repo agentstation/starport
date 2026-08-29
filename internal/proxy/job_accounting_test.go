@@ -19,7 +19,7 @@ var jobSubmitted = time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
 func videoEntry(state jobs.JobState) jobs.AccountingEntry {
 	return jobs.AccountingEntry{
 		JobID:       "job-abc",
-		Tenant:      "tenant_a",
+		Account:     "account_a",
 		KeyID:       "key_a",
 		Provider:    "deepinfra",
 		Model:       "deepinfra/wan-2.2",
@@ -49,7 +49,7 @@ func TestAFinishedJobDrawsOneValidRecord(t *testing.T) {
 	require.NoError(t, record.Validate())
 	require.Equal(t, "job-abc", record.RequestID, "the job identifier is what an operator correlates on")
 	require.Equal(t, "key_a", record.KeyID)
-	require.Equal(t, "tenant_a", record.TenantID)
+	require.Equal(t, "account_a", record.AccountID)
 	require.Equal(t, usage.OperationVideos, record.Operation)
 	require.Equal(t, usage.StatusOK, record.Status)
 	require.Equal(t, int64(90_000), record.LatencyMS, "a job's latency is its whole life, not one request")
@@ -57,7 +57,7 @@ func TestAFinishedJobDrawsOneValidRecord(t *testing.T) {
 	require.Equal(t, int64(1), record.Media.GeneratedVideos)
 }
 
-// TestAFailedJobRecordsNoCostAndNoMediaUnit is the rule a tenant reads its bill
+// TestAFailedJobRecordsNoCostAndNoMediaUnit is the rule an account reads its bill
 // through. The provider produced nothing, so nothing is priced, and the record
 // carries a named reason rather than a zero that would read as a free video.
 func TestAFailedJobRecordsNoCostAndNoMediaUnit(t *testing.T) {

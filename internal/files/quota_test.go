@@ -87,30 +87,30 @@ func TestAnUploadPastTheBoundWritesNothing(t *testing.T) {
 
 	payload := strings.Repeat("x", 600)
 	first, err := service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "first.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "first.txt", Purpose: PurposeUserData,
 		Size: int64(len(payload)), StoredBytesBound: 1000,
 	}, strings.NewReader(payload))
 	require.NoError(t, err)
-	require.Equal(t, int64(600), meter.totals["tenant-a"])
+	require.Equal(t, int64(600), meter.totals["account-a"])
 
 	before := countObjects(t, root)
 	_, err = service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "second.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "second.txt", Purpose: PurposeUserData,
 		Size: int64(len(payload)), StoredBytesBound: 1000,
 	}, strings.NewReader(payload))
 	require.ErrorIs(t, err, errStorageFull)
 
 	require.Equal(t, before, countObjects(t, root), "the refused upload wrote bytes")
-	require.Equal(t, int64(600), meter.totals["tenant-a"], "the refusal moved the total")
+	require.Equal(t, int64(600), meter.totals["account-a"], "the refusal moved the total")
 
-	listed, err := service.List(ctx, "tenant-a", 0)
+	listed, err := service.List(ctx, "account-a", 0)
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
 	require.Equal(t, first.ID, listed[0].ID)
 }
 
 // TestADeleteLowersTheTotalByTheFileSize states the other half. A bound that
-// only ever rose would turn every account into a one-way account, and a tenant
+// only ever rose would turn every account into a one-way account, and an account
 // under its bound would still run out of room after enough uploads and deletes.
 func TestADeleteLowersTheTotalByTheFileSize(t *testing.T) {
 	t.Parallel()
@@ -119,18 +119,18 @@ func TestADeleteLowersTheTotalByTheFileSize(t *testing.T) {
 
 	payload := strings.Repeat("x", 600)
 	file, err := service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "first.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "first.txt", Purpose: PurposeUserData,
 		Size: int64(len(payload)), StoredBytesBound: 1000,
 	}, strings.NewReader(payload))
 	require.NoError(t, err)
 
-	require.NoError(t, service.Delete(ctx, "tenant-a", file.ID))
-	require.Equal(t, int64(0), meter.totals["tenant-a"])
+	require.NoError(t, service.Delete(ctx, "account-a", file.ID))
+	require.Equal(t, int64(0), meter.totals["account-a"])
 
 	// The room the delete gave back is usable room. An upload the bound refused
 	// a moment ago now lands.
 	_, err = service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "second.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "second.txt", Purpose: PurposeUserData,
 		Size: int64(len(payload)), StoredBytesBound: 1000,
 	}, strings.NewReader(payload))
 	require.NoError(t, err)
@@ -149,26 +149,26 @@ func TestTheClaimSettlesAgainstTheRealSize(t *testing.T) {
 	// the upload is refused because the real size does not fit.
 	payload := strings.Repeat("x", 900)
 	_, err := service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "understated.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "understated.txt", Purpose: PurposeUserData,
 		Size: 1, StoredBytesBound: 500,
 	}, strings.NewReader(payload))
 	require.ErrorIs(t, err, errStorageFull)
-	require.Equal(t, int64(0), meter.totals["tenant-a"])
+	require.Equal(t, int64(0), meter.totals["account-a"])
 	require.Equal(t, 0, countObjects(t, root), "the refused upload left its bytes behind")
 
-	// Overstated: the claim falls to the real size, so the tenant does not hold
+	// Overstated: the claim falls to the real size, so the account does not hold
 	// room it never used.
 	small := strings.Repeat("x", 100)
 	_, err = service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-b", Filename: "overstated.txt", Purpose: PurposeUserData,
+		Account: "account-b", Filename: "overstated.txt", Purpose: PurposeUserData,
 		Size: 400, StoredBytesBound: 500,
 	}, strings.NewReader(small))
 	require.NoError(t, err)
-	require.Equal(t, int64(100), meter.totals["tenant-b"])
+	require.Equal(t, int64(100), meter.totals["account-b"])
 }
 
 // TestAFailedWriteGivesBackItsClaim states the synchronous half. An upload
-// whose bytes never landed must not leave a tenant paying for it.
+// whose bytes never landed must not leave an account paying for it.
 func TestAFailedWriteGivesBackItsClaim(t *testing.T) {
 	t.Parallel()
 	records, err := OpenRepository(storage.NewMockStore())
@@ -183,17 +183,17 @@ func TestAFailedWriteGivesBackItsClaim(t *testing.T) {
 	failing, err := NewService(records, &failingPut{Store: bytes}, WithMeter(meter))
 	require.NoError(t, err)
 	_, err = failing.Upload(context.Background(), UploadRequest{
-		Tenant: "tenant-a", Filename: "lost.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "lost.txt", Purpose: PurposeUserData,
 		Size: 600, StoredBytesBound: 1000,
 	}, strings.NewReader("payload"))
 	require.Error(t, err)
-	require.Equal(t, int64(0), meter.totals["tenant-a"], "the failed write kept the claim")
+	require.Equal(t, int64(0), meter.totals["account-a"], "the failed write kept the claim")
 
 	// And the room is usable again.
 	service, err := NewService(records, bytes, WithMeter(meter))
 	require.NoError(t, err)
 	_, err = service.Upload(context.Background(), UploadRequest{
-		Tenant: "tenant-a", Filename: "next.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "next.txt", Purpose: PurposeUserData,
 		Size: 900, StoredBytesBound: 1000,
 	}, strings.NewReader(strings.Repeat("x", 900)))
 	require.NoError(t, err)
@@ -221,10 +221,10 @@ func TestTheSweepGivesBackAnAbandonedClaim(t *testing.T) {
 
 	// This is what a crashed upload left behind: a claim, and a pending record
 	// that carries it.
-	require.NoError(t, meter.Reserve(ctx, "tenant-a", 600, 1000))
+	require.NoError(t, meter.Reserve(ctx, "account-a", 600, 1000))
 	abandoned := File{
 		ID:        newFileID(),
-		Tenant:    "tenant-a",
+		Account:   "account-a",
 		Filename:  "lost.txt",
 		Purpose:   PurposeUserData,
 		Bytes:     600,
@@ -239,7 +239,7 @@ func TestTheSweepGivesBackAnAbandonedClaim(t *testing.T) {
 	result, err := service.Sweep(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Abandoned)
-	require.Equal(t, int64(0), meter.totals["tenant-a"])
+	require.Equal(t, int64(0), meter.totals["account-a"])
 }
 
 // failingPut refuses every write. It stands in for a byte store that went away

@@ -79,7 +79,7 @@ func TestAPricedRecognitionOfferingKeepsBothOperations(t *testing.T) {
 // PLG3 adds. A page price is not decoration on an offering that already has
 // token prices: it is the only number that turns a recognized page into a
 // charge. Without it the gateway would answer a recognition request, pay the
-// provider for it, and record no cost against the tenant that asked.
+// provider for it, and record no cost against the account that asked.
 //
 // The chat operation is deliberately untouched. A missing page price is a
 // statement about one operation, and taking the whole model away would refuse a

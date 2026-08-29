@@ -12,7 +12,7 @@ issue for a suspected vulnerability.
 
 Include the affected version or commit, the deployment mode, reproduction
 steps, the security effect, and any proposed remediation. Remove provider
-keys, gateway keys, master keys, tenant data, and other secrets from every
+keys, gateway keys, master keys, account data, and other secrets from every
 report and attachment.
 
 We will confirm receipt, assess the report, and coordinate remediation and

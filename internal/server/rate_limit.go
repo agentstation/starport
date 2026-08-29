@@ -36,7 +36,7 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 			writeProtocolError(w, r, http.StatusInternalServerError, "server_error", "Rate limit identity missing")
 			return
 		}
-		tenantID := requestctx.TenantIDOrDefault(r.Context())
+		accountID := requestctx.AccountIDOrDefault(r.Context())
 
 		// Rules arrive account-first and the loop stops at the first refusal,
 		// so a request the account cap refuses never draws on the key's
@@ -47,7 +47,7 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 		var binding scopedRateDecision
 		var bound bool
 		for _, rule := range rules {
-			subject := rateLimitSubject(rule.Scope, tenantID, keyID)
+			subject := rateLimitSubject(rule.Scope, accountID, keyID)
 			window := time.Duration(rule.Limit.WindowSeconds) * time.Second
 			decision, err := s.rateLimits.Consume(r.Context(), subject, rule.Limit.Limit, window)
 			if err != nil {
@@ -87,14 +87,14 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 // Both the account and the key travel in the request context from
 // authentication, so neither read reaches storage on the hot path.
 func (s *Server) requestRules(r *http.Request) []limits.RequestRule {
-	var tenantLimits, keyLimits *limits.Limits
-	if record, ok := requestctx.GetTenantRecord(r.Context()); ok && record != nil {
-		tenantLimits = record.Limits
+	var accountLimits, keyLimits *limits.Limits
+	if record, ok := requestctx.GetAccountRecord(r.Context()); ok && record != nil {
+		accountLimits = record.Limits
 	}
 	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil {
 		keyLimits = apiKey.Limits
 	}
-	return limits.RequestRules(tenantLimits, keyLimits, s.deploymentRequestLimit())
+	return limits.RequestRules(accountLimits, keyLimits, s.deploymentRequestLimit())
 }
 
 // deploymentRequestLimit expresses the configured global window as a stored
@@ -115,9 +115,9 @@ func (s *Server) deploymentRequestLimit() *limits.RequestLimit {
 // rateLimitSubject names the counter one meter consumes from. The account
 // subject is shared by every key the account holds; that sharing is what makes
 // the account cap an account cap.
-func rateLimitSubject(scope limits.Scope, tenantID, keyID string) string {
-	if scope == limits.ScopeTenant {
-		return "tenant:" + tenantID
+func rateLimitSubject(scope limits.Scope, accountID, keyID string) string {
+	if scope == limits.ScopeAccount {
+		return "account:" + accountID
 	}
 	return "api_key:" + keyID
 }

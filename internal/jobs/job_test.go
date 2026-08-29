@@ -22,7 +22,7 @@ func newTestJob(t *testing.T) jobs.Job {
 	t.Helper()
 	job, err := jobs.New(
 		"job_01",
-		"tenant_a",
+		"account_a",
 		"deepinfra",
 		"black-forest-labs/FLUX-1-dev",
 		routing.OperationImagesGenerations,
@@ -160,7 +160,7 @@ func TestValidateRefusesARecordAStoreCannotAnswerWith(t *testing.T) {
 
 	tests := map[string]func(job *jobs.Job){
 		"no identifier": func(job *jobs.Job) { job.ID = " " },
-		"no tenant":     func(job *jobs.Job) { job.Tenant = "" },
+		"no account":    func(job *jobs.Job) { job.Account = "" },
 		"no model":      func(job *jobs.Job) { job.Model = "" },
 		"no provider":   func(job *jobs.Job) { job.Provider = " " },
 		"no operation":  func(job *jobs.Job) { job.Operation = "" },
@@ -182,7 +182,7 @@ func TestValidateRefusesARecordAStoreCannotAnswerWith(t *testing.T) {
 		})
 	}
 
-	_, err := jobs.New("", "tenant_a", "deepinfra", "m", routing.OperationImagesGenerations, submitted)
+	_, err := jobs.New("", "account_a", "deepinfra", "m", routing.OperationImagesGenerations, submitted)
 	require.ErrorIs(t, err, jobs.ErrInvalidJob)
 }
 

@@ -211,7 +211,7 @@ func (p *proxy) readDocument(
 	// bytes needed recognition, so re-reading the text layer to ask again
 	// would spend the work the entry exists to avoid.
 	key := document.CacheKey{
-		AccountID:   req.TenantID,
+		AccountID:   req.AccountID,
 		ContentHash: document.ContentHash(data),
 		Engine:      string(engine),
 		Generation:  p.catalogGeneration(ctx),
@@ -410,7 +410,7 @@ func (p *proxy) recognize(
 			Pages: extraction.PageCount(),
 		},
 		APIKeyConfig: policy,
-		TenantID:     req.TenantID,
+		AccountID:    req.AccountID,
 	})
 	if err != nil {
 		return "", "", recognitionFailure(attached.Filename, err)

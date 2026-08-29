@@ -179,7 +179,7 @@ Starmap owns provider IDs, model IDs, services, offerings, capabilities,
 prices, catalog credentials, and status sources. Do not add a provider switch,
 model list, endpoint table, or price default to Starport.
 
-Starport owns inference credentials, tenant identity, routing policy,
+Starport owns inference credentials, account identity, routing policy,
 availability, execution, caching, rate limits, and HTTP protocols.
 
 ## Add provider inference support

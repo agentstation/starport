@@ -249,7 +249,7 @@ type SecurityConfig struct {
 	AllowRemoteNoAuth bool `env:"ALLOW_REMOTE_NO_AUTH,default=false"`
 	// UnauthenticatedScopes lists the scopes a request holds while AuthMode
 	// is disabled. An empty list means the built-in default, which is every
-	// tenant scope and never admin. An operator who wants the admin plane
+	// account scope and never admin. An operator who wants the admin plane
 	// open without a key has to name "admin" here.
 	UnauthenticatedScopes []string `env:"UNAUTHENTICATED_SCOPES"`
 	// LocalTokenPath is the file holding this machine's local admin token.

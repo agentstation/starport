@@ -15,9 +15,9 @@ active when all three inputs exist:
    inference profile.
 
 Operator credentials are not an adapter activation condition. A request can
-select operator material, tenant BYOK material, or a catalog-default no-auth
+select operator material, account BYOK material, or a catalog-default no-auth
 profile. Starport then binds the selected material to the retained Starmap
-endpoint template. Operator endpoint overrides never apply to tenant material.
+endpoint template. Operator endpoint overrides never apply to account material.
 
 Requests give adapters an exact provider model ID and a request-bound Starmap
 endpoint. An adapter must send both without model-family inference, endpoint

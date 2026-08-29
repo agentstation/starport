@@ -97,13 +97,13 @@ func (f *gatewayCredentialFixture) route(
 	t.Helper()
 	return f.router.RouteEmbeddings(t.Context(), &EmbeddingRequest{
 		EmbeddingsRequest: &connectors.EmbeddingsRequest{Model: "author/embed", Input: "hello"},
-		TenantID:          "tenant-a",
+		AccountID:         "account-a",
 		APIKeyConfig:      &APIKeyConfig{CredentialStrategy: strategy},
 	})
 }
 
 // TestGatewayCredentialServesARequestWithNoBYOK is the AON3 fail-before case.
-// On the baseline the policy knew two planes, environment and tenant, so a
+// On the baseline the policy knew two planes, environment and account, so a
 // credential the operator applied for the whole deployment had no consumer at
 // all and this request failed as not configured.
 func TestGatewayCredentialServesARequestWithNoBYOK(t *testing.T) {
@@ -117,7 +117,7 @@ func TestGatewayCredentialServesARequestWithNoBYOK(t *testing.T) {
 	assert.Equal(t, []string{"gateway"}, fixture.accepted,
 		"the request must be served by the operator's gateway credential")
 	assert.Equal(t, []string{keyring.GatewayScope}, fixture.store.scopes(),
-		"operator_first reaches the gateway plane before the tenant's own")
+		"operator_first reaches the gateway plane before the account's own")
 	assert.Equal(t, int64(1), fixture.runtime.operatorCalls.Load(),
 		"the environment plane is still tried first")
 }
@@ -126,18 +126,18 @@ func TestGatewayCredentialServesARequestWithNoBYOK(t *testing.T) {
 // and not an artifact of one plane being empty.
 func TestBYOKWinsOverAGatewayCredentialUnderBYOKFirst(t *testing.T) {
 	fixture := newGatewayCredentialFixture(t, map[string]credentials.Material{
-		keyring.GatewayScope:              embeddingTestMaterial("gateway"),
-		keyring.TenantScope("tenant-a"):   embeddingTestMaterial("byok"),
-		keyring.TenantScope("other-acct"): embeddingTestMaterial("other-byok"),
+		keyring.GatewayScope:               embeddingTestMaterial("gateway"),
+		keyring.AccountScope("account-a"):  embeddingTestMaterial("byok"),
+		keyring.AccountScope("other-acct"): embeddingTestMaterial("other-byok"),
 	})
 
 	_, err := fixture.route(t, keyring.BYOKFirst)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"byok"}, fixture.accepted)
-	assert.Equal(t, []string{keyring.TenantScope("tenant-a")}, fixture.store.scopes(),
+	assert.Equal(t, []string{keyring.AccountScope("account-a")}, fixture.store.scopes(),
 		"a served BYOK credential must not cause the gateway plane to be read")
 	assert.Zero(t, fixture.runtime.operatorCalls.Load(),
-		"byok_first must not probe the environment when the tenant's own credential serves")
+		"byok_first must not probe the environment when the account's own credential serves")
 }
 
 // TestBYOKOnlyNeverReachesAGatewayCredential is the deny story. An operator
@@ -154,7 +154,7 @@ func TestBYOKOnlyNeverReachesAGatewayCredential(t *testing.T) {
 	require.ErrorAs(t, err, &providerFailure)
 	assert.Equal(t, "Provider credentials are not configured.", providerFailure.SafeMessage())
 	assert.Empty(t, fixture.accepted, "no attempt may be paid for by the operator")
-	assert.Equal(t, []string{keyring.TenantScope("tenant-a")}, fixture.store.scopes(),
+	assert.Equal(t, []string{keyring.AccountScope("account-a")}, fixture.store.scopes(),
 		"byok_only must never read the gateway scope")
 	assert.Zero(t, fixture.runtime.operatorCalls.Load())
 }
@@ -173,21 +173,21 @@ func TestNoCredentialInAnySourceReportsNotConfigured(t *testing.T) {
 	assert.Equal(t, "Provider credentials are not configured.", providerFailure.SafeMessage())
 	assert.Equal(t, int64(1), fixture.runtime.operatorCalls.Load())
 	assert.Equal(t,
-		[]string{keyring.GatewayScope, keyring.TenantScope("tenant-a")},
+		[]string{keyring.GatewayScope, keyring.AccountScope("account-a")},
 		fixture.store.scopes(),
 		"operator_first orders environment, then gateway, then BYOK")
 }
 
 // TestGatewayCredentialIsAttributedToTheOperator guards usage attribution. A
 // gateway credential is the operator's money even though it is stored rather
-// than read from the environment, so recording it as tenant-owned would bill
+// than read from the environment, so recording it as account-owned would bill
 // the wrong party for every request an operator paid for.
 func TestGatewayCredentialIsAttributedToTheOperator(t *testing.T) {
 	material := embeddingTestMaterial("v1")
 	for source, want := range map[keyring.CredentialSource]execution.CredentialOwner{
 		keyring.SourceEnvironment: execution.CredentialOwnerOperator,
 		keyring.SourceGateway:     execution.CredentialOwnerOperator,
-		keyring.SourceBYOK:        execution.CredentialOwnerTenant,
+		keyring.SourceBYOK:        execution.CredentialOwnerAccount,
 	} {
 		t.Run(string(source), func(t *testing.T) {
 			assert.Equal(t, want, credentialEvidence(source, material).Owner)
@@ -200,32 +200,32 @@ func TestGatewayCredentialIsAttributedToTheOperator(t *testing.T) {
 // hand a byok_only account an operator credential by accident.
 func TestUnreachableStoredPlanesNeverWidenAStrategy(t *testing.T) {
 	tests := []struct {
-		name     string
-		strategy keyring.Strategy
-		hasStore bool
-		tenantID string
-		want     []keyring.CredentialSource
+		name      string
+		strategy  keyring.Strategy
+		hasStore  bool
+		accountID string
+		want      []keyring.CredentialSource
 	}{
 		{
 			name: "no store keeps only the environment", strategy: keyring.OperatorFirst,
-			hasStore: false, tenantID: "tenant-a",
+			hasStore: false, accountID: "account-a",
 			want: []keyring.CredentialSource{keyring.SourceEnvironment},
 		},
 		{
 			name: "no store leaves byok_only with nothing", strategy: keyring.BYOKOnly,
-			hasStore: false, tenantID: "tenant-a",
+			hasStore: false, accountID: "account-a",
 			want: []keyring.CredentialSource{},
 		},
 		{
-			name: "no tenant drops only the BYOK plane", strategy: keyring.OperatorFirst,
-			hasStore: true, tenantID: "",
+			name: "no account drops only the BYOK plane", strategy: keyring.OperatorFirst,
+			hasStore: true, accountID: "",
 			want: []keyring.CredentialSource{
 				keyring.SourceEnvironment, keyring.SourceGateway,
 			},
 		},
 		{
-			name: "no tenant leaves byok_only with nothing", strategy: keyring.BYOKOnly,
-			hasStore: true, tenantID: "",
+			name: "no account leaves byok_only with nothing", strategy: keyring.BYOKOnly,
+			hasStore: true, accountID: "",
 			want: []keyring.CredentialSource{},
 		},
 	}
@@ -235,7 +235,7 @@ func TestUnreachableStoredPlanesNeverWidenAStrategy(t *testing.T) {
 			if test.hasStore {
 				store = newScopedCredentialStore(nil)
 			}
-			assert.Equal(t, test.want, reachableSources(test.strategy, test.tenantID, store))
+			assert.Equal(t, test.want, reachableSources(test.strategy, test.accountID, store))
 		})
 	}
 }

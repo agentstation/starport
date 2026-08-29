@@ -45,10 +45,10 @@ func open(runner jobs.Runner) jobs.OpenRunner {
 }
 
 // submissionFor is what every test that does not test the limit submits: one
-// tenant, no key, and no bound. A test that means to exercise the bound states
+// account, no key, and no bound. A test that means to exercise the bound states
 // its own.
-func submissionFor(tenant string) jobs.Submission {
-	return jobs.Submission{Tenant: tenant, Operation: routing.OperationVideosGenerations}
+func submissionFor(account string) jobs.Submission {
+	return jobs.Submission{Account: account, Operation: routing.OperationVideosGenerations}
 }
 
 func (r *recordingRunner) Submit(context.Context) (jobs.Acceptance, error) {
@@ -111,7 +111,7 @@ func TestSubmitRecordsWhatTheProviderAccepted(t *testing.T) {
 	service, records := newService(t)
 	runner := acceptedRunner()
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 	require.Equal(t, 1, runner.submits)
 	require.Equal(t, "job_service_01", job.ID)
@@ -122,7 +122,7 @@ func TestSubmitRecordsWhatTheProviderAccepted(t *testing.T) {
 
 	// The record survives the call, which is what makes the identifier the
 	// caller holds worth anything after the response closes.
-	stored, err := records.Get(ctx, tenantA, job.ID)
+	stored, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, job.Provider, stored.Provider)
 	require.True(t, stored.HasProviderJob())
@@ -139,17 +139,17 @@ func TestSubmitWritesNoRecordWhenTheProviderRefuses(t *testing.T) {
 	runner := acceptedRunner()
 	runner.submitErr = errors.New("the provider refused the prompt")
 
-	_, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	_, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.Error(t, err)
 
-	_, err = records.Get(ctx, tenantA, "job_service_01")
+	_, err = records.Get(ctx, accountA, "job_service_01")
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 }
 
-// TestSubmitRefusesAJobThatNamesNoTenant keeps an unowned record out of the
-// store. A record with no tenant is readable by the first caller that guesses
-// its identifier, because every read is scoped by tenant.
-func TestSubmitRefusesAJobThatNamesNoTenant(t *testing.T) {
+// TestSubmitRefusesAJobThatNamesNoAccount keeps an unowned record out of the
+// store. A record with no account is readable by the first caller that guesses
+// its identifier, because every read is scoped by account.
+func TestSubmitRefusesAJobThatNamesNoAccount(t *testing.T) {
 	t.Parallel()
 
 	service, _ := newService(t)
@@ -160,7 +160,7 @@ func TestSubmitRefusesAJobThatNamesNoTenant(t *testing.T) {
 // TestPollingAFinishedJobReachesNoProvider is the rule the accounting rule
 // rests on. A caller polls until it sees a terminal answer and often once more
 // after that, and every one of those reads has to be free: free of a provider
-// request, free of the tenant's credential, and free of a second cost record.
+// request, free of the account's credential, and free of a second cost record.
 func TestPollingAFinishedJobReachesNoProvider(t *testing.T) {
 	t.Parallel()
 
@@ -169,12 +169,12 @@ func TestPollingAFinishedJobReachesNoProvider(t *testing.T) {
 	runner := acceptedRunner()
 	runner.acceptance.State = jobs.JobStateCompleted
 
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCompleted, job.State)
 
 	for range 5 {
-		refreshed, err := service.Refresh(ctx, runner, tenantA, job.ID)
+		refreshed, err := service.Refresh(ctx, runner, accountA, job.ID)
 		require.NoError(t, err)
 		require.Equal(t, jobs.JobStateCompleted, refreshed.State)
 	}
@@ -190,11 +190,11 @@ func TestRefreshAdvancesTheRecordFromTheProviderAnswer(t *testing.T) {
 	ctx := context.Background()
 	service, records := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
 	runner.poll = jobs.Report{State: jobs.JobStateRunning}
-	refreshed, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	refreshed, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateRunning, refreshed.State)
 	require.Equal(t, 1, runner.polls)
@@ -202,7 +202,7 @@ func TestRefreshAdvancesTheRecordFromTheProviderAnswer(t *testing.T) {
 	require.Equal(t, "provider-side-identifier", runner.handles[0].ProviderJobID)
 	require.Equal(t, "deepinfra", runner.handles[0].Provider)
 
-	stored, err := records.Get(ctx, tenantA, job.ID)
+	stored, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateRunning, stored.State)
 }
@@ -216,11 +216,11 @@ func TestRefreshOfAnUnchangedJobRewritesNothing(t *testing.T) {
 	ctx := context.Background()
 	service, _ := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
 	runner.poll = jobs.Report{State: jobs.JobStateQueued}
-	refreshed, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	refreshed, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateQueued, refreshed.State)
 	require.True(t, refreshed.TerminalAt.IsZero())
@@ -235,11 +235,11 @@ func TestAFailedProviderAnswerAlwaysStatesAReason(t *testing.T) {
 	ctx := context.Background()
 	service, _ := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
 	runner.poll = jobs.Report{State: jobs.JobStateFailed}
-	failed, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	failed, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateFailed, failed.State)
 	require.NotEmpty(t, failed.Reason)
@@ -256,34 +256,34 @@ func TestASpentJobFailsWithoutAskingTheProvider(t *testing.T) {
 	clock := submitted
 	service, _ := newService(t, jobs.WithClock(func() time.Time { return clock }))
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
 	clock = submitted.Add(jobs.DefaultLifetime + time.Minute)
-	spent, err := service.Refresh(ctx, runner, tenantA, job.ID)
+	spent, err := service.Refresh(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateFailed, spent.State)
 	require.Contains(t, spent.Reason, "did not finish")
 	require.Zero(t, runner.polls)
 }
 
-// TestRefreshOfAnotherTenantsJobIsNotFound is the isolation rule at the service
+// TestRefreshOfAnotherAccountsJobIsNotFound is the isolation rule at the service
 // rather than at the store. A read that reached the provider before it checked
-// the owner would spend the wrong tenant's credential.
-func TestRefreshOfAnotherTenantsJobIsNotFound(t *testing.T) {
+// the owner would spend the wrong account's credential.
+func TestRefreshOfAnotherAccountsJobIsNotFound(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	service, _ := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
-	_, err = service.Refresh(ctx, runner, tenantB, job.ID)
+	_, err = service.Refresh(ctx, runner, accountB, job.ID)
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 	require.Zero(t, runner.polls)
 
-	_, err = service.Cancel(ctx, runner, tenantB, job.ID)
+	_, err = service.Cancel(ctx, runner, accountB, job.ID)
 	require.ErrorIs(t, err, jobs.ErrJobNotFound)
 	require.Zero(t, runner.cancels)
 }
@@ -298,22 +298,22 @@ func TestCancelStopsTheProviderAndTheRecord(t *testing.T) {
 	ctx := context.Background()
 	service, records := newService(t)
 	runner := acceptedRunner()
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
 	runner.cancel = jobs.Report{State: jobs.JobStateRunning}
-	cancelled, err := service.Cancel(ctx, runner, tenantA, job.ID)
+	cancelled, err := service.Cancel(ctx, runner, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, 1, runner.cancels)
 	require.Equal(t, jobs.JobStateCancelled, cancelled.State)
 	require.False(t, cancelled.TerminalAt.IsZero())
 
-	stored, err := records.Get(ctx, tenantA, job.ID)
+	stored, err := records.Get(ctx, accountA, job.ID)
 	require.NoError(t, err)
 	require.Equal(t, jobs.JobStateCancelled, stored.State)
 }
 
-// TestCancelOfAFinishedJobIsAConflict protects the answer a tenant paid for. A
+// TestCancelOfAFinishedJobIsAConflict protects the answer an account paid for. A
 // cancellation that rewrote a completed job would discard both the asset and
 // the cost record that goes with it.
 func TestCancelOfAFinishedJobIsAConflict(t *testing.T) {
@@ -323,10 +323,10 @@ func TestCancelOfAFinishedJobIsAConflict(t *testing.T) {
 	service, _ := newService(t)
 	runner := acceptedRunner()
 	runner.acceptance.State = jobs.JobStateCompleted
-	job, err := service.Submit(ctx, open(runner), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
 	require.NoError(t, err)
 
-	ended, err := service.Cancel(ctx, runner, tenantA, job.ID)
+	ended, err := service.Cancel(ctx, runner, accountA, job.ID)
 	require.ErrorIs(t, err, jobs.ErrJobAlreadyEnded)
 	require.Equal(t, jobs.JobStateCompleted, ended.State)
 	require.Zero(t, runner.cancels)
@@ -340,21 +340,21 @@ func TestTheServiceRefusesACallWithNoProviderSide(t *testing.T) {
 	ctx := context.Background()
 	service, _ := newService(t)
 
-	_, err := service.Submit(ctx, nil, submissionFor(tenantA))
+	_, err := service.Submit(ctx, nil, submissionFor(accountA))
 	require.ErrorIs(t, err, jobs.ErrRunnerRequired)
 
 	// A call that names a builder returning nothing reads the same way. The
 	// builder runs after the slot is claimed, so this path also proves the
 	// claim comes back.
-	_, err = service.Submit(ctx, open(nil), submissionFor(tenantA))
+	_, err = service.Submit(ctx, open(nil), submissionFor(accountA))
 	require.ErrorIs(t, err, jobs.ErrRunnerRequired)
 
-	job, err := service.Submit(ctx, open(acceptedRunner()), submissionFor(tenantA))
+	job, err := service.Submit(ctx, open(acceptedRunner()), submissionFor(accountA))
 	require.NoError(t, err)
 
-	_, err = service.Refresh(ctx, nil, tenantA, job.ID)
+	_, err = service.Refresh(ctx, nil, accountA, job.ID)
 	require.ErrorIs(t, err, jobs.ErrRunnerRequired)
-	_, err = service.Cancel(ctx, nil, tenantA, job.ID)
+	_, err = service.Cancel(ctx, nil, accountA, job.ID)
 	require.ErrorIs(t, err, jobs.ErrRunnerRequired)
 }
 

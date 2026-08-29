@@ -1,4 +1,4 @@
-package tenant
+package account
 
 import (
 	"context"
@@ -13,13 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTenantRepositoryContract(t *testing.T) {
+func TestAccountRepositoryContract(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
 		repository, err := Open(store)
 		require.NoError(t, err)
 
-		created := Tenant{
+		created := Account{
 			ID:                 "acme",
 			Name:               "Acme",
 			CredentialStrategy: StrategyBYOKOnly,
@@ -38,12 +38,12 @@ func TestTenantRepositoryContract(t *testing.T) {
 		stored, err := repository.GetByID(ctx, created.ID)
 		require.NoError(t, err)
 		require.Equal(t, record, stored)
-		require.Equal(t, StrategyBYOKOnly, stored.Tenant.CredentialStrategy)
-		require.EqualValues(t, 1000, stored.Tenant.Limits.Spend.Limit)
+		require.Equal(t, StrategyBYOKOnly, stored.Account.CredentialStrategy)
+		require.EqualValues(t, 1000, stored.Account.Limits.Spend.Limit)
 
 		// The durable value carries its schema version, so a later reader can
 		// tell a v1 record from a future one without guessing.
-		data, err := store.Get(ctx, tenantStorageKey(created.ID))
+		data, err := store.Get(ctx, accountStorageKey(created.ID))
 		require.NoError(t, err)
 		var schema map[string]any
 		require.NoError(t, json.Unmarshal(data, &schema))
@@ -57,17 +57,17 @@ func TestTenantRepositoryContract(t *testing.T) {
 		created.Limits.Spend.Limit = 5
 		reread, err := repository.GetByID(ctx, created.ID)
 		require.NoError(t, err)
-		require.EqualValues(t, 1000, reread.Tenant.Limits.Spend.Limit)
+		require.EqualValues(t, 1000, reread.Account.Limits.Spend.Limit)
 
-		renamed := reread.Tenant
+		renamed := reread.Account
 		renamed.Name = "Acme Corp"
 		renamed.CreatedAt = time.Unix(999, 0).UTC()
 		updated, err := repository.Update(ctx, renamed, reread.Revision)
 		require.NoError(t, err)
 		require.EqualValues(t, 2, updated.Revision)
-		require.Equal(t, "Acme Corp", updated.Tenant.Name)
+		require.Equal(t, "Acme Corp", updated.Account.Name)
 		// Creation time belongs to the record, not to the caller's payload.
-		require.Equal(t, reread.Tenant.CreatedAt, updated.Tenant.CreatedAt)
+		require.Equal(t, reread.Account.CreatedAt, updated.Account.CreatedAt)
 
 		_, err = repository.Update(ctx, renamed, reread.Revision)
 		require.ErrorIs(t, err, ErrConflict)
@@ -87,12 +87,12 @@ func TestEnsureDefaultIsIdempotent(t *testing.T) {
 
 		first, err := repository.EnsureDefault(ctx)
 		require.NoError(t, err)
-		require.Equal(t, DefaultID, first.Tenant.ID)
-		require.True(t, first.Tenant.IsDefault())
-		require.True(t, first.Tenant.Active)
-		require.Equal(t, StrategyOperatorFirst, first.Tenant.CredentialStrategy)
+		require.Equal(t, DefaultID, first.Account.ID)
+		require.True(t, first.Account.IsDefault())
+		require.True(t, first.Account.Active)
+		require.Equal(t, StrategyOperatorFirst, first.Account.CredentialStrategy)
 
-		// Every boot calls this. A second call must observe the first tenant
+		// Every boot calls this. A second call must observe the first account
 		// rather than create a second one or bump its revision.
 		second, err := repository.EnsureDefault(ctx)
 		require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestEnsureDefaultUnderConcurrentBoot(t *testing.T) {
 
 		for index := range bootCount {
 			require.NoErrorf(t, errs[index], "boot %d", index)
-			require.Equal(t, DefaultID, results[index].Tenant.ID)
+			require.Equal(t, DefaultID, results[index].Account.ID)
 			require.EqualValues(t, 1, results[index].Revision)
 		}
 
@@ -141,7 +141,7 @@ func TestEnsureDefaultUnderConcurrentBoot(t *testing.T) {
 	})
 }
 
-func TestDefaultTenantCannotBeDeleted(t *testing.T) {
+func TestDefaultAccountCannotBeDeleted(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
 		repository, err := Open(store)
@@ -150,7 +150,7 @@ func TestDefaultTenantCannotBeDeleted(t *testing.T) {
 		record, err := repository.EnsureDefault(ctx)
 		require.NoError(t, err)
 
-		// A gateway API key with no explicit tenant resolves here. Removing it
+		// A gateway API key with no explicit account resolves here. Removing it
 		// would strand those keys, so the repository refuses even a correct
 		// revision.
 		require.ErrorIs(t, repository.Delete(ctx, DefaultID, record.Revision), ErrDefaultImmutable)
@@ -159,21 +159,21 @@ func TestDefaultTenantCannotBeDeleted(t *testing.T) {
 	})
 }
 
-func TestRepositoryRejectsInvalidTenants(t *testing.T) {
+func TestRepositoryRejectsInvalidAccounts(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
 		repository, err := Open(store)
 		require.NoError(t, err)
 
-		valid := Tenant{ID: "acme", Name: "Acme", Active: true}
+		valid := Account{ID: "acme", Name: "Acme", Active: true}
 
-		// A tenant ID reaches a credential storage key and a log field, so a
+		// An account ID reaches a credential storage key and a log field, so a
 		// separator or a wildcard must never enter one.
-		for _, id := range []string{"", "acme corp", "acme/eu", "*", "tenant:acme"} {
+		for _, id := range []string{"", "acme corp", "acme/eu", "*", "account:acme"} {
 			invalid := valid
 			invalid.ID = id
 			_, err := repository.Create(ctx, invalid)
-			require.Errorf(t, err, "tenant ID %q must be rejected", id)
+			require.Errorf(t, err, "account ID %q must be rejected", id)
 		}
 
 		unnamed := valid
@@ -201,11 +201,11 @@ func TestCredentialStrategyPolicy(t *testing.T) {
 	// An unset strategy reads as the default rather than as a denial, so a
 	// record written before the field existed still reaches an operator
 	// credential.
-	require.Equal(t, StrategyOperatorFirst, Tenant{}.EffectiveCredentialStrategy())
+	require.Equal(t, StrategyOperatorFirst, Account{}.EffectiveCredentialStrategy())
 	require.Equal(
 		t,
 		StrategyBYOKFirst,
-		Tenant{CredentialStrategy: StrategyBYOKFirst}.EffectiveCredentialStrategy(),
+		Account{CredentialStrategy: StrategyBYOKFirst}.EffectiveCredentialStrategy(),
 	)
 
 	require.True(t, StrategyOperatorFirst.AllowsOperatorCredentials())

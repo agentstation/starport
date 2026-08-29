@@ -11,7 +11,7 @@ import (
 // mediaIdentity builds an eligible chat identity around one content part.
 func mediaIdentity(part inference.ContentPart) ChatIdentity {
 	return ChatIdentity{
-		TenantID:          "tenant",
+		AccountID:         "account",
 		CatalogGeneration: "generation",
 		Request: inference.ChatRequest{
 			Model: "openai/gpt-4o",
@@ -162,7 +162,7 @@ func TestFoldingLeavesNoBytesInTheKeyedRequest(t *testing.T) {
 // that wrote them, then update the constant below to the new full key.
 func TestTextOnlyKeyIsPinnedToItsVersion(t *testing.T) {
 	key, err := ChatKey(ChatIdentity{
-		TenantID:          "tenant",
+		AccountID:         "account",
 		CatalogGeneration: "generation",
 		Request: inference.ChatRequest{
 			Model: "openai/gpt-4.1",
@@ -175,8 +175,8 @@ func TestTextOnlyKeyIsPinnedToItsVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const pinned = "responsecache:v5:chat:" +
-		"23c80fde6998d446aa8b73c3da6ea6e409355ff82db9a5b14d3c24f1e9168070"
+	const pinned = "responsecache:v6:chat:" +
+		"f9d655eca861e9cee92a165bfca0e6b8be25488aac289c7f10a65414dc1bb546"
 	if key != pinned {
 		t.Fatalf("key = %q, want %q; if this change is deliberate, raise SemanticKeyVersion with it", key, pinned)
 	}

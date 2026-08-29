@@ -5,8 +5,8 @@ package requestctx
 import (
 	"context"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/identity"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // Key is the typed context key used for server request metadata.
@@ -19,13 +19,13 @@ const (
 	APIKeyID Key = "api_key_id"
 	// APIKeyModel stores the authenticated API key model.
 	APIKeyModel Key = "api_key_model" // #nosec G101 - context key name, not a credential.
-	// TenantID stores the account the request runs under. It is distinct from
-	// APIKeyID: many keys can belong to one tenant.
-	TenantID Key = "tenant_id"
-	// TenantRecord stores the account behind the authenticated key. It is the
+	// AccountID stores the account the request runs under. It is distinct from
+	// APIKeyID: many keys can belong to one account.
+	AccountID Key = "account_id"
+	// AccountRecord stores the account behind the authenticated key. It is the
 	// operator's governing record: the credential strategy the request may run
 	// under, and the limits it spends against.
-	TenantRecord Key = "tenant_record"
+	AccountRecord Key = "account_record"
 )
 
 // WithAPIKey stores the raw API key in the context.
@@ -43,51 +43,51 @@ func WithAPIKeyModel(ctx context.Context, value *identity.APIKey) context.Contex
 	return context.WithValue(ctx, APIKeyModel, value)
 }
 
-// WithTenantID stores the request tenant in the context.
-func WithTenantID(ctx context.Context, value string) context.Context {
-	return context.WithValue(ctx, TenantID, value)
+// WithAccountID stores the request account in the context.
+func WithAccountID(ctx context.Context, value string) context.Context {
+	return context.WithValue(ctx, AccountID, value)
 }
 
-// TenantIDOrDefault returns the account the request runs under, falling back
-// to the canonical tenant when no authenticated identity set one.
+// AccountIDOrDefault returns the account the request runs under, falling back
+// to the canonical account when no authenticated identity set one.
 //
-// This is the single place that decides the tenant of a request that carries
+// This is the single place that decides the account of a request that carries
 // no key. An unauthenticated gateway still has to attribute usage, apply
 // limits, and select credentials, and it attributes all of them to the default
-// tenant.
-func TenantIDOrDefault(ctx context.Context) string {
-	if value, ok := ctx.Value(TenantID).(string); ok && value != "" {
+// account.
+func AccountIDOrDefault(ctx context.Context) string {
+	if value, ok := ctx.Value(AccountID).(string); ok && value != "" {
 		return value
 	}
 	if apiKey, ok := GetAPIKeyModel(ctx); ok && apiKey != nil {
-		return apiKey.EffectiveTenantID()
+		return apiKey.EffectiveAccountID()
 	}
-	return tenant.DefaultID
+	return account.DefaultID
 }
 
-// WithTenantRecord stores the account behind the authenticated key.
-func WithTenantRecord(ctx context.Context, value *tenant.Tenant) context.Context {
-	return context.WithValue(ctx, TenantRecord, value)
+// WithAccountRecord stores the account behind the authenticated key.
+func WithAccountRecord(ctx context.Context, value *account.Account) context.Context {
+	return context.WithValue(ctx, AccountRecord, value)
 }
 
-// GetTenantRecord returns the account behind the authenticated key. It is
+// GetAccountRecord returns the account behind the authenticated key. It is
 // absent when the deployment could not read the account, which is not an
 // authentication failure: the key is still valid and the request falls back to
 // the default governing policy.
-func GetTenantRecord(ctx context.Context) (*tenant.Tenant, bool) {
-	value, ok := ctx.Value(TenantRecord).(*tenant.Tenant)
+func GetAccountRecord(ctx context.Context) (*account.Account, bool) {
+	value, ok := ctx.Value(AccountRecord).(*account.Account)
 	return value, ok && value != nil
 }
 
-// TenantCredentialStrategyOrDefault returns the credential policy the
+// AccountCredentialStrategyOrDefault returns the credential policy the
 // operator set for this request's account. It is the ceiling a per-request
 // strategy may narrow and may never widen, so an unreadable account resolves
 // to the default rather than to no policy at all.
-func TenantCredentialStrategyOrDefault(ctx context.Context) tenant.CredentialStrategy {
-	if record, ok := GetTenantRecord(ctx); ok {
+func AccountCredentialStrategyOrDefault(ctx context.Context) account.CredentialStrategy {
+	if record, ok := GetAccountRecord(ctx); ok {
 		return record.EffectiveCredentialStrategy()
 	}
-	return tenant.StrategyOperatorFirst
+	return account.StrategyOperatorFirst
 }
 
 // GetAPIKey returns the raw API key from the context.

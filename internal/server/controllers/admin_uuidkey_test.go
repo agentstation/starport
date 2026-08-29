@@ -21,7 +21,7 @@ func TestAdminHandler_CreateKey_UUIDKeyFormat(t *testing.T) {
 	store := storage.NewMockStore()
 	identities, err := identity.Open(store)
 	require.NoError(t, err)
-	handler := NewAdminController(identities, newAdminTestTenants(t), nil)
+	handler := NewAdminController(identities, newAdminTestAccounts(t), nil)
 	logger := zerolog.Nop()
 
 	reqBody := map[string]any{

@@ -318,10 +318,10 @@ function OperateDocs() {
       </DocSection>
       <DocSection title="Accounts and limits">
         <p>
-          Accounts isolate tenants: each has its own gateway API keys, BYOK
+          Accounts isolate accounts: each has its own gateway API keys, BYOK
           credentials, usage records, and limits. Create and manage them on
           the{" "}
-          <Link to="/tenants" className="text-accent-link hover:underline">
+          <Link to="/accounts" className="text-accent-link hover:underline">
             Accounts
           </Link>{" "}
           page. Spend and rate limits apply per key and per account.

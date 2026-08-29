@@ -41,7 +41,7 @@ type FilesConfig struct {
 	// MaxUploadBytes bounds one upload. It is a deployment decision rather
 	// than a wire-format one: the same request that a shared object store
 	// absorbs can fill the disk of a single node. FIL6 adds the separate
-	// bound on what one tenant may keep stored at once.
+	// bound on what one account may keep stored at once.
 	MaxUploadBytes int64 `env:"MAX_UPLOAD_BYTES,default=536870912"`
 
 	// Retention is how long a stored file stays readable. Every file expires,

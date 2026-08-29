@@ -32,12 +32,12 @@ func storedVideoJob(
 	t *testing.T,
 	records jobs.Repository,
 	byteStore blob.Store,
-	tenant string,
+	account string,
 	expiresAt time.Time,
 ) jobs.Job {
 	t.Helper()
 	now := time.Now()
-	job, err := jobs.New("job-with-stored-content", tenant, "mock", "mock/video-1",
+	job, err := jobs.New("job-with-stored-content", account, "mock", "mock/video-1",
 		routing.OperationVideosGenerations, now)
 	require.NoError(t, err)
 	require.NoError(t, job.AdoptProviderJob("provider-side-identifier"))
@@ -69,7 +69,7 @@ func TestVideoContentServesStarportBytes(t *testing.T) {
 	job := storedVideoJob(t, records, byteStore, "acme", time.Now().Add(time.Hour))
 	require.NotEmpty(t, job.AssetKey)
 
-	key := storeFileTestKeyForTenant(t, server, "video-content-owner", "acme", "videos:write")
+	key := storeFileTestKeyForAccount(t, server, "video-content-owner", "acme", "videos:write")
 	recorder := videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID+"/content", key)
 
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
@@ -105,7 +105,7 @@ func TestAnExpiredVideoAssetAnswersGone(t *testing.T) {
 	require.NoError(t, err)
 	job := storedVideoJob(t, records, byteStore, "acme", time.Now().Add(-time.Minute))
 
-	key := storeFileTestKeyForTenant(t, server, "video-expired-owner", "acme", "videos:write")
+	key := storeFileTestKeyForAccount(t, server, "video-expired-owner", "acme", "videos:write")
 	recorder := videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID+"/content", key)
 
 	require.Equal(t, http.StatusGone, recorder.Code, recorder.Body.String())
@@ -152,7 +152,7 @@ func TestAListedJobStatesWhetherItsBytesAreStillThere(t *testing.T) {
 	window := time.Now().Add(time.Hour).Truncate(time.Second)
 	job := storedVideoJob(t, records, byteStore, "acme", window)
 
-	key := storeFileTestKeyForTenant(t, server, "video-window-owner", "acme", "videos:write")
+	key := storeFileTestKeyForAccount(t, server, "video-window-owner", "acme", "videos:write")
 
 	held := decodeVideoJob(t, videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID, key))
 	require.Equal(t, "completed", held["status"])
@@ -195,7 +195,7 @@ func TestVideoContentOfAJobWithNoAssetIsNotFound(t *testing.T) {
 	require.NoError(t, job.AdoptProviderJob("provider-side-identifier"))
 	require.NoError(t, records.Create(t.Context(), job))
 
-	key := storeFileTestKeyForTenant(t, server, "video-pending-owner", "acme", "videos:write")
+	key := storeFileTestKeyForAccount(t, server, "video-pending-owner", "acme", "videos:write")
 	recorder := videoRequest(server, http.MethodGet, "/v1/videos/"+job.ID+"/content", key)
 	require.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
 }

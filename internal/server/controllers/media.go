@@ -190,7 +190,7 @@ func mediaGatewayRequest[Request any](
 	return &proxy.MediaRequest[Request]{
 		Request:      request,
 		APIKey:       h.getAPIKey(ctx),
-		TenantID:     h.getTenantID(ctx),
+		AccountID:    h.getAccountID(ctx),
 		KeyID:        h.getAPIKeyID(ctx),
 		APIKeyConfig: config,
 		RequestID:    h.getRequestID(ctx),

@@ -15,22 +15,22 @@ func TestRequestAuthenticationAppliesCatalogPlacements(t *testing.T) {
 	require.NoError(t, err)
 	profile := catalogs.ProviderCredentialProfile{
 		ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
-		Fields: []catalogs.ProviderCredentialFieldID{"api-key", "tenant"},
+		Fields: []catalogs.ProviderCredentialFieldID{"api-key", "account"},
 		Placements: []catalogs.ProviderCredentialPlacement{
 			{
 				Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader,
 				Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer,
 			},
 			{
-				Field: "tenant", Kind: catalogs.ProviderCredentialPlacementQuery,
-				Name: "tenant", Scheme: catalogs.ProviderCredentialSchemeDirect,
+				Field: "account", Kind: catalogs.ProviderCredentialPlacementQuery,
+				Name: "account", Scheme: catalogs.ProviderCredentialSchemeDirect,
 			},
 		},
 	}
 	material := credentials.NewMaterial(
 		profile,
 		map[catalogs.ProviderCredentialFieldID]string{
-			"api-key": "secret-value", "tenant": "tenant-a",
+			"api-key": "secret-value", "account": "account-a",
 		},
 		credentials.MaterialMetadata{Version: "test"},
 	)
@@ -38,7 +38,7 @@ func TestRequestAuthenticationAppliesCatalogPlacements(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, registry.Apply(material, request))
 	require.Equal(t, "Bearer secret-value", request.Header.Get("Authorization"))
-	require.Equal(t, "tenant-a", request.URL.Query().Get("tenant"))
+	require.Equal(t, "account-a", request.URL.Query().Get("account"))
 }
 
 func TestRequestAuthenticationRejectsQueryPlacementOnHTTP(t *testing.T) {

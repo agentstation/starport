@@ -54,7 +54,7 @@ const (
 const (
 	scopeKindGateway = "all"
 	scopeKindKey     = "key"
-	scopeKindTenant  = "tenant"
+	scopeKindAccount = "account"
 )
 
 var (
@@ -84,8 +84,8 @@ type Scope struct {
 // KeyScope addresses the counters for one gateway API key.
 func KeyScope(keyID string) Scope { return Scope{kind: scopeKindKey, id: keyID} }
 
-// TenantScope addresses the counters for one account: every key it holds.
-func TenantScope(tenantID string) Scope { return Scope{kind: scopeKindTenant, id: tenantID} }
+// AccountScope addresses the counters for one account: every key it holds.
+func AccountScope(accountID string) Scope { return Scope{kind: scopeKindAccount, id: accountID} }
 
 // GatewayScope addresses the counters for the whole deployment.
 func GatewayScope() Scope { return Scope{kind: scopeKindGateway} }
@@ -105,7 +105,7 @@ func (s Scope) valid() bool {
 	switch s.kind {
 	case scopeKindGateway:
 		return true
-	case scopeKindKey, scopeKindTenant:
+	case scopeKindKey, scopeKindAccount:
 		return s.id != ""
 	}
 	return false
@@ -119,21 +119,21 @@ func (s Scope) storageSegment() string {
 	return s.kind + ":" + encodeSegment(s.id)
 }
 
-// Query selects records. An empty KeyID selects every key and an empty TenantID
+// Query selects records. An empty KeyID selects every key and an empty AccountID
 // every account (admin scope); callers own that authorization decision.
 type Query struct {
 	KeyID string
-	// TenantID selects one account's records across every key it holds.
+	// AccountID selects one account's records across every key it holds.
 	// Records are keyed by gateway API key, so a query that names only an
 	// account scans the record namespace and filters. That cost belongs to
 	// reporting: budget enforcement reads the aggregate counters instead.
-	TenantID string
-	Model    string
-	Provider string
-	Status   string
-	Since    time.Time
-	Until    time.Time
-	Limit    int
+	AccountID string
+	Model     string
+	Provider  string
+	Status    string
+	Since     time.Time
+	Until     time.Time
+	Limit     int
 	// Cursor continues a previous page: the opaque NextCursor value.
 	Cursor string
 }
@@ -223,8 +223,8 @@ func (r *repository) accumulate(ctx context.Context, record Record) error {
 	// account set is skipped for a record written before account attribution
 	// existed: counting it under no account is worse than not counting it.
 	scopes := []Scope{KeyScope(record.KeyID), GatewayScope()}
-	if record.TenantID != "" {
-		scopes = append(scopes, TenantScope(record.TenantID))
+	if record.AccountID != "" {
+		scopes = append(scopes, AccountScope(record.AccountID))
 	}
 	for _, scope := range scopes {
 		for _, interval := range []string{IntervalDay, IntervalWeek, IntervalMonth} {
@@ -405,7 +405,7 @@ func trimToTimeRange(ordered []parsedKey, since, until time.Time) []parsedKey {
 }
 
 func matches(record Record, query Query) bool {
-	if query.TenantID != "" && record.TenantID != query.TenantID {
+	if query.AccountID != "" && record.AccountID != query.AccountID {
 		return false
 	}
 	if query.Model != "" && record.ModelUsed != query.Model && record.ModelRequested != query.Model {

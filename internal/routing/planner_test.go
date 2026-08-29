@@ -65,11 +65,11 @@ func TestRoutePlannerContract(t *testing.T) {
 		}, rejectionCodes(plan.Rejections()))
 	})
 
-	t.Run("tenant and provider policy", func(t *testing.T) {
+	t.Run("account and provider policy", func(t *testing.T) {
 		planner := NewPlanner()
 		plan, err := planner.Plan(Request{
 			Models: []string{"author/primary"},
-			Tenant: TenantPolicy{
+			Account: AccountPolicy{
 				AllowedModels:    []string{"author/primary"},
 				AllowedProviders: []string{"provider-b"},
 			},
@@ -79,16 +79,16 @@ func TestRoutePlannerContract(t *testing.T) {
 		}, contractSnapshot())
 		require.NoError(t, err)
 		require.Equal(t, []string{"provider-b/primary-b"}, attemptIDs(plan.Attempts()))
-		require.Contains(t, rejectionCodes(plan.Rejections()), RejectionTenantProvider)
+		require.Contains(t, rejectionCodes(plan.Rejections()), RejectionAccountProvider)
 	})
 
-	t.Run("tenant model override", func(t *testing.T) {
+	t.Run("account model override", func(t *testing.T) {
 		planner := NewPlanner()
 		plan, err := planner.Plan(Request{
-			Models: []string{"tenant/default"},
-			Tenant: TenantPolicy{
-				AllowedModels:  []string{"tenant/default"},
-				ModelOverrides: map[string]string{"tenant/default": "author/fallback"},
+			Models: []string{"account/default"},
+			Account: AccountPolicy{
+				AllowedModels:  []string{"account/default"},
+				ModelOverrides: map[string]string{"account/default": "author/fallback"},
 			},
 		}, contractSnapshot())
 		require.NoError(t, err)

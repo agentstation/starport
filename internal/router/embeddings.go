@@ -37,7 +37,7 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 		return nil, fmt.Errorf("plan embedding route: %w", err)
 	}
 	credentialPolicy, err := newCredentialPolicy(
-		req.APIKeyConfig.credentialStrategy(), req.TenantID,
+		req.APIKeyConfig.credentialStrategy(), req.AccountID,
 		runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
@@ -117,7 +117,7 @@ func embeddingPlanningRequest(req *EmbeddingRequest, preferLowestCost bool) rout
 		},
 	}
 	if req.APIKeyConfig != nil {
-		request.Tenant = routing.TenantPolicy{
+		request.Account = routing.AccountPolicy{
 			AllowedModels:    wildcardAsUnrestricted(req.APIKeyConfig.AllowedModels),
 			AllowedProviders: normalizeProviders(req.APIKeyConfig.AllowedProviders),
 			ModelOverrides:   cloneModelOverrides(req.APIKeyConfig.ModelOverrides),

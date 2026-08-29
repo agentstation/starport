@@ -135,7 +135,7 @@ func credentialRouter(store keyring.ProviderKeys) http.Handler {
 		r.Delete("/", handler.GatewayDelete)
 		r.Post("/validate", handler.GatewayValidate)
 	})
-	router.Route("/api/v1/tenants/{tenant_id}/byok", func(r chi.Router) {
+	router.Route("/api/v1/accounts/{account_id}/byok", func(r chi.Router) {
 		r.Get("/", handler.BYOKList)
 		r.Get("/{provider}", handler.BYOKGet)
 		r.Put("/{provider}", handler.BYOKPut)
@@ -183,11 +183,11 @@ func TestCredentialSurfacesDegradeLoudlyWithoutAStore(t *testing.T) {
 		{http.MethodPut, "/api/v1/providers/openai/credentials", `{"credentials":{"api-key":"x"}}`},
 		{http.MethodDelete, "/api/v1/providers/openai/credentials", ""},
 		{http.MethodPost, "/api/v1/providers/openai/credentials/validate", ""},
-		{http.MethodGet, "/api/v1/tenants/acme/byok", ""},
-		{http.MethodGet, "/api/v1/tenants/acme/byok/openai", ""},
-		{http.MethodPut, "/api/v1/tenants/acme/byok/openai", `{"credentials":{"api-key":"x"}}`},
-		{http.MethodDelete, "/api/v1/tenants/acme/byok/openai", ""},
-		{http.MethodPost, "/api/v1/tenants/acme/byok/openai/validate", ""},
+		{http.MethodGet, "/api/v1/accounts/acme/byok", ""},
+		{http.MethodGet, "/api/v1/accounts/acme/byok/openai", ""},
+		{http.MethodPut, "/api/v1/accounts/acme/byok/openai", `{"credentials":{"api-key":"x"}}`},
+		{http.MethodDelete, "/api/v1/accounts/acme/byok/openai", ""},
+		{http.MethodPost, "/api/v1/accounts/acme/byok/openai/validate", ""},
 	}
 
 	for _, route := range routes {
@@ -221,7 +221,7 @@ func TestACredentialBodyMustCarryStringFields(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			// Both planes decode the same body, so proving one proves both.
 			recorder := callCredentialRoute(t, &mockKeyManager{}, http.MethodPut,
-				"/api/v1/tenants/acme/byok/openai", testCase.body)
+				"/api/v1/accounts/acme/byok/openai", testCase.body)
 
 			require.Equal(t, http.StatusBadRequest, recorder.Code)
 			response := decodeCredentialError(t, recorder)
@@ -292,7 +292,7 @@ func TestASchemaRejectionIsTheCallersMistake(t *testing.T) {
 // asserts the shape it reports: that a credential exists, never what it is.
 func TestACredentialResponseNeverCarriesItsSecret(t *testing.T) {
 	recorder := callCredentialRoute(t, &mockKeyManager{}, http.MethodGet,
-		"/api/v1/tenants/acme/byok/openai", "")
+		"/api/v1/accounts/acme/byok/openai", "")
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	var summary map[string]any

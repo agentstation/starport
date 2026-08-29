@@ -122,7 +122,7 @@ func rerankTurn(model string) *RerankRequest {
 			Query:     "which provider serves reranking",
 			Documents: []string{"a poem about the sea", "Cohere serves reranking"},
 		},
-		TenantID:  "acme",
+		AccountID: "acme",
 		KeyID:     "key-1",
 		RequestID: "req-1",
 		Protocol:  "openrouter",
@@ -198,11 +198,11 @@ func TestASearchUnitOnAnUnpricedOfferingIsNeverBilledAtZero(t *testing.T) {
 	require.Equal(t, nanoUSD(3*routes.unitPrice), cost.NanoUSD)
 }
 
-// TestATenantAtItsSpendBoundIsRefusedBeforeTheProviderCall is the second half
+// TestAAccountAtItsSpendBoundIsRefusedBeforeTheProviderCall is the second half
 // of the budget. The door refuses a window already spent, which lets the
 // crossing request through; here the floor price is known before the money is
 // spent, so the refusal costs the account nothing.
-func TestATenantAtItsSpendBoundIsRefusedBeforeTheProviderCall(t *testing.T) {
+func TestAAccountAtItsSpendBoundIsRefusedBeforeTheProviderCall(t *testing.T) {
 	const model = "cohere/rerank-v3.5"
 	router := &rerankRouter{capturingRouter: &capturingRouter{}, units: 1}
 	service := &proxy{

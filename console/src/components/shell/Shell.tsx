@@ -66,7 +66,7 @@ const NAV_SECTIONS: ReadonlyArray<{
   {
     label: "Gateway",
     items: [
-      { to: "/tenants", label: "Accounts", icon: Building2 },
+      { to: "/accounts", label: "Accounts", icon: Building2 },
       { to: "/settings", label: "Settings", icon: Settings },
     ],
   },

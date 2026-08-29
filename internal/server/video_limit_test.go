@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // submitVideo posts one submission naming a model. The scope tests post an
@@ -54,7 +54,7 @@ func TestAnAccountAtItsOutstandingJobLimitReadsARefusal(t *testing.T) {
 	// video, so no submission ever reaches a record.
 	meter, err := limits.NewJobMeter(store)
 	require.NoError(t, err)
-	require.NoError(t, meter.Reserve(t.Context(), tenant.DefaultID, 1, bound))
+	require.NoError(t, meter.Reserve(t.Context(), account.DefaultID, 1, bound))
 
 	refused := submitVideo(server, key)
 	require.Equal(t, http.StatusTooManyRequests, refused.Code, refused.Body.String())
@@ -68,7 +68,7 @@ func TestAnAccountAtItsOutstandingJobLimitReadsARefusal(t *testing.T) {
 
 	// The slot comes back when a job ends. The same request is then admitted
 	// and fails further along, at the router.
-	require.NoError(t, meter.Release(t.Context(), tenant.DefaultID, 1))
+	require.NoError(t, meter.Release(t.Context(), account.DefaultID, 1))
 	admitted := submitVideo(server, key)
 	require.Equal(t, http.StatusServiceUnavailable, admitted.Code, admitted.Body.String())
 	require.NotContains(t, admitted.Body.String(), "outstanding job")
@@ -84,11 +84,11 @@ func TestAnAccountThatStatesNoOutstandingJobLimitStillHasOne(t *testing.T) {
 
 	meter, err := limits.NewJobMeter(store)
 	require.NoError(t, err)
-	// Fill the default. The number itself belongs to internal/tenant; what this
+	// Fill the default. The number itself belongs to internal/account; what this
 	// asserts is that the route reads it rather than treating an absent limit
 	// as no limit.
-	filled := tenant.DefaultOutstandingJobs
-	require.NoError(t, meter.Reserve(t.Context(), tenant.DefaultID, filled, filled))
+	filled := account.DefaultOutstandingJobs
+	require.NoError(t, meter.Reserve(t.Context(), account.DefaultID, filled, filled))
 
 	refused := submitVideo(server, key)
 	require.Equal(t, http.StatusTooManyRequests, refused.Code, refused.Body.String())

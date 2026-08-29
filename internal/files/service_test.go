@@ -27,10 +27,10 @@ func newService(t *testing.T, options ...Option) (*Service, Repository, blob.Sto
 	return service, records, bytes
 }
 
-func upload(t *testing.T, service *Service, tenant, name, payload string) File {
+func upload(t *testing.T, service *Service, account, name, payload string) File {
 	t.Helper()
 	file, err := service.Upload(context.Background(), UploadRequest{
-		Tenant: tenant, Filename: name, Purpose: PurposeUserData,
+		Account: account, Filename: name, Purpose: PurposeUserData,
 	}, strings.NewReader(payload))
 	require.NoError(t, err)
 	return file
@@ -41,14 +41,14 @@ func TestUploadCommitsTheRecordAfterTheBytes(t *testing.T) {
 	service, _, _ := newService(t)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	require.Equal(t, FileStateReady, file.State)
 	require.Equal(t, int64(len("the payload")), file.Bytes)
 	require.NotEmpty(t, file.ID)
 
 	// The size comes from the byte store rather than from the request, so a
 	// caller cannot state a size the bytes do not match.
-	read, reader, err := service.Open(ctx, "tenant-a", file.ID)
+	read, reader, err := service.Open(ctx, "account-a", file.ID)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, reader.Close()) }()
 	content, err := io.ReadAll(reader)
@@ -57,31 +57,31 @@ func TestUploadCommitsTheRecordAfterTheBytes(t *testing.T) {
 	require.Equal(t, file.Bytes, read.Bytes)
 }
 
-// TestAnotherTenantReadsNotFound holds FIL-V07. A refusal would confirm that
+// TestAnotherAccountReadsNotFound holds FIL-V07. A refusal would confirm that
 // the identifier exists, and an identifier is the only thing a caller has to
 // guess.
-func TestAnotherTenantReadsNotFound(t *testing.T) {
+func TestAnotherAccountReadsNotFound(t *testing.T) {
 	t.Parallel()
 	service, _, _ := newService(t)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 
-	_, err := service.Get(ctx, "tenant-b", file.ID)
+	_, err := service.Get(ctx, "account-b", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 
-	_, _, err = service.Open(ctx, "tenant-b", file.ID)
+	_, _, err = service.Open(ctx, "account-b", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 
-	require.ErrorIs(t, service.Delete(ctx, "tenant-b", file.ID), ErrFileNotFound)
+	require.ErrorIs(t, service.Delete(ctx, "account-b", file.ID), ErrFileNotFound)
 
-	listed, err := service.List(ctx, "tenant-b", 0)
+	listed, err := service.List(ctx, "account-b", 0)
 	require.NoError(t, err)
 	require.Empty(t, listed)
 
-	// The owner still reads it. The delete another tenant attempted did
+	// The owner still reads it. The delete another account attempted did
 	// nothing.
-	owned, err := service.Get(ctx, "tenant-a", file.ID)
+	owned, err := service.Get(ctx, "account-a", file.ID)
 	require.NoError(t, err)
 	require.Equal(t, file.ID, owned.ID)
 }
@@ -103,7 +103,7 @@ func TestCrashBeforeTheCommitLeavesNoReachableFile(t *testing.T) {
 
 	blobKey := newBlobKey()
 	pending := File{
-		ID: newFileID(), Tenant: "tenant-a", Filename: "half.txt",
+		ID: newFileID(), Account: "account-a", Filename: "half.txt",
 		Purpose: PurposeUserData, State: FileStatePending,
 		CreatedAt: created, blobKey: blobKey,
 	}
@@ -112,9 +112,9 @@ func TestCrashBeforeTheCommitLeavesNoReachableFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// No caller can reach it, through either the record or a listing.
-	_, err = service.Get(ctx, "tenant-a", pending.ID)
+	_, err = service.Get(ctx, "account-a", pending.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
-	listed, err := service.List(ctx, "tenant-a", 0)
+	listed, err := service.List(ctx, "account-a", 0)
 	require.NoError(t, err)
 	require.Empty(t, listed)
 
@@ -136,7 +136,7 @@ func TestCrashBeforeTheCommitLeavesNoReachableFile(t *testing.T) {
 
 	_, err = bytes.Stat(ctx, blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
-	_, err = records.Get(ctx, "tenant-a", pending.ID)
+	_, err = records.Get(ctx, "account-a", pending.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 
 	// A second sweep is safe. The reconciliation ticker runs it repeatedly.
@@ -158,14 +158,14 @@ func TestSweepLeavesACommittedFileAlone(t *testing.T) {
 	)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	clock = created.Add(100 * time.Hour)
 
 	result, err := service.Sweep(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, result.Abandoned)
 
-	found, err := service.Get(ctx, "tenant-a", file.ID)
+	found, err := service.Get(ctx, "account-a", file.ID)
 	require.NoError(t, err)
 	require.Equal(t, file.ID, found.ID)
 }
@@ -173,14 +173,14 @@ func TestSweepLeavesACommittedFileAlone(t *testing.T) {
 // TestRecordExposesNoBlobKey holds FIL-V09.
 //
 // The key is the one value that turns knowledge of a file into access to its
-// bytes across every tenant boundary. It stays inside this package, so a
+// bytes across every account boundary. It stays inside this package, so a
 // response body, a log line, or a console payload cannot carry it out by
 // accident.
 func TestRecordExposesNoBlobKey(t *testing.T) {
 	t.Parallel()
 	service, _, _ := newService(t)
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	blobKey := file.blobKey
 	require.NotEmpty(t, blobKey, "the record names no bytes")
 
@@ -215,7 +215,7 @@ func TestUploadRefusesAPurposeThisGatewayDoesNotServe(t *testing.T) {
 
 	for _, purpose := range []Purpose{"assistants", "batch", "fine-tune", ""} {
 		_, err := service.Upload(ctx, UploadRequest{
-			Tenant: "tenant-a", Filename: "notes.txt", Purpose: purpose,
+			Account: "account-a", Filename: "notes.txt", Purpose: purpose,
 		}, strings.NewReader("the payload"))
 		require.ErrorIsf(t, err, ErrInvalidPurpose, "purpose %q", purpose)
 	}
@@ -236,7 +236,7 @@ func TestFailedUploadLeavesNothing(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := service.Upload(ctx, UploadRequest{
-		Tenant: "tenant-a", Filename: "half.txt", Purpose: PurposeUserData,
+		Account: "account-a", Filename: "half.txt", Purpose: PurposeUserData,
 	}, &stopsEarly{err: errors.New("the client went away")})
 	require.Error(t, err)
 
@@ -258,12 +258,12 @@ func TestDeleteRemovesBothWrites(t *testing.T) {
 	service, records, bytes := newService(t)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	blobKey := file.blobKey
 
-	require.NoError(t, service.Delete(ctx, "tenant-a", file.ID))
+	require.NoError(t, service.Delete(ctx, "account-a", file.ID))
 
-	_, err := records.Get(ctx, "tenant-a", file.ID)
+	_, err := records.Get(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 	_, err = bytes.Stat(ctx, blobKey)
 	require.ErrorIs(t, err, blob.ErrNotFound)
@@ -277,10 +277,10 @@ func TestOpenReportsNotFoundWhenTheBytesAreGone(t *testing.T) {
 	service, _, bytes := newService(t)
 	ctx := context.Background()
 
-	file := upload(t, service, "tenant-a", "notes.txt", "the payload")
+	file := upload(t, service, "account-a", "notes.txt", "the payload")
 	require.NoError(t, bytes.Delete(ctx, file.blobKey))
 
-	_, _, err := service.Open(ctx, "tenant-a", file.ID)
+	_, _, err := service.Open(ctx, "account-a", file.ID)
 	require.ErrorIs(t, err, ErrFileNotFound)
 }
 

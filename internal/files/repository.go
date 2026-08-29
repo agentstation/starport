@@ -17,7 +17,7 @@ const (
 	// StorageSchemaVersion identifies the only file record schema.
 	StorageSchemaVersion = 1
 	// StoragePrefix is the file record v1 namespace.
-	StoragePrefix = "files:v1:tenant:"
+	StoragePrefix = "files:v1:account:"
 
 	defaultListLimit = 1000
 )
@@ -25,9 +25,9 @@ const (
 var (
 	// ErrRepositoryRequired reports an absent file record storage adapter.
 	ErrRepositoryRequired = errors.New("files: record storage is required")
-	// ErrFileNotFound reports a file this tenant cannot see.
+	// ErrFileNotFound reports a file this account cannot see.
 	//
-	// A file another tenant owns produces this error rather than a refusal. A
+	// A file another account owns produces this error rather than a refusal. A
 	// refusal would confirm that the identifier exists, and an identifier is
 	// the only thing a caller needs to guess.
 	ErrFileNotFound = errors.New("files: file not found")
@@ -55,7 +55,7 @@ type repository struct{ store storage.KVStore }
 type fileRecord struct {
 	SchemaVersion int       `json:"schema_version"`
 	ID            string    `json:"id"`
-	Tenant        string    `json:"tenant"`
+	Account       string    `json:"account"`
 	Filename      string    `json:"filename"`
 	Purpose       Purpose   `json:"purpose"`
 	Bytes         int64     `json:"bytes"`
@@ -78,7 +78,7 @@ func (r *repository) Create(ctx context.Context, file File) error {
 	if err != nil {
 		return err
 	}
-	if err := r.store.CompareAndSwap(ctx, storageKey(file.Tenant, file.ID), nil, data); err != nil {
+	if err := r.store.CompareAndSwap(ctx, storageKey(file.Account, file.ID), nil, data); err != nil {
 		if errors.Is(err, storage.ErrConflict) {
 			return ErrFileExists
 		}
@@ -87,11 +87,11 @@ func (r *repository) Create(ctx context.Context, file File) error {
 	return nil
 }
 
-func (r *repository) Get(ctx context.Context, tenant, id string) (File, error) {
-	if strings.TrimSpace(tenant) == "" || strings.TrimSpace(id) == "" {
+func (r *repository) Get(ctx context.Context, account, id string) (File, error) {
+	if strings.TrimSpace(account) == "" || strings.TrimSpace(id) == "" {
 		return File{}, ErrFileNotFound
 	}
-	data, err := r.store.Get(ctx, storageKey(tenant, id))
+	data, err := r.store.Get(ctx, storageKey(account, id))
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return File{}, ErrFileNotFound
@@ -101,15 +101,15 @@ func (r *repository) Get(ctx context.Context, tenant, id string) (File, error) {
 	return decodeFile(data)
 }
 
-func (r *repository) List(ctx context.Context, tenant string, limit int) ([]File, error) {
-	if strings.TrimSpace(tenant) == "" {
+func (r *repository) List(ctx context.Context, account string, limit int) ([]File, error) {
+	if strings.TrimSpace(account) == "" {
 		return nil, nil
 	}
-	return r.readPrefix(ctx, tenantPrefix(tenant), limit)
+	return r.readPrefix(ctx, accountPrefix(account), limit)
 }
 
-// Scan reads every tenant's records. The sweep is the only caller, because it
-// answers a question no tenant asks: which records did a stopped process leave
+// Scan reads every account's records. The sweep is the only caller, because it
+// answers a question no account asks: which records did a stopped process leave
 // behind.
 func (r *repository) Scan(ctx context.Context, limit int) ([]File, error) {
 	return r.readPrefix(ctx, StoragePrefix, limit)
@@ -151,7 +151,7 @@ func (r *repository) Replace(ctx context.Context, file File) error {
 	if err != nil {
 		return err
 	}
-	key := storageKey(file.Tenant, file.ID)
+	key := storageKey(file.Account, file.ID)
 	current, err := r.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -165,8 +165,8 @@ func (r *repository) Replace(ctx context.Context, file File) error {
 	return nil
 }
 
-func (r *repository) Delete(ctx context.Context, tenant, id string) error {
-	if err := r.store.Delete(ctx, storageKey(tenant, id)); err != nil {
+func (r *repository) Delete(ctx context.Context, account, id string) error {
+	if err := r.store.Delete(ctx, storageKey(account, id)); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			// A repeated delete is safe, so a sweep that runs twice over the
 			// same record does not fail the second time.
@@ -177,15 +177,15 @@ func (r *repository) Delete(ctx context.Context, tenant, id string) error {
 	return nil
 }
 
-// storageKey puts the tenant above the identifier, so a read for another
-// tenant misses by construction rather than by a check a later change could
+// storageKey puts the account above the identifier, so a read for another
+// account misses by construction rather than by a check a later change could
 // forget.
-func storageKey(tenant, id string) string {
-	return tenantPrefix(tenant) + base64.RawURLEncoding.EncodeToString([]byte(id))
+func storageKey(account, id string) string {
+	return accountPrefix(account) + base64.RawURLEncoding.EncodeToString([]byte(id))
 }
 
-func tenantPrefix(tenant string) string {
-	return StoragePrefix + base64.RawURLEncoding.EncodeToString([]byte(tenant)) + ":id:"
+func accountPrefix(account string) string {
+	return StoragePrefix + base64.RawURLEncoding.EncodeToString([]byte(account)) + ":id:"
 }
 
 func encodeFile(file File) ([]byte, error) {
@@ -195,7 +195,7 @@ func encodeFile(file File) ([]byte, error) {
 	data, err := json.Marshal(fileRecord{
 		SchemaVersion: StorageSchemaVersion,
 		ID:            file.ID,
-		Tenant:        file.Tenant,
+		Account:       file.Account,
 		Filename:      file.Filename,
 		Purpose:       file.Purpose,
 		Bytes:         file.Bytes,
@@ -220,7 +220,7 @@ func decodeFile(data []byte) (File, error) {
 	}
 	file := File{
 		ID:        stored.ID,
-		Tenant:    stored.Tenant,
+		Account:   stored.Account,
 		Filename:  stored.Filename,
 		Purpose:   stored.Purpose,
 		Bytes:     stored.Bytes,

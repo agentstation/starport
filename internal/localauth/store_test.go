@@ -164,7 +164,7 @@ func TestUnreadableRecordsAreRefusedRatherThanReplaced(t *testing.T) {
 	newerVersion := valid
 	newerVersion.Version = TokenVersion + 1
 	wrongScope := valid
-	wrongScope.Scope = "tenant-admin"
+	wrongScope.Scope = "account-admin"
 	notAToken := valid
 	notAToken.Secret = "STARPORT_looks_like_a_gateway_key"
 

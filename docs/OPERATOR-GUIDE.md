@@ -112,7 +112,7 @@ machine gives itself. It is not a gateway API key:
 
 | | Gateway API key | Local admin token |
 | --- | --- | --- |
-| Belongs to | a tenant | nobody |
+| Belongs to | an account | nobody |
 | Proves | who you are | that you are on this machine |
 | Lives in | encrypted storage | one file, mode 0600 |
 | Prefix | `STARPORT_` | `starport_local_` |
@@ -165,7 +165,7 @@ identity; no machine-local surface uses those words, and
 
 For a deployment where the operator is not at the machine, the console takes a
 gateway API key instead. That is a different credential with different
-consequences: it authenticates a caller and is metered against a tenant, where
+consequences: it authenticates a caller and is metered against an account, where
 the token above is the operator of the machine.
 
 ### Rotation
@@ -351,7 +351,7 @@ catalog-declared inference profiles. Deployment-owned material can come from a
 static environment value, an explicit secret reference, or a catalog-declared
 default cloud credential chain. An authentication-free profile needs no
 material. A missing or failed provider credential does not block other
-providers, tenant BYOK, or gateway readiness.
+providers, account BYOK, or gateway readiness.
 
 The provider reconciler repeats this work every minute by default. Set
 `STARPORT_CREDENTIAL_SOURCES_RECONCILE_INTERVAL` to another nonnegative
@@ -540,7 +540,7 @@ money and one is the account's. Only the last is BYOK.
 | --- | --- | --- | --- |
 | `environment` | the operator | this process's environment | starting the process |
 | `gateway` | the operator | encrypted storage, scope `*` | `PUT /api/v1/providers/{provider}/credentials`, or the provider screen |
-| `byok` | an account | encrypted storage, scope `tenant:<id>` | `PUT /api/v1/tenants/{tenant_id}/byok/{provider}`, or the account screen |
+| `byok` | an account | encrypted storage, scope `account:<id>` | `PUT /api/v1/accounts/{account_id}/byok/{provider}`, or the account screen |
 
 A **gateway credential** is deployment-wide: every account a strategy permits
 can spend it. It is read-only from no route — an operator applies and rotates
@@ -582,7 +582,7 @@ Set `STARPORT_CATALOG_REFRESH_ON_START=true` to run Starmap acquisition before
 runtime activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later catalog
 refreshes. These values update catalog facts. They do not control inference
 credential reconciliation.
-Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed tenant facts, including
+Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed account facts, including
 Azure deployment names and local Ollama model mappings. Those facts enter a
 durable Starmap generation before Starport makes the adapter routable.
 
@@ -1029,7 +1029,7 @@ each failed check and keeps all secret values redacted.
   derived, cloud, or secret-reference values that its Starmap profile declares.
 - HTTP 401: the bearer value does not match an active stored identity.
 - HTTP 403: the identity lacks the required scope or owns a different key.
-- No route candidate: the model, provider policy, tenant policy, capability,
+- No route candidate: the model, provider policy, account policy, capability,
   context limit, or current offering availability rejected every route.
 - SDK check is `UNVERIFIED`: install the named optional official SDK before
   treating that client as tested.

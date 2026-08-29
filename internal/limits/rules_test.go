@@ -21,7 +21,7 @@ func TestRequestRulesKeepBothMetersAndOrderAccountFirst(t *testing.T) {
 	)
 
 	require.Len(t, rules, 2, "an account limit and a key limit are two meters, not two candidates")
-	assert.Equal(t, ScopeTenant, rules[0].Scope)
+	assert.Equal(t, ScopeAccount, rules[0].Scope)
 	assert.Equal(t, int64(1), rules[0].Limit.Limit)
 	assert.Equal(t, ScopeKey, rules[1].Scope)
 	assert.Equal(t, int64(100), rules[1].Limit.Limit)
@@ -57,7 +57,7 @@ func TestBudgetRulesSelectOneDimensionPerHolder(t *testing.T) {
 
 	spend := BudgetRules(account, key, DimensionSpend)
 	require.Len(t, spend, 2)
-	assert.Equal(t, ScopeTenant, spend[0].Scope)
+	assert.Equal(t, ScopeAccount, spend[0].Scope)
 	assert.Equal(t, int64(1_000), spend[0].Budget.Limit)
 	assert.Equal(t, ScopeKey, spend[1].Scope)
 

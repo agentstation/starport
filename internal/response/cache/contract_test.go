@@ -11,7 +11,7 @@ import (
 	"github.com/agentstation/starport/internal/inference"
 )
 
-func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
+func TestSemanticKeyAndAccountIsolationContract(t *testing.T) {
 	maxTokens := 128
 	temperature := float32(0.2)
 	topP := float32(0.9)
@@ -43,12 +43,12 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 		User:              "user-1",
 	}
 	base := ChatIdentity{
-		TenantID:          "tenant-1",
+		AccountID:         "account-1",
 		CatalogGeneration: "catalog-1",
 		Request:           request,
 		Policy: Policy{
 			Provider: ProviderPolicy{Order: []string{"openai", "anthropic"}, Only: []string{"openai", "anthropic"}, AllowFallbacks: true, Route: "fallback", ModelOverrides: map[string]string{"openai/gpt-4": "openai/gpt-4.1"}},
-			Tenant:   TenantPolicy{AllowedModels: []string{"openai/gpt-4.1"}, AllowedProviders: []string{"openai"}, RateLimitTier: "pro", CredentialStrategy: "operator_first"},
+			Account:  AccountPolicy{AllowedModels: []string{"openai/gpt-4.1"}, AllowedProviders: []string{"openai"}, RateLimitTier: "pro", CredentialStrategy: "operator_first"},
 		},
 	}
 	baseKey, err := ChatKey(base)
@@ -57,7 +57,7 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 	}
 
 	variants := map[string]func(*ChatIdentity){
-		"tenant":                 func(value *ChatIdentity) { value.TenantID = "tenant-2" },
+		"account":                func(value *ChatIdentity) { value.AccountID = "account-2" },
 		"catalog generation":     func(value *ChatIdentity) { value.CatalogGeneration = "catalog-2" },
 		"model":                  func(value *ChatIdentity) { value.Request.Model = "openai/gpt-4.2" },
 		"model chain":            func(value *ChatIdentity) { value.Request.FallbackModels[0] = "google/gemini-2" },
@@ -103,10 +103,10 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 		"fallback policy":      func(value *ChatIdentity) { value.Policy.Provider.AllowFallbacks = false },
 		"route mode":           func(value *ChatIdentity) { value.Policy.Provider.Route = "manual" },
 		"model override":       func(value *ChatIdentity) { value.Policy.Provider.ModelOverrides["openai/gpt-4"] = "openai/gpt-4.2" },
-		"allowed models":       func(value *ChatIdentity) { value.Policy.Tenant.AllowedModels = []string{"openai/gpt-4.2"} },
-		"allowed providers":    func(value *ChatIdentity) { value.Policy.Tenant.AllowedProviders = []string{"anthropic"} },
-		"tenant tier":          func(value *ChatIdentity) { value.Policy.Tenant.RateLimitTier = "enterprise" },
-		"credential strategy":  func(value *ChatIdentity) { value.Policy.Tenant.CredentialStrategy = "byok_only" },
+		"allowed models":       func(value *ChatIdentity) { value.Policy.Account.AllowedModels = []string{"openai/gpt-4.2"} },
+		"allowed providers":    func(value *ChatIdentity) { value.Policy.Account.AllowedProviders = []string{"anthropic"} },
+		"account tier":         func(value *ChatIdentity) { value.Policy.Account.RateLimitTier = "enterprise" },
+		"credential strategy":  func(value *ChatIdentity) { value.Policy.Account.CredentialStrategy = "byok_only" },
 	}
 	for name, mutate := range variants {
 		t.Run(name, func(t *testing.T) {
@@ -135,10 +135,10 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 
 	unsorted := cloneChatIdentity(base)
 	unsorted.Policy.Provider.Only = []string{"anthropic", "openai"}
-	unsorted.Policy.Tenant.AllowedModels = []string{"z", "a"}
+	unsorted.Policy.Account.AllowedModels = []string{"z", "a"}
 	sorted := cloneChatIdentity(unsorted)
 	sorted.Policy.Provider.Only = []string{"openai", "anthropic"}
-	sorted.Policy.Tenant.AllowedModels = []string{"a", "z"}
+	sorted.Policy.Account.AllowedModels = []string{"a", "z"}
 	first, _ := ChatKey(unsorted)
 	second, _ := ChatKey(sorted)
 	if first != second {
@@ -148,7 +148,7 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 	t.Run("embedding identity", func(t *testing.T) {
 		dimensions := 768
 		identity := EmbeddingIdentity{
-			TenantID: "tenant-1", CatalogGeneration: "catalog-1",
+			AccountID: "account-1", CatalogGeneration: "catalog-1",
 			Request: inference.EmbeddingRequest{
 				Model:          "openai/text-embedding-3-small",
 				Input:          inference.EmbeddingInput{Texts: []string{"first", "second"}},
@@ -161,7 +161,7 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 			t.Fatal(err)
 		}
 		variants := []EmbeddingIdentity{
-			cloneEmbeddingIdentity(identity, func(value *EmbeddingIdentity) { value.TenantID = "tenant-2" }),
+			cloneEmbeddingIdentity(identity, func(value *EmbeddingIdentity) { value.AccountID = "account-2" }),
 			cloneEmbeddingIdentity(identity, func(value *EmbeddingIdentity) { value.CatalogGeneration = "catalog-2" }),
 			cloneEmbeddingIdentity(identity, func(value *EmbeddingIdentity) { value.Request.Model = "openai/text-embedding-3-large" }),
 			cloneEmbeddingIdentity(identity, func(value *EmbeddingIdentity) { value.Request.Input.Texts = []string{"second", "first"} }),
@@ -207,7 +207,7 @@ func TestSemanticKeyAndTenantIsolationContract(t *testing.T) {
 
 func TestCacheEligibilityRejectsUnsafeShapes(t *testing.T) {
 	base := ChatIdentity{
-		TenantID:          "tenant",
+		AccountID:         "account",
 		CatalogGeneration: "generation",
 		Request: inference.ChatRequest{Messages: []inference.Message{{
 			Role: inference.RoleUser, Content: []inference.ContentPart{{Kind: inference.ContentText, Text: "hello"}},
@@ -218,7 +218,7 @@ func TestCacheEligibilityRejectsUnsafeShapes(t *testing.T) {
 		mutate func(*ChatIdentity)
 		cause  error
 	}{
-		{"missing tenant", func(value *ChatIdentity) { value.TenantID = "" }, ErrTenantRequired},
+		{"missing account", func(value *ChatIdentity) { value.AccountID = "" }, ErrAccountRequired},
 		{"missing generation", func(value *ChatIdentity) { value.CatalogGeneration = "" }, ErrGenerationRequired},
 		{"mutable image", func(value *ChatIdentity) {
 			value.Request.Messages[0].Content = []inference.ContentPart{{Kind: inference.ContentImage, Image: &inference.Image{URL: "https://example.invalid/image.png"}}}
@@ -342,13 +342,13 @@ func TestRepositoryRejectsInvalidRecords(t *testing.T) {
 }
 
 func FuzzSemanticKey(f *testing.F) {
-	f.Add("tenant", "generation", "hello")
-	f.Fuzz(func(t *testing.T, tenant, generation, text string) {
-		if tenant == "" || generation == "" {
+	f.Add("account", "generation", "hello")
+	f.Fuzz(func(t *testing.T, account, generation, text string) {
+		if account == "" || generation == "" {
 			return
 		}
 		identity := ChatIdentity{
-			TenantID: tenant, CatalogGeneration: generation,
+			AccountID: account, CatalogGeneration: generation,
 			Request: inference.ChatRequest{Messages: []inference.Message{{Role: inference.RoleUser, Content: []inference.ContentPart{{Kind: inference.ContentText, Text: text}}}}},
 		}
 		first, err := ChatKey(identity)

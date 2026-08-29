@@ -108,11 +108,11 @@ type Cost struct {
 type Record struct {
 	RequestID string `json:"request_id"`
 	KeyID     string `json:"key_id"`
-	// TenantID is the account the key belongs to. It is what an account-wide
+	// AccountID is the account the key belongs to. It is what an account-wide
 	// spend cap counts, and a key ID cannot stand in for it because an account
 	// holds many keys. It is optional so that a record written before account
 	// attribution stays readable; such a record counts toward no account.
-	TenantID       string    `json:"tenant_id,omitempty"`
+	AccountID      string    `json:"account_id,omitempty"`
 	Timestamp      time.Time `json:"timestamp"`
 	Protocol       string    `json:"protocol,omitempty"`
 	Operation      string    `json:"operation"`

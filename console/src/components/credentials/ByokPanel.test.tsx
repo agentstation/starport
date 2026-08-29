@@ -12,10 +12,10 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ByokPanel } from "./ByokPanel";
 
 // BYOK is addressed by account. The panel's whole job is to store a credential
-// against a tenant, and these tests hold it to that address — a call that
-// dropped the tenant would silently write the deployment credential instead.
+// against an account, and these tests hold it to that address — a call that
+// dropped the account would silently write the deployment credential instead.
 const gateway = vi.hoisted(() => ({
-  stored: [] as { tenant: string; provider: string; body: unknown }[],
+  stored: [] as { account: string; provider: string; body: unknown }[],
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -29,20 +29,20 @@ vi.mock("@/lib/api", async (importOriginal) => {
         credential_fields: [{ id: "api_key", kind: "secret", required: true }],
       },
     ],
-    listBYOKCredentials: async (tenant: string) =>
+    listBYOKCredentials: async (account: string) =>
       gateway.stored
-        .filter((record) => record.tenant === tenant)
+        .filter((record) => record.account === account)
         .map((record) => ({
           provider: record.provider,
           has_credentials: true,
           created_at: "2026-08-25T00:00:00Z",
         })),
     putBYOKCredential: async (
-      tenant: string,
+      account: string,
       provider: string,
       body: unknown,
     ) => {
-      gateway.stored.push({ tenant, provider, body });
+      gateway.stored.push({ account, provider, body });
       return {};
     },
     validateBYOKCredential: async () => ({ valid: true }),
@@ -55,13 +55,13 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-function mount(tenantId = "acme") {
+function mount(accountId = "acme") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <ByokPanel tenantId={tenantId} />
+      <ByokPanel accountId={accountId} />
     </QueryClientProvider>,
   );
 }
@@ -82,15 +82,15 @@ test("stores a credential against the account, not the deployment", async () => 
   });
   await waitFor(() => expect(screen.getByLabelText("api_key")).toBeTruthy());
   fireEvent.change(screen.getByLabelText("api_key"), {
-    target: { value: "gsk-tenant-secret" },
+    target: { value: "gsk-account-secret" },
   });
   fireEvent.click(screen.getByText("Store credential"));
 
   await waitFor(() => expect(gateway.stored).toHaveLength(1));
   expect(gateway.stored[0]).toEqual({
-    tenant: "acme",
+    account: "acme",
     provider: "groq",
-    body: { credentials: { api_key: "gsk-tenant-secret" } },
+    body: { credentials: { api_key: "gsk-account-secret" } },
   });
   await waitFor(() =>
     expect(screen.getByText(/Applied and validated/)).toBeTruthy(),
@@ -118,7 +118,7 @@ test("names these credentials BYOK and says whose they are", async () => {
 // control lists what is missing, so the panel cannot invite a silent rotation
 // that looks like a first-time apply.
 test("offers only the providers this account has not covered", async () => {
-  gateway.stored.push({ tenant: "acme", provider: "groq", body: {} });
+  gateway.stored.push({ account: "acme", provider: "groq", body: {} });
   mount("acme");
 
   await waitFor(() => expect(screen.getByText("Groq")).toBeTruthy());

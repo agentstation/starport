@@ -86,14 +86,14 @@ type AttemptEvidence struct {
 }
 
 // CredentialOwner identifies the request credential plane used for one
-// provider attempt. It contains no tenant identity or credential material.
+// provider attempt. It contains no account identity or credential material.
 type CredentialOwner string
 
 const (
 	// CredentialOwnerOperator identifies deployment-owned inference material.
 	CredentialOwnerOperator CredentialOwner = "operator"
-	// CredentialOwnerTenant identifies request-scoped tenant BYOK material.
-	CredentialOwnerTenant CredentialOwner = "tenant"
+	// CredentialOwnerAccount identifies request-scoped account BYOK material.
+	CredentialOwnerAccount CredentialOwner = "account"
 )
 
 // CredentialEvidence identifies one selected credential version without

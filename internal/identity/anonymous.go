@@ -10,7 +10,7 @@ const AnonymousKeyID = "anonymous"
 // DefaultAnonymousScopes are the scopes an unauthenticated request holds when
 // the operator disabled authentication.
 //
-// The set is every tenant scope and never "admin". Disabling authentication
+// The set is every account scope and never "admin". Disabling authentication
 // says the port is trusted, not that every caller is the operator: the admin
 // plane creates keys, applies deployment-wide provider credentials, and
 // deletes accounts, and none of that should follow from opening inference.
@@ -37,7 +37,7 @@ func DefaultAnonymousScopes() []string {
 }
 
 // Anonymous returns the identity an unauthenticated request runs as. It names
-// no account, so it resolves to the canonical tenant through the same rule
+// no account, so it resolves to the canonical account through the same rule
 // every issued key uses, and it is active and unexpiring because there is
 // nothing to revoke: an operator revokes it by requiring authentication again.
 //

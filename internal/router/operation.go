@@ -21,12 +21,12 @@ import (
 // itself differs. This file holds the shared path so that adding an operation
 // adds a call rather than a second retry policy.
 
-// OperationRequest carries one canonical request plus the tenant routing and
+// OperationRequest carries one canonical request plus the account routing and
 // credential policy every operation reads.
 type OperationRequest[Request any] struct {
 	Request      Request
 	APIKeyConfig *APIKeyConfig
-	TenantID     string
+	AccountID    string
 }
 
 // policy names the model the plan asks for and the key restrictions that apply
@@ -34,7 +34,7 @@ type OperationRequest[Request any] struct {
 // unites them, so the caller states the model and the shared path stays free
 // of a constraint that would exist only to read one string.
 func (r *OperationRequest[Request]) policy(model string) operationPolicy {
-	return operationPolicy{Model: model, APIKeyConfig: r.APIKeyConfig, TenantID: r.TenantID}
+	return operationPolicy{Model: model, APIKeyConfig: r.APIKeyConfig, AccountID: r.AccountID}
 }
 
 // operationPolicy is everything the shared path reads that is not the
@@ -42,7 +42,7 @@ func (r *OperationRequest[Request]) policy(model string) operationPolicy {
 type operationPolicy struct {
 	Model        string
 	APIKeyConfig *APIKeyConfig
-	TenantID     string
+	AccountID    string
 	// Provider pins the plan to one provider. It is empty for every operation
 	// that finishes inside its request, and set only when a request carries an
 	// identifier a single provider issued.
@@ -123,7 +123,7 @@ func routeOperation[Response any](
 		return nil, fmt.Errorf("plan %s route: %w", operation, err)
 	}
 	credentialPolicy, err := newCredentialPolicy(
-		policy.APIKeyConfig.credentialStrategy(), policy.TenantID,
+		policy.APIKeyConfig.credentialStrategy(), policy.AccountID,
 		runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
@@ -201,7 +201,7 @@ func checkCatalogued(runtime connectors.RuntimeLease, model string) error {
 }
 
 // operationPlanningRequest builds the same planning request the embedding path
-// builds. Tenant model and provider restrictions apply to every operation
+// builds. Account model and provider restrictions apply to every operation
 // exactly as they apply to a chat call, because they are properties of the key.
 func operationPlanningRequest(policy operationPolicy, preferLowestCost bool) routing.Request {
 	request := routing.Request{
@@ -219,7 +219,7 @@ func operationPlanningRequest(policy operationPolicy, preferLowestCost bool) rou
 		request.Models = []string{policy.Model}
 	}
 	if policy.APIKeyConfig != nil {
-		request.Tenant = routing.TenantPolicy{
+		request.Account = routing.AccountPolicy{
 			AllowedModels:    wildcardAsUnrestricted(policy.APIKeyConfig.AllowedModels),
 			AllowedProviders: normalizeProviders(policy.APIKeyConfig.AllowedProviders),
 			ModelOverrides:   cloneModelOverrides(policy.APIKeyConfig.ModelOverrides),
@@ -229,7 +229,7 @@ func operationPlanningRequest(policy operationPolicy, preferLowestCost bool) rou
 	// it. The caller checked membership before setting it, so writing the one
 	// name here cannot let a key reach a provider it may not use.
 	if policy.Provider != "" {
-		request.Tenant.AllowedProviders = []string{policy.Provider}
+		request.Account.AllowedProviders = []string{policy.Provider}
 	}
 	return request
 }

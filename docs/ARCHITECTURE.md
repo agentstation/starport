@@ -13,7 +13,7 @@ Implemented:
 - Per-API-key rate-limit enforcement using authenticated API key ID and an atomic rate-limit repository.
 - Badger and Valkey KV storage backends behind a shared `KVStore` interface.
 - Versioned repositories for identities, provider credentials, rate limits, and presets.
-- Tenant-safe response caching with canonical chat and embedding records, catalog-generation invalidation, and stream reconstruction.
+- Account-safe response caching with canonical chat and embedding records, catalog-generation invalidation, and stream reconstruction.
 - Catalog-driven provider activation over the compiled OpenAI-compatible,
   Anthropic, Google AI, Google Cloud, and Ollama transport primitives.
 - Catalog-driven inference credential discovery, interval reconciliation, and
@@ -25,12 +25,12 @@ Implemented:
 - Routing uses provider preferences, fallback chains, one attempt budget, and offering-level availability. It supports cost, latency, affinity, and restrictions.
 - Provider inference credentials in three sources: the process environment, a
   gateway credential the operator applies for the whole deployment, and the BYOK
-  a tenant brings for itself. Encrypted storage, provider validation, per-tenant
+  an account brings for itself. Encrypted storage, provider validation, per-account
   selection strategies, per-source usage attribution, and separate operator and
-  tenant HTTP endpoints.
-- Tenant accounts that own gateway API keys, account-wide limits, and the
+  account HTTP endpoints.
+- Account accounts that own gateway API keys, account-wide limits, and the
   default credential strategy. A gateway API key authenticates a request; the
-  tenant behind it bounds what that request may spend.
+  account behind it bounds what that request may spend.
 - A gateway authentication mode the operator sets by flag, configuration, or
   console switch, with a local admin token for first-run console access.
 - Starmap-backed model, provider, capability, context, and price discovery from one immutable generation.
@@ -139,8 +139,8 @@ starport/
 ├── internal/response/cache/   # eligibility, semantic keys, canonical records, stream replay
 ├── internal/cache/            # local and distributed cache byte storage
 ├── internal/identity/         # gateway identity model and versioned repository
-├── internal/tenant/           # account identity, account-wide limits, credential strategy
-├── internal/limits/           # request-rate and consumption vocabulary shared by key and tenant
+├── internal/account/           # account identity, account-wide limits, credential strategy
+├── internal/limits/           # request-rate and consumption vocabulary shared by key and account
 ├── internal/authmode/         # whether the gateway requires a gateway API key
 ├── internal/localauth/        # local admin token, launch tickets, and console sessions
 ├── internal/credentials/      # provider credentials, encryption, and repository
@@ -278,7 +278,7 @@ Concept repositories own these version 1 namespaces:
 - `internal/usage`: `usage:v1:`
 - `internal/catalog`: `catalog_generation:v1:` for accepted state and
   `catalog_remote_generation:v1:` for the independently verified remote head
-- `internal/files`: `files:v1:tenant:`
+- `internal/files`: `files:v1:account:`
 
 Each repository owns its key encoding, record envelope, validation, revisions, and compare-and-swap rules. Controllers and business services use repository contracts. They do not construct durable keys or serialize durable records. The cache package stores response and model-cache data only.
 
@@ -288,7 +288,7 @@ Starport has no released durable-data contract. Therefore, the version 1 reposit
 
 A stored file has two halves, and they live apart. The record holds the
 identifier, the filename, the purpose, the size, the owning account, and the
-expiry, and it goes to the `KVStore` under `files:v1:tenant:`. The bytes go to
+expiry, and it goes to the `KVStore` under `files:v1:account:`. The bytes go to
 `internal/blob`, which owns them alone.
 
 The split follows the size. A record is small, indexed, and scanned by prefix.
@@ -315,9 +315,9 @@ package names a backend, a bucket, or a path.
 
 `internal/response/cache` owns response-cache eligibility, semantic identity, versioned records, and canonical stream reconstruction. `internal/cache` owns only byte storage, TTL, and local/distributed layering. The proxy converts current request and response types at this seam.
 
-Chat and embedding keys use the full SHA-256 digest in the `responsecache:v1:<kind>:` namespace. Identity includes the authenticated API key ID as tenant, the immutable catalog generation, canonical inference input, provider policy, model chains and overrides, and API-key restrictions. Ordered inputs keep their order. Set-like restrictions use sorted copies. Stream delivery options do not change the completed-result identity, so streaming and non-streaming requests can use one canonical record.
+Chat and embedding keys use the full SHA-256 digest in the `responsecache:v1:<kind>:` namespace. Identity includes the authenticated API key ID as account, the immutable catalog generation, canonical inference input, provider policy, model chains and overrides, and API-key restrictions. Ordered inputs keep their order. Set-like restrictions use sorted copies. Stream delivery options do not change the completed-result identity, so streaming and non-streaming requests can use one canonical record.
 
-The cache fails closed. It skips requests without tenant or catalog identity. It also skips unsupported chat requests. These include provider extensions, image inputs, and invalid tool or output schemas. Starport cannot prove stable result identity for those shapes.
+The cache fails closed. It skips requests without account or catalog identity. It also skips unsupported chat requests. These include provider extensions, image inputs, and invalid tool or output schemas. Starport cannot prove stable result identity for those shapes.
 
 A cache record has its own schema version, semantic key, kind, timestamp, and canonical inference result. A read rejects corrupt, stale-version, wrong-key, and wrong-kind records.
 
@@ -342,7 +342,7 @@ operator timeout and connection settings into the provider transport. One
 connector call makes one outbound request attempt.
 
 The routable snapshot retains Starmap endpoint templates. Request policy first
-selects tenant or deployment-owned inference material. The retained runtime
+selects account or deployment-owned inference material. The retained runtime
 generation then binds that material to the selected template. Deployment-owned
 base URL overrides apply only to deployment-owned material.
 
@@ -390,7 +390,7 @@ change material through their lifecycle without a restart.
 `internal/providers/state` projects adapter support, operator credential state,
 and exact offering availability as separate values. It stores an opaque
 material version only for stale-result rejection and never returns that value
-through HTTP. Tenant BYOK outcomes cannot change shared operator state.
+through HTTP. Account BYOK outcomes cannot change shared operator state.
 
 `internal/credentials` also owns direct inference secret-source adapters.
 It supports Google Cloud Secret Manager, Azure Key Vault, AWS Secrets Manager,
@@ -406,7 +406,7 @@ without its own expiry gets the configured remote refresh interval. Cache hits
 make no secret-store request. Each selected read owns and closes its client or
 idle HTTP resources.
 
-## Credentials and Tenants
+## Credentials and Accounts
 
 Starport holds two unrelated kinds of secret. A gateway API key authenticates a
 caller to Starport. A provider credential pays a provider. They never convert
@@ -419,22 +419,22 @@ sources can pay for one request, and two of the three belong to the operator:
 | --- | --- | --- | --- |
 | `environment` | operator | the gateway process environment | a restart |
 | `gateway` | operator | encrypted storage at scope `*` | the console or the admin API |
-| `byok` | tenant | encrypted storage at scope `tenant:<id>` | the tenant |
+| `byok` | account | encrypted storage at scope `account:<id>` | the account |
 
-Only the third is BYOK. The word names a credential a tenant brought for
+Only the third is BYOK. The word names a credential an account brought for
 itself, and nothing else. A credential the operator applies for the whole
 deployment is a gateway credential even though it is stored the same way,
 because the difference that matters is who owns the spend.
 
-A per-tenant strategy chooses the order. `operator_first` offers the
-environment credential, then the gateway credential, then the tenant's own.
-`byok_first` moves the tenant's own credential to the front and keeps the two
+A per-account strategy chooses the order. `operator_first` offers the
+environment credential, then the gateway credential, then the account's own.
+`byok_first` moves the account's own credential to the front and keeps the two
 operator sources adjacent behind it, because they are the same operator's
-money. `byok_only` narrows the request to the tenant's own credential and fails
+money. `byok_only` narrows the request to the account's own credential and fails
 when it is absent.
 
 A gateway API key may name a strategy in its metadata. It can only narrow the
-account's: a key held by a `byok_only` tenant cannot ask for operator
+account's: a key held by a `byok_only` account cannot ask for operator
 credentials, and a request that would widen the account's strategy is refused
 rather than quietly downgraded. A key that names none inherits the account's.
 
@@ -443,14 +443,14 @@ through to the next source in the same request. The attempt that answered
 carries the source it spent into `usage.Record.credential_source`, which is how
 an operator reads which plane paid rather than only which provider served.
 
-`internal/tenant` owns the account behind a gateway API key: the account-wide
+`internal/account` owns the account behind a gateway API key: the account-wide
 limits, the default credential strategy, and the account's own BYOK scope.
 `internal/limits` owns the limit vocabulary itself, because both a key and a
-tenant hold limits and neither owns the other's. A request satisfies both
+account hold limits and neither owns the other's. A request satisfies both
 meters. A key limit bounds one key; it never raises or lowers what the account
 may spend in total.
 
-Tenant outcomes stay tenant-local. A provider that refuses a tenant's BYOK marks
+Account outcomes stay account-local. A provider that refuses an account's BYOK marks
 nothing in the shared operator availability state, because one account's expired
 credential is not evidence about the deployment's.
 
@@ -511,13 +511,13 @@ Implemented:
 - The encryption service uses Argon2id when it derives a key from a password value.
 - Rate limiting uses the authenticated API key ID, not the raw secret.
 - The credential repository isolates stored provider credentials by scope. The
-  operator's gateway credential is stored at `*`; a tenant's BYOK is stored at
-  `tenant:<id>` and no other tenant can read or spend it.
+  operator's gateway credential is stored at `*`; an account's BYOK is stored at
+  `account:<id>` and no other account can read or spend it.
 - Disabling the gateway authentication mode requires a local listener. A
   deployment bound to a routable address refuses the disabled mode unless the
   operator states the exposure explicitly.
 - The local admin token is a file readable only by the account running the
-  gateway. It is not a gateway API key, holds no tenant, and never authenticates
+  gateway. It is not a gateway API key, holds no account, and never authenticates
   an inference request.
 
 Still planned:
@@ -625,7 +625,7 @@ has not shipped yet. The planner treats such a fact as inert rather than as
 corruption.
 
 Provider credentials. The operator applies one credential for the whole
-deployment; a tenant brings its own. The two never share a path, because they
+deployment; an account brings its own. The two never share a path, because they
 differ in who owns the credential:
 
 ```text
@@ -633,27 +633,27 @@ GET    /api/v1/providers/{provider}/credentials
 PUT    /api/v1/providers/{provider}/credentials
 DELETE /api/v1/providers/{provider}/credentials
 POST   /api/v1/providers/{provider}/credentials/validate
-GET    /api/v1/tenants/{tenant_id}/byok
-GET    /api/v1/tenants/{tenant_id}/byok/{provider}
-PUT    /api/v1/tenants/{tenant_id}/byok/{provider}
-DELETE /api/v1/tenants/{tenant_id}/byok/{provider}
-POST   /api/v1/tenants/{tenant_id}/byok/{provider}/validate
+GET    /api/v1/accounts/{account_id}/byok
+GET    /api/v1/accounts/{account_id}/byok/{provider}
+PUT    /api/v1/accounts/{account_id}/byok/{provider}
+DELETE /api/v1/accounts/{account_id}/byok/{provider}
+POST   /api/v1/accounts/{account_id}/byok/{provider}/validate
 ```
 
 Account usage and admin surfaces:
 
 ```text
-GET    /api/v1/tenants/{tenant_id}/usage/providers
+GET    /api/v1/accounts/{account_id}/usage/providers
 GET    /api/v1/admin/keys/
 POST   /api/v1/admin/keys/
 GET    /api/v1/admin/keys/{key_id}
 PUT    /api/v1/admin/keys/{key_id}
 DELETE /api/v1/admin/keys/{key_id}
-GET    /api/v1/admin/tenants
-POST   /api/v1/admin/tenants
-GET    /api/v1/admin/tenants/{tenant_id}
-PUT    /api/v1/admin/tenants/{tenant_id}
-DELETE /api/v1/admin/tenants/{tenant_id}
+GET    /api/v1/admin/accounts
+POST   /api/v1/admin/accounts
+GET    /api/v1/admin/accounts/{account_id}
+PUT    /api/v1/admin/accounts/{account_id}
+DELETE /api/v1/admin/accounts/{account_id}
 GET    /api/v1/admin/info
 GET    /api/v1/admin/metrics
 GET    /api/v1/admin/providers

@@ -46,7 +46,7 @@ func (h *EmbeddingsController) Create(w http.ResponseWriter, r *http.Request) {
 	// Add context from HTTP request
 	ctx := r.Context()
 	req.APIKey = h.getAPIKey(ctx)
-	req.TenantID = h.getTenantID(ctx)
+	req.AccountID = h.getAccountID(ctx)
 	req.KeyID = h.getAPIKeyID(ctx)
 	req.APIKeyConfig, err = h.getAPIKeyRoutingConfig(ctx)
 	if err != nil {

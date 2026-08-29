@@ -48,7 +48,7 @@ var (
 	ErrRetentionTooShort = errors.New("files: the requested retention is shorter than one hour")
 )
 
-// Meter bounds how many bytes one tenant keeps in storage at a time.
+// Meter bounds how many bytes one account keeps in storage at a time.
 //
 // This package names the primitive rather than importing the limit
 // vocabulary. A stored file knows its size and its owner, and nothing about
@@ -106,7 +106,7 @@ func WithRetention(window time.Duration) Option {
 	}
 }
 
-// WithMeter bounds the bytes each tenant keeps. Without one the service stores
+// WithMeter bounds the bytes each account keeps. Without one the service stores
 // without counting, which is what a deployment that set no bound wants.
 func WithMeter(meter Meter) Option {
 	return func(s *Service) {
@@ -136,7 +136,7 @@ func NewService(records Repository, blobs blob.Store, options ...Option) (*Servi
 
 // UploadRequest names everything about a file except its bytes.
 type UploadRequest struct {
-	Tenant   string
+	Account  string
 	Filename string
 	Purpose  Purpose
 
@@ -148,8 +148,8 @@ type UploadRequest struct {
 	// lands, so a caller that understated the upload gains nothing.
 	Size int64
 
-	// StoredBytesBound is the total this tenant may keep. Zero leaves the
-	// tenant unbounded, and the service still counts its bytes so a bound set
+	// StoredBytesBound is the total this account may keep. Zero leaves the
+	// account unbounded, and the service still counts its bytes so a bound set
 	// later reads a true number.
 	StoredBytesBound int64
 
@@ -192,18 +192,18 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 	if err != nil {
 		return File{}, err
 	}
-	tenant := strings.TrimSpace(request.Tenant)
+	account := strings.TrimSpace(request.Account)
 
 	// The claim goes in before anything is written. A bound checked after the
 	// write has already spent the storage it exists to protect.
 	held := max(request.Size, 0)
-	if err := s.reserve(ctx, tenant, held, request.StoredBytesBound); err != nil {
+	if err := s.reserve(ctx, account, held, request.StoredBytesBound); err != nil {
 		return File{}, err
 	}
 
 	pending := File{
 		ID:        newFileID(),
-		Tenant:    tenant,
+		Account:   account,
 		Filename:  request.Filename,
 		Purpose:   request.Purpose,
 		Bytes:     held,
@@ -216,7 +216,7 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 	// record gives the same number back. A crash leaves the claim to the
 	// sweep, which reads it off the record it deletes.
 	if err := s.records.Create(ctx, pending); err != nil {
-		s.release(ctx, tenant, held)
+		s.release(ctx, account, held)
 		return File{}, err
 	}
 
@@ -251,36 +251,36 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest, r io.Reader
 func (s *Service) settle(ctx context.Context, pending *File, actual, bound int64) error {
 	switch delta := actual - pending.Bytes; {
 	case delta > 0:
-		if err := s.reserve(ctx, pending.Tenant, delta, bound); err != nil {
+		if err := s.reserve(ctx, pending.Account, delta, bound); err != nil {
 			return err
 		}
 	case delta < 0:
-		s.release(ctx, pending.Tenant, -delta)
+		s.release(ctx, pending.Account, -delta)
 	}
 	pending.Bytes = actual
 	return nil
 }
 
-// reserve claims bytes against the tenant bound. A service with no meter
+// reserve claims bytes against the account bound. A service with no meter
 // stores without counting.
-func (s *Service) reserve(ctx context.Context, tenant string, size, bound int64) error {
+func (s *Service) reserve(ctx context.Context, account string, size, bound int64) error {
 	if s.meter == nil || size <= 0 {
 		return nil
 	}
-	return s.meter.Reserve(ctx, tenant, size, bound)
+	return s.meter.Reserve(ctx, account, size, bound)
 }
 
 // release gives bytes back and reports nothing.
 //
 // Every caller is already unwinding, and a failure here leaves the total too
-// high rather than too low. Too high refuses an upload the tenant could have
-// made, which an operator sees and can correct. Too low would let a tenant
+// high rather than too low. Too high refuses an upload the account could have
+// made, which an operator sees and can correct. Too low would let an account
 // past the bound the meter exists to hold.
-func (s *Service) release(ctx context.Context, tenant string, size int64) {
+func (s *Service) release(ctx context.Context, account string, size int64) {
 	if s.meter == nil || size <= 0 {
 		return
 	}
-	_ = s.meter.Release(ctx, tenant, size)
+	_ = s.meter.Release(ctx, account, size)
 }
 
 // Get returns one readable file. A pending record reads as not found, because
@@ -290,8 +290,8 @@ func (s *Service) release(ctx context.Context, tenant string, size int64) {
 // Expiry is decided on the read rather than by the sweep. The sweep runs on an
 // interval, and a file that answered for the length of that interval past its
 // stated window would make the window a suggestion.
-func (s *Service) Get(ctx context.Context, tenant, id string) (File, error) {
-	file, err := s.records.Get(ctx, tenant, id)
+func (s *Service) Get(ctx context.Context, account, id string) (File, error) {
+	file, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return File{}, err
 	}
@@ -302,8 +302,8 @@ func (s *Service) Get(ctx context.Context, tenant, id string) (File, error) {
 }
 
 // Open returns the record and a reader over its bytes.
-func (s *Service) Open(ctx context.Context, tenant, id string) (File, io.ReadCloser, error) {
-	file, err := s.Get(ctx, tenant, id)
+func (s *Service) Open(ctx context.Context, account, id string) (File, io.ReadCloser, error) {
+	file, err := s.Get(ctx, account, id)
 	if err != nil {
 		return File{}, nil, err
 	}
@@ -319,9 +319,9 @@ func (s *Service) Open(ctx context.Context, tenant, id string) (File, io.ReadClo
 	return file, reader, nil
 }
 
-// List returns the readable files one tenant owns.
-func (s *Service) List(ctx context.Context, tenant string, limit int) ([]File, error) {
-	records, err := s.records.List(ctx, tenant, limit)
+// List returns the readable files one account owns.
+func (s *Service) List(ctx context.Context, account string, limit int) ([]File, error) {
+	records, err := s.records.List(ctx, account, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -335,15 +335,15 @@ func (s *Service) List(ctx context.Context, tenant string, limit int) ([]File, e
 	return readable, nil
 }
 
-// Delete removes a file this tenant owns.
+// Delete removes a file this account owns.
 //
 // The record is marked first, then the bytes go, then the record goes. Marking
 // first is what makes the delete resumable: a process that stops part way
 // leaves a record in the deleting state, which reads as not found and which
 // the next sweep finishes. A delete that removed the bytes without marking
 // would leave a ready record over bytes that no longer exist.
-func (s *Service) Delete(ctx context.Context, tenant, id string) error {
-	file, err := s.records.Get(ctx, tenant, id)
+func (s *Service) Delete(ctx context.Context, account, id string) error {
+	file, err := s.records.Get(ctx, account, id)
 	if err != nil {
 		return err
 	}
@@ -446,13 +446,13 @@ func (s *Service) remove(ctx context.Context, file File) error {
 	if err := s.blobs.Delete(ctx, file.blobKey); err != nil && !errors.Is(err, blob.ErrNotFound) {
 		return fmt.Errorf("files: delete the bytes: %w", err)
 	}
-	if err := s.records.Delete(ctx, file.Tenant, file.ID); err != nil {
+	if err := s.records.Delete(ctx, file.Account, file.ID); err != nil {
 		return err
 	}
 	// The claim goes back only once both writes are gone. Releasing earlier
-	// would let a failure between the two leave the tenant credited for bytes
+	// would let a failure between the two leave the account credited for bytes
 	// a later sweep still has to find.
-	s.release(ctx, file.Tenant, file.Bytes)
+	s.release(ctx, file.Account, file.Bytes)
 	return nil
 }
 
@@ -461,8 +461,8 @@ func (s *Service) remove(ctx context.Context, file File) error {
 // sweep repeats.
 func (s *Service) discard(ctx context.Context, file File) {
 	_ = s.blobs.Delete(ctx, file.blobKey)
-	_ = s.records.Delete(ctx, file.Tenant, file.ID)
-	s.release(ctx, file.Tenant, file.Bytes)
+	_ = s.records.Delete(ctx, file.Account, file.ID)
+	s.release(ctx, file.Account, file.Bytes)
 }
 
 // newFileID names a file the way a caller sees it. The prefix makes an

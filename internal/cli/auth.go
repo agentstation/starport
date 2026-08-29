@@ -146,7 +146,7 @@ func newAuthCommand(deps Dependencies, usageError usageErrorHandler) *urfavecli.
 	return &urfavecli.Command{
 		Name: "auth", Usage: "Manage this machine's local admin token",
 		Description: "The local admin token is a file on this machine. It is not a gateway " +
-			"API key: it belongs to nobody, it is never issued to a tenant, and holding it " +
+			"API key: it belongs to nobody, it is never issued to an account, and holding it " +
 			"is a claim about where you are rather than who you are.",
 		OnUsageError: usageError, Commands: []*urfavecli.Command{token, status, rotate, newAuthURLCommand(deps, usageError)},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {

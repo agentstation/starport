@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
@@ -19,7 +20,6 @@ import (
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/server/requestctx"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // videosNotConfiguredMessage answers a deployment that assembled no job store.
@@ -29,7 +29,7 @@ const videosNotConfiguredMessage = "Video jobs are not configured"
 const videoIDParam = "video_id"
 
 // maxVideoListLimit bounds one listing. A caller reads its own jobs, and a
-// tenant that submitted more than this reads the newest of them.
+// account that submitted more than this reads the newest of them.
 const maxVideoListLimit = 100
 
 // VideosController serves the video job surface.
@@ -85,7 +85,7 @@ func (h *VideosController) Submit(w http.ResponseWriter, r *http.Request) {
 		}
 		return h.service.VideoJobRunner(gateway), nil
 	}, jobs.Submission{
-		Tenant:           h.getTenantID(ctx),
+		Account:          h.getAccountID(ctx),
 		KeyID:            h.getAPIKeyID(ctx),
 		Operation:        routing.OperationVideosGenerations,
 		OutstandingBound: outstandingJobBound(r),
@@ -116,7 +116,7 @@ func (h *VideosController) Get(w http.ResponseWriter, r *http.Request) {
 		h.writeCredentialStrategyError(w, err)
 		return
 	}
-	job, err := h.jobs.Refresh(ctx, runner, h.getTenantID(ctx), chi.URLParam(r, videoIDParam))
+	job, err := h.jobs.Refresh(ctx, runner, h.getAccountID(ctx), chi.URLParam(r, videoIDParam))
 	if err != nil {
 		h.writeJobError(ctx, w, err, "video job poll failed")
 		return
@@ -131,7 +131,7 @@ func (h *VideosController) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	records, err := h.jobs.List(ctx, h.getTenantID(ctx), maxVideoListLimit)
+	records, err := h.jobs.List(ctx, h.getAccountID(ctx), maxVideoListLimit)
 	if err != nil {
 		h.writeJobError(ctx, w, err, "video job listing failed")
 		return
@@ -156,7 +156,7 @@ func (h *VideosController) Cancel(w http.ResponseWriter, r *http.Request) {
 		h.writeCredentialStrategyError(w, err)
 		return
 	}
-	job, err := h.jobs.Cancel(ctx, runner, h.getTenantID(ctx), chi.URLParam(r, videoIDParam))
+	job, err := h.jobs.Cancel(ctx, runner, h.getAccountID(ctx), chi.URLParam(r, videoIDParam))
 	if err != nil {
 		h.writeJobError(ctx, w, err, "video job cancellation failed")
 		return
@@ -178,7 +178,7 @@ func (h *VideosController) Content(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	job, asset, err := h.jobs.Open(ctx, h.getTenantID(ctx), chi.URLParam(r, videoIDParam))
+	job, asset, err := h.jobs.Open(ctx, h.getAccountID(ctx), chi.URLParam(r, videoIDParam))
 	if err != nil {
 		h.writeAssetError(ctx, w, err, job)
 		return
@@ -311,22 +311,22 @@ func (h *VideosController) writeJobList(w http.ResponseWriter, records []inferen
 
 // outstandingJobBound resolves how many jobs this account may hold open.
 //
-// It falls back to the tenant default rather than to unlimited. An account that
+// It falls back to the account default rather than to unlimited. An account that
 // states no bound is the common case, and on this one dimension an absent bound
 // would let a single key hold an unbounded spend commitment open. Every other
 // limit meters work that already finished, so unlimited there costs nothing
 // nobody counted.
 func outstandingJobBound(r *http.Request) int64 {
-	var tenantLimits, keyLimits *limits.Limits
-	if record, ok := requestctx.GetTenantRecord(r.Context()); ok && record != nil {
-		tenantLimits = record.Limits
+	var accountLimits, keyLimits *limits.Limits
+	if record, ok := requestctx.GetAccountRecord(r.Context()); ok && record != nil {
+		accountLimits = record.Limits
 	}
 	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil {
 		keyLimits = apiKey.Limits
 	}
-	rule, bounded := limits.TightestOutstandingJobs(tenantLimits, keyLimits)
+	rule, bounded := limits.TightestOutstandingJobs(accountLimits, keyLimits)
 	if !bounded {
-		return tenant.DefaultOutstandingJobs
+		return account.DefaultOutstandingJobs
 	}
 	return rule.Limit
 }

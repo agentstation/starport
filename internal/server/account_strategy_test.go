@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/storage"
-	"github.com/agentstation/starport/internal/tenant"
 )
 
 // resolveStrategy runs one secret through RequireAPIKey and reports the
@@ -22,12 +22,12 @@ func resolveStrategy(
 	t *testing.T,
 	middleware *AuthMiddleware,
 	secret string,
-) (tenant.CredentialStrategy, int) {
+) (account.CredentialStrategy, int) {
 	t.Helper()
 
-	var resolved tenant.CredentialStrategy
+	var resolved account.CredentialStrategy
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		resolved = requestctx.TenantCredentialStrategyOrDefault(r.Context())
+		resolved = requestctx.AccountCredentialStrategyOrDefault(r.Context())
 	}))
 
 	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
@@ -37,66 +37,66 @@ func resolveStrategy(
 	return resolved, recorder.Code
 }
 
-// TestAuthenticatedRequestCarriesItsTenantCredentialStrategy is the seam AON3
+// TestAuthenticatedRequestCarriesItsAccountCredentialStrategy is the seam AON3
 // needs: the operator sets the policy on the account, and the request has to
 // arrive at the router already knowing it. Without this the key's own metadata
-// would be the only strategy the gateway ever saw, and a tenant could widen it.
-func TestAuthenticatedRequestCarriesItsTenantCredentialStrategy(t *testing.T) {
+// would be the only strategy the gateway ever saw, and an account could widen it.
+func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 	store := storage.NewMockStore()
 	identities, err := identity.Open(store)
 	require.NoError(t, err)
-	tenants, err := tenant.Open(store)
+	accounts, err := account.Open(store)
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	_, err = tenants.Create(ctx, tenant.Tenant{
+	_, err = accounts.Create(ctx, account.Account{
 		ID: "acme", Name: "Acme", Active: true,
-		CredentialStrategy: tenant.StrategyBYOKOnly,
+		CredentialStrategy: account.StrategyBYOKOnly,
 	})
 	require.NoError(t, err)
-	issuer, err := identity.NewIssuer(identities, identity.WithTenantChecker(tenants))
+	issuer, err := identity.NewIssuer(identities, identity.WithAccountChecker(accounts))
 	require.NoError(t, err)
 	issued, err := issuer.Issue(ctx, identity.IssueRequest{
-		Name: "Acme-CI", TenantID: "acme", Scopes: []string{"chat:write"},
+		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
 
-	strategy, status := resolveStrategy(t, NewAuthMiddleware(identities, tenants), issued.Secret)
+	strategy, status := resolveStrategy(t, NewAuthMiddleware(identities, accounts), issued.Secret)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, tenant.StrategyBYOKOnly, strategy)
+	assert.Equal(t, account.StrategyBYOKOnly, strategy)
 }
 
-// TestUnreadableTenantStillServesTheRequest states the availability call. The
+// TestUnreadableAccountStillServesTheRequest states the availability call. The
 // key authenticated, so a storage fault on the account record must not take a
 // working deployment offline; the request falls back to the default policy,
 // which is the one the operator gets by not choosing.
-func TestUnreadableTenantStillServesTheRequest(t *testing.T) {
+func TestUnreadableAccountStillServesTheRequest(t *testing.T) {
 	store := storage.NewMockStore()
 	identities, err := identity.Open(store)
 	require.NoError(t, err)
 
-	secret := "test-secret-for-unreadable-tenant"
+	secret := "test-secret-for-unreadable-account"
 	_, err = identities.Create(context.Background(), identity.APIKey{
 		ID: "STARPORT_unreadable", Name: "Unreadable", Hash: hashSecret(secret),
-		TenantID: "acme", Scopes: []string{"chat:write"}, Active: true,
+		AccountID: "acme", Scopes: []string{"chat:write"}, Active: true,
 	})
 	require.NoError(t, err)
 
-	failing := failingTenantReader{err: errors.New("store unavailable")}
+	failing := failingAccountReader{err: errors.New("store unavailable")}
 	strategy, status := resolveStrategy(t, NewAuthMiddleware(identities, failing), secret)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, tenant.StrategyOperatorFirst, strategy,
+	assert.Equal(t, account.StrategyOperatorFirst, strategy,
 		"an unreadable account resolves to the default policy, not to no policy")
 
-	// A deployment wired without a tenant reader behaves the same way, so the
+	// A deployment wired without an account reader behaves the same way, so the
 	// fallback is one behavior and not two.
 	strategy, status = resolveStrategy(t, NewAuthMiddleware(identities), secret)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, tenant.StrategyOperatorFirst, strategy)
+	assert.Equal(t, account.StrategyOperatorFirst, strategy)
 }
 
-type failingTenantReader struct{ err error }
+type failingAccountReader struct{ err error }
 
-func (r failingTenantReader) GetByID(context.Context, string) (tenant.Record, error) {
-	return tenant.Record{}, r.err
+func (r failingAccountReader) GetByID(context.Context, string) (account.Record, error) {
+	return account.Record{}, r.err
 }

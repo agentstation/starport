@@ -18,7 +18,7 @@ const (
 	// StorageSchemaVersion identifies the only job record schema.
 	StorageSchemaVersion = 1
 	// StoragePrefix is the job record v1 namespace.
-	StoragePrefix = "jobs:v1:tenant:"
+	StoragePrefix = "jobs:v1:account:"
 
 	defaultListLimit = 1000
 )
@@ -30,7 +30,7 @@ type repository struct{ store storage.KVStore }
 type jobRecord struct {
 	SchemaVersion int               `json:"schema_version"`
 	ID            string            `json:"id"`
-	Tenant        string            `json:"tenant"`
+	Account       string            `json:"account"`
 	KeyID         string            `json:"key_id,omitempty"`
 	Model         string            `json:"model"`
 	Operation     routing.Operation `json:"operation"`
@@ -63,7 +63,7 @@ func (r *repository) Create(ctx context.Context, job Job) error {
 	if err != nil {
 		return err
 	}
-	if err := r.store.CompareAndSwap(ctx, storageKey(job.Tenant, job.ID), nil, data); err != nil {
+	if err := r.store.CompareAndSwap(ctx, storageKey(job.Account, job.ID), nil, data); err != nil {
 		if errors.Is(err, storage.ErrConflict) {
 			return ErrJobExists
 		}
@@ -72,11 +72,11 @@ func (r *repository) Create(ctx context.Context, job Job) error {
 	return nil
 }
 
-func (r *repository) Get(ctx context.Context, tenant, id string) (Job, error) {
-	if strings.TrimSpace(tenant) == "" || strings.TrimSpace(id) == "" {
+func (r *repository) Get(ctx context.Context, account, id string) (Job, error) {
+	if strings.TrimSpace(account) == "" || strings.TrimSpace(id) == "" {
 		return Job{}, ErrJobNotFound
 	}
-	data, err := r.store.Get(ctx, storageKey(tenant, id))
+	data, err := r.store.Get(ctx, storageKey(account, id))
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return Job{}, ErrJobNotFound
@@ -89,14 +89,14 @@ func (r *repository) Get(ctx context.Context, tenant, id string) (Job, error) {
 // List answers newest first. A caller polling a job it just submitted looks at
 // the top of the page, and a storage layer that ordered by key would put it
 // wherever its identifier happened to sort.
-func (r *repository) List(ctx context.Context, tenant string, limit int) ([]Job, error) {
-	if strings.TrimSpace(tenant) == "" {
+func (r *repository) List(ctx context.Context, account string, limit int) ([]Job, error) {
+	if strings.TrimSpace(account) == "" {
 		return nil, nil
 	}
 	if limit <= 0 {
 		limit = defaultListLimit
 	}
-	keys, err := r.store.ScanWithPrefix(ctx, tenantPrefix(tenant), limit)
+	keys, err := r.store.ScanWithPrefix(ctx, accountPrefix(account), limit)
 	if err != nil {
 		return nil, fmt.Errorf("jobs: list records: %w", err)
 	}
@@ -139,9 +139,9 @@ func sortNewestFirst(records []Job) {
 // state changes this package allows.
 // Scan answers every job record this deployment holds, newest first.
 //
-// It reads across tenants because the sweep that reclaims expired asset storage
+// It reads across accounts because the sweep that reclaims expired asset storage
 // is a deployment-wide pass. Nothing on a request path calls it: a caller reads
-// its own jobs through List, which cannot see another tenant's prefix.
+// its own jobs through List, which cannot see another account's prefix.
 func (r *repository) Scan(ctx context.Context, limit int) ([]Job, error) {
 	if limit <= 0 {
 		limit = defaultListLimit
@@ -174,7 +174,7 @@ func (r *repository) Replace(ctx context.Context, job Job) error {
 	if err != nil {
 		return err
 	}
-	key := storageKey(job.Tenant, job.ID)
+	key := storageKey(job.Account, job.ID)
 	current, err := r.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -195,8 +195,8 @@ func (r *repository) Replace(ctx context.Context, job Job) error {
 	return nil
 }
 
-func (r *repository) Delete(ctx context.Context, tenant, id string) error {
-	if err := r.store.Delete(ctx, storageKey(tenant, id)); err != nil {
+func (r *repository) Delete(ctx context.Context, account, id string) error {
+	if err := r.store.Delete(ctx, storageKey(account, id)); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			// A repeated delete is safe, so a sweep that runs twice over the
 			// same record does not fail the second time.
@@ -207,15 +207,15 @@ func (r *repository) Delete(ctx context.Context, tenant, id string) error {
 	return nil
 }
 
-// storageKey puts the tenant above the identifier, so a read for another
-// tenant misses by construction rather than by a check a later change could
+// storageKey puts the account above the identifier, so a read for another
+// account misses by construction rather than by a check a later change could
 // forget.
-func storageKey(tenant, id string) string {
-	return tenantPrefix(tenant) + base64.RawURLEncoding.EncodeToString([]byte(id))
+func storageKey(account, id string) string {
+	return accountPrefix(account) + base64.RawURLEncoding.EncodeToString([]byte(id))
 }
 
-func tenantPrefix(tenant string) string {
-	return StoragePrefix + base64.RawURLEncoding.EncodeToString([]byte(tenant)) + ":id:"
+func accountPrefix(account string) string {
+	return StoragePrefix + base64.RawURLEncoding.EncodeToString([]byte(account)) + ":id:"
 }
 
 func encodeJob(job Job) ([]byte, error) {
@@ -225,7 +225,7 @@ func encodeJob(job Job) ([]byte, error) {
 	data, err := json.Marshal(jobRecord{
 		SchemaVersion: StorageSchemaVersion,
 		ID:            job.ID,
-		Tenant:        job.Tenant,
+		Account:       job.Account,
 		KeyID:         job.KeyID,
 		Model:         job.Model,
 		Operation:     job.Operation,
@@ -260,7 +260,7 @@ func decodeJob(data []byte) (Job, error) {
 	}
 	job := Job{
 		ID:            stored.ID,
-		Tenant:        stored.Tenant,
+		Account:       stored.Account,
 		KeyID:         stored.KeyID,
 		Model:         stored.Model,
 		Operation:     stored.Operation,

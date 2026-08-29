@@ -21,7 +21,7 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 // provider alone and edited here, on the provider's own screen, rather than
 // anywhere near a gateway API key.
 //
-// It is not BYOK. BYOK is a credential a tenant brings for itself, and it is
+// It is not BYOK. BYOK is a credential an account brings for itself, and it is
 // managed per account. The provider credential card may name accounts as the
 // third resolution source, but this panel never edits one and never names an
 // account: the credential it applies belongs to the deployment. The section

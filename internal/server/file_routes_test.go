@@ -194,13 +194,13 @@ func TestUploadRefusesAPurposeThisGatewayDoesNotServe(t *testing.T) {
 	}
 }
 
-// TestOneTenantCannotReadAnotherTenantsFile states the isolation rule at the
+// TestOneAccountCannotReadAnotherAccountsFile states the isolation rule at the
 // HTTP edge. Two keys under two accounts store one file each, and neither
 // identifier resolves for the other.
-func TestOneTenantCannotReadAnotherTenantsFile(t *testing.T) {
+func TestOneAccountCannotReadAnotherAccountsFile(t *testing.T) {
 	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20, MaxFileUploadSize: 1 << 20})
-	first := storeFileTestKeyForTenant(t, server, "file-tenant-one", "tenant-one", "files:read", "files:write")
-	second := storeFileTestKeyForTenant(t, server, "file-tenant-two", "tenant-two", "files:read", "files:write")
+	first := storeFileTestKeyForAccount(t, server, "file-account-one", "account-one", "files:read", "files:write")
+	second := storeFileTestKeyForAccount(t, server, "file-account-two", "account-two", "files:read", "files:write")
 
 	stored := uploadFile(t, server, first, "report.txt", "user_data", "the first account's bytes")
 	require.Equal(t, http.StatusOK, stored.Code, stored.Body.String())
@@ -319,7 +319,7 @@ func TestAFullAccountRefusesAnUploadAndSaysWhy(t *testing.T) {
 
 func storeFileTestKey(t *testing.T, server *Server, id string, scopes ...string) string {
 	t.Helper()
-	return storeFileTestKeyForTenant(t, server, id, "", scopes...)
+	return storeFileTestKeyForAccount(t, server, id, "", scopes...)
 }
 
 // storeFileTestKeyWithLimits stores a key carrying its own limits.
@@ -346,10 +346,10 @@ func storeFileTestKeyWithLimits(
 	return secret
 }
 
-// storeFileTestKeyForTenant issues one key under a named account. An empty
-// account name leaves the key on the canonical tenant, which is where a
+// storeFileTestKeyForAccount issues one key under a named account. An empty
+// account name leaves the key on the canonical account, which is where a
 // single-account deployment puts every key.
-func storeFileTestKeyForTenant(t *testing.T, server *Server, id, tenantID string, scopes ...string) string {
+func storeFileTestKeyForAccount(t *testing.T, server *Server, id, accountID string, scopes ...string) string {
 	t.Helper()
 	secret := "sk-starport-" + id
 	hash := sha256.Sum256([]byte(secret))
@@ -357,7 +357,7 @@ func storeFileTestKeyForTenant(t *testing.T, server *Server, id, tenantID string
 		ID:        id,
 		Name:      id,
 		Hash:      hex.EncodeToString(hash[:]),
-		TenantID:  tenantID,
+		AccountID: accountID,
 		Scopes:    scopes,
 		Active:    true,
 		CreatedAt: time.Now(),

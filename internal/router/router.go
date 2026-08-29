@@ -92,7 +92,7 @@ func WithAvailability(tracker *availability.Tracker) Option {
 }
 
 // WithStoredCredentials supplies the stored inference credential planes: the
-// operator's gateway credential and every tenant's own.
+// operator's gateway credential and every account's own.
 func WithStoredCredentials(resolver StoredCredentialResolver) Option {
 	return func(r *modelRouter) {
 		r.storedKeys = resolver
@@ -222,9 +222,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		}
 		return nil, fmt.Errorf("plan fallback route: %w", err)
 	}
-	strategy, tenantID := credentialRequestPolicy(req)
+	strategy, accountID := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, tenantID, runtime, r.storedKeys, r.credentialGate,
+		strategy, accountID, runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
 		return nil, err

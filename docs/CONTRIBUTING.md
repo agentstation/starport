@@ -53,7 +53,7 @@ prices, catalog credentials, and status sources. Change those facts in
 Starmap first. Do not add a local provider switch, model list, endpoint table,
 or price default to Starport.
 
-Starport owns inference credentials, tenant identity, routing policy,
+Starport owns inference credentials, account identity, routing policy,
 availability, execution, caching, rate limits, and HTTP protocols.
 
 ## Make one coherent change

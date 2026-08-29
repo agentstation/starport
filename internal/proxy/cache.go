@@ -567,7 +567,7 @@ func (s *cachedService) generateChatCacheKey(
 		return "", err
 	}
 	return responsecache.ChatKey(responsecache.ChatIdentity{
-		TenantID:          req.TenantID,
+		AccountID:         req.AccountID,
 		CatalogGeneration: s.catalogGeneration(ctx),
 		Request:           canonical,
 		Policy:            cachePolicy(req.Route, req.Provider, req.APIKeyConfig),
@@ -580,7 +580,7 @@ func (s *cachedService) generateEmbeddingsCacheKey(
 	req *EmbeddingsRequest,
 ) (string, error) {
 	return responsecache.EmbeddingKey(responsecache.EmbeddingIdentity{
-		TenantID:          req.TenantID,
+		AccountID:         req.AccountID,
 		CatalogGeneration: s.catalogGeneration(ctx),
 		Request:           req.Request,
 		Policy:            cachePolicy("", nil, req.APIKeyConfig),
@@ -620,7 +620,7 @@ func canonicalChatRequest(req *ChatCompletionRequest) (inference.ChatRequest, er
 	return req.Request.Clone(), nil
 }
 
-func cachePolicy(route string, provider *ProviderPreferences, tenant *APIKeyRoutingConfig) responsecache.Policy {
+func cachePolicy(route string, provider *ProviderPreferences, account *APIKeyRoutingConfig) responsecache.Policy {
 	policy := responsecache.Policy{}
 	policy.Provider.Route = route
 	if provider != nil {
@@ -632,13 +632,13 @@ func cachePolicy(route string, provider *ProviderPreferences, tenant *APIKeyRout
 		policy.Provider.MaxPromptPricePer1M = provider.MaxPromptPricePer1M
 		policy.Provider.MaxCompletionPricePer1M = provider.MaxCompletionPricePer1M
 	}
-	if tenant != nil {
-		policy.Tenant.AllowedModels = append([]string(nil), tenant.AllowedModels...)
-		policy.Tenant.AllowedProviders = append([]string(nil), tenant.AllowedProviders...)
-		policy.Tenant.RateLimitTier = tenant.RateLimitTier
-		policy.Tenant.CredentialStrategy = string(tenant.CredentialStrategy)
-		policy.Provider.ModelOverrides = make(map[string]string, len(tenant.ModelOverrides))
-		for model, override := range tenant.ModelOverrides {
+	if account != nil {
+		policy.Account.AllowedModels = append([]string(nil), account.AllowedModels...)
+		policy.Account.AllowedProviders = append([]string(nil), account.AllowedProviders...)
+		policy.Account.RateLimitTier = account.RateLimitTier
+		policy.Account.CredentialStrategy = string(account.CredentialStrategy)
+		policy.Provider.ModelOverrides = make(map[string]string, len(account.ModelOverrides))
+		for model, override := range account.ModelOverrides {
 			policy.Provider.ModelOverrides[model] = override
 		}
 		if len(policy.Provider.ModelOverrides) == 0 {

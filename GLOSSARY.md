@@ -15,7 +15,7 @@
 | Homebrew cask | A Homebrew package that installs a released Starport binary. | | approved | `https://docs.brew.sh/Cask-Cookbook` |
 | OpenAI-compatible API | The Starport HTTP contract under `/v1`. | | approved | `docs/ARCHITECTURE.md` |
 | OpenRouter-compatible API | The Starport HTTP contract under `/api/v1`. | | approved | `docs/ARCHITECTURE.md` |
-| BYOK | Bring your own key, which stores a tenant provider inference credential. | | approved | `internal/providers/byok/provider_keys.go` |
+| BYOK | Bring your own key, which stores an account provider inference credential. | | approved | `internal/providers/byok/provider_keys.go` |
 | credential material | One resolved set of named credential fields with an opaque version and optional lifecycle metadata. | | approved | `internal/credentials/material.go` |
 | credential source | A Starport or Starmap concept that resolves credential material from one configured source. | | approved | `internal/credentials/source.go` |
 | secret reference | Operator configuration that identifies one external credential without containing credential or backend authentication values. | | approved | `internal/credentials/reference.go` |

@@ -108,7 +108,7 @@ test("applies the deployment credential without naming an account", async () => 
   fireEvent.click(screen.getByText("Apply credential"));
 
   await waitFor(() => expect(gateway.applied).toHaveLength(1));
-  // The provider is the whole address. Nothing here carries a tenant, because
+  // The provider is the whole address. Nothing here carries an account, because
   // this credential belongs to no account.
   expect(gateway.applied).toEqual([
     {
@@ -144,7 +144,7 @@ test("refuses to submit configuration with no secret", async () => {
   expect(gateway.applied).toHaveLength(0);
 });
 
-// The word BYOK names a credential a tenant brings for itself. This panel
+// The word BYOK names a credential an account brings for itself. This panel
 // shows the opposite thing, and saying BYOK here is the confusion the whole
 // separation exists to remove.
 test("never calls the deployment credential BYOK", async () => {
