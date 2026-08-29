@@ -1,13 +1,15 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-28
+Last Updated: 2026-08-29
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-No plan is active. Every plan on the version 1 roadmap is closed.
+| Plan | ID prefix | Status | Notes |
+|------|-----------|--------|-------|
+| [Credential sharing and identity](credential-sharing-plan.html) | CSH | active | Multiple shared provider credentials with per-credential grants, operator BYOK policy and account provider/model access, account templates, embedded SQLite with a PostgreSQL/MySQL connect (`internal/sqlstore`), and OAuth (gothic) plus enterprise SSO (WorkOS) identity with users, teams, and account grants. Proof root: `docs/proof/credential-sharing/`. |
 
 ### Proposed Work
 
