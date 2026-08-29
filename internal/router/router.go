@@ -222,9 +222,9 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		}
 		return nil, fmt.Errorf("plan fallback route: %w", err)
 	}
-	strategy, accountID := credentialRequestPolicy(req)
+	strategy, accountID, byokGate := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, accountID, runtime, r.storedKeys, r.credentialGate,
+		strategy, accountID, byokGate, runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
 		return nil, err

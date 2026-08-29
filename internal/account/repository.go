@@ -285,8 +285,35 @@ func encodePart(value string) string {
 func cloneAccount(value Account) Account {
 	clone := value
 	clone.Limits = value.Limits.Clone()
+	clone.BYOKPolicy = cloneBYOKPolicy(value.BYOKPolicy)
+	clone.Access = cloneProviderAccess(value.Access)
 	clone.Metadata = cloneMap(value.Metadata)
 	return clone
+}
+
+func cloneBYOKPolicy(source *BYOKPolicy) *BYOKPolicy {
+	if source == nil {
+		return nil
+	}
+	clone := BYOKPolicy{Mode: source.Mode}
+	if len(source.Providers) > 0 {
+		clone.Providers = append([]string(nil), source.Providers...)
+	}
+	return &clone
+}
+
+func cloneProviderAccess(source []ProviderAccess) []ProviderAccess {
+	if source == nil {
+		return nil
+	}
+	result := make([]ProviderAccess, len(source))
+	for i, entry := range source {
+		result[i] = ProviderAccess{Provider: entry.Provider}
+		if len(entry.Models) > 0 {
+			result[i].Models = append([]string(nil), entry.Models...)
+		}
+	}
+	return result
 }
 
 func cloneMap(source map[string]any) map[string]any {

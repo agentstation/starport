@@ -69,8 +69,13 @@ type accountRequest struct {
 	Name               *string                     `json:"name,omitempty"`
 	Limits             *limits.Limits              `json:"limits,omitempty"`
 	CredentialStrategy *account.CredentialStrategy `json:"credential_strategy,omitempty"`
-	Metadata           map[string]any              `json:"metadata,omitempty"`
-	Active             *bool                       `json:"active,omitempty"`
+	// BYOKPolicy set to {"mode":"all"} clears the stored policy, because an
+	// all-providers policy and no policy mean the same thing. Access set to
+	// an explicit empty list clears the stored grants the same way.
+	BYOKPolicy *account.BYOKPolicy       `json:"byok_policy,omitempty"`
+	Access     *[]account.ProviderAccess `json:"access,omitempty"`
+	Metadata   map[string]any            `json:"metadata,omitempty"`
+	Active     *bool                     `json:"active,omitempty"`
 }
 
 // List handles GET /api/v1/admin/accounts.
@@ -325,6 +330,18 @@ func applyAccountRequest(account *account.Account, request accountRequest) {
 	}
 	if request.CredentialStrategy != nil {
 		account.CredentialStrategy = *request.CredentialStrategy
+	}
+	if request.BYOKPolicy != nil {
+		account.BYOKPolicy = request.BYOKPolicy
+		if request.BYOKPolicy.Mode == "all" && len(request.BYOKPolicy.Providers) == 0 {
+			account.BYOKPolicy = nil
+		}
+	}
+	if request.Access != nil {
+		account.Access = *request.Access
+		if len(*request.Access) == 0 {
+			account.Access = nil
+		}
 	}
 	if request.Metadata != nil {
 		account.Metadata = request.Metadata

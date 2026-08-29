@@ -174,12 +174,30 @@ func transformAPIKeyConfig(config *APIKeyRoutingConfig) *router.APIKeyConfig {
 		modelOverrides = nil
 	}
 
+	var access []routing.ProviderAccess
+	if len(config.Access) > 0 {
+		access = make([]routing.ProviderAccess, len(config.Access))
+		for i, entry := range config.Access {
+			access[i] = routing.ProviderAccess{Provider: entry.Provider}
+			if len(entry.Models) > 0 {
+				access[i].Models = append([]string(nil), entry.Models...)
+			}
+		}
+	}
+	var byokProviders *[]string
+	if config.BYOKProviders != nil {
+		gated := append([]string(nil), (*config.BYOKProviders)...)
+		byokProviders = &gated
+	}
+
 	return &router.APIKeyConfig{
 		AllowedProviders:   append([]string(nil), config.AllowedProviders...),
 		AllowedModels:      append([]string(nil), config.AllowedModels...),
 		ModelOverrides:     modelOverrides,
 		RateLimitTier:      config.RateLimitTier,
 		CredentialStrategy: config.CredentialStrategy,
+		Access:             access,
+		BYOKProviders:      byokProviders,
 	}
 }
 

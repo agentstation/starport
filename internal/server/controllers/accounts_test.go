@@ -177,3 +177,49 @@ func TestAccountPlaneWithoutStorageRefusesRatherThanReportingNoAccounts(t *testi
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), "Account management is not configured")
 }
+
+// TestAccountPolicyRoundTripsThroughTheWriteSurface covers the operator's
+// two policy dials: which providers an account may bring its own credential
+// for, and which providers and models it may reach at all.
+func TestAccountPolicyRoundTripsThroughTheWriteSurface(t *testing.T) {
+	controller, _, _ := newAccountsTestController(t)
+	router := accountsTestRouter(controller)
+
+	recorder := accountsTestCall(router, http.MethodPost, "/accounts", `{
+		"id": "acme",
+		"byok_policy": {"mode": "selected", "providers": ["openai"]},
+		"access": [
+			{"provider": "openai"},
+			{"provider": "groq", "models": ["llama-3.3-70b"]}
+		]
+	}`)
+	require.Equal(t, http.StatusCreated, recorder.Code)
+
+	var created account.Account
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &created))
+	require.NotNil(t, created.BYOKPolicy)
+	assert.Equal(t, account.BYOKSelected, created.BYOKPolicy.Mode)
+	assert.Equal(t, []string{"openai"}, created.BYOKPolicy.Providers)
+	require.Len(t, created.Access, 2)
+	assert.Equal(t, "groq", created.Access[1].Provider)
+	assert.Equal(t, []string{"llama-3.3-70b"}, created.Access[1].Models)
+
+	// An all-providers policy and an empty access list both mean "no
+	// restriction", so writing them clears the stored policy.
+	recorder = accountsTestCall(router, http.MethodPut, "/accounts/acme",
+		`{"byok_policy": {"mode": "all"}, "access": []}`)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var updated account.Account
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &updated))
+	assert.Nil(t, updated.BYOKPolicy)
+	assert.Empty(t, updated.Access)
+
+	// An invalid policy is the caller's mistake, refused before storage.
+	recorder = accountsTestCall(router, http.MethodPost, "/accounts",
+		`{"id": "beta", "byok_policy": {"mode": "selected"}}`)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+
+	recorder = accountsTestCall(router, http.MethodPost, "/accounts",
+		`{"id": "gamma", "access": [{"provider": "openai"}, {"provider": "openai"}]}`)
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+}

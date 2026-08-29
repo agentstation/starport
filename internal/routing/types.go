@@ -116,11 +116,25 @@ type Snapshot struct {
 	Candidates           []Candidate
 }
 
+// ProviderAccess grants the account one provider, and optionally narrows
+// which of its models. An empty Models list grants every model the provider
+// serves. The pairing matters: a flat model set cannot say "every model on
+// provider A, only one model on provider B" without denying A's other models.
+type ProviderAccess struct {
+	Provider string
+	Models   []string
+}
+
 // AccountPolicy defines the caller's hard model and provider boundaries.
 type AccountPolicy struct {
 	AllowedModels    []string
 	AllowedProviders []string
 	ModelOverrides   map[string]string
+	// Access names the providers this account may reach, each entry
+	// optionally narrowed to specific models. A nil or empty list grants
+	// every provider and every model, so a policy-free account plans
+	// exactly as before the field existed.
+	Access []ProviderAccess
 }
 
 // ProviderPolicy defines request-scoped provider constraints and order.

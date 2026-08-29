@@ -132,6 +132,17 @@ type APIKeyConfig struct {
 	// CredentialStrategy is the effective credential order for this request,
 	// already resolved against the account's governing strategy by the caller.
 	CredentialStrategy keyring.Strategy
+
+	// Access carries the account's paired provider and model grants into
+	// planning. Nil grants every provider and model.
+	Access []routing.ProviderAccess
+
+	// BYOKProviders gates which providers the BYOK credential source may
+	// serve for this request. Nil allows every provider, an empty list
+	// allows none, and a non-empty list allows only its members. The caller
+	// resolves it from the account's BYOK policy so this package never
+	// learns the account vocabulary.
+	BYOKProviders *[]string
 }
 
 // RequestMetadata contains information for routing decisions

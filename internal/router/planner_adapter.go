@@ -188,6 +188,7 @@ func (r *modelRouter) toPlanningRequest(req *Request) routing.Request {
 			AllowedModels:    wildcardAsUnrestricted(req.APIKeyConfig.AllowedModels),
 			AllowedProviders: normalizeProviders(req.APIKeyConfig.AllowedProviders),
 			ModelOverrides:   cloneModelOverrides(req.APIKeyConfig.ModelOverrides),
+			Access:           cloneProviderAccess(req.APIKeyConfig.Access),
 		}
 	}
 	return request
@@ -216,6 +217,22 @@ func (r *modelRouter) plannerOptimization(req *Request, variants variantEffects)
 		PreferLowestCost:    r.config.EnableCostOptimization,
 		PreferLowestLatency: true,
 	}
+}
+
+// cloneProviderAccess copies the paired provider and model grants so the
+// planner's view cannot alias the caller's slice.
+func cloneProviderAccess(access []routing.ProviderAccess) []routing.ProviderAccess {
+	if len(access) == 0 {
+		return nil
+	}
+	result := make([]routing.ProviderAccess, len(access))
+	for i, entry := range access {
+		result[i] = routing.ProviderAccess{Provider: entry.Provider}
+		if len(entry.Models) > 0 {
+			result[i].Models = append([]string(nil), entry.Models...)
+		}
+	}
+	return result
 }
 
 func cloneModelOverrides(overrides map[string]string) map[string]string {

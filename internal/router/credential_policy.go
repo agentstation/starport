@@ -29,8 +29,13 @@ type credentialPolicy struct {
 	storedKeys StoredCredentialResolver
 	gate       OperatorCredentialGate
 	accountID  string
-	sources    []keyring.CredentialSource
-	states     map[string]credentialRouteState
+	// byokProviders gates the BYOK source per provider: nil allows every
+	// provider, an empty list none, a non-empty list only its members. A
+	// gated provider resolves as not-configured, so the policy advances to
+	// the next source the strategy names rather than failing the route.
+	byokProviders *[]string
+	sources       []keyring.CredentialSource
+	states        map[string]credentialRouteState
 }
 
 type credentialRouteState struct {
@@ -46,6 +51,7 @@ type credentialSelection struct {
 func newCredentialPolicy(
 	strategy keyring.Strategy,
 	accountID string,
+	byokProviders *[]string,
 	runtime connectors.RuntimeLease,
 	storedKeys StoredCredentialResolver,
 	gate OperatorCredentialGate,
@@ -56,8 +62,9 @@ func newCredentialPolicy(
 	}
 	return &credentialPolicy{
 		runtime: runtime, storedKeys: storedKeys, gate: gate, accountID: accountID,
-		sources: reachableSources(parsedStrategy, accountID, storedKeys),
-		states:  make(map[string]credentialRouteState),
+		byokProviders: byokProviders,
+		sources:       reachableSources(parsedStrategy, accountID, storedKeys),
+		states:        make(map[string]credentialRouteState),
 	}, nil
 }
 
@@ -88,11 +95,12 @@ func reachableSources(
 	return reachable
 }
 
-func credentialRequestPolicy(request *Request) (keyring.Strategy, string) {
+func credentialRequestPolicy(request *Request) (keyring.Strategy, string, *[]string) {
 	if request == nil {
-		return keyring.OperatorFirst, ""
+		return keyring.OperatorFirst, "", nil
 	}
-	return request.APIKeyConfig.credentialStrategy(), request.AccountID
+	return request.APIKeyConfig.credentialStrategy(), request.AccountID,
+		request.APIKeyConfig.byokProviderGate()
 }
 
 // credentialStrategy reports the effective strategy the HTTP seam already
@@ -103,6 +111,29 @@ func (c *APIKeyConfig) credentialStrategy() keyring.Strategy {
 		return keyring.OperatorFirst
 	}
 	return c.CredentialStrategy
+}
+
+// byokProviderGate reports the per-provider BYOK gate the HTTP seam resolved
+// from the account's BYOK policy. A request without a key config is ungated.
+func (c *APIKeyConfig) byokProviderGate() *[]string {
+	if c == nil {
+		return nil
+	}
+	return c.BYOKProviders
+}
+
+// byokSourceAllowed applies the gate: nil allows every provider, an empty
+// list none, a non-empty list only its members.
+func byokSourceAllowed(gate *[]string, providerID string) bool {
+	if gate == nil {
+		return true
+	}
+	for _, allowed := range *gate {
+		if allowed == providerID {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *credentialPolicy) resolve(
@@ -123,7 +154,13 @@ func (p *credentialPolicy) resolve(
 	case keyring.SourceShared:
 		material, err = p.resolveShared(ctx, route.ProviderID)
 	case keyring.SourceBYOK:
-		material, err = p.resolveStored(ctx, keyring.AccountScope(p.accountID), route.ProviderID)
+		if byokSourceAllowed(p.byokProviders, route.ProviderID) {
+			material, err = p.resolveStored(ctx, keyring.AccountScope(p.accountID), route.ProviderID)
+		} else {
+			// A gated provider resolves exactly like one with no stored
+			// key, so the strategy's next source still gets its turn.
+			err = keyring.ErrKeyNotFound
+		}
 	default:
 		err = errors.New("unsupported credential source")
 	}
