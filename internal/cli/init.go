@@ -11,17 +11,17 @@ const initFormatJSON = "json"
 
 // InitOptions contains explicit local initialization choices.
 type InitOptions struct {
-	IdentityName      string
+	APIKeyName        string
 	ConfiguredStorage bool
 }
 
 // InitResult contains initialized paths and the one-time gateway credential.
 type InitResult struct {
-	IdentityName string                      `json:"identity_name"`
-	ConfigFile   string                      `json:"config_file,omitempty"`
-	DataDir      string                      `json:"data_dir,omitempty"`
-	APIKey       string                      `json:"api_key"`
-	Rollback     func(context.Context) error `json:"-"`
+	APIKeyName string                      `json:"api_key_name"`
+	ConfigFile string                      `json:"config_file,omitempty"`
+	DataDir    string                      `json:"data_dir,omitempty"`
+	APIKey     string                      `json:"api_key"`
+	Rollback   func(context.Context) error `json:"-"`
 }
 
 func writeInitResult(writer io.Writer, result InitResult, asJSON bool) error {
@@ -34,7 +34,7 @@ func writeInitResult(writer io.Writer, result InitResult, asJSON bool) error {
 	if result.ConfigFile == "" {
 		_, err := fmt.Fprintf(
 			writer,
-			"Initialized Starport identity storage.\nGateway API key (shown once): %s\nRun: starport serve\n",
+			"Initialized Starport API key storage.\nGateway API key (shown once): %s\nRun: starport serve\n",
 			result.APIKey,
 		)
 		return err

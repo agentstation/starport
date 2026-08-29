@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	// StorageSchemaVersion identifies the only supported identity schema.
+	// StorageSchemaVersion identifies the only supported API key schema.
 	StorageSchemaVersion = 1
-	// StoragePrefix is the identity v1 storage namespace.
+	// StoragePrefix is the API key v1 storage namespace.
 	StoragePrefix = "identity:v1:"
 
-	identityKeyPrefix = StoragePrefix + "key:"
+	apiKeyPrefix      = StoragePrefix + "key:"
 	hashKeyPrefix     = StoragePrefix + "hash:"
 	initialKey        = StoragePrefix + "initial"
 	collectionKey     = StoragePrefix + "collection"
@@ -28,24 +28,24 @@ const (
 
 var (
 	// ErrRepositoryRequired reports a missing storage adapter.
-	ErrRepositoryRequired = errors.New("identity storage is required")
-	// ErrNotFound reports a missing identity.
-	ErrNotFound = errors.New("identity not found")
-	// ErrConflict reports an existing identity or stale revision.
-	ErrConflict = errors.New("identity revision conflict")
-	// ErrCorruptRecord reports invalid durable identity data.
-	ErrCorruptRecord = errors.New("identity record is invalid")
+	ErrRepositoryRequired = errors.New("API key storage is required")
+	// ErrNotFound reports a missing API key.
+	ErrNotFound = errors.New("API key not found")
+	// ErrConflict reports an existing API key or stale revision.
+	ErrConflict = errors.New("API key revision conflict")
+	// ErrCorruptRecord reports invalid durable API key data.
+	ErrCorruptRecord = errors.New("API key record is invalid")
 	// ErrHashImmutable reports an attempted hash mutation.
-	ErrHashImmutable = errors.New("identity hash is immutable")
+	ErrHashImmutable = errors.New("API key hash is immutable")
 )
 
-// Record is one versioned identity repository value.
+// Record is one versioned API key repository value.
 type Record struct {
 	Revision uint64
 	APIKey   APIKey
 }
 
-// Repository is the durable identity contract.
+// Repository is the durable API key contract.
 type Repository interface {
 	Create(context.Context, APIKey) (Record, error)
 	CreateInitial(context.Context, APIKey) (Record, error)
@@ -61,7 +61,7 @@ type repository struct {
 	store storage.KVStore
 }
 
-type identityRecord struct {
+type apiKeyRecord struct {
 	SchemaVersion int    `json:"schema_version"`
 	Revision      uint64 `json:"revision"`
 	APIKey        APIKey `json:"api_key"`
@@ -69,21 +69,21 @@ type identityRecord struct {
 
 type hashRecord struct {
 	SchemaVersion int    `json:"schema_version"`
-	IdentityID    string `json:"identity_id"`
+	APIKeyID      string `json:"identity_id"`
 }
 
-type initialIdentityRecord struct {
+type initialAPIKeyRecord struct {
 	SchemaVersion int    `json:"schema_version"`
-	IdentityID    string `json:"identity_id"`
+	APIKeyID      string `json:"identity_id"`
 }
 
-type identityCollectionRecord struct {
+type apiKeyCollectionRecord struct {
 	SchemaVersion int    `json:"schema_version"`
 	Revision      uint64 `json:"revision"`
 	Count         uint64 `json:"count"`
 }
 
-// Open returns a storage-backed identity repository.
+// Open returns a storage-backed API key repository.
 func Open(store storage.KVStore) (Repository, error) {
 	if store == nil {
 		return nil, ErrRepositoryRequired
@@ -97,7 +97,7 @@ func (r *repository) Create(ctx context.Context, apiKey APIKey) (Record, error) 
 		if !errors.Is(err, ErrConflict) {
 			return record, err
 		}
-		collision, checkErr := r.identityOrHashExists(ctx, apiKey)
+		collision, checkErr := r.apiKeyOrHashExists(ctx, apiKey)
 		if checkErr != nil {
 			return Record{}, checkErr
 		}
@@ -108,7 +108,7 @@ func (r *repository) Create(ctx context.Context, apiKey APIKey) (Record, error) 
 	return Record{}, ErrConflict
 }
 
-// CreateInitial atomically claims initialization and creates the first identity.
+// CreateInitial atomically claims initialization and creates the first API key.
 func (r *repository) CreateInitial(ctx context.Context, apiKey APIKey) (Record, error) {
 	return r.create(ctx, apiKey, true)
 }
@@ -117,14 +117,14 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 	if err := apiKey.Validate(); err != nil {
 		return Record{}, err
 	}
-	stored := identityRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, APIKey: cloneAPIKey(apiKey)}
+	stored := apiKeyRecord{SchemaVersion: StorageSchemaVersion, Revision: 1, APIKey: cloneAPIKey(apiKey)}
 	data, err := json.Marshal(stored)
 	if err != nil {
-		return Record{}, fmt.Errorf("encode identity record: %w", err)
+		return Record{}, fmt.Errorf("encode API key record: %w", err)
 	}
-	indexData, err := json.Marshal(hashRecord{SchemaVersion: StorageSchemaVersion, IdentityID: apiKey.ID})
+	indexData, err := json.Marshal(hashRecord{SchemaVersion: StorageSchemaVersion, APIKeyID: apiKey.ID})
 	if err != nil {
-		return Record{}, fmt.Errorf("encode identity hash record: %w", err)
+		return Record{}, fmt.Errorf("encode API key hash record: %w", err)
 	}
 	collection, collectionData, err := r.readCollection(ctx)
 	if err != nil {
@@ -133,29 +133,29 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 	if initial && collection.Count != 0 {
 		return Record{}, ErrConflict
 	}
-	updatedCollection := identityCollectionRecord{
+	updatedCollection := apiKeyCollectionRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      collection.Revision + 1,
 		Count:         collection.Count + 1,
 	}
 	updatedCollectionData, err := json.Marshal(updatedCollection)
 	if err != nil {
-		return Record{}, fmt.Errorf("encode identity collection record: %w", err)
+		return Record{}, fmt.Errorf("encode API key collection record: %w", err)
 	}
 
 	mutations := []storage.CompareAndSwapMutation{
-		{Key: identityStorageKey(apiKey.ID), NewValue: data},
+		{Key: apiKeyStorageKey(apiKey.ID), NewValue: data},
 		{Key: hashStorageKey(apiKey.Hash), NewValue: indexData},
 		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
 	}
 	var markerData []byte
 	if initial {
-		markerData, err = json.Marshal(initialIdentityRecord{
+		markerData, err = json.Marshal(initialAPIKeyRecord{
 			SchemaVersion: StorageSchemaVersion,
-			IdentityID:    apiKey.ID,
+			APIKeyID:      apiKey.ID,
 		})
 		if err != nil {
-			return Record{}, fmt.Errorf("encode initial identity claim: %w", err)
+			return Record{}, fmt.Errorf("encode initial API key claim: %w", err)
 		}
 		mutations = append([]storage.CompareAndSwapMutation{{
 			Key: initialKey, NewValue: markerData,
@@ -165,12 +165,12 @@ func (r *repository) create(ctx context.Context, apiKey APIKey, initial bool) (R
 		if initial && errors.Is(err, storage.ErrConflict) {
 			return r.replaceMissingInitial(ctx, stored, data, indexData, markerData)
 		}
-		return Record{}, mapConflict("create identity, hash index, and collection record", err)
+		return Record{}, mapConflict("create API key, hash index, and collection record", err)
 	}
-	return recordFromIdentity(stored), nil
+	return recordFromStored(stored), nil
 }
 
-func (r *repository) identityOrHashExists(ctx context.Context, apiKey APIKey) (bool, error) {
+func (r *repository) apiKeyOrHashExists(ctx context.Context, apiKey APIKey) (bool, error) {
 	if _, err := r.GetByID(ctx, apiKey.ID); err == nil {
 		return true, nil
 	} else if !errors.Is(err, ErrNotFound) {
@@ -186,8 +186,8 @@ func (r *repository) identityOrHashExists(ctx context.Context, apiKey APIKey) (b
 
 func (r *repository) replaceMissingInitial(
 	ctx context.Context,
-	stored identityRecord,
-	identityData []byte,
+	stored apiKeyRecord,
+	apiKeyData []byte,
 	hashData []byte,
 	markerData []byte,
 ) (Record, error) {
@@ -196,16 +196,16 @@ func (r *repository) replaceMissingInitial(
 		if errors.Is(err, storage.ErrNotFound) {
 			return Record{}, ErrConflict
 		}
-		return Record{}, mapConflict("create identity and hash index", err)
+		return Record{}, mapConflict("create API key and hash index", err)
 	}
-	currentMarker, err := decodeInitialIdentityRecord(currentMarkerData)
+	currentMarker, err := decodeInitialAPIKeyRecord(currentMarkerData)
 	if err != nil {
 		return Record{}, err
 	}
-	if _, err := r.store.Get(ctx, identityStorageKey(currentMarker.IdentityID)); err == nil {
+	if _, err := r.store.Get(ctx, apiKeyStorageKey(currentMarker.APIKeyID)); err == nil {
 		return Record{}, ErrConflict
 	} else if !errors.Is(err, storage.ErrNotFound) {
-		return Record{}, mapReadError("get claimed initial identity", err)
+		return Record{}, mapReadError("get claimed initial API key", err)
 	}
 	records, err := r.List(ctx, 1, 0)
 	if err != nil {
@@ -221,26 +221,26 @@ func (r *repository) replaceMissingInitial(
 	if collection.Count != 0 {
 		return Record{}, ErrConflict
 	}
-	updatedCollectionData, err := json.Marshal(identityCollectionRecord{
+	updatedCollectionData, err := json.Marshal(apiKeyCollectionRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      collection.Revision + 1,
 		Count:         1,
 	})
 	if err != nil {
-		return Record{}, fmt.Errorf("encode replacement identity collection record: %w", err)
+		return Record{}, fmt.Errorf("encode replacement API key collection record: %w", err)
 	}
 	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
 		{Key: initialKey, ExpectedValue: currentMarkerData, NewValue: markerData},
-		{Key: identityStorageKey(stored.APIKey.ID), NewValue: identityData},
+		{Key: apiKeyStorageKey(stored.APIKey.ID), NewValue: apiKeyData},
 		{Key: hashStorageKey(stored.APIKey.Hash), NewValue: hashData},
 		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
 	}); err != nil {
-		return Record{}, mapConflict("replace missing initial identity", err)
+		return Record{}, mapConflict("replace missing initial API key", err)
 	}
-	return recordFromIdentity(stored), nil
+	return recordFromStored(stored), nil
 }
 
-// ReleaseInitial atomically deletes the initial identity and its setup claim.
+// ReleaseInitial atomically deletes the initial API key and its setup claim.
 // Call it only when the one-time credential could not be returned.
 func (r *repository) ReleaseInitial(ctx context.Context, id string) error {
 	if strings.TrimSpace(id) == "" {
@@ -248,61 +248,61 @@ func (r *repository) ReleaseInitial(ctx context.Context, id string) error {
 	}
 	markerData, err := r.store.Get(ctx, initialKey)
 	if err != nil {
-		return mapReadError("get initial identity claim", err)
+		return mapReadError("get initial API key claim", err)
 	}
-	marker, err := decodeInitialIdentityRecord(markerData)
+	marker, err := decodeInitialAPIKeyRecord(markerData)
 	if err != nil {
 		return err
 	}
-	if marker.IdentityID != id {
+	if marker.APIKeyID != id {
 		return ErrConflict
 	}
-	identityKey := identityStorageKey(id)
-	identityData, err := r.store.Get(ctx, identityKey)
+	apiKeyStoreKey := apiKeyStorageKey(id)
+	apiKeyData, err := r.store.Get(ctx, apiKeyStoreKey)
 	if err != nil {
-		return mapReadError("get initial identity", err)
+		return mapReadError("get initial API key", err)
 	}
-	stored, err := decodeIdentity(identityData)
+	stored, err := decodeAPIKey(apiKeyData)
 	if err != nil {
 		return err
 	}
 	if stored.APIKey.ID != id {
-		return fmt.Errorf("%w: initial identity ID does not match its key", ErrCorruptRecord)
+		return fmt.Errorf("%w: initial API key ID does not match its key", ErrCorruptRecord)
 	}
 	hashKey := hashStorageKey(stored.APIKey.Hash)
 	hashData, err := r.store.Get(ctx, hashKey)
 	if err != nil {
-		return mapReadError("get initial identity hash", err)
+		return mapReadError("get initial API key hash", err)
 	}
 	index, err := decodeHashRecord(hashData)
 	if err != nil {
 		return err
 	}
-	if index.IdentityID != id {
-		return fmt.Errorf("%w: initial identity hash target does not match", ErrCorruptRecord)
+	if index.APIKeyID != id {
+		return fmt.Errorf("%w: initial API key hash target does not match", ErrCorruptRecord)
 	}
 	collection, collectionData, err := r.readCollection(ctx)
 	if err != nil {
 		return err
 	}
 	if collection.Count == 0 {
-		return fmt.Errorf("%w: identity collection count is zero", ErrCorruptRecord)
+		return fmt.Errorf("%w: API key collection count is zero", ErrCorruptRecord)
 	}
-	updatedCollectionData, err := json.Marshal(identityCollectionRecord{
+	updatedCollectionData, err := json.Marshal(apiKeyCollectionRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      collection.Revision + 1,
 		Count:         collection.Count - 1,
 	})
 	if err != nil {
-		return fmt.Errorf("encode released identity collection record: %w", err)
+		return fmt.Errorf("encode released API key collection record: %w", err)
 	}
 	if err := r.store.CompareAndSwapBatch(ctx, []storage.CompareAndSwapMutation{
 		{Key: initialKey, ExpectedValue: markerData},
-		{Key: identityKey, ExpectedValue: identityData},
+		{Key: apiKeyStoreKey, ExpectedValue: apiKeyData},
 		{Key: hashKey, ExpectedValue: hashData},
 		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
 	}); err != nil {
-		return mapConflict("release initial identity and setup claim", err)
+		return mapConflict("release initial API key and setup claim", err)
 	}
 	return nil
 }
@@ -311,18 +311,18 @@ func (r *repository) GetByID(ctx context.Context, id string) (Record, error) {
 	if strings.TrimSpace(id) == "" {
 		return Record{}, ErrMissingID
 	}
-	data, err := r.store.Get(ctx, identityStorageKey(id))
+	data, err := r.store.Get(ctx, apiKeyStorageKey(id))
 	if err != nil {
-		return Record{}, mapReadError("get identity", err)
+		return Record{}, mapReadError("get API key", err)
 	}
-	stored, err := decodeIdentity(data)
+	stored, err := decodeAPIKey(data)
 	if err != nil {
 		return Record{}, err
 	}
 	if stored.APIKey.ID != id {
-		return Record{}, fmt.Errorf("%w: identity ID does not match its key", ErrCorruptRecord)
+		return Record{}, fmt.Errorf("%w: API key ID does not match its key", ErrCorruptRecord)
 	}
-	return recordFromIdentity(stored), nil
+	return recordFromStored(stored), nil
 }
 
 func (r *repository) GetByHash(ctx context.Context, hash string) (Record, error) {
@@ -331,13 +331,13 @@ func (r *repository) GetByHash(ctx context.Context, hash string) (Record, error)
 	}
 	data, err := r.store.Get(ctx, hashStorageKey(hash))
 	if err != nil {
-		return Record{}, mapReadError("get identity hash", err)
+		return Record{}, mapReadError("get API key hash", err)
 	}
 	index, err := decodeHashRecord(data)
 	if err != nil {
 		return Record{}, err
 	}
-	record, err := r.GetByID(ctx, index.IdentityID)
+	record, err := r.GetByID(ctx, index.APIKeyID)
 	if err != nil {
 		return Record{}, err
 	}
@@ -354,11 +354,11 @@ func (r *repository) List(ctx context.Context, limit, offset int) ([]Record, err
 	if offset < 0 {
 		offset = 0
 	}
-	// Scan every identity key: the store scan order is not a contract, so
+	// Scan every API key key: the store scan order is not a contract, so
 	// stable pagination needs the full sorted key set before slicing.
-	keys, err := r.store.ScanWithPrefix(ctx, identityKeyPrefix, 0)
+	keys, err := r.store.ScanWithPrefix(ctx, apiKeyPrefix, 0)
 	if err != nil {
-		return nil, fmt.Errorf("list identity keys: %w", err)
+		return nil, fmt.Errorf("list API key keys: %w", err)
 	}
 	sort.Strings(keys)
 	if offset >= len(keys) {
@@ -372,13 +372,13 @@ func (r *repository) List(ctx context.Context, limit, offset int) ([]Record, err
 	for _, key := range keys {
 		data, err := r.store.Get(ctx, key)
 		if err != nil {
-			return nil, mapReadError("read listed identity", err)
+			return nil, mapReadError("read listed API key", err)
 		}
-		stored, err := decodeIdentity(data)
+		stored, err := decodeAPIKey(data)
 		if err != nil {
 			return nil, err
 		}
-		records = append(records, recordFromIdentity(stored))
+		records = append(records, recordFromStored(stored))
 	}
 	return records, nil
 }
@@ -387,11 +387,11 @@ func (r *repository) Update(ctx context.Context, apiKey APIKey, expectedRevision
 	if err := apiKey.Validate(); err != nil {
 		return Record{}, err
 	}
-	currentData, err := r.store.Get(ctx, identityStorageKey(apiKey.ID))
+	currentData, err := r.store.Get(ctx, apiKeyStorageKey(apiKey.ID))
 	if err != nil {
-		return Record{}, mapReadError("get identity for update", err)
+		return Record{}, mapReadError("get API key for update", err)
 	}
-	current, err := decodeIdentity(currentData)
+	current, err := decodeAPIKey(currentData)
 	if err != nil {
 		return Record{}, err
 	}
@@ -401,30 +401,30 @@ func (r *repository) Update(ctx context.Context, apiKey APIKey, expectedRevision
 	if current.APIKey.Hash != apiKey.Hash {
 		return Record{}, ErrHashImmutable
 	}
-	updated := identityRecord{
+	updated := apiKeyRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      current.Revision + 1,
 		APIKey:        cloneAPIKey(apiKey),
 	}
 	updatedData, err := json.Marshal(updated)
 	if err != nil {
-		return Record{}, fmt.Errorf("encode identity update: %w", err)
+		return Record{}, fmt.Errorf("encode API key update: %w", err)
 	}
-	if err := r.store.CompareAndSwap(ctx, identityStorageKey(apiKey.ID), currentData, updatedData); err != nil {
-		return Record{}, mapConflict("update identity", err)
+	if err := r.store.CompareAndSwap(ctx, apiKeyStorageKey(apiKey.ID), currentData, updatedData); err != nil {
+		return Record{}, mapConflict("update API key", err)
 	}
-	return recordFromIdentity(updated), nil
+	return recordFromStored(updated), nil
 }
 
 func (r *repository) Delete(ctx context.Context, id string, expectedRevision uint64) error {
 	if strings.TrimSpace(id) == "" {
 		return ErrMissingID
 	}
-	data, err := r.store.Get(ctx, identityStorageKey(id))
+	data, err := r.store.Get(ctx, apiKeyStorageKey(id))
 	if err != nil {
-		return mapReadError("get identity for delete", err)
+		return mapReadError("get API key for delete", err)
 	}
-	stored, err := decodeIdentity(data)
+	stored, err := decodeAPIKey(data)
 	if err != nil {
 		return err
 	}
@@ -436,23 +436,23 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 		return err
 	}
 	if collection.Count == 0 {
-		return fmt.Errorf("%w: identity collection count is zero", ErrCorruptRecord)
+		return fmt.Errorf("%w: API key collection count is zero", ErrCorruptRecord)
 	}
-	updatedCollectionData, err := json.Marshal(identityCollectionRecord{
+	updatedCollectionData, err := json.Marshal(apiKeyCollectionRecord{
 		SchemaVersion: StorageSchemaVersion,
 		Revision:      collection.Revision + 1,
 		Count:         collection.Count - 1,
 	})
 	if err != nil {
-		return fmt.Errorf("encode deleted identity collection record: %w", err)
+		return fmt.Errorf("encode deleted API key collection record: %w", err)
 	}
 	indexKey := hashStorageKey(stored.APIKey.Hash)
 	indexData, err := r.store.Get(ctx, indexKey)
 	if err != nil && !errors.Is(err, storage.ErrNotFound) {
-		return mapReadError("get identity hash for delete", err)
+		return mapReadError("get API key hash for delete", err)
 	}
 	mutations := []storage.CompareAndSwapMutation{
-		{Key: identityStorageKey(id), ExpectedValue: data},
+		{Key: apiKeyStorageKey(id), ExpectedValue: data},
 		{Key: collectionKey, ExpectedValue: collectionData, NewValue: updatedCollectionData},
 	}
 	if err == nil {
@@ -460,8 +460,8 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 		if decodeErr != nil {
 			return decodeErr
 		}
-		if index.IdentityID != id {
-			return fmt.Errorf("%w: hash index target does not match identity", ErrCorruptRecord)
+		if index.APIKeyID != id {
+			return fmt.Errorf("%w: hash index target does not match API key", ErrCorruptRecord)
 		}
 		mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey, ExpectedValue: indexData})
 	} else {
@@ -470,7 +470,7 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 		mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey})
 	}
 	if err := r.store.CompareAndSwapBatch(ctx, mutations); err != nil {
-		return mapConflict("delete identity, hash index, and collection record", err)
+		return mapConflict("delete API key, hash index, and collection record", err)
 	}
 	return nil
 }
@@ -478,69 +478,69 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 func decodeHashRecord(data []byte) (hashRecord, error) {
 	var index hashRecord
 	if err := json.Unmarshal(data, &index); err != nil ||
-		index.SchemaVersion != StorageSchemaVersion || index.IdentityID == "" {
+		index.SchemaVersion != StorageSchemaVersion || index.APIKeyID == "" {
 		return hashRecord{}, fmt.Errorf("%w: hash index", ErrCorruptRecord)
 	}
 	return index, nil
 }
 
-func decodeInitialIdentityRecord(data []byte) (initialIdentityRecord, error) {
-	var record initialIdentityRecord
+func decodeInitialAPIKeyRecord(data []byte) (initialAPIKeyRecord, error) {
+	var record initialAPIKeyRecord
 	if err := json.Unmarshal(data, &record); err != nil ||
-		record.SchemaVersion != StorageSchemaVersion || record.IdentityID == "" {
-		return initialIdentityRecord{}, fmt.Errorf("%w: initial identity claim", ErrCorruptRecord)
+		record.SchemaVersion != StorageSchemaVersion || record.APIKeyID == "" {
+		return initialAPIKeyRecord{}, fmt.Errorf("%w: initial API key claim", ErrCorruptRecord)
 	}
 	return record, nil
 }
 
 func (r *repository) readCollection(
 	ctx context.Context,
-) (identityCollectionRecord, []byte, error) {
+) (apiKeyCollectionRecord, []byte, error) {
 	data, err := r.store.Get(ctx, collectionKey)
 	if errors.Is(err, storage.ErrNotFound) {
-		return identityCollectionRecord{SchemaVersion: StorageSchemaVersion}, nil, nil
+		return apiKeyCollectionRecord{SchemaVersion: StorageSchemaVersion}, nil, nil
 	}
 	if err != nil {
-		return identityCollectionRecord{}, nil, mapReadError("get identity collection record", err)
+		return apiKeyCollectionRecord{}, nil, mapReadError("get API key collection record", err)
 	}
-	record, err := decodeIdentityCollectionRecord(data)
+	record, err := decodeAPIKeyCollectionRecord(data)
 	if err != nil {
-		return identityCollectionRecord{}, nil, err
+		return apiKeyCollectionRecord{}, nil, err
 	}
 	return record, data, nil
 }
 
-func decodeIdentityCollectionRecord(data []byte) (identityCollectionRecord, error) {
-	var record identityCollectionRecord
+func decodeAPIKeyCollectionRecord(data []byte) (apiKeyCollectionRecord, error) {
+	var record apiKeyCollectionRecord
 	if err := json.Unmarshal(data, &record); err != nil ||
 		record.SchemaVersion != StorageSchemaVersion || record.Revision == 0 {
-		return identityCollectionRecord{}, fmt.Errorf("%w: identity collection record", ErrCorruptRecord)
+		return apiKeyCollectionRecord{}, fmt.Errorf("%w: API key collection record", ErrCorruptRecord)
 	}
 	return record, nil
 }
 
-func decodeIdentity(data []byte) (identityRecord, error) {
-	var stored identityRecord
+func decodeAPIKey(data []byte) (apiKeyRecord, error) {
+	var stored apiKeyRecord
 	if err := json.Unmarshal(data, &stored); err != nil {
-		return identityRecord{}, fmt.Errorf("%w: decode: %v", ErrCorruptRecord, err)
+		return apiKeyRecord{}, fmt.Errorf("%w: decode: %v", ErrCorruptRecord, err)
 	}
 	if stored.SchemaVersion != StorageSchemaVersion || stored.Revision == 0 {
-		return identityRecord{}, fmt.Errorf("%w: unsupported schema or revision", ErrCorruptRecord)
+		return apiKeyRecord{}, fmt.Errorf("%w: unsupported schema or revision", ErrCorruptRecord)
 	}
 	if err := stored.APIKey.Validate(); err != nil {
-		return identityRecord{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)
+		return apiKeyRecord{}, fmt.Errorf("%w: %v", ErrCorruptRecord, err)
 	}
 	return stored, nil
 }
 
-func identityStorageKey(id string) string { return identityKeyPrefix + encodePart(id) }
-func hashStorageKey(hash string) string   { return hashKeyPrefix + encodePart(hash) }
+func apiKeyStorageKey(id string) string { return apiKeyPrefix + encodePart(id) }
+func hashStorageKey(hash string) string { return hashKeyPrefix + encodePart(hash) }
 
 func encodePart(value string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(value))
 }
 
-func recordFromIdentity(stored identityRecord) Record {
+func recordFromStored(stored apiKeyRecord) Record {
 	return Record{Revision: stored.Revision, APIKey: cloneAPIKey(stored.APIKey)}
 }
 

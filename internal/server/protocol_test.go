@@ -50,7 +50,7 @@ func TestProtocolRoutesUseSelectedCodec(t *testing.T) {
 	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20})
 	apiKey := "test-protocol-route-key"
 	hash := sha256.Sum256([]byte(apiKey))
-	_, err := server.identities.Create(context.Background(), apikey.APIKey{
+	_, err := server.apiKeys.Create(context.Background(), apikey.APIKey{
 		ID:        "protocol-route-key",
 		Name:      "protocol_route_key",
 		Hash:      hex.EncodeToString(hash[:]),

@@ -1,0 +1,55 @@
+CSH-G3 fail-before: API-key-typed identifiers still speak the identity words.
+
+$ git grep -nE 'Identities|requireIdentity|ErrIdentitiesRequired|InitializeIdentity|ReleaseIdentity|IdentityName|createAdminTestIdentity' -- internal/server internal/app internal/cli internal/diagnosis internal/setup cmd/ internal/server/controllers | grep -v console_identity | head -40
+cmd/starport/main_test.go:182:				IdentityName: options.IdentityName,
+cmd/starport/main_test.go:190:	if got.IdentityName != "local-admin" {
+cmd/starport/main_test.go:191:		t.Errorf("identity name = %q, want local-admin", got.IdentityName)
+cmd/starport/run.go:85:		IdentityName: options.IdentityName,
+cmd/starport/run.go:88:		IdentityName: result.IdentityName,
+cmd/starport/run.go:157:	issued, issueErr := setup.InitializeIdentity(ctx, store, options.IdentityName)
+cmd/starport/run.go:159:	result := configuredInitResult(storageConfig, options.IdentityName, issued)
+cmd/starport/run.go:178:		IdentityName: identityName,
+cmd/starport/run.go:195:	releaseErr := setup.ReleaseIdentity(ctx, store, identityID)
+internal/app/app.go:445:	if err := requireIdentity(context.Background(), b.identities, b.auth.setting.Mode); err != nil {
+internal/app/app.go:681:		Service: b.gateway, Identities: b.identities, Accounts: b.accounts,
+internal/app/app.go:712:// requireIdentity refuses to start a gateway no one can reach. A deployment
+internal/app/app.go:720:func requireIdentity(ctx context.Context, identities apikey.Repository, mode authmode.Mode) error {
+internal/app/app.go:737:// It runs before requireIdentity because the two answer one question in
+internal/app/app_test.go:29:	require.ErrorIs(t, requireIdentity(context.Background(), identities, ""), ErrIdentityRequired)
+internal/app/app_test.go:31:		requireIdentity(context.Background(), identities, config.AuthModeRequired),
+internal/app/app_test.go:37:	require.NoError(t, requireIdentity(context.Background(), identities, config.AuthModeDisabled))
+internal/app/app_test.go:41:	require.NoError(t, requireIdentity(context.Background(), identities, config.AuthModeRequired))
+internal/app/auth_mode_test.go:123:	require.NoError(t, requireIdentity(t.Context(), identities, resolved.Mode))
+internal/app/auth_mode_test.go:124:	require.ErrorIs(t, requireIdentity(t.Context(), identities, authmode.Required), ErrIdentityRequired)
+internal/app/development.go:19:const developmentIdentityName = "local-development"
+internal/app/development.go:59:		issued, err := setup.InitializeIdentity(ctx, store, developmentIdentityName)
+internal/cli/app.go:238:				IdentityName: identityName, ConfiguredStorage: configuredStorage,
+internal/cli/app_test.go:185:			IdentityName: options.IdentityName,
+internal/cli/app_test.go:194:	if got.IdentityName != "developer" {
+internal/cli/app_test.go:222:func TestInitRejectsInvalidIdentityNameAsUsageError(t *testing.T) {
+internal/cli/app_test.go:247:			IdentityName: "local-admin",
+internal/cli/app_test.go:269:			IdentityName: "local-admin", APIKey: "gateway-key",
+internal/cli/app_test.go:286:		return InitResult{IdentityName: options.IdentityName, APIKey: "gateway-key"}, nil
+internal/cli/app_test.go:305:			IdentityName: options.IdentityName,
+internal/cli/init.go:14:	IdentityName      string
+internal/cli/init.go:20:	IdentityName string                      `json:"identity_name"`
+internal/diagnosis/service_test.go:101:	issued, err := setup.InitializeIdentity(context.Background(), store, "doctor-test")
+internal/server/controllers/admin_test.go:42:func createAdminTestIdentity(t *testing.T, repository apikey.Repository, apiKey apikey.APIKey) {
+internal/server/controllers/admin_test.go:151:	createAdminTestIdentity(t, identities, *apiKey)
+internal/server/controllers/admin_test.go:217:	createAdminTestIdentity(t, identities, *apiKey)
+internal/server/controllers/admin_test.go:252:	createAdminTestIdentity(t, identities, *apiKey)
+internal/server/controllers/admin_test.go:374:		createAdminTestIdentity(t, repository, apikey.APIKey{ID: id, Name: id, Active: true})
+internal/server/controllers/controllers.go:57:	Identities         apikey.Repository
+internal/server/controllers/controllers.go:126:		Admin: NewAdminController(cfg.Identities, cfg.Accounts, cfg.Usage,
+
+--- After (rename complete) ---
+
+$ git grep -nE 'Identities|requireIdentity|ErrIdentitiesRequired|InitializeIdentity|ReleaseIdentity|IdentityName|createAdminTestIdentity' -- internal/apikey internal/app internal/server internal/setup internal/diagnosis internal/cli cmd
+(no matches)
+
+$ git grep -inE 'identit' -- internal/apikey cmd | grep -vE 'identity:v1:|identity_id'
+(only the frozen storage prefix "identity:v1:" and stored JSON tag "identity_id" remain in internal/apikey; cmd/ is clean)
+
+Kept by design: the storage prefix constant "identity:v1:" and the stored JSON tags "identity_id" (durable data does not move); the people plane (internal/identity, localauth identity grant, console identity surfaces); and the unrelated identity senses the plan names (response-cache semantic identity, cloud default identity, routing and attempt identities, document cache identity, catalog identity marks, account identity).
+verify-v1-architecture.sh: 12 passed, 0 failed after the guard literals moved to TestAPIKeyRepositoryContract and TestRuntimeRequiresNamedAPIKey.
+go test ./internal/apikey: ok (0.4s). A prose pass had corrupted the concurrency test's key literals to "API key-A", which failed Validate before the collection read and deadlocked the barrier; restored to "key-A".

@@ -65,7 +65,7 @@ type Config struct {
 	AuthModeStore authmode.Repository
 
 	// UnauthenticatedScopes lists the scopes a request holds while the running
-	// mode is disabled. An empty list means identity.DefaultAnonymousScopes.
+	// mode is disabled. An empty list means apikey.DefaultAnonymousScopes.
 	UnauthenticatedScopes []string
 
 	// AllowRemoteNoAuth is the operator's acknowledgment that an

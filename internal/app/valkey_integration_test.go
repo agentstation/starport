@@ -28,11 +28,11 @@ func TestAppWithValkey(t *testing.T) {
 	cfg.Cache.Enabled = true
 	store, err := openStorage(cfg.Storage)
 	require.NoError(t, err)
-	identities, err := apikey.Open(store)
+	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
-	_, err = identities.Create(context.Background(), testIdentity())
+	_, err = apiKeys.Create(context.Background(), testAPIKey())
 	if err != nil && !errors.Is(err, apikey.ErrConflict) {
-		t.Fatalf("seed Valkey identity: %v", err)
+		t.Fatalf("seed Valkey API key: %v", err)
 	}
 	require.NoError(t, store.Close())
 

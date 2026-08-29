@@ -1,4 +1,4 @@
-// Package apikey owns gateway API-key identity and persistence.
+// Package apikey owns gateway API keys and their persistence.
 package apikey
 
 import (
@@ -11,7 +11,7 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 )
 
-// APIKey is one gateway authentication identity. It authenticates a request
+// APIKey is one gateway authentication API key. It authenticates a request
 // and carries scopes. What the request may reach and how much it may spend
 // belong to the account this key names.
 type APIKey struct {
@@ -45,19 +45,19 @@ func ResolveAccountID(value string) string {
 func (k APIKey) EffectiveAccountID() string { return ResolveAccountID(k.AccountID) }
 
 var (
-	// ErrMissingID reports an identity without a durable ID.
+	// ErrMissingID reports an API key without a durable ID.
 	ErrMissingID = errors.New("missing id")
-	// ErrMissingHash reports an identity without a key hash.
+	// ErrMissingHash reports an API key without a key hash.
 	ErrMissingHash = errors.New("missing hash")
-	// ErrMissingScopes reports an identity without any granted scope.
+	// ErrMissingScopes reports an API key without any granted scope.
 	ErrMissingScopes = errors.New("missing scopes")
-	// ErrInvalidName reports an invalid identity name.
+	// ErrInvalidName reports an invalid API key name.
 	ErrInvalidName = errors.New("invalid name: must be 1-255 characters")
-	// ErrInvalidScope reports an empty identity scope.
+	// ErrInvalidScope reports an empty API key scope.
 	ErrInvalidScope = errors.New("invalid scope: must be non-empty")
 	// ErrInvalidModel reports an empty allowed-model entry.
 	ErrInvalidModel = errors.New("invalid model: must be non-empty")
-	// ErrInvalidExpiration reports an expiration before identity creation.
+	// ErrInvalidExpiration reports an expiration before API key creation.
 	ErrInvalidExpiration = errors.New("expires_at must be after created_at")
 	// ErrUnknownAccount reports a key that names an account that does not exist.
 	ErrUnknownAccount = errors.New("api key names an account that does not exist")
@@ -65,7 +65,7 @@ var (
 
 var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-// ValidateName checks the public identity-name contract.
+// ValidateName checks the public key-name contract.
 func ValidateName(name string) error {
 	if name == "" || len(name) > 255 {
 		return ErrInvalidName
@@ -114,17 +114,17 @@ func (k APIKey) Validate() error {
 	return nil
 }
 
-// IsExpiredAt reports whether the identity expired at the supplied time.
+// IsExpiredAt reports whether the API key expired at the supplied time.
 func (k APIKey) IsExpiredAt(now time.Time) bool {
 	return k.ExpiresAt != nil && now.After(*k.ExpiresAt)
 }
 
-// IsExpired reports whether the identity is expired now.
+// IsExpired reports whether the API key is expired now.
 func (k APIKey) IsExpired() bool {
 	return k.IsExpiredAt(time.Now())
 }
 
-// HasScope reports whether the identity grants a scope.
+// HasScope reports whether the API key grants a scope.
 func (k APIKey) HasScope(scope string) bool {
 	if scope == "" {
 		return false
@@ -137,7 +137,7 @@ func (k APIKey) HasScope(scope string) bool {
 	return false
 }
 
-// CanUseModel reports whether the identity can use a model.
+// CanUseModel reports whether the API key can use a model.
 func (k APIKey) CanUseModel(model string) bool {
 	if len(k.AllowedModels) == 0 {
 		return true

@@ -61,12 +61,12 @@ check V06 'versioned concept repository contracts' sh -c '
 	grep -q -E "ProviderCredentialStorageSchemaVersion = 1" internal/credentials/repository.go &&
 	grep -q -E "StorageSchemaVersion = 1" internal/ratelimit/repository.go &&
 	grep -q -E "StorageSchemaVersion = 1" internal/presets/repository.go &&
-	grep -R -q -E --include="*_test.go" "^func TestIdentityRepositoryContract" internal/apikey &&
+	grep -R -q -E --include="*_test.go" "^func TestAPIKeyRepositoryContract" internal/apikey &&
 	grep -R -q -E --include="*_test.go" "^func TestProviderCredentialRepositoryContract" internal/credentials &&
 	grep -R -q -E --include="*_test.go" "^func TestRateLimitRepositoryContract" internal/ratelimit &&
 	grep -R -q -E --include="*_test.go" "^func TestPresetRepositoryContract" internal/presets &&
 	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "internal/storage" internal/server/controllers internal/server/middleware.go internal/console internal/providers/keyring &&
-	go test ./internal/apikey ./internal/credentials ./internal/ratelimit ./internal/presets -run "^Test(Identity|ProviderCredential|RateLimit|Preset)RepositoryContract$"
+	go test ./internal/apikey ./internal/credentials ./internal/ratelimit ./internal/presets -run "^Test(APIKey|ProviderCredential|RateLimit|Preset)RepositoryContract$"
 '
 
 check V07 'response cache semantic identity contract' sh -c '
@@ -83,7 +83,7 @@ check V07 'response cache semantic identity contract' sh -c '
 
 check V08 'production composition fail-closed contract' sh -c '
     grep -R -q -E --include="*_test.go" "^func TestProductionCompositionFailsClosed" internal/app &&
-	grep -R -q -E --include="*_test.go" "^func TestRuntimeRequiresNamedIdentity" internal/app &&
+	grep -R -q -E --include="*_test.go" "^func TestRuntimeRequiresNamedAPIKey" internal/app &&
 	grep -q -E "^type Dependencies struct" internal/server/server.go &&
 	grep -q -E "^func Open" internal/registry/registry.go &&
 	grep -q -E "^func .*Registry.* Start" internal/registry/registry.go &&
@@ -91,7 +91,7 @@ check V08 'production composition fail-closed contract' sh -c '
 	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "internal/(storage|registry|cache|router)" internal/server &&
 	scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "NewMockConnector|NewMockStore" internal/app internal/registry internal/server &&
     scripts/require-no-match.sh grep -R -q -E --include="*.go" --exclude="*_test.go" "os\\.Getenv|initializeMockProvider" internal/registry &&
-    go test ./internal/app -run "^Test(ProductionCompositionFailsClosed|RuntimeRequiresNamedIdentity)$"
+    go test ./internal/app -run "^Test(ProductionCompositionFailsClosed|RuntimeRequiresNamedAPIKey)$"
 '
 
 check V09 'public package boundary contract' sh -c '

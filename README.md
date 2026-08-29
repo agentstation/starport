@@ -5,7 +5,7 @@ APIs at `/v1` and OpenRouter-compatible APIs at `/api/v1`.
 
 Starport uses Starmap as its only source of provider, model, capability,
 context, price, and service facts. Starport owns inference credentials,
-gateway identities, routing policy, execution, and HTTP protocols.
+gateway API keys, routing policy, execution, and HTTP protocols.
 
 Starport adds less than 50 ms p99 gateway overhead per request. The number
 excludes provider inference time, ships on every response as the

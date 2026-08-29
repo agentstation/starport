@@ -17,20 +17,20 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// requestIdentity is what one authenticated request resolved to. The two
+// resolvedCaller is what one authenticated request resolved to. The two
 // values are separate on purpose: the key authenticates, and the account
 // decides what the request may reach.
-type requestIdentity struct {
+type resolvedCaller struct {
 	accountID string
 	keyID     string
 }
 
-// authenticate runs one secret through RequireAPIKey and reports the identity
+// authenticate runs one secret through RequireAPIKey and reports the caller
 // the middleware put on the request context.
-func authenticate(t *testing.T, middleware *AuthMiddleware, secret string) (requestIdentity, int) {
+func authenticate(t *testing.T, middleware *AuthMiddleware, secret string) (resolvedCaller, int) {
 	t.Helper()
 
-	var resolved requestIdentity
+	var resolved resolvedCaller
 	handler := middleware.RequireAPIKey(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		resolved.accountID = requestctx.AccountIDOrDefault(r.Context())
 		resolved.keyID, _ = requestctx.GetAPIKeyID(r.Context())
@@ -51,7 +51,7 @@ func authenticate(t *testing.T, middleware *AuthMiddleware, secret string) (requ
 // cached responses.
 func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := apikey.Open(store)
+	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
 	accounts, err := account.Open(store)
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 	_, err = accounts.Create(ctx, account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
 
-	issuer, err := apikey.NewIssuer(identities, apikey.WithAccountChecker(accounts))
+	issuer, err := apikey.NewIssuer(apiKeys, apikey.WithAccountChecker(accounts))
 	require.NoError(t, err)
 
 	first, err := issuer.Issue(ctx, apikey.IssueRequest{
@@ -71,9 +71,9 @@ func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 		Name: "Acme-Laptop", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
-	require.NotEqual(t, first.APIKey.ID, second.APIKey.ID, "the two keys must be distinct identities")
+	require.NotEqual(t, first.APIKey.ID, second.APIKey.ID, "the two keys must be distinct API keys")
 
-	middleware := NewAuthMiddleware(identities)
+	middleware := NewAuthMiddleware(apiKeys)
 
 	firstRequest, status := authenticate(t, middleware, first.Secret)
 	require.Equal(t, http.StatusOK, status)
@@ -99,11 +99,11 @@ func TestTwoKeysInOneAccountShareARequestAccount(t *testing.T) {
 // read time and not only at issue time.
 func TestKeyWithNoAccountResolvesToDefault(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := apikey.Open(store)
+	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
 
 	secret := "sk-starport-unaccounted"
-	_, err = identities.Create(context.Background(), apikey.APIKey{
+	_, err = apiKeys.Create(context.Background(), apikey.APIKey{
 		ID:     "STARPORT_unaccounted",
 		Name:   "Unaccounted",
 		Hash:   hashSecret(secret),
@@ -112,7 +112,7 @@ func TestKeyWithNoAccountResolvesToDefault(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resolved, status := authenticate(t, NewAuthMiddleware(identities), secret)
+	resolved, status := authenticate(t, NewAuthMiddleware(apiKeys), secret)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, account.DefaultID, resolved.accountID)
 	assert.Equal(t, "STARPORT_unaccounted", resolved.keyID)
@@ -120,7 +120,7 @@ func TestKeyWithNoAccountResolvesToDefault(t *testing.T) {
 
 // TestUnauthenticatedRequestAccountIsDecidedInOnePlace pins the seam AON6
 // extends when an operator disables authentication. A request with no
-// authenticated identity still has to attribute usage and select credentials,
+// authenticated caller still has to attribute usage and select credentials,
 // and AccountIDOrDefault is the only place that decides which account it uses.
 func TestUnauthenticatedRequestAccountIsDecidedInOnePlace(t *testing.T) {
 	assert.Equal(t, account.DefaultID, requestctx.AccountIDOrDefault(context.Background()))

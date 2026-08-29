@@ -23,8 +23,8 @@ const gatewayEntropyLength = 42
 
 var gatewayEntropyEncoding = base32.NewEncoding("0123456789ABCDEFGHJKMNPQRSTVWXYZ").WithPadding(base32.NoPadding)
 
-// ErrIssuerRequired reports an absent identity repository.
-var ErrIssuerRequired = errors.New("identity issuer repository is required")
+// ErrIssuerRequired reports an absent API key repository.
+var ErrIssuerRequired = errors.New("API key issuer repository is required")
 
 // AccountChecker reports whether an account exists. The issuer holds this
 // rather than an account repository so the key concept never learns how an
@@ -43,7 +43,7 @@ func WithAccountChecker(checker AccountChecker) IssuerOption {
 	return func(i *Issuer) { i.accounts = checker }
 }
 
-// IssueRequest contains the durable attributes for a new gateway identity.
+// IssueRequest contains the durable attributes for a new gateway API key.
 type IssueRequest struct {
 	Name string
 	// AccountID names the owning account. An empty value issues the key to the
@@ -56,14 +56,14 @@ type IssueRequest struct {
 	ExpiresAt     *time.Time
 }
 
-// IssueResult contains a new identity and its one-time plaintext credential.
+// IssueResult contains a new API key and its one-time plaintext credential.
 // The repository stores only the credential hash.
 type IssueResult struct {
 	APIKey APIKey
 	Secret string
 }
 
-// Issuer creates gateway credentials and their durable identity records.
+// Issuer creates gateway credentials and their durable API key records.
 type Issuer struct {
 	repository Repository
 	accounts   AccountChecker
@@ -76,7 +76,7 @@ type generatedCredential struct {
 	secret string
 }
 
-// NewIssuer returns an identity issuer backed by repository.
+// NewIssuer returns an API key issuer backed by repository.
 func NewIssuer(repository Repository, options ...IssuerOption) (*Issuer, error) {
 	if repository == nil {
 		return nil, ErrIssuerRequired
@@ -92,7 +92,7 @@ func NewIssuer(repository Repository, options ...IssuerOption) (*Issuer, error) 
 	return issuer, nil
 }
 
-// Issue creates one identity and returns its plaintext credential once.
+// Issue creates one API key and returns its plaintext credential once.
 func (i *Issuer) Issue(ctx context.Context, request IssueRequest) (IssueResult, error) {
 	if i == nil || i.repository == nil {
 		return IssueResult{}, ErrIssuerRequired
@@ -100,7 +100,7 @@ func (i *Issuer) Issue(ctx context.Context, request IssueRequest) (IssueResult, 
 	return i.issue(ctx, request, i.repository.Create)
 }
 
-// IssueInitial atomically creates the first identity in a repository.
+// IssueInitial atomically creates the first API key in a repository.
 func (i *Issuer) IssueInitial(ctx context.Context, request IssueRequest) (IssueResult, error) {
 	if i == nil || i.repository == nil {
 		return IssueResult{}, ErrIssuerRequired
@@ -148,7 +148,7 @@ func (i *Issuer) issue(
 	}
 	record, err := create(ctx, apiKey)
 	if err != nil {
-		return IssueResult{APIKey: apiKey, Secret: credential.secret}, fmt.Errorf("create identity: %w", err)
+		return IssueResult{APIKey: apiKey, Secret: credential.secret}, fmt.Errorf("create API key: %w", err)
 	}
 	return IssueResult{APIKey: record.APIKey, Secret: credential.secret}, nil
 }

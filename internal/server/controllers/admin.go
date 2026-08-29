@@ -27,7 +27,7 @@ const systemInfoUnavailable = "unavailable"
 
 // AdminController handles administrative endpoints
 type AdminController struct {
-	identities   apikey.Repository
+	apiKeys      apikey.Repository
 	accounts     account.Repository
 	issuer       *apikey.Issuer
 	usageRecords usage.Repository
@@ -47,7 +47,7 @@ func WithFileStorage(backend string) AdminOption {
 // NewAdminController creates a new admin controller. The account repository
 // lets the issuer refuse a key that names an account that does not exist.
 func NewAdminController(
-	identities apikey.Repository,
+	apiKeys apikey.Repository,
 	accounts account.Repository,
 	usageRecords usage.Repository,
 	options ...AdminOption,
@@ -56,9 +56,9 @@ func NewAdminController(
 	if accounts != nil {
 		issuerOptions = append(issuerOptions, apikey.WithAccountChecker(accounts))
 	}
-	issuer, _ := apikey.NewIssuer(identities, issuerOptions...)
+	issuer, _ := apikey.NewIssuer(apiKeys, issuerOptions...)
 	controller := &AdminController{
-		identities:   identities,
+		apiKeys:      apiKeys,
 		accounts:     accounts,
 		issuer:       issuer,
 		usageRecords: usageRecords,
@@ -91,7 +91,7 @@ func (h *AdminController) ListKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// One extra record proves or disproves a following page.
-	records, err := h.identities.List(ctx, limit+1, offset)
+	records, err := h.apiKeys.List(ctx, limit+1, offset)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to list API keys")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to list API keys")
@@ -182,7 +182,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 			return
 		}
-		log.Error().Err(err).Msg("Failed to create API key identity")
+		log.Error().Err(err).Msg("Failed to create the API key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create API key")
 		return
 	}
@@ -215,7 +215,7 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	keyID := chi.URLParam(r, "key_id")
 
-	record, err := h.identities.GetByID(ctx, keyID)
+	record, err := h.apiKeys.GetByID(ctx, keyID)
 	if err != nil {
 		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
@@ -313,7 +313,7 @@ func budgetUsage(
 	}
 }
 
-// isKeyValidationError reports whether err is a caller-shaped identity error.
+// isKeyValidationError reports whether err is a caller-shaped API key error.
 func isKeyValidationError(err error) bool {
 	return errors.Is(err, apikey.ErrInvalidName) ||
 		errors.Is(err, apikey.ErrMissingScopes) ||
@@ -335,7 +335,7 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	keyID := chi.URLParam(r, "key_id")
 
-	record, err := h.identities.GetByID(ctx, keyID)
+	record, err := h.apiKeys.GetByID(ctx, keyID)
 	if err != nil {
 		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
@@ -404,13 +404,13 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.identities.Update(ctx, apiKey, record.Revision)
+	updated, err := h.apiKeys.Update(ctx, apiKey, record.Revision)
 	if err != nil {
 		if errors.Is(err, apikey.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "API key changed during update")
 			return
 		}
-		log.Error().Err(err).Msg("Failed to update API key identity")
+		log.Error().Err(err).Msg("Failed to update the API key")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to update API key")
 		return
 	}
@@ -428,7 +428,7 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	keyID := chi.URLParam(r, "key_id")
 
-	if err := h.identities.Delete(ctx, keyID, 0); err != nil {
+	if err := h.apiKeys.Delete(ctx, keyID, 0); err != nil {
 		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return

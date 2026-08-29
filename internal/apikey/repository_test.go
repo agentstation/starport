@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIdentityRepositoryContract(t *testing.T) {
+func TestAPIKeyRepositoryContract(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
 		ctx := context.Background()
 		repository, err := Open(store)
@@ -44,7 +44,7 @@ func TestIdentityRepositoryContract(t *testing.T) {
 		keys, err := store.ScanWithPrefix(ctx, StoragePrefix, 0)
 		require.NoError(t, err)
 		require.Len(t, keys, 3)
-		primaryData, err := store.Get(ctx, identityStorageKey(apiKey.ID))
+		primaryData, err := store.Get(ctx, apiKeyStorageKey(apiKey.ID))
 		require.NoError(t, err)
 		var schema map[string]any
 		require.NoError(t, json.Unmarshal(primaryData, &schema))
@@ -94,13 +94,13 @@ func TestIdentityRepositoryContract(t *testing.T) {
 		require.NoError(t, err)
 
 		corruptID := "corrupt-" + suffix
-		require.NoError(t, store.Set(ctx, identityStorageKey(corruptID), []byte(`{"schema_version":2}`)))
+		require.NoError(t, store.Set(ctx, apiKeyStorageKey(corruptID), []byte(`{"schema_version":2}`)))
 		_, err = repository.GetByID(ctx, corruptID)
 		require.True(t, errors.Is(err, ErrCorruptRecord))
 	})
 }
 
-func TestIdentityDeleteUsesStoredHashIndexBytes(t *testing.T) {
+func TestAPIKeyDeleteUsesStoredHashIndexBytes(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
 	repository, err := Open(store)
@@ -122,7 +122,7 @@ func TestIdentityDeleteUsesStoredHashIndexBytes(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestIdentityDeleteToleratesMissingHashIndex(t *testing.T) {
+func TestAPIKeyDeleteToleratesMissingHashIndex(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
 	repository, err := Open(store)
@@ -174,8 +174,8 @@ func TestConcurrentCreatesRetryCollectionContention(t *testing.T) {
 		index := index
 		go func() {
 			apiKey := APIKey{
-				ID:     "identity-" + string(rune('A'+index)),
-				Name:   "identity-" + string(rune('A'+index)),
+				ID:     "key-" + string(rune('A'+index)),
+				Name:   "key-" + string(rune('A'+index)),
 				Hash:   "hash-" + string(rune('A'+index)),
 				Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),
 			}
@@ -213,7 +213,7 @@ func TestCreateInitialRefusesNonemptyCollection(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflict)
 }
 
-func TestCreateInitialReclaimsMissingInitialIdentity(t *testing.T) {
+func TestCreateInitialReclaimsMissingInitialAPIKey(t *testing.T) {
 	repository, err := Open(storage.NewMockStore())
 	require.NoError(t, err)
 	first := APIKey{
@@ -255,7 +255,7 @@ func TestReleaseInitialAllowsSafeRetry(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestReleaseInitialRefusesAnotherIdentity(t *testing.T) {
+func TestReleaseInitialRefusesAnotherAPIKey(t *testing.T) {
 	repository, err := Open(storage.NewMockStore())
 	require.NoError(t, err)
 	first := APIKey{

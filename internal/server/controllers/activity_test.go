@@ -195,9 +195,9 @@ func TestAdminMetricsReflectRecordedUsage(t *testing.T) {
 	third.LatencyMS = 500
 	seedActivityRecords(t, repository, first, second, third)
 
-	identities, err := apikey.Open(storage.NewMockStore())
+	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	handler := NewAdminController(identities, newAdminTestAccounts(t), repository)
+	handler := NewAdminController(apiKeys, newAdminTestAccounts(t), repository)
 
 	recorder := httptest.NewRecorder()
 	handler.Metrics(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/metrics", nil))

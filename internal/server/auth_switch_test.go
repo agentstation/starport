@@ -62,7 +62,7 @@ func keylessInference(t *testing.T, server *Server) int {
 // the switch already sees it.
 func TestSwitchChangesInferenceWithoutARestart(t *testing.T) {
 	server := switchServer(t, storage.NewMockStore())
-	secret := createServerIdentity(t, server, "switch-admin", []string{"admin"})
+	secret := createServerAPIKey(t, server, "switch-admin", []string{"admin"})
 
 	require.Equal(t, http.StatusUnauthorized, keylessInference(t, server))
 
@@ -116,7 +116,7 @@ func TestSwitchClosesAnOpenGatewayWithoutAKey(t *testing.T) {
 func TestSwitchSurvivesARestart(t *testing.T) {
 	store := storage.NewMockStore()
 	first := switchServer(t, store)
-	secret := createServerIdentity(t, first, "switch-admin", []string{"admin"})
+	secret := createServerAPIKey(t, first, "switch-admin", []string{"admin"})
 	require.Equal(t, http.StatusOK, setMode(t, first, secret, "disabled").Code)
 
 	modes, err := authmode.Open(store)
@@ -140,7 +140,7 @@ func TestSwitchSurvivesARestart(t *testing.T) {
 // key scoped for inference must not be able to open the gateway to everyone.
 func TestSwitchRefusesANonAdminCaller(t *testing.T) {
 	server := switchServer(t, storage.NewMockStore())
-	secret := createServerIdentity(t, server, "switch-user", []string{"chat:write"})
+	secret := createServerAPIKey(t, server, "switch-user", []string{"chat:write"})
 
 	response := setMode(t, server, secret, "disabled")
 
@@ -154,7 +154,7 @@ func TestSwitchRefusesANonAdminCaller(t *testing.T) {
 // operator's own browser is the same attack without the leak.
 func TestSwitchRefusesARemoteOrigin(t *testing.T) {
 	server := switchServer(t, storage.NewMockStore())
-	secret := createServerIdentity(t, server, "switch-admin", []string{"admin"})
+	secret := createServerAPIKey(t, server, "switch-admin", []string{"admin"})
 
 	remoteOrigin := setMode(t, server, secret, "disabled", func(r *http.Request) {
 		r.Header.Set("Origin", "https://evil.example")
@@ -176,7 +176,7 @@ func TestSwitchRefusesToOpenAReachableGateway(t *testing.T) {
 	server := newTestServer(t, &Config{
 		Port: 8080, Host: "0.0.0.0", MaxRequestSize: 1 << 20,
 	})
-	secret := createServerIdentity(t, server, "switch-admin", []string{"admin"})
+	secret := createServerAPIKey(t, server, "switch-admin", []string{"admin"})
 
 	refused := setMode(t, server, secret, "disabled")
 	require.Equal(t, http.StatusConflict, refused.Code, refused.Body.String())
@@ -206,7 +206,7 @@ func TestSwitchRefusesAModeStatedForThisProcess(t *testing.T) {
 				Port: 8080, Host: "127.0.0.1", MaxRequestSize: 1 << 20,
 				AuthMode: authmode.Required, AuthModeSource: test.source,
 			})
-			secret := createServerIdentity(t, server, "switch-admin", []string{"admin"})
+			secret := createServerAPIKey(t, server, "switch-admin", []string{"admin"})
 
 			response := setMode(t, server, secret, "disabled")
 
@@ -222,7 +222,7 @@ func TestSwitchRefusesAModeStatedForThisProcess(t *testing.T) {
 // into a 400 an operator can act on rather than a 500.
 func TestSwitchRejectsAnUnknownMode(t *testing.T) {
 	server := switchServer(t, storage.NewMockStore())
-	secret := createServerIdentity(t, server, "switch-admin", []string{"admin"})
+	secret := createServerAPIKey(t, server, "switch-admin", []string{"admin"})
 
 	for _, mode := range []string{"", "off", "REQUIRED"} {
 		response := setMode(t, server, secret, mode)

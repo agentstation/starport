@@ -54,7 +54,7 @@ type Controllers struct {
 type Config struct {
 	Service            proxy.Proxy
 	ProviderKeys       keyring.ProviderKeys
-	Identities         apikey.Repository
+	APIKeys            apikey.Repository
 	Accounts           account.Repository
 	Usage              usage.Repository
 	ProviderOperations ProviderOperations
@@ -123,9 +123,9 @@ func NewControllers(cfg Config) *Controllers {
 		Logos:                NewLogosController(cfg.Service),
 		ProviderCredentials:  NewProviderCredentialsController(cfg.ProviderKeys, cfg.Accounts),
 		Activity:             NewActivityController(cfg.Usage),
-		Admin: NewAdminController(cfg.Identities, cfg.Accounts, cfg.Usage,
+		Admin: NewAdminController(cfg.APIKeys, cfg.Accounts, cfg.Usage,
 			WithFileStorage(cfg.FileBackend)),
-		Accounts:           NewAccountsController(cfg.Accounts, cfg.Identities, cfg.Templates),
+		Accounts:           NewAccountsController(cfg.Accounts, cfg.APIKeys, cfg.Templates),
 		AccountTemplates:   NewAccountTemplatesController(cfg.Templates),
 		Members:            NewMembersController(cfg.Identity),
 		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),

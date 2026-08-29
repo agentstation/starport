@@ -19,18 +19,18 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-func TestInitializeCreatesNamedIdentity(t *testing.T) {
+func TestInitializeCreatesNamedAPIKey(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "provider-secret")
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	service := New(paths)
 
 	result, err := service.Initialize(context.Background(), Request{
-		IdentityName: "local-admin",
+		APIKeyName: "local-admin",
 	})
 	if err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	if result.APIKey == "" || result.IdentityName != "local-admin" {
+	if result.APIKey == "" || result.APIKeyName != "local-admin" {
 		t.Fatalf("result = %#v", result)
 	}
 	state, err := Inspect(paths)
@@ -66,7 +66,7 @@ func TestInitializeCreatesNamedIdentity(t *testing.T) {
 
 	store, err := openLocalStore(paths.BadgerDir)
 	if err != nil {
-		t.Fatalf("reopen identity store: %v", err)
+		t.Fatalf("reopen API key store: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	repository, err := apikey.Open(store)
@@ -76,10 +76,10 @@ func TestInitializeCreatesNamedIdentity(t *testing.T) {
 	digest := sha256.Sum256([]byte(result.APIKey))
 	record, err := repository.GetByHash(context.Background(), hex.EncodeToString(digest[:]))
 	if err != nil {
-		t.Fatalf("get initialized identity: %v", err)
+		t.Fatalf("get the initialized API key: %v", err)
 	}
 	if record.APIKey.Name != "local-admin" || record.APIKey.Metadata["source"] != "setup" {
-		t.Errorf("identity = %#v", record.APIKey)
+		t.Errorf("API key = %#v", record.APIKey)
 	}
 }
 
@@ -89,7 +89,7 @@ func TestLocalInitPersistsNoProviderCredential(t *testing.T) {
 	t.Setenv("STARPORT_OPENAI_API_KEY", "starport-provider-secret")
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	_, err := New(paths).Initialize(context.Background(), Request{
-		IdentityName: "local-admin",
+		APIKeyName: "local-admin",
 	})
 	if err != nil {
 		t.Fatalf("initialize: %v", err)
@@ -137,7 +137,7 @@ func TestInitializeRefusesExistingState(t *testing.T) {
 			},
 		},
 		{
-			name: "identity store", want: ErrPartialState,
+			name: "API key store", want: ErrPartialState,
 			prepare: func(t *testing.T, paths config.Paths) {
 				t.Helper()
 				if err := os.MkdirAll(paths.BadgerDir, 0o700); err != nil {
@@ -150,7 +150,7 @@ func TestInitializeRefusesExistingState(t *testing.T) {
 			check: func(t *testing.T, paths config.Paths) {
 				t.Helper()
 				if got := string(mustReadFile(t, filepath.Join(paths.BadgerDir, "sentinel"))); got != "keep" {
-					t.Errorf("identity sentinel = %q, want keep", got)
+					t.Errorf("API key sentinel = %q, want keep", got)
 				}
 			},
 		},
@@ -160,7 +160,7 @@ func TestInitializeRefusesExistingState(t *testing.T) {
 			paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 			test.prepare(t, paths)
 			_, err := New(paths).Initialize(context.Background(), Request{
-				IdentityName: "local-admin",
+				APIKeyName: "local-admin",
 			})
 			if !errors.Is(err, test.want) {
 				t.Fatalf("initialize error = %v, want %v", err, test.want)
@@ -173,7 +173,7 @@ func TestInitializeRefusesExistingState(t *testing.T) {
 func TestInitializeRefusesReadyState(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	service := New(paths)
-	request := Request{IdentityName: "local-admin"}
+	request := Request{APIKeyName: "local-admin"}
 	if _, err := service.Initialize(context.Background(), request); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestInitializeRefusesReadyState(t *testing.T) {
 func TestRollbackRemovesUnpublishedLocalState(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	service := New(paths)
-	request := Request{IdentityName: "local-admin"}
+	request := Request{APIKeyName: "local-admin"}
 	result, err := service.Initialize(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +207,7 @@ func TestRollbackRefusesChangedConfiguration(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	service := New(paths)
 	result, err := service.Initialize(context.Background(), Request{
-		IdentityName: "local-admin",
+		APIKeyName: "local-admin",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -223,11 +223,11 @@ func TestRollbackRefusesChangedConfiguration(t *testing.T) {
 	}
 }
 
-func TestRollbackRefusesChangedIdentityStorage(t *testing.T) {
+func TestRollbackRefusesChangedAPIKeyStorage(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	service := New(paths)
 	result, err := service.Initialize(context.Background(), Request{
-		IdentityName: "local-admin",
+		APIKeyName: "local-admin",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +266,7 @@ func TestRollbackRefusesOtherApplicationRecords(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	service := New(paths)
 	result, err := service.Initialize(context.Background(), Request{
-		IdentityName: "local-admin",
+		APIKeyName: "local-admin",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -294,7 +294,7 @@ func TestRollbackRefusesOtherManagedFiles(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
 	service := New(paths)
 	result, err := service.Initialize(context.Background(), Request{
-		IdentityName: "local-admin",
+		APIKeyName: "local-admin",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -313,7 +313,7 @@ func TestRollbackRefusesOtherManagedFiles(t *testing.T) {
 
 func TestInitializeConcurrentSingleWinner(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
-	request := Request{IdentityName: "local-admin"}
+	request := Request{APIKeyName: "local-admin"}
 	errorsByCall := make([]error, 2)
 	var wait sync.WaitGroup
 	wait.Add(2)
@@ -344,7 +344,7 @@ func TestInitializeConcurrentSingleWinner(t *testing.T) {
 
 func TestInitializeValidatesBeforeWriting(t *testing.T) {
 	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "starport"))
-	_, err := New(paths).Initialize(context.Background(), Request{IdentityName: "invalid name"})
+	_, err := New(paths).Initialize(context.Background(), Request{APIKeyName: "invalid name"})
 	if !errors.Is(err, apikey.ErrInvalidName) {
 		t.Fatalf("initialize error = %v, want %v", err, apikey.ErrInvalidName)
 	}
@@ -353,31 +353,31 @@ func TestInitializeValidatesBeforeWriting(t *testing.T) {
 	}
 }
 
-func TestInitializeIdentityRefusesExistingIdentity(t *testing.T) {
+func TestInitializeAPIKeyRefusesExistingKey(t *testing.T) {
 	store := storage.NewMockStore()
-	first, err := InitializeIdentity(context.Background(), store, "primary-admin")
+	first, err := InitializeAPIKey(context.Background(), store, "primary-admin")
 	if err != nil {
-		t.Fatalf("initialize identity: %v", err)
+		t.Fatalf("initialize API key: %v", err)
 	}
 	if first.Secret == "" || first.APIKey.Name != "primary-admin" {
-		t.Errorf("issued identity = %#v", first)
+		t.Errorf("issued API key = %#v", first)
 	}
-	_, err = InitializeIdentity(context.Background(), store, "replacement-admin")
+	_, err = InitializeAPIKey(context.Background(), store, "replacement-admin")
 	if !errors.Is(err, ErrAlreadyInitialized) {
 		t.Fatalf("second initialization error = %v, want %v", err, ErrAlreadyInitialized)
 	}
 }
 
-func TestReleaseIdentityAllowsConfiguredStorageRetry(t *testing.T) {
+func TestReleaseAPIKeyAllowsConfiguredStorageRetry(t *testing.T) {
 	store := storage.NewMockStore()
-	first, err := InitializeIdentity(context.Background(), store, "primary-admin")
+	first, err := InitializeAPIKey(context.Background(), store, "primary-admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ReleaseIdentity(context.Background(), store, first.APIKey.ID); err != nil {
-		t.Fatalf("release identity: %v", err)
+	if err := ReleaseAPIKey(context.Background(), store, first.APIKey.ID); err != nil {
+		t.Fatalf("release API key: %v", err)
 	}
-	if _, err := InitializeIdentity(context.Background(), store, "retry-admin"); err != nil {
+	if _, err := InitializeAPIKey(context.Background(), store, "retry-admin"); err != nil {
 		t.Fatalf("retry configured initialization: %v", err)
 	}
 }

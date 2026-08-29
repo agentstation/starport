@@ -12,7 +12,7 @@ Implemented:
 - Header-only API-key authentication using SHA-256 hash lookup. Query-string API keys are intentionally rejected.
 - Per-API-key rate-limit enforcement using authenticated API key ID and an atomic rate-limit repository.
 - Badger and Valkey KV storage backends behind a shared `KVStore` interface.
-- Versioned repositories for identities, provider credentials, rate limits, and presets.
+- Versioned repositories for API keys, provider credentials, rate limits, and presets.
 - Account-safe response caching with canonical chat and embedding records, catalog-generation invalidation, and stream reconstruction.
 - Catalog-driven provider activation over the compiled OpenAI-compatible,
   Anthropic, Google AI, Google Cloud, and Ollama transport primitives.
@@ -502,9 +502,9 @@ Implemented:
 - Directory synchronization makes staged contents and the installed rename durable before the command reports success.
 - Configured-storage initialization creates the first named identity without a temporary startup credential.
 - Failed credential output isolates local state before deletion. Rollback requires the original layout and only the initial identity records.
-- Configured storage atomically releases the identity claim after an output failure.
-- An initial claim names its identity. Setup can reclaim the claim only when the repository is empty and that identity is absent.
-- Startup rejects empty identity storage and does not create an identity.
+- Configured storage atomically releases the API key claim after an output failure.
+- An initial claim names its API key. Setup can reclaim the claim only when the repository is empty and that key is absent.
+- Startup rejects empty API key storage and does not create a key.
 - Starport accepts API keys from `Authorization` and `X-API-Key` headers only.
 - The HTTP edge derives client IP from the direct TCP peer. It ignores untrusted forwarding headers.
 - Authentication stores the API key model in request context for ownership and routing checks.

@@ -23,22 +23,22 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-func TestRuntimeRequiresNamedIdentity(t *testing.T) {
-	identities, err := apikey.Open(storage.NewMockStore())
+func TestRuntimeRequiresNamedAPIKey(t *testing.T) {
+	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	require.ErrorIs(t, requireIdentity(context.Background(), identities, ""), ErrIdentityRequired)
+	require.ErrorIs(t, requireAPIKey(context.Background(), apiKeys, ""), ErrAPIKeyRequired)
 	require.ErrorIs(t,
-		requireIdentity(context.Background(), identities, config.AuthModeRequired),
-		ErrIdentityRequired)
+		requireAPIKey(context.Background(), apiKeys, config.AuthModeRequired),
+		ErrAPIKeyRequired)
 
-	// An empty identity store is the expected state of a gateway that requires
+	// An empty API key store is the expected state of a gateway that requires
 	// no key, and refusing to start there would make the mode unusable for the
 	// operator it exists for.
-	require.NoError(t, requireIdentity(context.Background(), identities, config.AuthModeDisabled))
+	require.NoError(t, requireAPIKey(context.Background(), apiKeys, config.AuthModeDisabled))
 
-	_, err = identities.Create(context.Background(), testIdentity())
+	_, err = apiKeys.Create(context.Background(), testAPIKey())
 	require.NoError(t, err)
-	require.NoError(t, requireIdentity(context.Background(), identities, config.AuthModeRequired))
+	require.NoError(t, requireAPIKey(context.Background(), apiKeys, config.AuthModeRequired))
 }
 
 func TestProductionCompositionFailsClosed(t *testing.T) {
@@ -76,13 +76,13 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 			cause: ErrCredentialsRequired,
 		},
 		{
-			name: "missing identity",
+			name: "missing API key",
 			mutate: func(_ *config.Config, factories *runtimeFactories) {
 				factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
 					return storage.NewMockStore(), nil
 				}
 			},
-			cause: ErrIdentityRequired,
+			cause: ErrAPIKeyRequired,
 		},
 	}
 	for _, test := range tests {
@@ -317,8 +317,8 @@ func validProductionConfig(t *testing.T) *config.Config {
 func explicitTestFactories() runtimeFactories {
 	factories := defaultRuntimeFactories()
 	store := storage.NewMockStore()
-	identities, _ := apikey.Open(store)
-	_, _ = identities.Create(context.Background(), testIdentity())
+	apiKeys, _ := apikey.Open(store)
+	_, _ = apiKeys.Create(context.Background(), testAPIKey())
 	factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
 		return store, nil
 	}
@@ -332,7 +332,7 @@ func explicitTestFactories() runtimeFactories {
 	return factories
 }
 
-func testIdentity() apikey.APIKey {
+func testAPIKey() apikey.APIKey {
 	return apikey.APIKey{
 		ID: "STARPORT_TEST", Name: "test-admin", Hash: "test-hash",
 		Scopes: []string{"*"}, Active: true, CreatedAt: time.Now().UTC(),

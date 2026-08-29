@@ -208,12 +208,12 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 
 	initialize := &urfavecli.Command{
 		Name:         "init",
-		Usage:        "Initialize secure local configuration and identity storage",
+		Usage:        "Initialize secure local configuration and API key storage",
 		OnUsageError: usageError,
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{
 				Name:  "name",
-				Usage: "Name for the first gateway identity",
+				Usage: "Name for the first gateway API key",
 				Value: "local-admin",
 			},
 			&urfavecli.BoolFlag{
@@ -222,7 +222,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 			},
 			&urfavecli.BoolFlag{
 				Name:  "configured-storage",
-				Usage: "Create only the first identity in configured storage",
+				Usage: "Create only the first API key in configured storage",
 			},
 		},
 		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
@@ -230,12 +230,12 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 				return err
 			}
 			configuredStorage := cmd.Bool("configured-storage")
-			identityName := cmd.String("name")
-			if err := apikey.ValidateName(identityName); err != nil {
+			apiKeyName := cmd.String("name")
+			if err := apikey.ValidateName(apiKeyName); err != nil {
 				return urfavecli.Exit(err.Error(), ExitCodeUsage)
 			}
 			result, initializeErr := deps.Initialize(ctx, InitOptions{
-				IdentityName: identityName, ConfiguredStorage: configuredStorage,
+				APIKeyName: apiKeyName, ConfiguredStorage: configuredStorage,
 			})
 			if result.APIKey != "" {
 				if err := writeInitResult(cmd.Writer, result, cmd.Bool(initFormatJSON)); err != nil {

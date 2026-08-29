@@ -77,7 +77,7 @@ func TestMediaRoutesCarryTheirScopes(t *testing.T) {
 }
 
 // TestAnonymousDeploymentReachesTheMediaRoutes covers the operator who runs
-// with authentication disabled. The anonymous identity has to carry the two
+// with authentication disabled. The anonymous key has to carry the two
 // media scopes, or the mode that exists to make the first request work would
 // refuse half the surface.
 func TestAnonymousDeploymentReachesTheMediaRoutes(t *testing.T) {
@@ -97,7 +97,7 @@ func storeMediaTestKey(t *testing.T, server *Server, id string, scopes ...string
 	t.Helper()
 	secret := "sk-starport-" + id
 	hash := sha256.Sum256([]byte(secret))
-	_, err := server.identities.Create(context.Background(), apikey.APIKey{
+	_, err := server.apiKeys.Create(context.Background(), apikey.APIKey{
 		ID:        id,
 		Name:      id,
 		Hash:      hex.EncodeToString(hash[:]),

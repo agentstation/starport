@@ -65,7 +65,7 @@ require_text DX-CLI-11 'TestNoArgumentsShowHelp' internal/cli/app_test.go
 
 require_file DX-SETUP-1 internal/setup/service.go
 require_text DX-SETUP-2 '0600|0o600' internal/setup/service_test.go
-require_text DX-SETUP-3 'TestInitializeCreatesNamedIdentity' internal/setup/service_test.go
+require_text DX-SETUP-3 'TestInitializeCreatesNamedAPIKey' internal/setup/service_test.go
 
 require_file DX-AUTH-1 internal/providers/auth/request.go
 require_file DX-AUTH-2 internal/credentials/cloudchain/cloud.go

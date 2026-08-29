@@ -39,7 +39,7 @@ func newAdminTestAccounts(t *testing.T) account.Repository {
 	return accounts
 }
 
-func createAdminTestIdentity(t *testing.T, repository apikey.Repository, apiKey apikey.APIKey) {
+func createAdminTestAPIKey(t *testing.T, repository apikey.Repository, apiKey apikey.APIKey) {
 	t.Helper()
 	if len(apiKey.Scopes) == 0 {
 		apiKey.Scopes = []string{"test"}
@@ -140,7 +140,7 @@ func TestAdminHandler_Metrics(t *testing.T) {
 
 func TestAdminHandler_ListKeys(t *testing.T) {
 	// Create handler
-	handler, identities := newAdminTestController(t)
+	handler, apiKeys := newAdminTestController(t)
 
 	// Add some test keys
 	apiKey := &apikey.APIKey{
@@ -148,7 +148,7 @@ func TestAdminHandler_ListKeys(t *testing.T) {
 		Name:   "Test-Key-1",
 		Active: true,
 	}
-	createAdminTestIdentity(t, identities, *apiKey)
+	createAdminTestAPIKey(t, apiKeys, *apiKey)
 
 	// Create request
 	req := httptest.NewRequest("GET", "/api/v1/admin/keys", nil)
@@ -205,7 +205,7 @@ func TestAdminHandler_CreateKey(t *testing.T) {
 
 func TestAdminHandler_GetKey(t *testing.T) {
 	// Create handler
-	handler, identities := newAdminTestController(t)
+	handler, apiKeys := newAdminTestController(t)
 
 	// Add a test key
 	apiKey := &apikey.APIKey{
@@ -214,7 +214,7 @@ func TestAdminHandler_GetKey(t *testing.T) {
 		Active: true,
 		Hash:   "secret-hash",
 	}
-	createAdminTestIdentity(t, identities, *apiKey)
+	createAdminTestAPIKey(t, apiKeys, *apiKey)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -241,7 +241,7 @@ func TestAdminHandler_GetKey(t *testing.T) {
 
 func TestAdminHandler_DeleteKey(t *testing.T) {
 	// Create handler
-	handler, identities := newAdminTestController(t)
+	handler, apiKeys := newAdminTestController(t)
 
 	// Add a test key
 	apiKey := &apikey.APIKey{
@@ -249,7 +249,7 @@ func TestAdminHandler_DeleteKey(t *testing.T) {
 		Name:   "Test-Key-1",
 		Active: true,
 	}
-	createAdminTestIdentity(t, identities, *apiKey)
+	createAdminTestAPIKey(t, apiKeys, *apiKey)
 
 	// Create router to handle URL params
 	r := chi.NewRouter()
@@ -273,7 +273,7 @@ func TestAdminHandler_DeleteKey(t *testing.T) {
 	assert.Equal(t, "test-key-1", resp["key_id"])
 
 	// Verify key was deleted
-	_, err = identities.GetByID(context.Background(), apiKey.ID)
+	_, err = apiKeys.GetByID(context.Background(), apiKey.ID)
 	assert.ErrorIs(t, err, apikey.ErrNotFound)
 }
 
@@ -371,7 +371,7 @@ func TestAdminKeyRejectsInvalidLimits(t *testing.T) {
 func TestKeyListPagination(t *testing.T) {
 	handler, repository := newAdminTestController(t)
 	for _, id := range []string{"key-a", "key-b", "key-c", "key-d", "key-e"} {
-		createAdminTestIdentity(t, repository, apikey.APIKey{ID: id, Name: id, Active: true})
+		createAdminTestAPIKey(t, repository, apikey.APIKey{ID: id, Name: id, Active: true})
 	}
 
 	page := func(query string) (keys []map[string]any, pagination map[string]any) {
@@ -455,7 +455,7 @@ func TestAdminCreateKeyReportsTheOwningAccount(t *testing.T) {
 // HTTP boundary. Naming an account that does not exist is the caller's mistake,
 // so it answers 400 rather than 500 and stores nothing.
 func TestAdminCreateKeyRefusesAnUnknownAccount(t *testing.T) {
-	handler, identities := newAdminTestController(t)
+	handler, apiKeys := newAdminTestController(t)
 
 	recorder := createKeyRequest(t, handler, map[string]any{
 		"name":       "Ghost-Key",
@@ -464,7 +464,7 @@ func TestAdminCreateKeyRefusesAnUnknownAccount(t *testing.T) {
 	})
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 
-	records, err := identities.List(context.Background(), 10, 0)
+	records, err := apiKeys.List(context.Background(), 10, 0)
 	require.NoError(t, err)
 	assert.Empty(t, records, "a refused creation must store no key")
 }

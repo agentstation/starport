@@ -179,16 +179,16 @@ func TestRunContextInitDelegatesToInitializer(t *testing.T) {
 		func(_ context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {
 			got = options
 			return starportcli.InitResult{
-				IdentityName: options.IdentityName,
-				ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+				APIKeyName: options.APIKeyName,
+				ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 			}, nil
 		},
 	)
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)
 	}
-	if got.IdentityName != "local-admin" {
-		t.Errorf("identity name = %q, want local-admin", got.IdentityName)
+	if got.APIKeyName != "local-admin" {
+		t.Errorf("API key name = %q, want local-admin", got.APIKeyName)
 	}
 	var result starportcli.InitResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
