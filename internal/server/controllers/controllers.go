@@ -34,6 +34,7 @@ type Controllers struct {
 	Activity             *ActivityController
 	Admin                *AdminController
 	Accounts             *AccountsController
+	AccountTemplates     *AccountTemplatesController
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
 	Files                *FilesController
@@ -56,6 +57,9 @@ type Config struct {
 	ProviderOperations ProviderOperations
 	Catalog            CatalogOperations
 	Presets            presets.Repository
+	// Templates serves the account-template surface. A nil repository
+	// degrades those routes to 503, the way an absent preset store does.
+	Templates account.TemplateRepository
 	// Files serves the stored file surface. A nil service leaves the routes
 	// registered and answers each one with a service-unavailable result, so a
 	// deployment that configured no file storage says so instead of 404.
@@ -110,7 +114,8 @@ func NewControllers(cfg Config) *Controllers {
 		Activity:             NewActivityController(cfg.Usage),
 		Admin: NewAdminController(cfg.Identities, cfg.Accounts, cfg.Usage,
 			WithFileStorage(cfg.FileBackend)),
-		Accounts:           NewAccountsController(cfg.Accounts, cfg.Identities),
+		Accounts:           NewAccountsController(cfg.Accounts, cfg.Identities, cfg.Templates),
+		AccountTemplates:   NewAccountTemplatesController(cfg.Templates),
 		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:            NewCatalogController(cfg.Catalog),
 		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),

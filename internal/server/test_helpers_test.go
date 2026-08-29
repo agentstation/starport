@@ -26,6 +26,7 @@ import (
 	"github.com/agentstation/starport/internal/registry"
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/server/controllers"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -222,11 +223,28 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		config.AuthModeStore = modes
 	}
 
+	// Production composition migrates the relational store before any
+	// repository rides it, so the test server does the same on an in-memory
+	// database.
+	sqlDB, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypeSQLite})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	tb.Cleanup(func() { _ = sqlDB.Close() })
+	if err := sqlDB.Migrate(context.Background()); err != nil {
+		tb.Fatal(err)
+	}
+	templates, err := account.OpenTemplates(sqlDB)
+	if err != nil {
+		tb.Fatal(err)
+	}
+
 	result, err := New(config, Dependencies{
 		Service: service, Identities: identities, Accounts: accounts,
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
-		Files: fileService, Jobs: jobService,
+		Templates: templates,
+		Files:     fileService, Jobs: jobService,
 	})
 	if err != nil {
 		tb.Fatal(err)

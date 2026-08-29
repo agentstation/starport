@@ -38,15 +38,22 @@ type KeyLister interface {
 // hold gateway API keys, the caps that bound what each account may spend, and
 // the credential policy that says which provider credentials serve it.
 type AccountsController struct {
-	accounts account.Repository
-	keys     KeyLister
+	accounts  account.Repository
+	keys      KeyLister
+	templates account.TemplateRepository
 }
 
 // NewAccountsController creates the account controller. A nil repository
 // degrades every route to 503 rather than to an empty account list, which
-// would read as "this deployment has no accounts".
-func NewAccountsController(accounts account.Repository, keys KeyLister) *AccountsController {
-	return &AccountsController{accounts: accounts, keys: keys}
+// would read as "this deployment has no accounts". A nil template
+// repository only refuses creates that name a template, because everything
+// else on this surface works without one.
+func NewAccountsController(
+	accounts account.Repository,
+	keys KeyLister,
+	templates account.TemplateRepository,
+) *AccountsController {
+	return &AccountsController{accounts: accounts, keys: keys, templates: templates}
 }
 
 // ready reports whether account storage is configured, writing the refusal
@@ -65,8 +72,13 @@ func (h *AccountsController) ready(w http.ResponseWriter) bool {
 // writable, because an account ID reaches a credential storage scope and a
 // usage counter, and renaming it would orphan both.
 type accountRequest struct {
-	ID                 string                      `json:"id"`
-	Name               *string                     `json:"name,omitempty"`
+	ID   string  `json:"id"`
+	Name *string `json:"name,omitempty"`
+	// Template names the account template whose creation defaults this
+	// account starts from. It is read only at creation: the defaults are
+	// stamped once, the explicit fields below still win, and the template
+	// is never consulted again.
+	Template           string                      `json:"template,omitempty"`
 	Limits             *limits.Limits              `json:"limits,omitempty"`
 	CredentialStrategy *account.CredentialStrategy `json:"credential_strategy,omitempty"`
 	// BYOKPolicy set to {"mode":"all"} clears the stored policy, because an
@@ -113,13 +125,9 @@ func (h *AccountsController) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]any{
-		"accounts":         accounts,
-		responseCountField: len(accounts),
-		"pagination": map[string]any{
-			fieldLimit: limit,
-			"offset":   offset,
-			"has_more": hasMore,
-		},
+		"accounts":              accounts,
+		responseCountField:      len(accounts),
+		responsePaginationField: paginationEnvelope(limit, offset, hasMore),
 	}
 	writeAccountJSON(w, http.StatusOK, response)
 }
@@ -143,6 +151,14 @@ func (h *AccountsController) Create(w http.ResponseWriter, r *http.Request) {
 	// A new account is active unless the caller says otherwise, and its name
 	// falls back to its ID so a caller never has to repeat itself.
 	candidate := account.Account{ID: request.ID, Name: request.ID, Active: true}
+
+	// The template stamps first and the explicit fields apply after, so a
+	// field the caller named always wins over the template's default.
+	if request.Template != "" {
+		if !h.stampTemplate(w, r, &candidate, request.Template) {
+			return
+		}
+	}
 	applyAccountRequest(&candidate, request)
 
 	if err := candidate.Validate(); err != nil {
@@ -267,6 +283,38 @@ func (h *AccountsController) Delete(w http.ResponseWriter, r *http.Request) {
 		responseMessageField: "Account deleted successfully",
 		fieldAccountID:       accountID,
 	})
+}
+
+// stampTemplate loads the named template and stamps its creation defaults
+// onto the account, writing the refusal itself when it cannot. A missing
+// template refuses the create rather than silently building an account
+// without the defaults the operator asked for.
+func (h *AccountsController) stampTemplate(
+	w http.ResponseWriter,
+	r *http.Request,
+	target *account.Account,
+	templateID string,
+) bool {
+	if h.templates == nil {
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError,
+			"Account template management is not configured")
+		return false
+	}
+	record, err := h.templates.GetByID(r.Context(), templateID)
+	if err != nil {
+		if errors.Is(err, account.ErrTemplateNotFound) {
+			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest,
+				"Unknown account template: "+templateID)
+			return false
+		}
+		log.Error().Err(err).Str(fieldTemplateID, templateID).
+			Msg("Failed to read account template for create")
+		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError,
+			"Failed to read account template")
+		return false
+	}
+	record.Template.Stamp(target)
+	return true
 }
 
 // accountStillHoldsKeys reports the refusal message when a gateway API key

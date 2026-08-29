@@ -42,6 +42,7 @@ const (
 	providerField               = "provider"
 	responseCountField          = "count"
 	responseMessageField        = "message"
+	responsePaginationField     = "pagination"
 	fieldLimit                  = "limit"
 	fieldCreatedAt              = "created_at"
 	fieldError                  = "error"
@@ -52,6 +53,16 @@ const (
 	// field that records one.
 	fieldAccountID = "account_id"
 )
+
+// paginationEnvelope reports the window a listing honored and whether
+// another page exists, in the one shape every admin listing shares.
+func paginationEnvelope(limit, offset int, hasMore bool) map[string]any {
+	return map[string]any{
+		fieldLimit: limit,
+		"offset":   offset,
+		"has_more": hasMore,
+	}
+}
 
 // BaseHandler provides common functionality for all handlers
 type BaseHandler struct {

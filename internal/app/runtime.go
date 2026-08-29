@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
 
@@ -36,6 +37,7 @@ type catalogUpdateRuntime interface {
 
 type runtimeFactories struct {
 	openStorage  func(config.StorageConfig) (storage.KVStore, error)
+	openSQL      func(config.StorageConfig) (*sqlstore.DB, error)
 	openBlob     func(context.Context, config.FilesConfig) (blob.Store, error)
 	openCatalog  func(context.Context, storage.KVStore, config.CatalogConfig) (catalogRuntime, error)
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
