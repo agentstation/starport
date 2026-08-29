@@ -19,9 +19,9 @@ import (
 
 func TestAdminHandler_CreateKey_UUIDKeyFormat(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := apikey.Open(store)
+	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
-	handler := NewAdminController(identities, newAdminTestAccounts(t), nil)
+	handler := NewAdminController(apiKeys, newAdminTestAccounts(t), nil)
 	logger := zerolog.Nop()
 
 	reqBody := map[string]any{
@@ -95,7 +95,7 @@ func TestAdminHandler_CreateKey_UUIDKeyFormat(t *testing.T) {
 
 	// Verify hash was generated (we can't check the mapping without knowing the internal hash)
 	// But we can verify the key was stored
-	storedKey, err := identities.GetByID(ctx, keyID)
+	storedKey, err := apiKeys.GetByID(ctx, keyID)
 	assert.NoError(t, err, "key should be stored")
 	assert.Equal(t, keyID, storedKey.APIKey.ID)
 }

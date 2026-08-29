@@ -60,8 +60,8 @@ var (
 	ErrCatalogRequired = errors.New("catalog factory returned no catalog")
 	// ErrCredentialsRequired reports an absent provider-credential master key.
 	ErrCredentialsRequired = errors.New("provider credential master key is required")
-	// ErrIdentityRequired reports empty gateway identity storage.
-	ErrIdentityRequired = errors.New("gateway identity is required; run \"starport init\"")
+	// ErrAPIKeyRequired reports empty gateway API key storage.
+	ErrAPIKeyRequired = errors.New("a gateway API key is required; run \"starport init\"")
 	// ErrLocalTokenPathRequired reports a configuration with nowhere to keep this
 	// machine's local admin token. The loader derives the path from the platform
 	// paths, so an empty value means the configuration did not come from the
@@ -170,7 +170,7 @@ type runtimeBuilder struct {
 	application  *App
 	config       *config.Config
 	factories    runtimeFactories
-	identities   apikey.Repository
+	apiKeys      apikey.Repository
 	accounts     account.Repository
 	providerKeys keyring.ProviderKeys
 	rateLimits   ratelimit.Repository
@@ -359,7 +359,7 @@ func (b *runtimeBuilder) openConcepts() error {
 		resolutionFailureIDs(startupFailures),
 	)
 
-	if err := b.openAccountIdentity(); err != nil {
+	if err := b.openAccountAccess(); err != nil {
 		return err
 	}
 	credentialRepository, err := credentials.Open(b.application.store)
@@ -417,13 +417,12 @@ func (b *runtimeBuilder) openConcepts() error {
 	return nil
 }
 
-// openAccountIdentity opens who a request belongs to and how it proves it.
+// openAccountAccess opens who a request belongs to and how it proves it.
 //
 // The four steps run together because each one is unreadable without the ones
-// before it: a gateway API key names an identity, an identity resolves to a
-// account, and the authentication mode decides whether a deployment is allowed
-// to hold no identity at all.
-func (b *runtimeBuilder) openAccountIdentity() error {
+// before it: a gateway API key resolves to an account, and the authentication
+// mode decides whether a deployment is allowed to hold no key at all.
+func (b *runtimeBuilder) openAccountAccess() error {
 	var err error
 	b.accounts, err = account.Open(b.application.store)
 	if err != nil {
@@ -435,14 +434,14 @@ func (b *runtimeBuilder) openAccountIdentity() error {
 	if _, err := b.accounts.EnsureDefault(context.Background()); err != nil {
 		return fmt.Errorf("ensure the default account: %w", err)
 	}
-	b.identities, err = apikey.Open(b.application.store)
+	b.apiKeys, err = apikey.Open(b.application.store)
 	if err != nil {
-		return fmt.Errorf("open identity repository: %w", err)
+		return fmt.Errorf("open API key repository: %w", err)
 	}
 	if err := b.resolveAuthMode(context.Background()); err != nil {
 		return err
 	}
-	if err := requireIdentity(context.Background(), b.identities, b.auth.setting.Mode); err != nil {
+	if err := requireAPIKey(context.Background(), b.apiKeys, b.auth.setting.Mode); err != nil {
 		return err
 	}
 	return b.resolveLocalToken(context.Background())
@@ -678,7 +677,7 @@ func (b *runtimeBuilder) identityAuthenticator() controllers.IdentityAuthenticat
 
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config, b.auth), server.Dependencies{
-		Service: b.gateway, Identities: b.identities, Accounts: b.accounts,
+		Service: b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
 		Usage: b.usageRecords, Catalog: b.application, Presets: b.presets,
@@ -709,7 +708,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 	return nil
 }
 
-// requireIdentity refuses to start a gateway no one can reach. A deployment
+// requireAPIKey refuses to start a gateway no one can reach. A deployment
 // that requires a gateway API key and holds none serves 401 to every request,
 // which is a misconfiguration worth failing on rather than a state worth
 // running in.
@@ -717,16 +716,16 @@ func (b *runtimeBuilder) openHTTPServer() error {
 // With authentication disabled the same empty store is the expected state:
 // there is nothing to authenticate, and an operator trying Starport for the
 // first time has not issued a key yet. That is the whole point of the mode.
-func requireIdentity(ctx context.Context, identities apikey.Repository, mode authmode.Mode) error {
+func requireAPIKey(ctx context.Context, apiKeys apikey.Repository, mode authmode.Mode) error {
 	if mode.Effective() == authmode.Disabled {
 		return nil
 	}
-	records, err := identities.List(ctx, 1, 0)
+	records, err := apiKeys.List(ctx, 1, 0)
 	if err != nil {
-		return fmt.Errorf("list gateway identities: %w", err)
+		return fmt.Errorf("list gateway API keys: %w", err)
 	}
 	if len(records) == 0 {
-		return ErrIdentityRequired
+		return ErrAPIKeyRequired
 	}
 	return nil
 }
@@ -734,7 +733,7 @@ func requireIdentity(ctx context.Context, identities apikey.Repository, mode aut
 // resolveAuthMode decides the authentication mode this process runs in, from
 // what the operator stated and what a previous console change stored.
 //
-// It runs before requireIdentity because the two answer one question in
+// It runs before requireAPIKey because the two answer one question in
 // sequence: what mode is this, and given that mode is this gateway reachable.
 // Reading the raw configuration value here instead would judge a deployment by
 // a mode it is not running in.

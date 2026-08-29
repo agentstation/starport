@@ -96,7 +96,7 @@ func TestVideoRoutesCarryTheVideoScope(t *testing.T) {
 }
 
 // TestAnonymousDeploymentReachesTheVideoRoutes covers the operator running with
-// authentication disabled. The anonymous identity has to carry videos:write, or
+// authentication disabled. The anonymous key has to carry videos:write, or
 // the mode that exists to make a first request work would refuse this surface
 // while serving every other one.
 func TestAnonymousDeploymentReachesTheVideoRoutes(t *testing.T) {

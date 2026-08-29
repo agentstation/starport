@@ -91,14 +91,14 @@ func TestOfflineDiagnosisIsPassiveAndRedactsSecrets(t *testing.T) {
 	assertCheck(t, report, "adapters", StatusPass)
 }
 
-func TestProbeReadsIdentityWithoutChangingIt(t *testing.T) {
+func TestProbeReadsAPIKeysWithoutChangingThem(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")
 	cfg := loadTestConfig(t, root)
 	store, err := storage.Open(cfg.Storage.RuntimeStorage())
 	if err != nil {
 		t.Fatal(err)
 	}
-	issued, err := setup.InitializeIdentity(context.Background(), store, "doctor-test")
+	issued, err := setup.InitializeAPIKey(context.Background(), store, "doctor-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,14 +113,14 @@ func TestProbeReadsIdentityWithoutChangingIt(t *testing.T) {
 	}
 	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
 		assertCheck(t, report, "storage", StatusSkip)
-		assertCheck(t, report, "identities", StatusSkip)
+		assertCheck(t, report, "api_keys", StatusSkip)
 		if after := treeFingerprint(t, root); !reflect.DeepEqual(after, before) {
 			t.Fatalf("unsupported diagnosis changed storage files\nbefore: %#v\nafter: %#v", before, after)
 		}
 		return
 	}
 	assertCheck(t, report, "storage", StatusPass)
-	assertCheck(t, report, "identities", StatusPass)
+	assertCheck(t, report, "api_keys", StatusPass)
 	if after := treeFingerprint(t, root); !reflect.DeepEqual(after, before) {
 		t.Fatalf("diagnosis changed storage files\nbefore: %#v\nafter: %#v", before, after)
 	}
@@ -139,11 +139,11 @@ func TestProbeReadsIdentityWithoutChangingIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(records) != 1 || records[0].APIKey.ID != issued.APIKey.ID {
-		t.Fatalf("identities after diagnosis = %#v", records)
+		t.Fatalf("API keys after diagnosis = %#v", records)
 	}
 }
 
-func TestProbeReportsExactEmptyIdentityCheck(t *testing.T) {
+func TestProbeReportsExactEmptyAPIKeyCheck(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "starport")
 	cfg := loadTestConfig(t, root)
 	service := testService(cfg)
@@ -154,9 +154,9 @@ func TestProbeReportsExactEmptyIdentityCheck(t *testing.T) {
 	if report.OK {
 		t.Fatalf("report = %#v", report)
 	}
-	check := assertCheck(t, report, "identities", StatusFail)
+	check := assertCheck(t, report, "api_keys", StatusFail)
 	if !strings.Contains(check.Message, "starport init") {
-		t.Errorf("identity failure = %q", check.Message)
+		t.Errorf("API key failure = %q", check.Message)
 	}
 }
 
@@ -214,7 +214,7 @@ func TestBadgerRecoveryMakesProbeInconclusive(t *testing.T) {
 	if !strings.Contains(storageCheck.Message, "starport serve") {
 		t.Errorf("storage recovery guidance = %q", storageCheck.Message)
 	}
-	assertCheck(t, report, "identities", StatusSkip)
+	assertCheck(t, report, "api_keys", StatusSkip)
 }
 
 func TestUnsupportedReadOnlyStorageMakesProbeInconclusive(t *testing.T) {
@@ -229,7 +229,7 @@ func TestUnsupportedReadOnlyStorageMakesProbeInconclusive(t *testing.T) {
 	if !strings.Contains(storageCheck.Message, "starport serve") {
 		t.Errorf("unsupported storage guidance = %q", storageCheck.Message)
 	}
-	assertCheck(t, report, "identities", StatusSkip)
+	assertCheck(t, report, "api_keys", StatusSkip)
 }
 
 func TestDiagnosisDoesNotTrustConfigurationLoaderErrors(t *testing.T) {

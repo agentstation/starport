@@ -91,7 +91,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 		report.addFailure("configuration", config.OperatorError(err).Error())
 		report.addSkip("master_key", "configuration is unavailable")
 		report.addSkip("storage", "configuration is unavailable")
-		report.addSkip("identities", "storage is unavailable")
+		report.addSkip("api_keys", "storage is unavailable")
 		report.addSkip("catalog", "configuration is unavailable")
 		report.addSkip("adapters", "catalog is unavailable")
 		return report
@@ -106,7 +106,7 @@ func (s service) run(ctx context.Context, options Options) Report {
 	var store storage.KVStore
 	if !options.Probe {
 		report.addSkip("storage", "use --probe to open configured storage in read-only mode")
-		report.addSkip("identities", "use --probe to inspect configured identity storage")
+		report.addSkip("api_keys", "use --probe to inspect configured API key storage")
 	} else {
 		store, err = s.dependencies.openStorage(cfg.Storage.RuntimeStorage())
 		switch {
@@ -115,30 +115,30 @@ func (s service) run(ctx context.Context, options Options) Report {
 				"storage",
 				"Badger needs recovery; start and stop \"starport serve\" cleanly, then rerun the probe",
 			)
-			report.addSkip("identities", "storage inspection is unavailable until Badger recovery")
+			report.addSkip("api_keys", "storage inspection is unavailable until Badger recovery")
 		case errors.Is(err, storage.ErrReadOnlyUnsupported):
 			report.addSkip(
 				"storage",
 				"read-only Badger inspection is unavailable on this platform; verify startup with \"starport serve\"",
 			)
-			report.addSkip("identities", "read-only storage inspection is unavailable on this platform")
+			report.addSkip("api_keys", "read-only storage inspection is unavailable on this platform")
 		case err != nil:
 			report.addFailure("storage", "configured storage could not be opened in read-only mode")
-			report.addSkip("identities", "storage is unavailable")
+			report.addSkip("api_keys", "storage is unavailable")
 		default:
 			report.addPass("storage", "configured storage opened in read-only mode")
 			repository, openErr := apikey.Open(store)
 			if openErr != nil {
-				report.addFailure("identities", "gateway identity repository could not be opened")
+				report.addFailure("api_keys", "gateway API key repository could not be opened")
 			} else {
 				records, listErr := repository.List(ctx, 1, 0)
 				switch {
 				case listErr != nil:
-					report.addFailure("identities", "gateway identity storage could not be read")
+					report.addFailure("api_keys", "gateway API key storage could not be read")
 				case len(records) == 0:
-					report.addFailure("identities", "gateway identity storage is empty; run \"starport init\"")
+					report.addFailure("api_keys", "gateway API key storage is empty; run \"starport init\"")
 				default:
-					report.addPass("identities", "gateway identity storage contains an identity")
+					report.addPass("api_keys", "gateway API key storage contains an API key")
 				}
 			}
 		}

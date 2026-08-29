@@ -43,7 +43,7 @@ func resolveStrategy(
 // would be the only strategy the gateway ever saw, and an account could widen it.
 func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := apikey.Open(store)
+	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
 	accounts, err := account.Open(store)
 	require.NoError(t, err)
@@ -54,14 +54,14 @@ func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 		CredentialStrategy: account.StrategyBYOKOnly,
 	})
 	require.NoError(t, err)
-	issuer, err := apikey.NewIssuer(identities, apikey.WithAccountChecker(accounts))
+	issuer, err := apikey.NewIssuer(apiKeys, apikey.WithAccountChecker(accounts))
 	require.NoError(t, err)
 	issued, err := issuer.Issue(ctx, apikey.IssueRequest{
 		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
 
-	strategy, status := resolveStrategy(t, NewAuthMiddleware(identities, accounts), issued.Secret)
+	strategy, status := resolveStrategy(t, NewAuthMiddleware(apiKeys, accounts), issued.Secret)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, account.StrategyBYOKOnly, strategy)
 }
@@ -72,25 +72,25 @@ func TestAuthenticatedRequestCarriesItsAccountCredentialStrategy(t *testing.T) {
 // which is the one the operator gets by not choosing.
 func TestUnreadableAccountStillServesTheRequest(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := apikey.Open(store)
+	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
 
 	secret := "test-secret-for-unreadable-account"
-	_, err = identities.Create(context.Background(), apikey.APIKey{
+	_, err = apiKeys.Create(context.Background(), apikey.APIKey{
 		ID: "STARPORT_unreadable", Name: "Unreadable", Hash: hashSecret(secret),
 		AccountID: "acme", Scopes: []string{"chat:write"}, Active: true,
 	})
 	require.NoError(t, err)
 
 	failing := failingAccountReader{err: errors.New("store unavailable")}
-	strategy, status := resolveStrategy(t, NewAuthMiddleware(identities, failing), secret)
+	strategy, status := resolveStrategy(t, NewAuthMiddleware(apiKeys, failing), secret)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, account.StrategyOperatorFirst, strategy,
 		"an unreadable account resolves to the default policy, not to no policy")
 
 	// A deployment wired without an account reader behaves the same way, so the
 	// fallback is one behavior and not two.
-	strategy, status = resolveStrategy(t, NewAuthMiddleware(identities), secret)
+	strategy, status = resolveStrategy(t, NewAuthMiddleware(apiKeys), secret)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, account.StrategyOperatorFirst, strategy)
 }

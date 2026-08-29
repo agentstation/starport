@@ -218,7 +218,7 @@ func TestOneAccountCannotReadAnotherAccountsFile(t *testing.T) {
 }
 
 // TestAnonymousDeploymentReachesTheFileRoutes covers the operator running with
-// authentication disabled. The anonymous identity has to carry both file
+// authentication disabled. The anonymous key has to carry both file
 // scopes, or the mode that exists to make the first request work would refuse
 // half the surface.
 func TestAnonymousDeploymentReachesTheFileRoutes(t *testing.T) {
@@ -333,7 +333,7 @@ func storeFileTestKeyWithLimits(
 	t.Helper()
 	secret := "sk-starport-" + id
 	hash := sha256.Sum256([]byte(secret))
-	_, err := server.identities.Create(t.Context(), apikey.APIKey{
+	_, err := server.apiKeys.Create(t.Context(), apikey.APIKey{
 		ID:        id,
 		Name:      id,
 		Hash:      hex.EncodeToString(hash[:]),
@@ -353,7 +353,7 @@ func storeFileTestKeyForAccount(t *testing.T, server *Server, id, accountID stri
 	t.Helper()
 	secret := "sk-starport-" + id
 	hash := sha256.Sum256([]byte(secret))
-	_, err := server.identities.Create(t.Context(), apikey.APIKey{
+	_, err := server.apiKeys.Create(t.Context(), apikey.APIKey{
 		ID:        id,
 		Name:      id,
 		Hash:      hex.EncodeToString(hash[:]),

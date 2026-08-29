@@ -28,7 +28,7 @@ const (
 )
 
 // KeyLister lists gateway API keys. The account surface holds this single
-// method rather than the identity repository: deleting an account must be able
+// method rather than the API key repository: deleting an account must be able
 // to find out whether a key still names it, and nothing more.
 type KeyLister interface {
 	List(ctx context.Context, limit, offset int) ([]apikey.Record, error)

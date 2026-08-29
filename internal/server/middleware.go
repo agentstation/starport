@@ -146,15 +146,15 @@ type AccountReader interface {
 
 // AuthMiddleware provides authentication functionality
 type AuthMiddleware struct {
-	identities apikey.Repository
-	accounts   AccountReader
+	apiKeys  apikey.Repository
+	accounts AccountReader
 	// policy is the live authentication mode. It is read once per request, not
 	// once per router build, because the console can change the mode without a
 	// restart and "disabled" must not come to mean "disabled at boot". A nil
 	// policy reports required, which is what a zero-valued middleware has to
 	// mean.
 	policy *authmode.Policy
-	// anonymous is the identity a request runs as while the mode is disabled.
+	// anonymous is the key a request runs as while the mode is disabled.
 	// The scope set is the operator's and does not change at runtime, so it is
 	// resolved once.
 	anonymous apikey.APIKey
@@ -166,22 +166,22 @@ type AuthMiddleware struct {
 
 // NewAuthMiddleware creates a new authentication middleware. The account reader
 // is optional: without it a request still authenticates and runs under the
-// default credential policy, because a key is a valid identity whether or not
+// default credential policy, because a key is a valid caller whether or not
 // the deployment can read the account behind it.
-func NewAuthMiddleware(identities apikey.Repository, accounts ...AccountReader) *AuthMiddleware {
-	middleware := &AuthMiddleware{identities: identities}
+func NewAuthMiddleware(apiKeys apikey.Repository, accounts ...AccountReader) *AuthMiddleware {
+	middleware := &AuthMiddleware{apiKeys: apiKeys}
 	if len(accounts) > 0 {
 		middleware.accounts = accounts[0]
 	}
 	return middleware
 }
 
-// Govern binds the live authentication policy and the identity a request runs
+// Govern binds the live authentication policy and the key a request runs
 // as while that policy is disabled. An empty scope list means
 // apikey.DefaultAnonymousScopes.
 //
 // The operator decides both; nothing in a request can. Passing them together
-// is the point: a policy without an anonymous identity would disable the key
+// is the point: a policy without an anonymous key would disable the key
 // check and leave every downstream seam without a subject to meter.
 func (m *AuthMiddleware) Govern(policy *authmode.Policy, scopes []string) {
 	m.policy = policy
@@ -231,7 +231,7 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 		hash := sha256.Sum256([]byte(apiKey))
 		hashStr := hex.EncodeToString(hash[:])
 
-		record, err := m.identities.GetByHash(r.Context(), hashStr)
+		record, err := m.apiKeys.GetByHash(r.Context(), hashStr)
 		if err != nil {
 			if errors.Is(err, apikey.ErrNotFound) {
 				writeProtocolError(w, r, http.StatusUnauthorized, "authentication_error", "Invalid API key")
@@ -271,7 +271,7 @@ func (m *AuthMiddleware) RequireAPIKey(next http.Handler) http.Handler {
 	})
 }
 
-// anonymousContext furnishes the request with the same identity every
+// anonymousContext furnishes the request with the same key every
 // authenticated request carries, minus the key. Rate limits, budgets, usage
 // records, and scope checks all read the context and none of them learn that
 // authentication was off, so an unauthenticated deployment is metered and
@@ -391,7 +391,7 @@ func (m *AuthMiddleware) RequireAccountAccess(next http.Handler) http.Handler {
 
 		// Without an account reader the deployment cannot tell a real account
 		// from a typo, and the same rule as elsewhere applies: a key is a
-		// valid identity whether or not accounts are readable.
+		// valid caller whether or not accounts are readable.
 		if m.accounts != nil {
 			if _, err := m.accounts.GetByID(r.Context(), urlAccountID); err != nil {
 				if errors.Is(err, account.ErrNotFound) {

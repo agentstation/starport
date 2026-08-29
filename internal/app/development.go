@@ -16,7 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-const developmentIdentityName = "local-development"
+const developmentAPIKeyName = "local-development"
 
 // Development owns one isolated local application and its one-time key.
 type Development struct {
@@ -56,7 +56,7 @@ func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, erro
 	// anyway would teach the wrong thing about the mode it is running in.
 	var apiKey string
 	if cfg.Security.AuthMode.Effective() != config.AuthModeDisabled {
-		issued, err := setup.InitializeIdentity(ctx, store, developmentIdentityName)
+		issued, err := setup.InitializeAPIKey(ctx, store, developmentAPIKeyName)
 		if err != nil {
 			return nil, errors.Join(err, store.Close())
 		}

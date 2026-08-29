@@ -49,7 +49,7 @@ func TestIssuerStoresOnlyCredentialHash(t *testing.T) {
 		Name: "local-admin", Scopes: []string{"*"}, Metadata: map[string]any{"source": "setup"},
 	})
 	if err != nil {
-		t.Fatalf("issue identity: %v", err)
+		t.Fatalf("issue API key: %v", err)
 	}
 	if result.Secret != "gateway-secret" {
 		t.Fatalf("secret = %q", result.Secret)
@@ -61,17 +61,17 @@ func TestIssuerStoresOnlyCredentialHash(t *testing.T) {
 	digest := sha256.Sum256([]byte(result.Secret))
 	record, err := repository.GetByHash(context.Background(), hex.EncodeToString(digest[:]))
 	if err != nil {
-		t.Fatalf("get issued identity: %v", err)
+		t.Fatalf("get issued API key: %v", err)
 	}
 	if record.APIKey.Hash == result.Secret {
 		t.Fatal("repository stored the plaintext credential")
 	}
 	if record.APIKey.Name != "local-admin" || !record.APIKey.HasScope("admin") {
-		t.Errorf("stored identity = %#v", record.APIKey)
+		t.Errorf("stored API key = %#v", record.APIKey)
 	}
 }
 
-func TestIssuerRejectsInvalidIdentityBeforeStorage(t *testing.T) {
+func TestIssuerRejectsInvalidAPIKeyBeforeStorage(t *testing.T) {
 	repository, err := Open(storage.NewMockStore())
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestIssuerRejectsInvalidIdentityBeforeStorage(t *testing.T) {
 		t.Fatal(listErr)
 	}
 	if len(records) != 0 {
-		t.Fatalf("stored identities = %d, want 0", len(records))
+		t.Fatalf("stored API keys = %d, want 0", len(records))
 	}
 }
 

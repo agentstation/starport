@@ -57,7 +57,7 @@ func TestRerankRoutesCarryTheRerankScope(t *testing.T) {
 }
 
 // TestAnonymousDeploymentReachesTheRerankRoutes covers the operator who runs
-// with authentication disabled. The anonymous identity has to carry the scope,
+// with authentication disabled. The anonymous key has to carry the scope,
 // or the mode that exists to make the first request work would refuse this one.
 func TestAnonymousDeploymentReachesTheRerankRoutes(t *testing.T) {
 	config := unauthenticatedConfig()

@@ -82,11 +82,11 @@ func runInitializer(ctx context.Context, options starportcli.InitOptions) (starp
 	}
 	service := setup.New(paths)
 	result, err := service.Initialize(ctx, setup.Request{
-		IdentityName: options.IdentityName,
+		APIKeyName: options.APIKeyName,
 	})
 	initialized := starportcli.InitResult{
-		IdentityName: result.IdentityName,
-		ConfigFile:   result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
+		APIKeyName: result.APIKeyName,
+		ConfigFile: result.ConfigFile, DataDir: result.DataDir, APIKey: result.APIKey,
 		Rollback: func(rollbackCtx context.Context) error {
 			return service.Rollback(rollbackCtx, result)
 		},
@@ -154,9 +154,9 @@ func initializeConfiguredStorage(
 	if err != nil {
 		return starportcli.InitResult{}, fmt.Errorf("open configured storage: %w", err)
 	}
-	issued, issueErr := setup.InitializeIdentity(ctx, store, options.IdentityName)
+	issued, issueErr := setup.InitializeAPIKey(ctx, store, options.APIKeyName)
 	closeErr := store.Close()
-	result := configuredInitResult(storageConfig, options.IdentityName, issued)
+	result := configuredInitResult(storageConfig, options.APIKeyName, issued)
 	if issueErr != nil {
 		return result, errors.Join(issueErr, closeErr)
 	}
@@ -168,31 +168,31 @@ func initializeConfiguredStorage(
 
 func configuredInitResult(
 	storageConfig storage.Config,
-	identityName string,
+	apiKeyName string,
 	issued apikey.IssueResult,
 ) starportcli.InitResult {
 	if issued.Secret == "" {
 		return starportcli.InitResult{}
 	}
 	return starportcli.InitResult{
-		IdentityName: identityName,
-		APIKey:       issued.Secret,
+		APIKeyName: apiKeyName,
+		APIKey:     issued.Secret,
 		Rollback: func(rollbackCtx context.Context) error {
-			return rollbackConfiguredIdentity(rollbackCtx, storageConfig, issued.APIKey.ID)
+			return rollbackConfiguredAPIKey(rollbackCtx, storageConfig, issued.APIKey.ID)
 		},
 	}
 }
 
-func rollbackConfiguredIdentity(
+func rollbackConfiguredAPIKey(
 	ctx context.Context,
 	storageConfig storage.Config,
-	identityID string,
+	apiKeyID string,
 ) error {
 	store, err := storage.Open(storageConfig)
 	if err != nil {
 		return fmt.Errorf("open configured storage for rollback: %w", err)
 	}
-	releaseErr := setup.ReleaseIdentity(ctx, store, identityID)
+	releaseErr := setup.ReleaseAPIKey(ctx, store, apiKeyID)
 	closeErr := store.Close()
 	if releaseErr != nil {
 		return errors.Join(releaseErr, closeErr)

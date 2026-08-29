@@ -16,13 +16,13 @@ import (
 	"github.com/agentstation/starport/internal/apikey"
 )
 
-// newPresetTestKey mints one active identity with the given scopes and
+// newPresetTestKey mints one active API key with the given scopes and
 // returns its bearer token.
 func newPresetTestKey(t *testing.T, server *Server, id string, scopes ...string) string {
 	t.Helper()
 	token := "test-" + id
 	hash := sha256.Sum256([]byte(token))
-	_, err := server.identities.Create(context.Background(), apikey.APIKey{
+	_, err := server.apiKeys.Create(context.Background(), apikey.APIKey{
 		ID:        id,
 		Name:      strings.ReplaceAll(id, "-", "_"),
 		Hash:      hex.EncodeToString(hash[:]),

@@ -22,7 +22,7 @@ const maxMediaUploadBytes = 64 << 20
 const maxMediaMemoryBytes = 8 << 20
 
 // MediaController serves the three dedicated media operations. One controller
-// holds all of them, because they share their identity handling, their upload
+// holds all of them, because they share their authentication handling, their upload
 // reading, and their protocol switch, and the only part that differs is which
 // proxy method the handler calls.
 type MediaController struct {
@@ -175,8 +175,8 @@ func (h *MediaController) parseUpload(w http.ResponseWriter, r *http.Request) (*
 	return r.MultipartForm, nil
 }
 
-// mediaGatewayRequest carries the caller identity onto one media request. All
-// three operations read the same identity a chat request reads, so it is
+// mediaGatewayRequest carries the caller onto one media request. All
+// three operations read the same caller a chat request reads, so it is
 // written once over the request type.
 func mediaGatewayRequest[Request any](
 	ctx context.Context,

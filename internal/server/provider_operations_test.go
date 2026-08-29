@@ -37,7 +37,7 @@ func TestAdminProviderStatusContract(t *testing.T) {
 	server := newTestServer(
 		t, &Config{MaxRequestSize: 1 << 20}, withTestProviderOperations(operations),
 	)
-	secret := createServerIdentity(t, server, "provider-admin", []string{"admin"})
+	secret := createServerAPIKey(t, server, "provider-admin", []string{"admin"})
 
 	recorder := serveAuthorized(
 		server, http.MethodGet, "/api/v1/admin/providers", secret, context.Background(),
@@ -70,7 +70,7 @@ func TestAdminProviderRefreshContract(t *testing.T) {
 		server := newTestServer(
 			t, &Config{MaxRequestSize: 1 << 20}, withTestProviderOperations(operations),
 		)
-		secret := createServerIdentity(t, server, "provider-admin", []string{"admin"})
+		secret := createServerAPIKey(t, server, "provider-admin", []string{"admin"})
 
 		recorder := serveAuthorized(
 			server, http.MethodPost, "/api/v1/admin/providers/refresh", secret, context.Background(),
@@ -108,7 +108,7 @@ func TestAdminProviderRefreshContract(t *testing.T) {
 		server := newTestServer(
 			t, &Config{MaxRequestSize: 1 << 20}, withTestProviderOperations(operations),
 		)
-		secret := createServerIdentity(t, server, "provider-admin", []string{"admin"})
+		secret := createServerAPIKey(t, server, "provider-admin", []string{"admin"})
 		requestContext, cancel := context.WithCancel(context.Background())
 		request := httptest.NewRequest(
 			http.MethodPost, "/api/v1/admin/providers/refresh", nil,
@@ -141,7 +141,7 @@ func TestAdminProviderRefreshContract(t *testing.T) {
 		server := newTestServer(
 			t, &Config{MaxRequestSize: 1 << 20}, withTestProviderOperations(operations),
 		)
-		secret := createServerIdentity(t, server, "provider-admin", []string{"admin"})
+		secret := createServerAPIKey(t, server, "provider-admin", []string{"admin"})
 
 		recorder := serveAuthorized(
 			server, http.MethodPost, "/api/v1/admin/providers/refresh", secret, context.Background(),
@@ -166,7 +166,7 @@ func TestAdminProviderRoutesRequireAuthentication(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, unauthorized.Code)
 	assertOpenRouterError(t, unauthorized, http.StatusUnauthorized, "authentication_error")
 
-	secret := createServerIdentity(t, server, "provider-reader", []string{"models:read"})
+	secret := createServerAPIKey(t, server, "provider-reader", []string{"models:read"})
 	forbidden := serveAuthorized(
 		server, http.MethodPost, "/api/v1/admin/providers/refresh", secret, context.Background(),
 	)
@@ -223,11 +223,11 @@ func (o *providerOperationsStub) callCount() int {
 	return o.calls
 }
 
-func createServerIdentity(t *testing.T, server *Server, id string, scopes []string) string {
+func createServerAPIKey(t *testing.T, server *Server, id string, scopes []string) string {
 	t.Helper()
 	secret := "secret-" + id
 	hash := sha256.Sum256([]byte(secret))
-	_, err := server.identities.Create(t.Context(), apikey.APIKey{
+	_, err := server.apiKeys.Create(t.Context(), apikey.APIKey{
 		ID: id, Name: strings.ReplaceAll(id, "-", "_"),
 		Hash: hex.EncodeToString(hash[:]), Scopes: scopes, Active: true,
 		CreatedAt: time.Now().UTC(),

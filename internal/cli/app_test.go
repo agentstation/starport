@@ -182,8 +182,8 @@ func TestInitUsesInjectedRunnerAndJSONOutput(t *testing.T) {
 	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
 		got = options
 		return InitResult{
-			IdentityName: options.IdentityName,
-			ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			APIKeyName: options.APIKeyName,
+			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 		}, nil
 	}
 	if err := Run(context.Background(), []string{
@@ -191,7 +191,7 @@ func TestInitUsesInjectedRunnerAndJSONOutput(t *testing.T) {
 	}, deps); err != nil {
 		t.Fatalf("run init: %v", err)
 	}
-	if got.IdentityName != "developer" {
+	if got.APIKeyName != "developer" {
 		t.Errorf("init options = %#v", got)
 	}
 	var result InitResult
@@ -219,7 +219,7 @@ func TestInitRejectsProviderFlag(t *testing.T) {
 	}
 }
 
-func TestInitRejectsInvalidIdentityNameAsUsageError(t *testing.T) {
+func TestInitRejectsInvalidAPIKeyNameAsUsageError(t *testing.T) {
 	deps, _, _ := testDependencies()
 	called := false
 	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
@@ -233,7 +233,7 @@ func TestInitRejectsInvalidIdentityNameAsUsageError(t *testing.T) {
 		t.Fatalf("invalid name error = %v, exit code = %d", err, ExitCode(err))
 	}
 	if called {
-		t.Fatal("initializer ran for an invalid identity name")
+		t.Fatal("initializer ran for an invalid API key name")
 	}
 }
 
@@ -244,8 +244,8 @@ func TestInitRollsBackWhenCredentialOutputFails(t *testing.T) {
 	rollbackCalls := 0
 	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
 		return InitResult{
-			IdentityName: "local-admin",
-			ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			APIKeyName: "local-admin",
+			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 			Rollback: func(context.Context) error {
 				rollbackCalls++
 				return nil
@@ -266,7 +266,7 @@ func TestInitReturnsCredentialBeforePostCommitFailure(t *testing.T) {
 	closeErr := errors.New("storage close failed")
 	deps.Initialize = func(context.Context, InitOptions) (InitResult, error) {
 		return InitResult{
-			IdentityName: "local-admin", APIKey: "gateway-key",
+			APIKeyName: "local-admin", APIKey: "gateway-key",
 		}, closeErr
 	}
 	err := Run(context.Background(), []string{"starport", "init", "--configured-storage"}, deps)
@@ -283,7 +283,7 @@ func TestInitConfiguredStorageNeedsNoProvider(t *testing.T) {
 	var got InitOptions
 	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
 		got = options
-		return InitResult{IdentityName: options.IdentityName, APIKey: "gateway-key"}, nil
+		return InitResult{APIKeyName: options.APIKeyName, APIKey: "gateway-key"}, nil
 	}
 	if err := Run(context.Background(), []string{
 		"starport", "init", "--configured-storage",
@@ -302,8 +302,8 @@ func TestInitOutputUsesProviderNeutralNextStep(t *testing.T) {
 	deps, stdout, _ := testDependencies()
 	deps.Initialize = func(_ context.Context, options InitOptions) (InitResult, error) {
 		return InitResult{
-			IdentityName: options.IdentityName,
-			ConfigFile:   "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
+			APIKeyName: options.APIKeyName,
+			ConfigFile: "/config/config.env", DataDir: "/config/data", APIKey: "gateway-key",
 		}, nil
 	}
 	if err := Run(context.Background(), []string{"starport", "init"}, deps); err != nil {
@@ -487,8 +487,8 @@ func TestDoctorReportsExactFailuresAndReturnsRuntimeExit(t *testing.T) {
 		return diagnosis.Report{
 			OK: false, Failed: 1,
 			Checks: []diagnosis.Check{{
-				ID: "identities", Status: diagnosis.StatusFail,
-				Message: "gateway identity storage is empty",
+				ID: "api_keys", Status: diagnosis.StatusFail,
+				Message: "gateway API key storage is empty",
 			}},
 		}
 	}
@@ -496,7 +496,7 @@ func TestDoctorReportsExactFailuresAndReturnsRuntimeExit(t *testing.T) {
 	if !errors.Is(err, ErrDiagnosisFailed) || ExitCode(err) != ExitCodeRuntime {
 		t.Fatalf("doctor error = %v, exit code = %d", err, ExitCode(err))
 	}
-	if !strings.Contains(stdout.String(), "FAIL identities: gateway identity storage is empty") {
+	if !strings.Contains(stdout.String(), "FAIL api_keys: gateway API key storage is empty") {
 		t.Errorf("doctor output = %q", stdout.String())
 	}
 }

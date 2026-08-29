@@ -30,7 +30,7 @@ func unauthenticatedConfig(scopes ...string) *Config {
 
 // TestDisabledAuthenticationServesInferenceWithoutAKey is the AON6 acceptance
 // case. An operator trying Starport for the first time has no key and no
-// identity store, and the whole point of the mode is that the first request
+// API key store, and the whole point of the mode is that the first request
 // still works.
 func TestDisabledAuthenticationServesInferenceWithoutAKey(t *testing.T) {
 	config := unauthenticatedConfig()
@@ -46,12 +46,12 @@ func TestDisabledAuthenticationServesInferenceWithoutAKey(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 }
 
-// TestDisabledAuthenticationMetersTheAnonymousIdentity pins what everything
+// TestDisabledAuthenticationMetersTheAnonymousKey pins what everything
 // downstream of authentication reads. Rate limits, budgets, and usage records
 // all key off the request context, so an unauthenticated deployment has to
-// carry a complete identity or those seams meet a state they never see in
+// carry a complete caller or those seams meet a state they never see in
 // production and behave differently in a mode operators actually run.
-func TestDisabledAuthenticationMetersTheAnonymousIdentity(t *testing.T) {
+func TestDisabledAuthenticationMetersTheAnonymousKey(t *testing.T) {
 	middleware := NewAuthMiddleware(nil)
 	middleware.Govern(authmode.NewPolicy(authmode.Setting{Mode: authmode.Disabled}), nil)
 
@@ -69,7 +69,7 @@ func TestDisabledAuthenticationMetersTheAnonymousIdentity(t *testing.T) {
 // limits, budgets, and credentials, and the caller would have no way to see it.
 func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	store := storage.NewMockStore()
-	identities, err := apikey.Open(store)
+	apiKeys, err := apikey.Open(store)
 	require.NoError(t, err)
 	accounts, err := account.Open(store)
 	require.NoError(t, err)
@@ -77,14 +77,14 @@ func TestDisabledAuthenticationIgnoresAPresentedKey(t *testing.T) {
 	_, err = accounts.Create(ctx, account.Account{ID: "acme", Name: "Acme", Active: true})
 	require.NoError(t, err)
 
-	issuer, err := apikey.NewIssuer(identities, apikey.WithAccountChecker(accounts))
+	issuer, err := apikey.NewIssuer(apiKeys, apikey.WithAccountChecker(accounts))
 	require.NoError(t, err)
 	issued, err := issuer.Issue(ctx, apikey.IssueRequest{
 		Name: "Acme-CI", AccountID: "acme", Scopes: []string{"chat:write"},
 	})
 	require.NoError(t, err)
 
-	middleware := NewAuthMiddleware(identities, accounts)
+	middleware := NewAuthMiddleware(apiKeys, accounts)
 	middleware.Govern(authmode.NewPolicy(authmode.Setting{Mode: authmode.Disabled}), nil)
 
 	resolved, status := authenticate(t, middleware, issued.Secret)

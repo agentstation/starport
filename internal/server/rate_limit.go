@@ -33,7 +33,7 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 
 		keyID, ok := requestctx.GetAPIKeyID(r.Context())
 		if !ok || keyID == "" {
-			writeProtocolError(w, r, http.StatusInternalServerError, "server_error", "Rate limit identity missing")
+			writeProtocolError(w, r, http.StatusInternalServerError, "server_error", "Rate limit caller missing")
 			return
 		}
 		accountID := requestctx.AccountIDOrDefault(r.Context())

@@ -49,7 +49,7 @@ func WithAccountID(ctx context.Context, value string) context.Context {
 }
 
 // AccountIDOrDefault returns the account the request runs under, falling back
-// to the canonical account when no authenticated identity set one.
+// to the canonical account when no authenticated caller set one.
 //
 // This is the single place that decides the account of a request that carries
 // no key. An unauthenticated gateway still has to attribute usage, apply

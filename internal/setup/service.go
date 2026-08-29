@@ -28,7 +28,7 @@ const (
 var (
 	// ErrPathsRequired reports incomplete managed paths.
 	ErrPathsRequired = errors.New("setup paths are required")
-	// ErrAlreadyInitialized reports existing configuration or identity storage.
+	// ErrAlreadyInitialized reports existing configuration or API key storage.
 	ErrAlreadyInitialized = errors.New("starport is already initialized")
 	// ErrPartialState reports an incomplete managed configuration directory.
 	ErrPartialState = errors.New("starport setup state is incomplete")
@@ -44,26 +44,26 @@ const (
 	StateAbsent State = "absent"
 	// StatePartial means the directory exists without both required artifacts.
 	StatePartial State = "partial"
-	// StateReady means the configuration file and identity store both exist.
+	// StateReady means the configuration file and API key store both exist.
 	StateReady State = "ready"
 )
 
 // Request contains the explicit choices for local initialization.
 type Request struct {
-	IdentityName string
+	APIKeyName string
 }
 
 // Result contains initialized paths and the one-time gateway credential.
 type Result struct {
-	IdentityName string
+	APIKeyName   string
 	ConfigFile   string
 	DataDir      string
 	APIKey       string
-	identityID   string
+	apiKeyID     string
 	configDigest [sha256.Size]byte
 }
 
-// Service initializes one local configuration and identity store.
+// Service initializes one local configuration and API key store.
 type Service struct {
 	paths             config.Paths
 	openStore         func(string) (storage.KVStore, error)
@@ -80,7 +80,7 @@ func New(paths config.Paths) *Service {
 }
 
 // Initialize creates local configuration and one named gateway apikey.
-// It never replaces an existing configuration file or identity store.
+// It never replaces an existing configuration file or API key store.
 func (s *Service) Initialize(ctx context.Context, request Request) (Result, error) {
 	if err := s.validate(request); err != nil {
 		return Result{}, err
@@ -123,7 +123,7 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 	if err := os.MkdirAll(stagedPaths.DataDir, privateDirMode); err != nil {
 		return Result{}, fmt.Errorf("create staged data directory: %w", err)
 	}
-	issued, err := s.createIdentity(ctx, stagedPaths.BadgerDir, request.IdentityName)
+	issued, err := s.createAPIKey(ctx, stagedPaths.BadgerDir, request.APIKeyName)
 	if err != nil {
 		return Result{}, err
 	}
@@ -150,9 +150,9 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 	}
 
 	result := Result{
-		IdentityName: request.IdentityName,
-		ConfigFile:   s.paths.ConfigFile, DataDir: s.paths.DataDir, APIKey: issued.Secret,
-		identityID: issued.APIKey.ID, configDigest: sha256.Sum256(contents),
+		APIKeyName: request.APIKeyName,
+		ConfigFile: s.paths.ConfigFile, DataDir: s.paths.DataDir, APIKey: issued.Secret,
+		apiKeyID: issued.APIKey.ID, configDigest: sha256.Sum256(contents),
 	}
 	if err := syncDirectory(parentDir); err != nil {
 		return result, fmt.Errorf("sync installed setup directory: %w", err)
@@ -163,7 +163,7 @@ func (s *Service) Initialize(ctx context.Context, request Request) (Result, erro
 // Rollback removes local state if the command cannot return the initialization result.
 func (s *Service) Rollback(ctx context.Context, result Result) error {
 	if s == nil || result.ConfigFile != s.paths.ConfigFile || result.DataDir != s.paths.DataDir ||
-		result.identityID == "" {
+		result.apiKeyID == "" {
 		return ErrRollbackRefused
 	}
 	if err := ctx.Err(); err != nil {
@@ -220,12 +220,12 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 	}
 	store, err := s.openStore(paths.BadgerDir)
 	if err != nil {
-		return fmt.Errorf("open isolated identity store for rollback: %w", err)
+		return fmt.Errorf("open isolated API key store for rollback: %w", err)
 	}
 	repository, err := apikey.Open(store)
 	if err != nil {
 		_ = store.Close()
-		return fmt.Errorf("open initialized identity repository for rollback: %w", err)
+		return fmt.Errorf("open initialized API key repository for rollback: %w", err)
 	}
 	keys, scanErr := store.ScanWithPrefix(ctx, "", 0)
 	records, listErr := repository.List(ctx, 2, 0)
@@ -234,13 +234,13 @@ func (s *Service) validateRollbackState(ctx context.Context, paths config.Paths,
 		return errors.Join(fmt.Errorf("inspect isolated storage keys for rollback: %w", scanErr), closeErr)
 	}
 	if listErr != nil {
-		return errors.Join(fmt.Errorf("inspect initialized identity for rollback: %w", listErr), closeErr)
+		return errors.Join(fmt.Errorf("inspect the initialized API key for rollback: %w", listErr), closeErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("close initialized identity store for rollback: %w", closeErr)
+		return fmt.Errorf("close initialized API key store for rollback: %w", closeErr)
 	}
-	if len(records) != 1 || records[0].APIKey.ID != result.identityID {
-		return fmt.Errorf("%w: identity storage changed after initialization", ErrRollbackRefused)
+	if len(records) != 1 || records[0].APIKey.ID != result.apiKeyID {
+		return fmt.Errorf("%w: API key storage changed after initialization", ErrRollbackRefused)
 	}
 	if len(keys) != 4 {
 		return fmt.Errorf("%w: storage contains %d records, want 4", ErrRollbackRefused, len(keys))
@@ -304,8 +304,8 @@ func (s *Service) validate(request Request) error {
 	if !filepath.IsAbs(s.paths.ConfigDir) || s.paths != expected {
 		return ErrPathsRequired
 	}
-	if err := (apikey.APIKey{ID: "validation", Name: request.IdentityName, Hash: "validation", Scopes: []string{"*"}}).Validate(); err != nil {
-		return fmt.Errorf("identity name: %w", err)
+	if err := (apikey.APIKey{ID: "validation", Name: request.APIKeyName, Hash: "validation", Scopes: []string{"*"}}).Validate(); err != nil {
+		return fmt.Errorf("API key name: %w", err)
 	}
 	return nil
 }
@@ -325,7 +325,7 @@ func Inspect(paths config.Paths) (State, error) {
 	}
 	storeExists, err := pathExists(paths.BadgerDir)
 	if err != nil {
-		return "", fmt.Errorf("inspect identity store: %w", err)
+		return "", fmt.Errorf("inspect API key store: %w", err)
 	}
 	if configExists && storeExists {
 		return StateReady, nil
@@ -333,72 +333,72 @@ func Inspect(paths config.Paths) (State, error) {
 	return StatePartial, nil
 }
 
-func (s *Service) createIdentity(
+func (s *Service) createAPIKey(
 	ctx context.Context,
 	path string,
 	name string,
 ) (apikey.IssueResult, error) {
 	store, err := s.openStore(path)
 	if err != nil {
-		return apikey.IssueResult{}, fmt.Errorf("open staged identity store: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("open staged API key store: %w", err)
 	}
-	issued, issueErr := InitializeIdentity(ctx, store, name)
+	issued, issueErr := InitializeAPIKey(ctx, store, name)
 	closeErr := store.Close()
 	if issueErr != nil {
 		return apikey.IssueResult{}, issueErr
 	}
 	if closeErr != nil {
-		return apikey.IssueResult{}, fmt.Errorf("close staged identity store: %w", closeErr)
+		return apikey.IssueResult{}, fmt.Errorf("close staged API key store: %w", closeErr)
 	}
 	return issued, nil
 }
 
-// InitializeIdentity creates the first named identity in configured storage.
+// InitializeAPIKey creates the first named API key in configured storage.
 // It refuses a repository that already contains an apikey.
-func InitializeIdentity(
+func InitializeAPIKey(
 	ctx context.Context,
 	store storage.KVStore,
 	name string,
 ) (apikey.IssueResult, error) {
 	repository, err := apikey.Open(store)
 	if err != nil {
-		return apikey.IssueResult{}, fmt.Errorf("open identity repository: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("open API key repository: %w", err)
 	}
 	records, err := repository.List(ctx, 1, 0)
 	if err != nil {
-		return apikey.IssueResult{}, fmt.Errorf("inspect identity repository: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("inspect API key repository: %w", err)
 	}
 	if len(records) != 0 {
 		return apikey.IssueResult{}, ErrAlreadyInitialized
 	}
 	// The initial key names no account, so it resolves to the canonical account at
-	// read time. Setup deliberately writes nothing but identity records, and the
+	// read time. Setup deliberately writes nothing but API key records, and the
 	// gateway ensures the canonical account at boot, so this path needs no account
 	// checker: it never accepts a caller-supplied account to check.
 	issuer, err := apikey.NewIssuer(repository)
 	if err != nil {
-		return apikey.IssueResult{}, fmt.Errorf("open identity issuer: %w", err)
+		return apikey.IssueResult{}, fmt.Errorf("open API key issuer: %w", err)
 	}
 	issued, err := issuer.IssueInitial(ctx, apikey.IssueRequest{
 		Name: name, Scopes: []string{"*"}, Metadata: map[string]any{"source": "setup"},
 	})
 	if err != nil {
 		if errors.Is(err, apikey.ErrConflict) {
-			return apikey.IssueResult{}, fmt.Errorf("%w: initial identity was already claimed", ErrAlreadyInitialized)
+			return apikey.IssueResult{}, fmt.Errorf("%w: initial API key was already claimed", ErrAlreadyInitialized)
 		}
-		return issued, fmt.Errorf("create named identity: %w", err)
+		return issued, fmt.Errorf("create named API key: %w", err)
 	}
 	return issued, nil
 }
 
-// ReleaseIdentity removes an unpublished initial identity and its setup claim.
-func ReleaseIdentity(ctx context.Context, store storage.KVStore, id string) error {
+// ReleaseAPIKey removes an unpublished initial API key and its setup claim.
+func ReleaseAPIKey(ctx context.Context, store storage.KVStore, id string) error {
 	repository, err := apikey.Open(store)
 	if err != nil {
-		return fmt.Errorf("open identity repository: %w", err)
+		return fmt.Errorf("open API key repository: %w", err)
 	}
 	if err := repository.ReleaseInitial(ctx, id); err != nil {
-		return fmt.Errorf("release initial identity: %w", err)
+		return fmt.Errorf("release initial API key: %w", err)
 	}
 	return nil
 }

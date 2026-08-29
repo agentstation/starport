@@ -76,7 +76,7 @@ func TestRateLimitMiddlewareDisabledByDefault(t *testing.T) {
 	assert.True(t, called)
 }
 
-func TestRateLimitMiddlewareRequiresAuthenticatedIdentity(t *testing.T) {
+func TestRateLimitMiddlewareRequiresAuthenticatedCaller(t *testing.T) {
 	server := &Server{
 		cfg: &Config{
 			EnableRateLimiting:         true,
@@ -94,7 +94,7 @@ func TestRateLimitMiddlewareRequiresAuthenticatedIdentity(t *testing.T) {
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/test", nil))
 
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.Contains(t, rec.Body.String(), "Rate limit identity missing")
+	assert.Contains(t, rec.Body.String(), "Rate limit caller missing")
 }
 
 func TestPerKeyRequestLimitOverridesGlobal(t *testing.T) {

@@ -15,14 +15,14 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// sessionHarness is a middleware over an empty identity store. Empty is the
+// sessionHarness is a middleware over an empty API key store. Empty is the
 // point: nothing in these tests is meant to authenticate as a gateway API key,
 // so a request that passes did so on its session alone.
 func sessionHarness(t *testing.T, gate *localauth.Gate) *AuthMiddleware {
 	t.Helper()
-	identities, err := apikey.Open(storage.NewMockStore())
+	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	middleware := NewAuthMiddleware(identities)
+	middleware := NewAuthMiddleware(apiKeys)
 	middleware.AcceptSessions(gate)
 	return middleware
 }
@@ -43,7 +43,7 @@ func sessionToken(t *testing.T, generation uint64) localauth.Token {
 }
 
 // callWithSession sends one request carrying only a session cookie and reports
-// the status plus the identity the handler saw.
+// the status plus the caller the handler saw.
 func callWithSession(
 	middleware *AuthMiddleware,
 	cookie string,

@@ -117,7 +117,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		tb.Fatal(err)
 	}
 
-	identities, err := apikey.Open(testConfig.store)
+	apiKeys, err := apikey.Open(testConfig.store)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	}
 
 	result, err := New(config, Dependencies{
-		Service: service, Identities: identities, Accounts: accounts,
+		Service: service, APIKeys: apiKeys, Accounts: accounts,
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
 		Templates: templates,

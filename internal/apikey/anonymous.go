@@ -1,6 +1,6 @@
 package apikey
 
-// AnonymousKeyID names the identity of a request that carried no gateway API
+// AnonymousKeyID names the API key of a request that carried no gateway API
 // key. It is not a key: nothing issues it, nothing stores it, and no hash
 // matches it. It exists because every path behind authentication still needs
 // one name to meter, to attribute usage to, and to log, and a gateway running
@@ -36,7 +36,7 @@ func DefaultAnonymousScopes() []string {
 	}
 }
 
-// Anonymous returns the identity an unauthenticated request runs as. It names
+// Anonymous returns the API key an unauthenticated request runs as. It names
 // no account, so it resolves to the canonical account through the same rule
 // every issued key uses, and it is active and unexpiring because there is
 // nothing to revoke: an operator revokes it by requiring authentication again.

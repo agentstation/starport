@@ -37,7 +37,7 @@ const (
 	byokCredentialValue   = "account-plane-value-under-test"
 )
 
-// credentialGateway is a running gateway plus the three identities a
+// credentialGateway is a running gateway plus the three apiKeys a
 // credential test needs: an operator who holds admin and owns the deployment,
 // and two accounts who own only their own BYOK.
 type credentialGateway struct {
@@ -75,7 +75,7 @@ func mintCredentialKey(t *testing.T, server *Server, id, accountID string, scope
 
 	token := "token-" + id
 	hash := sha256.Sum256([]byte(token))
-	_, err := server.identities.Create(context.Background(), apikey.APIKey{
+	_, err := server.apiKeys.Create(context.Background(), apikey.APIKey{
 		ID:        id,
 		Name:      strings.ReplaceAll(id, "-", "_"),
 		Hash:      hex.EncodeToString(hash[:]),

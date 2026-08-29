@@ -106,20 +106,20 @@ func TestAuthModeSourceNamesWhatStatedIt(t *testing.T) {
 	}
 }
 
-// TestRequireIdentityJudgesTheResolvedMode is the ordering bug this task could
+// TestRequireAPIKeyJudgesTheResolvedMode is the ordering bug this task could
 // have shipped. A gateway that stored "disabled" from the console holds no
 // key on purpose, and a startup check that read the raw configuration value
 // would refuse to start it.
-func TestRequireIdentityJudgesTheResolvedMode(t *testing.T) {
+func TestRequireAPIKeyJudgesTheResolvedMode(t *testing.T) {
 	resolved := authmode.Resolve("", authmode.SourceUnset, authmode.Setting{
 		Mode:   authmode.Disabled,
 		Source: authmode.SourceConsole,
 	})
 
-	identities, err := apikey.Open(storage.NewMockStore())
+	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 
 	require.Equal(t, authmode.Disabled, resolved.Mode)
-	require.NoError(t, requireIdentity(t.Context(), identities, resolved.Mode))
-	require.ErrorIs(t, requireIdentity(t.Context(), identities, authmode.Required), ErrIdentityRequired)
+	require.NoError(t, requireAPIKey(t.Context(), apiKeys, resolved.Mode))
+	require.ErrorIs(t, requireAPIKey(t.Context(), apiKeys, authmode.Required), ErrAPIKeyRequired)
 }

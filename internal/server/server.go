@@ -30,8 +30,8 @@ var (
 	ErrConfigRequired = errors.New("server config is required")
 	// ErrServiceRequired reports an absent gateway use-case service.
 	ErrServiceRequired = errors.New("gateway service is required")
-	// ErrIdentitiesRequired reports an absent identity repository.
-	ErrIdentitiesRequired = errors.New("identity repository is required")
+	// ErrAPIKeysRequired reports an absent API key repository.
+	ErrAPIKeysRequired = errors.New("API key repository is required")
 	// ErrAccountsRequired reports an absent account repository.
 	ErrAccountsRequired = errors.New("account repository is required")
 	// ErrProviderKeysRequired reports an absent provider-key service.
@@ -50,7 +50,7 @@ type Server struct {
 
 	// Ready application dependencies
 	service            proxy.Proxy
-	identities         apikey.Repository
+	apiKeys            apikey.Repository
 	accounts           account.Repository
 	providerKeys       keyring.ProviderKeys
 	rateLimits         ratelimit.Repository
@@ -72,7 +72,7 @@ type Server struct {
 // Dependencies contains ready application ports for the HTTP adapter.
 type Dependencies struct {
 	Service            proxy.Proxy
-	Identities         apikey.Repository
+	APIKeys            apikey.Repository
 	Accounts           account.Repository
 	ProviderKeys       keyring.ProviderKeys
 	RateLimits         ratelimit.Repository
@@ -115,7 +115,7 @@ type Dependencies struct {
 	// mounted either way and refuse with the operator's answer when nil.
 	IdentityAuth controllers.IdentityAuthenticator
 	// Identity holds the durable people plane: users, teams, memberships,
-	// and account grants. Zero repositories — no identity configured —
+	// and account grants. Zero repositories — no identity provider configured —
 	// degrade the members and teams endpoints to 503, loudly, so the
 	// console reads "not configured" rather than "nobody is here".
 	Identity identity.Repositories
@@ -129,8 +129,8 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 	if dependencies.Service == nil {
 		return nil, ErrServiceRequired
 	}
-	if dependencies.Identities == nil {
-		return nil, ErrIdentitiesRequired
+	if dependencies.APIKeys == nil {
+		return nil, ErrAPIKeysRequired
 	}
 	if dependencies.Accounts == nil {
 		return nil, ErrAccountsRequired
@@ -149,7 +149,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		router:             chi.NewRouter(),
 		cfg:                config,
 		service:            dependencies.Service,
-		identities:         dependencies.Identities,
+		apiKeys:            dependencies.APIKeys,
 		accounts:           dependencies.Accounts,
 		providerKeys:       dependencies.ProviderKeys,
 		rateLimits:         dependencies.RateLimits,
@@ -160,14 +160,14 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Mode:   config.AuthMode,
 		Source: config.AuthModeSource,
 	})
-	s.auth = NewAuthMiddleware(s.identities, s.accounts)
+	s.auth = NewAuthMiddleware(s.apiKeys, s.accounts)
 	s.auth.Govern(s.authPolicy, config.UnauthenticatedScopes)
 	s.auth.AcceptSessions(dependencies.LocalGate)
 
 	handlerConfig := controllers.Config{
 		Service:            s.service,
 		ProviderKeys:       s.providerKeys,
-		Identities:         s.identities,
+		APIKeys:            s.apiKeys,
 		Accounts:           s.accounts,
 		Usage:              dependencies.Usage,
 		ProviderOperations: s.providerOperations,
@@ -225,7 +225,7 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 //
 // It is the admin scope whenever there is a key to hold. When authentication
 // is disabled there is none: the gateway resolves every request to the
-// anonymous identity, which holds no admin scope on purpose, so requiring one
+// anonymous key, which holds no admin scope on purpose, so requiring one
 // would make the switch a one-way door — an operator could open the gateway
 // and never close it again without editing configuration and restarting.
 //

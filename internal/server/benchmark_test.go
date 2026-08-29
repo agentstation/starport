@@ -25,7 +25,7 @@ func BenchmarkProxyHandler(b *testing.B) {
 	server := newTestServer(b, config)
 	const apiKey = "benchmark-gateway-key"
 	hash := sha256.Sum256([]byte(apiKey))
-	if _, err := server.identities.Create(context.Background(), apikey.APIKey{
+	if _, err := server.apiKeys.Create(context.Background(), apikey.APIKey{
 		ID: "benchmark-key", Name: "benchmark_key", Hash: hex.EncodeToString(hash[:]),
 		Scopes: []string{"*"}, Active: true, CreatedAt: time.Now(),
 	}); err != nil {

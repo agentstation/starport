@@ -22,7 +22,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 		name           string
 		setupAuth      func(req *http.Request)
 		storedSecret   string
-		storedIdentity *apikey.APIKey
+		storedAPIKey   *apikey.APIKey
 		wantStatus     int
 		wantErrMessage string
 		wantContext    bool
@@ -51,7 +51,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 				req.Header.Set("Authorization", "Bearer sk-starport-testkey123")
 			},
 			storedSecret: "sk-starport-testkey123",
-			storedIdentity: &apikey.APIKey{
+			storedAPIKey: &apikey.APIKey{
 				ID:        "STARPORT_test123",
 				Name:      "Test-Key",
 				Scopes:    []string{"chat:write", "models:read"},
@@ -67,7 +67,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 				req.Header.Set("X-API-Key", "sk-starport-testkey456")
 			},
 			storedSecret: "sk-starport-testkey456",
-			storedIdentity: &apikey.APIKey{
+			storedAPIKey: &apikey.APIKey{
 				ID:        "STARPORT_test456",
 				Name:      "Test-Key-2",
 				Scopes:    []string{"chat:write"},
@@ -105,7 +105,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 				req.Header.Set("Authorization", "Bearer sk-starport-disabled")
 			},
 			storedSecret: "sk-starport-disabled",
-			storedIdentity: &apikey.APIKey{
+			storedAPIKey: &apikey.APIKey{
 				ID:        "STARPORT_disabled",
 				Name:      "Disabled-Key",
 				Scopes:    []string{"chat:write"},
@@ -122,7 +122,7 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 				req.Header.Set("Authorization", "Bearer sk-starport-expired")
 			},
 			storedSecret: "sk-starport-expired",
-			storedIdentity: &apikey.APIKey{
+			storedAPIKey: &apikey.APIKey{
 				ID:        "STARPORT_expired",
 				Name:      "Expired-Key",
 				Scopes:    []string{"chat:write"},
@@ -139,17 +139,17 @@ func TestAuthMiddleware_RequireAPIKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
-			identities, err := apikey.Open(storage.NewMockStore())
+			apiKeys, err := apikey.Open(storage.NewMockStore())
 			require.NoError(t, err)
-			if tt.storedIdentity != nil {
-				storedIdentity := *tt.storedIdentity
+			if tt.storedAPIKey != nil {
+				storedAPIKey := *tt.storedAPIKey
 				hash := sha256.Sum256([]byte(tt.storedSecret))
-				storedIdentity.Hash = hex.EncodeToString(hash[:])
-				_, err := identities.Create(context.Background(), storedIdentity)
+				storedAPIKey.Hash = hex.EncodeToString(hash[:])
+				_, err := apiKeys.Create(context.Background(), storedAPIKey)
 				require.NoError(t, err)
 			}
 
-			auth := NewAuthMiddleware(identities)
+			auth := NewAuthMiddleware(apiKeys)
 
 			// Create a test handler that checks context
 			var gotContext bool
@@ -292,9 +292,9 @@ func TestExtractAPIKey(t *testing.T) {
 }
 
 func TestAuthMiddleware_RequireAnyScope(t *testing.T) {
-	identities, err := apikey.Open(storage.NewMockStore())
+	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
-	auth := NewAuthMiddleware(identities)
+	auth := NewAuthMiddleware(apiKeys)
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -350,7 +350,7 @@ func TestAuthIntegrationWithConsole(t *testing.T) {
 	// 2. The key is stored with proper hash mapping
 	// 3. The key can be used for authentication
 
-	identities, err := apikey.Open(storage.NewMockStore())
+	apiKeys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 
 	// Simulate what the console does when generating a key
@@ -376,11 +376,11 @@ func TestAuthIntegrationWithConsole(t *testing.T) {
 
 	// Store the key (what the console handler does)
 	ctx := context.Background()
-	_, err = identities.Create(ctx, *apiKey)
+	_, err = apiKeys.Create(ctx, *apiKey)
 	require.NoError(t, err)
 
 	// Now test authentication with this key
-	auth := NewAuthMiddleware(identities)
+	auth := NewAuthMiddleware(apiKeys)
 
 	// Create a test handler
 	authenticated := false
