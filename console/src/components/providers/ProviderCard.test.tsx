@@ -113,7 +113,7 @@ test("rolls adapter, circuit, and routing into one health verdict", () => {
     providerHealth(
       runtime({ offerings: [{ provider_model_id: "a", state: "healthy" }] }),
     ).state,
-  ).toBe("operational");
+  ).toBe("healthy");
   expect(
     providerHealth(runtime({ adapter: { state: "error" } })).state,
   ).toBe("unavailable");
