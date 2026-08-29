@@ -648,6 +648,11 @@ func (b *runtimeBuilder) openIdentity() error {
 		return fmt.Errorf("open identity acquisition: %w", err)
 	}
 	b.gate.UseIdentityProvider(authenticator)
+	resolver, err := identity.NewAccountResolver(repositories.Users, repositories.AccountGrants)
+	if err != nil {
+		return fmt.Errorf("open identity account resolver: %w", err)
+	}
+	b.gate.UseAccountResolver(resolver)
 	b.identityAuth = authenticator
 	log.Info().
 		Strs("providers", authenticator.Providers()).

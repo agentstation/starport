@@ -1,6 +1,7 @@
 package localauth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -158,4 +159,68 @@ func TestTheSubjectAndTheGrantMustAgree(t *testing.T) {
 	// identity session, because it has no subject to give one.
 	_, _, err := IssueSession(token, GrantIdentity, now)
 	require.ErrorIs(t, err, ErrIdentitySubjectMissing)
+}
+
+// resolverStub stands in for a filled account-resolution slot. It records the
+// subject it was asked about, so the test can prove the session's own subject
+// is the one that travels.
+type resolverStub struct {
+	accounts []string
+	err      error
+	asked    string
+}
+
+func (r *resolverStub) ReachableAccounts(_ context.Context, subject string) ([]string, error) {
+	r.asked = subject
+	return r.accounts, r.err
+}
+
+// TestSessionAccountsResolvesAnIdentitySession proves the session account
+// resolution seam: an identity session's subject goes to the resolver and its
+// accounts come back scoped, a machine-local session is not account-scoped at
+// all, and an unfilled slot answers with its own named refusal.
+func TestSessionAccountsResolvesAnIdentitySession(t *testing.T) {
+	ctx := context.Background()
+	token := testToken(t, 1)
+	gate := NewGate(token, "127.0.0.1")
+	gate.UseIdentityProvider(providerStub{subject: "google:114380"})
+	now := time.Now()
+
+	_, session, err := gate.MintSession(GrantIdentity, GrantRequest{Claim: "a-claim"}, now)
+	require.NoError(t, err)
+
+	// The slot ships empty, and asking an account-scoped question then is a
+	// deployment inconsistency with its own name.
+	_, scoped, err := gate.SessionAccounts(ctx, session)
+	require.True(t, scoped)
+	require.ErrorIs(t, err, ErrAccountResolverNotConfigured)
+
+	resolver := &resolverStub{accounts: []string{"acct-a", "acct-b"}}
+	gate.UseAccountResolver(resolver)
+
+	accounts, scoped, err := gate.SessionAccounts(ctx, session)
+	require.NoError(t, err)
+	require.True(t, scoped)
+	require.Equal(t, []string{"acct-a", "acct-b"}, accounts)
+	require.Equal(t, "google:114380", resolver.asked)
+
+	// A machine-local session is the operator's own admission: it is not
+	// account-scoped, and the resolver is never consulted for it.
+	_, local, err := gate.MintSession(GrantLocalToken, GrantRequest{Claim: token.Secret}, now)
+	require.NoError(t, err)
+	accounts, scoped, err = gate.SessionAccounts(ctx, local)
+	require.NoError(t, err)
+	require.False(t, scoped)
+	require.Nil(t, accounts)
+
+	// A resolver refusal reaches the caller wrapped, still scoped.
+	gate.UseAccountResolver(&resolverStub{err: errors.New("store gone")})
+	_, scoped, err = gate.SessionAccounts(ctx, session)
+	require.True(t, scoped)
+	require.ErrorContains(t, err, "store gone")
+
+	// A nil resolver is a no-op, not a reset, matching UseIdentityProvider.
+	gate.UseAccountResolver(nil)
+	_, _, err = gate.SessionAccounts(ctx, session)
+	require.ErrorContains(t, err, "store gone")
 }

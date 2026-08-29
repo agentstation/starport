@@ -1,6 +1,8 @@
 package localauth
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -27,7 +29,30 @@ type Gate struct {
 	token   Token
 	tickets *Tickets
 	grants  map[GrantKind]Grant
+
+	// accounts resolves which accounts an identity session may act for. It
+	// is nil until the composition root fills it through UseAccountResolver,
+	// alongside the identity provider it serves: a deployment with no
+	// identity has no account-scoped sessions to resolve.
+	accounts AccountResolver
 }
+
+// AccountResolver is the contract the composition root fills so an identity
+// session can resolve its reachable accounts. The subject is the one the
+// session carries; the answer is the account IDs the subject's grants reach.
+// It lives here for the same reason IdentityProvider does: the gate decides
+// what a session means, and how the mapping is stored is the filler's
+// problem.
+type AccountResolver interface {
+	ReachableAccounts(ctx context.Context, subject string) ([]string, error)
+}
+
+// ErrAccountResolverNotConfigured reports an account-scoped question this
+// deployment cannot answer: an identity session exists but nothing filled
+// the resolver slot.
+var ErrAccountResolverNotConfigured = errors.New(
+	"no account resolver is configured for this gateway",
+)
 
 // NewGate returns a gate over one token. A zero Token yields a gate that
 // refuses everything, because an unvalidatable token signs nothing.
@@ -59,6 +84,35 @@ func (g *Gate) UseIdentityProvider(provider IdentityProvider) {
 	if grant, ok := g.grants[GrantIdentity].(*identityGrant); ok {
 		grant.provider = provider
 	}
+}
+
+// UseAccountResolver fills the account-resolution slot, the way
+// UseIdentityProvider fills the identity grant's. Only the composition root
+// calls it, and only when identity is configured.
+func (g *Gate) UseAccountResolver(resolver AccountResolver) {
+	if g == nil || resolver == nil {
+		return
+	}
+	g.accounts = resolver
+}
+
+// SessionAccounts reports which accounts a session may act for. The second
+// result says whether the session is account-scoped at all: a machine-local
+// session is the operator's own admission, answers false, and is bounded by
+// nothing here. An identity session answers true with the accounts its
+// grants reach — possibly none.
+func (g *Gate) SessionAccounts(ctx context.Context, session Session) ([]string, bool, error) {
+	if session.Grant != GrantIdentity {
+		return nil, false, nil
+	}
+	if g == nil || g.accounts == nil {
+		return nil, true, ErrAccountResolverNotConfigured
+	}
+	accounts, err := g.accounts.ReachableAccounts(ctx, session.Subject)
+	if err != nil {
+		return nil, true, fmt.Errorf("resolve the session's accounts: %w", err)
+	}
+	return accounts, true, nil
 }
 
 // register files a grant under the kind it reports. A grant registered under a
