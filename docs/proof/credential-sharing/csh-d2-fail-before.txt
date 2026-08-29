@@ -1,0 +1,32 @@
+CSH-D2 fail-before — captured 2026-08-29T10:31:05Z on e2b27b3 (codex/csh-d2-account-policy-panel)
+
+$ ls console/src/components/accounts
+ls: console/src/components/accounts: No such file or directory
+
+$ grep -rn 'byok_policy\|AccountPolicyPanel' console/src || echo '(no matches)'
+(no matches)
+
+The baseline console has no account policy panel: no accounts component directory exists,
+no component names the byok_policy wire field, and the accounts route renders strategy,
+limits, keys, and BYOK credentials only. The D1 write surface (byok_policy/access on
+PUT /api/v1/admin/accounts/{id}) is unreachable from the console.
+
+--- After implementation (2026-08-29) ---
+Panel: console/src/components/accounts/AccountPolicyPanel.tsx, mounted in the
+account side panel (console/src/routes/accounts.tsx) above BYOK credentials.
+API client: Account gains byok_policy/access; updateAccount body carries both
+(clearing sentinels {"mode":"all"} and []).
+Component tests: console/src/components/accounts/AccountPolicyPanel.test.tsx —
+7 tests: open defaults render checked; mode none saved; mode selected saved and
+an empty selection refused; the {"mode":"all"} clearing sentinel over a stored
+rule; a granted provider travels with no models field (all-models default);
+the model opt-in narrows one provider and refuses an empty model set; the []
+clearing sentinel over stored grants.
+pnpm -C console check: build + typecheck + vitest — 25 files, 173 tests, all pass.
+Rendered verification at http://127.0.0.1:8080/accounts (rebuilt binary,
+restarted gateway): panel renders both questions with open defaults; "Only
+selected providers" fills from the live catalog; checking Groq reveals the
+model opt-in; opting in lists Groq's live models with the filter box; a
+narrowed save answered "Policy saved" and rendered back identically after a
+full page reload; clearing to "Every provider and model" saved and left the
+account at its defaults.

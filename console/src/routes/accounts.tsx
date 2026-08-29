@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { AccountPolicyPanel } from "@/components/accounts/AccountPolicyPanel";
 import { ByokPanel } from "@/components/credentials/ByokPanel";
 import {
   Field,
@@ -190,6 +191,10 @@ function AccountDetail({
             Manage keys →
           </Link>
         </div>
+
+        {/* The key remounts the policy drafts when the operator opens a
+            different account in the same panel position. */}
+        <AccountPolicyPanel key={account.id} account={account} />
 
         <ByokPanel accountId={account.id} />
       </div>
