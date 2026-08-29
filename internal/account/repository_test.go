@@ -26,14 +26,16 @@ func TestAccountRepositoryContract(t *testing.T) {
 			Limits: &limits.Limits{
 				Spend: &limits.Budget{Limit: 1000, Interval: limits.IntervalMonth},
 			},
-			Active:    true,
-			CreatedAt: time.Unix(100, 0).UTC(),
-			UpdatedAt: time.Unix(100, 0).UTC(),
+			Active: true,
 		}
 
 		record, err := repository.Create(ctx, created)
 		require.NoError(t, err)
 		require.EqualValues(t, 1, record.Revision)
+		// The repository stamps creation time; a caller that omits it must
+		// never persist the zero time the console would render as a date.
+		require.False(t, record.Account.CreatedAt.IsZero())
+		require.False(t, record.Account.UpdatedAt.IsZero())
 
 		stored, err := repository.GetByID(ctx, created.ID)
 		require.NoError(t, err)
