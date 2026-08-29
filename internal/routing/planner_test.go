@@ -380,3 +380,65 @@ func rejectionCodes(rejections []Rejection) []RejectionCode {
 	}
 	return codes
 }
+
+// TestAccountProviderAccess proves the paired grant that a flat set cannot
+// express: one provider open to every model while another is narrowed to
+// specific models, without the narrow entry denying the open provider.
+func TestAccountProviderAccess(t *testing.T) {
+	t.Run("a narrowed provider does not deny an open one", func(t *testing.T) {
+		planner := NewPlanner()
+		plan, err := planner.Plan(Request{
+			Models:              []string{"author/primary", "author/fallback"},
+			AllowModelFallbacks: true,
+			Account: AccountPolicy{
+				Access: []ProviderAccess{
+					{Provider: "provider-a"},
+					{Provider: "provider-b", Models: []string{"author/fallback"}},
+				},
+			},
+			Providers: ProviderPolicy{AllowFallbacks: true},
+		}, contractSnapshot())
+		require.NoError(t, err)
+		require.Equal(t, []string{
+			"provider-a/primary-a",
+			"provider-b/fallback-b",
+		}, attemptIDs(plan.Attempts()))
+		require.Contains(t, rejectionCodes(plan.Rejections()), RejectionAccountModel)
+	})
+
+	t.Run("an unlisted provider is refused", func(t *testing.T) {
+		planner := NewPlanner()
+		plan, err := planner.Plan(Request{
+			Models: []string{"author/primary"},
+			Account: AccountPolicy{
+				Access: []ProviderAccess{{Provider: "provider-b"}},
+			},
+		}, contractSnapshot())
+		require.NoError(t, err)
+		require.Equal(t, []string{"provider-b/primary-b"}, attemptIDs(plan.Attempts()))
+		require.Contains(t, rejectionCodes(plan.Rejections()), RejectionAccountProvider)
+	})
+
+	t.Run("no access entries grants every provider and model", func(t *testing.T) {
+		planner := NewPlanner()
+		plan, err := planner.Plan(Request{
+			Models:    []string{"author/primary"},
+			Providers: ProviderPolicy{AllowFallbacks: true},
+		}, contractSnapshot())
+		require.NoError(t, err)
+		require.Len(t, attemptIDs(plan.Attempts()), 2)
+	})
+
+	t.Run("access composes with the flat allow lists", func(t *testing.T) {
+		planner := NewPlanner()
+		plan, err := planner.Plan(Request{
+			Models: []string{"author/primary"},
+			Account: AccountPolicy{
+				AllowedProviders: []string{"provider-a"},
+				Access:           []ProviderAccess{{Provider: "provider-a"}, {Provider: "provider-b"}},
+			},
+		}, contractSnapshot())
+		require.NoError(t, err)
+		require.Equal(t, []string{"provider-a/primary-a"}, attemptIDs(plan.Attempts()))
+	})
+}

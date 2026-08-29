@@ -10,6 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/providers/keyring"
+	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -362,6 +363,16 @@ type APIKeyRoutingConfig struct {
 	ModelOverrides     map[string]string
 	RateLimitTier      string
 	CredentialStrategy keyring.Strategy
+
+	// Access carries the account's paired provider and model grants. Nil
+	// grants every provider and model.
+	Access []routing.ProviderAccess
+
+	// BYOKProviders gates which providers the BYOK credential source may
+	// serve: nil allows every provider, an empty list none, a non-empty
+	// list only its members. It is the account's BYOK policy resolved to
+	// plain data, so this package never learns the account vocabulary.
+	BYOKProviders *[]string
 }
 
 // CacheCost represents the cost of cache operations

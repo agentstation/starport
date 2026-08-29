@@ -1,0 +1,42 @@
+CSH-D1 fail-before: a disallowed BYOK put succeeds on baseline (no policy enforcement).
+Captured 2026-08-29 on codex/csh-d1-byok-policy after adding account.BYOKPolicy vocabulary but before the controller refusal.
+
+--- FAIL: TestBYOKPutHonorsTheOperatorBYOKPolicy (0.00s)
+    --- FAIL: TestBYOKPutHonorsTheOperatorBYOKPolicy/a_provider_outside_a_selected_policy_is_refused (0.00s)
+        provider_credentials_test.go:351: 
+            	Error Trace:	/Users/jack/src/github.com/agentstation/starport/internal/server/controllers/provider_credentials_test.go:351
+            	Error:      	Not equal: 
+            	            	expected: 403
+            	            	actual  : 200
+            	Test:       	TestBYOKPutHonorsTheOperatorBYOKPolicy/a_provider_outside_a_selected_policy_is_refused
+    --- FAIL: TestBYOKPutHonorsTheOperatorBYOKPolicy/a_none_policy_refuses_every_provider (0.00s)
+        provider_credentials_test.go:361: 
+            	Error Trace:	/Users/jack/src/github.com/agentstation/starport/internal/server/controllers/provider_credentials_test.go:361
+            	Error:      	Not equal: 
+            	            	expected: 403
+            	            	actual  : 200
+            	Test:       	TestBYOKPutHonorsTheOperatorBYOKPolicy/a_none_policy_refuses_every_provider
+FAIL
+FAIL	github.com/agentstation/starport/internal/server/controllers	0.363s
+FAIL
+
+=== After implementation (2026-08-29) ===
+Seams changed:
+- internal/account: BYOKPolicy (all/selected/none), ProviderAccess (paired provider+models),
+  AllowsBYOK/AllowsProvider/AllowsModel, Validate coverage, repository clone.
+- internal/server/controllers: BYOKPut refuses 403 permission_error when the account's
+  BYOKPolicy withholds the provider; accountRequest/applyAccountRequest carry byok_policy
+  and access; {"mode":"all"} and [] clear back to unrestricted.
+- internal/routing: AccountPolicy.Access ([]ProviderAccess) enforced in the planner with
+  paired per-provider model sets, reusing RejectionAccountProvider/RejectionAccountModel.
+- internal/router: APIKeyConfig.Access + BYOKProviders gate; credentialPolicy.resolve skips
+  the BYOK source for a gated provider (resolves as not-configured, strategy advances).
+  Scope note: resolution honoring lives here (the per-request source-order seam), not in
+  internal/providers/keyring as the plan text guessed.
+- Wiring: base.go reads requestctx.GetAccountRecord -> proxy.APIKeyRoutingConfig ->
+  transformAPIKeyConfig -> router.APIKeyConfig -> three AccountPolicy population sites.
+- Cache identity: responsecache.AccountPolicy.Access carried canonically (sorted).
+
+go test ./internal/account/... ./internal/providers/keyring/... ./internal/routing/...
+  ./internal/router/... ./internal/proxy/... ./internal/response/... ./internal/server/... : all ok
+verify-credential-sharing.sh: 14 passed, 9 failed (V11-V14 flipped green; V15-V23 are later tasks)

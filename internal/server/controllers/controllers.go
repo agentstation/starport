@@ -106,7 +106,7 @@ func NewControllers(cfg Config) *Controllers {
 		Providers:            NewProvidersController(cfg.Service),
 		Authors:              NewAuthorsController(cfg.Service),
 		Logos:                NewLogosController(cfg.Service),
-		ProviderCredentials:  NewProviderCredentialsController(cfg.ProviderKeys),
+		ProviderCredentials:  NewProviderCredentialsController(cfg.ProviderKeys, cfg.Accounts),
 		Activity:             NewActivityController(cfg.Usage),
 		Admin: NewAdminController(cfg.Identities, cfg.Accounts, cfg.Usage,
 			WithFileStorage(cfg.FileBackend)),

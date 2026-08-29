@@ -28,6 +28,7 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 	providerRanks := orderedRanks(request.Providers.Order)
 	accountModels := accountModelSet(request.Account)
 	accountProviders := normalizedSet(request.Account.AllowedProviders)
+	accountAccess := accessIndex(request.Account.Access)
 	onlyProviders := normalizedSet(request.Providers.Only)
 	ignoredProviders := normalizedSet(request.Providers.Ignore)
 	requiredCapabilities := normalizedSet(request.RequiredCapabilities)
@@ -49,6 +50,7 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 			request,
 			accountModels,
 			accountProviders,
+			accountAccess,
 			onlyProviders,
 			ignoredProviders,
 			providerRanks,
@@ -286,6 +288,7 @@ func rejectCandidate(
 	request Request,
 	accountModels map[string]struct{},
 	accountProviders map[string]struct{},
+	accountAccess map[string]map[string]struct{},
 	onlyProviders map[string]struct{},
 	ignoredProviders map[string]struct{},
 	providerRanks map[string]int,
@@ -316,6 +319,15 @@ func rejectCandidate(
 	providerID := normalize(candidate.Route.ProviderID)
 	if !setAllows(providerID, accountProviders) {
 		return reject(RejectionAccountProvider, "account policy denied the provider")
+	}
+	if len(accountAccess) > 0 {
+		grantedModels, granted := accountAccess[providerID]
+		if !granted {
+			return reject(RejectionAccountProvider, "account access does not grant the provider")
+		}
+		if grantedModels != nil && !modelAllowed(candidate.Route, grantedModels) {
+			return reject(RejectionAccountModel, "account access does not grant the model on this provider")
+		}
 	}
 	if !setAllows(providerID, onlyProviders) {
 		return reject(RejectionProviderPolicy, "provider is not in the only list")
@@ -531,6 +543,28 @@ func accountModelSet(policy AccountPolicy) map[string]struct{} {
 		}
 	}
 	return allowed
+}
+
+// accessIndex keys each granted provider to its granted model set. A nil
+// inner set grants every model of that provider, which keeps the pairing a
+// flat set loses: one provider may stay open while another is narrowed.
+func accessIndex(access []ProviderAccess) map[string]map[string]struct{} {
+	if len(access) == 0 {
+		return nil
+	}
+	result := make(map[string]map[string]struct{}, len(access))
+	for _, entry := range access {
+		provider := normalize(entry.Provider)
+		if provider == "" {
+			continue
+		}
+		if len(entry.Models) == 0 {
+			result[provider] = nil
+			continue
+		}
+		result[provider] = exactSet(entry.Models)
+	}
+	return result
 }
 
 func normalizedSet(values []string) map[string]struct{} {

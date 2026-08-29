@@ -61,12 +61,20 @@ type ProviderPolicy struct {
 	MaxCompletionPricePer1M float64 `json:"max_completion_price_per_1m,omitempty"`
 }
 
+// ProviderAccess is one paired provider and model grant. It changes which
+// route may serve a response, so it is part of the cache identity.
+type ProviderAccess struct {
+	Provider string   `json:"provider"`
+	Models   []string `json:"models,omitempty"`
+}
+
 // AccountPolicy contains account-scoped route restrictions.
 type AccountPolicy struct {
-	AllowedModels      []string `json:"allowed_models,omitempty"`
-	AllowedProviders   []string `json:"allowed_providers,omitempty"`
-	RateLimitTier      string   `json:"rate_limit_tier,omitempty"`
-	CredentialStrategy string   `json:"credential_strategy,omitempty"`
+	AllowedModels      []string         `json:"allowed_models,omitempty"`
+	AllowedProviders   []string         `json:"allowed_providers,omitempty"`
+	Access             []ProviderAccess `json:"access,omitempty"`
+	RateLimitTier      string           `json:"rate_limit_tier,omitempty"`
+	CredentialStrategy string           `json:"credential_strategy,omitempty"`
 }
 
 // Policy contains all routing policy that can change a response.
@@ -198,6 +206,7 @@ func normalizePolicy(policy Policy) Policy {
 	policy.Provider.Ignore = sortedCopy(policy.Provider.Ignore)
 	policy.Account.AllowedModels = sortedCopy(policy.Account.AllowedModels)
 	policy.Account.AllowedProviders = sortedCopy(policy.Account.AllowedProviders)
+	policy.Account.Access = normalizedAccess(policy.Account.Access)
 	if policy.Provider.ModelOverrides != nil {
 		cloned := make(map[string]string, len(policy.Provider.ModelOverrides))
 		for model, override := range policy.Provider.ModelOverrides {
@@ -206,6 +215,20 @@ func normalizePolicy(policy Policy) Policy {
 		policy.Provider.ModelOverrides = cloned
 	}
 	return policy
+}
+
+// normalizedAccess orders the paired grants canonically, by provider with
+// each model list sorted, so equal policies hash equally.
+func normalizedAccess(access []ProviderAccess) []ProviderAccess {
+	if access == nil {
+		return nil
+	}
+	result := make([]ProviderAccess, len(access))
+	for i, entry := range access {
+		result[i] = ProviderAccess{Provider: entry.Provider, Models: sortedCopy(entry.Models)}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Provider < result[j].Provider })
+	return result
 }
 
 func sortedCopy(values []string) []string {

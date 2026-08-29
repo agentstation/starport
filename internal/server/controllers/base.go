@@ -10,12 +10,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/proxy"
+	"github.com/agentstation/starport/internal/routing"
 	"github.com/agentstation/starport/internal/server/requestctx"
 )
 
@@ -171,10 +173,49 @@ func (h *BaseHandler) getAPIKeyRoutingConfig(ctx context.Context) (*proxy.APIKey
 		return nil, err
 	}
 
-	return &proxy.APIKeyRoutingConfig{
+	config := &proxy.APIKeyRoutingConfig{
 		AllowedModels:      append([]string(nil), apiKey.AllowedModels...),
 		CredentialStrategy: strategy,
-	}, nil
+	}
+	if record, exists := requestctx.GetAccountRecord(ctx); exists && record != nil {
+		config.Access = accountAccessPolicy(record.Access)
+		config.BYOKProviders = accountBYOKGate(record.BYOKPolicy)
+	}
+	return config, nil
+}
+
+// accountAccessPolicy maps the account's paired provider and model grants to
+// the routing shape the planner consumes.
+func accountAccessPolicy(access []account.ProviderAccess) []routing.ProviderAccess {
+	if len(access) == 0 {
+		return nil
+	}
+	result := make([]routing.ProviderAccess, len(access))
+	for i, entry := range access {
+		result[i] = routing.ProviderAccess{Provider: entry.Provider}
+		if len(entry.Models) > 0 {
+			result[i].Models = append([]string(nil), entry.Models...)
+		}
+	}
+	return result
+}
+
+// accountBYOKGate resolves the account's BYOK policy to the plain per-provider
+// gate the credential policy consumes: nil for every provider, an empty list
+// for none, the selected list otherwise.
+func accountBYOKGate(policy *account.BYOKPolicy) *[]string {
+	if policy == nil {
+		return nil
+	}
+	switch policy.Mode {
+	case account.BYOKNone:
+		gate := []string{}
+		return &gate
+	case account.BYOKSelected:
+		gate := append([]string(nil), policy.Providers...)
+		return &gate
+	}
+	return nil
 }
 
 // logError logs an error with context

@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/catalogs"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
@@ -118,10 +119,26 @@ func (m *mockKeyManager) RotateEncryptionKey(ctx context.Context) error {
 	return nil
 }
 
+// fixedAccountReader serves one account record to the BYOK-policy check.
+type fixedAccountReader struct {
+	record account.Record
+}
+
+func (r *fixedAccountReader) GetByID(_ context.Context, id string) (account.Record, error) {
+	if id != r.record.Account.ID {
+		return account.Record{}, account.ErrNotFound
+	}
+	return r.record, nil
+}
+
 // credentialRouter mounts both credential surfaces on one router so a test
 // addresses either plane by path, the way a caller does.
 func credentialRouter(store keyring.ProviderKeys) http.Handler {
-	handler := NewProviderCredentialsController(store)
+	return credentialRouterWithAccounts(store, nil)
+}
+
+func credentialRouterWithAccounts(store keyring.ProviderKeys, accounts accountPolicyReader) http.Handler {
+	handler := NewProviderCredentialsController(store, accounts)
 
 	router := chi.NewRouter()
 	router.Route("/api/v1/providers/{provider}/credentials", func(r chi.Router) {
@@ -302,4 +319,67 @@ func TestACredentialResponseNeverCarriesItsSecret(t *testing.T) {
 	assert.NotContains(t, summary, "credentials")
 	assert.NotContains(t, summary, "encrypted_credential")
 	assert.NotContains(t, summary, "key")
+}
+
+// TestBYOKPutHonorsTheOperatorBYOKPolicy guards the operator's answer to
+// whether an account may bring its own credential. The strategy says when a
+// BYOK credential is spent; the account's BYOKPolicy says whether one may be
+// stored at all, and the write is where that refusal belongs.
+func TestBYOKPutHonorsTheOperatorBYOKPolicy(t *testing.T) {
+	byokPut := func(t *testing.T, record account.Account, provider string) *httptest.ResponseRecorder {
+		t.Helper()
+		router := credentialRouterWithAccounts(&mockKeyManager{},
+			&fixedAccountReader{record: account.Record{Revision: 1, Account: record}})
+		request := httptest.NewRequest(http.MethodPut,
+			"/api/v1/accounts/"+record.ID+"/byok/"+provider,
+			bytes.NewReader([]byte(`{"credentials":{"api-key":"placeholder-value"}}`)))
+		request.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	acme := account.Account{ID: "acme", Name: "Acme", Active: true}
+
+	t.Run("a provider outside a selected policy is refused", func(t *testing.T) {
+		record := acme
+		record.BYOKPolicy = &account.BYOKPolicy{
+			Mode:      account.BYOKSelected,
+			Providers: []string{"openai"},
+		}
+		recorder := byokPut(t, record, "anthropic")
+		require.Equal(t, http.StatusForbidden, recorder.Code)
+		response := decodeCredentialError(t, recorder)
+		assert.Equal(t, dto.ErrorTypePermissionError, response.Error.Type)
+		assert.Contains(t, response.Error.Message, "anthropic")
+	})
+
+	t.Run("a none policy refuses every provider", func(t *testing.T) {
+		record := acme
+		record.BYOKPolicy = &account.BYOKPolicy{Mode: account.BYOKNone}
+		recorder := byokPut(t, record, "openai")
+		require.Equal(t, http.StatusForbidden, recorder.Code)
+	})
+
+	t.Run("a provider inside a selected policy is stored", func(t *testing.T) {
+		record := acme
+		record.BYOKPolicy = &account.BYOKPolicy{
+			Mode:      account.BYOKSelected,
+			Providers: []string{"openai"},
+		}
+		recorder := byokPut(t, record, "openai")
+		require.Equal(t, http.StatusOK, recorder.Code)
+	})
+
+	t.Run("an account without a policy stores any provider", func(t *testing.T) {
+		recorder := byokPut(t, acme, "anthropic")
+		require.Equal(t, http.StatusOK, recorder.Code)
+	})
+
+	t.Run("a missing accounts reader does not block the write", func(t *testing.T) {
+		recorder := callCredentialRoute(t, &mockKeyManager{}, http.MethodPut,
+			"/api/v1/accounts/acme/byok/openai",
+			`{"credentials":{"api-key":"placeholder-value"}}`)
+		require.Equal(t, http.StatusOK, recorder.Code)
+	})
 }

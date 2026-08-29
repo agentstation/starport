@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,10 +10,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
 )
+
+// accountPolicyReader loads the account a BYOK route addresses, so a write
+// can honor the operator's BYOK policy. It is the read half of
+// account.Repository.
+type accountPolicyReader interface {
+	GetByID(ctx context.Context, id string) (account.Record, error)
+}
 
 // ProviderCredentialsController serves both stored provider-credential planes.
 //
@@ -22,11 +31,16 @@ import (
 // gateway API key that carried the request.
 type ProviderCredentialsController struct {
 	providerKeys keyring.ProviderKeys
+	accounts     accountPolicyReader
 }
 
-// NewProviderCredentialsController creates the credential controller.
-func NewProviderCredentialsController(providerKeys keyring.ProviderKeys) *ProviderCredentialsController {
-	return &ProviderCredentialsController{providerKeys: providerKeys}
+// NewProviderCredentialsController creates the credential controller. A nil
+// accounts reader disables BYOK-policy enforcement, which only a test uses.
+func NewProviderCredentialsController(
+	providerKeys keyring.ProviderKeys,
+	accounts accountPolicyReader,
+) *ProviderCredentialsController {
+	return &ProviderCredentialsController{providerKeys: providerKeys, accounts: accounts}
 }
 
 // credentialRequest is the body both surfaces accept. A credential is a map of
@@ -270,9 +284,41 @@ func (h *ProviderCredentialsController) BYOKGet(w http.ResponseWriter, r *http.R
 	h.get(w, r, byokScope(r))
 }
 
-// BYOKPut handles PUT /api/v1/accounts/{account_id}/byok/{provider}.
+// BYOKPut handles PUT /api/v1/accounts/{account_id}/byok/{provider}. The
+// write is where the operator's BYOK policy speaks: an account outside the
+// policy never stores the credential, so nothing later has to unwind one.
 func (h *ProviderCredentialsController) BYOKPut(w http.ResponseWriter, r *http.Request) {
+	if !h.byokAllowed(w, r) {
+		return
+	}
 	h.put(w, r, byokScope(r))
+}
+
+// byokAllowed reports whether the operator's BYOK policy lets the addressed
+// account store its own credential for the routed provider, and writes the
+// refusal when it does not. A missing account or reader falls open: the
+// account middleware already decided the route is reachable, and a policy
+// only exists on an account an operator stored one on.
+func (h *ProviderCredentialsController) byokAllowed(w http.ResponseWriter, r *http.Request) bool {
+	if h.accounts == nil {
+		return true
+	}
+	accountID := chi.URLParam(r, fieldAccountID)
+	record, err := h.accounts.GetByID(r.Context(), accountID)
+	if err != nil {
+		if !errors.Is(err, account.ErrNotFound) {
+			log.Error().Err(err).Str("account", accountID).
+				Msg("Failed to read account for BYOK policy check")
+		}
+		return true
+	}
+	provider := chi.URLParam(r, providerField)
+	if record.Account.AllowsBYOK(provider) {
+		return true
+	}
+	dto.WriteError(w, http.StatusForbidden, dto.ErrorTypePermissionError,
+		"This account may not bring its own credential for provider "+provider)
+	return false
 }
 
 // BYOKDelete handles DELETE /api/v1/accounts/{account_id}/byok/{provider}.

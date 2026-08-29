@@ -38,6 +38,7 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 	}
 	credentialPolicy, err := newCredentialPolicy(
 		req.APIKeyConfig.credentialStrategy(), req.AccountID,
+		req.APIKeyConfig.byokProviderGate(),
 		runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
@@ -121,6 +122,7 @@ func embeddingPlanningRequest(req *EmbeddingRequest, preferLowestCost bool) rout
 			AllowedModels:    wildcardAsUnrestricted(req.APIKeyConfig.AllowedModels),
 			AllowedProviders: normalizeProviders(req.APIKeyConfig.AllowedProviders),
 			ModelOverrides:   cloneModelOverrides(req.APIKeyConfig.ModelOverrides),
+			Access:           cloneProviderAccess(req.APIKeyConfig.Access),
 		}
 	}
 	return request

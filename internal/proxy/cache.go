@@ -635,6 +635,15 @@ func cachePolicy(route string, provider *ProviderPreferences, account *APIKeyRou
 	if account != nil {
 		policy.Account.AllowedModels = append([]string(nil), account.AllowedModels...)
 		policy.Account.AllowedProviders = append([]string(nil), account.AllowedProviders...)
+		if len(account.Access) > 0 {
+			policy.Account.Access = make([]responsecache.ProviderAccess, len(account.Access))
+			for i, entry := range account.Access {
+				policy.Account.Access[i] = responsecache.ProviderAccess{
+					Provider: entry.Provider,
+					Models:   append([]string(nil), entry.Models...),
+				}
+			}
+		}
 		policy.Account.RateLimitTier = account.RateLimitTier
 		policy.Account.CredentialStrategy = string(account.CredentialStrategy)
 		policy.Provider.ModelOverrides = make(map[string]string, len(account.ModelOverrides))

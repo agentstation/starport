@@ -124,6 +124,7 @@ func routeOperation[Response any](
 	}
 	credentialPolicy, err := newCredentialPolicy(
 		policy.APIKeyConfig.credentialStrategy(), policy.AccountID,
+		policy.APIKeyConfig.byokProviderGate(),
 		runtime, r.storedKeys, r.credentialGate,
 	)
 	if err != nil {
@@ -223,6 +224,7 @@ func operationPlanningRequest(policy operationPolicy, preferLowestCost bool) rou
 			AllowedModels:    wildcardAsUnrestricted(policy.APIKeyConfig.AllowedModels),
 			AllowedProviders: normalizeProviders(policy.APIKeyConfig.AllowedProviders),
 			ModelOverrides:   cloneModelOverrides(policy.APIKeyConfig.ModelOverrides),
+			Access:           cloneProviderAccess(policy.APIKeyConfig.Access),
 		}
 	}
 	// A pinned provider narrows what the key already allows and never widens
