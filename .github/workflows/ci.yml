@@ -183,6 +183,7 @@ jobs:
           bash scripts/verify-document-parser.sh
           bash scripts/verify-reranking.sh
           bash scripts/verify-catalog-performance.sh
+          bash scripts/verify-credential-sharing.sh
           bash scripts/benchmark-overhead.sh
 
       - name: Check GoReleaser configuration

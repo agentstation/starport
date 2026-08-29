@@ -98,6 +98,7 @@ bash scripts/verify-async-media-jobs.sh
 bash scripts/verify-document-parser.sh
 bash scripts/verify-reranking.sh
 bash scripts/verify-catalog-performance.sh
+bash scripts/verify-credential-sharing.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
 go test ./...
@@ -181,6 +182,17 @@ That gate owns the media surface alone. The parity gate
 `scripts/verify-openrouter-parity.sh` keeps its own count of 17 and its own
 stated meaning, so a new media route does not move it. Re-open the split when OpenRouter changes a route that
 the parity gate already guards.
+
+`scripts/verify-credential-sharing.sh` guards the credential-sharing and
+identity campaign. It covers the relational contract in `internal/sqlstore`
+(embedded SQLite with a PostgreSQL or MySQL connect), the many shared
+credentials per provider with per-credential grants in
+`internal/providers/keyring`, the operator BYOK policy and account provider
+and model access in `internal/account`, account templates that stamp
+creation defaults, the people plane in `internal/identity` (users, teams,
+and account grants acquired through gothic OAuth or WorkOS SSO), and the
+console surfaces that render them. It is terminal at 23 conditions
+(`CSH-V01` through `CSH-V23`) and runs in CI.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.
