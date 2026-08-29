@@ -239,7 +239,7 @@ export function EnvironmentCredentialPanel({
                   <code className="font-mono text-xs text-text-2">{name}</code>
                 </span>
               ))}
-              . Set one in the gateway environment, or apply a gateway
+              . Set one in the gateway environment, or store a shared
               credential below.
             </p>
           ) : (
@@ -247,7 +247,7 @@ export function EnvironmentCredentialPanel({
               Set{" "}
               <code className="font-mono text-xs text-text-2">{envName}</code> or{" "}
               <code className="font-mono text-xs text-text-2">{prefixedEnvName}</code>{" "}
-              in the gateway environment, or apply a gateway credential below.
+              in the gateway environment, or store a shared credential below.
             </p>
           )}
         </>

@@ -47,9 +47,15 @@ test("a window served by more than one plane names each one and its count", () =
   );
 
   const rows = rowText();
-  // Environment first, then gateway, then BYOK: the order the gateway itself
-  // reaches the planes, so the list reads as the fallback chain.
-  expect(rows).toEqual(["Environment 1", "Gateway credential 2", "BYOK 1"]);
+  // Environment first, then stored, then the account's own: the order the
+  // gateway itself reaches the planes, so the list reads as the fallback
+  // chain. The labels wear the console's ownership words — shared for the
+  // operator's two sources.
+  expect(rows).toEqual([
+    "Shared · environment 1",
+    "Shared · stored 2",
+    "Account's own 1",
+  ]);
 });
 
 // A record written before the gateway recorded planes must not be folded into
@@ -59,7 +65,7 @@ test("a record with no source is counted as unrecorded, not as a plane", () => {
   render(<ServedCredentialPanel records={[record("byok"), record(undefined)]} />);
 
   const rows = rowText();
-  expect(rows).toEqual(["BYOK 1", "Unrecorded 1"]);
+  expect(rows).toEqual(["Account's own 1", "Unrecorded 1"]);
 });
 
 test("an empty window says so instead of showing a zeroed breakdown", () => {

@@ -1,39 +1,52 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
-import { GatewayCredentialPanel } from "@/components/credentials/GatewayCredentialPanel";
 import {
-  SourcePill,
-  credentialSourcePill,
-} from "@/components/credentials/SourcePill";
-import { EnvironmentCredentialPanel } from "@/components/providers/ProviderDetail";
-import { Field, RowAction } from "@/components/ui/Form";
+  GatewayCredentialPanel,
+  gatewayCredentialQueryKey,
+} from "@/components/credentials/GatewayCredentialPanel";
+import { SourcePill } from "@/components/credentials/SourcePill";
+import {
+  EnvironmentCredentialPanel,
+  operatorEnvNames,
+} from "@/components/providers/ProviderDetail";
+import { Field, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
+import { SidePanel } from "@/components/ui/SidePanel";
 import {
   ApiError,
+  getGatewayCredential,
   listAccounts,
   putBYOKCredential,
+  putGatewayCredential,
   validateBYOKCredential,
+  validateGatewayCredential,
   type CredentialField,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
 
-// ProviderCredentialCard is the one place this screen answers "what pays this
-// provider". Three sources can, and the gateway tries them in a fixed default
-// order (internal/providers/keyring, operator_first): the environment
-// credential, then the gateway credential, then an account's own credential.
-// The rows render in that order, each wearing a one-word pill, and exactly one
-// pill says Active: the source requests use. An operator reads status from
-// the pills and provenance from the sentences, instead of decoding what
-// "read from the environment" implies about whether anything is set.
+// ProviderCredentialCard answers "what pays this provider" in one line: the
+// effective payer, named. Everything else — the full source list, provenance,
+// set/replace/remove — lives behind Manage, in a drawer, so a configured
+// provider spends one row of the page instead of a column.
 //
-// The card can store an account's own credential from here — the account is
-// picked in the dialog, so the address (account + provider) is always
-// explicit — and links to the accounts screen that manages them. It never
-// links the keys page: a gateway API key authenticates a caller and cannot
-// pay a provider (AON-V26).
+// The sources split into two owners. Shared credentials are the operator's
+// money — one read from the process environment, one stored through the
+// console (the keyring calls it the gateway credential; on screen the word is
+// "shared") — and every account's requests can use them. An account's own
+// credential pays that account alone and is managed on the accounts screen.
+// A request uses the first usable source in the keyring's default order
+// (internal/providers/keyring, operator_first): environment, then stored,
+// then the account's own.
+//
+// Who is reading is inferred from what the gateway answers, not asked: the
+// stored-credential read needs the admin scope, which a localhost console
+// session holds, so a locked read means an account-side reader and the card
+// says so instead of offering controls that would 403. Nothing here links the
+// keys page: a gateway API key authenticates a caller and cannot pay a
+// provider (AON-V26).
 
 export function ProviderCredentialCard({
   providerId,
@@ -46,66 +59,210 @@ export function ProviderCredentialCard({
   credential: ProviderRuntimeStatus["operator_credential"];
   fields: CredentialField[];
 }) {
+  const queryClient = useQueryClient();
+  const [managing, setManaging] = useState(false);
+  const [settingShared, setSettingShared] = useState(false);
+
+  const stored = useQuery({
+    queryKey: gatewayCredentialQueryKey(providerId),
+    queryFn: () => getGatewayCredential(providerId),
+    retry: false,
+  });
+
   const envUsable = credential?.usable === true;
-  const envPill = credentialSourcePill(credential?.state, envUsable);
+  const locked = stored.error instanceof ApiError && stored.error.needsKey;
+  const storedApplied = stored.data?.has_credentials === true;
+  const [envName, prefixedEnvName] = operatorEnvNames(providerId);
+
   return (
     <section
       data-testid="provider-credential-card"
-      className="flex flex-col rounded-md border border-border-1 bg-bg-panel"
+      className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
     >
-      <div className="border-b border-border-1 p-4">
+      <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
-          Provider credential
+          Credential
         </h2>
-        <p className="mt-1.5 text-sm text-text-3">
-          What pays {name}. A gateway API key never does — it only identifies
-          the caller. Each request uses the first usable source, top to
-          bottom; an account's own strategy can prefer its own credential or
-          refuse the operator's.
+        <RowAction onClick={() => setManaging(true)}>manage…</RowAction>
+      </div>
+
+      {envUsable ? (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-text-2">
+          <SourcePill
+            label="Active"
+            tone="success"
+            title="Requests use this credential"
+          />
+          <span>
+            Paid by the shared environment credential (
+            <code className="font-mono text-xs">{envName}</code>), set where
+            the gateway runs.
+          </span>
         </p>
-      </div>
-      <div className="flex flex-col divide-y divide-border-1">
-        <div className="flex flex-col gap-2 p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-medium text-text-1">Environment</h3>
-            <SourcePill
-              label={envPill.label}
-              tone={envPill.tone}
-              title={envUsable ? "Requests use this credential" : undefined}
-            />
-            <span className="ml-auto text-xs text-text-4">
-              read-only · set where the gateway runs
-            </span>
+      ) : storedApplied ? (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-text-2">
+          <SourcePill
+            label="Active"
+            tone="success"
+            title="Requests use this credential"
+          />
+          <span>
+            Paid by the shared credential stored on this gateway, applied by an
+            operator for every account.
+          </span>
+        </p>
+      ) : stored.isPending ? (
+        <p className="text-sm text-text-3">Reading credential state…</p>
+      ) : locked ? (
+        <p className="text-sm text-text-3">
+          Shared credentials are applied by an operator. Your account can bring
+          its own credential for {name} on the{" "}
+          <AccountsLink label="Accounts" /> page.
+        </p>
+      ) : (
+        // The empty state is the setup lesson: what pays, and the three ways
+        // to make one exist, with the console-stored shared credential as the
+        // primary action because it is the one this screen can finish.
+        <div className="flex flex-col gap-2.5">
+          <p className="text-sm text-text-2">
+            Nothing pays {name} yet, so requests to it fail. A gateway API key
+            only identifies the caller — a provider needs one of these:
+          </p>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-text-3">
+            <li>
+              A shared credential stored here — an operator sets it once and
+              every account&rsquo;s requests can use it.
+            </li>
+            <li>
+              A shared environment credential:{" "}
+              <code className="font-mono text-xs">{envName}</code> or{" "}
+              <code className="font-mono text-xs">{prefixedEnvName}</code>, set
+              where the gateway runs.
+            </li>
+            <li>
+              An account&rsquo;s own credential, added on the{" "}
+              <AccountsLink label="Accounts" /> page — it pays that
+              account&rsquo;s requests only.
+            </li>
+          </ul>
+          <div>
+            <PrimaryButton onClick={() => setSettingShared(true)}>
+              Set shared credential
+            </PrimaryButton>
           </div>
-          <EnvironmentCredentialPanel
-            providerId={providerId}
-            credential={credential}
-          />
         </div>
-        <div className="p-4">
-          <GatewayCredentialPanel
-            providerId={providerId}
-            name={name}
-            fields={fields}
-            active={!envUsable}
-          />
-        </div>
-        <div className="p-4">
-          <AccountCredentialRow
-            providerId={providerId}
-            name={name}
-            fields={fields}
-          />
-        </div>
-      </div>
+      )}
+
+      {settingShared && (
+        <CredentialApplyModal
+          title="Set shared credential"
+          description={`The shared credential for ${name}. Every account's requests can use it; it is stored encrypted and never returned.`}
+          fields={fields}
+          apply={async (body) => {
+            await putGatewayCredential(providerId, body);
+            await queryClient.invalidateQueries({
+              queryKey: gatewayCredentialQueryKey(providerId),
+            });
+          }}
+          validate={() => validateGatewayCredential(providerId)}
+          onClose={() => setSettingShared(false)}
+        />
+      )}
+
+      {managing && (
+        <SidePanel
+          title={`${name} credentials`}
+          onClose={() => setManaging(false)}
+          footer={
+            <p className="text-xs text-text-4">
+              Each request uses the first usable source: shared environment,
+              then shared stored, then the account&rsquo;s own. An
+              account&rsquo;s strategy can prefer its own credential or refuse
+              the operator&rsquo;s.
+            </p>
+          }
+        >
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
+                  Shared
+                </h3>
+                <p className="mt-1 text-xs text-text-4">
+                  The operator&rsquo;s credentials. Every account&rsquo;s
+                  requests can use them.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 rounded-sm border border-border-1 bg-bg-panel p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="text-sm font-medium text-text-1">
+                    Environment
+                  </h4>
+                  {envUsable && (
+                    <SourcePill
+                      label="Active"
+                      tone="success"
+                      title="Requests use this credential"
+                    />
+                  )}
+                  {!envUsable && <SourcePill label="Not set" tone="neutral" />}
+                  <span className="ml-auto text-xs text-text-4">
+                    read-only · set where the gateway runs
+                  </span>
+                </div>
+                <EnvironmentCredentialPanel
+                  providerId={providerId}
+                  credential={credential}
+                />
+              </div>
+              <div className="rounded-sm border border-border-1 bg-bg-panel p-3">
+                <GatewayCredentialPanel
+                  providerId={providerId}
+                  name={name}
+                  fields={fields}
+                  active={!envUsable}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div>
+                <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
+                  Accounts
+                </h3>
+                <p className="mt-1 text-xs text-text-4">
+                  A credential an account brings for itself. It pays that
+                  account&rsquo;s requests only, billed to the account
+                  directly.
+                </p>
+              </div>
+              <AccountCredentialRow
+                providerId={providerId}
+                name={name}
+                fields={fields}
+              />
+            </div>
+          </div>
+        </SidePanel>
+      )}
     </section>
   );
 }
 
-// --- Accounts row: the per-account credential source (BYOK on the accounts
-// screen, where the word is taught). The row can store one from here when the
-// session can list accounts; managing and removing them stays on the accounts
-// screen, where the stored set is visible.
+function AccountsLink({ label }: { label: string }) {
+  return (
+    <Link
+      to="/accounts"
+      className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
+    >
+      {label}
+    </Link>
+  );
+}
+
+// --- Accounts group: the per-account credential source (BYOK on the accounts
+// screen, where the word is taught). The drawer can store one from here when
+// the session can list accounts; managing and removing them stays on the
+// accounts screen, where the stored set is visible.
 
 function AccountCredentialRow({
   providerId,
@@ -127,27 +284,17 @@ function AccountCredentialRow({
   const locked = accounts.error instanceof ApiError && accounts.error.needsKey;
 
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-medium text-text-1">Accounts</h3>
-        {!locked && accounts.data && (
+    <div className="flex min-w-0 flex-col gap-2 rounded-sm border border-border-1 bg-bg-panel p-3">
+      <p className="text-sm text-text-3">
+        Managed per account on the <AccountsLink label="Accounts" /> page.
+      </p>
+      {!locked && accounts.data && (
+        <div>
           <RowAction onClick={() => setAdding(true)}>
             add for an account…
           </RowAction>
-        )}
-      </div>
-      <p className="text-sm text-text-3">
-        A credential an account brings for itself. It pays that account's
-        requests only, billed to the account directly, and is managed per
-        account on the{" "}
-        <Link
-          to="/accounts"
-          className="text-accent-link transition-colors duration-150 ease-standard hover:underline"
-        >
-          Accounts
-        </Link>{" "}
-        page.
-      </p>
+        </div>
+      )}
 
       {adding && (
         <CredentialApplyModal
