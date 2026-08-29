@@ -1,17 +1,34 @@
 # Starport
 
-Starport is a self-hosted LLM inference gateway. It serves OpenAI-compatible
-APIs at `/v1` and OpenRouter-compatible APIs at `/api/v1`.
+[![Release](https://img.shields.io/github/v/release/agentstation/starport)](https://github.com/agentstation/starport/releases)
+[![CI](https://github.com/agentstation/starport/actions/workflows/ci.yml/badge.svg)](https://github.com/agentstation/starport/actions/workflows/ci.yml)
+[![License: AGPLv3](https://img.shields.io/github/license/agentstation/starport)](LICENSE)
 
-Starport uses Starmap as its only source of provider, model, capability,
-context, price, and service facts. Starport owns inference credentials,
-gateway API keys, routing policy, execution, and HTTP protocols.
+Starport is a self-hosted LLM inference gateway in one binary. It serves the
+OpenAI-compatible API at `/v1` and the OpenRouter-compatible API at `/api/v1`.
+One Starmap catalog generation gives it every provider, model, capability,
+context, and price fact. The 2026-08-29 generation lists 17 providers and
+routes 511 models.
 
-Starport adds less than 50 ms p99 gateway overhead per request. The number
-excludes provider inference time, ships on every response as the
-`x-starport-overhead-ms` header, and a CI benchmark fails the build when
-the bound breaks. See [docs/PERFORMANCE.md](docs/PERFORMANCE.md) for the
-measurement methodology.
+[![The Starport console: the gateway overview, the model catalog, one model across providers, and provider health with incident history.](docs/assets/2026-08-29_starport-console.gif)](docs/assets/2026-08-29_starport-console.gif)
+
+The embedded console above shows the gateway overview, the model catalog with
+prices, one model across two providers, and provider health with incident
+history.
+
+Starport adds less than 50 ms p99 gateway overhead per request. The overhead
+benchmark measures 0 ms p50 and p99 over 200 requests against a mock upstream.
+Every response reports its own number in the `x-starport-overhead-ms` header.
+A CI benchmark fails the build when the bound breaks. See
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md) for the methodology and exclusions.
+
+Starport serves individual developers, startups, and enterprises:
+
+- An individual developer runs one command and gets an isolated gateway, a
+  console, and one temporary gateway API key.
+- A startup keeps its OpenAI and OpenRouter clients and changes one base URL.
+- An enterprise adds shared provider inference credentials, BYOK policy,
+  budgets, rate limits, encrypted credential storage, and secret references.
 
 ## Install
 
@@ -37,9 +54,9 @@ make build
 
 ## Quick start
 
-Starport checks every provider in the active Starmap catalog. It registers each
-provider whose transport and authentication primitive it supports. It
-separately discovers deployment-owned inference credentials from the ordered
+Starport checks every provider in the active catalog generation. It registers
+each provider whose transport and authentication primitive it supports. It
+discovers deployment-owned provider inference credentials from the ordered
 profiles in that catalog. You do not select a provider with `starport init` or
 a provider-specific flag.
 
@@ -69,16 +86,16 @@ Gateway API key (shown once): replace-with-generated-gateway-key
 Console (one-time launch link): http://127.0.0.1:8080/launch?lt=replace-with-ticket
 ```
 
-The console link is not a key. It is spent the first time it is followed and
-exchanged for a browser session this machine issued, so nothing is pasted into
-the browser and no key is stored there. Add `--no-open` to print the link
-instead of opening a browser, which is what a machine reached over SSH needs.
-`starport ui` opens a new one at any time.
+The console link is not a key. The gateway spends the link on first use and
+exchanges it for a browser session that this machine issued. You paste nothing
+into the browser, and the browser stores no key. Add `--no-open` to print the
+link instead, which fits a machine you reach over SSH. `starport ui` opens a
+new link at any time.
 
-A browser that reaches the console without a link is asked for this machine's
-local admin token instead. `starport auth token --copy` puts it on the
-clipboard of the machine running the gateway. Both ways in prove the same
-thing — that you are at that machine — and both end in the same session.
+A browser without a link must present this machine's local admin token.
+`starport auth token --copy` puts the token on the clipboard of the gateway
+machine. Both paths prove presence at that machine and end in the same console
+session.
 
 Keep this terminal open.
 
@@ -119,10 +136,11 @@ failures in its scoped provider state.
 
 ### Serve without a gateway API key
 
-Starport requires a gateway API key by default. To serve open — a workstation,
-a private container, a test rig — add `--no-auth` to `starport dev` or
-`starport serve`, or use the switch in the console under Settings. An open
-gateway can be closed again from the machine running it.
+Starport requires a gateway API key by default. Add `--no-auth` to
+`starport dev` or `starport serve` to serve open. Open service fits a
+workstation, a private container, or a test rig. The console offers the same
+switch under Settings. You can close an open gateway again from the machine
+that runs it.
 
 Starport refuses `--no-auth` on an address the network can reach unless you
 also pass `--allow-remote-no-auth`. See
@@ -170,6 +188,41 @@ response = client.chat.completions.create(
 
 For an OpenRouter client, replace its default base URL with
 `http://127.0.0.1:8080/api/v1`. Keep the client request and response types.
+
+## Features
+
+Version 1 includes:
+
+- Chat completions, streaming chat, embeddings, and model discovery.
+- Exact provider and model routing with fallback and `openrouter/auto`.
+- Provider routing preferences: order, sort, price caps, and model variants.
+- Presets with `@preset/` model references.
+- Catalog-driven providers over the compiled OpenAI, Anthropic, Google Cloud,
+  Google AI Studio, and Ollama transport primitives.
+- Encrypted provider credentials, renewable cloud credentials, and direct
+  secret-source references.
+- Header-only gateway authentication, per-key rate limits, per-key budgets,
+  and allowed-model limits.
+- Request logs and usage accounting with catalog-priced costs at
+  `/api/v1/activity`.
+- An embedded web console. Its pages cover the overview, chat with model
+  comparison, models, providers with incident history, usage, presets, keys,
+  files, and settings.
+- A file store at `/v1/files` that keeps a document for a later chat request.
+  It writes to a local filesystem or an S3-compatible bucket.
+- A `file-parser` plugin that reads an attached document before the chat model
+  sees it. The `native` engine reads a text layer in process and charges
+  nothing. The `recognition` engine sends a scanned page to a catalog model
+  that serves `documents-recognition`, and the record reports what the pages
+  cost.
+- Reranking at `/v1/rerank` and `/api/v1/rerank`, which scores a document list
+  against one query. It needs the `rerank:write` scope, and Starmap owns the
+  offerings, the billing basis, and the price.
+- Account-safe response caching.
+- Badger storage for one process and Valkey storage for multiple processes.
+
+Starport uses direct changes and has no legacy provider aliases or storage
+readers. It does not yet promise a compatibility window.
 
 ## Configuration
 
@@ -284,40 +337,6 @@ docker compose up -d starport
 Save the gateway key from initialization. Do not initialize the same identity
 repository again.
 
-## Version 1 scope
-
-Version 1 includes:
-
-- Chat completions, streaming chat, embeddings, and model discovery.
-- Exact provider and model routing with fallback and `openrouter/auto`.
-- Provider routing preferences: order, sort, price caps, and model variants.
-- Presets with `@preset/` model references.
-- Catalog-driven providers over the compiled OpenAI, Anthropic, Google Cloud,
-  Google AI Studio, and Ollama transport primitives.
-- Encrypted provider credentials, renewable cloud credentials, and direct
-  secret-source references.
-- Header-only gateway authentication, per-key rate limits, per-key budgets,
-  and allowed-model limits.
-- Request logs and usage accounting with catalog-priced costs at
-  `/api/v1/activity`.
-- An embedded web console with overview, chat with model comparison, models,
-  providers, usage, presets, keys, files, and settings pages.
-- A file store at `/v1/files` that keeps a document for a later chat request.
-  It writes to a local filesystem or an S3-compatible bucket.
-- A `file-parser` plugin that reads an attached document before the chat model
-  sees it. The `native` engine reads a text layer in process and charges
-  nothing. The `recognition` engine sends a scanned page to a catalog model
-  that serves `documents-recognition`, and the record reports what the pages
-  cost.
-- Reranking at `/v1/rerank` and `/api/v1/rerank`, which scores a document list
-  against one query. It needs the `rerank:write` scope, and Starmap owns the
-  offerings, the billing basis, and the price.
-- Account-safe response caching.
-- Badger storage for one process and Valkey storage for multiple processes.
-
-Starport uses direct changes and has no legacy provider aliases or storage
-readers. It does not yet promise a compatibility window.
-
 ## Develop
 
 ```bash
@@ -337,6 +356,7 @@ See the [development guide](DEVELOPMENT.md) and
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Operator guide](docs/OPERATOR-GUIDE.md)
+- [Performance methodology](docs/PERFORMANCE.md)
 - [Vertex AI configuration](docs/VERTEX_AI_CONFIG.md)
 - [Model catalog contract](MODELS.md)
 - [Documentation index](docs/README.md)
