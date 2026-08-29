@@ -45,9 +45,12 @@ export function CredentialPill({
 // providerHealth folds adapter state, circuit state, and routing into the
 // one verdict both the card and the detail header lead with. It reports
 // liveness only — a missing credential is the credential pill's story, even
-// though it is often why nothing is available.
+// though it is often why nothing is available. The console has one
+// user-facing health vocabulary: healthy, degraded, unavailable ("down"
+// is reserved for a verdict confirmed by the provider's own status page,
+// which nothing reports yet).
 export type ProviderHealth = {
-  state: "operational" | "degraded" | "unavailable" | "no_models";
+  state: "healthy" | "degraded" | "unavailable" | "no_models";
   label: string;
 };
 
@@ -65,11 +68,11 @@ export function providerHealth(status: ProviderRuntimeStatus): ProviderHealth {
   if (available < offerings.length) {
     return { state: "degraded", label: "degraded" };
   }
-  return { state: "operational", label: "operational" };
+  return { state: "healthy", label: "healthy" };
 }
 
 const HEALTH_DOTS: Record<ProviderHealth["state"], string> = {
-  operational: "bg-success",
+  healthy: "bg-success",
   degraded: "bg-warning",
   unavailable: "bg-error",
   no_models: "bg-text-4",
