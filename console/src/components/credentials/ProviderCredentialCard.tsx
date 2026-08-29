@@ -75,6 +75,9 @@ export function ProviderCredentialCard({
   const envUsable = credential?.usable === true;
   const locked = stored.error instanceof ApiError && stored.error.needsKey;
   const storedApplied = (stored.data?.length ?? 0) > 0;
+  // Resolution walks the list in order, so the first stored credential is
+  // the one a request reaches first; the payer line names it.
+  const servingLabel = stored.data?.[0]?.label;
   const [envName, prefixedEnvName] = operatorEnvNames(providerId);
 
   return (
@@ -110,8 +113,14 @@ export function ProviderCredentialCard({
             title="Requests use this credential"
           />
           <span>
-            Paid by the shared credential stored on this gateway, applied by an
-            operator for every account.
+            Paid by the shared credential stored on this gateway
+            {servingLabel ? (
+              <>
+                {" "}
+                (<strong className="font-medium">{servingLabel}</strong>)
+              </>
+            ) : null}
+            , applied by an operator.
           </span>
         </p>
       ) : stored.isPending ? (
