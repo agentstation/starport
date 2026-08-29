@@ -6,6 +6,7 @@ import (
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/files"
+	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
@@ -35,6 +36,7 @@ type Controllers struct {
 	Admin                *AdminController
 	Accounts             *AccountsController
 	AccountTemplates     *AccountTemplatesController
+	Members              *MembersController
 	ProviderOperations   *ProviderOperationsController
 	Catalog              *CatalogController
 	Files                *FilesController
@@ -96,6 +98,10 @@ type Config struct {
 	// with no identity provider configured. Nil keeps the identity routes
 	// mounted and refusing with the operator's answer.
 	IdentityAuth IdentityAuthenticator
+	// Identity holds the durable people plane: users, teams, memberships,
+	// and account grants. Zero repositories degrade the members routes to
+	// 503, the way an absent template store degrades its surface.
+	Identity identity.Repositories
 }
 
 // NewControllers creates a new controller collection
@@ -121,6 +127,7 @@ func NewControllers(cfg Config) *Controllers {
 			WithFileStorage(cfg.FileBackend)),
 		Accounts:           NewAccountsController(cfg.Accounts, cfg.Identities, cfg.Templates),
 		AccountTemplates:   NewAccountTemplatesController(cfg.Templates),
+		Members:            NewMembersController(cfg.Identity),
 		ProviderOperations: NewProviderOperationsController(cfg.ProviderOperations),
 		Catalog:            NewCatalogController(cfg.Catalog),
 		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),

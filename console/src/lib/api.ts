@@ -1048,6 +1048,151 @@ export function deleteAccountTemplate(templateId: string): Promise<unknown> {
   );
 }
 
+// --- Members and teams: the people plane an identity provider fills ---
+
+// Member is one user this gateway knows: a row the identity provider
+// resolved. The gateway never creates one from the console — membership in
+// the deployment arrives through the identity grant, so this surface reads
+// and governs, it does not invent people.
+export type Member = {
+  id: string;
+  subject: string;
+  email?: string;
+  display_name?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+// Team is an operator-formed group of members. Granting an account to a
+// team grants it to everyone on the roster, now and later.
+export type Team = {
+  id: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type TeamMembership = {
+  user_id: string;
+  team_id: string;
+  created_at?: string;
+};
+
+// AccountGrant gives one account to exactly one grantee: a user or a team,
+// never both. The row's identity is the whole triple, which is why removal
+// names every part of it.
+export type AccountGrant = {
+  account_id: string;
+  user_id?: string;
+  team_id?: string;
+  created_at?: string;
+};
+
+export async function listMembers(): Promise<Member[]> {
+  const body = await request<{ users?: Member[] }>("/api/v1/admin/users");
+  return body?.users ?? [];
+}
+
+export async function listTeams(): Promise<Team[]> {
+  const body = await request<{ teams?: Team[] }>("/api/v1/admin/teams");
+  return body?.teams ?? [];
+}
+
+export function createTeam(name: string): Promise<Team> {
+  return request<Team>("/api/v1/admin/teams", {
+    method: "POST",
+    body: { name },
+  });
+}
+
+export function deleteTeam(teamId: string): Promise<unknown> {
+  return request<unknown>(
+    `/api/v1/admin/teams/${encodeURIComponent(teamId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listTeamMembers(
+  teamId: string,
+): Promise<TeamMembership[]> {
+  const body = await request<{ members?: TeamMembership[] }>(
+    `/api/v1/admin/teams/${encodeURIComponent(teamId)}/members`,
+  );
+  return body?.members ?? [];
+}
+
+export function addTeamMember(
+  teamId: string,
+  userId: string,
+): Promise<TeamMembership> {
+  return request<TeamMembership>(
+    `/api/v1/admin/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`,
+    { method: "PUT" },
+  );
+}
+
+export function removeTeamMember(
+  teamId: string,
+  userId: string,
+): Promise<unknown> {
+  return request<unknown>(
+    `/api/v1/admin/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listMemberGrants(
+  userId: string,
+): Promise<AccountGrant[]> {
+  const body = await request<{ grants?: AccountGrant[] }>(
+    `/api/v1/admin/users/${encodeURIComponent(userId)}/grants`,
+  );
+  return body?.grants ?? [];
+}
+
+export async function listTeamGrants(teamId: string): Promise<AccountGrant[]> {
+  const body = await request<{ grants?: AccountGrant[] }>(
+    `/api/v1/admin/teams/${encodeURIComponent(teamId)}/grants`,
+  );
+  return body?.grants ?? [];
+}
+
+// listReachableAccounts folds a member's direct grants with the grants of
+// every team the member is on — the same answer the gateway resolves when
+// that member's session asks for an account.
+export async function listReachableAccounts(
+  userId: string,
+): Promise<string[]> {
+  const body = await request<{ accounts?: string[] }>(
+    `/api/v1/admin/users/${encodeURIComponent(userId)}/accounts`,
+  );
+  return body?.accounts ?? [];
+}
+
+export function createAccountGrant(body: {
+  account_id: string;
+  user_id?: string;
+  team_id?: string;
+}): Promise<AccountGrant> {
+  return request<AccountGrant>("/api/v1/admin/account-grants", {
+    method: "POST",
+    body,
+  });
+}
+
+export function deleteAccountGrant(grant: {
+  account_id: string;
+  user_id?: string;
+  team_id?: string;
+}): Promise<unknown> {
+  const query = new URLSearchParams({ account_id: grant.account_id });
+  if (grant.user_id) query.set("user_id", grant.user_id);
+  if (grant.team_id) query.set("team_id", grant.team_id);
+  return request<unknown>(`/api/v1/admin/account-grants?${query.toString()}`, {
+    method: "DELETE",
+  });
+}
+
 // --- Stored files ---
 
 // StoredFile is one file this gateway holds for the calling account. The shape
