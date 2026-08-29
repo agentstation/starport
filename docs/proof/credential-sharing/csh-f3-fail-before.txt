@@ -1,0 +1,70 @@
+CSH-F3 fail-before proof
+Captured: 2026-08-29
+Baseline: main 53f4d95 + plan commit 2006c37 (branch codex/csh-f3-workos)
+
+Claim: only the gothic acquisition path exists after CSH-F2. No WorkOS
+acquisition path is present in internal/identity.
+
+$ grep -rn "workos" internal/identity/
+(no output — nothing in the package names workos)
+
+$ bash scripts/verify-credential-sharing.sh | tail -7
+PASS CSH-V18 gothic OAuth acquires an identity into the one user model
+FAIL CSH-V19 WorkOS SSO acquires an identity beside gothic, same user model
+FAIL CSH-V20 an identity session resolves the accounts its grants reach
+FAIL CSH-V21 a granted shared credential serves only accounts its grants name, held by tests
+FAIL CSH-V22 the console grants an account to a user or a team
+FAIL CSH-V23 CI runs this gate and the evidence list names it
+Summary: 18 passed, 5 failed
+
+CSH-V19 is the condition this task flips. V20-V23 belong to CSH-G1, G2,
+and H1.
+
+=== After implementation (2026-08-29) ===
+
+$ bash scripts/verify-credential-sharing.sh | tail -7
+PASS CSH-V18 gothic OAuth acquires an identity into the one user model
+PASS CSH-V19 WorkOS SSO acquires an identity beside gothic, same user model
+FAIL CSH-V20 an identity session resolves the accounts its grants reach
+FAIL CSH-V21 a granted shared credential serves only accounts its grants name, held by tests
+FAIL CSH-V22 the console grants an account to a user or a team
+FAIL CSH-V23 CI runs this gate and the evidence list names it
+Summary: 19 passed, 4 failed
+
+What shipped:
+- internal/identity/authenticator.go: the seam moved above the paths. The
+  Authenticator owns dispatch by provider name, the user-model resolution,
+  the one-time claim broker, and the identity grant's Authenticate. An
+  acquisition path only performs its dance and hands back who the provider
+  vouched for (acquiredIdentity).
+- internal/identity/gothic.go: slimmed to the gothic path — goth
+  registration, the OAuth dance, the profile handoff.
+- internal/identity/workos.go: the WorkOS path — SDK client
+  (workos-go/v10 v10.3.0), state-cookie CSRF guard, authorize redirect,
+  code-for-profile exchange, display-name fold. Subject: workos:<profile id>.
+- internal/config/identity.go: CallbackBaseURL hoisted to
+  STARPORT_IDENTITY_CALLBACK_BASE_URL (shared by both paths, breaking
+  pre-release rename); STARPORT_IDENTITY_WORKOS_{API_KEY,CLIENT_ID,
+  ORGANIZATION,CONNECTION} added; RuntimeOAuth -> RuntimeAcquisition.
+- internal/app/app.go: openIdentity builds the one Authenticator when any
+  path is configured.
+- Console: providerLabel maps workos -> "SSO".
+- Docs: OPERATOR-GUIDE identity section (WorkOS vars, callback
+  registration), ARCHITECTURE tree line.
+
+Tests (all passing):
+- TestWorkOSSSOEndToEnd: Begin -> authorize URL -> callback with state and
+  code -> stubbed /sso/token exchange -> claim -> Authenticate ->
+  workos:prof_01HXE, user upserted with email and folded display name.
+- TestWorkOSAuthorizeURLCarriesTheConfig, TestWorkOSCallbackStateMustMatch,
+  TestWorkOSCallbackNeedsItsCookie, TestWorkOSRefusedExchangeIsRefused,
+  TestWorkOSDisplayName.
+- TestNewAuthenticatorValidatesItsConfig grew the two WorkOS refusals;
+  TestNewAuthenticatorRegistersConfiguredProviders holds both paths behind
+  the one seam ([github google workos]).
+- The full gothic suite (TestOAuthSignInEndToEnd et al.) reworked onto the
+  Authenticator and passing — acquisition-path tests cover both paths.
+
+Acceptance met: a WorkOS-brokered profile resolves to the same user shape
+through the same resolveUser and claim mint the OAuth path uses;
+configuration selects either or both paths; the session mint path is shared.

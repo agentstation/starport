@@ -171,24 +171,37 @@ the token above is the operator of the machine.
 ### Identity providers
 
 An enterprise deployment lets people authenticate through an identity
-provider the operator registers with that provider. Two are supported, and
-either or both may be configured:
+provider the operator registers with that provider. There are two
+acquisition paths — per-provider OAuth applications, and enterprise SSO
+through WorkOS — and either or both may be configured:
 
 ```bash
-# Where the provider sends the browser back. Defaults to the gateway's own
-# bind address, which is right for local use; a deployment behind a proxy or
-# a domain sets the address the browser actually reaches.
-STARPORT_IDENTITY_OAUTH_CALLBACK_BASE_URL=https://gateway.example.com
+# Where a provider sends the browser back, shared by every path. Defaults
+# to the gateway's own bind address, which is right for local use; a
+# deployment behind a proxy or a domain sets the address the browser
+# actually reaches.
+STARPORT_IDENTITY_CALLBACK_BASE_URL=https://gateway.example.com
 
+# OAuth applications, one per provider.
 STARPORT_IDENTITY_OAUTH_GOOGLE_CLIENT_ID=…
 STARPORT_IDENTITY_OAUTH_GOOGLE_CLIENT_SECRET=…
 
 STARPORT_IDENTITY_OAUTH_GITHUB_CLIENT_ID=…
 STARPORT_IDENTITY_OAUTH_GITHUB_CLIENT_SECRET=…
+
+# Enterprise SSO through WorkOS. The key and client come from the WorkOS
+# dashboard; the organization (or a connection) names which enterprise
+# directory people arrive from, and at least one of the two is required.
+STARPORT_IDENTITY_WORKOS_API_KEY=…
+STARPORT_IDENTITY_WORKOS_CLIENT_ID=…
+STARPORT_IDENTITY_WORKOS_ORGANIZATION=org_…
+#STARPORT_IDENTITY_WORKOS_CONNECTION=conn_…
 ```
 
 Register the callback address with the provider as
-`<base>/console/identity/<provider>/callback`. A configured provider appears
+`<base>/console/identity/<provider>/callback` — for WorkOS, add
+`<base>/console/identity/workos/callback` as a redirect URI in its
+dashboard. A configured provider appears
 on the first-contact page as a choice; choosing it runs the provider's
 consent flow and comes back with the same session cookie every other grant
 mints, recording the provider-issued subject it was minted for. The person's
@@ -196,9 +209,11 @@ record — subject, email, display name — is upserted in the identity store on
 each pass, so a returning person is the same user.
 
 The identity records live in the relational store — the embedded SQLite by
-default, or the configured Postgres or MySQL. A half-configured provider (an
-ID without its secret, or the reverse) is refused at start rather than
-silently skipped.
+default, or the configured Postgres or MySQL. A half-configured path (an ID
+without its secret, a WorkOS key without its client, or WorkOS with no
+organization or connection) is refused at start rather than silently
+skipped. A WorkOS arrival resolves to the same user shape an OAuth arrival
+does; the paths differ only in who vouches.
 
 The identity routes stay mounted on every deployment.
 `GET /console/identity/providers` answers with the configured list — empty

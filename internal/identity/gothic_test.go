@@ -60,10 +60,10 @@ func (p *fakeProvider) FetchUser(goth.Session) (goth.User, error) {
 	return profile, nil
 }
 
-// beginAndCallback drives one full dance: Begin against the acquisition
-// path, then the provider's redirect back, carrying the state cookie the
-// begin response set. It returns the claim Complete issued.
-func beginAndCallback(t *testing.T, path *Gothic, provider string) string {
+// beginAndCallback drives one full dance: Begin against the seam, then the
+// provider's redirect back, carrying the state cookie the begin response
+// set. It returns the claim Complete issued.
+func beginAndCallback(t *testing.T, path *Authenticator, provider string) string {
 	t.Helper()
 
 	begin := httptest.NewRecorder()
@@ -88,12 +88,14 @@ func beginAndCallback(t *testing.T, path *Gothic, provider string) string {
 	return claim
 }
 
-func newTestGothic(t *testing.T, provider *fakeProvider) *Gothic {
+func newTestGothic(t *testing.T, provider *fakeProvider) *Authenticator {
 	t.Helper()
 	repositories := newTestRepositories(t)
 	goth.UseProviders(provider)
 	t.Cleanup(func() { delete(goth.GetProviders(), provider.Name()) })
-	path, err := newGothic(repositories.Users, []string{provider.Name()})
+	require.NoError(t, ensureGothicStore())
+	path, err := newAuthenticator(repositories.Users,
+		map[string]acquisitionPath{provider.Name(): &gothicPath{}})
 	require.NoError(t, err)
 	return path
 }
@@ -255,53 +257,65 @@ func TestAnUnconfiguredProviderIsRefused(t *testing.T) {
 
 	err := path.Begin(httptest.NewRecorder(),
 		httptest.NewRequest(http.MethodGet, "/console/identity/other", nil), "other")
-	require.ErrorIs(t, err, ErrUnknownOAuthProvider)
+	require.ErrorIs(t, err, ErrUnknownProvider)
 
 	_, err = path.Complete(httptest.NewRecorder(),
 		httptest.NewRequest(http.MethodGet, CallbackPath("other"), nil), "other")
-	require.ErrorIs(t, err, ErrUnknownOAuthProvider)
+	require.ErrorIs(t, err, ErrUnknownProvider)
 }
 
-// TestNewGothicValidatesItsConfig pins each refusal an operator can draw
-// from a bad OAuth config.
-func TestNewGothicValidatesItsConfig(t *testing.T) {
+// TestNewAuthenticatorValidatesItsConfig pins each refusal an operator can
+// draw from a bad acquisition config.
+func TestNewAuthenticatorValidatesItsConfig(t *testing.T) {
 	repositories := newTestRepositories(t)
 	cases := []struct {
 		name string
-		cfg  OAuthConfig
+		cfg  AcquisitionConfig
 		want error
 	}{
-		{"no providers", OAuthConfig{CallbackBaseURL: "http://localhost:8080"},
+		{"nothing configured", AcquisitionConfig{CallbackBaseURL: "http://localhost:8080"},
 			ErrNoProvidersConfigured},
-		{"no callback base", OAuthConfig{
-			Providers: []OAuthProvider{{Name: "google", ClientID: "id", ClientSecret: "s"}}},
+		{"no callback base", AcquisitionConfig{
+			OAuthProviders: []OAuthProvider{{Name: "google", ClientID: "id", ClientSecret: "s"}}},
 			ErrCallbackBaseRequired},
-		{"unknown provider", OAuthConfig{
+		{"unknown provider", AcquisitionConfig{
 			CallbackBaseURL: "http://localhost:8080",
-			Providers:       []OAuthProvider{{Name: "myspace", ClientID: "id", ClientSecret: "s"}}},
-			ErrUnknownOAuthProvider},
-		{"missing secret", OAuthConfig{
+			OAuthProviders:  []OAuthProvider{{Name: "myspace", ClientID: "id", ClientSecret: "s"}}},
+			ErrUnknownProvider},
+		{"missing secret", AcquisitionConfig{
 			CallbackBaseURL: "http://localhost:8080",
-			Providers:       []OAuthProvider{{Name: "google", ClientID: "id"}}},
+			OAuthProviders:  []OAuthProvider{{Name: "google", ClientID: "id"}}},
 			ErrIncompleteOAuthProvider},
+		{"half a WorkOS", AcquisitionConfig{
+			CallbackBaseURL: "http://localhost:8080",
+			WorkOS:          WorkOSConfig{APIKey: "sk_test"}},
+			ErrIncompleteWorkOS},
+		{"WorkOS with nowhere to go", AcquisitionConfig{
+			CallbackBaseURL: "http://localhost:8080",
+			WorkOS:          WorkOSConfig{APIKey: "sk_test", ClientID: "client"}},
+			ErrWorkOSDestinationRequired},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := NewGothic(testCase.cfg, repositories.Users)
+			_, err := NewAuthenticator(testCase.cfg, repositories.Users)
 			require.ErrorIs(t, err, testCase.want)
 		})
 	}
 }
 
-// TestNewGothicRegistersConfiguredProviders holds the happy construction
-// path for the two shipped constructors.
-func TestNewGothicRegistersConfiguredProviders(t *testing.T) {
+// TestNewAuthenticatorRegistersConfiguredProviders holds the happy
+// construction path: both acquisition paths configured together, every
+// provider name served through the one seam.
+func TestNewAuthenticatorRegistersConfiguredProviders(t *testing.T) {
 	repositories := newTestRepositories(t)
-	path, err := NewGothic(OAuthConfig{
+	path, err := NewAuthenticator(AcquisitionConfig{
 		CallbackBaseURL: "http://localhost:8080/",
-		Providers: []OAuthProvider{
+		OAuthProviders: []OAuthProvider{
 			{Name: "google", ClientID: "gid", ClientSecret: "gsecret"},
 			{Name: "github", ClientID: "hid", ClientSecret: "hsecret"},
+		},
+		WorkOS: WorkOSConfig{
+			APIKey: "sk_test", ClientID: "client", Organization: "org_01H",
 		},
 	}, repositories.Users)
 	require.NoError(t, err)
@@ -309,7 +323,7 @@ func TestNewGothicRegistersConfiguredProviders(t *testing.T) {
 		delete(goth.GetProviders(), "google")
 		delete(goth.GetProviders(), "github")
 	})
-	require.Equal(t, []string{"github", "google"}, path.Providers())
+	require.Equal(t, []string{"github", "google", "workos"}, path.Providers())
 
 	registered, err := goth.GetProvider("google")
 	require.NoError(t, err)
