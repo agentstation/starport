@@ -3,6 +3,7 @@ package sqlstore
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"testing/fstest"
@@ -14,13 +15,35 @@ import (
 // configured backend; contractConfigs grows as connects arrive, so a new
 // backend inherits the whole contract instead of a subset someone
 // remembered.
+//
+// The network backends follow the Valkey precedent: they join the run when
+// the environment names a server, and the run reports them skipped
+// (UNVERIFIED) otherwise.
 func contractConfigs(t *testing.T) map[string]Config {
 	t.Helper()
-	return map[string]Config{
+	configs := map[string]Config{
 		"sqlite": {
 			Type:   TypeSQLite,
 			SQLite: SQLiteConfig{Path: filepath.Join(t.TempDir(), "starport.db")},
 		},
+	}
+	if url := os.Getenv("TEST_POSTGRES_URL"); url != "" {
+		configs["postgres"] = Config{Type: TypePostgres, Postgres: PostgresConfig{URL: url}}
+	}
+	if dsn := os.Getenv("TEST_MYSQL_DSN"); dsn != "" {
+		configs["mysql"] = Config{Type: TypeMySQL, MySQL: MySQLConfig{DSN: dsn}}
+	}
+	return configs
+}
+
+// resetBackend clears the contract's tables so a shared network server
+// starts every test from the state a fresh SQLite file starts from.
+func resetBackend(t *testing.T, ctx context.Context, db *DB) {
+	t.Helper()
+	for _, table := range []string{"sqlstore_meta", "schema_migrations", "probe"} {
+		if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+			t.Fatalf("reset %s: %v", table, err)
+		}
 	}
 }
 
@@ -33,6 +56,7 @@ func TestContractOpenMigrateReadWrite(t *testing.T) {
 				t.Fatalf("Open: %v", err)
 			}
 			defer db.Close()
+			resetBackend(t, ctx, db)
 
 			if err := db.Migrate(ctx); err != nil {
 				t.Fatalf("Migrate: %v", err)
@@ -50,7 +74,7 @@ func TestContractOpenMigrateReadWrite(t *testing.T) {
 			// the marker back proves schema and data both landed.
 			var value string
 			err = db.QueryRowContext(ctx,
-				`SELECT value FROM sqlstore_meta WHERE key = 'schema'`,
+				`SELECT value FROM sqlstore_meta WHERE name = 'schema'`,
 			).Scan(&value)
 			if err != nil {
 				t.Fatalf("read baseline row: %v", err)
@@ -60,12 +84,12 @@ func TestContractOpenMigrateReadWrite(t *testing.T) {
 			}
 
 			if _, err := db.ExecContext(ctx,
-				`INSERT INTO sqlstore_meta (key, value) VALUES ('probe', 'v1')`,
+				`INSERT INTO sqlstore_meta (name, value) VALUES ('probe', 'v1')`,
 			); err != nil {
 				t.Fatalf("write: %v", err)
 			}
 			err = db.QueryRowContext(ctx,
-				`SELECT value FROM sqlstore_meta WHERE key = 'probe'`,
+				`SELECT value FROM sqlstore_meta WHERE name = 'probe'`,
 			).Scan(&value)
 			if err != nil || value != "v1" {
 				t.Fatalf("read back = %q, %v; want v1, nil", value, err)
@@ -85,6 +109,7 @@ func TestContractTransactionRollback(t *testing.T) {
 				t.Fatalf("Open: %v", err)
 			}
 			defer db.Close()
+			resetBackend(t, ctx, db)
 			if err := db.Migrate(ctx); err != nil {
 				t.Fatalf("Migrate: %v", err)
 			}
@@ -94,7 +119,7 @@ func TestContractTransactionRollback(t *testing.T) {
 				t.Fatalf("BeginTx: %v", err)
 			}
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO sqlstore_meta (key, value) VALUES ('doomed', 'x')`,
+				`INSERT INTO sqlstore_meta (name, value) VALUES ('doomed', 'x')`,
 			); err != nil {
 				t.Fatalf("tx write: %v", err)
 			}
@@ -104,7 +129,7 @@ func TestContractTransactionRollback(t *testing.T) {
 
 			var count int
 			if err := db.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM sqlstore_meta WHERE key = 'doomed'`,
+				`SELECT COUNT(*) FROM sqlstore_meta WHERE name = 'doomed'`,
 			).Scan(&count); err != nil {
 				t.Fatalf("count: %v", err)
 			}
@@ -131,7 +156,7 @@ func TestSQLitePersistsAcrossOpens(t *testing.T) {
 		t.Fatalf("Migrate: %v", err)
 	}
 	if _, err := first.ExecContext(ctx,
-		`INSERT INTO sqlstore_meta (key, value) VALUES ('durable', 'yes')`,
+		`INSERT INTO sqlstore_meta (name, value) VALUES ('durable', 'yes')`,
 	); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -146,7 +171,7 @@ func TestSQLitePersistsAcrossOpens(t *testing.T) {
 	defer second.Close()
 	var value string
 	if err := second.QueryRowContext(ctx,
-		`SELECT value FROM sqlstore_meta WHERE key = 'durable'`,
+		`SELECT value FROM sqlstore_meta WHERE name = 'durable'`,
 	).Scan(&value); err != nil || value != "yes" {
 		t.Fatalf("read after reopen = %q, %v; want yes, nil", value, err)
 	}
@@ -177,6 +202,16 @@ func TestOpenRefusesUnknownType(t *testing.T) {
 	}
 }
 
+// A network type without an address is a validation refusal, not a hang.
+func TestOpenRefusesConnectWithoutAddress(t *testing.T) {
+	if _, err := Open(Config{Type: TypePostgres}); err == nil {
+		t.Fatal("Open(postgres, no URL) reported success")
+	}
+	if _, err := Open(Config{Type: TypeMySQL}); err == nil {
+		t.Fatal("Open(mysql, no DSN) reported success")
+	}
+}
+
 // The runner's own contract, proven over a test filesystem so the shipped
 // binary carries only the real schema: files apply in name order, exactly
 // once each, and a file added later applies on the next run without
@@ -190,9 +225,9 @@ func TestMigrateRunsEachFileOnceInOrder(t *testing.T) {
 	defer db.Close()
 
 	first := fstest.MapFS{
-		"migrations/0001_a.sql": {Data: []byte(
+		"migrations/sqlite/0001_a.sql": {Data: []byte(
 			`CREATE TABLE probe (n INTEGER); INSERT INTO probe (n) VALUES (1);`)},
-		"migrations/0002_b.sql": {Data: []byte(
+		"migrations/sqlite/0002_b.sql": {Data: []byte(
 			`INSERT INTO probe (n) VALUES (2);`)},
 	}
 	if err := db.migrate(ctx, first); err != nil {
@@ -212,9 +247,9 @@ func TestMigrateRunsEachFileOnceInOrder(t *testing.T) {
 	}
 
 	second := fstest.MapFS{
-		"migrations/0001_a.sql": first["migrations/0001_a.sql"],
-		"migrations/0002_b.sql": first["migrations/0002_b.sql"],
-		"migrations/0003_c.sql": {Data: []byte(
+		"migrations/sqlite/0001_a.sql": first["migrations/sqlite/0001_a.sql"],
+		"migrations/sqlite/0002_b.sql": first["migrations/sqlite/0002_b.sql"],
+		"migrations/sqlite/0003_c.sql": {Data: []byte(
 			`INSERT INTO probe (n) VALUES (3);`)},
 	}
 	if err := db.migrate(ctx, second); err != nil {
@@ -240,7 +275,7 @@ func TestMigrateFailureRecordsNothing(t *testing.T) {
 	defer db.Close()
 
 	broken := fstest.MapFS{
-		"migrations/0001_bad.sql": {Data: []byte(`CREATE SYNTAX ERROR;`)},
+		"migrations/sqlite/0001_bad.sql": {Data: []byte(`CREATE SYNTAX ERROR;`)},
 	}
 	if err := db.migrate(ctx, broken); err == nil {
 		t.Fatal("migrate over a broken file reported success")
@@ -253,5 +288,44 @@ func TestMigrateFailureRecordsNothing(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("failed migration recorded: %d rows", count)
+	}
+}
+
+// Every dialect ships the same set of migration names: three files with one
+// name are one logical migration, and a dialect missing one would drift
+// silently until a deployment switched backends.
+func TestDialectMigrationSetsAgree(t *testing.T) {
+	sqlite, err := migrationNames(migrations, TypeSQLite)
+	if err != nil {
+		t.Fatalf("sqlite names: %v", err)
+	}
+	if len(sqlite) == 0 {
+		t.Fatal("no sqlite migrations embedded")
+	}
+	for _, dialect := range []string{TypePostgres, TypeMySQL} {
+		names, err := migrationNames(migrations, dialect)
+		if err != nil {
+			t.Fatalf("%s names: %v", dialect, err)
+		}
+		if len(names) != len(sqlite) {
+			t.Fatalf("%s ships %d migrations, sqlite ships %d", dialect, len(names), len(sqlite))
+		}
+		for i := range names {
+			if names[i] != sqlite[i] {
+				t.Fatalf("%s migration %d = %s, sqlite has %s", dialect, i, names[i], sqlite[i])
+			}
+		}
+	}
+}
+
+// bind is what lets the runner write one query for three engines.
+func TestBindNumbersPostgresPlaceholders(t *testing.T) {
+	pg := &DB{dialect: TypePostgres}
+	if got := pg.bind("a = ? AND b = ?"); got != "a = $1 AND b = $2" {
+		t.Fatalf("postgres bind = %q", got)
+	}
+	lite := &DB{dialect: TypeSQLite}
+	if got := lite.bind("a = ?"); got != "a = ?" {
+		t.Fatalf("sqlite bind = %q", got)
 	}
 }

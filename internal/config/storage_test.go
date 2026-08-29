@@ -53,12 +53,45 @@ func TestRuntimeStorageProjectsAdapterSettings(t *testing.T) {
 
 func TestRuntimeSQLProjectsStoreSettings(t *testing.T) {
 	input := StorageConfig{SQL: SQLConfig{
-		Mode:   "sqlite",
-		SQLite: SQLiteConfig{Path: "/data/sqlite/starport.db"},
+		Mode:     "sqlite",
+		SQLite:   SQLiteConfig{Path: "/data/sqlite/starport.db"},
+		Postgres: SQLPostgresConfig{URL: "postgres://db.example/starport"},
+		MySQL:    SQLMySQLConfig{DSN: "starport@tcp(db.example:3306)/starport"},
 	}}
 	got := input.RuntimeSQL()
-	if got.Type != sqlstore.TypeSQLite || got.SQLite.Path != "/data/sqlite/starport.db" {
+	if got.Type != sqlstore.TypeSQLite || got.SQLite.Path != "/data/sqlite/starport.db" ||
+		got.Postgres.URL != "postgres://db.example/starport" ||
+		got.MySQL.DSN != "starport@tcp(db.example:3306)/starport" {
 		t.Errorf("SQL runtime configuration = %#v", got)
+	}
+}
+
+// A network mode without an address is a configuration error the operator
+// sees at validation, not a hang at open.
+func TestSQLConfigValidatesConnectModes(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   SQLConfig
+		wantErr bool
+	}{
+		{name: "sqlite", input: SQLConfig{Mode: "sqlite"}},
+		{name: "postgres with url", input: SQLConfig{
+			Mode: "postgres", Postgres: SQLPostgresConfig{URL: "postgres://db.example/starport"},
+		}},
+		{name: "postgres without url", input: SQLConfig{Mode: "postgres"}, wantErr: true},
+		{name: "mysql with dsn", input: SQLConfig{
+			Mode: "mysql", MySQL: SQLMySQLConfig{DSN: "starport@tcp(db.example)/starport"},
+		}},
+		{name: "mysql without dsn", input: SQLConfig{Mode: "mysql"}, wantErr: true},
+		{name: "unknown", input: SQLConfig{Mode: "bolt"}, wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.input.Validate()
+			if (err != nil) != test.wantErr {
+				t.Errorf("Validate() = %v, wantErr %v", err, test.wantErr)
+			}
+		})
 	}
 }
 

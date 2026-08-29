@@ -8,6 +8,8 @@ import (
 const (
 	storageModeBadger = storage.StorageTypeBadger
 	sqlModeSQLite     = sqlstore.TypeSQLite
+	sqlModePostgres   = sqlstore.TypePostgres
+	sqlModeMySQL      = sqlstore.TypeMySQL
 	compressionNone   = "none"
 )
 
@@ -15,8 +17,10 @@ const (
 // the way RuntimeStorage projects the key-value ones.
 func (c StorageConfig) RuntimeSQL() sqlstore.Config {
 	return sqlstore.Config{
-		Type:   c.SQL.Mode,
-		SQLite: sqlstore.SQLiteConfig{Path: c.SQL.SQLite.Path},
+		Type:     c.SQL.Mode,
+		SQLite:   sqlstore.SQLiteConfig{Path: c.SQL.SQLite.Path},
+		Postgres: sqlstore.PostgresConfig{URL: c.SQL.Postgres.URL},
+		MySQL:    sqlstore.MySQLConfig{DSN: c.SQL.MySQL.DSN},
 	}
 }
 

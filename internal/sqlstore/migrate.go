@@ -6,15 +6,23 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"strconv"
 	"strings"
 )
 
 // The schema lives here and nowhere else. A migration is one .sql file named
-// NNNN_description.sql; Migrate applies the files in name order, each in its
-// own transaction, and records each applied name so a file runs exactly once
-// for the life of a database.
+// NNNN_description.sql under the dialect's directory; Migrate applies the
+// dialect's files in name order, each in its own transaction, and records
+// each applied name so a file runs exactly once for the life of a database.
 //
-//go:embed migrations/*.sql
+// Each dialect keeps its own directory because the engines disagree on the
+// margins — MySQL cannot index an unbounded TEXT column or parse ON
+// CONFLICT — and a shared file that papers over that with the lowest common
+// subset hides the disagreement instead of owning it. The three files with
+// one name are the same logical migration; the contract tests hold every
+// backend to the same resulting behavior.
+//
+//go:embed migrations/*/*.sql
 var migrations embed.FS
 
 // Migrate brings the store's schema to the current set of embedded
@@ -31,15 +39,11 @@ func (db *DB) migrate(ctx context.Context, fsys fs.FS) error {
 	if db == nil || db.DB == nil {
 		return ErrClosed
 	}
-	if _, err := db.ExecContext(ctx,
-		`CREATE TABLE IF NOT EXISTS schema_migrations (
-			name TEXT PRIMARY KEY,
-			applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`); err != nil {
+	if _, err := db.ExecContext(ctx, db.schemaMigrationsDDL()); err != nil {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 
-	names, err := migrationNames(fsys)
+	names, err := migrationNames(fsys, db.dialect)
 	if err != nil {
 		return err
 	}
@@ -58,12 +62,26 @@ func (db *DB) migrate(ctx context.Context, fsys fs.FS) error {
 	return nil
 }
 
-// migrationNames lists the .sql files in name order. The name order is the
-// application order, which is why every file carries a numeric prefix.
-func migrationNames(fsys fs.FS) ([]string, error) {
-	entries, err := fs.ReadDir(fsys, "migrations")
+// schemaMigrationsDDL is the one statement the runner owns itself. MySQL
+// cannot index an unbounded TEXT primary key, so it gets a bounded name.
+func (db *DB) schemaMigrationsDDL() string {
+	name := "name TEXT PRIMARY KEY"
+	if db.dialect == TypeMySQL {
+		name = "name VARCHAR(191) PRIMARY KEY"
+	}
+	return `CREATE TABLE IF NOT EXISTS schema_migrations (
+		` + name + `,
+		applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`
+}
+
+// migrationNames lists the dialect's .sql files in name order. The name
+// order is the application order, which is why every file carries a numeric
+// prefix.
+func migrationNames(fsys fs.FS, dialect string) ([]string, error) {
+	entries, err := fs.ReadDir(fsys, "migrations/"+dialect)
 	if err != nil {
-		return nil, fmt.Errorf("read migrations: %w", err)
+		return nil, fmt.Errorf("read %s migrations: %w", dialect, err)
 	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -79,7 +97,7 @@ func migrationNames(fsys fs.FS) ([]string, error) {
 func (db *DB) migrationApplied(ctx context.Context, name string) (bool, error) {
 	var count int
 	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, name,
+		db.bind(`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`), name,
 	).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("read schema_migrations: %w", err)
@@ -88,9 +106,10 @@ func (db *DB) migrationApplied(ctx context.Context, name string) (bool, error) {
 }
 
 // applyMigration runs one file and records it inside the same transaction,
-// so the record and the schema cannot disagree.
+// so the record and the schema cannot disagree. (MySQL auto-commits DDL, so
+// its migration files use IF NOT EXISTS guards to stay safe under a retry.)
 func (db *DB) applyMigration(ctx context.Context, fsys fs.FS, name string) error {
-	body, err := fs.ReadFile(fsys, "migrations/"+name)
+	body, err := fs.ReadFile(fsys, "migrations/"+db.dialect+"/"+name)
 	if err != nil {
 		return err
 	}
@@ -104,8 +123,28 @@ func (db *DB) applyMigration(ctx context.Context, fsys fs.FS, name string) error
 		return err
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO schema_migrations (name) VALUES (?)`, name); err != nil {
+		db.bind(`INSERT INTO schema_migrations (name) VALUES (?)`), name); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+// bind rewrites ? placeholders into the dialect's form. PostgreSQL numbers
+// its placeholders; the other engines take ? as written.
+func (db *DB) bind(query string) string {
+	if db.dialect != TypePostgres {
+		return query
+	}
+	var b strings.Builder
+	n := 0
+	for _, r := range query {
+		if r == '?' {
+			n++
+			b.WriteByte('$')
+			b.WriteString(strconv.Itoa(n))
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

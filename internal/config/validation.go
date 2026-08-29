@@ -85,6 +85,16 @@ func (c *SQLConfig) Validate() error {
 	switch c.Mode {
 	case sqlModeSQLite:
 		return nil
+	case sqlModePostgres:
+		if c.Postgres.URL == "" {
+			return fmt.Errorf("postgres sql store requires a URL")
+		}
+		return nil
+	case sqlModeMySQL:
+		if c.MySQL.DSN == "" {
+			return fmt.Errorf("mysql sql store requires a DSN")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported sql store mode: %s", c.Mode)
 	}

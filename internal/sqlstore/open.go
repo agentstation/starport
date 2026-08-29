@@ -22,6 +22,10 @@ func Open(config Config) (*DB, error) {
 	switch config.Type {
 	case TypeSQLite:
 		return openSQLite(config.SQLite)
+	case TypePostgres:
+		return openPostgres(config.Postgres)
+	case TypeMySQL:
+		return openMySQL(config.MySQL)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnknownType, config.Type)
 	}

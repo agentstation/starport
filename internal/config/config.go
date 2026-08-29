@@ -114,8 +114,10 @@ type StorageConfig struct {
 
 // SQLConfig defines relational store settings.
 type SQLConfig struct {
-	Mode   string       `env:"MODE,default=sqlite"`
-	SQLite SQLiteConfig `env:",prefix=SQLITE_"`
+	Mode     string            `env:"MODE,default=sqlite"`
+	SQLite   SQLiteConfig      `env:",prefix=SQLITE_"`
+	Postgres SQLPostgresConfig `env:",prefix=POSTGRES_"`
+	MySQL    SQLMySQLConfig    `env:",prefix=MYSQL_"`
 }
 
 // SQLiteConfig defines the embedded relational store's settings. An empty
@@ -123,6 +125,17 @@ type SQLConfig struct {
 // choice.
 type SQLiteConfig struct {
 	Path string `env:"PATH,overwrite"`
+}
+
+// SQLPostgresConfig defines the PostgreSQL connect's settings.
+type SQLPostgresConfig struct {
+	URL string `env:"URL" redact:"url"`
+}
+
+// SQLMySQLConfig defines the MySQL connect's settings. The DSN embeds the
+// password, so inspection redacts it whole.
+type SQLMySQLConfig struct {
+	DSN string `env:"DSN" secret:"true"`
 }
 
 // BadgerConfig defines Badger DB settings
