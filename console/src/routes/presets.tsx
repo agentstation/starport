@@ -34,7 +34,7 @@ export const Route = createFileRoute("/presets")({
 
 // Provider sort orders mirror the OpenRouter wire values the preset
 // domain accepts; empty keeps the server default.
-const SORTS = ["", "price", "latency", "throughput"] as const;
+const SORTS = ["", "price", "latency", "throughput", "spread"] as const;
 
 function utcTooltip(iso: string | undefined): string | undefined {
   if (!iso) return undefined;
@@ -407,7 +407,7 @@ function EditorModal({
               className={`${INPUT_CLASS} font-mono`}
             />
           </Field>
-          <Field label="Sort" hint="price, latency, or throughput">
+          <Field label="Sort" hint="price, latency, throughput, or spread">
             <Select
               value={draft.sort}
               onChange={(event) => patch({ sort: event.target.value })}

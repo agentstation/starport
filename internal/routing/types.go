@@ -152,10 +152,23 @@ type ProviderPolicy struct {
 	MaxCompletionPricePerToken float64
 }
 
-// OptimizationPolicy defines deterministic soft preferences.
+// OptimizationPolicy defines soft ordering preferences. Every field keeps the
+// plan a pure function of the request: the spread fields carry the caller's
+// seed instead of drawing randomness inside the planner.
 type OptimizationPolicy struct {
 	PreferLowestCost    bool
 	PreferLowestLatency bool
+
+	// Spread reorders the leading candidates whose ranking metric sits
+	// within SpreadRatio of the best, weighted toward the better metric.
+	// Candidates outside the band keep the deterministic order.
+	Spread bool
+	// SpreadSeed seeds the weighted selection. The same request with the
+	// same seed produces the same plan.
+	SpreadSeed uint64
+	// SpreadRatio bounds the band as a multiple of the best metric. A value
+	// below one falls back to DefaultSpreadRatio.
+	SpreadRatio float64
 }
 
 // Request contains all policy and requirements used by the pure planner.

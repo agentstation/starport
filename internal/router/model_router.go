@@ -108,9 +108,10 @@ type ProviderPreferences struct {
 	// Allow fallback to other providers not in order list
 	AllowFallbacks bool `json:"allow_fallbacks,omitempty"`
 
-	// Sort selects the route ordering: "price", "latency", or "throughput".
-	// Starport measures latency, not throughput, so "throughput" routes by
-	// measured latency. Empty keeps the server default ordering.
+	// Sort selects the route ordering: "price", "latency", "throughput",
+	// or "spread". Starport measures latency, not throughput, so
+	// "throughput" routes by measured latency. "spread" balances traffic
+	// across the leading ranking band. Empty keeps the server default.
 	Sort string `json:"sort,omitempty"`
 
 	// MaxPromptPricePer1M and MaxCompletionPricePer1M cap the accepted route

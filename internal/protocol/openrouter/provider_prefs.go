@@ -8,11 +8,13 @@ import (
 	"strconv"
 )
 
-// Sort values the OpenRouter provider-routing policy documents.
+// Sort values the OpenRouter provider-routing policy documents, plus the
+// Starport spread extension that balances traffic inside a ranking band.
 const (
 	SortPrice      = "price"
 	SortLatency    = "latency"
 	SortThroughput = "throughput"
+	SortSpread     = "spread"
 )
 
 // MaxPrice is the OpenRouter per-request price ceiling in USD per million
@@ -80,7 +82,7 @@ func validateProviderPreferences(prefs *ProviderPreferences) error {
 		return nil
 	}
 	switch prefs.Sort {
-	case "", SortPrice, SortLatency, SortThroughput:
+	case "", SortPrice, SortLatency, SortThroughput, SortSpread:
 		return nil
 	default:
 		return fmt.Errorf("provider.sort %q is not supported", prefs.Sort)

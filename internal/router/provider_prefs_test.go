@@ -87,6 +87,19 @@ func TestProviderSortLatency(t *testing.T) {
 	require.Equal(t, request.Optimization, throughput.Optimization)
 }
 
+func TestProviderSortSpreadSeedsThePlanner(t *testing.T) {
+	router := plannerTestRouter()
+	request := router.toPlanningRequest(&Request{
+		ChatRequest:         &connectors.ChatRequest{Model: "author/primary"},
+		ProviderPreferences: &ProviderPreferences{Sort: "spread"},
+	})
+	// Spread keeps the server ranking and turns on the band; the seed is
+	// drawn here per request, so the planner stays a pure function.
+	require.True(t, request.Optimization.Spread)
+	require.True(t, request.Optimization.PreferLowestCost)
+	require.True(t, request.Optimization.PreferLowestLatency)
+}
+
 func TestVariantFloorSortsByPrice(t *testing.T) {
 	router := plannerTestRouter()
 	request := router.toPlanningRequest(&Request{
