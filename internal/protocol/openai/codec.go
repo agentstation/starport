@@ -19,6 +19,9 @@ const (
 	// the same word an image input uses, so a caller sends back what it
 	// received without translating.
 	contentTypeImageURL = "image_url"
+	// contentTypeText names plain text on the wire: the content-part type,
+	// the response_format type, and the Responses text.format type.
+	contentTypeText = "text"
 )
 
 // ChatRequest is the OpenAI chat-completions wire request.
@@ -545,7 +548,7 @@ func decodeContent(raw json.RawMessage, allowCacheControl bool) ([]inference.Con
 	result := make([]inference.ContentPart, len(parts))
 	for index, part := range parts {
 		switch part.Type {
-		case "text", "input_text":
+		case contentTypeText, "input_text":
 			result[index] = inference.ContentPart{Kind: inference.ContentText, Text: part.Text}
 		case contentTypeImageURL, "input_image":
 			if part.ImageURL == nil || part.ImageURL.URL == "" {
@@ -685,7 +688,7 @@ func decodeStop(raw json.RawMessage) ([]string, error) {
 }
 
 func decodeResponseFormat(wire *ResponseFormat) (inference.StructuredOutput, error) {
-	if wire == nil || wire.Type == "" || wire.Type == "text" {
+	if wire == nil || wire.Type == "" || wire.Type == contentTypeText {
 		return inference.StructuredOutput{Format: inference.OutputText}, nil
 	}
 	switch wire.Type {

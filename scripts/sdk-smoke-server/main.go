@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 )
 
@@ -40,6 +42,7 @@ func routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/chat/completions", authorize(chat))
 	mux.HandleFunc("POST /api/v1/embeddings", authorize(embeddings))
 	mux.HandleFunc("GET /api/v1/models", authorize(models))
+	mux.HandleFunc("POST /v1/responses", authorize(responses))
 	return mux
 }
 
@@ -93,6 +96,59 @@ func chat(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 	}
 	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+}
+
+func responses(w http.ResponseWriter, r *http.Request) {
+	request, err := openai.DecodeResponses(r.Body)
+	if err != nil {
+		var unsupported *openai.UnsupportedError
+		if errors.As(err, &unsupported) {
+			param := unsupported.Param
+			openai.WriteError(w, http.StatusBadRequest, "invalid_request_error", unsupported.Message, &param)
+			return
+		}
+		openai.WriteError(w, http.StatusBadRequest, "invalid_request_error", err.Error(), nil)
+		return
+	}
+	response := inference.ChatResponse{
+		ID: "resp-smoke", CreatedUnix: 1744329600, Model: request.Model, ModelUsed: request.Model,
+		Choices: []inference.Choice{{
+			Index: 0, FinishReason: "stop",
+			Message: inference.Message{Role: inference.RoleAssistant, Content: []inference.ContentPart{{Kind: inference.ContentText, Text: "starport smoke ok"}}},
+		}},
+		Usage: inference.Usage{InputTokens: 3, OutputTokens: 4, TotalTokens: 7},
+	}
+	if !request.Stream {
+		_ = openai.WriteJSON(w, http.StatusOK, openai.EncodeResponses(response))
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	usage := response.Usage
+	events := []inference.StreamEvent{
+		{Kind: inference.StreamStart, ID: response.ID, CreatedUnix: response.CreatedUnix, Model: request.Model, ModelUsed: request.Model, Deltas: []inference.ChoiceDelta{{Index: 0, Role: inference.RoleAssistant}}},
+		{Kind: inference.StreamDelta, ID: response.ID, CreatedUnix: response.CreatedUnix, Model: request.Model, ModelUsed: request.Model, Deltas: []inference.ChoiceDelta{{Index: 0, Text: "starport smoke ok"}}},
+		{Kind: inference.StreamUsage, ID: response.ID, Model: request.Model, ModelUsed: request.Model, Usage: &usage},
+		{Kind: inference.StreamEnd, ID: response.ID, CreatedUnix: response.CreatedUnix, Model: request.Model, ModelUsed: request.Model, Deltas: []inference.ChoiceDelta{{Index: 0, FinishReason: "stop"}}},
+	}
+	encoder := &openai.ResponsesStreamEncoder{}
+	for _, event := range events {
+		encoded, encodeErr := encoder.Encode(event)
+		if encodeErr != nil {
+			return
+		}
+		writeResponsesEvents(w, encoded)
+	}
+	final, finishErr := encoder.Finish()
+	if finishErr != nil {
+		return
+	}
+	writeResponsesEvents(w, final)
+}
+
+func writeResponsesEvents(w http.ResponseWriter, events []openai.ResponsesStreamEvent) {
+	for _, event := range events {
+		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
+	}
 }
 
 func embeddings(w http.ResponseWriter, r *http.Request) {
