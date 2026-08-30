@@ -65,6 +65,7 @@ type modelRouter struct {
 	outcomes       execution.OutcomePublisher
 	credentialGate OperatorCredentialGate
 	storedKeys     StoredCredentialResolver
+	sharedHealth   availability.KVStore
 
 	// Advanced routing features
 	config                       Config
@@ -91,6 +92,15 @@ func WithCatalog(catalogPlane *runtimecatalog.ControlPlane) Option {
 func WithAvailability(tracker *availability.Tracker) Option {
 	return func(r *modelRouter) {
 		r.availability = tracker
+	}
+}
+
+// WithSharedHealthStore supplies the distributed store that replicas share.
+// The latency tracker publishes its snapshots there and reads peer
+// measurements back. Without it every measurement stays process-local.
+func WithSharedHealthStore(store availability.KVStore) Option {
+	return func(r *modelRouter) {
+		r.sharedHealth = store
 	}
 }
 
@@ -139,6 +149,9 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 	}
 	for _, opt := range opts {
 		opt(router)
+	}
+	if router.sharedHealth != nil {
+		router.latencyTracker = NewSharedLatencyTracker(latencyTracker, router.sharedHealth)
 	}
 	if router.availability == nil {
 		tracker, err := availability.New(router.config.Availability, nil, router.catalog)

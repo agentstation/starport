@@ -87,6 +87,10 @@ type Tracker struct {
 	records   map[Offering]*entry
 	lastError error
 
+	shared        KVStore
+	sharedConfig  SharedConfig
+	lastPeerFetch time.Time
+
 	publishMu         sync.Mutex
 	publishedRevision uint64
 }
@@ -97,6 +101,7 @@ type entry struct {
 	consecutiveFailure int
 	openUntil          time.Time
 	probeInFlight      bool
+	updatedAt          time.Time
 }
 
 type systemClock struct{}
@@ -148,12 +153,15 @@ func (t *Tracker) Acquire(route routing.Route) bool {
 		admitted = true
 	}
 	var snapshot Snapshot
+	var doc *sharedDocument
 	if changed {
 		snapshot = t.changedSnapshotLocked()
+		doc = t.sharedDocumentLocked()
 	}
 	t.mu.Unlock()
 	if changed {
 		t.publish(snapshot)
+		t.writeShared(doc)
 	}
 	return admitted
 }
@@ -175,11 +183,13 @@ func (t *Tracker) Release(route routing.Route) {
 	t.mu.Unlock()
 }
 
-// Refresh makes expired open offerings eligible for one half-open probe.
-func (t *Tracker) Refresh(_ context.Context) {
+// Refresh makes expired open offerings eligible for one half-open probe and
+// merges peer state when a shared store is configured.
+func (t *Tracker) Refresh(ctx context.Context) {
 	if t == nil {
 		return
 	}
+	t.mergePeerState(ctx)
 	t.mu.Lock()
 	now := t.clock.Now()
 	changed := false
@@ -187,12 +197,15 @@ func (t *Tracker) Refresh(_ context.Context) {
 		changed = t.refreshEntryLocked(entry, now) || changed
 	}
 	var snapshot Snapshot
+	var doc *sharedDocument
 	if changed {
 		snapshot = t.changedSnapshotLocked()
+		doc = t.sharedDocumentLocked()
 	}
 	t.mu.Unlock()
 	if changed {
 		t.publish(snapshot)
+		t.writeShared(doc)
 	}
 }
 
@@ -217,9 +230,12 @@ func (t *Tracker) RecordSuccess(route routing.Route, _ time.Duration) {
 		return
 	}
 	*entry = entryValue(StateHealthy)
+	entry.updatedAt = t.clock.Now()
 	snapshot := t.changedSnapshotLocked()
+	doc := t.sharedDocumentLocked()
 	t.mu.Unlock()
 	t.publish(snapshot)
+	t.writeShared(doc)
 }
 
 // RecordFailure applies one normalized failure to the offering state machine.
@@ -250,30 +266,36 @@ func (t *Tracker) RecordFailure(route routing.Route, providerFailure *failure.Fa
 		return
 	}
 
+	now := t.clock.Now()
 	changed := false
 	switch providerFailure.Kind() {
 	case failure.NotFound:
 		*entry = entryValue(StateUnavailable)
 		entry.failureKind = failure.NotFound
+		entry.updatedAt = now
 		changed = true
 	case failure.RateLimit, failure.Quota, failure.ProviderUnavailable,
 		failure.Unreachable, failure.Timeout:
 		entry.failureKind = providerFailure.Kind()
 		entry.consecutiveFailure++
 		entry.probeInFlight = false
+		entry.updatedAt = now
 		changed = true
 		if entry.state == StateHalfOpen || entry.consecutiveFailure >= t.config.FailureThreshold {
 			entry.state = StateOpen
-			entry.openUntil = t.clock.Now().Add(t.config.OpenDuration)
+			entry.openUntil = now.Add(t.config.OpenDuration)
 		}
 	}
 	var snapshot Snapshot
+	var doc *sharedDocument
 	if changed {
 		snapshot = t.changedSnapshotLocked()
+		doc = t.sharedDocumentLocked()
 	}
 	t.mu.Unlock()
 	if changed {
 		t.publish(snapshot)
+		t.writeShared(doc)
 	}
 }
 
@@ -292,8 +314,10 @@ func (t *Tracker) Reset(offering Offering) error {
 	}
 	delete(t.records, offering)
 	snapshot := t.changedSnapshotLocked()
+	doc := t.sharedDocumentLocked()
 	t.mu.Unlock()
 	t.publish(snapshot)
+	t.writeShared(doc)
 	return nil
 }
 
@@ -307,7 +331,8 @@ func (t *Tracker) Snapshot() Snapshot {
 	return t.snapshotLocked()
 }
 
-// LastPublishError returns the latest derived-projection publication error.
+// LastPublishError returns the latest derived-projection or shared-store
+// publication error.
 func (t *Tracker) LastPublishError() error {
 	if t == nil {
 		return nil
@@ -324,6 +349,7 @@ func (t *Tracker) refreshEntryLocked(entry *entry, now time.Time) bool {
 	entry.state = StateHalfOpen
 	entry.openUntil = time.Time{}
 	entry.probeInFlight = false
+	entry.updatedAt = now
 	return true
 }
 
