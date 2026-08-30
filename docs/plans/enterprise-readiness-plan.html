@@ -120,7 +120,7 @@
     Created: 2026-08-29 ·
     Baseline: main @ f7dfb6b ·
     Proof root: <code>docs/proof/enterprise-readiness/</code> ·
-    Next action: implement ENR-E1.
+    Next action: implement ENR-E2.
   </p>
 
   <section id="outcome">
@@ -328,8 +328,8 @@
         <tr id="ENR-D1" data-status="done"><td>ENR-D1</td><td>/v1/responses: the stateless subset of the OpenAI Responses API.</td><td><code>done</code></td><td>PR #316 merged as 8a763da. Verifier: 14 passed (V01&#8211;V14). Proof: ENR-D1.md.</td></tr>
         <tr id="ENR-D2" data-status="done"><td>ENR-D2</td><td>/v1/moderations: catalog-driven moderation route. Depends on the starmap moderations operation.</td><td><code>done</code></td><td>PR #317 merged as 3c2e3da4. Verifier: 15 passed (V01&#8211;V15). Proof: ENR-D2.md.</td></tr>
         <tr id="ENR-D3" data-status="done"><td>ENR-D3</td><td>/v1/batches: gateway-executed batches over the files and jobs seams.</td><td><code>done</code></td><td>PR #318 merged as ac7f73e. Verifier: 17 passed, 16 failed (V16&#8211;V17 green). Proof: docs/proof/enterprise-readiness/ENR-D3.md.</td></tr>
-        <tr id="ENR-E1" data-status="in_progress"><td>ENR-E1</td><td>Routing spread: opt-in weighted selection inside a ranking band.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="ENR-E2" data-status="todo"><td>ENR-E2</td><td>Shared provider health through KV when the operator configures Valkey.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-E1" data-status="done"><td>ENR-E1</td><td>Routing spread: opt-in weighted selection inside a ranking band.</td><td><code>done</code></td><td>PR #319 merged as e9c9797. Verifier: 18 passed, 15 failed (V18 green). Proof: docs/proof/enterprise-readiness/ENR-E1.md.</td></tr>
+        <tr id="ENR-E2" data-status="in_progress"><td>ENR-E2</td><td>Shared provider health through KV when the operator configures Valkey.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="ENR-F1" data-status="todo"><td>ENR-F1</td><td>Guardrail seam: ordered pre and post checks that fail closed.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-F2" data-status="todo"><td>ENR-F2</td><td>Built-in guardrails: deterministic PII redaction and the moderation check.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-G1" data-status="todo"><td>ENR-G1</td><td>Team budgets: the limits vocabulary reaches teams.</td><td><code>todo</code></td><td></td></tr>
@@ -1052,6 +1052,7 @@ every ledger row except ENR-Z3 is terminal.</code></pre>
 
         <tr><td>2026-08-30</td><td>ENR-D2</td><td>done</td><td>PR #317 merged as 3c2e3da4. Verifier: 15 passed, 18 failed (V01&#8211;V15 green), the exact D2 target. Starmap v0.15.0 supplies the moderations operation. Full suite, lint, vet, benchmark, smoke-first-run, SDK smoke, console (210 tests), and all structural gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-D3 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-D3</td><td>done</td><td>PR #318 merged as ac7f73e. Verifier: 17 passed, 16 failed (V16&#8211;V17 green), the exact D3 target. The batch surface runs over the files and jobs seams with the shared job meter, the line governor, and the usage join. Full suite, race pass on jobs, lint, vet, build, console (210 tests), and all structural gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-E1 moves to in_progress.</td></tr>
+        <tr><td>2026-08-30</td><td>ENR-E1</td><td>done</td><td>PR #319 merged as e9c9797. Verifier: 18 passed, 15 failed (V18 green), the exact E1 target. Spread is an opt-in sort word: the planner draws a weighted order inside the leading ranking band from a per-request seed, and the deterministic default stays byte for byte. Full suite, race pass on routing, lint, vet, build, console (210 tests), and all structural gates green. Autoreview clean (Sol, 0.98). CI green across all checks. ENR-E2 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-D1</td><td>done</td><td>PR #316 merged as 8a763da. Verifier: 14 passed, 19 failed (V01&#8211;V14 green), the exact D1 target. Full suite, lint, vet, benchmark, smoke-first-run, SDK smoke with the official OpenAI SDK, and all 24 structural gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-D2 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-C3</td><td>done</td><td>PR #315 merged as be4a577. Verifier: 12 passed, 21 failed (V01&#8211;V12 green), the exact phase C target. Doc links, doc-link verifier, and README quickstart gates green. Technical-writing lint clean on all touched prose. Autoreview clean (Sol, 0.99). CI green across all ten checks. ENR-D1 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-C2</td><td>done</td><td>PR #314 merged as 1332903. Verifier: 11 passed, 22 failed (V01&#8211;V11 green). Full suite, lint, vet, benchmark, doc links, and seven repo gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-C3 moves to in_progress.</td></tr>
