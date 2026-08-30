@@ -97,7 +97,7 @@ func activityQueryFromRequest(r *http.Request) (usage.Query, error) {
 	query := usage.Query{
 		Model:    values.Get("model"),
 		Provider: values.Get("provider"),
-		Status:   values.Get("status"),
+		Status:   values.Get(fieldStatus),
 		Cursor:   values.Get("cursor"),
 	}
 

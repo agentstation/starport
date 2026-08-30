@@ -86,6 +86,11 @@ type TelemetryConfig struct {
 	// tracer stays a no-op. The loader fills this field; it carries no env
 	// tag because the gateway prefix does not apply.
 	TracesEndpoint string
+
+	// UsageExport names where finalized usage records stream. An http or
+	// https URL posts NDJSON batches; any other value is a file path that
+	// NDJSON lines append to. Empty means no export.
+	UsageExport string `env:"USAGE_EXPORT"`
 }
 
 // Validate refuses a metrics mode the router would silently read as "on".

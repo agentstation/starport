@@ -214,6 +214,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 
 			// Request activity for the authenticated key
 			r.With(s.requireAnyScope("activity:read")).Get("/activity", s.controllers.Activity.List)
+			r.With(s.requireAnyScope("activity:read")).Get("/activity/export", s.controllers.Activity.ActivityExport)
 
 			// Admin endpoints (requires admin privileges)
 			r.Route("/admin", func(r chi.Router) {
@@ -420,6 +421,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET  /api/v1/logos/{kind}/{id}.svg      - Catalog identity mark (public, cached)
 //   GET  /api/v1/auth/mode                  - Whether a gateway API key is required (public)
 //   GET  /api/v1/activity                   - List request activity for the authenticated key
+//   GET  /api/v1/activity/export            - Stream that activity as NDJSON or CSV
 //
 // Preset Management:
 //   GET    /api/v1/presets          - List presets

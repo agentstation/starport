@@ -51,6 +51,7 @@ type Metrics struct {
 	cacheHits        *prometheus.CounterVec
 	providerFailures *prometheus.CounterVec
 	budgetRefusals   *prometheus.CounterVec
+	usageExportDrops prometheus.Counter
 }
 
 // NewMetrics builds the metric vocabulary on its own registry. The gateway's
@@ -98,10 +99,15 @@ func NewMetrics() *Metrics {
 			Name: "starport_budget_refusals_total",
 			Help: "Requests refused pre-flight by budget scope and dimension.",
 		}, []string{"scope", "dimension"}),
+		usageExportDrops: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "starport_usage_export_dropped_total",
+			Help: "Usage records the export sink dropped because its target stayed unreachable or its buffer filled.",
+		}),
 	}
 	m.registry.MustRegister(
 		m.requests, m.tokens, m.costNanoUSD, m.duration, m.timeToFirstToken,
 		m.overhead, m.cacheHits, m.providerFailures, m.budgetRefusals,
+		m.usageExportDrops,
 	)
 	return m
 }
@@ -164,6 +170,16 @@ func (m *Metrics) ObserveBudgetRefusal(scope, dimension string) {
 		return
 	}
 	m.budgetRefusals.WithLabelValues(orUnlabeled(scope), orUnlabeled(dimension)).Inc()
+}
+
+// ObserveUsageExportDrops counts records the export sink could not deliver.
+// The counter carries no labels: a drop is a gap in the analytics copy, and
+// which target dropped it is already fixed by configuration.
+func (m *Metrics) ObserveUsageExportDrops(count int) {
+	if m == nil || count <= 0 {
+		return
+	}
+	m.usageExportDrops.Add(float64(count))
 }
 
 func orUnlabeled(value string) string {

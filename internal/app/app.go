@@ -631,13 +631,49 @@ func (b *runtimeBuilder) buildGateway() error {
 	// and every terminal outcome produce a record. The metric surface rides
 	// the same choke point: one completed request, one record, one scrape
 	// observation.
-	usageCapture := proxy.NewUsageCapture(b.usageRecords, b.metrics)
+	observers := []proxy.UsageObserver{b.metrics}
+	// The export sink rides the same observer seam: every finalized record
+	// streams to the configured target, and a drop lands on the scrape.
+	if target := b.config.Telemetry.UsageExport; target != "" {
+		sink, err := openUsageSink(target, b.metrics)
+		if err != nil {
+			return err
+		}
+		b.application.own("usage export sink", sink.Close)
+		observers = append(observers, usageSinkObserver{sink: sink})
+	}
+	usageCapture := proxy.NewUsageCapture(b.usageRecords, observers...)
 	b.gateway = usageCapture.Wrap(b.gateway)
 	b.application.own("usage capture", func(context.Context) error {
 		usageCapture.Flush()
 		return nil
 	})
 	return nil
+}
+
+// openUsageSink builds the export sink the configuration names: an http or
+// https URL selects the posting sink, anything else a local NDJSON file.
+// Dropped records count on the metric surface either way.
+func openUsageSink(target string, metrics *telemetry.Metrics) (usage.Sink, error) {
+	options := usage.SinkOptions{OnDrop: metrics.ObserveUsageExportDrops}
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		return usage.NewHTTPSink(target, options), nil
+	}
+	sink, err := usage.NewFileSink(target, options)
+	if err != nil {
+		return nil, fmt.Errorf("open usage export sink: %w", err)
+	}
+	return sink, nil
+}
+
+// usageSinkObserver adapts the sink onto the capture observer seam. Receive
+// only buffers, so the synchronous observer contract holds.
+type usageSinkObserver struct {
+	sink usage.Sink
+}
+
+func (o usageSinkObserver) ObserveUsage(record usage.Record) {
+	o.sink.Receive(record)
 }
 
 func (b *runtimeBuilder) openConsole() error {

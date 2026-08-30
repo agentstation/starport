@@ -459,8 +459,8 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 		"os":         runtime.GOOS,
 		"arch":       runtime.GOARCH,
 		"storage": map[string]any{
-			"type":   "badger",
-			"status": "healthy",
+			"type":      "badger",
+			fieldStatus: "healthy",
 		},
 		// Stored file bytes do not live in the record store, so the backend
 		// that holds them is a separate fact. A deployment that stores no
@@ -471,7 +471,7 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 		},
 		providersField: map[string]any{
 			responseCountField: systemInfoUnavailable,
-			"status":           systemInfoUnavailable,
+			fieldStatus:        systemInfoUnavailable,
 		},
 	}
 
