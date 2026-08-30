@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enterprise readiness campaign</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Enterprise readiness campaign</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="active">active</code> ·
+    Owner: this plan ·
+    Created: 2026-08-29 ·
+    Baseline: main @ f7dfb6b ·
+    Proof root: <code>docs/proof/enterprise-readiness/</code> ·
+    Next action: land ENR-A0.
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      A Starport deployment answers every operational question an
+      enterprise evaluation asks, without a hosted control plane. The
+      gateway exports its metrics, traces, and usage records to the
+      operator's own systems. It records who changed what. It pushes the
+      events an operator must not poll for. It serves the OpenAI surfaces
+      a 2026 SDK expects: responses, batches, and moderations. Two
+      gateway replicas behind one load balancer share provider health. A
+      configured guardrail refuses what it cannot check. Budgets reach
+      teams. Each capability is a named seam with its own gate condition.
+      The gate <code>scripts/verify-enterprise-readiness.sh</code> is
+      terminal at 33 conditions.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">Progress appears here when the page loads. The
+      status ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 460 240" role="img" aria-label="Before diagram">
+          <rect x="10" y="10" width="440" height="220" rx="8" fill="none" stroke="currentColor"/>
+          <text x="230" y="34" text-anchor="middle" fill="currentColor" font-weight="bold">gateway process</text>
+          <rect x="30" y="50" width="190" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="125" y="75" text-anchor="middle" fill="currentColor">proxy + routing</text>
+          <rect x="240" y="50" width="190" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="335" y="75" text-anchor="middle" fill="currentColor">availability (in-process)</text>
+          <rect x="30" y="105" width="190" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="125" y="130" text-anchor="middle" fill="currentColor">usage records (KV only)</text>
+          <rect x="240" y="105" width="190" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="335" y="130" text-anchor="middle" fill="currentColor">admin mutations (no audit)</text>
+          <text x="230" y="185" text-anchor="middle" fill="currentColor">no metrics, no traces, no sinks,</text>
+          <text x="230" y="205" text-anchor="middle" fill="currentColor">no webhooks, no guardrails</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 460 240" role="img" aria-label="After diagram">
+          <rect x="10" y="10" width="440" height="220" rx="8" fill="none" stroke="currentColor"/>
+          <text x="230" y="34" text-anchor="middle" fill="currentColor" font-weight="bold">gateway process</text>
+          <rect x="30" y="50" width="130" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="95" y="70" text-anchor="middle" fill="currentColor">guardrails</text>
+          <text x="95" y="84" text-anchor="middle" fill="currentColor" font-size="11">pre/post seam</text>
+          <rect x="170" y="50" width="130" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="235" y="75" text-anchor="middle" fill="currentColor">proxy + routing</text>
+          <rect x="310" y="50" width="120" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="370" y="70" text-anchor="middle" fill="currentColor">availability</text>
+          <text x="370" y="84" text-anchor="middle" fill="currentColor" font-size="11">shared via KV</text>
+          <rect x="30" y="105" width="130" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="95" y="125" text-anchor="middle" fill="currentColor">telemetry</text>
+          <text x="95" y="139" text-anchor="middle" fill="currentColor" font-size="11">metrics + traces</text>
+          <rect x="170" y="105" width="130" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="235" y="125" text-anchor="middle" fill="currentColor">events</text>
+          <text x="235" y="139" text-anchor="middle" fill="currentColor" font-size="11">signed webhooks</text>
+          <rect x="310" y="105" width="120" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="370" y="125" text-anchor="middle" fill="currentColor">audit</text>
+          <text x="370" y="139" text-anchor="middle" fill="currentColor" font-size="11">sqlstore</text>
+          <rect x="30" y="160" width="400" height="40" rx="6" fill="none" stroke="currentColor"/>
+          <text x="230" y="185" text-anchor="middle" fill="currentColor">operator systems: Prometheus, OTLP, sinks, webhook receivers</text>
+        </svg>
+      </figure>
+    </div>
+    <p>The campaign adds five seams: <code>internal/telemetry</code>,
+      <code>internal/events</code>, <code>internal/audit</code>,
+      <code>internal/guardrails</code>, and <code>internal/mcp</code>.
+      It moves availability state from a per-process map to shared KV
+      state when the operator configures Valkey. Names stay identical
+      across both views.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns:</strong> the export plane (Prometheus metrics, OTel
+      traces, usage sinks). The governance plane (audit log, webhooks,
+      the security posture document). OpenAI surface parity
+      (<code>/v1/responses</code>, <code>/v1/batches</code>,
+      <code>/v1/moderations</code>). Routing spread and shared provider
+      health. The guardrail seam with two built-in checks. Team budgets,
+      semantic caching, preset revisions, the MCP server, and the
+      IDENTITY-001 repair.</p>
+
+    <p><strong>Does not own:</strong> the Starmap catalog facts a task
+      needs. The <code>moderations</code> operation and its offerings
+      land in the starmap repository first. ENR-D2 names that dependency.
+      Payments, credits, and billing rails belong to no plan. Starport
+      positions against the hosted marketplace, not toward it.</p>
+
+    <p><strong>Non-goals:</strong> a hosted control plane. SOC 2
+      certification itself, because ENR-C3 ships the evidence document
+      only. An organization tier above accounts, which ENR-G2 defers
+      with a recorded re-open condition. Provider-side batch passthrough:
+      the gateway executes batches itself, so a batch works on every
+      provider.</p>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <ol>
+      <li><code>scripts/benchmark-overhead.sh</code> stays green on every
+        task. A disabled feature adds no measurable per-request
+        cost.</li>
+
+      <li>Passive surfaces, such as the <code>/metrics</code> endpoint,
+        may default on. Active exporters stay off until configuration
+        names them: OTLP, usage sinks, webhooks, and guardrail model
+        calls. <code>starport dev</code> keeps its stateless-disk
+        contract and sends no outbound telemetry.</li>
+
+      <li>Starmap owns provider, model, offering, and operation facts. No
+        task adds a local model list, price default, or provider
+        switch.</li>
+
+      <li>No export surface carries a provider credential, gateway key
+        material, or prompt and response content. Export surfaces are
+        metrics, traces, usage sinks, audit records, and webhook
+        payloads. The one exception is a sink that configuration names
+        as content-carrying.</li>
+
+      <li>Existing gates keep their terminal counts. The counts are
+        AON 26, CSG 16, MMD 26, FIL 22, AMJ 18, PLG 20, RNK 22, CSH 23,
+        ORP 17, and CDP 19.</li>
+
+      <li>A configured guardrail that cannot evaluate refuses the
+        request. Fail closed, never fail open.</li>
+
+      <li>Deterministic routing stays the default. Spread is opt-in per
+        request or preset.</li>
+    </ol>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-enterprise-readiness.sh</code> follows the
+      campaign verifier convention. ENR-A0 authors it red at baseline. It
+      prints one <code>PASS</code> or <code>FAIL</code> line per
+      condition. It ends with <code>Summary: N passed, M failed</code>.
+      It is terminal at 33 conditions, <code>ENR-V01</code> through
+      <code>ENR-V33</code>. Expected green counts by phase:</p>
+    <table>
+      <thead><tr><th>Phase</th><th>Conditions</th><th>Green after phase</th></tr></thead>
+      <tbody>
+        <tr><td>B Observability</td><td>ENR-V01..V06</td><td>6</td></tr>
+        <tr><td>C Governance</td><td>ENR-V07..V12</td><td>12</td></tr>
+        <tr><td>D Surface parity</td><td>ENR-V13..V17</td><td>17</td></tr>
+        <tr><td>E Routing and health</td><td>ENR-V18..V20</td><td>20</td></tr>
+        <tr><td>F Guardrails</td><td>ENR-V21..V24</td><td>24</td></tr>
+        <tr><td>G Tenancy</td><td>ENR-V25..V26</td><td>26</td></tr>
+        <tr><td>H Product polish</td><td>ENR-V27..V31</td><td>31</td></tr>
+        <tr><td>Z Close</td><td>ENR-V32..V33</td><td>33</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="rejected-designs">
+    <h2>Rejected designs</h2>
+    <ul>
+      <li><strong>Organization tier above accounts.</strong> Rejected for
+        now. The identity plane covers every deployment seen so far with
+        users, teams, memberships, and account grants. An organization
+        layer would touch identity, limits, grants, and the console on
+        speculation. Re-open when a real operator needs several isolated
+        account sets under one deployment. ENR-G2 holds the
+        deferral.</li>
+
+      <li><strong>Provider-native batch passthrough.</strong> Rejected.
+        Each provider's batch API differs in format, polling, and
+        pricing. A passthrough would leak provider job identifiers that
+        the AMJ campaign hides on purpose. The gateway executes batches
+        through its own planner instead. Re-open if a provider's batch
+        discount becomes decisive for a real deployment.</li>
+
+      <li><strong>Always-on content logging.</strong> Rejected. Prompt
+        and response content leaves the process only when a configured
+        sink names content explicitly, per invariant 4.</li>
+    </ul>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="ENR-A0" data-status="in_progress"><td>ENR-A0</td><td>Baseline: pin the baseline commit, create the proof root, author the verifier red, register the plan.</td><td><code>in_progress</code></td><td></td></tr>
+        <tr id="ENR-B1" data-status="todo"><td>ENR-B1</td><td>Prometheus metrics: the telemetry seam and the /metrics endpoint.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-B2" data-status="todo"><td>ENR-B2</td><td>OpenTelemetry traces across proxy, routing, execution, and the provider call.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-B3" data-status="todo"><td>ENR-B3</td><td>Usage export: a configured sink streams usage records out, and the activity API exports them.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-C1" data-status="todo"><td>ENR-C1</td><td>Audit log: every admin mutation writes an actor-attributed relational record.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-C2" data-status="todo"><td>ENR-C2</td><td>Webhooks: signed events for budget, job, health, and key lifecycle.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-C3" data-status="todo"><td>ENR-C3</td><td>Security posture document for procurement review.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-D1" data-status="todo"><td>ENR-D1</td><td>/v1/responses: the stateless subset of the OpenAI Responses API.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-D2" data-status="todo"><td>ENR-D2</td><td>/v1/moderations: catalog-driven moderation route. Depends on the starmap moderations operation.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-D3" data-status="todo"><td>ENR-D3</td><td>/v1/batches: gateway-executed batches over the files and jobs seams.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-E1" data-status="todo"><td>ENR-E1</td><td>Routing spread: opt-in weighted selection inside a ranking band.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-E2" data-status="todo"><td>ENR-E2</td><td>Shared provider health through KV when the operator configures Valkey.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-F1" data-status="todo"><td>ENR-F1</td><td>Guardrail seam: ordered pre and post checks that fail closed.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-F2" data-status="todo"><td>ENR-F2</td><td>Built-in guardrails: deterministic PII redaction and the moderation check.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-G1" data-status="todo"><td>ENR-G1</td><td>Team budgets: the limits vocabulary reaches teams.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-G2" data-status="deferred"><td>ENR-G2</td><td>Organization tier above accounts.</td><td><code>deferred(no multi-organization operator requirement)</code></td><td>Decision recorded in rejected designs, 2026-08-29.</td></tr>
+        <tr id="ENR-H1" data-status="todo"><td>ENR-H1</td><td>Semantic cache: opt-in similarity layer beside the exact response cache.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-H2" data-status="todo"><td>ENR-H2</td><td>Preset revisions: immutable history, version pins, rollback.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-H3" data-status="todo"><td>ENR-H3</td><td>MCP server: catalog search, model detail, and chat behind a gateway key.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-Z1" data-status="todo"><td>ENR-Z1</td><td>IDENTITY-001: let an operator repair a corrupt identity hash-index record.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-Z2" data-status="todo"><td>ENR-Z2</td><td>Close: the verifier is terminal at 33 in CI, and the docs cover every new surface.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-Z3" data-status="todo"><td>ENR-Z3</td><td>Cleanup after the final pull request merges: delete the plan and proof root, update TASKS.md.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+
+    <h3 id="task-ENR-A0">ENR-A0 Baseline</h3>
+    <ul>
+      <li><strong>Problem:</strong> the campaign needs a pinned baseline,
+        a red verifier, and a registered control plane.</li>
+
+      <li><strong>Owning seam and paths:</strong> this plan,
+        <code>docs/proof/enterprise-readiness/</code>,
+        <code>scripts/verify-enterprise-readiness.sh</code>, and
+        <code>docs/TASKS.md</code>.</li>
+
+      <li><strong>Steps:</strong> pin baseline <code>f7dfb6b</code>.
+        Create the proof root. Author the verifier with all 33 conditions
+        failing. Register the plan under Active Work.</li>
+
+      <li><strong>Acceptance:</strong> the verifier prints
+        <code>Summary: 0 passed, 33 failed</code> and exits nonzero. No
+        production file changes.</li>
+
+      <li><strong>Fail-before:</strong> the red verifier is the
+        fail-before evidence for every later task.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>bash scripts/verify-enterprise-readiness.sh</code> and
+        <code>go build ./...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-B1">ENR-B1 Prometheus metrics</h3>
+    <ul>
+      <li><strong>Problem:</strong> the only metrics surface is an admin
+        JSON endpoint. No scraper can read the gateway.</li>
+
+      <li><strong>Owning seam and paths:</strong> new
+        <code>internal/telemetry</code> owns the metric vocabulary.
+        <code>internal/server</code> mounts <code>GET /metrics</code>.
+        The proxy and execution seams record their existing
+        measurements.</li>
+
+      <li><strong>Steps:</strong> define counters and histograms for
+        requests, tokens, cost, TTFT, overhead, cache hits, provider
+        failures, and budget refusals. Label by provider, model,
+        protocol, and outcome, with no per-account labels. Mount
+        <code>/metrics</code> on by default, with a config switch to
+        turn it off or require admin scope. Document scrape setup in the
+        operator guide.</li>
+
+      <li><strong>Acceptance:</strong> a scrape after one chat request
+        shows nonzero request and token counters. Named tests cover the
+        seam and the route. ENR-V01 and ENR-V02 turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V01 and ENR-V02 red at
+        baseline.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/telemetry/... ./internal/server/...</code>,
+        then <code>bash scripts/benchmark-overhead.sh</code>, then
+        <code>bash scripts/verify-enterprise-readiness.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-B2">ENR-B2 OpenTelemetry traces</h3>
+    <ul>
+      <li><strong>Problem:</strong> no request produces a trace. A
+        platform team cannot see where a slow request spent its
+        time.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/telemetry</code> owns tracer setup and span
+        names. Spans start in server middleware and wrap routing, each
+        attempt, and the provider call.</li>
+
+      <li><strong>Steps:</strong> add OTLP exporter configuration that
+        honors the standard <code>OTEL_EXPORTER_OTLP_ENDPOINT</code>
+        variables, off when unset. Name spans for the request, the route
+        plan, each attempt, and the provider call. Attach the overhead
+        and TTFT values as span attributes. Propagate W3C trace context
+        from inbound headers. Keep the disabled path
+        allocation-free.</li>
+
+      <li><strong>Acceptance:</strong> with an in-memory exporter, one
+        chat request yields the four named spans in parent order. With
+        no configuration, the tracer is a no-op. ENR-V03 and ENR-V04
+        turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V03 and ENR-V04 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/telemetry/... ./internal/proxy/...</code>,
+        then <code>bash scripts/benchmark-overhead.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-B3">ENR-B3 Usage export</h3>
+    <ul>
+      <li><strong>Problem:</strong> usage records live in the KV store
+        and die with retention. No analytics system can consume
+        them.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/usage</code> gains a sink contract.
+        <code>internal/config</code> names the sink. The activity
+        controller in <code>internal/server</code> gains an export
+        mode.</li>
+
+      <li><strong>Steps:</strong> define the sink contract: receive each
+        finalized usage record, batch, and flush on interval and
+        shutdown. Implement a file sink writing NDJSON. Implement an
+        HTTP sink with bounded retry and a drop counter on the metrics
+        surface. Add <code>GET /api/v1/activity/export</code> serving
+        NDJSON and CSV under the existing activity scope. Document
+        both.</li>
+
+      <li><strong>Acceptance:</strong> a request under a configured file
+        sink appends one NDJSON line that matches the stored record. The
+        HTTP sink retries a failed post and counts drops. The export
+        endpoint streams the same records. ENR-V05 and ENR-V06 turn
+        green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V05 and ENR-V06 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/usage/... ./internal/server/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-C1">ENR-C1 Audit log</h3>
+    <ul>
+      <li><strong>Problem:</strong> key creation, credential changes, and
+        policy edits leave no trail. Enterprise review treats that as a
+        hard gate.</li>
+
+      <li><strong>Owning seam and paths:</strong> new
+        <code>internal/audit</code> owns the record, the actor, and
+        retention. Migration <code>0006_audit_log</code> lands in all
+        three sqlstore dialects. Admin controllers write records.
+        <code>GET /api/v1/admin/audit</code> and a console view read
+        them.</li>
+
+      <li><strong>Steps:</strong> define the record: time, actor, action,
+        subject, and outcome, never a credential value. The actor is a
+        key name, a console session grant kind, or an identity user.
+        Write from every admin mutation: keys, provider credentials,
+        accounts, templates, presets, auth mode, and identity grants.
+        Serve the admin route with paging and filters. Render the
+        console view. Prune past a configured retention window that
+        defaults to 400 days.</li>
+
+      <li><strong>Acceptance:</strong> a key create and delete under a
+        console session produce two records that name the actor. A
+        contract test walks the mutation handlers and asserts each one
+        writes an audit record. ENR-V07, ENR-V08, and ENR-V09 turn
+        green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V07 through ENR-V09 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/audit/... ./internal/sqlstore/...
+        ./internal/server/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-C2">ENR-C2 Webhooks</h3>
+    <ul>
+      <li><strong>Problem:</strong> a budget breach is a 402 and a job
+        finish is a poll. Nothing pushes.</li>
+
+      <li><strong>Owning seam and paths:</strong> new
+        <code>internal/events</code> owns the envelope, the HMAC-SHA256
+        signature, delivery with bounded retry, and the event names.
+        Emit sites: the budget middleware, <code>internal/jobs</code>,
+        <code>internal/providers/state</code>, and the admin key
+        lifecycle.</li>
+
+      <li><strong>Steps:</strong> define the envelope: id, type, time,
+        and a payload that obeys invariant 4. Deliver to configured
+        endpoints with an <code>X-Starport-Signature</code> header.
+        Retry three times with backoff and count dead letters on the
+        metrics surface. Emit budget threshold and exhaustion, job
+        terminal states, provider health transitions, and key lifecycle.
+        Document receiver verification with a sample.</li>
+
+      <li><strong>Acceptance:</strong> a test receiver records a signed
+        budget-exhausted delivery and a signed job-completed delivery.
+        Signature verification passes from the documented sample.
+        ENR-V10 and ENR-V11 turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V10 and ENR-V11 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/events/... ./internal/jobs/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-C3">ENR-C3 Security posture document</h3>
+    <ul>
+      <li><strong>Problem:</strong> a security review asks the same
+        questions each time, and the answers live in code.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>docs/SECURITY-POSTURE.md</code>, linked from the README
+        and the operator guide.</li>
+
+      <li><strong>Steps:</strong> document the credential model, the
+        encryption at rest, the authentication modes, and the data
+        flows. Document what leaves the process, the audit surface, SSO,
+        and a deployment hardening checklist. Map each claim to the gate
+        or test that proves it. Keep it distinct from the top-level
+        <code>SECURITY.md</code>, which owns vulnerability disclosure,
+        and cross-link the two. Wire the document into
+        <code>verify-doc-links.sh</code>.</li>
+
+      <li><strong>Acceptance:</strong> the document exists with the named
+        sections. Each claim carries its evidence pointer. The doc link
+        gate passes. ENR-V12 turns green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V12 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>bash scripts/verify-doc-links.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-D1">ENR-D1 /v1/responses</h3>
+    <ul>
+      <li><strong>Problem:</strong> the OpenAI SDK default surface moved
+        to the Responses API, and Starport does not serve it.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/protocol/openai</code> owns the codec.
+        <code>internal/server</code> mounts
+        <code>POST /v1/responses</code> behind
+        <code>chat:write</code>.</li>
+
+      <li><strong>Steps:</strong> map input items, instructions, and
+        sampling fields onto the canonical chat request. Map the
+        canonical result onto output items and the response object.
+        Stream the Responses event sequence from the canonical stream.
+        Refuse the stored-state features with a 400 and a named reason:
+        <code>previous_response_id</code>, stored responses, and
+        built-in tools. Record usage identically to chat.</li>
+
+      <li><strong>Acceptance:</strong> the official OpenAI SDK completes
+        a non-streaming and a streaming responses call in the smoke
+        suite. Stored-state fields draw the named 400. ENR-V13 and
+        ENR-V14 turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V13 and ENR-V14 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/protocol/openai/...
+        ./internal/server/...</code>, then
+        <code>bash scripts/smoke-openrouter-sdks.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-D2">ENR-D2 /v1/moderations</h3>
+    <ul>
+      <li><strong>Problem:</strong> no moderation surface exists, and the
+        ENR-F2 moderation guardrail needs one.</li>
+
+      <li><strong>Owning seam and paths:</strong> starmap adds the
+        <code>moderations</code> operation and its offerings first, in
+        the starmap repository. <code>internal/inference</code> owns the
+        canonical shape. Both protocol codecs and the server own the
+        wire surface behind a <code>moderations:write</code> scope.</li>
+
+      <li><strong>Steps:</strong> land the starmap operation and
+        offerings, then raise the dependency. Add the canonical
+        moderation request and result. Add the codec, the routes, and
+        operation-aware planning. Refuse a model that does not serve
+        moderations at planning time. Meter and price per the
+        offering.</li>
+
+      <li><strong>Acceptance:</strong> a moderation request to a catalog
+        moderation model returns category scores. A chat-only model
+        draws the planning refusal. ENR-V15 turns green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V15 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/inference/... ./internal/routing/...
+        ./internal/protocol/...</code>, then
+        <code>bash scripts/verify-starmap-ownership.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-D3">ENR-D3 /v1/batches</h3>
+    <ul>
+      <li><strong>Problem:</strong> bulk workloads have no offline path,
+        and evaluations check the box.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/jobs</code> generalizes beyond video and owns the
+        batch record. <code>internal/files</code> holds the input and
+        output files. Execution goes through the existing planner. The
+        server mounts create, list, get, and cancel routes under
+        <code>/v1/batches</code>.</li>
+
+      <li><strong>Steps:</strong> accept a JSONL input file by stored
+        file id. Validate each line as a chat, embeddings, or responses
+        request. Execute lines through the planner under the account's
+        rate and budget limits, with bounded concurrency. Write the
+        JSONL output and error files to the file store. Account each
+        line as one usage record that carries the batch id. Reuse the
+        AMJ state and retention vocabulary.</li>
+
+      <li><strong>Acceptance:</strong> a three-line batch completes with
+        an output file of three responses and one usage record per line.
+        A cancel mid-run reaches <code>cancelled</code> without new
+        lines starting. ENR-V16 and ENR-V17 turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V16 and ENR-V17 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/jobs/... ./internal/server/...</code>,
+        then confirm <code>verify-async-media-jobs.sh</code> stays at
+        18.</li>
+    </ul>
+
+    <h3 id="task-ENR-E1">ENR-E1 Routing spread</h3>
+    <ul>
+      <li><strong>Problem:</strong> ranking is fully deterministic, so
+        identical traffic converges on one route.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/routing</code> owns the strategy. The candidate
+        ordering in <code>internal/routing/planner.go</code> gains a
+        spread mode.</li>
+
+      <li><strong>Steps:</strong> define the band: candidates whose
+        ranking metric sits within a configured ratio of the best.
+        Select weighted-random inside the band, seeded per request.
+        Expose <code>provider.sort: "spread"</code> on the request and
+        the preset. Keep the deterministic default unchanged. Record the
+        chosen route as today.</li>
+
+      <li><strong>Acceptance:</strong> a distribution test over 1000
+        plans shows every in-band candidate chosen and no out-of-band
+        candidate chosen. Default requests keep the deterministic plan
+        byte for byte. ENR-V18 turns green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V18 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/routing/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-E2">ENR-E2 Shared provider health</h3>
+    <ul>
+      <li><strong>Problem:</strong> the circuit breaker and latency
+        averages are per-process maps, so each replica learns failures
+        alone.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/availability</code> and the router latency
+        tracker gain a KV-backed publication behind the existing
+        <code>storage.KVStore</code> contract. Process-local behavior
+        stays the fallback.</li>
+
+      <li><strong>Steps:</strong> publish breaker transitions and latency
+        snapshots to KV with short TTLs when the operator configures the
+        distributed store. Merge peer state on read, with local state
+        winning recency conflicts. Keep Badger-only deployments
+        identical in behavior. Bound the added read cost with a local
+        refresh interval.</li>
+
+      <li><strong>Acceptance:</strong> two trackers over one shared store
+        converge: the second tracker observes a breaker the first one
+        opened, within the refresh interval. With no shared store,
+        behavior matches the current tests. ENR-V19 and ENR-V20 turn
+        green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V19 and ENR-V20 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/availability/...
+        ./internal/router/...</code>, then
+        <code>bash scripts/benchmark-overhead.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-F1">ENR-F1 Guardrail seam</h3>
+    <ul>
+      <li><strong>Problem:</strong> no policy can inspect a request or a
+        response, and competitors made this the differentiator.</li>
+
+      <li><strong>Owning seam and paths:</strong> new
+        <code>internal/guardrails</code> owns the check contract, the
+        verdicts, the ordering, and the refusal shape. The verdicts are
+        <code>allow</code>, <code>redact</code>, and
+        <code>refuse</code>. <code>internal/proxy</code> invokes pre and
+        post. Configuration registers checks per deployment and per
+        account.</li>
+
+      <li><strong>Steps:</strong> define the check contract over
+        canonical requests and responses, never wire formats. Invoke
+        pre-request before planning and post-response before the caller
+        write. Buffer a bounded window for post checks on streams.
+        Refuse with a named guardrail error when a configured check
+        cannot evaluate, per invariant 6. Record the verdict in the
+        usage record.</li>
+
+      <li><strong>Acceptance:</strong> contract tests cover allow,
+        redact, refuse, and the fail-closed path on an erroring check.
+        An unconfigured deployment adds zero allocations on the hot
+        path. ENR-V21 and ENR-V22 turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V21 and ENR-V22 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/guardrails/...
+        ./internal/proxy/...</code>, then
+        <code>bash scripts/benchmark-overhead.sh</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-F2">ENR-F2 Built-in guardrails</h3>
+    <ul>
+      <li><strong>Problem:</strong> a seam with no checks guards
+        nothing.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/guardrails</code> ships two checks. One is a
+        deterministic PII detector and redactor. One is a moderation
+        check that calls the ENR-D2 surface through the account's own
+        routing.</li>
+
+      <li><strong>Steps:</strong> implement PII detection for email
+        addresses, phone numbers, card numbers under Luhn, and US SSNs.
+        Let configuration pick redact or refuse. Implement the
+        moderation check against a configured catalog moderation model,
+        with a threshold per category. Document both with configuration
+        samples.</li>
+
+      <li><strong>Acceptance:</strong> table tests prove detection and
+        redaction on positive and negative cases. The moderation check
+        refuses above threshold and allows below, against a stub
+        provider. ENR-V23 and ENR-V24 turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V23 and ENR-V24 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/guardrails/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-G1">ENR-G1 Team budgets</h3>
+    <ul>
+      <li><strong>Problem:</strong> limits hang off keys and accounts
+        only. A team of people sharing granted accounts has no
+        collective bound.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/limits</code> gains the team scope.
+        <code>internal/identity</code> stores the team budget.
+        Enforcement joins the existing pre-flight allowance check. The
+        console team surface renders it.</li>
+
+      <li><strong>Steps:</strong> extend the limits vocabulary with a
+        team budget over the same windowed nano-USD shape. Attribute
+        spend to a team when the serving session or key resolved through
+        that team's grant. Record the attribution in the usage record.
+        Enforce pre-flight beside the account allowance, with the same
+        refusal shape and headers. Render and edit the budget in the
+        console teams view.</li>
+
+      <li><strong>Acceptance:</strong> two users on one team exhaust the
+        team budget against one granted account and draw a 402 refusal.
+        A teamless key on the same account still passes. Usage rows carry the team
+        attribution. ENR-V25 and ENR-V26 turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V25 and ENR-V26 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/limits/... ./internal/identity/...
+        ./internal/server/...</code>, then confirm
+        <code>verify-credential-sharing.sh</code> stays at 23.</li>
+    </ul>
+
+    <h3 id="task-ENR-G2">ENR-G2 Organization tier</h3>
+    <ul>
+      <li><strong>Problem:</strong> a deployment with several isolated
+        account sets would need a tier above accounts.</li>
+
+      <li><strong>Owning seam and paths:</strong> not designed. The
+        rejected-designs entry owns the decision.</li>
+
+      <li><strong>Steps:</strong> none while deferred.</li>
+
+      <li><strong>Acceptance:</strong> the deferral and its re-open
+        condition stay recorded.</li>
+
+      <li><strong>Fail-before:</strong> not applicable.</li>
+
+      <li><strong>Verification:</strong> not applicable.</li>
+    </ul>
+
+    <h3 id="task-ENR-H1">ENR-H1 Semantic cache</h3>
+    <ul>
+      <li><strong>Problem:</strong> the response cache serves exact
+        canonical matches only, so near-duplicate traffic pays full
+        price.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/response/cache</code> owns the similarity layer
+        beside the exact identity. Embeddings come from a configured
+        catalog embedding model through the gateway's own embeddings
+        path.</li>
+
+      <li><strong>Steps:</strong> gate the layer opt-in per deployment
+        and per request. Apply it only to requests the exact cache
+        already deems cacheable. Embed the canonical prompt text and
+        store vectors in the KV plane beside the exact entry. Answer
+        when cosine similarity clears the configured threshold. Mark the
+        served response with the existing cache status vocabulary plus
+        the similarity score. Bound the vector scan per account and
+        evict vectors with their entries.</li>
+
+      <li><strong>Acceptance:</strong> two paraphrased prompts above the
+        threshold serve one provider call. Below the threshold they
+        serve two. With the flag off they serve two. ENR-V27 and ENR-V28
+        turn green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V27 and ENR-V28 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/response/cache/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-H2">ENR-H2 Preset revisions</h3>
+    <ul>
+      <li><strong>Problem:</strong> editing a preset destroys its
+        history, and a bad edit has no rollback.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>internal/presets</code> owns immutable revisions and
+        <code>@preset/name@N</code> resolution. The console preset view
+        renders the history.</li>
+
+      <li><strong>Steps:</strong> store each save as an immutable
+        revision with an incrementing number. The repository already
+        holds a <code>Revision</code> counter as an
+        optimistic-concurrency token. Reconcile or rename that field so
+        the two revision meanings never conflate. Resolve
+        <code>@preset/name</code> to the latest revision and
+        <code>@preset/name@N</code> to a pin. Add rollback as a new
+        revision that copies an old one. Render the history in the
+        console.</li>
+
+      <li><strong>Acceptance:</strong> three saves yield revisions 1
+        through 3. A pinned request uses revision 2 verbatim. Rollback
+        to 1 creates revision 4 equal to 1. ENR-V29 turns green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V29 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/presets/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-H3">ENR-H3 MCP server</h3>
+    <ul>
+      <li><strong>Problem:</strong> agent harnesses reach gateways over
+        MCP, and Starport offers no MCP surface.</li>
+
+      <li><strong>Owning seam and paths:</strong> new
+        <code>internal/mcp</code> owns the server and the tool
+        definitions. <code>starport mcp</code> runs it on stdio. Tools
+        call the gateway's own HTTP surface with a gateway key.</li>
+
+      <li><strong>Steps:</strong> serve three tools: search the model
+        catalog, read one model's detail and prices, and run a chat
+        completion. Authenticate with a gateway key from the
+        environment, never a provider credential. Reuse the catalog
+        projection and the canonical chat contract, adding no second
+        model vocabulary. Document client setup for two harnesses.</li>
+
+      <li><strong>Acceptance:</strong> an MCP client lists the three
+        tools and completes a catalog search and a chat call in tests.
+        An absent key refuses at startup. ENR-V30 and ENR-V31 turn
+        green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V30 and ENR-V31 red.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/mcp/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-Z1">ENR-Z1 IDENTITY-001 repair path</h3>
+    <ul>
+      <li><strong>Problem:</strong> a corrupt or foreign identity
+        hash-index record blocks operator deletion, per the TASKS.md
+        known issue.</li>
+
+      <li><strong>Owning seam and paths:</strong> the identity hash-index
+        repository and its deletion path.</li>
+
+      <li><strong>Steps:</strong> reproduce with a corrupt record in a
+        test. When an operator deletes the owning record, remove an
+        index record it cannot decode. Keep runtime authentication
+        failing closed.
+        Close the known-issue row.</li>
+
+      <li><strong>Acceptance:</strong> the regression test deletes an
+        entity whose index record is corrupt. Authentication against a
+        corrupt record still refuses. ENR-V32 turns green.</li>
+
+      <li><strong>Fail-before:</strong> the new regression test fails on
+        baseline.</li>
+
+      <li><strong>Verification:</strong> run
+        <code>go test ./internal/identity/...</code>.</li>
+    </ul>
+
+    <h3 id="task-ENR-Z2">ENR-Z2 Close</h3>
+    <ul>
+      <li><strong>Problem:</strong> a gate that no workflow runs cannot
+        report a regression. An undocumented surface does not exist for
+        an operator.</li>
+
+      <li><strong>Owning seam and paths:</strong>
+        <code>.github/workflows/ci.yml</code>, <code>AGENTS.md</code> as
+        the CLAUDE.md symlink target,
+        <code>docs/OPERATOR-GUIDE.md</code>, <code>README.md</code>, and
+        <code>docs/ARCHITECTURE.md</code>.</li>
+
+      <li><strong>Steps:</strong> add the verifier to CI and to the
+        required-evidence list. Document every new surface in the
+        operator guide and the architecture document. Update the README
+        capability table. Confirm every earlier gate keeps its terminal
+        count.</li>
+
+      <li><strong>Acceptance:</strong> the verifier reports
+        <code>Summary: 33 passed, 0 failed</code> in CI. ENR-V33 turns
+        green.</li>
+
+      <li><strong>Fail-before:</strong> ENR-V33 red.</li>
+
+      <li><strong>Verification:</strong> run the full required-evidence
+        roster from AGENTS.md.</li>
+    </ul>
+
+    <h3 id="task-ENR-Z3">ENR-Z3 Cleanup</h3>
+    <ul>
+      <li><strong>Problem:</strong> a merged plan must not linger as a
+        stale control plane.</li>
+
+      <li><strong>Owning seam and paths:</strong> this plan file, its
+        proof root, and <code>docs/TASKS.md</code>.</li>
+
+      <li><strong>Steps:</strong> confirm the merge of the final pull
+        request. Delete the plan and the proof root. Move the campaign
+        to Recently Completed with the PR range.</li>
+
+      <li><strong>Acceptance:</strong> the repository holds no reference
+        to this plan outside TASKS.md history.</li>
+
+      <li><strong>Fail-before:</strong> not applicable. The ledger row
+        records the merge.</li>
+
+      <li><strong>Verification:</strong> search the repository for
+        <code>enterprise-readiness</code> and confirm the end
+        state.</li>
+    </ul>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute docs/plans/enterprise-readiness-plan.html to completion. This
+is a whole-plan goal, not a single-task goal. Read the plan fully. Then
+read CLAUDE.md, docs/ARCHITECTURE.md, docs/TASKS.md, and
+docs/OPERATOR-GUIDE.md. Work in
+/Users/jack/src/github.com/agentstation/starport on one branch per
+task, named codex/enr-&lt;task&gt;. Chat history is not progress state.
+Resume from the status ledger, the execution log, and git state. After
+compaction, continue from the plan and git state. Do not restart.
+
+Loop: keep one task in_progress. Implement at the owning seam. Capture
+fail-before evidence. Run the verification commands. Commit the work
+per the commit policy. Write the proof file. Append the execution log
+with the work commit. Mark the task terminal with evidence. Commit the
+plan update the same way. Then advance to the next task. Decide rather
+than ask. Mark a wrong or already-satisfied task no-action with a
+one-line reason. Record a blocker and continue with the next eligible
+task. Binding constraints: the seven invariants and the non-goals in
+this plan.
+
+Commit policy: one pull request per task. Squash-merge manually after
+CI is green, because this repository has no auto-merge. Run autoreview
+with the pre-pr gate in auto mode before each pull request. The
+orchestrating Claude session runs the helper itself. A delegated Codex
+job never invokes it. No AI
+attribution. End commits with the session trailer the harness
+requires. Record each ledger transition as its own plan commit in the
+next task's pull request.
+
+Stop only at a valid stop state from the plans skill. Before you stop,
+update the ledger and the log, and record the next action in the
+status line. The goal is met when
+scripts/verify-enterprise-readiness.sh reports 33 passed in CI and
+every ledger row except ENR-Z3 is terminal.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-08-29</td><td>meta</td><td>authored</td><td>Plan authored at baseline f7dfb6b from the competitive gap audit. No implementation started by this step.</td></tr>
+        <tr><td>2026-08-29</td><td>meta</td><td>reviewed</td><td>Second-model review (Sol) verified paths, migration numbering, gate counts, and condition math. Fixes applied: ENR-C2 budget status 429 to 402, ENR-C3 SECURITY.md cross-link, five seams in architecture, ENR-H2 revision-field reconciliation note. Plan activated.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>

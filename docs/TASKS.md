@@ -7,7 +7,16 @@ Last Updated: 2026-08-29
 
 ### Active Work
 
-No plan is active.
+| Plan | Status | Location |
+| --- | --- | --- |
+| Enterprise readiness campaign (ENR) | active | [docs/plans/enterprise-readiness-plan.html](plans/enterprise-readiness-plan.html) |
+
+The ENR campaign closes the competitive gaps against the hosted gateways:
+observability export, audit and events, OpenAI surface parity, distributed
+health, guardrails, team budgets, the semantic cache, preset revisions, and
+an MCP server. `scripts/verify-enterprise-readiness.sh` guards it with 33
+conditions (`ENR-V01` through `ENR-V33`), authored red at baseline `f7dfb6b`.
+The gate joins CI at ENR-Z2.
 
 ### Proposed Work
 
