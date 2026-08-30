@@ -126,3 +126,15 @@ func TestHandlerServesThePrometheusTextFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestObserveUsageExportDropsCounts(t *testing.T) {
+	m := NewMetrics()
+	m.ObserveUsageExportDrops(3)
+	m.ObserveUsageExportDrops(0)
+	if got := testutil.ToFloat64(m.usageExportDrops); got != 3 {
+		t.Errorf("usage export drop counter = %v, want 3", got)
+	}
+
+	var nilMetrics *Metrics
+	nilMetrics.ObserveUsageExportDrops(1)
+}

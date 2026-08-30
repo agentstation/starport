@@ -1138,6 +1138,35 @@ client already started.
 Span attributes never carry an account, a key, or prompt content. The same
 privacy rule that bounds the metric labels bounds the spans.
 
+## Usage Export
+
+Usage records feed the activity API and die with retention. An analytics
+system that wants its own copy has two paths: a streaming sink and an
+export endpoint.
+
+Set `STARPORT_TELEMETRY_USAGE_EXPORT` to stream each finalized record out:
+
+- An `http://` or `https://` value posts NDJSON batches to that URL.
+- Any other value is a file path that NDJSON lines append to.
+- Empty (the default) exports nothing.
+
+The sink buffers and flushes every five seconds and at shutdown. It never
+blocks a request: when the target stays unreachable or the buffer fills,
+records drop and `starport_usage_export_dropped_total` counts them on the
+scrape. A failed post retries three times before its batch drops. The
+durable store keeps every record either way. A drop only leaves a gap in
+the streamed copy.
+
+`GET /api/v1/activity/export` streams the stored records for the
+authenticated key under the `activity:read` scope. It takes the same
+filters the activity listing takes (`model`, `provider`, `status`,
+`since`, `until`) and serves NDJSON by default or CSV with `format=csv`:
+
+```bash
+curl -H "Authorization: Bearer $STARPORT_API_KEY" \
+  "http://127.0.0.1:8080/api/v1/activity/export?format=csv" > activity.csv
+```
+
 ## Failure Diagnosis
 
 Run `starport doctor --probe` before you start the server. The output names
