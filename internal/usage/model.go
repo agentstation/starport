@@ -191,6 +191,16 @@ type Record struct {
 	// answering about it cost. It is nil when the turn recognized nothing.
 	ExtractionCost *Cost `json:"extraction_cost,omitempty"`
 
+	// GuardrailVerdict is the strongest guardrail verdict of the turn:
+	// `allow`, `redact`, or `refuse`. It is empty on a turn no guardrail
+	// inspected, which is what every record written before the guardrail
+	// seam existed reads back as.
+	GuardrailVerdict string `json:"guardrail_verdict,omitempty"`
+	// GuardrailCheck names the check behind a refusal, so an operator can
+	// see which policy stopped the turn. It is empty unless the verdict
+	// is `refuse`.
+	GuardrailCheck string `json:"guardrail_check,omitempty"`
+
 	// Cost is nil when no cost could be computed; CostUnavailableReason
 	// then names why. It covers the whole request, the document reads
 	// included.

@@ -18,6 +18,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/guardrails"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/router"
 	"github.com/agentstation/starport/internal/telemetry"
@@ -158,6 +159,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		record.CacheStatus = response.CacheStatus
 		record.Tokens = usageTokens(response.Response.Usage)
 		record.Media = usageMedia(response.Response.Usage)
+		record.GuardrailVerdict = response.GuardrailVerdict
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
@@ -394,6 +396,9 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		record.LatencyMS = time.Since(s.start).Milliseconds()
 		record.ModelUsed = s.modelUsed
 		record.CacheStatus = s.GetCacheStatus()
+		if verdict := findStreamGuardrailVerdict(s.stream); verdict != "" && record.GuardrailVerdict == "" {
+			record.GuardrailVerdict = verdict
+		}
 		if s.usage != nil {
 			latched := *s.usage
 			// A streamed answer reports its usage on one chunk and its
@@ -424,6 +429,22 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		}
 		s.capture.submit(record)
 	})
+}
+
+// findStreamGuardrailVerdict walks the stream wrapper chain to the
+// guardrail stream, when one wrapped this turn, and reads its verdict.
+func findStreamGuardrailVerdict(stream ChatCompletionStreamResponse) string {
+	for stream != nil {
+		if provider, ok := stream.(GuardrailVerdictProvider); ok {
+			return provider.GuardrailVerdict()
+		}
+		unwrapper, ok := stream.(StreamUnwrapper)
+		if !ok {
+			return ""
+		}
+		stream = unwrapper.Unwrap()
+	}
+	return ""
 }
 
 // findStreamEvidence walks the stream wrapper chain to the routed stream
@@ -500,6 +521,7 @@ func applyOutcome(record *usage.Record, err error) {
 	record.StatusCode = http.StatusInternalServerError
 	var validationError *ValidationError
 	var routingError *RoutingError
+	var refusal *guardrails.RefusalError
 	switch {
 	case errors.As(err, &validationError):
 		record.ErrorClass = string(failure.Validation)
@@ -507,6 +529,11 @@ func applyOutcome(record *usage.Record, err error) {
 	case errors.As(err, &routingError):
 		record.ErrorClass = string(failure.ProviderUnavailable)
 		record.StatusCode = http.StatusServiceUnavailable
+	case errors.As(err, &refusal):
+		record.ErrorClass = guardrailRefusalClass
+		record.StatusCode = http.StatusBadRequest
+		record.GuardrailVerdict = string(guardrails.VerdictRefuse)
+		record.GuardrailCheck = refusal.Check
 	}
 }
 
