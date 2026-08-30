@@ -7,6 +7,9 @@ deployment. Starport starts when storage, Starmap, and the initial gateway
 identity are usable. Provider credential state does not control gateway
 readiness.
 
+The security review answers live in the
+[security posture document](SECURITY-POSTURE.md).
+
 ## Requirements
 
 - Go 1.26.5 for a source build.

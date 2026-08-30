@@ -21,3 +21,10 @@ before that coordination is complete.
 
 If a report, log, trace, or reproduction included a secret, revoke and replace
 it immediately. Starport cannot recover or validate an exposed secret.
+
+## Deployment Security Posture
+
+The security review answers live in
+[docs/SECURITY-POSTURE.md](docs/SECURITY-POSTURE.md): the credential
+model, encryption at rest, authentication, the audit surface, and what
+leaves the process. This file owns vulnerability disclosure only.
