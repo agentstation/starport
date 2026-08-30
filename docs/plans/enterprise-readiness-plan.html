@@ -120,7 +120,7 @@
     Created: 2026-08-29 ·
     Baseline: main @ f7dfb6b ·
     Proof root: <code>docs/proof/enterprise-readiness/</code> ·
-    Next action: land ENR-B1.
+    Next action: land ENR-B2.
   </p>
 
   <section id="outcome">
@@ -319,8 +319,8 @@
       </thead>
       <tbody>
         <tr id="ENR-A0" data-status="done"><td>ENR-A0</td><td>Baseline: pin the baseline commit, create the proof root, author the verifier red, register the plan.</td><td><code>done</code></td><td>PR #309 merged as 9f3e3b6. Verifier red at f7dfb6b: 0 passed, 33 failed, exit 1. Proof: ENR-A0.md.</td></tr>
-        <tr id="ENR-B1" data-status="in_progress"><td>ENR-B1</td><td>Prometheus metrics: the telemetry seam and the /metrics endpoint.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="ENR-B2" data-status="todo"><td>ENR-B2</td><td>OpenTelemetry traces across proxy, routing, execution, and the provider call.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-B1" data-status="done"><td>ENR-B1</td><td>Prometheus metrics: the telemetry seam and the /metrics endpoint.</td><td><code>done</code></td><td>PR #310 merged as f32acb9. Verifier: 2 passed (V01, V02). Proof: ENR-B1.md.</td></tr>
+        <tr id="ENR-B2" data-status="in_progress"><td>ENR-B2</td><td>OpenTelemetry traces across proxy, routing, execution, and the provider call.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="ENR-B3" data-status="todo"><td>ENR-B3</td><td>Usage export: a configured sink streams usage records out, and the activity API exports them.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-C1" data-status="todo"><td>ENR-C1</td><td>Audit log: every admin mutation writes an actor-attributed relational record.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-C2" data-status="todo"><td>ENR-C2</td><td>Webhooks: signed events for budget, job, health, and key lifecycle.</td><td><code>todo</code></td><td></td></tr>
@@ -1049,6 +1049,8 @@ every ledger row except ENR-Z3 is terminal.</code></pre>
         <tr><td>2026-08-29</td><td>meta</td><td>authored</td><td>Plan authored at baseline f7dfb6b from the competitive gap audit. No implementation started by this step.</td></tr>
         <tr><td>2026-08-29</td><td>meta</td><td>reviewed</td><td>Second-model review (Sol) verified paths, migration numbering, gate counts, and condition math. Fixes applied: ENR-C2 budget status 429 to 402, ENR-C3 SECURITY.md cross-link, five seams in architecture, ENR-H2 revision-field reconciliation note. Plan activated.</td></tr>
         <tr><td>2026-08-29</td><td>ENR-A0</td><td>done</td><td>PR #309 merged as 9f3e3b6. Verifier authored red: 0 passed, 33 failed at f7dfb6b. Autoreview clean (Sol). CI green across all ten checks. ENR-B1 moves to in_progress.</td></tr>
+
+        <tr><td>2026-08-30</td><td>ENR-B1</td><td>done</td><td>PR #310 merged as f32acb9. Verifier: 2 passed, 31 failed (V01, V02 green). Full suite, lint, vet, and the overhead benchmark green. Autoreview clean (Sol, 0.96). CI green across all ten checks. ENR-B2 moves to in_progress.</td></tr>
       </tbody>
     </table>
   </section>

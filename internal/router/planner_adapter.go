@@ -11,6 +11,7 @@ import (
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/telemetry"
 )
 
 func (r *modelRouter) planRoute(
@@ -29,6 +30,8 @@ func (r *modelRouter) planOperation(
 	runtime connectors.RuntimeLease,
 	registryRequest *Request,
 ) (*routing.Plan, error) {
+	ctx, span := telemetry.StartSpan(ctx, telemetry.SpanRoutePlan)
+	defer span.End()
 	if r.availability != nil {
 		r.availability.Refresh(ctx)
 	}

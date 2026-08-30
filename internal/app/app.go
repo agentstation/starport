@@ -187,6 +187,7 @@ type runtimeBuilder struct {
 	gateway      proxy.Proxy
 	console      console.PageServer
 	metrics      *telemetry.Metrics
+	tracing      *telemetry.Tracing
 	auth         authRuntime
 	gate         *localauth.Gate
 	identityAuth *identity.Authenticator
@@ -616,6 +617,16 @@ func (b *runtimeBuilder) buildGateway() error {
 	if b.config.Telemetry.Metrics != config.TelemetryMetricsOff {
 		b.metrics = telemetry.NewMetrics()
 	}
+	// The tracer builds only when an OTLP endpoint is configured, so an
+	// unconfigured deployment dials nothing and every span call is a no-op.
+	if b.config.Telemetry.TracesEndpoint != "" {
+		tracing, err := telemetry.NewTracing(context.Background())
+		if err != nil {
+			return fmt.Errorf("open trace exporter: %w", err)
+		}
+		b.tracing = tracing
+		b.application.own("trace exporter", b.tracing.Shutdown)
+	}
 	// Usage capture wraps outside the proxy middleware chain so cache hits
 	// and every terminal outcome produce a record. The metric surface rides
 	// the same choke point: one completed request, one record, one scrape
@@ -714,6 +725,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		IdentityAuth: b.identityAuthenticator(),
 		Identity:     b.identityRepos,
 		Telemetry:    b.metrics,
+		Tracing:      b.tracing,
 	})
 	if err != nil {
 		if httpServer != nil {

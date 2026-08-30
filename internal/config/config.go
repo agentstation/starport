@@ -78,6 +78,14 @@ type TelemetryConfig struct {
 	// Metrics states who may read the Prometheus scrape at GET /metrics:
 	// "on" (default), "admin", or "off".
 	Metrics string `env:"METRICS,default=on"`
+
+	// TracesEndpoint holds the OTLP endpoint the standard OpenTelemetry
+	// environment names. The variables are OTEL_EXPORTER_OTLP_ENDPOINT and
+	// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, deliberately unprefixed: they are
+	// the cross-vendor contract every collector documents. Empty means the
+	// tracer stays a no-op. The loader fills this field; it carries no env
+	// tag because the gateway prefix does not apply.
+	TracesEndpoint string
 }
 
 // Validate refuses a metrics mode the router would silently read as "on".

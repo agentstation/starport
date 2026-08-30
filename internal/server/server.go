@@ -58,6 +58,7 @@ type Server struct {
 	usage              usage.Repository
 	providerOperations controllers.ProviderOperations
 	telemetry          *telemetry.Metrics
+	tracing            *telemetry.Tracing
 
 	// Handler collection
 	controllers *controllers.Controllers
@@ -125,6 +126,11 @@ type Dependencies struct {
 	// nil surface removes the /metrics route and observes nothing, which is
 	// what a deployment that turned metrics off gets.
 	Telemetry *telemetry.Metrics
+
+	// Tracing starts the request span and hands the tracer to the routing and
+	// execution seams. A nil tracer disables tracing without a guard anywhere
+	// else.
+	Tracing *telemetry.Tracing
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -162,6 +168,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		usage:              dependencies.Usage,
 		providerOperations: dependencies.ProviderOperations,
 		telemetry:          dependencies.Telemetry,
+		tracing:            dependencies.Tracing,
 	}
 	s.authPolicy = authmode.NewPolicy(authmode.Setting{
 		Mode:   config.AuthMode,

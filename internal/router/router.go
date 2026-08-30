@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/agentstation/starport/internal/availability"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/execution"
@@ -18,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/telemetry"
 )
 
 const (
@@ -251,9 +254,17 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 		}
 		request := prepareChatAttempt(req, boundRoute, false)
 		request.Credential = selected.material
+		callCtx, callSpan := telemetry.StartSpan(attemptCtx, telemetry.SpanProviderCall,
+			attribute.String(telemetry.AttrProvider, planned.Route.ProviderID),
+			attribute.String(telemetry.AttrModel, planned.Route.ID()),
+		)
 		endUpstream := execution.OverheadTimerFrom(attemptCtx).TrackUpstream()
-		response, requestErr := connector.Chat(attemptCtx, request)
+		response, requestErr := connector.Chat(callCtx, request)
 		endUpstream()
+		if requestErr != nil {
+			callSpan.RecordError(requestErr)
+		}
+		callSpan.End()
 		if requestErr != nil {
 			providerFailure := connectors.NormalizeFailure(planned.Route.ProviderID, requestErr)
 			return nil, providerFailure, credentialPolicy.afterFailure(planned.Route, providerFailure)

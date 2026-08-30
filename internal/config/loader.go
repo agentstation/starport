@@ -141,6 +141,15 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	if cfg.CredentialSources.RemoteRefreshInterval == 0 {
 		cfg.CredentialSources.RemoteRefreshInterval = credentials.DefaultDirectSecretRefreshInterval
 	}
+	// The OTLP endpoint keeps its standard unprefixed names, because they are
+	// the cross-vendor contract every collector documents. The specific
+	// traces variable beats the general one, matching the OpenTelemetry
+	// specification.
+	if endpoint, ok := lookuper.Lookup("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"); ok && endpoint != "" {
+		cfg.Telemetry.TracesEndpoint = endpoint
+	} else if endpoint, ok := lookuper.Lookup("OTEL_EXPORTER_OTLP_ENDPOINT"); ok && endpoint != "" {
+		cfg.Telemetry.TracesEndpoint = endpoint
+	}
 	if prepare != nil {
 		prepare(cfg)
 	}
