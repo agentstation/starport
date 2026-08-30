@@ -22,6 +22,19 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		r.Get("/ready", s.controllers.Health.Ready)
 	})
 
+	// Prometheus scrape. On by default the way the health checks are: the
+	// labels carry no caller identity, so the scrape exposes deployment
+	// aggregates, not tenant activity. An operator can still require the
+	// admin scope or remove the route through the telemetry configuration.
+	if s.telemetry != nil && s.cfg.MetricsMode != MetricsModeOff {
+		scrape := s.telemetry.Handler()
+		if s.cfg.MetricsMode == MetricsModeAdmin {
+			mux.With(s.requireAPIKey, s.requireAdmin).Method(http.MethodGet, "/metrics", scrape)
+		} else {
+			mux.Method(http.MethodGet, "/metrics", scrape)
+		}
+	}
+
 	// OpenAI-compatible API (v1)
 	mux.Route("/v1", func(r chi.Router) {
 		r.Use(selectProtocol(openAIProtocol))

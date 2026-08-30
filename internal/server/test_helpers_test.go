@@ -29,6 +29,7 @@ import (
 	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/telemetry"
 )
 
 type testServerConfig struct {
@@ -254,6 +255,10 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
 		Templates: templates,
 		Files:     fileService, Jobs: jobService,
+		// Production composes the metric surface for every mode but "off",
+		// so a route test that skipped it would serve a routing table no
+		// deployment runs.
+		Telemetry: telemetry.NewMetrics(),
 	})
 	if err != nil {
 		tb.Fatal(err)

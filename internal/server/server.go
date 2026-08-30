@@ -22,6 +22,7 @@ import (
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/ratelimit"
 	"github.com/agentstation/starport/internal/server/controllers"
+	"github.com/agentstation/starport/internal/telemetry"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -56,6 +57,7 @@ type Server struct {
 	rateLimits         ratelimit.Repository
 	usage              usage.Repository
 	providerOperations controllers.ProviderOperations
+	telemetry          *telemetry.Metrics
 
 	// Handler collection
 	controllers *controllers.Controllers
@@ -119,6 +121,10 @@ type Dependencies struct {
 	// degrade the members and teams endpoints to 503, loudly, so the
 	// console reads "not configured" rather than "nobody is here".
 	Identity identity.Repositories
+	// Telemetry serves the Prometheus scrape and counts budget refusals. A
+	// nil surface removes the /metrics route and observes nothing, which is
+	// what a deployment that turned metrics off gets.
+	Telemetry *telemetry.Metrics
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -155,6 +161,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		rateLimits:         dependencies.RateLimits,
 		usage:              dependencies.Usage,
 		providerOperations: dependencies.ProviderOperations,
+		telemetry:          dependencies.Telemetry,
 	}
 	s.authPolicy = authmode.NewPolicy(authmode.Setting{
 		Mode:   config.AuthMode,

@@ -1069,6 +1069,45 @@ while it reads the body, so that message states the limit alone.
 It then closes background work, cache, providers, and storage in reverse
 construction order.
 
+## Prometheus Metrics
+
+Starport serves a Prometheus scrape at `GET /metrics`. The scrape is on by
+default and needs no credentials, the same way the health checks do. Set
+`STARPORT_TELEMETRY_METRICS` to change that:
+
+- `on` (default): serve the scrape without credentials.
+- `admin`: serve the scrape only to a gateway key with the `admin` scope.
+- `off`: remove the route.
+
+Point a Prometheus scrape job at the gateway:
+
+```yaml
+scrape_configs:
+  - job_name: starport
+    static_configs:
+      - targets: ["127.0.0.1:8080"]
+```
+
+For `admin` mode, add the gateway key as a bearer credential:
+
+```yaml
+    authorization:
+      type: Bearer
+      credentials: <admin gateway key>
+```
+
+The metric names carry the `starport_` prefix. The gateway counts requests,
+tokens, cost, latency, time to first token, gateway overhead, cache hits,
+provider failures, and budget refusals. Labels name the protocol, operation,
+provider, model, and outcome. Labels never carry an account, a key, or any
+other caller identity. The scrape stays safe to share with a metrics system,
+and its label cardinality stays bounded.
+
+A budget refusal writes no usage record. The refusal counter
+`starport_budget_refusals_total` therefore counts refusals at the budget
+check itself, labeled by scope (`account` or `key`) and dimension (`spend`
+or `tokens`).
+
 ## Failure Diagnosis
 
 Run `starport doctor --probe` before you start the server. The output names
