@@ -42,16 +42,17 @@ const (
 type Metrics struct {
 	registry *prometheus.Registry
 
-	requests         *prometheus.CounterVec
-	tokens           *prometheus.CounterVec
-	costNanoUSD      *prometheus.CounterVec
-	duration         *prometheus.HistogramVec
-	timeToFirstToken *prometheus.HistogramVec
-	overhead         prometheus.Histogram
-	cacheHits        *prometheus.CounterVec
-	providerFailures *prometheus.CounterVec
-	budgetRefusals   *prometheus.CounterVec
-	usageExportDrops prometheus.Counter
+	requests           *prometheus.CounterVec
+	tokens             *prometheus.CounterVec
+	costNanoUSD        *prometheus.CounterVec
+	duration           *prometheus.HistogramVec
+	timeToFirstToken   *prometheus.HistogramVec
+	overhead           prometheus.Histogram
+	cacheHits          *prometheus.CounterVec
+	providerFailures   *prometheus.CounterVec
+	budgetRefusals     *prometheus.CounterVec
+	usageExportDrops   prometheus.Counter
+	webhookDeadLetters prometheus.Counter
 }
 
 // NewMetrics builds the metric vocabulary on its own registry. The gateway's
@@ -103,11 +104,15 @@ func NewMetrics() *Metrics {
 			Name: "starport_usage_export_dropped_total",
 			Help: "Usage records the export sink dropped because its target stayed unreachable or its buffer filled.",
 		}),
+		webhookDeadLetters: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "starport_webhook_dead_letters_total",
+			Help: "Webhook events that never delivered: every attempt failed, or the queue was full.",
+		}),
 	}
 	m.registry.MustRegister(
 		m.requests, m.tokens, m.costNanoUSD, m.duration, m.timeToFirstToken,
 		m.overhead, m.cacheHits, m.providerFailures, m.budgetRefusals,
-		m.usageExportDrops,
+		m.usageExportDrops, m.webhookDeadLetters,
 	)
 	return m
 }
@@ -180,6 +185,16 @@ func (m *Metrics) ObserveUsageExportDrops(count int) {
 		return
 	}
 	m.usageExportDrops.Add(float64(count))
+}
+
+// ObserveWebhookDeadLetters counts events the dispatcher could not deliver.
+// Like the export counter, it carries no labels: the endpoint set is fixed
+// by configuration.
+func (m *Metrics) ObserveWebhookDeadLetters(count int) {
+	if m == nil || count <= 0 {
+		return
+	}
+	m.webhookDeadLetters.Add(float64(count))
 }
 
 func orUnlabeled(value string) string {

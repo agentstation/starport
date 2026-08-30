@@ -138,3 +138,15 @@ func TestObserveUsageExportDropsCounts(t *testing.T) {
 	var nilMetrics *Metrics
 	nilMetrics.ObserveUsageExportDrops(1)
 }
+
+func TestObserveWebhookDeadLettersCounts(t *testing.T) {
+	m := NewMetrics()
+	m.ObserveWebhookDeadLetters(2)
+	m.ObserveWebhookDeadLetters(0)
+	if got := testutil.ToFloat64(m.webhookDeadLetters); got != 2 {
+		t.Errorf("webhook dead letter counter = %v, want 2", got)
+	}
+
+	var nilMetrics *Metrics
+	nilMetrics.ObserveWebhookDeadLetters(1)
+}

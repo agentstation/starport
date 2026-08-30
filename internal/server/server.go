@@ -59,6 +59,7 @@ type Server struct {
 	providerOperations controllers.ProviderOperations
 	telemetry          *telemetry.Metrics
 	tracing            *telemetry.Tracing
+	events             controllers.EventEmitter
 
 	// Handler collection
 	controllers *controllers.Controllers
@@ -135,6 +136,11 @@ type Dependencies struct {
 	// Audit records admin mutations and serves the trail back. A nil trail
 	// records nothing and degrades the audit listing to 503, loudly.
 	Audit controllers.AuditTrail
+
+	// Events pushes budget and key lifecycle events to the configured
+	// webhook endpoints. A nil emitter pushes nothing, which is the
+	// deployment with no endpoint configured.
+	Events controllers.EventEmitter
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -173,6 +179,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		providerOperations: dependencies.ProviderOperations,
 		telemetry:          dependencies.Telemetry,
 		tracing:            dependencies.Tracing,
+		events:             dependencies.Events,
 	}
 	s.authPolicy = authmode.NewPolicy(authmode.Setting{
 		Mode:   config.AuthMode,
@@ -207,6 +214,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		IdentityAuth:       dependencies.IdentityAuth,
 		Identity:           dependencies.Identity,
 		Audit:              dependencies.Audit,
+		Events:             dependencies.Events,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

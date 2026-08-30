@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/requestctx"
 	"github.com/agentstation/starport/internal/usage"
@@ -185,6 +186,17 @@ func (s *Server) allowBudget(
 		// A refused request writes no usage record, so the refusal counts
 		// here or nowhere.
 		s.telemetry.ObserveBudgetRefusal(string(binding.scope), string(dimension.name))
+		if s.events != nil {
+			// The payload names the holder and the meter, never a prompt or
+			// a credential: identifiers are the export surface's whole diet.
+			s.events.Emit(events.TypeBudgetExhausted, map[string]string{
+				"scope":      string(binding.scope),
+				"dimension":  string(dimension.name),
+				"interval":   binding.interval,
+				"account_id": accountID,
+				"key_id":     keyID,
+			})
+		}
 		writeProtocolError(w, r, http.StatusPaymentRequired, "permission_error",
 			"Insufficient quota: "+string(binding.scope)+" "+string(dimension.name)+
 				" budget exhausted for the current "+binding.interval+" window")

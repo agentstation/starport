@@ -287,3 +287,48 @@ func TestTheSweepClosesAJobNobodyCameBackFor(t *testing.T) {
 	require.Zero(t, again.Accounted)
 	require.Len(t, accountant.all(), 1)
 }
+
+// recordingNotifier is the event side under test: it keeps every terminal
+// entry it hears.
+type recordingNotifier struct {
+	mu      sync.Mutex
+	entries []jobs.AccountingEntry
+}
+
+func (n *recordingNotifier) JobEnded(_ context.Context, entry jobs.AccountingEntry) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.entries = append(n.entries, entry)
+}
+
+func (n *recordingNotifier) all() []jobs.AccountingEntry {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return append([]jobs.AccountingEntry(nil), n.entries...)
+}
+
+// The settle stamp that keeps the charge single keeps the notification
+// single: a receiver hears one end per job however often a caller polls.
+func TestATerminalJobNotifiesExactlyOnce(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	notifier := &recordingNotifier{}
+	service, _ := newService(t, jobs.WithNotifier(notifier))
+	runner := acceptedRunner()
+	runner.poll = jobs.Report{State: jobs.JobStateCompleted}
+
+	job, err := service.Submit(ctx, open(runner), submissionFor(accountA))
+	require.NoError(t, err)
+	require.Empty(t, notifier.all(), "a queued job has not ended and announces nothing")
+
+	for range 10 {
+		_, err := service.Refresh(ctx, runner, accountA, job.ID)
+		require.NoError(t, err)
+	}
+
+	entries := notifier.all()
+	require.Len(t, entries, 1)
+	require.Equal(t, job.ID, entries[0].JobID)
+	require.Equal(t, jobs.JobStateCompleted, entries[0].State)
+}

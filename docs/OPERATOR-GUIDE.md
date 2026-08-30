@@ -1204,6 +1204,61 @@ Records prune on write past the retention window.
 days. A failed audit write lands in the log and never changes the caller's
 response, because the mutation already happened.
 
+## Webhooks
+
+Starport pushes gateway events to HTTP endpoints you name. Webhooks stay
+off until configuration names a receiver.
+
+Set two environment variables:
+
+- `STARPORT_EVENTS_WEBHOOK_URLS` holds the receiver URLs, comma separated.
+- `STARPORT_EVENTS_WEBHOOK_SECRET` holds the signing secret.
+
+The gateway emits six event types:
+
+- `budget.exhausted` when a budget refusal writes a 402 answer.
+- `job.completed`, `job.failed`, and `job.cancelled` when an asynchronous
+  job reaches its terminal state, once per job.
+- `provider.health.changed` when a provider's status page moves to a new
+  indicator.
+- `key.created` and `key.deleted` when an admin mutation lands.
+
+Every delivery is one JSON envelope:
+
+```json
+{
+  "id": "evt-sample",
+  "type": "budget.exhausted",
+  "time": "2026-08-30T00:00:00Z",
+  "data": {"scope": "account"}
+}
+```
+
+The `data` map carries identifiers, scopes, and states only. A payload
+never holds a provider credential, a gateway key token, or prompt or
+response content.
+
+Each POST carries an `X-Starport-Signature` header: `sha256=` followed by
+the hex HMAC-SHA256 of the raw request body under your secret. Verify it
+before you trust a delivery. With the secret `whsec_demo_secret` and the
+body
+
+```json
+{"id":"evt-sample","type":"budget.exhausted","time":"2026-08-30T00:00:00Z","data":{"scope":"account"}}
+```
+
+the header value is
+`sha256=45f5f4544c3390994afa396a4fe0415d0c9574a32a3e1973bd9342b3e02a5b1d`.
+Compute the same HMAC over the received bytes and compare with a
+constant-time equality check.
+
+Delivery is asynchronous and never blocks a request. Each event gets three
+attempts per endpoint with doubling backoff, and a queue of at most 1000
+undelivered events. An event that spends every attempt, or arrives at a
+full queue, drops and counts on the scrape as
+`starport_webhook_dead_letters_total`. At shutdown the dispatcher delivers
+what is already queued before it stops.
+
 ## Failure Diagnosis
 
 Run `starport doctor --probe` before you start the server. The output names

@@ -107,6 +107,9 @@ type Config struct {
 	// records nothing and degrades the listing route to 503, the way an
 	// absent preset store degrades its surface.
 	Audit AuditTrail
+	// Events pushes key lifecycle events to the configured webhook
+	// endpoints. A nil emitter pushes nothing.
+	Events EventEmitter
 }
 
 // NewControllers creates a new controller collection
@@ -151,6 +154,7 @@ func NewControllers(cfg Config) *Controllers {
 	// because every mutating controller shares the one trail and a nil trail
 	// simply records nothing.
 	collections.Admin.audit = cfg.Audit
+	collections.Admin.events = cfg.Events
 	collections.Accounts.audit = cfg.Audit
 	collections.AccountTemplates.audit = cfg.Audit
 	collections.Members.audit = cfg.Audit

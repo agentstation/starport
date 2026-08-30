@@ -45,6 +45,7 @@ const (
 	responseMessageField        = "message"
 	responsePaginationField     = "pagination"
 	fieldLimit                  = "limit"
+	fieldName                   = "name"
 	fieldCreatedAt              = "created_at"
 	fieldError                  = "error"
 	fieldRequests               = "requests"
