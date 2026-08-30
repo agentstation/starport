@@ -675,7 +675,22 @@ func (b *runtimeBuilder) buildGateway() error {
 	// deployment never enters this middleware, so it adds nothing to the hot
 	// path. An unknown check name refuses to start.
 	if names := b.config.Guardrails.Names(); len(names) > 0 {
-		pipeline, err := guardrails.BuildPipeline(names)
+		thresholds, err := b.config.Guardrails.CategoryThresholds()
+		if err != nil {
+			return fmt.Errorf("build guardrail pipeline: %w", err)
+		}
+		settings := guardrails.Settings{
+			PIIMode:              b.config.Guardrails.PIIMode,
+			ModerationThreshold:  b.config.Guardrails.ModerationThreshold,
+			ModerationThresholds: thresholds,
+		}
+		if model := strings.TrimSpace(b.config.Guardrails.ModerationModel); model != "" {
+			// The moderator calls the finished gateway, late-bound: the
+			// classification then rides the account's own routing and
+			// draws its own usage record like any moderation request.
+			settings.Moderator = proxy.NewGatewayModerator(model, func() proxy.Proxy { return b.gateway })
+		}
+		pipeline, err := guardrails.BuildPipeline(names, settings)
 		if err != nil {
 			return fmt.Errorf("build guardrail pipeline: %w", err)
 		}

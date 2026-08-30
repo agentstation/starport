@@ -1029,6 +1029,59 @@ terminal state lowers it, and no interval resets it. It bounds concurrent
 provider work rather than request volume. It therefore composes with the
 request and token rates rather than replaces them.
 
+## Guardrails
+
+A guardrail check reads canonical text and answers allow, redact, or refuse.
+Checks run in the configured order over the request before planning and over
+the answer before the caller reads it. Guardrails stay off until configuration
+names a check, and an unconfigured deployment pays nothing on the request
+path.
+
+A configured check that cannot evaluate refuses rather than waves the text
+through unread. A refusal answers HTTP 400 with the check name, and the usage
+record carries the verdict. On a stream the gateway holds answer text in a
+bounded window and inspects each window before release.
+
+```bash
+export STARPORT_GUARDRAILS_CHECKS="pii,moderation"
+```
+
+An unknown check name refuses to start.
+
+### The pii check
+
+The `pii` check detects personal identifiers with no model call: email
+addresses, phone numbers, card numbers under Luhn, and dashed US SSNs. The
+`redact` mode rewrites each identifier to a bracketed label such as
+`[redacted-card]`. The `refuse` mode stops the exchange, and the reason names
+the categories rather than the values.
+
+```bash
+export STARPORT_GUARDRAILS_CHECKS="pii"
+export STARPORT_GUARDRAILS_PII_MODE="redact"
+```
+
+The mode defaults to `redact`.
+
+### The moderation check
+
+The `moderation` check classifies text with a catalog moderation model and
+refuses when any category scores at or above its threshold. The call rides
+the account's own routing. Credential selection, usage capture, and limits
+treat it as the account's own moderation request. The classification draws
+its own usage record beside the turn that asked for it.
+
+```bash
+export STARPORT_GUARDRAILS_CHECKS="moderation"
+export STARPORT_GUARDRAILS_MODERATION_MODEL="openai/omni-moderation-latest"
+export STARPORT_GUARDRAILS_MODERATION_THRESHOLD="0.5"
+export STARPORT_GUARDRAILS_MODERATION_THRESHOLDS="violence=0.8,self-harm=0.2"
+```
+
+The default threshold is `0.5`. A category named in the override list reads
+its own threshold, and every other category reads the default. A pipeline
+that names the moderation check without a model refuses to start.
+
 ## Container Start
 
 The Compose file starts Starport with Valkey. Its optional `.env` file passes

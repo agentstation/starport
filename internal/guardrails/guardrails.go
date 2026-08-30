@@ -164,24 +164,48 @@ type StaticPolicy struct {
 // PipelineFor implements Policy.
 func (p StaticPolicy) PipelineFor(string) *Pipeline { return p.Pipeline }
 
-// builtins registers the checks configuration can name. The built-in
-// checks task populates it.
-var builtins = map[string]func() Check{}
+// Settings carries what the built-in checks read at construction. The
+// composition root fills it from configuration and wires the Moderator.
+type Settings struct {
+	// PIIMode picks what a PII finding does: PIIModeRedact or
+	// PIIModeRefuse. Empty redacts.
+	PIIMode string
+	// Moderator answers moderation scores for the moderation check. Nil
+	// refuses to build that check: a deployment that names it without a
+	// model to call must not serve traffic as if it ran.
+	Moderator Moderator
+	// ModerationThreshold refuses when any category scores at or above
+	// it. Zero takes DefaultModerationThreshold.
+	ModerationThreshold float64
+	// ModerationThresholds overrides the threshold per category name.
+	ModerationThresholds map[string]float64
+}
+
+// builtins registers the checks configuration can name.
+var builtins = map[string]func(Settings) (Check, error){
+	piiCheckName:        newPIICheck,
+	moderationCheckName: newModerationCheck,
+}
 
 // ErrUnknownCheck refuses a configured name this build does not ship.
 var ErrUnknownCheck = errors.New("unknown guardrail check")
 
 // BuildPipeline resolves configured check names into a pipeline. An
-// unknown name is a startup error, not a silent skip: a deployment that
-// asked for a check it cannot run must not serve traffic as if it ran.
-func BuildPipeline(names []string) (*Pipeline, error) {
+// unknown name or an unbuildable check is a startup error, not a silent
+// skip: a deployment that asked for a check it cannot run must not serve
+// traffic as if it ran.
+func BuildPipeline(names []string, settings Settings) (*Pipeline, error) {
 	checks := make([]Check, 0, len(names))
 	for _, name := range names {
 		constructor, ok := builtins[name]
 		if !ok {
 			return nil, fmt.Errorf("%w: %q (known checks: %s)", ErrUnknownCheck, name, knownCheckNames())
 		}
-		checks = append(checks, constructor())
+		check, err := constructor(settings)
+		if err != nil {
+			return nil, fmt.Errorf("check %q: %w", name, err)
+		}
+		checks = append(checks, check)
 	}
 	return NewPipeline(checks...), nil
 }
