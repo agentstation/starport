@@ -512,3 +512,48 @@ func TestUsageRecordCarriesTheServedCredentialSource(t *testing.T) {
 		require.Equal(t, "gateway", records[0].CredentialSource)
 	})
 }
+
+// recordingUsageObserver captures the records submit hands to observers.
+type recordingUsageObserver struct {
+	mu      sync.Mutex
+	records []usage.Record
+}
+
+func (o *recordingUsageObserver) ObserveUsage(record usage.Record) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.records = append(o.records, record)
+}
+
+func (o *recordingUsageObserver) all() []usage.Record {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]usage.Record(nil), o.records...)
+}
+
+// An observer sees the same record the repository stores, before the async
+// write: a dropped store write must still reach the metric surface.
+func TestUsageCaptureNotifiesObservers(t *testing.T) {
+	snapshot, routeID, _ := pricedTestSnapshot(t)
+	repository := &recordingUsageRepository{}
+	observer := &recordingUsageObserver{}
+	// A nil observer is filtered at construction, so composition roots can pass
+	// an optional metric surface without a guard at every call site.
+	capture := NewUsageCapture(repository, observer, nil)
+	router := &usageEvidenceRouter{response: chatEvidenceResponse(routeID, snapshot, 100, 40)}
+	service := capture.Wrap(&proxy{router: router})
+
+	_, err := service.ProcessChatCompletion(context.Background(), usageChatRequest())
+	require.NoError(t, err)
+	capture.Flush()
+
+	observed := observer.all()
+	require.Len(t, observed, 1)
+	stored := repository.all()
+	require.Len(t, stored, 1)
+	require.Equal(t, stored[0], observed[0])
+	require.Equal(t, usage.OperationChat, observed[0].Operation)
+	require.Equal(t, "test-provider", observed[0].Provider)
+	require.EqualValues(t, 100, observed[0].Tokens.Input)
+	require.EqualValues(t, 40, observed[0].Tokens.Output)
+}

@@ -7,6 +7,16 @@ import (
 	"github.com/agentstation/starport/internal/authmode"
 )
 
+// Metrics modes name who may read the Prometheus scrape.
+const (
+	// MetricsModeOn serves GET /metrics to every caller.
+	MetricsModeOn = "on"
+	// MetricsModeAdmin serves GET /metrics only to the admin scope.
+	MetricsModeAdmin = "admin"
+	// MetricsModeOff removes the route.
+	MetricsModeOff = "off"
+)
+
 // Config holds server configuration
 type Config struct {
 	// Port to listen on
@@ -73,6 +83,14 @@ type Config struct {
 	// the same acknowledgment startup validation reads, and the runtime switch
 	// reads it for the same reason.
 	AllowRemoteNoAuth bool
+
+	// MetricsMode states who may read GET /metrics: MetricsModeOn serves
+	// every caller, MetricsModeAdmin requires the admin scope, and
+	// MetricsModeOff removes the route. Application composition supplies it
+	// from the loaded telemetry configuration; an empty value reads as on,
+	// so a hand-built server serves the scrape the way a deployment does by
+	// default.
+	MetricsMode string
 
 	// CORS configuration
 	CORS CORSConfig

@@ -4,6 +4,7 @@
 package config
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ type Config struct {
 	Jobs              JobsConfig         `env:",prefix=JOBS_"`
 	Console           ConsoleConfig      `env:",prefix=CONSOLE_"`
 	Identity          IdentityConfig     `env:",prefix=IDENTITY_"`
+	Telemetry         TelemetryConfig    `env:",prefix=TELEMETRY_"`
 
 	providerEnvironment  environmentLookup
 	credentialResolver   *credentials.Resolver
@@ -54,6 +56,37 @@ func (c *Config) AuthModeSource() authmode.Source {
 		return authmode.SourceConfig
 	default:
 		return authmode.SourceUnset
+	}
+}
+
+// Metrics exposure modes for TelemetryConfig.
+const (
+	// TelemetryMetricsOn serves GET /metrics to every caller. It is the
+	// default: the labels carry no caller identity, so the scrape exposes
+	// deployment aggregates, not tenant activity.
+	TelemetryMetricsOn = "on"
+	// TelemetryMetricsAdmin requires the admin scope on GET /metrics.
+	TelemetryMetricsAdmin = "admin"
+	// TelemetryMetricsOff removes the route.
+	TelemetryMetricsOff = "off"
+)
+
+// TelemetryConfig selects the observability export surfaces. The metric
+// vocabulary itself lives in internal/telemetry; this section only states
+// which surfaces a deployment serves.
+type TelemetryConfig struct {
+	// Metrics states who may read the Prometheus scrape at GET /metrics:
+	// "on" (default), "admin", or "off".
+	Metrics string `env:"METRICS,default=on"`
+}
+
+// Validate refuses a metrics mode the router would silently read as "on".
+func (c TelemetryConfig) Validate() error {
+	switch c.Metrics {
+	case "", TelemetryMetricsOn, TelemetryMetricsAdmin, TelemetryMetricsOff:
+		return nil
+	default:
+		return fmt.Errorf("telemetry metrics mode %q is not one of on, admin, off", c.Metrics)
 	}
 }
 
@@ -370,6 +403,11 @@ func (c *Config) Validate() error {
 
 	// Validate the file byte store selection
 	if err := c.Files.Validate(); err != nil {
+		return err
+	}
+
+	// Validate the telemetry exposure selection
+	if err := c.Telemetry.Validate(); err != nil {
 		return err
 	}
 

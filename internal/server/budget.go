@@ -182,6 +182,9 @@ func (s *Server) allowBudget(
 	w.Header().Set(dimension.scopeHeader, string(binding.scope))
 
 	if binding.exhausted {
+		// A refused request writes no usage record, so the refusal counts
+		// here or nowhere.
+		s.telemetry.ObserveBudgetRefusal(string(binding.scope), string(dimension.name))
 		writeProtocolError(w, r, http.StatusPaymentRequired, "permission_error",
 			"Insufficient quota: "+string(binding.scope)+" "+string(dimension.name)+
 				" budget exhausted for the current "+binding.interval+" window")

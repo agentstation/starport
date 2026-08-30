@@ -51,20 +51,37 @@ type UsageRecorder interface {
 	Put(ctx context.Context, record usage.Record) error
 }
 
+// UsageObserver sees every record this middleware captures, before the
+// asynchronous write. The telemetry seam satisfies it, which is how one
+// choke point feeds both the activity store and the scrape.
+type UsageObserver interface {
+	ObserveUsage(record usage.Record)
+}
+
 // UsageCapture is a proxy middleware that records one usage.Record per
 // completed inference request. Writes are asynchronous, bounded, and
 // best-effort: capture failure never fails or delays a request.
 type UsageCapture struct {
-	recorder UsageRecorder
-	pending  chan struct{}
-	group    sync.WaitGroup
+	recorder  UsageRecorder
+	observers []UsageObserver
+	pending   chan struct{}
+	group     sync.WaitGroup
 }
 
-// NewUsageCapture creates the capture middleware around one recorder.
-func NewUsageCapture(recorder UsageRecorder) *UsageCapture {
+// NewUsageCapture creates the capture middleware around one recorder. Each
+// observer sees every captured record synchronously, so an observer must be
+// cheap; counter arithmetic is, a network call is not.
+func NewUsageCapture(recorder UsageRecorder, observers ...UsageObserver) *UsageCapture {
+	kept := make([]UsageObserver, 0, len(observers))
+	for _, observer := range observers {
+		if observer != nil {
+			kept = append(kept, observer)
+		}
+	}
 	return &UsageCapture{
-		recorder: recorder,
-		pending:  make(chan struct{}, usageCaptureMaxPendingWrites),
+		recorder:  recorder,
+		observers: kept,
+		pending:   make(chan struct{}, usageCaptureMaxPendingWrites),
 	}
 }
 
@@ -79,8 +96,17 @@ func (c *UsageCapture) Flush() {
 }
 
 // submit writes one record on a detached bounded background goroutine.
+// Observers run first and synchronously: a dropped or failed store write
+// still counts on the scrape, so the two surfaces disagree only in the
+// direction an operator can live with.
 func (c *UsageCapture) submit(record usage.Record) {
-	if c == nil || c.recorder == nil {
+	if c == nil {
+		return
+	}
+	for _, observer := range c.observers {
+		observer.ObserveUsage(record)
+	}
+	if c.recorder == nil {
 		return
 	}
 	select {

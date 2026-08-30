@@ -44,6 +44,7 @@ import (
 	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
+	"github.com/agentstation/starport/internal/telemetry"
 	"github.com/agentstation/starport/internal/tokenize"
 	"github.com/agentstation/starport/internal/usage"
 )
@@ -185,6 +186,7 @@ type runtimeBuilder struct {
 	jobs         *jobs.Service
 	gateway      proxy.Proxy
 	console      console.PageServer
+	metrics      *telemetry.Metrics
 	auth         authRuntime
 	gate         *localauth.Gate
 	identityAuth *identity.Authenticator
@@ -609,9 +611,16 @@ func (b *runtimeBuilder) buildGateway() error {
 	// Preset references resolve before caching and routing so cache keys and
 	// routes see the resolved request.
 	b.gateway = proxy.NewPresetResolver(b.presets).Wrap(b.gateway)
+	// The metric surface composes with the gateway even when the route is
+	// admin-guarded; only "off" removes it entirely.
+	if b.config.Telemetry.Metrics != config.TelemetryMetricsOff {
+		b.metrics = telemetry.NewMetrics()
+	}
 	// Usage capture wraps outside the proxy middleware chain so cache hits
-	// and every terminal outcome produce a record.
-	usageCapture := proxy.NewUsageCapture(b.usageRecords)
+	// and every terminal outcome produce a record. The metric surface rides
+	// the same choke point: one completed request, one record, one scrape
+	// observation.
+	usageCapture := proxy.NewUsageCapture(b.usageRecords, b.metrics)
 	b.gateway = usageCapture.Wrap(b.gateway)
 	b.application.own("usage capture", func(context.Context) error {
 		usageCapture.Flush()
@@ -704,6 +713,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		LocalGate:    b.gate,
 		IdentityAuth: b.identityAuthenticator(),
 		Identity:     b.identityRepos,
+		Telemetry:    b.metrics,
 	})
 	if err != nil {
 		if httpServer != nil {
@@ -1329,6 +1339,7 @@ func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {
 		AuthModeStore:              auth.store,
 		AllowRemoteNoAuth:          cfg.Security.AllowRemoteNoAuth,
 		UnauthenticatedScopes:      cfg.Security.UnauthenticatedScopes,
+		MetricsMode:                cfg.Telemetry.Metrics,
 		EnableRateLimiting:         cfg.Security.EnableRateLimiting,
 		RateLimitRequestsPerWindow: int64(cfg.RateLimiting.DefaultRequestsPerMinute),
 		RateLimitWindow:            cfg.RateLimiting.WindowSize,
