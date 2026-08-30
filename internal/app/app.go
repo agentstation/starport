@@ -27,6 +27,7 @@ import (
 	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/files"
+	"github.com/agentstation/starport/internal/guardrails"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
 	"github.com/agentstation/starport/internal/limits"
@@ -669,6 +670,17 @@ func (b *runtimeBuilder) buildGateway() error {
 		}))
 	}
 	b.gateway = proxy.New(b.application.registry, modelRouter, proxyOptions...)
+	// Guardrails wrap inside the preset resolver so the checks read the
+	// resolved request, and only when a check is configured: an unconfigured
+	// deployment never enters this middleware, so it adds nothing to the hot
+	// path. An unknown check name refuses to start.
+	if names := b.config.Guardrails.Names(); len(names) > 0 {
+		pipeline, err := guardrails.BuildPipeline(names)
+		if err != nil {
+			return fmt.Errorf("build guardrail pipeline: %w", err)
+		}
+		b.gateway = proxy.NewGuardrails(guardrails.StaticPolicy{Pipeline: pipeline}).Wrap(b.gateway)
+	}
 	// Preset references resolve before caching and routing so cache keys and
 	// routes see the resolved request.
 	b.gateway = proxy.NewPresetResolver(b.presets).Wrap(b.gateway)

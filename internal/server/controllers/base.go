@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/guardrails"
 	"github.com/agentstation/starport/internal/protocol/openai"
 	"github.com/agentstation/starport/internal/protocol/openrouter"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -37,6 +38,7 @@ const (
 	errorTypeServiceUnavailable = "service_unavailable"
 	errorTypeProvider           = "provider_error"
 	errorTypeNotFound           = "not_found_error"
+	errorTypeGuardrailRefusal   = "guardrail_refusal"
 	errorCodeNotFound           = "not_found"
 	openRouterErrorTypeField    = "error_type"
 	providerField               = "provider"
@@ -269,6 +271,15 @@ func errorShape(err error) (status int, errorType, message string, param *string
 	if errors.As(err, &normalized) {
 		status, errorType = normalizedFailureShape(normalized.Kind())
 		return status, errorType, normalized.SafeMessage(), nil
+	}
+
+	// A guardrail refusal is a policy answer about this request's content,
+	// so it reads as a caller error that names the refusing check. It covers
+	// the fail-closed path too: a configured check that could not evaluate
+	// refuses, and the caller reads the same shape.
+	var refusal *guardrails.RefusalError
+	if errors.As(err, &refusal) {
+		return http.StatusBadRequest, errorTypeGuardrailRefusal, refusal.Error(), nil
 	}
 
 	// An unknown preset reference is a caller error against a named gateway

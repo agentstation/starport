@@ -154,6 +154,11 @@ type ChatCompletionResponse struct {
 	Attempts         int                              `json:"-"`
 	RoutingDuration  time.Duration                    `json:"-"`
 	CatalogSnapshot  *runtimecatalog.RoutableSnapshot `json:"-"`
+
+	// GuardrailVerdict is the strongest verdict the guardrail pipeline
+	// answered over this turn: allow, redact, or refuse. Empty means no
+	// guardrail ran. The usage record carries it; the wire never does.
+	GuardrailVerdict string `json:"-"`
 }
 
 // ChatCompletionStreamResponse represents a streaming response
