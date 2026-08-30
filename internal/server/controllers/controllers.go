@@ -20,6 +20,7 @@ type Controllers struct {
 	Health               *HealthController
 	Chat                 *ChatController
 	OpenRouterChat       *ChatController
+	Responses            *ResponsesController
 	Embeddings           *EmbeddingsController
 	OpenRouterEmbeddings *EmbeddingsController
 	Rerank               *RerankController
@@ -118,6 +119,7 @@ func NewControllers(cfg Config) *Controllers {
 		Health:               NewHealthController(cfg.ServiceName, cfg.Version),
 		Chat:                 NewChatController(cfg.Service),
 		OpenRouterChat:       NewOpenRouterChatController(cfg.Service),
+		Responses:            NewResponsesController(cfg.Service),
 		Embeddings:           NewEmbeddingsController(cfg.Service),
 		OpenRouterEmbeddings: NewOpenRouterEmbeddingsController(cfg.Service),
 		Rerank:               NewRerankController(cfg.Service),

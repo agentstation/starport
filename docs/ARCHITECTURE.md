@@ -545,6 +545,7 @@ OpenAI-compatible:
 
 ```text
 POST   /v1/chat/completions
+POST   /v1/responses
 POST   /v1/embeddings
 POST   /v1/rerank
 POST   /v1/images/generations

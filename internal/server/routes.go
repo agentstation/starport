@@ -47,6 +47,11 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// Chat completions
 		r.With(s.requireAnyScope("chat:write")).Post("/chat/completions", s.controllers.Chat.Create)
 
+		// Responses (POST /v1/responses): the stateless subset of the
+		// OpenAI Responses API. It rides the chat scope because it is the
+		// same conversation capability in another wire shape.
+		r.With(s.requireAnyScope("chat:write")).Post("/responses", s.controllers.Responses.Create)
+
 		// Embeddings
 		r.With(s.requireAnyScope("chat:write", "embeddings:write")).Post("/embeddings", s.controllers.Embeddings.Create)
 
@@ -383,6 +388,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //
 // OpenAI-Compatible API (v1):
 //   POST /v1/chat/completions   - Create chat completion
+//   POST /v1/responses          - Create a response, stateless subset
 //   POST /v1/embeddings         - Create embeddings
 //   POST /v1/rerank             - Rank documents against a query (rerank:write)
 //   POST /v1/images/generations - Generate images (images:write)

@@ -89,7 +89,35 @@ embeddings_response=$(curl --fail --silent --show-error \
 printf '%s' "$embeddings_response" | grep -q '"embedding":\[0.1,0.2,0.3\]'
 printf '%s\n' 'PASS raw HTTP embeddings'
 
+openai_base="$base_url/v1"
+
+responses_response=$(curl --fail --silent --show-error \
+	-H "Authorization: Bearer $api_key" \
+	-H 'Content-Type: application/json' \
+	-d '{"model":"openai/gpt-4.1","input":"smoke"}' \
+	"$openai_base/responses")
+printf '%s' "$responses_response" | grep -q '"object":"response"'
+printf '%s' "$responses_response" | grep -q '"text":"starport smoke ok"'
+printf '%s\n' 'PASS raw HTTP responses'
+
+responses_stream=$(curl --fail --silent --show-error --no-buffer \
+	-H "Authorization: Bearer $api_key" \
+	-H 'Content-Type: application/json' \
+	-d '{"model":"openai/gpt-4.1","input":"smoke","stream":true}' \
+	"$openai_base/responses")
+printf '%s' "$responses_stream" | grep -q 'event: response.completed'
+printf '%s\n' 'PASS raw HTTP responses stream'
+
+responses_refusal=$(curl --silent --show-error \
+	-H "Authorization: Bearer $api_key" \
+	-H 'Content-Type: application/json' \
+	-d '{"model":"openai/gpt-4.1","input":"smoke","previous_response_id":"resp_0"}' \
+	"$openai_base/responses")
+printf '%s' "$responses_refusal" | grep -q '"param":"previous_response_id"'
+printf '%s\n' 'PASS raw HTTP responses stored-state refusal'
+
 export STARPORT_SMOKE_BASE_URL="$api_base"
+export STARPORT_SMOKE_OPENAI_BASE_URL="$openai_base"
 export STARPORT_SMOKE_API_KEY="$api_key"
 
 python_environment="$temporary_directory/python"
@@ -97,8 +125,10 @@ python3 -m venv "$python_environment"
 "$python_environment/bin/python" -m pip install \
 	--disable-pip-version-check \
 	--quiet \
-	'openrouter==1.1.38'
+	'openrouter==1.1.38' \
+	'openai==3.6.0'
 "$python_environment/bin/python" "$repository_root/scripts/smoke_openrouter_python.py"
+"$python_environment/bin/python" "$repository_root/scripts/smoke_openai_responses.py"
 
 typescript_environment="$temporary_directory/typescript"
 mkdir -p "$typescript_environment"
