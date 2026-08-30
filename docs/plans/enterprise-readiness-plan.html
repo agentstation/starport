@@ -120,7 +120,7 @@
     Created: 2026-08-29 ·
     Baseline: main @ f7dfb6b ·
     Proof root: <code>docs/proof/enterprise-readiness/</code> ·
-    Next action: land ENR-D2.
+    Next action: land ENR-D3.
   </p>
 
   <section id="outcome">
@@ -326,8 +326,8 @@
         <tr id="ENR-C2" data-status="done"><td>ENR-C2</td><td>Webhooks: signed events for budget, job, health, and key lifecycle.</td><td><code>done</code></td><td>PR #314 merged as 1332903. Verifier: 11 passed (V01&#8211;V11). Proof: ENR-C2.md.</td></tr>
         <tr id="ENR-C3" data-status="done"><td>ENR-C3</td><td>Security posture document for procurement review.</td><td><code>done</code></td><td>PR #315 merged as be4a577. Verifier: 12 passed (V01&#8211;V12). Proof: ENR-C3.md.</td></tr>
         <tr id="ENR-D1" data-status="done"><td>ENR-D1</td><td>/v1/responses: the stateless subset of the OpenAI Responses API.</td><td><code>done</code></td><td>PR #316 merged as 8a763da. Verifier: 14 passed (V01&#8211;V14). Proof: ENR-D1.md.</td></tr>
-        <tr id="ENR-D2" data-status="in_progress"><td>ENR-D2</td><td>/v1/moderations: catalog-driven moderation route. Depends on the starmap moderations operation.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="ENR-D3" data-status="todo"><td>ENR-D3</td><td>/v1/batches: gateway-executed batches over the files and jobs seams.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-D2" data-status="done"><td>ENR-D2</td><td>/v1/moderations: catalog-driven moderation route. Depends on the starmap moderations operation.</td><td><code>done</code></td><td>PR #317 merged as 3c2e3da4. Verifier: 15 passed (V01&#8211;V15). Proof: ENR-D2.md.</td></tr>
+        <tr id="ENR-D3" data-status="in_progress"><td>ENR-D3</td><td>/v1/batches: gateway-executed batches over the files and jobs seams.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="ENR-E1" data-status="todo"><td>ENR-E1</td><td>Routing spread: opt-in weighted selection inside a ranking band.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-E2" data-status="todo"><td>ENR-E2</td><td>Shared provider health through KV when the operator configures Valkey.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-F1" data-status="todo"><td>ENR-F1</td><td>Guardrail seam: ordered pre and post checks that fail closed.</td><td><code>todo</code></td><td></td></tr>
@@ -1050,6 +1050,7 @@ every ledger row except ENR-Z3 is terminal.</code></pre>
         <tr><td>2026-08-29</td><td>meta</td><td>reviewed</td><td>Second-model review (Sol) verified paths, migration numbering, gate counts, and condition math. Fixes applied: ENR-C2 budget status 429 to 402, ENR-C3 SECURITY.md cross-link, five seams in architecture, ENR-H2 revision-field reconciliation note. Plan activated.</td></tr>
         <tr><td>2026-08-29</td><td>ENR-A0</td><td>done</td><td>PR #309 merged as 9f3e3b6. Verifier authored red: 0 passed, 33 failed at f7dfb6b. Autoreview clean (Sol). CI green across all ten checks. ENR-B1 moves to in_progress.</td></tr>
 
+        <tr><td>2026-08-30</td><td>ENR-D2</td><td>done</td><td>PR #317 merged as 3c2e3da4. Verifier: 15 passed, 18 failed (V01&#8211;V15 green), the exact D2 target. Starmap v0.15.0 supplies the moderations operation. Full suite, lint, vet, benchmark, smoke-first-run, SDK smoke, console (210 tests), and all structural gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-D3 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-D1</td><td>done</td><td>PR #316 merged as 8a763da. Verifier: 14 passed, 19 failed (V01&#8211;V14 green), the exact D1 target. Full suite, lint, vet, benchmark, smoke-first-run, SDK smoke with the official OpenAI SDK, and all 24 structural gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-D2 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-C3</td><td>done</td><td>PR #315 merged as be4a577. Verifier: 12 passed, 21 failed (V01&#8211;V12 green), the exact phase C target. Doc links, doc-link verifier, and README quickstart gates green. Technical-writing lint clean on all touched prose. Autoreview clean (Sol, 0.99). CI green across all ten checks. ENR-D1 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-C2</td><td>done</td><td>PR #314 merged as 1332903. Verifier: 11 passed, 22 failed (V01&#8211;V11 green). Full suite, lint, vet, benchmark, doc links, and seven repo gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-C3 moves to in_progress.</td></tr>
