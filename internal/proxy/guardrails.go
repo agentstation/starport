@@ -43,6 +43,37 @@ type guardrailService struct {
 	policy guardrails.Policy
 }
 
+// guardrailIdentityKey keys the calling request's gateway identity in the
+// context, for a check that routes a model call of its own.
+type guardrailIdentityKey struct{}
+
+// guardrailIdentity is the identity a guardrail model call runs under.
+// It is the calling request's own identity, so credential selection and
+// usage attribution treat the call as the account's.
+type guardrailIdentity struct {
+	AccountID string
+	KeyID     string
+	RequestID string
+	Protocol  string
+}
+
+// withGuardrailIdentity stamps the calling request's identity into the
+// context before the pipeline runs.
+func withGuardrailIdentity(ctx context.Context, req *ChatCompletionRequest) context.Context {
+	return context.WithValue(ctx, guardrailIdentityKey{}, guardrailIdentity{
+		AccountID: req.AccountID,
+		KeyID:     req.KeyID,
+		RequestID: req.RequestID,
+		Protocol:  req.Protocol,
+	})
+}
+
+// guardrailIdentityFrom reads the identity back inside a check's call.
+func guardrailIdentityFrom(ctx context.Context) (guardrailIdentity, bool) {
+	identity, ok := ctx.Value(guardrailIdentityKey{}).(guardrailIdentity)
+	return identity, ok
+}
+
 // ProcessChatCompletion checks the request before planning and the answer
 // before the caller reads it.
 func (s *guardrailService) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
@@ -50,6 +81,7 @@ func (s *guardrailService) ProcessChatCompletion(ctx context.Context, req *ChatC
 	if pipeline.Len() == 0 {
 		return s.Proxy.ProcessChatCompletion(ctx, req)
 	}
+	ctx = withGuardrailIdentity(ctx, req)
 	requestVerdict, err := inspectMessages(ctx, pipeline, guardrails.DirectionRequest, req.Request.Messages)
 	if err != nil {
 		return nil, err
@@ -79,6 +111,7 @@ func (s *guardrailService) ProcessChatCompletionStream(ctx context.Context, req 
 	if pipeline.Len() == 0 {
 		return s.Proxy.ProcessChatCompletionStream(ctx, req)
 	}
+	ctx = withGuardrailIdentity(ctx, req)
 	requestVerdict, err := inspectMessages(ctx, pipeline, guardrails.DirectionRequest, req.Request.Messages)
 	if err != nil {
 		return nil, err

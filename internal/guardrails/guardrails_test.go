@@ -115,7 +115,7 @@ func TestNilPipelineAllowsEverything(t *testing.T) {
 // TestBuildPipelineRefusesAnUnknownName holds the startup contract: a
 // configured check no build ships is an error, not a silent skip.
 func TestBuildPipelineRefusesAnUnknownName(t *testing.T) {
-	_, err := BuildPipeline([]string{"no-such-check"})
+	_, err := BuildPipeline([]string{"no-such-check"}, Settings{})
 	require.ErrorIs(t, err, ErrUnknownCheck)
 	require.Contains(t, err.Error(), "no-such-check")
 }
