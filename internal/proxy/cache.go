@@ -310,6 +310,14 @@ func (s *cachedService) ProcessRerank(ctx context.Context, req *RerankRequest) (
 	return s.service.ProcessRerank(ctx, req)
 }
 
+// ProcessModerations routes one moderation request without caching it. A
+// verdict reads inputs by position in one caller's own list, and a moderation
+// answer that could go stale against a retrained classifier is worth less
+// than the cheap call it would save.
+func (s *cachedService) ProcessModerations(ctx context.Context, req *ModerationRequest) (*ModerationResponse, error) {
+	return s.service.ProcessModerations(ctx, req)
+}
+
 // ProcessImages routes one image request without caching it.
 func (s *cachedService) ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error) {
 	return s.service.ProcessImages(ctx, req)

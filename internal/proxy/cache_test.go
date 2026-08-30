@@ -376,6 +376,11 @@ func (m *mockProxyImpl) ProcessRerank(context.Context, *RerankRequest) (*RerankR
 	return &RerankResponse{}, nil
 }
 
+func (m *mockProxyImpl) ProcessModerations(context.Context, *ModerationRequest) (*ModerationResponse, error) {
+	m.count("ProcessModerations")
+	return &ModerationResponse{}, nil
+}
+
 func (m *mockProxyImpl) GetLogo(context.Context, view.LogoKind, string) ([]byte, error) {
 	return nil, &ProviderError{Code: "not_found", Message: "Logo not found"}
 }

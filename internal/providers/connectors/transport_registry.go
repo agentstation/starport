@@ -158,7 +158,13 @@ func ProductionTransportRegistry() (*TransportRegistry, error) {
 	return NewTransportRegistry(
 		TransportDescriptor{
 			EndpointType: catalogs.EndpointTypeOpenAI,
-			Operations:   append([]catalogs.ProviderOperation{chat, embeddings}, media...),
+			// Moderations sits beside chat and media on the one protocol that
+			// publishes it: a moderation model answers over the same wire
+			// conventions, at the path the catalog names for the operation.
+			Operations: append(
+				[]catalogs.ProviderOperation{chat, embeddings, catalogs.ProviderOperationModerations},
+				media...,
+			),
 			Factory: func(providerID catalogs.ProviderID, config ProviderConfig) (Connector, error) {
 				return newOpenAIConnector(providerID, string(providerID), config)
 			},

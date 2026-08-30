@@ -168,6 +168,32 @@ func ValidateRerankRequest(req *RerankRequest) error {
 	return nil
 }
 
+// ValidateModerationRequest checks one canonical moderation request. Like the
+// rerank validator, it repeats the emptiness checks the codec performed so
+// the guarantee belongs to the operation rather than to one wire format.
+func ValidateModerationRequest(req *ModerationRequest) error {
+	if req == nil {
+		return validationError("request", "request is required")
+	}
+	request := req.Request
+	if request.Model == "" {
+		return validationError("model", "model is required")
+	}
+	if len(request.Inputs) == 0 {
+		return validationError("input", "input is required")
+	}
+	// An empty input classifies nothing, and a provider bills the request that
+	// carries it, so it stops here with its position named.
+	for index, input := range request.Inputs {
+		if input == "" {
+			return validationError(
+				fmt.Sprintf("input[%d]", index), "input cannot be empty",
+			)
+		}
+	}
+	return nil
+}
+
 // ValidateImagesRequest checks one image generation or image edit request.
 func ValidateImagesRequest(req *ImagesRequest) error {
 	if req == nil {

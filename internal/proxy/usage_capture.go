@@ -226,6 +226,14 @@ func (s *usageCaptureService) ProcessRerank(ctx context.Context, req *RerankRequ
 	return captureOperation(ctx, s, usage.OperationRerank, req, req.Request.Model, s.Proxy.ProcessRerank)
 }
 
+// ProcessModerations records usage for one completed moderation request.
+func (s *usageCaptureService) ProcessModerations(
+	ctx context.Context,
+	req *ModerationRequest,
+) (*ModerationResponse, error) {
+	return captureOperation(ctx, s, usage.OperationModerations, req, req.Request.Model, s.Proxy.ProcessModerations)
+}
+
 // ProcessImages records usage for one completed image request.
 func (s *usageCaptureService) ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error) {
 	return captureOperation(ctx, s, usage.OperationImages, req, req.Request.Model, s.Proxy.ProcessImages)
@@ -295,6 +303,8 @@ func operationUsage(response any) inference.Usage {
 	case inference.TranscriptionResponse:
 		return typed.Usage
 	case inference.RerankResponse:
+		return typed.Usage
+	case inference.ModerationResponse:
 		return typed.Usage
 	default:
 		return inference.Usage{}
