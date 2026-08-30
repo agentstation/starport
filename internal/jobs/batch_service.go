@@ -183,7 +183,7 @@ func (s *BatchService) Submit(ctx context.Context, submission BatchSubmission) (
 	// The batch outlives the request that submitted it, so the run detaches
 	// from the request context on purpose. Cancel reaches it through the
 	// stored cancel function, not through the submitter's context.
-	go s.run(batch, submission.IO, submission.Runner) //nolint:gosec // G118: detaching is the contract.
+	go s.run(batch, submission.IO, submission.Runner) // #nosec G118 -- detaching is the contract.
 	return batch, nil
 }
 
