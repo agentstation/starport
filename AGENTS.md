@@ -101,6 +101,7 @@ bash scripts/verify-catalog-performance.sh
 bash scripts/verify-credential-sharing.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
+bash scripts/smoke-first-run.sh
 go test ./...
 go vet ./...
 make lint

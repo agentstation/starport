@@ -81,6 +81,23 @@ func (s *Store) Load(ctx context.Context) (Token, error) {
 	})
 }
 
+// Peek reads the current token without taking the file lock and without
+// creating anything on disk — no directory, no lock file. Writes land through
+// an atomic rename, so a plain read never sees a half-written record; what a
+// peeking reader gives up is only the guarantee that the token is not rotated
+// mid-call. A development gateway uses it, because that gateway promises to
+// leave the disk exactly as it found it.
+func (s *Store) Peek(_ context.Context) (Token, error) {
+	token, found, err := s.read()
+	if err != nil {
+		return Token{}, err
+	}
+	if !found {
+		return Token{}, ErrNotFound
+	}
+	return token, nil
+}
+
 // LoadOrMint reads the current token, minting one if the machine has none. The
 // second return value reports whether this call is the one that minted it, so a
 // first boot can say so and every later boot can stay quiet.

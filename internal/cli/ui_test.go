@@ -248,6 +248,26 @@ func TestDevelopmentHonoursNoOpen(t *testing.T) {
 	assert.Contains(t, output.String(), consoleURL)
 }
 
+// TestDevDoesNotGreetOrStamp keeps the development mode stateless. The session
+// output already carries the console link, and the welcome's stamp would be
+// the one file a mode that promises to create none leaves behind.
+func TestDevDoesNotGreetOrStamp(t *testing.T) {
+	deps, output, paths := uiDependencies(t)
+	t.Setenv("CI", "1")
+	deps.StartDevelopment = func(context.Context, GatewayOptions) (DevelopmentSession, error) {
+		return DevelopmentSession{
+			URL: "http://127.0.0.1:8080", APIKey: "development-key",
+			Run:   func(context.Context) error { return nil },
+			Close: func(context.Context) error { return nil },
+		}, nil
+	}
+
+	require.NoError(t, runCLI(t, deps, "dev"))
+
+	assert.NotContains(t, output.String(), "Welcome to Starport")
+	assert.NoFileExists(t, paths.WelcomeStampFile)
+}
+
 // TestTheWelcomePrintsOnce keeps the greeting from becoming noise. It is only
 // true on a first run, and an operator who sees it on every start learns to
 // scroll past the one screen that was written for them.

@@ -106,7 +106,7 @@ if ! initialization="$("${starport_environment[@]}" "$binary" init --name smoke-
 	exit 1
 fi
 gateway_key="$(jq -er '.api_key | select(length > 0)' <<<"$initialization")"
-test "$(jq -r .identity_name <<<"$initialization")" = smoke-admin
+test "$(jq -r .api_key_name <<<"$initialization")" = smoke-admin
 test "$(jq -r .config_file <<<"$initialization")" = "$config_directory/config.env"
 if grep -q '^OPENAI_API_KEY=' "$config_directory/config.env"; then
 	printf 'first-run initialization persisted a provider credential\n' >&2
