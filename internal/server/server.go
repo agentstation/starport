@@ -131,6 +131,10 @@ type Dependencies struct {
 	// execution seams. A nil tracer disables tracing without a guard anywhere
 	// else.
 	Tracing *telemetry.Tracing
+
+	// Audit records admin mutations and serves the trail back. A nil trail
+	// records nothing and degrades the audit listing to 503, loudly.
+	Audit controllers.AuditTrail
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -202,6 +206,7 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		LocalGate:          dependencies.LocalGate,
 		IdentityAuth:       dependencies.IdentityAuth,
 		Identity:           dependencies.Identity,
+		Audit:              dependencies.Audit,
 	}
 	s.controllers = controllers.NewControllers(handlerConfig)
 

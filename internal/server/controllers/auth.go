@@ -19,6 +19,7 @@ type AuthController struct {
 	store       authmode.Repository
 	bindHost    string
 	allowRemote bool
+	audit       AuditRecorder
 }
 
 // NewAuthController creates a controller over the running authentication
@@ -127,7 +128,9 @@ func (c *AuthController) SetMode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setting := authmode.Setting{Mode: mode, Source: authmode.SourceConsole, UpdatedAt: time.Now().UTC()}
-	if err := c.persist(r, setting); err != nil {
+	err := c.persist(r, setting)
+	writeAudit(r.Context(), c.audit, "auth_mode.update", string(mode), err)
+	if err != nil {
 		if errors.Is(err, authmode.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
 				"The authentication mode changed while this request was in flight")

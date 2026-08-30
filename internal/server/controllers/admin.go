@@ -32,6 +32,7 @@ type AdminController struct {
 	issuer       *apikey.Issuer
 	usageRecords usage.Repository
 	fileBackend  string
+	audit        AuditRecorder
 }
 
 // AdminOption adjusts what the admin surface reports.
@@ -177,6 +178,11 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:     req.ExpiresAt,
 		Metadata:      convertStringMapToInterface(req.Metadata),
 	})
+	subject := req.Name
+	if err == nil {
+		subject = issued.APIKey.ID
+	}
+	writeAudit(ctx, h.audit, "key.create", subject, err)
 	if err != nil {
 		if isKeyValidationError(err) {
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
@@ -405,6 +411,7 @@ func (h *AdminController) UpdateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated, err := h.apiKeys.Update(ctx, apiKey, record.Revision)
+	writeAudit(ctx, h.audit, "key.update", keyID, err)
 	if err != nil {
 		if errors.Is(err, apikey.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest, "API key changed during update")
@@ -428,7 +435,9 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	keyID := chi.URLParam(r, "key_id")
 
-	if err := h.apiKeys.Delete(ctx, keyID, 0); err != nil {
+	err := h.apiKeys.Delete(ctx, keyID, 0)
+	writeAudit(ctx, h.audit, "key.delete", keyID, err)
+	if err != nil {
 		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
 			return

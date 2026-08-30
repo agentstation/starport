@@ -1666,3 +1666,41 @@ export function listActivity(filters: ActivityFilters): Promise<ActivityPage> {
 export function listAdminActivity(filters: ActivityFilters): Promise<ActivityPage> {
   return request<ActivityPage>(`/api/v1/admin/activity${activityQuery(filters)}`);
 }
+
+// --- Audit log ---
+
+// AuditRecord is one admin mutation on the durable trail: who did what to
+// which subject, and whether the store accepted it. It never holds a
+// credential value.
+export type AuditRecord = {
+  id?: number;
+  time?: string;
+  actor?: string;
+  action?: string;
+  subject?: string;
+  outcome?: string;
+};
+
+export type AuditPage = {
+  data?: AuditRecord[];
+  next_cursor?: string;
+};
+
+export type AuditFilters = {
+  action?: string;
+  actor?: string;
+  since?: string;
+  limit?: number;
+  cursor?: string;
+};
+
+export function listAuditLog(filters: AuditFilters): Promise<AuditPage> {
+  const params = new URLSearchParams();
+  if (filters.action) params.set("action", filters.action);
+  if (filters.actor) params.set("actor", filters.actor);
+  if (filters.since) params.set("since", filters.since);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.cursor) params.set("cursor", filters.cursor);
+  const query = params.toString();
+  return request<AuditPage>(`/api/v1/admin/audit${query ? `?${query}` : ""}`);
+}

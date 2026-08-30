@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/audit"
 	"github.com/agentstation/starport/internal/authmode"
 	"github.com/agentstation/starport/internal/availability"
 	"github.com/agentstation/starport/internal/blob"
@@ -182,6 +183,7 @@ type runtimeBuilder struct {
 	presets      presets.Repository
 	sqlDB        *sqlstore.DB
 	templates    account.TemplateRepository
+	audit        *audit.Repository
 	files        *files.Service
 	jobs         *jobs.Service
 	gateway      proxy.Proxy
@@ -400,6 +402,10 @@ func (b *runtimeBuilder) openConcepts() error {
 	b.templates, err = account.OpenTemplates(b.sqlDB)
 	if err != nil {
 		return fmt.Errorf("open account template repository: %w", err)
+	}
+	b.audit, err = audit.Open(b.sqlDB, b.config.Audit.RetentionWindow())
+	if err != nil {
+		return fmt.Errorf("open audit repository: %w", err)
 	}
 	if err := b.openFileService(); err != nil {
 		return err
@@ -762,6 +768,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		Identity:     b.identityRepos,
 		Telemetry:    b.metrics,
 		Tracing:      b.tracing,
+		Audit:        b.audit,
 	})
 	if err != nil {
 		if httpServer != nil {

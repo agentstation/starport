@@ -1167,6 +1167,43 @@ curl -H "Authorization: Bearer $STARPORT_API_KEY" \
   "http://127.0.0.1:8080/api/v1/activity/export?format=csv" > activity.csv
 ```
 
+## Audit Log
+
+Every admin mutation leaves one durable record: who asked, what it touched,
+and whether the store accepted it. The trail covers gateway API keys,
+accounts, account templates, teams, memberships, grants, shared credentials,
+BYOK, presets, and the authentication mode. A record never holds a credential
+value.
+
+Each record names its actor with one prefixed string:
+
+- `key:<name>` is a gateway API key, by name when it has one and by ID
+  otherwise.
+- `console:<grant>` is a machine-local console session: `ticket` or
+  `local-token`.
+- `user:<subject>` is an identity-grant console session.
+- `anonymous` is a caller without an authenticated identity.
+
+The outcome is `ok` when the store accepted the mutation and `error` when the
+store refused it. A request refused before the store, such as a validation
+failure, records nothing.
+
+Read the trail with `GET /api/v1/admin/audit` under the admin scope. The
+listing serves the newest records first and takes `action`, `actor`, `since`,
+`until`, `limit`, and `cursor` filters:
+
+```bash
+curl -H "Authorization: Bearer $STARPORT_API_KEY" \
+  "http://127.0.0.1:8080/api/v1/admin/audit?action=key.create&limit=50"
+```
+
+The console renders the same trail on its Audit Log page.
+
+Records prune on write past the retention window.
+`STARPORT_AUDIT_RETENTION` sets the window, and the default `9600h` keeps 400
+days. A failed audit write lands in the log and never changes the caller's
+response, because the mutation already happened.
+
 ## Failure Diagnosis
 
 Run `starport doctor --probe` before you start the server. The output names

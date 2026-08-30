@@ -32,6 +32,7 @@ type accountPolicyReader interface {
 type ProviderCredentialsController struct {
 	providerKeys keyring.ProviderKeys
 	accounts     accountPolicyReader
+	audit        AuditRecorder
 }
 
 // NewProviderCredentialsController creates the credential controller. A nil
@@ -132,6 +133,11 @@ func (h *ProviderCredentialsController) SharedCreate(w http.ResponseWriter, r *h
 			Access: credentials.Access(request.Access),
 			Grants: request.Grants,
 		})
+	subject := provider
+	if err == nil {
+		subject = provider + "/" + credential.ID
+	}
+	writeAudit(r.Context(), h.audit, "credential.create", subject, err)
 	if err != nil {
 		h.writeWriteError(w, err, provider, "store")
 		return
@@ -183,6 +189,7 @@ func (h *ProviderCredentialsController) SharedUpdate(w http.ResponseWriter, r *h
 	}
 
 	credential, err := h.providerKeys.UpdateSharedCredential(r.Context(), provider, credentialID, update)
+	writeAudit(r.Context(), h.audit, "credential.update", provider+"/"+credentialID, err)
 	if err != nil {
 		if errors.Is(err, keyring.ErrKeyNotFound) {
 			h.writeLookupError(w, err, provider, "update")
@@ -201,7 +208,9 @@ func (h *ProviderCredentialsController) SharedDelete(w http.ResponseWriter, r *h
 	}
 	provider := chi.URLParam(r, providerField)
 	credentialID := chi.URLParam(r, fieldCredentialID)
-	if err := h.providerKeys.DeleteSharedCredential(r.Context(), provider, credentialID); err != nil {
+	err := h.providerKeys.DeleteSharedCredential(r.Context(), provider, credentialID)
+	writeAudit(r.Context(), h.audit, "credential.delete", provider+"/"+credentialID, err)
+	if err != nil {
 		h.writeLookupError(w, err, provider, "delete")
 		return
 	}
@@ -399,15 +408,20 @@ func (h *ProviderCredentialsController) put(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	subject := chi.URLParam(r, fieldAccountID) + "/" + provider
 	_, err := h.providerKeys.GetKey(ctx, scope, provider)
 	switch {
 	case err == nil:
-		if _, updateErr := h.providerKeys.UpdateKey(ctx, scope, provider, fields, config, nil, nil); updateErr != nil {
+		_, updateErr := h.providerKeys.UpdateKey(ctx, scope, provider, fields, config, nil, nil)
+		writeAudit(ctx, h.audit, "byok.put", subject, updateErr)
+		if updateErr != nil {
 			h.writeWriteError(w, updateErr, provider, "update")
 			return
 		}
 	case errors.Is(err, keyring.ErrKeyNotFound):
-		if _, addErr := h.providerKeys.AddKey(ctx, scope, provider, fields, config, false, 0); addErr != nil {
+		_, addErr := h.providerKeys.AddKey(ctx, scope, provider, fields, config, false, 0)
+		writeAudit(ctx, h.audit, "byok.put", subject, addErr)
+		if addErr != nil {
 			h.writeWriteError(w, addErr, provider, "store")
 			return
 		}
@@ -430,7 +444,9 @@ func (h *ProviderCredentialsController) remove(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	provider := chi.URLParam(r, providerField)
 
-	if err := h.providerKeys.DeleteKey(ctx, scope, provider); err != nil {
+	err := h.providerKeys.DeleteKey(ctx, scope, provider)
+	writeAudit(ctx, h.audit, "byok.delete", chi.URLParam(r, fieldAccountID)+"/"+provider, err)
+	if err != nil {
 		h.writeLookupError(w, err, provider, "delete")
 		return
 	}

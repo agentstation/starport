@@ -20,6 +20,7 @@ const presetsNotConfiguredMessage = "Preset storage is not configured"
 // PresetsController serves preset CRUD under /api/v1/presets.
 type PresetsController struct {
 	repository presets.Repository
+	audit      AuditRecorder
 }
 
 // NewPresetsController creates the preset management adapter.
@@ -99,6 +100,7 @@ func (h *PresetsController) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
+	writeAudit(r.Context(), h.audit, "preset.create", payload.Name, err)
 	if err != nil {
 		writePresetError(w, err)
 		return
@@ -138,6 +140,7 @@ func (h *PresetsController) Update(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   current.Preset.CreatedAt,
 		UpdatedAt:   time.Now().UTC(),
 	}, payload.Revision)
+	writeAudit(r.Context(), h.audit, "preset.update", name, err)
 	if err != nil {
 		writePresetError(w, err)
 		return
@@ -161,7 +164,10 @@ func (h *PresetsController) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 		revision = parsed
 	}
-	if err := h.repository.Delete(r.Context(), chi.URLParam(r, "name"), revision); err != nil {
+	name := chi.URLParam(r, "name")
+	err := h.repository.Delete(r.Context(), name, revision)
+	writeAudit(r.Context(), h.audit, "preset.delete", name, err)
+	if err != nil {
 		writePresetError(w, err)
 		return
 	}
