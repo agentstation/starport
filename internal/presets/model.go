@@ -42,10 +42,13 @@ type Config struct {
 
 // Provider sort orders a preset may store. They mirror the OpenRouter wire
 // values; "throughput" routes by measured latency, Starport's closest signal.
+// "spread" is the Starport extension that balances traffic across the routes
+// whose ranking metric sits inside one band.
 const (
 	SortPrice      = "price"
 	SortLatency    = "latency"
 	SortThroughput = "throughput"
+	SortSpread     = "spread"
 )
 
 // ProviderPreferences is the preset-owned provider routing policy.
@@ -117,7 +120,7 @@ func (p Preset) Validate() error {
 	}
 	if provider := p.Config.Provider; provider != nil {
 		switch provider.Sort {
-		case "", SortPrice, SortLatency, SortThroughput:
+		case "", SortPrice, SortLatency, SortThroughput, SortSpread:
 		default:
 			return fmt.Errorf("%w: provider.sort %q is not supported", ErrInvalidPreset, provider.Sort)
 		}

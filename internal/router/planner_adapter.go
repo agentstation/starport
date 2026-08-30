@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -200,7 +201,9 @@ func (r *modelRouter) toPlanningRequest(req *Request) routing.Request {
 // plannerOptimization resolves the route ordering with defined precedence:
 // an explicit provider.sort wins over a model variant suffix, which wins
 // over the server default. Starport measures latency, not throughput, so
-// "throughput" routes by measured latency.
+// "throughput" routes by measured latency. "spread" keeps the default
+// ranking and balances traffic inside its leading band; the seed is drawn
+// here so the planner stays a pure function of its request.
 func (r *modelRouter) plannerOptimization(req *Request, variants variantEffects) routing.OptimizationPolicy {
 	requestedSort := ""
 	if req != nil && req.ProviderPreferences != nil {
@@ -211,6 +214,13 @@ func (r *modelRouter) plannerOptimization(req *Request, variants variantEffects)
 		return routing.OptimizationPolicy{PreferLowestCost: true}
 	case requestedSort == "latency" || requestedSort == "throughput":
 		return routing.OptimizationPolicy{PreferLowestLatency: true}
+	case requestedSort == "spread":
+		return routing.OptimizationPolicy{
+			PreferLowestCost:    r.config.EnableCostOptimization,
+			PreferLowestLatency: true,
+			Spread:              true,
+			SpreadSeed:          rand.Uint64(), // #nosec G404 -- route spread is load balancing, not a secret.
+		}
 	case variants.sortPrice:
 		return routing.OptimizationPolicy{PreferLowestCost: true}
 	case variants.sortLatency:

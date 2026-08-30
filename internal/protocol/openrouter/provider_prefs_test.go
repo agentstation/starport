@@ -49,6 +49,16 @@ func TestQuantizationsAccepted(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, decoded.UnenforcedProviderFields)
 
+	// The spread extension is an accepted sort value.
+	spreadSort := `{
+		"model": "openai/gpt-4o",
+		"messages": [{"role": "user", "content": "hi"}],
+		"provider": {"sort": "spread"}
+	}`
+	decoded, err = DecodeChat(strings.NewReader(spreadSort))
+	require.NoError(t, err)
+	require.Equal(t, SortSpread, decoded.Provider.Sort)
+
 	// An unknown sort value is a caller error.
 	badSort := `{
 		"model": "openai/gpt-4o",

@@ -366,8 +366,9 @@ type ProviderPreferences struct {
 	Only          []string `json:"only,omitempty"`
 	AllowFallback bool     `json:"allow_fallback,omitempty"`
 
-	// Sort selects route ordering: "price", "latency", or "throughput"
-	// (routed by measured latency). Empty keeps the server default.
+	// Sort selects route ordering: "price", "latency", "throughput"
+	// (routed by measured latency), or "spread" (weighted balance inside
+	// the leading ranking band). Empty keeps the server default.
 	Sort string `json:"sort,omitempty"`
 
 	// MaxPromptPricePer1M and MaxCompletionPricePer1M cap the accepted route

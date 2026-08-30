@@ -316,6 +316,7 @@ function ParamsPopover({
               <option value="price">price</option>
               <option value="throughput">throughput</option>
               <option value="latency">latency</option>
+              <option value="spread">spread</option>
             </Select>,
           )}
         </div>

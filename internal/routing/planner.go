@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-// Planner deterministically converts one request and snapshot into a route plan.
+// Planner converts one request and snapshot into a route plan. The plan is a
+// pure function of its inputs: even spread ordering draws from the seed the
+// request carries, so the same request plans the same way twice.
 type Planner struct{}
 
 // NewPlanner creates a stateless route planner.
@@ -98,6 +100,7 @@ func (Planner) Plan(request Request, snapshot Snapshot) (*Plan, error) {
 
 	rejections = append(rejections, unmatchedModelRejections(modelRanks, matchedModels, snapshot.CatalogGenerationID)...)
 	sortRankedCandidates(eligible, request.Optimization, len(providerRanks) > 0)
+	spreadRankedCandidates(eligible, request.Optimization, len(providerRanks) > 0)
 	sort.Slice(rejections, func(left, right int) bool {
 		if rejections[left].Route.ID() != rejections[right].Route.ID() {
 			return rejections[left].Route.ID() < rejections[right].Route.ID()

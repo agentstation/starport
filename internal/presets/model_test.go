@@ -26,7 +26,7 @@ func TestValidateProviderRoutingPolicy(t *testing.T) {
 	}
 	require.NoError(t, preset.Validate())
 
-	for _, sort := range []string{"", SortPrice, SortLatency, SortThroughput} {
+	for _, sort := range []string{"", SortPrice, SortLatency, SortThroughput, SortSpread} {
 		preset.Config.Provider.Sort = sort
 		require.NoError(t, preset.Validate(), "sort %q is valid", sort)
 	}
