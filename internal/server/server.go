@@ -105,6 +105,9 @@ type Dependencies struct {
 	// does: the routes stay registered so a caller reads that this deployment
 	// configured no job store rather than that the gateway has no video API.
 	Jobs *jobs.Service
+	// Batches serves the batch surface. A nil service degrades the batch
+	// endpoints to 503, loudly, for the same reason a nil job service does.
+	Batches *jobs.BatchService
 
 	// FileBackend names the blob backend behind that service, for the admin
 	// surface to report. An empty name reads as no file storage at all.
@@ -201,6 +204,8 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		Templates:          dependencies.Templates,
 		Files:              dependencies.Files,
 		Jobs:               dependencies.Jobs,
+		Batches:            dependencies.Batches,
+		BatchGovernor:      s.batchGovernor(),
 		FileUploadBound:    config.MaxFileUploadSize,
 		FileBackend:        dependencies.FileBackend,
 		ServiceName:        "starport",

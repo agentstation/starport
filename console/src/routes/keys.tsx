@@ -437,6 +437,7 @@ function CreateKeyModal({
             "activity:read",
             "files:read",
             "files:write",
+            "batches:write",
           ],
       ...(fields.allowedModels.length > 0
         ? { allowed_models: fields.allowedModels }

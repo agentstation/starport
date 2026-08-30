@@ -218,6 +218,17 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 	if err != nil {
 		tb.Fatal(err)
 	}
+	// The batch store is production composition for the same reason the job
+	// store is: without it every batch path reads the unconfigured answer.
+	batchRecords, err := jobs.OpenBatchRepository(testConfig.store)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	batchService, err := jobs.NewBatchService(batchRecords,
+		jobs.WithBatchJobMeter(outstandingJobs))
+	if err != nil {
+		tb.Fatal(err)
+	}
 
 	// Match production composition: preset references resolve before routing.
 	service := proxy.NewPresetResolver(presetRepository).Wrap(proxy.New(reg, modelRouter))
@@ -254,7 +265,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
 		Templates: templates,
-		Files:     fileService, Jobs: jobService,
+		Files:     fileService, Jobs: jobService, Batches: batchService,
 		// Production composes the metric surface for every mode but "off",
 		// so a route test that skipped it would serve a routing table no
 		// deployment runs.

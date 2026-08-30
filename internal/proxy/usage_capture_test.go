@@ -177,6 +177,38 @@ func TestChatCompletionWritesUsageRecord(t *testing.T) {
 	require.NoError(t, record.Validate())
 }
 
+// TestBatchLineUsageRecordCarriesTheBatchID holds the batch attribution
+// contract. A batch line writes one usage record like any online request,
+// and the batch identifier on the record is the only join between the spend
+// and the batch that caused it. An online request leaves the field empty.
+func TestBatchLineUsageRecordCarriesTheBatchID(t *testing.T) {
+	snapshot, routeID, _ := pricedTestSnapshot(t)
+	repository := &recordingUsageRepository{}
+	capture := NewUsageCapture(repository)
+	router := &usageEvidenceRouter{response: chatEvidenceResponse(routeID, snapshot, 10, 4)}
+	service := capture.Wrap(&proxy{router: router})
+
+	online := usageChatRequest()
+	_, err := service.ProcessChatCompletion(context.Background(), online)
+	require.NoError(t, err)
+
+	batched := usageChatRequest()
+	batched.RequestID = "req-2"
+	batched.BatchID = "batch-7"
+	_, err = service.ProcessChatCompletion(context.Background(), batched)
+	require.NoError(t, err)
+	capture.Flush()
+
+	records := repository.all()
+	require.Len(t, records, 2)
+	byRequest := map[string]usage.Record{}
+	for _, record := range records {
+		byRequest[record.RequestID] = record
+	}
+	require.Empty(t, byRequest["req-1"].BatchID)
+	require.Equal(t, "batch-7", byRequest["req-2"].BatchID)
+}
+
 func TestUsageRecordCostFromSnapshotPricing(t *testing.T) {
 	snapshot, routeID, prices := pricedTestSnapshot(t)
 	repository := &recordingUsageRepository{}

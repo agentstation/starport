@@ -213,7 +213,7 @@ func TestUploadRefusesAPurposeThisGatewayDoesNotServe(t *testing.T) {
 	service, records, _ := newService(t)
 	ctx := context.Background()
 
-	for _, purpose := range []Purpose{"assistants", "batch", "fine-tune", ""} {
+	for _, purpose := range []Purpose{"assistants", "fine-tune", ""} {
 		_, err := service.Upload(ctx, UploadRequest{
 			Account: "account-a", Filename: "notes.txt", Purpose: purpose,
 		}, strings.NewReader("the payload"))

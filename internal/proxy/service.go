@@ -113,6 +113,10 @@ type ChatCompletionRequest struct {
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
 	Protocol     string               `json:"-"` // Protocol surface that received the request
+	// BatchID names the batch this request runs inside, or is empty for an
+	// online request. The usage record carries it, so an operator can read
+	// what one batch spent.
+	BatchID string `json:"-"`
 }
 
 // ChatCompletionResponse is a canonical result plus gateway response metadata.
@@ -183,6 +187,10 @@ type EmbeddingsRequest struct {
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
 	Protocol     string               `json:"-"` // Protocol surface that received the request
+	// BatchID names the batch this request runs inside, or is empty for an
+	// online request. The usage record carries it, so an operator can read
+	// what one batch spent.
+	BatchID string `json:"-"`
 }
 
 // EmbeddingsResponse is a canonical embedding result plus gateway metadata.
