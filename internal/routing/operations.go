@@ -35,6 +35,10 @@ const (
 	// them in relevance order. It generates nothing, so a model that serves it
 	// serves no other operation.
 	OperationRerank Operation = "rerank"
+	// OperationModerations classifies text against a fixed set of harm
+	// categories and answers with a score for each one. Like rerank, it
+	// generates nothing, so a model that serves it serves no other operation.
+	OperationModerations Operation = "moderations"
 )
 
 // OperationSet is an immutable set of operation names. One set answers the
@@ -99,6 +103,7 @@ var servedOperations = NewOperationSet(
 	OperationVideosGenerations,
 	OperationDocumentsRecognition,
 	OperationRerank,
+	OperationModerations,
 )
 
 // ServedOperations returns the operations this build can plan.

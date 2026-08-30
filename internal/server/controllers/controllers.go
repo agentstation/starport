@@ -25,6 +25,7 @@ type Controllers struct {
 	OpenRouterEmbeddings *EmbeddingsController
 	Rerank               *RerankController
 	OpenRouterRerank     *RerankController
+	Moderations          *ModerationsController
 	Media                *MediaController
 	OpenRouterMedia      *MediaController
 	Models               *ModelsController
@@ -124,6 +125,7 @@ func NewControllers(cfg Config) *Controllers {
 		OpenRouterEmbeddings: NewOpenRouterEmbeddingsController(cfg.Service),
 		Rerank:               NewRerankController(cfg.Service),
 		OpenRouterRerank:     NewOpenRouterRerankController(cfg.Service),
+		Moderations:          NewModerationsController(cfg.Service),
 		Media:                NewMediaController(cfg.Service),
 		OpenRouterMedia:      NewOpenRouterMediaController(cfg.Service),
 		Models:               NewModelsController(cfg.Service),

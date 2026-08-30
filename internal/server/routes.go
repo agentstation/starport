@@ -60,6 +60,11 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 		// documents and a key that only writes chat should not.
 		r.With(s.requireAnyScope("rerank:write")).Post("/rerank", s.controllers.Rerank.Create)
 
+		// Moderations. The scope stands alone for the same reason the rerank
+		// scope does: a moderation request reads a caller's own text, and a
+		// key that only writes chat should not.
+		r.With(s.requireAnyScope("moderations:write")).Post("/moderations", s.controllers.Moderations.Create)
+
 		// Images. An edit carries a source image, which is why it is a
 		// separate path and a multipart body rather than a flag.
 		r.With(s.requireAnyScope("images:write")).Post("/images/generations", s.controllers.Media.GenerateImages)
@@ -391,6 +396,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   POST /v1/responses          - Create a response, stateless subset
 //   POST /v1/embeddings         - Create embeddings
 //   POST /v1/rerank             - Rank documents against a query (rerank:write)
+//   POST /v1/moderations        - Classify text against harm categories (moderations:write)
 //   POST /v1/images/generations - Generate images (images:write)
 //   POST /v1/images/edits       - Edit an image (images:write)
 //   POST /v1/audio/speech       - Synthesize speech (audio:write)

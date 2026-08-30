@@ -21,6 +21,13 @@ func (unroutedOperations) RouteRerank(
 	return nil, routepkg.ErrNoModelsAvailable
 }
 
+func (unroutedOperations) RouteModerations(
+	context.Context,
+	*routepkg.ModerationRequest,
+) (*routepkg.ModerationResponse, error) {
+	return nil, routepkg.ErrNoModelsAvailable
+}
+
 func (unroutedOperations) RouteImages(
 	context.Context,
 	*routepkg.ImagesRequest,
@@ -85,6 +92,13 @@ func (unsupportedOperationProxy) ProcessRerank(
 	context.Context,
 	*RerankRequest,
 ) (*RerankResponse, error) {
+	return nil, errUnsupportedOperation
+}
+
+func (unsupportedOperationProxy) ProcessModerations(
+	context.Context,
+	*ModerationRequest,
+) (*ModerationResponse, error) {
 	return nil, errUnsupportedOperation
 }
 

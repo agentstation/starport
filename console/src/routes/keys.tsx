@@ -420,7 +420,8 @@ function CreateKeyModal({
     // inline can store one and name it later, so withholding the file scopes
     // would not withhold the capability, only the cheaper way to use it.
     // Reranking reads the caller's own documents rather than a stored one, so
-    // it carries its own scope beside chat rather than riding on it.
+    // it carries its own scope beside chat rather than riding on it, and
+    // moderation classifies the caller's own text for the same reason.
     create.mutate({
       name: name.trim(),
       scopes: admin
@@ -431,6 +432,7 @@ function CreateKeyModal({
             "images:write",
             "audio:write",
             "rerank:write",
+            "moderations:write",
             "models:read",
             "activity:read",
             "files:read",

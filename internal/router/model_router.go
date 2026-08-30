@@ -34,6 +34,10 @@ type ModelRouter interface {
 	// route, credential, availability, and total-attempt policies as chat.
 	RouteRerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error)
 
+	// RouteModerations classifies one input list against a provider's harm
+	// categories through the same policies as chat.
+	RouteModerations(ctx context.Context, req *ModerationRequest) (*ModerationResponse, error)
+
 	// RouteImages executes one image generation or image edit request.
 	RouteImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error)
 

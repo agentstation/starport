@@ -36,6 +36,10 @@ type Proxy interface {
 	// the caller's own document positions in ranked order.
 	ProcessRerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error)
 
+	// ProcessModerations classifies each input against a provider's harm
+	// categories and answers with a verdict and a score per category.
+	ProcessModerations(ctx context.Context, req *ModerationRequest) (*ModerationResponse, error)
+
 	// ProcessImages handles image generation and image edit requests.
 	ProcessImages(ctx context.Context, req *ImagesRequest) (*ImagesResponse, error)
 
@@ -256,6 +260,14 @@ type RerankRequest = OperationRequest[inference.RerankRequest]
 
 // RerankResponse is one gateway ranked document list.
 type RerankResponse = OperationResponse[inference.RerankResponse]
+
+// ModerationRequest is one gateway moderation request.
+type ModerationRequest = OperationRequest[inference.ModerationRequest]
+
+// ModerationResponse is one gateway classified input list. It is not cached
+// for the same reason a rerank answer is not: the result reads by position
+// in one caller's own input list.
+type ModerationResponse = OperationResponse[inference.ModerationResponse]
 
 // ImagesRequest is one gateway image generation or image edit request.
 type ImagesRequest = OperationRequest[inference.ImagesRequest]

@@ -78,6 +78,11 @@ func (c *OpenAIConnector) Transcribe(ctx context.Context, req *TranscriptionRequ
 	return c.OpenAICompatibleConnector.Transcribe(ctx, req, c.setHeaders, c.handleError)
 }
 
+// Moderate serves moderations.
+func (c *OpenAIConnector) Moderate(ctx context.Context, req *ModerationRequest) (*ModerationResponse, error) {
+	return c.OpenAICompatibleConnector.Moderate(ctx, req, c.setHeaders, c.handleError)
+}
+
 // SubmitJob serves videos-generations.
 func (c *OpenAIConnector) SubmitJob(ctx context.Context, req *JobSubmission) (*ProviderJob, error) {
 	return c.OpenAICompatibleConnector.SubmitJob(ctx, req, c.setHeaders, c.handleError)

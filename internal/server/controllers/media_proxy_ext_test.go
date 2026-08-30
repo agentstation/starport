@@ -21,6 +21,13 @@ func (unsupportedOperations) ProcessRerank(
 	return nil, errUnsupportedOperation
 }
 
+func (unsupportedOperations) ProcessModerations(
+	context.Context,
+	*proxy.ModerationRequest,
+) (*proxy.ModerationResponse, error) {
+	return nil, errUnsupportedOperation
+}
+
 func (unsupportedOperations) ProcessImages(
 	context.Context,
 	*proxy.ImagesRequest,

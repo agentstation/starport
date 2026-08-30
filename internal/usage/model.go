@@ -32,6 +32,10 @@ const (
 	// and a rerank is billed by token at one provider and by search unit at
 	// another.
 	OperationRerank = "rerank"
+	// OperationModerations reports a moderation request. The one compiled
+	// moderation provider publishes it free, so a record that reports no
+	// usage and no cost is the honest account of the turn.
+	OperationModerations = "moderations"
 	// OperationImages reports an image generation or image edit request.
 	// One name covers both, because the two are metered the same way and a
 	// spend report reads the meter rather than the path.
