@@ -7,9 +7,12 @@ import (
 	"math"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/telemetry"
 )
 
 // Executor applies one total attempt and elapsed-time budget to one route plan.
@@ -152,8 +155,16 @@ func executeInference[T any](
 		}
 
 		attemptCtx, cancel, credential := session.attemptContext(ctx)
+		attemptCtx, span := telemetry.StartSpan(attemptCtx, telemetry.SpanAttempt,
+			attribute.Int(telemetry.AttrAttempt, session.actualAttempts),
+			attribute.String(telemetry.AttrProvider, planned.Route.ProviderID),
+		)
 		response, providerFailure, action := attempt(attemptCtx, planned)
 		providerFailure = session.normalizeOutcome(attemptCtx, response != nil, providerFailure)
+		if providerFailure != nil {
+			span.RecordError(providerFailure)
+		}
+		span.End()
 		cancel()
 		if providerFailure == nil {
 			session.succeed(evidenceIndex, credential.snapshot())

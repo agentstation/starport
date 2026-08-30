@@ -1108,6 +1108,36 @@ A budget refusal writes no usage record. The refusal counter
 check itself, labeled by scope (`account` or `key`) and dimension (`spend`
 or `tokens`).
 
+## Distributed Traces
+
+Starport exports OpenTelemetry traces over OTLP HTTP. Tracing is off until
+you set the standard OpenTelemetry endpoint variable:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:4318"
+```
+
+The more specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` wins when you set
+both. These two names are the cross-vendor OpenTelemetry contract, so they
+carry no `STARPORT_` prefix. With neither set, the tracer is a no-op and
+the gateway dials nothing.
+
+One chat request produces four spans:
+
+- `starport.request`: the full HTTP request.
+- `starport.route_plan`: the deterministic route computation.
+- `starport.attempt`: one execution attempt, numbered from 1.
+- `starport.provider_call`: the upstream provider call inside the attempt.
+
+The provider-call span names the provider and the model. The request span
+carries the gateway overhead and the time to first token as
+`starport.overhead_ms` and `starport.ttft_ms`. Inbound W3C `traceparent`
+headers continue the caller's trace, so a gateway span joins the trace your
+client already started.
+
+Span attributes never carry an account, a key, or prompt content. The same
+privacy rule that bounds the metric labels bounds the spans.
+
 ## Failure Diagnosis
 
 Run `starport doctor --probe` before you start the server. The output names

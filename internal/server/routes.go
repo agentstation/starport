@@ -341,8 +341,9 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 // setupMiddleware returns the middleware chain for the server
 func (s *Server) setupMiddleware() []func(http.Handler) http.Handler {
 	return []func(http.Handler) http.Handler{
-		RequestID,         // Generate request ID
-		ClientIP,          // Trust only the direct TCP peer address
+		RequestID, // Generate request ID
+		ClientIP,  // Trust only the direct TCP peer address
+		TracingMiddleware(s.tracing),
 		LoggingMiddleware, // Log requests
 		Recoverer,         // Recover from panics
 		SecurityHeaders,   // Add security headers

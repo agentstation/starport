@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"go.opentelemetry.io/otel/attribute"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/credentials"
@@ -17,6 +18,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/routing"
+	"github.com/agentstation/starport/internal/telemetry"
 )
 
 // RouteStream executes the same immutable route plan and total budget as a
@@ -76,13 +78,21 @@ func (r *modelRouter) RouteStream(ctx context.Context, req *Request) (execution.
 		// reject an attempt inside an established 200 stream (an SSE error
 		// frame before any content). Reading it here keeps those
 		// rejections on the same fallback-and-status path as a non-200.
+		callCtx, callSpan := telemetry.StartSpan(attemptCtx, telemetry.SpanProviderCall,
+			attribute.String(telemetry.AttrProvider, planned.Route.ProviderID),
+			attribute.String(telemetry.AttrModel, planned.Route.ID()),
+		)
 		endUpstream := timer.TrackUpstream()
-		stream, streamErr := connector.ChatStream(attemptCtx, request)
+		stream, streamErr := connector.ChatStream(callCtx, request)
 		var firstChunk *connectors.ChatStreamChunk
 		if streamErr == nil {
 			firstChunk, streamErr = stream.Recv()
 		}
 		endUpstream()
+		if streamErr != nil {
+			callSpan.RecordError(streamErr)
+		}
+		callSpan.End()
 		if streamErr != nil {
 			if stream != nil {
 				_ = stream.Close()

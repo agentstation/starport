@@ -20,6 +20,7 @@ import (
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/router"
+	"github.com/agentstation/starport/internal/telemetry"
 	"github.com/agentstation/starport/internal/usage"
 )
 
@@ -163,6 +164,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 	if overheadMS, ok := OverheadMS(ctx); ok {
 		record.OverheadMS = overheadMS
 	}
+	telemetry.AnnotateSpanTimings(ctx, record.OverheadMS, record.TTFTMS)
 	s.capture.submit(record)
 	return response, err
 }
@@ -189,6 +191,10 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 		record:  record,
 		start:   start,
 		timer:   execution.OverheadTimerFrom(ctx),
+		// The request span outlives the handler return: the server writes the
+		// stream inside the handler, so the context still carries the open
+		// span when the stream ends and the timings become known.
+		requestCtx: ctx,
 	}, nil
 }
 
@@ -305,6 +311,9 @@ type usageCaptureStream struct {
 	timer   *execution.OverheadTimer
 	ttft    time.Duration
 
+	// requestCtx carries the request span the timings annotate at finalize.
+	requestCtx context.Context
+
 	usage     *inference.Usage
 	modelUsed string
 	once      sync.Once
@@ -396,6 +405,9 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		}
 		if s.ttft > 0 {
 			record.TTFTMS = s.ttft.Milliseconds()
+		}
+		if s.requestCtx != nil {
+			telemetry.AnnotateSpanTimings(s.requestCtx, record.OverheadMS, record.TTFTMS)
 		}
 		s.capture.submit(record)
 	})

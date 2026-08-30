@@ -461,3 +461,25 @@ func writeEnvFile(t *testing.T, dir, name, contents string) string {
 	}
 	return path
 }
+
+func TestLoaderReadsStandardOTLPEndpoint(t *testing.T) {
+	cfg := loadTestConfig(t, map[string]string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector.example:4318",
+	})
+	if cfg.Telemetry.TracesEndpoint != "http://collector.example:4318" {
+		t.Errorf("TracesEndpoint = %q, want the general OTLP endpoint", cfg.Telemetry.TracesEndpoint)
+	}
+
+	cfg = loadTestConfig(t, map[string]string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT":        "http://general.example:4318",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://traces.example:4318/v1/traces",
+	})
+	if cfg.Telemetry.TracesEndpoint != "http://traces.example:4318/v1/traces" {
+		t.Errorf("TracesEndpoint = %q, want the specific traces endpoint to win", cfg.Telemetry.TracesEndpoint)
+	}
+
+	cfg = loadTestConfig(t, nil)
+	if cfg.Telemetry.TracesEndpoint != "" {
+		t.Errorf("TracesEndpoint = %q, want empty without OTLP environment", cfg.Telemetry.TracesEndpoint)
+	}
+}
