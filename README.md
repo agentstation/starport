@@ -356,6 +356,7 @@ See the [development guide](DEVELOPMENT.md) and
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Operator guide](docs/OPERATOR-GUIDE.md)
+- [Security posture](docs/SECURITY-POSTURE.md)
 - [Performance methodology](docs/PERFORMANCE.md)
 - [Vertex AI configuration](docs/VERTEX_AI_CONFIG.md)
 - [Model catalog contract](MODELS.md)
@@ -366,3 +367,5 @@ See the [development guide](DEVELOPMENT.md) and
 Starport uses the GNU AGPLv3 license. See [LICENSE](LICENSE).
 
 Report vulnerabilities through the process in [SECURITY.md](SECURITY.md).
+For credential handling, encryption, and data flows, read the
+[security posture](docs/SECURITY-POSTURE.md).

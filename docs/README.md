@@ -16,6 +16,8 @@ Use this index to find current product, operator, and developer information.
 - [Prompt cache control](CACHE_CONTROL.md): send route-aware prompt-cache
   controls.
 - [Security policy](../SECURITY.md): report a vulnerability.
+- [Security posture](SECURITY-POSTURE.md): answer a security review
+  with evidence-mapped claims.
 
 ## Understand the system
 

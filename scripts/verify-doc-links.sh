@@ -13,6 +13,7 @@ files=(
   docs/CACHE_CONTROL.md
   docs/CONTRIBUTING.md
   docs/OPERATOR-GUIDE.md
+  docs/SECURITY-POSTURE.md
   docs/README.md
   docs/TASKS.md
   docs/VERTEX_AI_CONFIG.md
