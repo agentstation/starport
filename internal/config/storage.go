@@ -7,6 +7,7 @@ import (
 
 const (
 	storageModeBadger = storage.StorageTypeBadger
+	storageModeValkey = storage.StorageTypeValkey
 	sqlModeSQLite     = sqlstore.TypeSQLite
 	sqlModePostgres   = sqlstore.TypePostgres
 	sqlModeMySQL      = sqlstore.TypeMySQL
@@ -22,6 +23,12 @@ func (c StorageConfig) RuntimeSQL() sqlstore.Config {
 		Postgres: sqlstore.PostgresConfig{URL: c.SQL.Postgres.URL},
 		MySQL:    sqlstore.MySQLConfig{DSN: c.SQL.MySQL.DSN},
 	}
+}
+
+// Distributed reports whether the runtime key-value store is one that
+// replicas share. Shared provider health publication turns on with it.
+func (c StorageConfig) Distributed() bool {
+	return c.Mode == storageModeValkey
 }
 
 // RuntimeStorage projects external storage settings into the storage adapter contract.

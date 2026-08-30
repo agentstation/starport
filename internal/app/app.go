@@ -623,14 +623,24 @@ func (b *runtimeBuilder) buildGateway() error {
 		return fmt.Errorf("open provider availability owner: %w", err)
 	}
 	b.application.availability = availabilityOwner
-	modelRouter := router.New(
-		registryAdapter,
+	routerOptions := []router.Option{
 		router.WithCatalog(b.application.catalog),
 		router.WithAvailability(availabilityOwner),
 		router.WithOutcomePublisher(b.application.providerStates),
 		router.WithOperatorCredentialGate(b.application.providerStates),
 		router.WithStoredCredentials(b.providerKeys),
-	)
+	}
+	// A distributed store makes provider health a fleet fact: each replica
+	// publishes its breaker transitions and latency snapshots there and
+	// merges peer state on refresh. An embedded store keeps every replica
+	// process-local, exactly as before.
+	if b.config.Storage.Distributed() && b.application.store != nil {
+		if err := availabilityOwner.UseSharedStore(b.application.store, availability.SharedConfig{}); err != nil {
+			return fmt.Errorf("share provider availability state: %w", err)
+		}
+		routerOptions = append(routerOptions, router.WithSharedHealthStore(b.application.store))
+	}
+	modelRouter := router.New(registryAdapter, routerOptions...)
 	proxyOptions := make([]proxy.Option, 0, 3)
 	// Codecs build once here and serve every request concurrently.
 	proxyOptions = append(proxyOptions, proxy.WithTokenEstimator(tokenize.NewEstimator()))
