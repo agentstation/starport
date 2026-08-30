@@ -45,6 +45,7 @@ type Controllers struct {
 	Files                *FilesController
 	Videos               *VideosController
 	OpenRouterVideos     *VideosController
+	Batches              *BatchesController
 	Presets              *PresetsController
 	Auth                 *AuthController
 	Launch               *LaunchController
@@ -75,6 +76,13 @@ type Config struct {
 	// video routes registered and answers each one with a service-unavailable
 	// result, the same way an unconfigured file store answers.
 	Jobs *jobs.Service
+	// Batches serves the batch surface. A nil service degrades its routes the
+	// same way a nil job service degrades the video ones.
+	Batches *jobs.BatchService
+	// BatchGovernor admits each batch line under the caller's live budget and
+	// rate limits. A nil governor admits every line, which is what a test
+	// deployment without meters means.
+	BatchGovernor BatchGovernor
 	// FileBackend names the blob backend stored file bytes land in. It reaches
 	// the admin surface rather than the file routes, because it describes the
 	// deployment and not any one file.
@@ -146,6 +154,7 @@ func NewControllers(cfg Config) *Controllers {
 		Files:              NewFilesController(cfg.Files, cfg.FileUploadBound),
 		Videos:             NewVideosController(cfg.Service, cfg.Jobs),
 		OpenRouterVideos:   NewOpenRouterVideosController(cfg.Service, cfg.Jobs),
+		Batches:            NewBatchesController(cfg.Service, cfg.Batches, cfg.Files, cfg.BatchGovernor),
 		Presets:            NewPresetsController(cfg.Presets),
 		Auth:               NewAuthController(cfg.AuthPolicy, cfg.AuthModeStore, cfg.AuthModeBindHost, cfg.AllowRemoteNoAuth),
 		Launch:             NewLaunchController(cfg.LocalGate),

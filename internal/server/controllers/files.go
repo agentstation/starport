@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -93,13 +94,22 @@ func (h *FilesController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The service accepts every purpose the gateway stores, and the batch
+	// runner writes output files through it. The route accepts less: the
+	// upload set, which no caller-supplied purpose may step outside.
+	purpose := files.Purpose(strings.TrimSpace(r.FormValue("purpose")))
+	if !slices.Contains(files.UploadPurposes(), purpose) {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, acceptedPurposeMessage())
+		return
+	}
+
 	// The multipart parse already read the part to memory or to a spill file,
 	// so the header states the real size rather than a caller's claim. The
 	// service still reconciles it against what the write lands.
 	record, err := h.service.Upload(r.Context(), files.UploadRequest{
 		Account:          requestctx.AccountIDOrDefault(r.Context()),
 		Filename:         header.Filename,
-		Purpose:          files.Purpose(strings.TrimSpace(r.FormValue("purpose"))),
+		Purpose:          purpose,
 		Retention:        retention,
 		Size:             header.Size,
 		StoredBytesBound: storedBytesBound(r),
@@ -263,11 +273,11 @@ func (h *FilesController) writeError(w http.ResponseWriter, action string, err e
 	}
 }
 
-// acceptedPurposeMessage names the set this gateway serves. The message reads
+// acceptedPurposeMessage names the set an upload may claim. The message reads
 // the vocabulary rather than restating it, so a purpose added to
 // internal/files reaches the error without a second edit.
 func acceptedPurposeMessage() string {
-	accepted := files.Purposes()
+	accepted := files.UploadPurposes()
 	names := make([]string, 0, len(accepted))
 	for _, purpose := range accepted {
 		names = append(names, strconv.Quote(string(purpose)))

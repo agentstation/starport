@@ -96,26 +96,9 @@ func (r *repository) List(ctx context.Context, account string, limit int) ([]Job
 	if limit <= 0 {
 		limit = defaultListLimit
 	}
-	keys, err := r.store.ScanWithPrefix(ctx, accountPrefix(account), limit)
+	records, err := readRecordsUnder(ctx, r.store, accountPrefix(account), limit, decodeJob, "job")
 	if err != nil {
-		return nil, fmt.Errorf("jobs: list records: %w", err)
-	}
-	records := make([]Job, 0, len(keys))
-	for _, key := range keys {
-		data, err := r.store.Get(ctx, key)
-		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
-				// A record deleted between the scan and the read is not an
-				// error. A listing and a delete run at the same time.
-				continue
-			}
-			return nil, fmt.Errorf("jobs: read listed record: %w", err)
-		}
-		job, err := decodeJob(data)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, job)
+		return nil, err
 	}
 	sortNewestFirst(records)
 	return records, nil
@@ -133,10 +116,6 @@ func sortNewestFirst(records []Job) {
 	})
 }
 
-// Replace writes a record that already exists, and it is the point at which a
-// state change meets the transition table. A caller that assembled an illegal
-// record fails here rather than in storage, so no store has to know which
-// state changes this package allows.
 // Scan answers every job record this deployment holds, newest first.
 //
 // It reads across accounts because the sweep that reclaims expired asset storage
@@ -146,24 +125,9 @@ func (r *repository) Scan(ctx context.Context, limit int) ([]Job, error) {
 	if limit <= 0 {
 		limit = defaultListLimit
 	}
-	keys, err := r.store.ScanWithPrefix(ctx, StoragePrefix, limit)
+	records, err := readRecordsUnder(ctx, r.store, StoragePrefix, limit, decodeJob, "job")
 	if err != nil {
-		return nil, fmt.Errorf("jobs: scan records: %w", err)
-	}
-	records := make([]Job, 0, len(keys))
-	for _, key := range keys {
-		data, err := r.store.Get(ctx, key)
-		if err != nil {
-			if errors.Is(err, storage.ErrNotFound) {
-				continue
-			}
-			return nil, fmt.Errorf("jobs: read scanned record: %w", err)
-		}
-		job, err := decodeJob(data)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, job)
+		return nil, err
 	}
 	sortNewestFirst(records)
 	return records, nil
@@ -174,25 +138,11 @@ func (r *repository) Replace(ctx context.Context, job Job) error {
 	if err != nil {
 		return err
 	}
-	key := storageKey(job.Account, job.ID)
-	current, err := r.store.Get(ctx, key)
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return ErrJobNotFound
-		}
-		return fmt.Errorf("jobs: read record for replace: %w", err)
-	}
-	stored, err := decodeJob(current)
-	if err != nil {
-		return err
-	}
-	if stored.State != job.State && !CanTransition(stored.State, job.State) {
-		return fmt.Errorf("%w: %q to %q", ErrIllegalTransition, stored.State, job.State)
-	}
-	if err := r.store.CompareAndSwap(ctx, key, current, data); err != nil {
-		return fmt.Errorf("jobs: replace record: %w", err)
-	}
-	return nil
+	return replaceRecord(ctx, r.store, storageKey(job.Account, job.ID), data,
+		func(current []byte) (JobState, error) {
+			stored, err := decodeJob(current)
+			return stored.State, err
+		}, job.State, ErrJobNotFound, "job")
 }
 
 func (r *repository) Delete(ctx context.Context, account, id string) error {

@@ -188,6 +188,7 @@ type runtimeBuilder struct {
 	audit        *audit.Repository
 	files        *files.Service
 	jobs         *jobs.Service
+	batches      *jobs.BatchService
 	gateway      proxy.Proxy
 	console      console.PageServer
 	metrics      *telemetry.Metrics
@@ -554,6 +555,18 @@ func (b *runtimeBuilder) openJobService() error {
 		return fmt.Errorf("open job service: %w", err)
 	}
 	b.application.jobs = b.jobs
+
+	// The batch service shares the store and the outstanding-work meter with
+	// the video jobs, because a batch is the same kind of commitment: work an
+	// account started and has not finished paying attention to.
+	batchRecords, err := jobs.OpenBatchRepository(b.application.store)
+	if err != nil {
+		return fmt.Errorf("open batch repository: %w", err)
+	}
+	b.batches, err = jobs.NewBatchService(batchRecords, jobs.WithBatchJobMeter(meter))
+	if err != nil {
+		return fmt.Errorf("open batch service: %w", err)
+	}
 	return nil
 }
 
@@ -803,6 +816,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		Templates:    b.templates,
 		Files:        b.files,
 		Jobs:         b.jobs,
+		Batches:      b.batches,
 		FileBackend:  b.fileBackend(),
 		LocalGate:    b.gate,
 		IdentityAuth: b.identityAuthenticator(),

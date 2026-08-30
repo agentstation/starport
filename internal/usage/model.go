@@ -116,7 +116,11 @@ type Record struct {
 	// spend cap counts, and a key ID cannot stand in for it because an account
 	// holds many keys. It is optional so that a record written before account
 	// attribution stays readable; such a record counts toward no account.
-	AccountID      string    `json:"account_id,omitempty"`
+	AccountID string `json:"account_id,omitempty"`
+	// BatchID names the batch this request ran inside, or is empty for an
+	// online request. Every line of a batch draws its own record, and this
+	// field is what sums them back into one bill.
+	BatchID        string    `json:"batch_id,omitempty"`
 	Timestamp      time.Time `json:"timestamp"`
 	Protocol       string    `json:"protocol,omitempty"`
 	Operation      string    `json:"operation"`

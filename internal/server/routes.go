@@ -100,6 +100,18 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("files:read")).Get("/{file_id}/content", s.controllers.Files.Content)
 		})
 
+		// Batches. A batch runs a stored file of requests through the same
+		// pipeline the online routes run, so it outlives its request the way
+		// a video job does. One scope covers the whole surface for the same
+		// reason the video scope does: only the submitting account can read
+		// what it submitted.
+		r.Route("/batches", func(r chi.Router) {
+			r.With(s.requireAnyScope("batches:write")).Post("/", s.controllers.Batches.Create)
+			r.With(s.requireAnyScope("batches:write")).Get("/", s.controllers.Batches.List)
+			r.With(s.requireAnyScope("batches:write")).Get("/{batch_id}", s.controllers.Batches.Get)
+			r.With(s.requireAnyScope("batches:write")).Post("/{batch_id}/cancel", s.controllers.Batches.Cancel)
+		})
+
 		// Models
 		r.With(s.requireAnyScope("models:read")).Get("/models", s.controllers.Models.List)
 		r.With(s.requireAnyScope("models:read")).Get("/models/{model}", s.controllers.Models.Get)
@@ -407,6 +419,10 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /v1/videos/{video_id}       - Read one job, polling while it can change
 //   GET    /v1/videos/{video_id}/content - Read the stored video bytes
 //   POST   /v1/videos/{video_id}/cancel  - Stop a job that has not ended
+//   POST   /v1/batches                 - Submit a batch of stored requests (batches:write)
+//   GET    /v1/batches                 - List this account's batches (batches:write)
+//   GET    /v1/batches/{batch_id}      - Read one batch record (batches:write)
+//   POST   /v1/batches/{batch_id}/cancel - Stop a batch that has not ended
 //   POST   /v1/files                  - Upload a file (files:write)
 //   GET    /v1/files                  - List stored files (files:read)
 //   GET    /v1/files/{file_id}        - Read one file object (files:read)

@@ -28,8 +28,8 @@ var (
 // Purpose states what a caller intends to do with a stored file.
 //
 // The set is deliberately small. OpenAI names several more, and each of the
-// others belongs to a product Starport does not run: an assistant, a batch, or
-// a fine-tune. A gateway that accepted them would take an upload it can never
+// others belongs to a product Starport does not run: an assistant or a
+// fine-tune. A gateway that accepted them would take an upload it can never
 // use and bill storage for it.
 type Purpose string
 
@@ -38,10 +38,25 @@ const (
 	PurposeUserData Purpose = "user_data"
 	// PurposeVision is an image a model reads as part of a request.
 	PurposeVision Purpose = "vision"
+	// PurposeBatch is a JSONL input file a batch reads one line at a time.
+	PurposeBatch Purpose = "batch"
+	// PurposeBatchOutput is a JSONL result file a batch writes. A caller never
+	// uploads one, so the upload route refuses it and only the batch runner
+	// stores it.
+	PurposeBatchOutput Purpose = "batch_output"
 )
 
 // Purposes lists every purpose this gateway accepts.
-func Purposes() []Purpose { return []Purpose{PurposeUserData, PurposeVision} }
+func Purposes() []Purpose {
+	return []Purpose{PurposeUserData, PurposeVision, PurposeBatch, PurposeBatchOutput}
+}
+
+// UploadPurposes lists every purpose a caller may name on an upload. The batch
+// output purpose is absent, because an upload claiming it would put caller
+// bytes where a reader expects batch results.
+func UploadPurposes() []Purpose {
+	return []Purpose{PurposeUserData, PurposeVision, PurposeBatch}
+}
 
 // Valid reports whether this gateway serves the purpose.
 func (p Purpose) Valid() bool {

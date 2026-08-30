@@ -146,6 +146,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 	response, err := s.Proxy.ProcessChatCompletion(ctx, req)
 
 	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.Protocol, req.Request.Model, start)
+	record.BatchID = req.BatchID
 	applyOutcome(&record, err)
 	var snapshot *runtimecatalog.RoutableSnapshot
 	if response != nil {
@@ -175,6 +176,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	stream, err := s.Proxy.ProcessChatCompletionStream(ctx, req)
 
 	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.Protocol, req.Request.Model, start)
+	record.BatchID = req.BatchID
 	record.Streaming = true
 	if err != nil {
 		applyOutcome(&record, err)
@@ -204,6 +206,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 	response, err := s.Proxy.ProcessEmbeddings(ctx, req)
 
 	record := baseUsageRecord(usage.OperationEmbeddings, req.RequestID, req.KeyID, req.AccountID, req.Protocol, req.Request.Model, start)
+	record.BatchID = req.BatchID
 	applyOutcome(&record, err)
 	var snapshot *runtimecatalog.RoutableSnapshot
 	if response != nil {

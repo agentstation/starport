@@ -186,7 +186,7 @@ func TestUploadRefusesAPurposeThisGatewayDoesNotServe(t *testing.T) {
 	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20, MaxFileUploadSize: 1 << 20})
 	key := storeFileTestKey(t, server, "file-writer", "files:read", "files:write")
 
-	for _, purpose := range []string{"assistants", "batch", "fine-tune", ""} {
+	for _, purpose := range []string{"assistants", "batch_output", "fine-tune", ""} {
 		recorder := uploadFile(t, server, key, "report.txt", purpose, "bytes")
 		require.Equalf(t, http.StatusBadRequest, recorder.Code, "purpose %q was accepted", purpose)
 		require.Contains(t, recorder.Body.String(), "user_data")
