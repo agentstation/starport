@@ -14,8 +14,9 @@
 #     shared through KV when the operator configures a distributed store,
 #   - internal/guardrails owns pre and post checks that fail closed, with
 #     deterministic PII redaction and a moderation check built in,
-#   - team budgets, the semantic cache, preset revisions, and the MCP
-#     server each land at their owning seam.
+#   - team budgets, the semantic cache, preset revisions, and the agent
+#     surface (catalog verbs plus the embedded skill) each land at their
+#     owning seam.
 #
 # Authored red at baseline f7dfb6b (ENR-A0): each condition turns green as
 # its ENR task closes. The gate is terminal at 33 conditions (ENR-V01
@@ -185,11 +186,11 @@ check ENR-V28 "similarity answers only above the threshold, held by tests" \
 check ENR-V29 "preset revisions pin and roll back, held by tests" \
   tests_all_present 'Rollback' -- internal/presets
 
-check ENR-V30 "internal/mcp owns the server and its tools" \
-  all_present 'package mcp' -- internal/mcp
+check ENR-V30 "the CLI owns the agent surface: catalog verbs and the embedded skill" \
+  all_present 'models' 'agent setup' 'SKILL.md' -- cmd/starport skills/starport
 
-check ENR-V31 "the MCP server authenticates with a gateway key alone, held by tests" \
-  tests_all_present 'GatewayKey' -- internal/mcp
+check ENR-V31 "the catalog verbs answer JSON and agent setup writes the skill, held by tests" \
+  tests_all_present 'ModelsSearch' 'AgentSetup' -- cmd/starport
 
 # --- Close ---
 
