@@ -21,11 +21,16 @@ const activityExportMaxPages = 1000
 // header, the activity filter, and the admin health payload.
 const fieldStatus = "status"
 
+// fieldKeyID is the wire name for a gateway key's identifier on every
+// surface this package writes it to: the CSV header, event payloads, and
+// the key deletion response.
+const fieldKeyID = "key_id"
+
 // activityExportCSVHeader names the flat columns the CSV format carries. The
 // NDJSON format carries the whole record; CSV keeps the columns a spreadsheet
 // reads.
 var activityExportCSVHeader = []string{
-	"request_id", "timestamp", "key_id", "account_id", "operation",
+	"request_id", "timestamp", fieldKeyID, "account_id", "operation",
 	"model_requested", "model_used", "provider", fieldStatus, "status_code",
 	"streaming", "tokens_input", "tokens_output", "tokens_total",
 	"latency_ms", "overhead_ms", "ttft_ms",

@@ -151,6 +151,78 @@ func TestBudgetStorageErrorFailsOpen(t *testing.T) {
 	assert.True(t, called, "storage failure must fail open")
 }
 
+// recordingEmitter keeps every event the middleware pushes. It records
+// types and payloads rather than a count, because the property under test
+// is what a webhook receiver would read.
+type recordingEmitter struct {
+	types    []string
+	payloads []map[string]string
+}
+
+func (e *recordingEmitter) Emit(eventType string, data map[string]string) {
+	e.types = append(e.types, eventType)
+	e.payloads = append(e.payloads, data)
+}
+
+// A refusal is the moment an operator's pager cares about, so the refusal
+// that writes the 402 pushes the one budget event. The payload names the
+// holder and the meter and nothing else: no prompt, no credential.
+func TestABudgetRefusalEmitsOneNamedEvent(t *testing.T) {
+	emitter := &recordingEmitter{}
+	server := &Server{
+		cfg: &Config{},
+		usage: stubUsageTotals{
+			totals: usage.Totals{Requests: 10, Tokens: 500, SpendNanoUSD: 2_000_000_000},
+		},
+		events: emitter,
+	}
+
+	handler := server.enforceBudgets(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	apiKey := budgetTestKey(&limits.Limits{
+		Spend: &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalDay},
+	})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, budgetTestRequest(apiKey))
+
+	require.Equal(t, http.StatusPaymentRequired, rec.Code)
+	require.Equal(t, []string{"budget.exhausted"}, emitter.types)
+	payload := emitter.payloads[0]
+	assert.Equal(t, "key", payload["scope"])
+	assert.Equal(t, "spend", payload["dimension"])
+	assert.Equal(t, string(limits.IntervalDay), payload["interval"])
+	assert.Equal(t, "key-budget", payload["key_id"])
+}
+
+// An allowed request is not an incident. The emitter hears nothing.
+func TestAnAllowedRequestEmitsNothing(t *testing.T) {
+	emitter := &recordingEmitter{}
+	server := &Server{
+		cfg: &Config{},
+		usage: stubUsageTotals{
+			totals: usage.Totals{Requests: 2, Tokens: 100, SpendNanoUSD: 400_000_000},
+		},
+		events: emitter,
+	}
+
+	handler := server.enforceBudgets(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	apiKey := budgetTestKey(&limits.Limits{
+		Spend: &limits.Budget{Limit: 1_000_000_000, Interval: limits.IntervalDay},
+	})
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, budgetTestRequest(apiKey))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Empty(t, emitter.types)
+}
+
 func TestBudgetMiddlewarePassesKeysWithoutBudgets(t *testing.T) {
 	server := &Server{
 		cfg:   &Config{},

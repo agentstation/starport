@@ -83,6 +83,9 @@ type Service struct {
 	// that later gains an accountant does not re-price the jobs it already
 	// finished.
 	accountant Accountant
+	// notifier hears each terminal state once. A service without one tells
+	// nobody, which is what a deployment with no webhook endpoint gets.
+	notifier Notifier
 	// meter bounds how many jobs one account holds open. A service without one
 	// bounds nothing, which is what a deployment with no counter gets.
 	meter  Meter
@@ -143,6 +146,11 @@ func WithAssetBound(bytes int64) ServiceOption {
 // WithAccountant gives the service somewhere to report a finished job.
 func WithAccountant(accountant Accountant) ServiceOption {
 	return func(s *Service) { s.accountant = accountant }
+}
+
+// WithNotifier gives the service who hears each job's terminal state.
+func WithNotifier(notifier Notifier) ServiceOption {
+	return func(s *Service) { s.notifier = notifier }
 }
 
 // WithJobMeter gives the service the counter that bounds outstanding jobs.

@@ -17,6 +17,7 @@ import (
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server/dto"
@@ -33,6 +34,7 @@ type AdminController struct {
 	usageRecords usage.Repository
 	fileBackend  string
 	audit        AuditRecorder
+	events       EventEmitter
 }
 
 // AdminOption adjusts what the admin surface reports.
@@ -183,6 +185,13 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		subject = issued.APIKey.ID
 	}
 	writeAudit(ctx, h.audit, "key.create", subject, err)
+	if err == nil && h.events != nil {
+		// The payload names the key. The token itself never leaves the
+		// response that answers this one request.
+		h.events.Emit(events.TypeKeyCreated, map[string]string{
+			fieldKeyID: issued.APIKey.ID, fieldName: req.Name,
+		})
+	}
 	if err != nil {
 		if isKeyValidationError(err) {
 			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
@@ -199,7 +208,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		"key": map[string]any{
 			"id":             apiKey.ID,
 			"key":            issued.Secret,
-			"name":           apiKey.Name,
+			fieldName:        apiKey.Name,
 			fieldAccountID:   apiKey.EffectiveAccountID(),
 			"scopes":         apiKey.Scopes,
 			"allowed_models": apiKey.AllowedModels,
@@ -237,7 +246,7 @@ func (h *AdminController) GetKey(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]any{
 		"id":             apiKey.ID,
-		"name":           apiKey.Name,
+		fieldName:        apiKey.Name,
 		fieldAccountID:   apiKey.EffectiveAccountID(),
 		"scopes":         apiKey.Scopes,
 		"allowed_models": apiKey.AllowedModels,
@@ -437,6 +446,9 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 
 	err := h.apiKeys.Delete(ctx, keyID, 0)
 	writeAudit(ctx, h.audit, "key.delete", keyID, err)
+	if err == nil && h.events != nil {
+		h.events.Emit(events.TypeKeyDeleted, map[string]string{fieldKeyID: keyID})
+	}
 	if err != nil {
 		if errors.Is(err, apikey.ErrNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "API key not found")
@@ -449,7 +461,7 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]any{
 		responseMessageField: "API key deleted successfully",
-		"key_id":             keyID,
+		fieldKeyID:           keyID,
 	}
 
 	if err := dto.WriteJSON(w, http.StatusOK, response); err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/events"
 	providerstate "github.com/agentstation/starport/internal/providers/state"
 	"github.com/agentstation/starport/internal/providers/statuspage"
 )
@@ -64,6 +65,9 @@ func (s catalogHealthAPISource) HealthAPIs() map[catalogs.ProviderID]statuspage.
 type providerIncidentPublisher struct {
 	states      *providerstate.Store
 	transitions providerstate.TransitionRepository
+	// events pushes each transition to the configured webhook endpoints. A
+	// nil emitter pushes nothing.
+	events eventEmitter
 }
 
 // incidentRecordTimeout bounds one durable write of observed transitions.
@@ -83,7 +87,22 @@ func (p providerIncidentPublisher) PublishIncidents(observations []statuspage.Ob
 		})
 	}
 	transitions := p.states.PublishIncidents(projected)
-	if len(transitions) == 0 || p.transitions == nil {
+	if len(transitions) == 0 {
+		return
+	}
+	if p.events != nil {
+		for _, transition := range transitions {
+			// The payload names the provider and the indicator it moved to.
+			// The description is the provider's own published status text.
+			p.events.Emit(events.TypeProviderHealthChanged, map[string]string{
+				"provider":    string(transition.ProviderID),
+				"indicator":   transition.Indicator,
+				"description": transition.Description,
+				"observed_at": transition.ObservedAt.UTC().Format(time.RFC3339),
+			})
+		}
+	}
+	if p.transitions == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), incidentRecordTimeout)

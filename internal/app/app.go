@@ -25,6 +25,7 @@ import (
 	"github.com/agentstation/starport/internal/console"
 	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/document"
+	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
@@ -98,6 +99,7 @@ type App struct {
 	blobStore           blob.Store
 	files               *files.Service
 	jobs                *jobs.Service
+	events              *events.Dispatcher
 	cacheManager        *cache.Manager
 	transports          *connectors.TransportRegistry
 	authentication      *providerauth.Registry
@@ -213,6 +215,7 @@ func (b *runtimeBuilder) compose() error {
 		b.openStorage,
 		b.openSQLStore,
 		b.openBlob,
+		b.openEvents,
 		b.openConcepts,
 		b.openRegistry,
 		b.openCache,
@@ -244,6 +247,28 @@ func (b *runtimeBuilder) openStorage() error {
 	}
 	b.application.store = store
 	b.application.own("storage", func(context.Context) error { return store.Close() })
+	return nil
+}
+
+// openEvents builds the webhook dispatcher, or nothing when configuration
+// names no endpoint. It runs before openConcepts because the job service
+// takes its notifier at construction. The dead-letter observer reads the
+// metric surface through the builder: the surface itself builds later, in
+// buildGateway, and the first delivery happens later still, behind a
+// channel receive that orders the two.
+func (b *runtimeBuilder) openEvents() error {
+	dispatcher := events.NewDispatcher(
+		b.config.Events.Endpoints(),
+		b.config.Events.WebhookSecret,
+		events.Options{OnDeadLetter: func(count int) {
+			b.metrics.ObserveWebhookDeadLetters(count)
+		}},
+	)
+	if dispatcher == nil {
+		return nil
+	}
+	b.application.events = dispatcher
+	b.application.own("webhook dispatcher", dispatcher.Close)
 	return nil
 }
 
@@ -513,12 +538,18 @@ func (b *runtimeBuilder) openJobService() error {
 	// snapshot. A job ends long after the request that started it, so the price
 	// it draws comes from whatever the catalog holds at that moment.
 	accountant := proxy.NewJobAccountant(b.application.currentRoutableSnapshot, b.usageRecords)
-	b.jobs, err = jobs.NewService(records,
+	serviceOptions := []jobs.ServiceOption{
 		jobs.WithAssetStore(b.application.blobStore),
 		jobs.WithRetention(b.config.Jobs.AssetRetentionWindow()),
 		jobs.WithAssetBound(b.config.Jobs.AssetBound()),
 		jobs.WithJobMeter(meter),
-		jobs.WithAccountant(accountant))
+		jobs.WithAccountant(accountant),
+	}
+	if b.application.events != nil {
+		serviceOptions = append(serviceOptions,
+			jobs.WithNotifier(jobEventNotifier{events: b.application.events}))
+	}
+	b.jobs, err = jobs.NewService(records, serviceOptions...)
 	if err != nil {
 		return fmt.Errorf("open job service: %w", err)
 	}
@@ -753,6 +784,16 @@ func (b *runtimeBuilder) identityAuthenticator() controllers.IdentityAuthenticat
 	return b.identityAuth
 }
 
+// eventEmitter hands the dispatcher across as the server's contract, with
+// the same nil check identityAuthenticator makes: a nil *events.Dispatcher
+// wrapped in a non-nil interface would defeat every emit-site guard.
+func (b *runtimeBuilder) eventEmitter() controllers.EventEmitter {
+	if b.application.events == nil {
+		return nil
+	}
+	return b.application.events
+}
+
 func (b *runtimeBuilder) openHTTPServer() error {
 	httpServer, err := b.factories.newServer(serverConfig(b.config, b.auth), server.Dependencies{
 		Service: b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
@@ -769,6 +810,7 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		Telemetry:    b.metrics,
 		Tracing:      b.tracing,
 		Audit:        b.audit,
+		Events:       b.eventEmitter(),
 	})
 	if err != nil {
 		if httpServer != nil {
@@ -983,7 +1025,11 @@ func (a *App) Run(ctx context.Context) error {
 		incidentPoller, err := statuspage.New(
 			statuspage.DefaultConfig(),
 			catalogHealthAPISource{catalog: a.catalog},
-			providerIncidentPublisher{states: a.providerStates, transitions: a.incidentTransitions},
+			providerIncidentPublisher{
+				states:      a.providerStates,
+				transitions: a.incidentTransitions,
+				events:      a.events,
+			},
 		)
 		if err != nil {
 			return errors.Join(fmt.Errorf("open status-page poller: %w", err), a.closeWithTimeout())

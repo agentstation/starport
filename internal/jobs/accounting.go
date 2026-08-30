@@ -47,6 +47,18 @@ type Accountant interface {
 	RecordJob(ctx context.Context, entry AccountingEntry) error
 }
 
+// Notifier hears each job that reached its terminal state, exactly once.
+//
+// It is declared here for the reason Accountant is: the event surface
+// lives in another package, and this leaf owns state alone. The settle
+// stamp that keeps the accounting entry single keeps the notification
+// single too, so a receiver hears one end per job however often a caller
+// polls. A failure to notify is absorbed the way an accounting failure
+// is: the caller holds its answer either way.
+type Notifier interface {
+	JobEnded(ctx context.Context, entry AccountingEntry)
+}
+
 // Meter bounds how many jobs one holder may hold open at a time.
 //
 // The interface is declared here for the same reason Accountant is: the limit
@@ -84,6 +96,9 @@ func (s *Service) settle(ctx context.Context, job Job) Job {
 	if s.accountant != nil {
 		// The caller holds its answer either way. See the note above.
 		_ = s.accountant.RecordJob(ctx, entryFor(settled))
+	}
+	if s.notifier != nil {
+		s.notifier.JobEnded(ctx, entryFor(settled))
 	}
 	s.releaseSlot(ctx, settled)
 	return settled
