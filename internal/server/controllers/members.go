@@ -35,6 +35,7 @@ const (
 // shared credential's grant list names accounts without owning them.
 type MembersController struct {
 	identity identity.Repositories
+	audit    AuditRecorder
 }
 
 // NewMembersController creates the members controller. Zero repositories —
@@ -139,6 +140,7 @@ func (h *MembersController) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 
 	record, err := h.identity.Teams.Create(r.Context(), candidate)
+	writeAudit(r.Context(), h.audit, "team.create", candidate.ID, err)
 	if err != nil {
 		log.Error().Err(err).Str(fieldTeamID, candidate.ID).Msg("Failed to create team")
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create team")
@@ -160,7 +162,9 @@ func (h *MembersController) DeleteTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.identity.Teams.Delete(r.Context(), record.Team.ID, record.Revision); err != nil {
+	err := h.identity.Teams.Delete(r.Context(), record.Team.ID, record.Revision)
+	writeAudit(r.Context(), h.audit, "team.delete", record.Team.ID, err)
+	if err != nil {
 		switch {
 		case errors.Is(err, identity.ErrTeamNotFound):
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Team not found")
@@ -216,6 +220,7 @@ func (h *MembersController) AddTeamMember(w http.ResponseWriter, r *http.Request
 		TeamID: chi.URLParam(r, fieldTeamID),
 	}
 	created, err := h.identity.Memberships.Add(r.Context(), membership)
+	writeAudit(r.Context(), h.audit, "team_member.add", membership.TeamID+"/"+membership.UserID, err)
 	if err != nil {
 		switch {
 		case errors.Is(err, identity.ErrMissingID):
@@ -245,7 +250,9 @@ func (h *MembersController) RemoveTeamMember(w http.ResponseWriter, r *http.Requ
 
 	userID := chi.URLParam(r, fieldUserID)
 	teamID := chi.URLParam(r, fieldTeamID)
-	if err := h.identity.Memberships.Remove(r.Context(), userID, teamID); err != nil {
+	err := h.identity.Memberships.Remove(r.Context(), userID, teamID)
+	writeAudit(r.Context(), h.audit, "team_member.remove", teamID+"/"+userID, err)
+	if err != nil {
 		if errors.Is(err, identity.ErrMembershipNotFound) {
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Membership not found")
 			return
@@ -343,6 +350,7 @@ func (h *MembersController) CreateGrant(w http.ResponseWriter, r *http.Request) 
 	}
 
 	created, err := h.identity.AccountGrants.Add(r.Context(), grant)
+	writeAudit(r.Context(), h.audit, "grant.create", grantAuditSubject(grant), err)
 	if err != nil {
 		h.writeGrantRefusal(w, grant, err, "Failed to create account grant")
 		return
@@ -363,7 +371,9 @@ func (h *MembersController) DeleteGrant(w http.ResponseWriter, r *http.Request) 
 		UserID:    r.URL.Query().Get(fieldUserID),
 		TeamID:    r.URL.Query().Get(fieldTeamID),
 	}
-	if err := h.identity.AccountGrants.Remove(r.Context(), grant); err != nil {
+	err := h.identity.AccountGrants.Remove(r.Context(), grant)
+	writeAudit(r.Context(), h.audit, "grant.delete", grantAuditSubject(grant), err)
+	if err != nil {
 		h.writeGrantRefusal(w, grant, err, "Failed to remove account grant")
 		return
 	}
@@ -371,6 +381,16 @@ func (h *MembersController) DeleteGrant(w http.ResponseWriter, r *http.Request) 
 		responseMessageField: "Account grant removed successfully",
 		fieldAccountID:       grant.AccountID,
 	})
+}
+
+// grantAuditSubject names a grant for the audit trail: the account and the one
+// grantee the grant carries.
+func grantAuditSubject(grant identity.AccountGrant) string {
+	grantee := grant.UserID
+	if grantee == "" {
+		grantee = grant.TeamID
+	}
+	return grant.AccountID + "/" + grantee
 }
 
 // writeGrantRefusal maps a grant repository error onto the admin surface. Both

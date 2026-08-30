@@ -33,6 +33,7 @@ type Controllers struct {
 	Logos                *LogosController
 	ProviderCredentials  *ProviderCredentialsController
 	Activity             *ActivityController
+	Audit                *AuditController
 	Admin                *AdminController
 	Accounts             *AccountsController
 	AccountTemplates     *AccountTemplatesController
@@ -102,6 +103,10 @@ type Config struct {
 	// and account grants. Zero repositories degrade the members routes to
 	// 503, the way an absent template store degrades its surface.
 	Identity identity.Repositories
+	// Audit records admin mutations and serves the trail back. A nil trail
+	// records nothing and degrades the listing route to 503, the way an
+	// absent preset store degrades its surface.
+	Audit AuditTrail
 }
 
 // NewControllers creates a new controller collection
@@ -123,6 +128,7 @@ func NewControllers(cfg Config) *Controllers {
 		Logos:                NewLogosController(cfg.Service),
 		ProviderCredentials:  NewProviderCredentialsController(cfg.ProviderKeys, cfg.Accounts),
 		Activity:             NewActivityController(cfg.Usage),
+		Audit:                NewAuditController(cfg.Audit),
 		Admin: NewAdminController(cfg.APIKeys, cfg.Accounts, cfg.Usage,
 			WithFileStorage(cfg.FileBackend)),
 		Accounts:           NewAccountsController(cfg.Accounts, cfg.APIKeys, cfg.Templates),
@@ -140,6 +146,17 @@ func NewControllers(cfg Config) *Controllers {
 		ConsoleIdentity:    NewConsoleIdentityController(cfg.IdentityAuth, cfg.LocalGate),
 		Console:            cfg.Console,
 	}
+
+	// The recorder rides a package-private field instead of each constructor,
+	// because every mutating controller shares the one trail and a nil trail
+	// simply records nothing.
+	collections.Admin.audit = cfg.Audit
+	collections.Accounts.audit = cfg.Audit
+	collections.AccountTemplates.audit = cfg.Audit
+	collections.Members.audit = cfg.Audit
+	collections.ProviderCredentials.audit = cfg.Audit
+	collections.Presets.audit = cfg.Audit
+	collections.Auth.audit = cfg.Audit
 
 	return collections
 }

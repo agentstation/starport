@@ -121,7 +121,7 @@ func (h *SPAHandler) Assets(w http.ResponseWriter, r *http.Request) {
 // refreshes. TestSPAPagePathsCoverClientRoutes derives this list from
 // console/src/routes and fails when the two drift.
 var spaPagePaths = []string{
-	"/", "/accounts", "/auth", "/authors", "/authors/*", "/chat",
+	"/", "/accounts", "/audit", "/auth", "/authors", "/authors/*", "/chat",
 	"/docs", "/documents", "/files", "/jobs", "/keys", "/members",
 	"/models", "/models/*", "/presets", "/providers", "/providers/*",
 	"/settings", "/teams", "/usage",

@@ -41,6 +41,7 @@ type AccountsController struct {
 	accounts  account.Repository
 	keys      KeyLister
 	templates account.TemplateRepository
+	audit     AuditRecorder
 }
 
 // NewAccountsController creates the account controller. A nil repository
@@ -167,6 +168,7 @@ func (h *AccountsController) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	record, err := h.accounts.Create(r.Context(), candidate)
+	writeAudit(r.Context(), h.audit, "account.create", candidate.ID, err)
 	if err != nil {
 		if errors.Is(err, account.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
@@ -221,6 +223,7 @@ func (h *AccountsController) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated, err := h.accounts.Update(r.Context(), edited, record.Revision)
+	writeAudit(r.Context(), h.audit, "account.update", edited.ID, err)
 	if err != nil {
 		if errors.Is(err, account.ErrConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
@@ -262,7 +265,9 @@ func (h *AccountsController) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.accounts.Delete(r.Context(), accountID, record.Revision); err != nil {
+	err := h.accounts.Delete(r.Context(), accountID, record.Revision)
+	writeAudit(r.Context(), h.audit, "account.delete", accountID, err)
+	if err != nil {
 		switch {
 		case errors.Is(err, account.ErrNotFound):
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Account not found")

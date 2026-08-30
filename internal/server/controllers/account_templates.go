@@ -21,6 +21,7 @@ const fieldTemplateID = "template_id"
 // templates alone; the stamping itself happens where accounts are created.
 type AccountTemplatesController struct {
 	templates account.TemplateRepository
+	audit     AuditRecorder
 }
 
 // NewAccountTemplatesController creates the template controller. A nil
@@ -124,6 +125,7 @@ func (h *AccountTemplatesController) Create(w http.ResponseWriter, r *http.Reque
 	}
 
 	record, err := h.templates.Create(r.Context(), candidate)
+	writeAudit(r.Context(), h.audit, "template.create", candidate.ID, err)
 	if err != nil {
 		if errors.Is(err, account.ErrTemplateConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
@@ -180,6 +182,7 @@ func (h *AccountTemplatesController) Update(w http.ResponseWriter, r *http.Reque
 	}
 
 	updated, err := h.templates.Update(r.Context(), edited, record.Revision)
+	writeAudit(r.Context(), h.audit, "template.update", edited.ID, err)
 	if err != nil {
 		if errors.Is(err, account.ErrTemplateConflict) {
 			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
@@ -208,7 +211,9 @@ func (h *AccountTemplatesController) Delete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.templates.Delete(r.Context(), record.Template.ID, record.Revision); err != nil {
+	err := h.templates.Delete(r.Context(), record.Template.ID, record.Revision)
+	writeAudit(r.Context(), h.audit, "template.delete", record.Template.ID, err)
+	if err != nil {
 		switch {
 		case errors.Is(err, account.ErrTemplateNotFound):
 			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Template not found")

@@ -324,11 +324,15 @@ func (m *AuthMiddleware) sessionContext(r *http.Request) (context.Context, error
 	if err != nil || cookie.Value == "" {
 		return nil, errNoSession
 	}
-	if _, err := m.sessions.Verify(cookie.Value, time.Now()); err != nil {
+	session, err := m.sessions.Verify(cookie.Value, time.Now())
+	if err != nil {
 		return nil, err
 	}
 	operator := apikey.LocalOperator()
-	ctx := requestctx.WithAPIKeyID(r.Context(), operator.ID)
+	// The grant kind and identity subject ride the context so the audit
+	// trail can name the actor behind a console mutation.
+	ctx := requestctx.WithConsoleSession(r.Context(), string(session.Grant), session.Subject)
+	ctx = requestctx.WithAPIKeyID(ctx, operator.ID)
 	ctx = requestctx.WithAPIKeyModel(ctx, &operator)
 	accountID := operator.EffectiveAccountID()
 	ctx = requestctx.WithAccountID(ctx, accountID)

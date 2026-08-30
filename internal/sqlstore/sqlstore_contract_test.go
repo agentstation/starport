@@ -318,6 +318,22 @@ func TestDialectMigrationSetsAgree(t *testing.T) {
 	}
 }
 
+// The audit trail is only durable if its table actually ships. A rename or a
+// dropped file would pass the agreement test above while silently removing
+// the trail from every fresh deployment.
+func TestAuditLogMigrationShips(t *testing.T) {
+	names, err := migrationNames(migrations, TypeSQLite)
+	if err != nil {
+		t.Fatalf("sqlite names: %v", err)
+	}
+	for _, name := range names {
+		if name == "0006_audit_log.sql" {
+			return
+		}
+	}
+	t.Fatalf("0006_audit_log missing from embedded migrations: %v", names)
+}
+
 // bind is what lets the runner write one query for three engines.
 func TestBindNumbersPostgresPlaceholders(t *testing.T) {
 	pg := &DB{dialect: TypePostgres}

@@ -295,6 +295,9 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					r.Get("/info", s.controllers.Admin.SystemInfo)
 					r.Get("/metrics", s.controllers.Admin.Metrics)
 					r.Get("/activity", s.controllers.Activity.AdminList)
+					// The audit trail: who changed what on this admin
+					// surface, newest first.
+					r.Get("/audit", s.controllers.Audit.List)
 					r.Get("/providers", s.controllers.ProviderOperations.Status)
 					r.Get("/providers/{provider}/incidents", s.controllers.ProviderOperations.Incidents)
 					r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)

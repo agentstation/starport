@@ -31,6 +31,7 @@ type Config struct {
 	Console           ConsoleConfig      `env:",prefix=CONSOLE_"`
 	Identity          IdentityConfig     `env:",prefix=IDENTITY_"`
 	Telemetry         TelemetryConfig    `env:",prefix=TELEMETRY_"`
+	Audit             AuditConfig        `env:",prefix=AUDIT_"`
 
 	providerEnvironment  environmentLookup
 	credentialResolver   *credentials.Resolver

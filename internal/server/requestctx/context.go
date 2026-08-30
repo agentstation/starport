@@ -26,6 +26,14 @@ const (
 	// operator's governing record: the credential strategy the request may run
 	// under, and the limits it spends against.
 	AccountRecord Key = "account_record"
+	// ConsoleGrant stores the grant kind that minted a console session, when
+	// the request arrived with one. The audit trail reads it to name the
+	// actor behind a console mutation.
+	ConsoleGrant Key = "console_grant"
+	// ConsoleSubject stores who an identity provider said the console caller
+	// is. It is empty for the machine-local grants, which prove where the
+	// caller is and not who.
+	ConsoleSubject Key = "console_subject"
 )
 
 // WithAPIKey stores the raw API key in the context.
@@ -88,6 +96,25 @@ func AccountCredentialStrategyOrDefault(ctx context.Context) account.CredentialS
 		return record.EffectiveCredentialStrategy()
 	}
 	return account.StrategyOperatorFirst
+}
+
+// WithConsoleSession stores the grant kind and identity subject of the
+// console session a request arrived with.
+func WithConsoleSession(ctx context.Context, grant, subject string) context.Context {
+	ctx = context.WithValue(ctx, ConsoleGrant, grant)
+	return context.WithValue(ctx, ConsoleSubject, subject)
+}
+
+// GetConsoleSession returns the console session's grant kind and identity
+// subject. The second return is false when the request carried no console
+// session.
+func GetConsoleSession(ctx context.Context) (grant, subject string, ok bool) {
+	grant, ok = ctx.Value(ConsoleGrant).(string)
+	if !ok || grant == "" {
+		return "", "", false
+	}
+	subject, _ = ctx.Value(ConsoleSubject).(string)
+	return grant, subject, true
 }
 
 // GetAPIKey returns the raw API key from the context.
