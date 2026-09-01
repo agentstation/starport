@@ -120,6 +120,9 @@ type ChatCompletionRequest struct {
 	// online request. The usage record carries it, so an operator can read
 	// what one batch spent.
 	BatchID string `json:"-"`
+	// SemanticCache opts this request into the similarity layer, when the
+	// deployment enables one. The X-Semantic-Cache header states it.
+	SemanticCache bool `json:"-"`
 }
 
 // ChatCompletionResponse is a canonical result plus gateway response metadata.
@@ -150,6 +153,10 @@ type ChatCompletionResponse struct {
 	CacheAge    int        `json:"-"` // Seconds since cached
 	ETag        string     `json:"-"` // Entity tag for response
 	CacheCost   *CacheCost `json:"-"` // Cache pricing information
+	// CacheSimilarity is the cosine similarity a semantic hit served
+	// under, or zero for an exact hit or a miss. The X-Cache-Similarity
+	// header reports it beside the shared cache status vocabulary.
+	CacheSimilarity float64 `json:"-"`
 
 	// Route evidence (not serialized)
 	ProviderUsed     string                           `json:"-"`
@@ -423,6 +430,13 @@ type CacheStatusProvider interface {
 	GetCacheAge() int // Returns cache age in seconds, or 0 if not cached
 }
 
+// CacheSimilarityProvider reports the cosine similarity a semantic cache
+// hit served under. A stream that does not implement it, or answers zero,
+// served exactly or not from cache at all.
+type CacheSimilarityProvider interface {
+	GetCacheSimilarity() float64
+}
+
 // CacheConfig defines caching behavior
 type CacheConfig struct {
 	// Enable caching for different endpoints
@@ -434,6 +448,22 @@ type CacheConfig struct {
 	SkipCacheModels []string `env:"SKIP_CACHE_MODELS"`
 	// Force cache refresh header
 	CacheControlHeader string `env:"CACHE_CONTROL_HEADER,default=X-Cache-Control"`
+
+	// EnableSemanticCache turns on the similarity layer beside the exact
+	// identity. Each request still opts in per call, and the layer only
+	// runs where the exact cache already deemed the request cacheable.
+	// Composition sets these fields from the deployment configuration, so
+	// they carry no env tags.
+	EnableSemanticCache bool
+	// SemanticThreshold is the minimum cosine similarity that answers.
+	// Zero takes the cache package default.
+	SemanticThreshold float64
+	// SemanticMaxEntries bounds the vectors one similarity scope holds.
+	// Zero takes the cache package default.
+	SemanticMaxEntries int
+	// SemanticEmbedder embeds the canonical prompt text through the
+	// gateway's own embeddings path. Nil keeps the layer off.
+	SemanticEmbedder SemanticEmbedder
 }
 
 // Define typed context keys

@@ -663,11 +663,24 @@ func (b *runtimeBuilder) buildGateway() error {
 		proxyOptions = append(proxyOptions, proxy.WithDocumentCache(extractions))
 	}
 	if b.application.cacheManager != nil {
-		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, &proxy.CacheConfig{
+		cacheConfig := &proxy.CacheConfig{
 			EnableChatCache: true, EnableEmbeddingCache: true,
 			EnableModelCache: true, EnableProviderCache: true,
 			CacheControlHeader: "X-Cache-Control",
-		}))
+		}
+		if b.config.SemanticCache.Enabled {
+			// The embedder calls the finished gateway, late-bound like the
+			// guardrail moderator: the embedding rides the account's own
+			// routing and draws its own usage record.
+			cacheConfig.EnableSemanticCache = true
+			cacheConfig.SemanticThreshold = b.config.SemanticCache.Threshold
+			cacheConfig.SemanticMaxEntries = b.config.SemanticCache.MaxEntries
+			cacheConfig.SemanticEmbedder = proxy.NewGatewayEmbedder(
+				strings.TrimSpace(b.config.SemanticCache.Model),
+				func() proxy.Proxy { return b.gateway },
+			)
+		}
+		proxyOptions = append(proxyOptions, proxy.WithCache(b.application.cacheManager, cacheConfig))
 	}
 	b.gateway = proxy.New(b.application.registry, modelRouter, proxyOptions...)
 	// Guardrails wrap inside the preset resolver so the checks read the

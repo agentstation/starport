@@ -123,6 +123,21 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 		Str("cache_key", cacheKey).
 		Msg("cache miss for chat completion")
 
+	// An exact miss is where similarity gets its one chance: a paraphrase
+	// never shares the exact key, so only this path can recognize one.
+	probe := s.semanticProbe(ctx, req)
+	if probe != nil {
+		if cached, cachedAt, similarity, ok := probe.lookup(ctx, repository); ok {
+			resp, err := chatResponseFromCanonical(cached)
+			if err == nil {
+				resp.CacheStatus = CacheStatusHit
+				resp.CacheAge = cacheAge(cachedAt)
+				resp.CacheSimilarity = similarity
+				return resp, nil
+			}
+		}
+	}
+
 	// Execute the request
 	resp, err := s.service.ProcessChatCompletion(ctx, req)
 	if err != nil {
@@ -143,6 +158,9 @@ func (s *cachedService) ProcessChatCompletion(ctx context.Context, req *ChatComp
 	}
 	if conversionErr != nil {
 		log.Warn().Err(conversionErr).Str("key", cacheKey).Msg("failed to cache response")
+	}
+	if conversionErr == nil && probe != nil {
+		probe.store(cacheCtx, cacheKey)
 	}
 
 	return resp, nil
@@ -229,6 +247,20 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 		Str("cache_key", cacheKey).
 		Msg("cache miss for streaming chat completion")
 
+	// An exact miss is where similarity gets its one chance, for streams
+	// as much as for single responses.
+	probe := s.semanticProbe(ctx, req)
+	if probe != nil {
+		if cached, cachedAt, similarity, ok := probe.lookup(ctx, repository); ok {
+			events, err := responsecache.StreamEvents(cached, canonicalRequest.StreamOptions)
+			if err == nil {
+				replay := newCachedEventStream(events, cachedAt)
+				replay.similarity = similarity
+				return finish(replay, nil)
+			}
+		}
+	}
+
 	// Cache miss - get stream from service
 	stream, err := s.service.ProcessChatCompletionStream(ctx, req)
 	if err != nil {
@@ -236,7 +268,11 @@ func (s *cachedService) ProcessChatCompletionStream(ctx context.Context, req *Ch
 	}
 
 	// Wrap stream to cache the response
-	return finish(newCachingStreamWrapper(stream, repository, cacheKey), nil)
+	wrapper := newCachingStreamWrapper(stream, repository, cacheKey)
+	if probe != nil {
+		wrapper.afterCache = probe.store
+	}
+	return finish(wrapper, nil)
 }
 
 // ProcessEmbeddings handles embeddings with caching
@@ -703,6 +739,9 @@ type cachedEventStream struct {
 	events   []inference.StreamEvent
 	position int
 	cachedAt time.Time
+	// similarity is nonzero only when a semantic match answered the
+	// replay, and the X-Cache-Similarity header reports it.
+	similarity float64
 }
 
 func newCachedEventStream(events []inference.StreamEvent, cachedAt time.Time) *cachedEventStream {
@@ -722,12 +761,14 @@ func (s *cachedEventStream) Read() (*inference.StreamEvent, error) {
 	return &event, nil
 }
 
-func (s *cachedEventStream) Close() error           { return nil }
-func (s *cachedEventStream) GetCacheStatus() string { return CacheStatusHit }
-func (s *cachedEventStream) GetCacheAge() int       { return cacheAge(s.cachedAt) }
+func (s *cachedEventStream) Close() error                { return nil }
+func (s *cachedEventStream) GetCacheStatus() string      { return CacheStatusHit }
+func (s *cachedEventStream) GetCacheAge() int            { return cacheAge(s.cachedAt) }
+func (s *cachedEventStream) GetCacheSimilarity() float64 { return s.similarity }
 
 var _ ChatCompletionStreamResponse = (*cachedEventStream)(nil)
 var _ CacheStatusProvider = (*cachedEventStream)(nil)
+var _ CacheSimilarityProvider = (*cachedEventStream)(nil)
 
 // cachingStreamWrapper stores only a successfully completed canonical stream.
 type cachingStreamWrapper struct {
@@ -736,6 +777,9 @@ type cachingStreamWrapper struct {
 	cacheKey   string
 	events     []inference.StreamEvent
 	cached     bool
+	// afterCache runs once after a successful store, so a semantic probe
+	// can record its vector beside the entry the store just wrote.
+	afterCache func(ctx context.Context, exactKey string)
 }
 
 func newCachingStreamWrapper(
@@ -776,6 +820,10 @@ func (w *cachingStreamWrapper) cacheResponse() {
 	defer cancel()
 	if err := w.repository.PutChat(cacheCtx, w.cacheKey, response); err != nil {
 		log.Warn().Err(err).Str("model", response.ModelUsed).Msg("failed to cache streaming response")
+		return
+	}
+	if w.afterCache != nil {
+		w.afterCache(cacheCtx, w.cacheKey)
 	}
 }
 
@@ -824,6 +872,13 @@ func (s *runtimeLeaseStream) GetCacheStatus() string {
 func (s *runtimeLeaseStream) GetCacheAge() int {
 	if status, ok := s.stream.(CacheStatusProvider); ok {
 		return status.GetCacheAge()
+	}
+	return 0
+}
+
+func (s *runtimeLeaseStream) GetCacheSimilarity() float64 {
+	if status, ok := s.stream.(CacheSimilarityProvider); ok {
+		return status.GetCacheSimilarity()
 	}
 	return 0
 }

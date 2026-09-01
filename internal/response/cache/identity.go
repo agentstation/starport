@@ -99,10 +99,21 @@ type EmbeddingIdentity struct {
 	Policy            Policy
 }
 
-// ChatKey returns the versioned semantic key for an eligible chat request.
-func ChatKey(identity ChatIdentity) (string, error) {
+// chatKeyPayload is the canonical encoding a chat identity hashes to. The
+// exact key and the semantic scope key share it, so a field added here
+// reaches both hashes in the same change.
+type chatKeyPayload struct {
+	Version           int                   `json:"version"`
+	AccountID         string                `json:"account_id"`
+	CatalogGeneration string                `json:"catalog_generation"`
+	Request           inference.ChatRequest `json:"request"`
+	MediaDigests      []string              `json:"media_digests,omitempty"`
+	Policy            Policy                `json:"policy"`
+}
+
+func buildChatPayload(identity ChatIdentity) (chatKeyPayload, error) {
 	if err := chatEligibility(identity); err != nil {
-		return "", err
+		return chatKeyPayload{}, err
 	}
 	request := identity.Request.Clone()
 	// Delivery format does not change the canonical completed result.
@@ -113,16 +124,17 @@ func ChatKey(identity ChatIdentity) (string, error) {
 	// request that carries no media folds nothing, so a text-only request
 	// pays none of the cost of the media rule.
 	digests := foldInlineMedia(&request)
-	payload := struct {
-		Version           int                   `json:"version"`
-		AccountID         string                `json:"account_id"`
-		CatalogGeneration string                `json:"catalog_generation"`
-		Request           inference.ChatRequest `json:"request"`
-		MediaDigests      []string              `json:"media_digests,omitempty"`
-		Policy            Policy                `json:"policy"`
-	}{
+	return chatKeyPayload{
 		SemanticKeyVersion, identity.AccountID, identity.CatalogGeneration,
 		request, digests, normalizePolicy(identity.Policy),
+	}, nil
+}
+
+// ChatKey returns the versioned semantic key for an eligible chat request.
+func ChatKey(identity ChatIdentity) (string, error) {
+	payload, err := buildChatPayload(identity)
+	if err != nil {
+		return "", err
 	}
 	return semanticKey("chat", payload)
 }
