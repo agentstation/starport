@@ -74,15 +74,15 @@ blocks the delete, and runtime authentication still fails closed.
 - Authentication uses hash-based identity lookup and fails closed.
 - Response caching uses account-safe canonical semantic keys.
 - HTTP middleware enforces rate limits through the concept repository.
-- Starmap v0.6.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
+- Starmap v0.15.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
 - Starport owns inference credentials, request policy, route planning, execution, and protocol adaptation.
 - OpenAI and OpenRouter raw protocol smoke tests pass.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
 - Release archives, SBOMs, checksums, attestations, and GHCR publication are
   fail-closed release requirements.
-- Independent checks verify public immutable release `v1.0.3` and its public,
+- Independent checks verify public immutable release `v1.1.0` and its public,
   attested GHCR image at
-  `sha256:a90373ce690fb5ef836a4b4af3d6d82a931db7eca7865031eb9b6ffbb1dfea6a`.
+  `sha256:0fbb56d1424d1d0ff0e8aa8ea63c6bedbad62f00e175677b64bd14fc51910f14`.
 
 This file keeps task status and the Phase 1 completion history. The canonical
 v1 design is in `docs/ARCHITECTURE.md`.
