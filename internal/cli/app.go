@@ -98,6 +98,10 @@ type Dependencies struct {
 	// with no browser and no clipboard still runs every command, because each
 	// one prints the link it would otherwise have handed over.
 	Desktop Desktop
+	// ExtraCommands appends process-owned commands to the root command tree.
+	// The process boundary owns commands whose behavior binds to its build,
+	// such as the embedded agent skill and the catalog verbs.
+	ExtraCommands []*urfavecli.Command
 }
 
 // New creates the Starport root command.
@@ -314,6 +318,9 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 	auth := newAuthCommand(deps, usageError)
 	ui := newUICommand(deps, usageError)
 
+	commands := []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand}
+	commands = append(commands, deps.ExtraCommands...)
+	commands = append(commands, version, man, help)
 	root := &urfavecli.Command{
 		Name:            "starport",
 		Usage:           "OpenAI- and OpenRouter-compatible LLM inference gateway",
@@ -322,7 +329,7 @@ func New(deps Dependencies) (*urfavecli.Command, error) {
 		Writer:          deps.Stdout,
 		ErrWriter:       deps.Stderr,
 		OnUsageError:    usageError,
-		Commands:        []*urfavecli.Command{initialize, development, serve, ui, auth, doctor, configCommand, version, man, help},
+		Commands:        commands,
 		HideHelpCommand: true,
 		ConfigureShellCompletionCommand: configureCompletionCommand(
 			completion,

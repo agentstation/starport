@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/rs/zerolog/log"
+	urfavecli "github.com/urfave/cli/v3"
 
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/app"
@@ -59,6 +60,7 @@ func runContext(
 		Stdin: stdin, Stdout: stdout, Stderr: stderr,
 		Build: buildInformation(), RunServer: server,
 		StartDevelopment: development, Initialize: initializer,
+		ExtraCommands: processCommands(),
 		LoadConfig: func(loadCtx context.Context) (*config.Config, error) {
 			return config.LoadWithDefaults(loadCtx)
 		},
@@ -70,6 +72,16 @@ func runContext(
 	}
 	_, _ = fmt.Fprintln(stderr, err)
 	return starportcli.ExitCode(err)
+}
+
+// processCommands names the commands this process boundary owns: the agent
+// surface binds to the build, because the embedded skill and the embedded
+// catalog generation ship inside this binary.
+func processCommands() []*urfavecli.Command {
+	return []*urfavecli.Command{
+		newModelsCommand(loadRoutableModels),
+		newAgentCommand(),
+	}
 }
 
 func runInitializer(ctx context.Context, options starportcli.InitOptions) (starportcli.InitResult, error) {

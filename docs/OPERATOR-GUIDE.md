@@ -380,6 +380,35 @@ Each route reads its own scope:
 A deployment with authentication disabled holds all of these, so the media
 routes answer an unauthenticated caller exactly as the chat route does.
 
+## Agent Surface
+
+The CLI answers catalog questions offline from the embedded catalog:
+
+```bash
+starport models search gpt-4o --json
+starport models show openai/gpt-4o-mini --json
+```
+
+`models search` matches every query word against model IDs, names, and
+authors. It answers a compact summary: ID, name, context length, and token
+prices. `models show` answers the full catalog projection for one exact model
+ID. The projection carries prices, capabilities, modalities, and every
+routable provider offering. Both commands read no configuration and no
+network.
+
+The binary also carries an agent skill that teaches a coding agent to
+install, start, query, and diagnose this gateway:
+
+```bash
+starport agent setup
+```
+
+The command installs the embedded `SKILL.md` into a shared skills root. An
+explicit `--dir` wins, then `$AGENTS_HOME/skills`, then `~/.agents/skills`.
+Add `--print` to write the skill to standard output instead. Run the command
+again after a CLI upgrade, so the installed skill tracks the installed
+commands.
+
 ## Provider Configuration
 
 Starmap owns each provider's exact ID, credential fields, ordered conventional
