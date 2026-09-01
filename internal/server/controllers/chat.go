@@ -62,6 +62,7 @@ func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	req.RequestID = h.getRequestID(ctx)
 	req.Protocol = string(h.protocol)
+	req.SemanticCache = semanticCacheRequested(r)
 
 	// Measure the latency the gateway adds; route attempts mark their
 	// upstream waits on the same timer.
@@ -136,6 +137,9 @@ func (h *ChatController) handleNonStream(w http.ResponseWriter, r *http.Request,
 		if resp.CacheStatus == proxy.CacheStatusHit && resp.CacheAge > 0 {
 			w.Header().Set("X-Cache-Age", fmt.Sprintf("%d", resp.CacheAge))
 		}
+		if resp.CacheSimilarity > 0 {
+			w.Header().Set("X-Cache-Similarity", strconv.FormatFloat(resp.CacheSimilarity, 'f', 4, 64))
+		}
 	}
 
 	// Set ETag header
@@ -196,6 +200,11 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 					w.Header().Set("X-Cache-Age", fmt.Sprintf("%d", cacheAge))
 				}
 			}
+		}
+	}
+	if provider, ok := stream.(proxy.CacheSimilarityProvider); ok {
+		if similarity := provider.GetCacheSimilarity(); similarity > 0 {
+			w.Header().Set("X-Cache-Similarity", strconv.FormatFloat(similarity, 'f', 4, 64))
 		}
 	}
 
@@ -259,6 +268,13 @@ func (h *ChatController) encodeStreamEvent(event inference.StreamEvent) ([]byte,
 		return json.Marshal(openrouter.EncodeStream(event))
 	}
 	return json.Marshal(openai.EncodeStream(event))
+}
+
+// semanticCacheRequested reads the per-request similarity opt-in. The
+// deployment flag alone never turns the layer on for a caller.
+func semanticCacheRequested(r *http.Request) bool {
+	value := strings.TrimSpace(r.Header.Get("X-Semantic-Cache"))
+	return value == "1" || strings.EqualFold(value, "true")
 }
 
 func (h *ChatController) writeOpenRouterStreamError(w http.ResponseWriter, event inference.StreamEvent) {

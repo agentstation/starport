@@ -1082,6 +1082,50 @@ The default threshold is `0.5`. A category named in the override list reads
 its own threshold, and every other category reads the default. A pipeline
 that names the moderation check without a model refuses to start.
 
+## Semantic Cache
+
+The exact response cache answers only an exact repeat of a request. The
+semantic cache adds a similarity index beside it, so a close paraphrase
+of a cached prompt can answer from the cache. The layer never stores a
+response of its own. It holds vectors that point at exact cache entries,
+and the index drops a vector whose entry expires.
+
+A similarity match stays inside one similarity scope. The scope pins the
+account, the catalog generation, the model, the sampling parameters, the
+tools, and the routing policy. Only the prompt text may differ. A paraphrase
+therefore never crosses a boundary that the exact cache keeps apart.
+
+The layer is off by default and needs two opt-ins:
+
+```bash
+export STARPORT_SEMANTIC_CACHE_ENABLED="true"
+export STARPORT_SEMANTIC_CACHE_MODEL="openai/text-embedding-3-small"
+```
+
+The deployment flag alone answers nothing. Each request also opts in with
+the `X-Semantic-Cache: true` header, and only a request the exact cache
+would store is eligible. The embedding call rides the account's own routing
+through the gateway's embeddings path. It draws its own usage record beside
+the turn that asked for it. Enabling the layer without an embedding model
+refuses to start.
+
+Two optional bounds tune the index:
+
+```bash
+export STARPORT_SEMANTIC_CACHE_THRESHOLD="0.95"
+export STARPORT_SEMANTIC_CACHE_MAX_ENTRIES="128"
+```
+
+The threshold is the minimum cosine similarity that answers, and it must sit
+in `(0, 1]`. The entry bound caps the vectors one similarity scope holds,
+and the oldest vector leaves first. The values above are the defaults.
+
+A similarity answer reports `X-Cache: HIT` with `X-Cache-Age`, the same
+vocabulary an exact hit uses. It adds `X-Cache-Similarity` with the cosine
+score, so a caller can tell the two apart. An embedding or index failure
+never blocks the request. The gateway logs the failure and pays the
+provider it would have paid anyway.
+
 ## Container Start
 
 The Compose file starts Starport with Valkey. Its optional `.env` file passes
