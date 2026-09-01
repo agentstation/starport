@@ -958,7 +958,12 @@
         known issue.</li>
 
       <li><strong>Owning seam and paths:</strong> the identity hash-index
-        repository and its deletion path.</li>
+        repository and its deletion path. Execution located that seam in
+        <code>internal/apikey/repository.go</code>: the gateway identity
+        store owns the <code>identity:v1:</code> prefix, and
+        <code>internal/identity</code> owns the people plane, not this
+        index. ENR-V32's path pin moved to <code>internal/apikey</code> to
+        match.</li>
 
       <li><strong>Steps:</strong> reproduce with a corrupt record in a
         test. When an operator deletes the owning record, remove an
@@ -974,7 +979,7 @@
         baseline.</li>
 
       <li><strong>Verification:</strong> run
-        <code>go test ./internal/identity/...</code>.</li>
+        <code>go test ./internal/apikey/...</code>.</li>
     </ul>
 
     <h3 id="task-ENR-Z2">ENR-Z2 Close</h3>

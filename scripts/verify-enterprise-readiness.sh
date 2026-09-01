@@ -195,7 +195,7 @@ check ENR-V31 "the catalog verbs answer JSON and agent setup writes the skill, h
 # --- Close ---
 
 check ENR-V32 "deleting an owner repairs a corrupt hash-index record, held by tests" \
-  tests_all_present 'RepairsCorrupt' -- internal/identity
+  tests_all_present 'RepairsCorrupt' -- internal/apikey
 
 check ENR-V33 "CI runs this gate and the evidence list names it" \
   all_present 'verify-enterprise-readiness.sh' -- .github/workflows AGENTS.md

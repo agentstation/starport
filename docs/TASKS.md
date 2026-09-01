@@ -73,9 +73,9 @@ No plan is proposed.
 
 ### Known Issues
 
-| Issue | Severity | Description | Workaround |
-|-------|----------|-------------|------------|
-| IDENTITY-001 | Low | A corrupt or foreign identity hash-index record can block operator deletion; runtime authentication fails closed | Repair the hash-index record before deletion |
+None. IDENTITY-001 closed on 2026-09-01. Deleting an API key now removes a
+corrupt hash-index record and leaves a foreign one in place. Neither defect
+blocks the delete, and runtime authentication still fails closed.
 
 ## Current v1 Status
 

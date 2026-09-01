@@ -457,13 +457,20 @@ func (r *repository) Delete(ctx context.Context, id string, expectedRevision uin
 	}
 	if err == nil {
 		index, decodeErr := decodeHashRecord(indexData)
-		if decodeErr != nil {
-			return decodeErr
+		switch {
+		case decodeErr != nil:
+			// A corrupt index serves nobody: authentication against it already
+			// fails closed, so the owner's delete repairs it by removing it.
+			mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey, ExpectedValue: indexData})
+		case index.APIKeyID != id:
+			// A foreign index names another owner, so this delete has no claim
+			// to remove it. Hold it unchanged so a concurrent rewrite conflicts.
+			mutations = append(mutations, storage.CompareAndSwapMutation{
+				Key: indexKey, ExpectedValue: indexData, NewValue: indexData,
+			})
+		default:
+			mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey, ExpectedValue: indexData})
 		}
-		if index.APIKeyID != id {
-			return fmt.Errorf("%w: hash index target does not match API key", ErrCorruptRecord)
-		}
-		mutations = append(mutations, storage.CompareAndSwapMutation{Key: indexKey, ExpectedValue: indexData})
 	} else {
 		// Keep the missing-index observation in the atomic condition. A concurrent
 		// repair must make this delete conflict instead of leaving a dangling index.
