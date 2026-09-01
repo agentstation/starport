@@ -299,6 +299,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					r.Route("/teams", func(r chi.Router) {
 						r.Get("/", s.controllers.Members.ListTeams)
 						r.Post("/", s.controllers.Members.CreateTeam)
+						r.Put("/{team_id}", s.controllers.Members.UpdateTeam)
 						r.Delete("/{team_id}", s.controllers.Members.DeleteTeam)
 						r.Get("/{team_id}/members", s.controllers.Members.ListTeamMembers)
 						r.Put("/{team_id}/members/{user_id}", s.controllers.Members.AddTeamMember)
@@ -500,6 +501,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /api/v1/admin/users/{user_id}/accounts         - Every account the user's grants reach
 //   GET    /api/v1/admin/teams                            - List teams
 //   POST   /api/v1/admin/teams                            - Create a team
+//   PUT    /api/v1/admin/teams/{team_id}                  - Update a team's name and budget
 //   DELETE /api/v1/admin/teams/{team_id}                  - Delete a team with its memberships and grants
 //   GET    /api/v1/admin/teams/{team_id}/members          - List a team's memberships
 //   PUT    /api/v1/admin/teams/{team_id}/members/{user_id}    - Put a user on a team

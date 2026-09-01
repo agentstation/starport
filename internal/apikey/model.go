@@ -20,7 +20,11 @@ type APIKey struct {
 	Hash string `json:"hash"`
 	// AccountID names the account this key belongs to. An empty value means
 	// the canonical account; see ResolveAccountID.
-	AccountID     string         `json:"account_id,omitempty"`
+	AccountID string `json:"account_id,omitempty"`
+	// TeamID attributes this key to one team. A request served under the key
+	// counts toward the team's budget and carries the team in its usage
+	// record. An empty value leaves the key teamless: no team meters it.
+	TeamID        string         `json:"team_id,omitempty"`
 	Scopes        []string       `json:"scopes"`
 	AllowedModels []string       `json:"allowed_models,omitempty"`
 	Limits        *limits.Limits `json:"limits,omitempty"`

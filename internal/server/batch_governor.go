@@ -26,6 +26,7 @@ type batchGovernor struct {
 	usage          usage.Repository
 	rateLimits     ratelimit.Repository
 	deploymentRule func() *limits.RequestLimit
+	teamBudget     func(ctx context.Context, teamID string) *limits.TeamBudget
 }
 
 // batchGovernor builds the line governor over this server's meters.
@@ -34,6 +35,7 @@ func (s *Server) batchGovernor() controllers.BatchGovernor {
 		usage:          s.usage,
 		rateLimits:     s.rateLimits,
 		deploymentRule: s.deploymentRequestLimit,
+		teamBudget:     s.readTeamBudget,
 	}
 }
 
@@ -55,8 +57,13 @@ func (g *batchGovernor) admitBudget(ctx context.Context, admission controllers.B
 	now := time.Now().UTC()
 	for _, dimension := range budgetDimensions {
 		rules := limits.BudgetRules(admission.AccountLimits, admission.KeyLimits, dimension.name)
+		if dimension.name == limits.DimensionSpend && g.teamBudget != nil {
+			if rule, ok := limits.TeamBudgetRule(g.teamBudget(ctx, admission.TeamID)); ok {
+				rules = append(rules, rule)
+			}
+		}
 		for _, rule := range rules {
-			scope := budgetScope(rule.Scope, admission.AccountID, admission.KeyID)
+			scope := budgetScope(rule.Scope, admission.AccountID, admission.KeyID, admission.TeamID)
 			totals, err := g.usage.Totals(ctx, scope, rule.Budget.Interval, now)
 			if err != nil {
 				log.Error().Err(err).

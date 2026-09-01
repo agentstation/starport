@@ -177,6 +177,33 @@ func TestChatCompletionWritesUsageRecord(t *testing.T) {
 	require.NoError(t, record.Validate())
 }
 
+// The team rides the record beside the key and the account: the team counter
+// sums keys across accounts, so neither of the other two identifiers can
+// stand in for it. A teamless request carries no team at all.
+func TestChatUsageRecordCarriesTeamAttribution(t *testing.T) {
+	snapshot, routeID, _ := pricedTestSnapshot(t)
+	repository := &recordingUsageRepository{}
+	capture := NewUsageCapture(repository)
+	router := &usageEvidenceRouter{response: chatEvidenceResponse(routeID, snapshot, 10, 4)}
+	service := capture.Wrap(&proxy{router: router})
+
+	attributed := usageChatRequest()
+	attributed.TeamID = "team-platform"
+	_, err := service.ProcessChatCompletion(context.Background(), attributed)
+	require.NoError(t, err)
+
+	teamless := usageChatRequest()
+	teamless.RequestID = "req-2"
+	_, err = service.ProcessChatCompletion(context.Background(), teamless)
+	require.NoError(t, err)
+	capture.Flush()
+
+	records := repository.all()
+	require.Len(t, records, 2)
+	require.Equal(t, "team-platform", records[0].TeamID)
+	require.Empty(t, records[1].TeamID)
+}
+
 // TestBatchLineUsageRecordCarriesTheBatchID holds the batch attribution
 // contract. A batch line writes one usage record like any online request,
 // and the batch identifier on the record is the only join between the spend

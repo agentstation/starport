@@ -109,7 +109,10 @@ type ChatCompletionRequest struct {
 	// KeyID is the gateway API key that authenticated the request. Usage
 	// attribution and per-key limits read this. Many keys share one account, so
 	// the two values are distinct and neither substitutes for the other.
-	KeyID        string               `json:"-"`
+	KeyID string `json:"-"`
+	// TeamID is the team the serving key is attributed to, or empty for a
+	// teamless key. Usage attribution and the team budget read this.
+	TeamID       string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
 	Protocol     string               `json:"-"` // Protocol surface that received the request
@@ -188,7 +191,10 @@ type EmbeddingsRequest struct {
 	// KeyID is the gateway API key that authenticated the request. Usage
 	// attribution and per-key limits read this. Many keys share one account, so
 	// the two values are distinct and neither substitutes for the other.
-	KeyID        string               `json:"-"`
+	KeyID string `json:"-"`
+	// TeamID is the team the serving key is attributed to, or empty for a
+	// teamless key. Usage attribution and the team budget read this.
+	TeamID       string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
 	Protocol     string               `json:"-"` // Protocol surface that received the request
@@ -229,7 +235,10 @@ type OperationRequest[Request any] struct {
 	AccountID string `json:"-"`
 	// KeyID is the gateway API key that authenticated the request. Usage
 	// attribution and per-key limits read this.
-	KeyID        string               `json:"-"`
+	KeyID string `json:"-"`
+	// TeamID is the team the serving key is attributed to, or empty for a
+	// teamless key. Usage attribution and the team budget read this.
+	TeamID       string               `json:"-"`
 	APIKeyConfig *APIKeyRoutingConfig `json:"-"`
 	RequestID    string               `json:"-"`
 	Protocol     string               `json:"-"`

@@ -286,6 +286,48 @@ func TestAccountCounterSumsEveryKeyItHolds(t *testing.T) {
 	})
 }
 
+// TestTeamCounterSumsEveryAttributedKey proves the team counter set: a team
+// sums every key attributed to it across accounts, a teamless record advances
+// no team counter, and one team's traffic never reaches another's.
+func TestTeamCounterSumsEveryAttributedKey(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := context.Background()
+		repository, err := Open(store, Options{})
+		require.NoError(t, err)
+
+		for _, spec := range []struct{ keyID, requestID, accountID, teamID string }{
+			{"key-a", "req-1", "acme", "platform"},
+			{"key-b", "req-2", "globex", "platform"},
+			{"key-c", "req-3", "acme", ""},
+			{"key-d", "req-4", "acme", "research"},
+		} {
+			record := testRecord(spec.keyID, spec.requestID, testBase)
+			record.AccountID = spec.accountID
+			record.TeamID = spec.teamID
+			require.NoError(t, repository.Put(ctx, record))
+		}
+
+		team, err := repository.Totals(ctx, TeamScope("platform"), IntervalDay, testBase)
+		require.NoError(t, err)
+		require.Equal(t, Totals{Requests: 2, Tokens: 300, SpendNanoUSD: 2_500_000}, team,
+			"the team total must span every attributed key, across accounts")
+
+		other, err := repository.Totals(ctx, TeamScope("research"), IntervalDay, testBase)
+		require.NoError(t, err)
+		require.Equal(t, Totals{Requests: 1, Tokens: 150, SpendNanoUSD: 1_250_000}, other,
+			"one team's traffic must not reach another team's counter")
+
+		account, err := repository.Totals(ctx, AccountScope("acme"), IntervalDay, testBase)
+		require.NoError(t, err)
+		require.Equal(t, Totals{Requests: 3, Tokens: 450, SpendNanoUSD: 3_750_000}, account,
+			"team attribution must not change what the account counter reads")
+
+		_, err = repository.Totals(ctx, TeamScope(""), IntervalDay, testBase)
+		require.ErrorIs(t, err, ErrInvalidScope,
+			"a team scope without a subject must refuse rather than read the wrong counters")
+	})
+}
+
 // TestListByAccountSpansEveryKey covers the per-provider rollup's read path:
 // records are key-indexed, so an account query has to scan and filter rather
 // than address a namespace, and it must still return every key's records.

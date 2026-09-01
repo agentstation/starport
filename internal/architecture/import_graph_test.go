@@ -117,10 +117,13 @@ func TestImportGraphArchitecture(t *testing.T) {
 		)
 	}
 	// The humans a deployment knows are purely relational: identity
-	// reaches the relational store and nothing else inside the module, so
-	// no concept can smuggle behavior in through a user or a team.
+	// reaches the relational store and the shared limits vocabulary — a
+	// team carries a budget the way an account or a key does — and nothing
+	// else inside the module, so no concept can smuggle behavior in
+	// through a user or a team.
 	assertOnlyInternalImports(t, packages["github.com/agentstation/starport/internal/identity"],
 		"github.com/agentstation/starport/internal/sqlstore",
+		"github.com/agentstation/starport/internal/limits",
 	)
 	// The relational store is a leaf beside the key-value store: it holds
 	// rows for the concepts that own them and reads no meaning of its own.

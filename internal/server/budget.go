@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -82,7 +83,16 @@ func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 		now := time.Now().UTC()
 		for _, dimension := range budgetDimensions {
 			rules := limits.BudgetRules(accountLimits, apiKey.Limits, dimension.name)
-			binding, allowed := s.allowBudget(w, r, dimension, rules, accountID, apiKey.ID, now)
+			// The team meters a third population — every key attributed to
+			// the team, across accounts — so its rule joins the list the way
+			// the account and key rules join each other. A team budget bounds
+			// spend only.
+			if dimension.name == limits.DimensionSpend {
+				if rule, ok := limits.TeamBudgetRule(s.readTeamBudget(r.Context(), apiKey.TeamID)); ok {
+					rules = append(rules, rule)
+				}
+			}
+			binding, allowed := s.allowBudget(w, r, dimension, rules, accountID, apiKey.ID, apiKey.TeamID, now)
 			if !allowed {
 				return
 			}
@@ -97,6 +107,24 @@ func (s *Server) enforceBudgets(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// readTeamBudget reads the spend budget of the team a key is attributed to.
+// It answers nil — no meter — for a teamless key, a deployment with no
+// identity plane, and a read failure alike: the last is the same fail-open
+// answer a broken usage read gives (D6), logged just as loudly.
+func (s *Server) readTeamBudget(ctx context.Context, teamID string) *limits.TeamBudget {
+	if teamID == "" || s.teamBudgets == nil {
+		return nil
+	}
+	budget, err := s.teamBudgets(ctx, teamID)
+	if err != nil {
+		log.Error().Err(err).
+			Str("team_id", teamID).
+			Msg("team budget read failed; allowing request")
+		return nil
+	}
+	return budget
 }
 
 // scopedBudget is one budget meter's reading and the holder that set it.
@@ -130,14 +158,14 @@ func (s *Server) allowBudget(
 	r *http.Request,
 	dimension budgetDimension,
 	rules []limits.BudgetRule,
-	accountID, keyID string,
+	accountID, keyID, teamID string,
 	now time.Time,
 ) (scopedBudget, bool) {
 	var binding scopedBudget
 	var bound bool
 
 	for _, rule := range rules {
-		scope := budgetScope(rule.Scope, accountID, keyID)
+		scope := budgetScope(rule.Scope, accountID, keyID, teamID)
 		totals, err := s.usage.Totals(r.Context(), scope, rule.Budget.Interval, now)
 		if err != nil {
 			// Fail open: a budget read failure must not reject traffic.
@@ -189,13 +217,17 @@ func (s *Server) allowBudget(
 		if s.events != nil {
 			// The payload names the holder and the meter, never a prompt or
 			// a credential: identifiers are the export surface's whole diet.
-			s.events.Emit(events.TypeBudgetExhausted, map[string]string{
+			payload := map[string]string{
 				"scope":      string(binding.scope),
 				"dimension":  string(dimension.name),
 				"interval":   binding.interval,
 				"account_id": accountID,
 				"key_id":     keyID,
-			})
+			}
+			if teamID != "" {
+				payload["team_id"] = teamID
+			}
+			s.events.Emit(events.TypeBudgetExhausted, payload)
 		}
 		writeProtocolError(w, r, http.StatusPaymentRequired, "permission_error",
 			"Insufficient quota: "+string(binding.scope)+" "+string(dimension.name)+
@@ -206,9 +238,12 @@ func (s *Server) allowBudget(
 }
 
 // budgetScope names the counter set one budget meter reads.
-func budgetScope(scope limits.Scope, accountID, keyID string) usage.Scope {
-	if scope == limits.ScopeAccount {
+func budgetScope(scope limits.Scope, accountID, keyID, teamID string) usage.Scope {
+	switch scope {
+	case limits.ScopeAccount:
 		return usage.AccountScope(accountID)
+	case limits.ScopeTeam:
+		return usage.TeamScope(teamID)
 	}
 	return usage.KeyScope(keyID)
 }

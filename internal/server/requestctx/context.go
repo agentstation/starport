@@ -134,3 +134,13 @@ func GetAPIKeyModel(ctx context.Context) (*apikey.APIKey, bool) {
 	value, ok := ctx.Value(APIKeyModel).(*apikey.APIKey)
 	return value, ok
 }
+
+// GetTeamID returns the team the serving key is attributed to. It is empty
+// for a teamless key and for a request that carries no key model, so team
+// attribution and the team budget both read one derivation.
+func GetTeamID(ctx context.Context) string {
+	if apiKey, ok := GetAPIKeyModel(ctx); ok && apiKey != nil {
+		return apiKey.TeamID
+	}
+	return ""
+}

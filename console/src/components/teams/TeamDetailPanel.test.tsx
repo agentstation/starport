@@ -19,6 +19,7 @@ const gateway = vi.hoisted(() => ({
   dropped: [] as { teamId: string; userId: string }[],
   granted: [] as unknown[],
   removed: [] as unknown[],
+  updated: [] as { teamId: string; body: unknown }[],
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -48,6 +49,10 @@ vi.mock("@/lib/api", async (importOriginal) => {
       gateway.removed.push(grant);
       return {};
     },
+    updateTeam: async (teamId: string, body: unknown) => {
+      gateway.updated.push({ teamId, body });
+      return body;
+    },
   };
 });
 
@@ -56,20 +61,18 @@ beforeEach(() => {
   gateway.dropped = [];
   gateway.granted = [];
   gateway.removed = [];
+  gateway.updated = [];
 });
 
 afterEach(cleanup);
 
-function mount() {
+function mount(team: import("@/lib/api").Team = { id: "t-1", name: "Platform" }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <TeamDetailPanel
-        team={{ id: "t-1", name: "Platform" }}
-        onClose={() => {}}
-      />
+      <TeamDetailPanel team={team} onClose={() => {}} />
     </QueryClientProvider>,
   );
 }
@@ -130,6 +133,73 @@ test("grants an account to the team", async () => {
       { account_id: "acct-new", team_id: "t-1" },
     ]),
   );
+});
+
+// Saving a budget sends the team's whole mutable surface — the name and the
+// budget — with the dollars converted to the gateway's nano-USD unit.
+test("saves a team spend budget", async () => {
+  mount();
+
+  fireEvent.change(
+    screen.getByRole("spinbutton", { name: "Team spend budget (USD)" }),
+    { target: { value: "5" } },
+  );
+  fireEvent.change(
+    screen.getByRole("combobox", { name: "Team budget interval" }),
+    { target: { value: "week" } },
+  );
+  fireEvent.click(screen.getByText("Save budget"));
+
+  await waitFor(() =>
+    expect(gateway.updated).toEqual([
+      {
+        teamId: "t-1",
+        body: {
+          name: "Platform",
+          budget: { limit: 5_000_000_000, interval: "week" },
+        },
+      },
+    ]),
+  );
+});
+
+// An emptied amount clears the budget: the PUT omits it, and the gateway
+// reads the omission as "unmetered".
+test("clears the budget when the amount is emptied", async () => {
+  mount({
+    id: "t-1",
+    name: "Platform",
+    budget: { limit: 2_000_000_000, interval: "day" },
+  });
+
+  const amount = screen.getByRole("spinbutton", {
+    name: "Team spend budget (USD)",
+  }) as HTMLInputElement;
+  expect(amount.value).toBe("2");
+  fireEvent.change(amount, { target: { value: "" } });
+  fireEvent.click(screen.getByText("Save budget"));
+
+  await waitFor(() =>
+    expect(gateway.updated).toEqual([
+      { teamId: "t-1", body: { name: "Platform" } },
+    ]),
+  );
+});
+
+// A negative amount never travels: the panel refuses it locally.
+test("refuses a non-positive budget amount", async () => {
+  mount();
+
+  fireEvent.change(
+    screen.getByRole("spinbutton", { name: "Team spend budget (USD)" }),
+    { target: { value: "-1" } },
+  );
+  fireEvent.click(screen.getByText("Save budget"));
+
+  expect(
+    await screen.findByText("The spend budget must be a positive amount."),
+  ).toBeTruthy();
+  expect(gateway.updated).toEqual([]);
 });
 
 // Removing a grant names the whole row: the account and this team.

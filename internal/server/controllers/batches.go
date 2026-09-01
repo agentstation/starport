@@ -34,8 +34,11 @@ const maxBatchListLimit = 100
 // The values are captured at submission, because the line runs long after the
 // submitting request and its context are gone.
 type BatchAdmission struct {
-	AccountID     string
-	KeyID         string
+	AccountID string
+	KeyID     string
+	// TeamID is the team the submitting key is attributed to, or empty for a
+	// teamless key. The governor meters the team's spend budget with it.
+	TeamID        string
 	AccountLimits *limits.Limits
 	KeyLimits     *limits.Limits
 }
@@ -140,6 +143,7 @@ func (h *BatchesController) Create(w http.ResponseWriter, r *http.Request) {
 		apiKey:       h.getAPIKey(ctx),
 		accountID:    account,
 		keyID:        h.getAPIKeyID(ctx),
+		teamID:       h.getTeamID(ctx),
 		apiKeyConfig: apiKeyConfig,
 	}
 	batch, err := h.batches.Submit(ctx, jobs.BatchSubmission{
@@ -234,6 +238,7 @@ func batchAdmissionFrom(r *http.Request) BatchAdmission {
 	}
 	if apiKey, ok := requestctx.GetAPIKeyModel(r.Context()); ok && apiKey != nil {
 		admission.KeyID = apiKey.ID
+		admission.TeamID = apiKey.TeamID
 		admission.KeyLimits = apiKey.Limits
 	}
 	return admission
@@ -340,6 +345,7 @@ type batchLineRunner struct {
 	apiKey       string
 	accountID    string
 	keyID        string
+	teamID       string
 	apiKeyConfig *proxy.APIKeyRoutingConfig
 }
 
@@ -402,6 +408,7 @@ func (r *batchLineRunner) execute(
 			APIKey:       r.apiKey,
 			AccountID:    r.accountID,
 			KeyID:        r.keyID,
+			TeamID:       r.teamID,
 			APIKeyConfig: r.apiKeyConfig,
 			RequestID:    requestID,
 			Protocol:     string(ProtocolOpenAI),
@@ -445,6 +452,7 @@ func (r *batchLineRunner) chat(
 		APIKey:       r.apiKey,
 		AccountID:    r.accountID,
 		KeyID:        r.keyID,
+		TeamID:       r.teamID,
 		APIKeyConfig: r.apiKeyConfig,
 		RequestID:    requestID,
 		Protocol:     string(ProtocolOpenAI),

@@ -55,6 +55,7 @@ const (
 	scopeKindGateway = "all"
 	scopeKindKey     = "key"
 	scopeKindAccount = "account"
+	scopeKindTeam    = "team"
 )
 
 var (
@@ -87,6 +88,10 @@ func KeyScope(keyID string) Scope { return Scope{kind: scopeKindKey, id: keyID} 
 // AccountScope addresses the counters for one account: every key it holds.
 func AccountScope(accountID string) Scope { return Scope{kind: scopeKindAccount, id: accountID} }
 
+// TeamScope addresses the counters for one team: every key attributed to it,
+// across every account the team reaches.
+func TeamScope(teamID string) Scope { return Scope{kind: scopeKindTeam, id: teamID} }
+
 // GatewayScope addresses the counters for the whole deployment.
 func GatewayScope() Scope { return Scope{kind: scopeKindGateway} }
 
@@ -105,7 +110,7 @@ func (s Scope) valid() bool {
 	switch s.kind {
 	case scopeKindGateway:
 		return true
-	case scopeKindKey, scopeKindAccount:
+	case scopeKindKey, scopeKindAccount, scopeKindTeam:
 		return s.id != ""
 	}
 	return false
@@ -225,6 +230,9 @@ func (r *repository) accumulate(ctx context.Context, record Record) error {
 	scopes := []Scope{KeyScope(record.KeyID), GatewayScope()}
 	if record.AccountID != "" {
 		scopes = append(scopes, AccountScope(record.AccountID))
+	}
+	if record.TeamID != "" {
+		scopes = append(scopes, TeamScope(record.TeamID))
 	}
 	for _, scope := range scopes {
 		for _, interval := range []string{IntervalDay, IntervalWeek, IntervalMonth} {

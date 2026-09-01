@@ -54,6 +54,7 @@ func (h *ChatController) Create(w http.ResponseWriter, r *http.Request) {
 	req.APIKey = h.getAPIKey(ctx)
 	req.AccountID = h.getAccountID(ctx)
 	req.KeyID = h.getAPIKeyID(ctx)
+	req.TeamID = h.getTeamID(ctx)
 	req.APIKeyConfig, err = h.getAPIKeyRoutingConfig(ctx)
 	if err != nil {
 		h.writeCredentialStrategyError(w, err)

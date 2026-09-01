@@ -1112,11 +1112,20 @@ export type Member = {
   updated_at?: string;
 };
 
+// TeamBudget bounds the team's nano-USD spend inside one fixed UTC
+// interval, summed over every key attributed to the team across every
+// account the team reaches. An absent budget leaves the team unmetered.
+export type TeamBudget = {
+  limit: number;
+  interval: string;
+};
+
 // Team is an operator-formed group of members. Granting an account to a
 // team grants it to everyone on the roster, now and later.
 export type Team = {
   id: string;
   name: string;
+  budget?: TeamBudget | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -1151,6 +1160,19 @@ export function createTeam(name: string): Promise<Team> {
   return request<Team>("/api/v1/admin/teams", {
     method: "POST",
     body: { name },
+  });
+}
+
+// updateTeam states the team's whole mutable surface: the name and the
+// budget. Omitting the budget clears it — the PUT is the team as it should
+// now be, not a delta.
+export function updateTeam(
+  teamId: string,
+  body: { name: string; budget?: TeamBudget },
+): Promise<Team> {
+  return request<Team>(`/api/v1/admin/teams/${encodeURIComponent(teamId)}`, {
+    method: "PUT",
+    body,
   });
 }
 

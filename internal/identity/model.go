@@ -12,6 +12,8 @@ package identity
 import (
 	"errors"
 	"time"
+
+	"github.com/agentstation/starport/internal/limits"
 )
 
 // User is one human the deployment knows. The subject is the external
@@ -32,10 +34,13 @@ type User struct {
 // Team is a named group of users. Access granted to a team reaches every
 // member, so a team is the unit an operator manages instead of people.
 type Team struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Budget bounds the team's nano-USD spend inside one fixed UTC interval,
+	// across every key attributed to the team. Nil leaves the team unmetered.
+	Budget    *limits.TeamBudget `json:"budget,omitempty"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 // Membership ties one user to one team. It carries no state of its own
@@ -139,6 +144,9 @@ func (t Team) Validate() error {
 	}
 	if t.Name == "" || len(t.Name) > maxNameLength {
 		return ErrInvalidName
+	}
+	if err := t.Budget.Validate(); err != nil {
+		return err
 	}
 	if !t.UpdatedAt.IsZero() && t.UpdatedAt.Before(t.CreatedAt) {
 		return ErrInvalidTimestamps

@@ -192,6 +192,7 @@ func mediaGatewayRequest[Request any](
 		APIKey:       h.getAPIKey(ctx),
 		AccountID:    h.getAccountID(ctx),
 		KeyID:        h.getAPIKeyID(ctx),
+		TeamID:       h.getTeamID(ctx),
 		APIKeyConfig: config,
 		RequestID:    h.getRequestID(ctx),
 		Protocol:     string(h.protocol),
