@@ -285,7 +285,8 @@ Concept repositories own these version 1 namespaces:
 - `internal/apikey`: `identity:v1:`
 - `internal/credentials`: `credentials:v1:`
 - `internal/ratelimit`: `ratelimit:v1:subject:`
-- `internal/presets`: `presets:v1:name:`
+- `internal/presets`: `presets:v1:name:` for heads and
+  `presets:v1:revision:` for immutable revision snapshots
 - `internal/usage`: `usage:v1:`
 - `internal/catalog`: `catalog_generation:v1:` for accepted state and
   `catalog_remote_generation:v1:` for the independently verified remote head

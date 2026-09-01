@@ -1425,6 +1425,28 @@ export function deletePreset(name: string): Promise<unknown> {
   });
 }
 
+// listPresetHistory answers the stored revisions of one preset, newest
+// first. Pin one from a request with @preset/name@N.
+export async function listPresetHistory(name: string): Promise<Preset[]> {
+  const body = await request<{ data?: Preset[] }>(
+    `/api/v1/presets/${encodeURIComponent(name)}/history`,
+  );
+  return body?.data ?? [];
+}
+
+// rollbackPreset saves a new head revision copying toRevision; revision
+// names the head the caller read (409 on mismatch).
+export function rollbackPreset(
+  name: string,
+  toRevision: number,
+  revision: number,
+): Promise<Preset> {
+  return request<Preset>(
+    `/api/v1/presets/${encodeURIComponent(name)}/rollback`,
+    { method: "POST", body: { to_revision: toRevision, revision } },
+  );
+}
+
 // --- Chat completions ---
 
 export type ChatUsage = {

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import { History, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ModelPicker } from "@/components/models/ModelPicker";
@@ -19,7 +19,9 @@ import {
   ApiError,
   createPreset,
   deletePreset,
+  listPresetHistory,
   listPresets,
+  rollbackPreset,
   updatePreset,
   type Preset,
   type PresetConfig,
@@ -470,6 +472,135 @@ function EditorModal({
   );
 }
 
+// --- History modal ---
+
+function HistoryModal({
+  preset,
+  onClose,
+  onRolledBack,
+  onError,
+}: {
+  preset: Preset;
+  onClose: () => void;
+  onRolledBack: (revision: number) => void;
+  onError: (message: string) => void;
+}) {
+  const history = useQuery({
+    queryKey: ["presets", preset.name, "history"],
+    queryFn: () => listPresetHistory(preset.name),
+    retry: false,
+  });
+
+  const rollback = useMutation({
+    mutationFn: (toRevision: number) =>
+      rollbackPreset(preset.name, toRevision, preset.revision ?? 0),
+    onSuccess: (record) => onRolledBack(record.revision ?? 0),
+    onError: (error) =>
+      onError(
+        error instanceof ApiError && error.status === 409
+          ? "Preset changed elsewhere — reload and retry."
+          : `Rollback failed: ${error instanceof Error ? error.message : error}`,
+      ),
+  });
+
+  let body: ReactNode;
+  if (history.error) {
+    body = (
+      <p className="text-sm text-text-3">
+        Failed to load history: {history.error.message}
+      </p>
+    );
+  } else if (history.isPending) {
+    body = <p className="text-sm text-text-3">Loading history…</p>;
+  } else {
+    const revisions = history.data ?? [];
+    body = (
+      <div className="overflow-x-auto rounded-sm border border-border-1">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
+              <th className="px-3 py-2">Revision</th>
+              <th className="px-3 py-2">Model</th>
+              <th className="px-3 py-2">Overrides</th>
+              <th className="px-3 py-2">Saved</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {revisions.map((revision) => {
+              const isHead = revision.revision === preset.revision;
+              return (
+                <tr
+                  key={revision.revision}
+                  className="border-b border-border-1 last:border-b-0"
+                >
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-text-1">
+                    @preset/{preset.name}@{revision.revision}
+                    {isHead && (
+                      <span className="ml-1.5 rounded-xs bg-bg-raised px-1.5 py-0.5 text-xs text-text-3">
+                        current
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-text-2">
+                    {revision.config.model ??
+                      revision.config.models?.[0] ?? (
+                        <span className="text-text-4">—</span>
+                      )}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-text-3">
+                    {samplingSummary(revision.config) || (
+                      <span className="text-text-4">—</span>
+                    )}
+                  </td>
+                  <td
+                    className="whitespace-nowrap px-3 py-2 text-xs text-text-3"
+                    title={utcTooltip(revision.updated_at)}
+                  >
+                    {revision.updated_at
+                      ? formatRelativeTime(revision.updated_at)
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {!isHead && (
+                      <RowAction
+                        onClick={() => rollback.mutate(revision.revision ?? 0)}
+                        disabled={rollback.isPending}
+                      >
+                        restore
+                      </RowAction>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <Modal
+      title={`History of @preset/${preset.name}`}
+      onClose={onClose}
+      wide
+      footer={<GhostButton onClick={onClose}>Close</GhostButton>}
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-text-3">
+          Every save is an immutable revision. Pin one from a request with{" "}
+          <code className="rounded-xs bg-bg-raised px-1 py-0.5 font-mono text-xs text-text-2">
+            @preset/{preset.name}@N
+          </code>
+          . Restoring copies an old revision into a new one.
+        </p>
+        {body}
+      </div>
+    </Modal>
+  );
+}
+
 // --- Delete modal ---
 
 function DeleteModal({
@@ -567,6 +698,7 @@ function Header() {
 type ModalState =
   | { kind: "create" }
   | { kind: "edit"; preset: Preset }
+  | { kind: "history"; preset: Preset }
   | { kind: "delete"; preset: Preset }
   | null;
 
@@ -689,6 +821,14 @@ function PresetsPage() {
                     </RowAction>
                     <button
                       type="button"
+                      onClick={() => setModal({ kind: "history", preset })}
+                      aria-label={`History of ${preset.name}`}
+                      className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
+                    >
+                      <History className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setModal({ kind: "delete", preset })}
                       aria-label={`Delete ${preset.name}`}
                       className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error"
@@ -735,6 +875,18 @@ function PresetsPage() {
             say(created ? `Created @preset/${name}` : "Preset saved");
             await reload();
           }}
+        />
+      )}
+      {modal?.kind === "history" && (
+        <HistoryModal
+          preset={modal.preset}
+          onClose={() => setModal(null)}
+          onRolledBack={async (revision) => {
+            setModal(null);
+            say(`Restored as revision ${revision}`);
+            await reload();
+          }}
+          onError={(message) => say(message, true)}
         />
       )}
       {modal?.kind === "delete" && (

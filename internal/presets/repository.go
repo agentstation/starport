@@ -33,19 +33,32 @@ var (
 	ErrNameImmutable = errors.New("preset name is immutable")
 )
 
-// Record is one versioned preset repository value.
+// Record is one versioned preset repository value. Revision carries one
+// meaning with two uses: it is the preset's place in its immutable
+// history, and because every save is a new revision, the same number is
+// the optimistic-concurrency token an update must name. The two never
+// diverge by construction.
 type Record struct {
 	Revision uint64
 	Preset   Preset
 }
 
-// Repository is the durable preset contract.
+// Repository is the durable preset contract. Every save writes an
+// immutable revision snapshot beside the head, so a request can pin a
+// revision and an operator can roll back to one.
 type Repository interface {
 	Create(context.Context, Preset) (Record, error)
 	Get(context.Context, string) (Record, error)
 	List(context.Context, int) ([]Record, error)
 	Update(context.Context, Preset, uint64) (Record, error)
 	Delete(context.Context, string, uint64) error
+	// History answers stored revisions newest-first, up to limit.
+	History(ctx context.Context, name string, limit int) ([]Record, error)
+	// GetRevision answers one pinned revision verbatim.
+	GetRevision(ctx context.Context, name string, revision uint64) (Record, error)
+	// Rollback saves a new head revision that copies an old one. The
+	// expected revision names the head the caller read, like Update.
+	Rollback(ctx context.Context, name string, toRevision, expectedRevision uint64) (Record, error)
 }
 
 type repository struct{ store storage.KVStore }
@@ -76,6 +89,7 @@ func (r *repository) Create(ctx context.Context, preset Preset) (Record, error) 
 	if err := r.store.CompareAndSwap(ctx, storageKey(preset.Name), nil, data); err != nil {
 		return Record{}, mapConflict("create preset", err)
 	}
+	r.storeRevision(ctx, stored, data)
 	return recordFromPreset(stored), nil
 }
 
@@ -147,6 +161,7 @@ func (r *repository) Update(ctx context.Context, preset Preset, expectedRevision
 	if err := r.store.CompareAndSwap(ctx, storageKey(preset.Name), currentData, updatedData); err != nil {
 		return Record{}, mapConflict("update preset", err)
 	}
+	r.storeRevision(ctx, updated, updatedData)
 	return recordFromPreset(updated), nil
 }
 
@@ -169,6 +184,7 @@ func (r *repository) Delete(ctx context.Context, name string, expectedRevision u
 	if err := r.store.CompareAndSwap(ctx, key, data, nil); err != nil {
 		return mapConflict("delete preset", err)
 	}
+	r.dropRevisions(ctx, name)
 	return nil
 }
 

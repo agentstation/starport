@@ -61,6 +61,12 @@ func (h *PresetsController) List(w http.ResponseWriter, r *http.Request) {
 		writePresetError(w, err)
 		return
 	}
+	writePresetList(w, records)
+}
+
+// writePresetList answers one preset collection in the data envelope
+// every list-shaped route shares.
+func writePresetList(w http.ResponseWriter, records []presets.Record) {
 	payloads := make([]presetPayload, 0, len(records))
 	for _, record := range records {
 		payloads = append(payloads, presetResponse(record))
@@ -172,6 +178,75 @@ func (h *PresetsController) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// History handles GET /api/v1/presets/{name}/history. It answers stored
+// revisions newest-first.
+func (h *PresetsController) History(w http.ResponseWriter, r *http.Request) {
+	if h.repository == nil {
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, presetsNotConfiguredMessage)
+		return
+	}
+	var limit int
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 {
+			dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid limit parameter")
+			return
+		}
+		limit = parsed
+	}
+	name := chi.URLParam(r, "name")
+	// A name without a head is a 404, even when orphan snapshots linger.
+	if _, err := h.repository.Get(r.Context(), name); err != nil {
+		writePresetError(w, err)
+		return
+	}
+	records, err := h.repository.History(r.Context(), name, limit)
+	if err != nil {
+		writePresetError(w, err)
+		return
+	}
+	writePresetList(w, records)
+}
+
+// presetRollbackPayload is the strict rollback request body. ToRevision
+// names the revision to copy; Revision names the head the caller read.
+type presetRollbackPayload struct {
+	ToRevision uint64 `json:"to_revision"`
+	Revision   uint64 `json:"revision"`
+}
+
+// Rollback handles POST /api/v1/presets/{name}/rollback. It saves a new
+// head revision that copies the named old one.
+func (h *PresetsController) Rollback(w http.ResponseWriter, r *http.Request) {
+	if h.repository == nil {
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, presetsNotConfiguredMessage)
+		return
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	var payload presetRollbackPayload
+	if err := decoder.Decode(&payload); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body: "+err.Error())
+		return
+	}
+	if payload.ToRevision == 0 {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Rollback requires to_revision")
+		return
+	}
+	if payload.Revision == 0 {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Rollback requires the expected revision")
+		return
+	}
+	name := chi.URLParam(r, "name")
+	record, err := h.repository.Rollback(r.Context(), name, payload.ToRevision, payload.Revision)
+	writeAudit(r.Context(), h.audit, "preset.rollback", name, err)
+	if err != nil {
+		writePresetError(w, err)
+		return
+	}
+	writePresetJSON(w, http.StatusOK, presetResponse(record))
 }
 
 // decodePresetPayload decodes one strict preset body. Unknown fields are

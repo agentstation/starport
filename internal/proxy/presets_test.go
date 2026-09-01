@@ -11,10 +11,12 @@ import (
 	"github.com/agentstation/starport/internal/presets"
 )
 
-// staticPresetSource serves one named preset from memory.
+// staticPresetSource serves one named preset from memory, plus any
+// pinned revisions the test registers.
 type staticPresetSource struct {
-	record presets.Record
-	err    error
+	record    presets.Record
+	revisions map[uint64]presets.Record
+	err       error
 }
 
 func (s staticPresetSource) Get(_ context.Context, name string) (presets.Record, error) {
@@ -25,6 +27,17 @@ func (s staticPresetSource) Get(_ context.Context, name string) (presets.Record,
 		return presets.Record{}, presets.ErrNotFound
 	}
 	return s.record, nil
+}
+
+func (s staticPresetSource) GetRevision(_ context.Context, name string, revision uint64) (presets.Record, error) {
+	if s.err != nil {
+		return presets.Record{}, s.err
+	}
+	pinned, ok := s.revisions[revision]
+	if !ok || pinned.Preset.Name != name {
+		return presets.Record{}, presets.ErrNotFound
+	}
+	return pinned, nil
 }
 
 // capturingChatProxy records the chat request the resolver forwarded.
@@ -169,4 +182,51 @@ func TestUnknownPresetRejected(t *testing.T) {
 	_, err = wrapped.ProcessChatCompletion(context.Background(), plain)
 	require.NoError(t, err)
 	require.Equal(t, "openai/gpt-4o", inner.lastChat.Request.Model)
+}
+
+func TestPinnedPresetReferenceUsesTheRevision(t *testing.T) {
+	head := presetTestRecord()
+	head.Revision = 3
+	head.Preset.Config.Model = "openai/gpt-4o"
+	pinned := presetTestRecord()
+	pinned.Revision = 2
+	source := staticPresetSource{record: head, revisions: map[uint64]presets.Record{2: pinned}}
+
+	inner := &capturingChatProxy{}
+	wrapped := NewPresetResolver(source).Wrap(inner)
+
+	// The model-field reference resolves the pinned revision verbatim.
+	_, err := wrapped.ProcessChatCompletion(context.Background(), &ChatCompletionRequest{
+		Request: inference.ChatRequest{Model: "@preset/fast@2"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "openai/gpt-4o-mini", inner.lastChat.Request.Model)
+
+	// The body field pins the same way.
+	_, err = wrapped.ProcessChatCompletion(context.Background(), &ChatCompletionRequest{
+		Preset:  "fast@2",
+		Request: inference.ChatRequest{Messages: nil},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "openai/gpt-4o-mini", inner.lastChat.Request.Model)
+
+	// Without a pin, the head answers.
+	_, err = wrapped.ProcessChatCompletion(context.Background(), &ChatCompletionRequest{
+		Request: inference.ChatRequest{Model: "@preset/fast"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "openai/gpt-4o", inner.lastChat.Request.Model)
+}
+
+func TestPinnedPresetReferenceRejectsBadPins(t *testing.T) {
+	inner := &capturingChatProxy{}
+	wrapped := NewPresetResolver(staticPresetSource{record: presetTestRecord()}).Wrap(inner)
+
+	for _, model := range []string{"@preset/fast@abc", "@preset/fast@0", "@preset/fast@", "@preset/fast@9"} {
+		_, err := wrapped.ProcessChatCompletion(context.Background(), &ChatCompletionRequest{
+			Request: inference.ChatRequest{Model: model},
+		})
+		require.ErrorIs(t, err, ErrPresetNotFound, model)
+	}
+	require.Nil(t, inner.lastChat, "a bad pin never reaches routing")
 }
