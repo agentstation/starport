@@ -122,6 +122,59 @@ func TestAPIKeyDeleteUsesStoredHashIndexBytes(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
+func TestAPIKeyDeleteRepairsCorruptHashIndex(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMockStore()
+	repository, err := Open(store)
+	require.NoError(t, err)
+	apiKey := APIKey{
+		ID: "key-delete-corrupt", Name: "delete-corrupt", Hash: "hash-delete-corrupt",
+		Scopes: []string{"chat:write"}, Active: true, CreatedAt: time.Unix(100, 0).UTC(),
+	}
+	created, err := repository.Create(ctx, apiKey)
+	require.NoError(t, err)
+
+	require.NoError(t, store.Set(ctx, hashStorageKey(apiKey.Hash), []byte("not json")))
+	// Authentication against the corrupt index fails closed before the repair.
+	_, err = repository.GetByHash(ctx, apiKey.Hash)
+	require.ErrorIs(t, err, ErrCorruptRecord)
+
+	require.NoError(t, repository.Delete(ctx, apiKey.ID, created.Revision))
+	_, err = repository.GetByID(ctx, apiKey.ID)
+	require.ErrorIs(t, err, ErrNotFound)
+	// The delete repaired the index: the corrupt record left with its owner.
+	_, err = store.Get(ctx, hashStorageKey(apiKey.Hash))
+	require.ErrorIs(t, err, storage.ErrNotFound)
+	_, err = repository.GetByHash(ctx, apiKey.Hash)
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestAPIKeyDeleteLeavesForeignHashIndex(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMockStore()
+	repository, err := Open(store)
+	require.NoError(t, err)
+	apiKey := APIKey{
+		ID: "key-delete-foreign", Name: "delete-foreign", Hash: "hash-delete-foreign",
+		Scopes: []string{"chat:write"}, Active: true, CreatedAt: time.Unix(100, 0).UTC(),
+	}
+	created, err := repository.Create(ctx, apiKey)
+	require.NoError(t, err)
+
+	// The index decodes but names another owner. The delete has no claim to
+	// remove it, so the owner record leaves and the index stays.
+	foreign, err := json.Marshal(hashRecord{SchemaVersion: StorageSchemaVersion, APIKeyID: "another-key"})
+	require.NoError(t, err)
+	require.NoError(t, store.Set(ctx, hashStorageKey(apiKey.Hash), foreign))
+
+	require.NoError(t, repository.Delete(ctx, apiKey.ID, created.Revision))
+	_, err = repository.GetByID(ctx, apiKey.ID)
+	require.ErrorIs(t, err, ErrNotFound)
+	remaining, err := store.Get(ctx, hashStorageKey(apiKey.Hash))
+	require.NoError(t, err)
+	require.Equal(t, foreign, remaining)
+}
+
 func TestAPIKeyDeleteToleratesMissingHashIndex(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMockStore()
