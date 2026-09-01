@@ -194,17 +194,29 @@ For an OpenRouter client, replace its default base URL with
 Version 1 includes:
 
 - Chat completions, streaming chat, embeddings, and model discovery.
+- The Responses API at `/v1/responses` on the same chat contract.
+- Moderations at `/v1/moderations` and gateway-executed batches at `/v1/batches`.
 - Exact provider and model routing with fallback and `openrouter/auto`.
 - Provider routing preferences: order, sort, price caps, and model variants.
-- Presets with `@preset/` model references.
+- Presets with `@preset/` model references, immutable revisions, and rollback.
 - Catalog-driven providers over the compiled OpenAI, Anthropic, Google Cloud,
   Google AI Studio, and Ollama transport primitives.
 - Encrypted provider credentials, renewable cloud credentials, and direct
   secret-source references.
 - Header-only gateway authentication, per-key rate limits, per-key budgets,
   and allowed-model limits.
+- Team budgets, refused before the provider call.
+- Guardrails that redact or refuse, detect payment cards under Luhn, and
+  fail closed.
 - Request logs and usage accounting with catalog-priced costs at
   `/api/v1/activity`.
+- Prometheus metrics at `/metrics`, optional OTLP trace export, and NDJSON
+  usage export.
+- An admin audit log. Every admin mutation writes an actor-attributed
+  record, and the console renders the log.
+- Signed webhooks for budget, job, and provider-health transitions.
+- An agent surface: the catalog verbs answer offline with `--json`, and
+  `starport agent setup` installs the embedded skill.
 - An embedded web console. Its pages cover the overview, chat with model
   comparison, models, providers with incident history, usage, presets, keys,
   files, and settings.
@@ -218,7 +230,8 @@ Version 1 includes:
 - Reranking at `/v1/rerank` and `/api/v1/rerank`, which scores a document list
   against one query. It needs the `rerank:write` scope, and Starmap owns the
   offerings, the billing basis, and the price.
-- Account-safe response caching.
+- Account-safe response caching, with an opt-in semantic cache beside the
+  exact identity.
 - Badger storage for one process and Valkey storage for multiple processes.
 
 Starport uses direct changes and has no legacy provider aliases or storage
