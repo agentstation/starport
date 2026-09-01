@@ -1126,6 +1126,40 @@ score, so a caller can tell the two apart. An embedding or index failure
 never blocks the request. The gateway logs the failure and pays the
 provider it would have paid anyway.
 
+## Preset Revisions
+
+Every preset save is an immutable revision with an incrementing number.
+The first save is revision 1, and each update or rollback adds one. An
+edit therefore never destroys the configuration a running client depends
+on. The revision number is also the optimistic-concurrency token an
+update names, so the two meanings never diverge.
+
+A request selects the latest revision with `@preset/name`, in the model
+field or the OpenRouter `preset` body field. A request pins one stored
+revision with `@preset/name@N`. A pin to a revision that does not exist
+fails like an unknown preset.
+
+The history routes sit beside the preset routes:
+
+```bash
+curl "$STARPORT_URL/api/v1/presets/fast/history" \
+  -H "Authorization: Bearer $STARPORT_API_KEY"
+
+curl -X POST "$STARPORT_URL/api/v1/presets/fast/rollback" \
+  -H "Authorization: Bearer $STARPORT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"to_revision": 1, "revision": 3}'
+```
+
+The history answers stored revisions newest first, and any authenticated
+key reads it. A rollback needs the `presets:write` scope. It saves a new
+head revision that copies what `to_revision` stored. The `revision` field
+names the head the caller read, so a concurrent save answers `409` instead
+of a silent overwrite.
+
+Deleting a preset drops its history. The console renders the history
+behind each preset row, with a restore action per old revision.
+
 ## Container Start
 
 The Compose file starts Starport with Valkey. Its optional `.env` file passes

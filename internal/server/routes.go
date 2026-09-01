@@ -229,8 +229,10 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.Route("/presets", func(r chi.Router) {
 				r.Get("/", s.controllers.Presets.List)
 				r.Get("/{name}", s.controllers.Presets.Get)
+				r.Get("/{name}/history", s.controllers.Presets.History)
 				r.With(s.requireAnyScope("presets:write")).Post("/", s.controllers.Presets.Create)
 				r.With(s.requireAnyScope("presets:write")).Put("/{name}", s.controllers.Presets.Update)
+				r.With(s.requireAnyScope("presets:write")).Post("/{name}/rollback", s.controllers.Presets.Rollback)
 				r.With(s.requireAnyScope("presets:write")).Delete("/{name}", s.controllers.Presets.Delete)
 			})
 
@@ -459,7 +461,9 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /api/v1/presets          - List presets
 //   POST   /api/v1/presets          - Create preset (presets:write)
 //   GET    /api/v1/presets/{name}   - Get preset
+//   GET    /api/v1/presets/{name}/history  - List stored revisions, newest first
 //   PUT    /api/v1/presets/{name}   - Update preset, revision-checked (presets:write)
+//   POST   /api/v1/presets/{name}/rollback - New head copying an old revision (presets:write)
 //   DELETE /api/v1/presets/{name}   - Delete preset (presets:write)
 //
 // Provider Credentials, operator plane (admin):

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/agentstation/starport/internal/inference"
@@ -14,10 +15,12 @@ import (
 // matching OpenRouter's "@preset/<name>" reference.
 const PresetReferencePrefix = "@preset/"
 
-// PresetSource resolves one stored preset by name. The concept-owned
-// repository in internal/presets satisfies it.
+// PresetSource resolves one stored preset by name, or one pinned
+// revision of it. The concept-owned repository in internal/presets
+// satisfies it.
 type PresetSource interface {
 	Get(ctx context.Context, name string) (presets.Record, error)
+	GetRevision(ctx context.Context, name string, revision uint64) (presets.Record, error)
 }
 
 // PresetResolver is a proxy middleware that resolves preset references on
@@ -63,30 +66,55 @@ func (r *PresetResolver) resolveChat(ctx context.Context, req *ChatCompletionReq
 	if req == nil {
 		return nil
 	}
-	name := req.Preset
+	selector := req.Preset
 	usedReference := false
 	if strings.HasPrefix(req.Request.Model, PresetReferencePrefix) {
-		name = strings.TrimPrefix(req.Request.Model, PresetReferencePrefix)
+		selector = strings.TrimPrefix(req.Request.Model, PresetReferencePrefix)
 		usedReference = true
 	}
-	if name == "" {
+	if selector == "" {
 		if usedReference {
 			return fmt.Errorf("%w: %q names no preset", ErrPresetNotFound, req.Request.Model)
 		}
 		return nil
 	}
+	name, revision, err := parsePresetSelector(selector)
+	if err != nil {
+		return err
+	}
 	if r == nil || r.source == nil {
 		return fmt.Errorf("%w: %q (preset storage is not configured)", ErrPresetNotFound, name)
 	}
-	record, err := r.source.Get(ctx, name)
+	record, err := r.lookup(ctx, name, revision)
 	if err != nil {
 		if errors.Is(err, presets.ErrNotFound) {
-			return fmt.Errorf("%w: %q", ErrPresetNotFound, name)
+			return fmt.Errorf("%w: %q", ErrPresetNotFound, selector)
 		}
-		return fmt.Errorf("resolve preset %q: %w", name, err)
+		return fmt.Errorf("resolve preset %q: %w", selector, err)
 	}
 	mergePresetConfig(req, record.Preset.Config, usedReference)
 	return nil
+}
+
+// parsePresetSelector splits an optional "@<revision>" pin off a preset
+// selector. Preset names never contain "@", so the split is unambiguous.
+func parsePresetSelector(selector string) (string, uint64, error) {
+	name, pin, pinned := strings.Cut(selector, "@")
+	if !pinned {
+		return selector, 0, nil
+	}
+	revision, err := strconv.ParseUint(pin, 10, 64)
+	if err != nil || revision == 0 {
+		return "", 0, fmt.Errorf("%w: %q pins no revision", ErrPresetNotFound, selector)
+	}
+	return name, revision, nil
+}
+
+func (r *PresetResolver) lookup(ctx context.Context, name string, revision uint64) (presets.Record, error) {
+	if revision == 0 {
+		return r.source.Get(ctx, name)
+	}
+	return r.source.GetRevision(ctx, name, revision)
 }
 
 // mergePresetConfig applies one preset config to a chat request. The request
