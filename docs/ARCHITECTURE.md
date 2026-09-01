@@ -50,14 +50,37 @@ Implemented:
 - Embedded web console (`internal/console`) for chat, model comparison,
   presets, models, providers, keys, usage, and settings against the local
   gateway.
+- Telemetry export in `internal/telemetry`: a Prometheus scrape at
+  `/metrics`, OTLP traces only when configuration names an endpoint, and a
+  no-op tracer otherwise. Usage export streams stored records as NDJSON.
+- An admin audit log in `internal/audit` over the relational store. Every
+  admin mutation writes a record, and the console renders the log.
+- Signed webhooks in `internal/events`: budget, job, and provider-health
+  transitions emit named events under `X-Starport-Signature`.
+- `/v1/responses`, `/v1/moderations`, and `/v1/batches` at their owning
+  boundaries. The responses codec rides the chat contract. Moderation
+  carries its own scope. Batch lines run through the planner and meter in
+  `internal/jobs`.
+- Guardrails in `internal/guardrails`: redact and refuse verdicts, Luhn PII
+  detection, moderation over the account's own routing, and fail-closed
+  evaluation.
+- Team budgets through the shared `internal/limits` vocabulary, refused
+  pre-flight.
+- An opt-in semantic response cache beside the exact identity, answering
+  only above the similarity threshold.
+- Preset revisions: every save is an immutable numbered snapshot with
+  pinned resolution and rollback.
+- Routing spread inside the ranking band and shared availability state
+  through the KV contract, staying local without a shared store.
+- An agent surface on the CLI: `models search` and `models show` answer the
+  catalog offline, and `agent setup` installs the embedded skill from
+  `skills/starport`.
 
 Not implemented or still planned:
 
-- Content filtering and moderation pipeline.
-- OpenTelemetry metrics and distributed tracing.
 - Billing integration.
-- Webhook notifications.
-- Enterprise SSO/RBAC and relational audit-log features.
+- An MCP server. The agent surface covers shell-capable harnesses, and the
+  enterprise-readiness plan records the re-open conditions.
 
 ## Runtime Shape
 
@@ -119,6 +142,8 @@ graph TD
 ```text
 starport/
 ├── cmd/starport/              # CLI and composition root
+├── skills/starport/           # canonical embedded agent skill that `agent setup` installs
+├── internal/cli/              # command contracts and process-independent execution
 ├── internal/app/              # application lifecycle and dependency ownership
 ├── internal/server/           # HTTP server, middleware, routes, controllers, DTO helpers
 ├── internal/protocol/openai/  # OpenAI wire DTOs and codecs
@@ -150,6 +175,14 @@ starport/
 ├── internal/ratelimit/        # atomic rate-limit policy state and repository
 ├── internal/presets/          # preset model and versioned repository
 ├── internal/usage/            # request records, usage aggregation, and repository
+├── internal/telemetry/        # metric vocabulary, Prometheus registry, and the OTLP tracer
+├── internal/audit/            # actor-attributed admin mutation records and retention
+├── internal/events/           # outbound webhook events, signed envelopes, bounded delivery
+├── internal/jobs/             # asynchronous job records, states, and gateway-executed batches
+├── internal/guardrails/       # policy check contract: allow, redact, refuse; fails closed
+├── internal/files/            # stored file records, purposes, retention, stored-byte bound
+├── internal/blob/             # opaque byte objects; filesystem and objectstore backends
+├── internal/document/         # in-process document reading: text layer, pages, scanned verdict
 ├── internal/console/          # embedded web console (single-page app build and handler)
 ├── internal/storage/          # KVStore adapter interface and implementations
 ├── internal/sqlstore/         # relational contract: embedded SQLite, PostgreSQL/MySQL connect, per-dialect migrations
@@ -531,12 +564,17 @@ Implemented:
 - The local admin token is a file readable only by the account running the
   gateway. It is not a gateway API key, holds no account, and never authenticates
   an inference request.
+- `internal/identity` owns the people plane: users, teams, memberships, and
+  account grants, acquired through gothic OAuth or WorkOS SSO.
+- `internal/audit` records every admin mutation with its actor, and the
+  console renders the log.
+- `internal/guardrails` runs moderation and content checks that fail closed.
+- Deleting an API key repairs a corrupt hash-index record and leaves a
+  foreign one in place. Authentication against a corrupt record fails
+  closed.
 
-Still planned:
-
-- Moderation/content filtering.
-- OpenTelemetry metrics/traces.
-- Enterprise SSO/RBAC and audit logs.
+`docs/SECURITY-POSTURE.md` states the operator-facing posture and its
+boundaries.
 
 ## API Surface
 

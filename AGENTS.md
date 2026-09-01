@@ -99,6 +99,7 @@ bash scripts/verify-document-parser.sh
 bash scripts/verify-reranking.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-credential-sharing.sh
+bash scripts/verify-enterprise-readiness.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
 bash scripts/smoke-first-run.sh
@@ -194,6 +195,14 @@ creation defaults, the people plane in `internal/identity` (users, teams,
 and account grants acquired through gothic OAuth or WorkOS SSO), and the
 console surfaces that render them. It is terminal at 23 conditions
 (`CSH-V01` through `CSH-V23`) and runs in CI.
+
+`scripts/verify-enterprise-readiness.sh` guards the enterprise-readiness
+campaign. It covers telemetry export (Prometheus metrics, distributed
+traces, usage export), the audit log, webhooks, the moderation and
+guardrail surfaces, team budgets, the semantic cache, preset revisions,
+the agent surface (the catalog verbs and the embedded skill), and the
+IDENTITY-001 repair in the `internal/apikey` hash index. It is terminal
+at 33 conditions (`ENR-V01` through `ENR-V33`) and runs in CI.
 
 Use branches with the `codex/` prefix unless the task gives another name. Use
 pull requests as the primary repository update method.
