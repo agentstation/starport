@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/agentstation/starport/internal/limits"
 )
 
 func TestUserValidate(t *testing.T) {
@@ -43,6 +45,11 @@ func TestTeamValidate(t *testing.T) {
 	if err := (Team{ID: "t-1", Name: "Platform"}).Validate(); err != nil {
 		t.Fatal(err)
 	}
+	budgeted := Team{ID: "t-1", Name: "Platform",
+		Budget: &limits.TeamBudget{Limit: 1_000, Interval: limits.IntervalMonth}}
+	if err := budgeted.Validate(); err != nil {
+		t.Fatal(err)
+	}
 
 	cases := []struct {
 		name string
@@ -52,6 +59,16 @@ func TestTeamValidate(t *testing.T) {
 		{"missing id", Team{Name: "Platform"}, ErrMissingID},
 		{"missing name", Team{ID: "t-1"}, ErrInvalidName},
 		{"oversized name", Team{ID: "t-1", Name: strings.Repeat("n", 256)}, ErrInvalidName},
+		{
+			"non-positive budget",
+			Team{ID: "t-1", Name: "Platform", Budget: &limits.TeamBudget{Limit: 0, Interval: limits.IntervalDay}},
+			limits.ErrInvalidBudgetLimit,
+		},
+		{
+			"unknown budget interval",
+			Team{ID: "t-1", Name: "Platform", Budget: &limits.TeamBudget{Limit: 10, Interval: "quarter"}},
+			limits.ErrInvalidBudgetInterval,
+		},
 		{
 			"update before creation",
 			Team{ID: "t-1", Name: "Platform", CreatedAt: time.Unix(100, 0), UpdatedAt: time.Unix(50, 0)},

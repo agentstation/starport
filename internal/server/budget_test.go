@@ -223,6 +223,144 @@ func TestAnAllowedRequestEmitsNothing(t *testing.T) {
 	assert.Empty(t, emitter.types)
 }
 
+// teamBudgetServer builds a server whose identity plane answers one team's
+// budget, over scope-sensitive usage counters.
+func teamBudgetServer(budget *limits.TeamBudget, byScope map[usage.Scope]usage.Totals) *Server {
+	return &Server{
+		cfg:   &Config{},
+		usage: scopedUsageTotals{byScope: byScope},
+		teamBudgets: func(_ context.Context, teamID string) (*limits.TeamBudget, error) {
+			if teamID == "team-platform" {
+				return budget, nil
+			}
+			return nil, nil
+		},
+	}
+}
+
+func teamBudgetKey(id, teamID string) *apikey.APIKey {
+	return &apikey.APIKey{
+		ID:     id,
+		Name:   id,
+		TeamID: teamID,
+		Scopes: []string{"*"},
+		Active: true,
+	}
+}
+
+// Two keys attributed to one team draw the same refusal once the team's
+// spend counter passes the team budget, whether or not either key holds a
+// budget of its own: the team meters a population neither key counter sees.
+func TestTeamBudgetExhaustionRefusesEveryTeamKey(t *testing.T) {
+	emitter := &recordingEmitter{}
+	server := teamBudgetServer(
+		&limits.TeamBudget{Limit: 1_000_000_000, Interval: limits.IntervalMonth},
+		map[usage.Scope]usage.Totals{
+			usage.TeamScope("team-platform"): {Requests: 20, Tokens: 900, SpendNanoUSD: 1_500_000_000},
+		},
+	)
+	server.events = emitter
+
+	handler := server.enforceBudgets(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for _, keyID := range []string{"key-a", "key-b"} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, budgetTestRequest(teamBudgetKey(keyID, "team-platform")))
+
+		require.Equal(t, http.StatusPaymentRequired, rec.Code, keyID)
+		assert.Contains(t, rec.Body.String(), "team spend budget exhausted", keyID)
+		assert.Equal(t, "team", rec.Header().Get("X-Starport-Budget-Spend-Scope"), keyID)
+		assert.Equal(t, "1000000000", rec.Header().Get("X-Starport-Budget-Spend-Limit"), keyID)
+		assert.Equal(t, "0", rec.Header().Get("X-Starport-Budget-Spend-Remaining"), keyID)
+	}
+
+	require.Len(t, emitter.payloads, 2)
+	payload := emitter.payloads[0]
+	assert.Equal(t, "team", payload["scope"])
+	assert.Equal(t, "spend", payload["dimension"])
+	assert.Equal(t, "team-platform", payload["team_id"])
+	assert.Equal(t, "key-a", payload["key_id"])
+}
+
+// A teamless key rides the same gateway untouched: no team is attributed, so
+// no team meters it, however exhausted some team's budget is.
+func TestTeamBudgetLeavesTeamlessKeysAlone(t *testing.T) {
+	server := teamBudgetServer(
+		&limits.TeamBudget{Limit: 1_000_000_000, Interval: limits.IntervalMonth},
+		map[usage.Scope]usage.Totals{
+			usage.TeamScope("team-platform"): {SpendNanoUSD: 1_500_000_000},
+		},
+	)
+
+	called := false
+	handler := server.enforceBudgets(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, budgetTestRequest(teamBudgetKey("key-c", "")))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, called)
+	assert.Empty(t, rec.Header().Get("X-Starport-Budget-Spend-Scope"))
+}
+
+// The team rule joins the key rule rather than replacing it, and the tightest
+// meter owns the reported headers.
+func TestTeamBudgetJoinsKeyBudgetAndTightestReports(t *testing.T) {
+	server := teamBudgetServer(
+		&limits.TeamBudget{Limit: 1_000_000_000, Interval: limits.IntervalMonth},
+		map[usage.Scope]usage.Totals{
+			usage.TeamScope("team-platform"): {SpendNanoUSD: 800_000_000},
+			usage.KeyScope("key-a"):          {SpendNanoUSD: 100_000_000},
+		},
+	)
+
+	handler := server.enforceBudgets(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	apiKey := teamBudgetKey("key-a", "team-platform")
+	apiKey.Limits = &limits.Limits{
+		Spend: &limits.Budget{Limit: 2_000_000_000, Interval: limits.IntervalMonth},
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, budgetTestRequest(apiKey))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	// Team remaining is 200M; key remaining is 1900M. The team is tighter.
+	assert.Equal(t, "team", rec.Header().Get("X-Starport-Budget-Spend-Scope"))
+	assert.Equal(t, "200000000", rec.Header().Get("X-Starport-Budget-Spend-Remaining"))
+}
+
+// A team budget read failure meters nothing and allows the request: the same
+// fail-open answer a broken usage read gives (D6).
+func TestTeamBudgetReadErrorFailsOpen(t *testing.T) {
+	server := &Server{
+		cfg:   &Config{},
+		usage: scopedUsageTotals{},
+		teamBudgets: func(context.Context, string) (*limits.TeamBudget, error) {
+			return nil, errors.New("identity storage unreachable")
+		},
+	}
+
+	called := false
+	handler := server.enforceBudgets(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, budgetTestRequest(teamBudgetKey("key-a", "team-platform")))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, called, "a team budget read failure must fail open")
+}
+
 func TestBudgetMiddlewarePassesKeysWithoutBudgets(t *testing.T) {
 	server := &Server{
 		cfg:   &Config{},

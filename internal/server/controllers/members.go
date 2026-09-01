@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/identity"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/dto"
 )
 
@@ -126,14 +127,15 @@ func (h *MembersController) CreateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		Name string `json:"name"`
+		Name   string             `json:"name"`
+		Budget *limits.TeamBudget `json:"budget,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
 		return
 	}
 
-	candidate := identity.Team{ID: uuid.NewString(), Name: request.Name}
+	candidate := identity.Team{ID: uuid.NewString(), Name: request.Name, Budget: request.Budget}
 	if err := candidate.Validate(); err != nil {
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
 		return
@@ -147,6 +149,54 @@ func (h *MembersController) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeMembersJSON(w, http.StatusCreated, record.Team)
+}
+
+// UpdateTeam handles PUT /api/v1/admin/teams/{team_id}. The body states the
+// team's whole mutable surface — the name and the budget — so an omitted
+// budget clears it: PUT states the team as it should now be, not a delta.
+func (h *MembersController) UpdateTeam(w http.ResponseWriter, r *http.Request) {
+	if !h.ready(w) {
+		return
+	}
+
+	record, ok := h.readTeam(w, r)
+	if !ok {
+		return
+	}
+
+	var request struct {
+		Name   string             `json:"name"`
+		Budget *limits.TeamBudget `json:"budget,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
+		return
+	}
+
+	candidate := record.Team
+	candidate.Name = request.Name
+	candidate.Budget = request.Budget
+	if err := candidate.Validate(); err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
+		return
+	}
+
+	updated, err := h.identity.Teams.Update(r.Context(), candidate, record.Revision)
+	writeAudit(r.Context(), h.audit, "team.update", candidate.ID, err)
+	if err != nil {
+		switch {
+		case errors.Is(err, identity.ErrTeamNotFound):
+			dto.WriteError(w, http.StatusNotFound, dto.ErrorTypeNotFound, "Team not found")
+		case errors.Is(err, identity.ErrTeamConflict):
+			dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
+				"Team changed during update")
+		default:
+			log.Error().Err(err).Str(fieldTeamID, candidate.ID).Msg("Failed to update team")
+			dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to update team")
+		}
+		return
+	}
+	writeMembersJSON(w, http.StatusOK, updated.Team)
 }
 
 // DeleteTeam handles DELETE /api/v1/admin/teams/{team_id}. Deleting a team

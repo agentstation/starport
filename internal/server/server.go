@@ -16,6 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/files"
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/jobs"
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/localauth"
 	"github.com/agentstation/starport/internal/presets"
 	"github.com/agentstation/starport/internal/providers/keyring"
@@ -60,6 +61,11 @@ type Server struct {
 	telemetry          *telemetry.Metrics
 	tracing            *telemetry.Tracing
 	events             controllers.EventEmitter
+
+	// teamBudgets reads the stored spend budget of one team, or is nil when
+	// the deployment configured no identity plane: a key may then carry a
+	// team attribution, but nothing meters it.
+	teamBudgets func(ctx context.Context, teamID string) (*limits.TeamBudget, error)
 
 	// Handler collection
 	controllers *controllers.Controllers
@@ -183,6 +189,21 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		telemetry:          dependencies.Telemetry,
 		tracing:            dependencies.Tracing,
 		events:             dependencies.Events,
+	}
+	if teams := dependencies.Identity.Teams; teams != nil {
+		// A key attributed to a team that no longer exists meters nothing:
+		// the attribution outlived the team, and refusing such a key would
+		// let a team deletion take its keys' traffic down.
+		s.teamBudgets = func(ctx context.Context, teamID string) (*limits.TeamBudget, error) {
+			record, err := teams.GetByID(ctx, teamID)
+			if errors.Is(err, identity.ErrTeamNotFound) {
+				return nil, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return record.Team.Budget, nil
+		}
 	}
 	s.authPolicy = authmode.NewPolicy(authmode.Setting{
 		Mode:   config.AuthMode,

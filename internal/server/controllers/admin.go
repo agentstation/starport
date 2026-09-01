@@ -151,7 +151,10 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description,omitempty"`
 		// AccountID names the owning account. An empty value issues the key to
 		// the canonical account.
-		AccountID     string            `json:"account_id,omitempty"`
+		AccountID string `json:"account_id,omitempty"`
+		// TeamID attributes the key to one team, so the team's budget meters
+		// the key's spend. An empty value leaves the key teamless.
+		TeamID        string            `json:"team_id,omitempty"`
 		Scopes        []string          `json:"scopes,omitempty"`
 		AllowedModels []string          `json:"allowed_models,omitempty"`
 		Limits        *limits.Limits    `json:"limits,omitempty"`
@@ -174,6 +177,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 	issued, err := h.issuer.Issue(ctx, apikey.IssueRequest{
 		Name:          req.Name,
 		AccountID:     req.AccountID,
+		TeamID:        req.TeamID,
 		Scopes:        req.Scopes,
 		AllowedModels: req.AllowedModels,
 		Limits:        req.Limits,
@@ -210,6 +214,7 @@ func (h *AdminController) CreateKey(w http.ResponseWriter, r *http.Request) {
 			"key":            issued.Secret,
 			fieldName:        apiKey.Name,
 			fieldAccountID:   apiKey.EffectiveAccountID(),
+			"team_id":        apiKey.TeamID,
 			"scopes":         apiKey.Scopes,
 			"allowed_models": apiKey.AllowedModels,
 			"limits":         apiKey.Limits,

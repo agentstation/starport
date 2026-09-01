@@ -53,6 +53,7 @@ type guardrailIdentityKey struct{}
 type guardrailIdentity struct {
 	AccountID string
 	KeyID     string
+	TeamID    string
 	RequestID string
 	Protocol  string
 }
@@ -63,6 +64,7 @@ func withGuardrailIdentity(ctx context.Context, req *ChatCompletionRequest) cont
 	return context.WithValue(ctx, guardrailIdentityKey{}, guardrailIdentity{
 		AccountID: req.AccountID,
 		KeyID:     req.KeyID,
+		TeamID:    req.TeamID,
 		RequestID: req.RequestID,
 		Protocol:  req.Protocol,
 	})

@@ -115,6 +115,12 @@ func (h *BaseHandler) getAPIKeyID(ctx context.Context) string {
 	return ""
 }
 
+// getTeamID extracts the team the serving key is attributed to, or empty for
+// a teamless key. Usage attribution and the team budget read this.
+func (h *BaseHandler) getTeamID(ctx context.Context) string {
+	return requestctx.GetTeamID(ctx)
+}
+
 // writeCredentialStrategyError separates a malformed strategy from a forbidden
 // one. A value the gateway cannot parse is the caller's mistake and answers
 // 400. A value the gateway understands but the account is not permitted to use

@@ -48,7 +48,9 @@ type IssueRequest struct {
 	Name string
 	// AccountID names the owning account. An empty value issues the key to the
 	// canonical account.
-	AccountID     string
+	AccountID string
+	// TeamID attributes the key to one team, or leaves it teamless when empty.
+	TeamID        string
 	Scopes        []string
 	AllowedModels []string
 	Limits        *limits.Limits
@@ -135,6 +137,7 @@ func (i *Issuer) issue(
 		Name:          request.Name,
 		Hash:          hex.EncodeToString(digest[:]),
 		AccountID:     accountID,
+		TeamID:        request.TeamID,
 		Scopes:        append([]string(nil), request.Scopes...),
 		AllowedModels: append([]string(nil), request.AllowedModels...),
 		Limits:        request.Limits.Clone(),

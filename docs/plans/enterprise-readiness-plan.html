@@ -120,7 +120,7 @@
     Created: 2026-08-29 ·
     Baseline: main @ f7dfb6b ·
     Proof root: <code>docs/proof/enterprise-readiness/</code> ·
-    Next action: implement ENR-F2.
+    Next action: implement ENR-G1.
   </p>
 
   <section id="outcome">
@@ -194,9 +194,10 @@
         </svg>
       </figure>
     </div>
-    <p>The campaign adds five seams: <code>internal/telemetry</code>,
-      <code>internal/events</code>, <code>internal/audit</code>,
-      <code>internal/guardrails</code>, and <code>internal/mcp</code>.
+    <p>The campaign adds four seams: <code>internal/telemetry</code>,
+      <code>internal/events</code>, <code>internal/audit</code>, and
+      <code>internal/guardrails</code>, plus the agent surface the CLI
+      owns: catalog verbs and an embedded skill.
       It moves availability state from a per-process map to shared KV
       state when the operator configures Valkey. Names stay identical
       across both views.</p>
@@ -212,8 +213,8 @@
       (<code>/v1/responses</code>, <code>/v1/batches</code>,
       <code>/v1/moderations</code>). Routing spread and shared provider
       health. The guardrail seam with two built-in checks. Team budgets,
-      semantic caching, preset revisions, the MCP server, and the
-      IDENTITY-001 repair.</p>
+      semantic caching, preset revisions, the agent surface (catalog
+      verbs and the embedded skill), and the IDENTITY-001 repair.</p>
 
     <p><strong>Does not own:</strong> the Starmap catalog facts a task
       needs. The <code>moderations</code> operation and its offerings
@@ -331,12 +332,12 @@
         <tr id="ENR-E1" data-status="done"><td>ENR-E1</td><td>Routing spread: opt-in weighted selection inside a ranking band.</td><td><code>done</code></td><td>PR #319 merged as e9c9797. Verifier: 18 passed, 15 failed (V18 green). Proof: docs/proof/enterprise-readiness/ENR-E1.md.</td></tr>
         <tr id="ENR-E2" data-status="done"><td>ENR-E2</td><td>Shared provider health through KV when the operator configures Valkey.</td><td><code>done</code></td><td>PR #320 merged as 9b7d859. Verifier: 20 passed, 13 failed (V19&#8211;V20 green). Proof: docs/proof/enterprise-readiness/ENR-E2.md.</td></tr>
         <tr id="ENR-F1" data-status="done"><td>ENR-F1</td><td>Guardrail seam: ordered pre and post checks that fail closed.</td><td><code>done</code></td><td>PR #321 merged as 88506a6. Verifier: 22 passed, 11 failed (V21&#8211;V22 green). Proof: docs/proof/enterprise-readiness/ENR-F1.md.</td></tr>
-        <tr id="ENR-F2" data-status="in_progress"><td>ENR-F2</td><td>Built-in guardrails: deterministic PII redaction and the moderation check.</td><td><code>in_progress</code></td><td></td></tr>
-        <tr id="ENR-G1" data-status="todo"><td>ENR-G1</td><td>Team budgets: the limits vocabulary reaches teams.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-F2" data-status="done"><td>ENR-F2</td><td>Built-in guardrails: deterministic PII redaction and the moderation check.</td><td><code>done</code></td><td>PR #322 merged as b14a85b. Verifier: 24 passed, 9 failed (V23&#8211;V24 green). Proof: docs/proof/enterprise-readiness/ENR-F2.md.</td></tr>
+        <tr id="ENR-G1" data-status="in_progress"><td>ENR-G1</td><td>Team budgets: the limits vocabulary reaches teams.</td><td><code>in_progress</code></td><td></td></tr>
         <tr id="ENR-G2" data-status="deferred"><td>ENR-G2</td><td>Organization tier above accounts.</td><td><code>deferred(no multi-organization operator requirement)</code></td><td>Decision recorded in rejected designs, 2026-08-29.</td></tr>
         <tr id="ENR-H1" data-status="todo"><td>ENR-H1</td><td>Semantic cache: opt-in similarity layer beside the exact response cache.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-H2" data-status="todo"><td>ENR-H2</td><td>Preset revisions: immutable history, version pins, rollback.</td><td><code>todo</code></td><td></td></tr>
-        <tr id="ENR-H3" data-status="todo"><td>ENR-H3</td><td>MCP server: catalog search, model detail, and chat behind a gateway key.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="ENR-H3" data-status="todo"><td>ENR-H3</td><td>Agent surface: catalog verbs on the CLI and an embedded starport skill.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-Z1" data-status="todo"><td>ENR-Z1</td><td>IDENTITY-001: let an operator repair a corrupt identity hash-index record.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-Z2" data-status="todo"><td>ENR-Z2</td><td>Close: the verifier is terminal at 33 in CI, and the docs cover every new surface.</td><td><code>todo</code></td><td></td></tr>
         <tr id="ENR-Z3" data-status="todo"><td>ENR-Z3</td><td>Cleanup after the final pull request merges: delete the plan and proof root, update TASKS.md.</td><td><code>todo</code></td><td></td></tr>
@@ -894,32 +895,60 @@
         <code>go test ./internal/presets/...</code>.</li>
     </ul>
 
-    <h3 id="task-ENR-H3">ENR-H3 MCP server</h3>
+    <h3 id="task-ENR-H3">ENR-H3 Agent surface</h3>
     <ul>
-      <li><strong>Problem:</strong> agent harnesses reach gateways over
-        MCP, and Starport offers no MCP surface.</li>
+      <li><strong>Problem:</strong> an agent harness already speaks the
+        gateway's OpenAI surface for inference, but nothing teaches an
+        agent the operator workflows or answers its catalog questions.
+        The original MCP-server shape re-wrapped both as tools; the
+        amended shape follows the pattern the exemplars converged on
+        (Stripe skills plus <code>stripe agent setup</code>): a skill
+        carries procedure, and CLI verbs answer queries.</li>
 
-      <li><strong>Owning seam and paths:</strong> new
-        <code>internal/mcp</code> owns the server and the tool
-        definitions. <code>starport mcp</code> runs it on stdio. Tools
-        call the gateway's own HTTP surface with a gateway key.</li>
+      <li><strong>Owning seam and paths:</strong>
+        <code>cmd/starport/models.go</code> owns the catalog verbs.
+        <code>cmd/starport/agent.go</code> owns <code>starport agent
+        setup</code> and embeds <code>skills/starport/SKILL.md</code>,
+        the canonical skill source this repository versions with the
+        CLI. The verbs read the catalog projection in
+        <code>internal/catalog</code>; they add no second model
+        vocabulary.</li>
 
-      <li><strong>Steps:</strong> serve three tools: search the model
-        catalog, read one model's detail and prices, and run a chat
-        completion. Authenticate with a gateway key from the
-        environment, never a provider credential. Reuse the catalog
-        projection and the canonical chat contract, adding no second
-        model vocabulary. Document client setup for two harnesses.</li>
+      <li><strong>Steps:</strong> add <code>starport models search
+        &lt;query&gt; --json</code> and <code>starport models show
+        &lt;id&gt; --json</code> over the catalog projection, covering
+        prices and capabilities, deterministic and parseable. Author
+        the starport skill: install, init, keys, routing, doctor, and
+        pointing a harness at the gateway. Embed it and let
+        <code>starport agent setup</code> write it into the shared
+        skills root. Mirror the skill into the agentstation/skills
+        repository for <code>npx skills add</code>. Document the agent
+        surface in the operator guide.</li>
 
-      <li><strong>Acceptance:</strong> an MCP client lists the three
-        tools and completes a catalog search and a chat call in tests.
-        An absent key refuses at startup. ENR-V30 and ENR-V31 turn
-        green.</li>
+      <li><strong>Acceptance:</strong> the catalog verbs answer JSON in
+        tests, <code>agent setup</code> writes the embedded skill in
+        tests, and the skill lints clean under the technical-writing
+        gate. ENR-V30 and ENR-V31 turn green.</li>
 
       <li><strong>Fail-before:</strong> ENR-V30 and ENR-V31 red.</li>
 
       <li><strong>Verification:</strong> run
-        <code>go test ./internal/mcp/...</code>.</li>
+        <code>go test ./cmd/starport/...</code>.</li>
+
+      <li><strong>Deferred MCP surface:</strong> no MCP server ships in
+        this campaign. Every popular shell-capable harness (Claude
+        Code, Codex, OpenCode, Pi, Cursor) can invoke the catalog verbs
+        mid-turn through its shell tool, so a tool server would add a
+        second surface over the same answers. Re-open when a shell-less
+        client (a desktop or web harness) demonstrably needs live
+        catalog or model-selection tools, or when a harness must let
+        its model select subagents or gateway tooling without shell
+        access. Any future server targets the MCP 2026-07-28 stateless
+        revision (go-sdk v1.7.0-pre.1 or later, stateless streamable
+        HTTP, <code>server/discover</code>, no session header, no
+        initialize handshake, none of the deprecated Roots, Sampling,
+        or Logging features), lives in <code>internal/mcp</code>, and
+        authenticates with a gateway key alone.</li>
     </ul>
 
     <h3 id="task-ENR-Z1">ENR-Z1 IDENTITY-001 repair path</h3>
@@ -1054,6 +1083,8 @@ every ledger row except ENR-Z3 is terminal.</code></pre>
         <tr><td>2026-08-30</td><td>ENR-D3</td><td>done</td><td>PR #318 merged as ac7f73e. Verifier: 17 passed, 16 failed (V16&#8211;V17 green), the exact D3 target. The batch surface runs over the files and jobs seams with the shared job meter, the line governor, and the usage join. Full suite, race pass on jobs, lint, vet, build, console (210 tests), and all structural gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-E1 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-E1</td><td>done</td><td>PR #319 merged as e9c9797. Verifier: 18 passed, 15 failed (V18 green), the exact E1 target. Spread is an opt-in sort word: the planner draws a weighted order inside the leading ranking band from a per-request seed, and the deterministic default stays byte for byte. Full suite, race pass on routing, lint, vet, build, console (210 tests), and all structural gates green. Autoreview clean (Sol, 0.98). CI green across all checks. ENR-E2 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-E2</td><td>done</td><td>PR #320 merged as 9b7d859. Verifier: 20 passed, 13 failed (V19&#8211;V20 green), the exact E2 target. Each replica publishes breaker records and latency snapshots under its own instance key with short TTLs when the operator selects the Valkey store; Refresh merges peer state once per interval and local state wins recency conflicts; Badger-only deployments compose exactly as before. Full suite, race pass on availability and router, lint, vet, build, benchmark, all structural gates, and both smoke scripts green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-F1 moves to in_progress.</td></tr>
+        <tr><td>2026-08-30</td><td>ENR-H3</td><td>todo</td><td>Amended by owner direction before execution. The MCP server becomes an agent surface: catalog verbs on the CLI (models search and show, JSON output), an embedded starport skill that agent setup installs, and a mirror into the agentstation/skills repository. The exemplar pattern (Stripe skills, stripe agent setup, the agentskills.io standard) carries procedure in a skill and queries in CLI verbs; every popular shell-capable harness invokes CLI verbs mid-turn, so a tool server would duplicate the surface. MCP stays deferred with a named re-open condition: a shell-less client that needs live catalog or subagent-selection tools, targeting the 2026-07-28 stateless revision. ENR-V30 and ENR-V31 restated for the new artifacts; both stay red before execution, and the gate still reads 24 passed, 9 failed.</td></tr>
+        <tr><td>2026-08-30</td><td>ENR-F2</td><td>done</td><td>PR #322 merged as b14a85b. Verifier: 24 passed, 9 failed (V23&#8211;V24 green), the exact F2 target. The pii check detects email, phone, card-under-Luhn, and dashed-SSN identifiers with no model call, redacting by default and refusing by name when configured. The moderation check classifies through the Moderator seam over the gateway's own moderation surface, rides the calling account's identity and routing, draws its own usage record, and fails closed on a moderator error. Configuration names the checks, the mode, the model, and the thresholds; an unbuildable check refuses startup. Full suite, race pass, lint, vet, build, benchmark (p50/p99 0ms), all structural gates, and both smoke scripts green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-G1 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-F1</td><td>done</td><td>PR #321 merged as 88506a6. Verifier: 22 passed, 11 failed (V21&#8211;V22 green), the exact F1 target. The guardrail seam owns the check vocabulary and an ordered pipeline that fails closed on a check error or an unknown verdict; the proxy middleware inspects request text before planning and answer text before the caller reads it, holds streamed text in a bounded window, and skips entirely when no check is configured. Refusals answer 400 with the check name, and the usage record carries the verdict. Full suite, race pass on guardrails and proxy, lint, vet, build, benchmark, all structural gates, and both smoke scripts green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-F2 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-D1</td><td>done</td><td>PR #316 merged as 8a763da. Verifier: 14 passed, 19 failed (V01&#8211;V14 green), the exact D1 target. Full suite, lint, vet, benchmark, smoke-first-run, SDK smoke with the official OpenAI SDK, and all 24 structural gates green. Autoreview clean (Sol, 0.98). CI green across all ten checks. ENR-D2 moves to in_progress.</td></tr>
         <tr><td>2026-08-30</td><td>ENR-C3</td><td>done</td><td>PR #315 merged as be4a577. Verifier: 12 passed, 21 failed (V01&#8211;V12 green), the exact phase C target. Doc links, doc-link verifier, and README quickstart gates green. Technical-writing lint clean on all touched prose. Autoreview clean (Sol, 0.99). CI green across all ten checks. ENR-D1 moves to in_progress.</td></tr>

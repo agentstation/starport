@@ -44,6 +44,7 @@ func (m *GatewayModerator) Moderate(ctx context.Context, text string) ([]guardra
 		Request:   canonical,
 		AccountID: identity.AccountID,
 		KeyID:     identity.KeyID,
+		TeamID:    identity.TeamID,
 		// The classification draws its own usage record beside the turn
 		// that asked for it, so the suffix keeps the two apart while the
 		// shared stem joins them.

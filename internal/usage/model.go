@@ -117,6 +117,11 @@ type Record struct {
 	// holds many keys. It is optional so that a record written before account
 	// attribution stays readable; such a record counts toward no account.
 	AccountID string `json:"account_id,omitempty"`
+	// TeamID is the team the serving key is attributed to, or empty for a
+	// teamless key. It is what a team-wide spend cap counts: a team meters
+	// every key attributed to it, across every account the team reaches, so
+	// neither the key ID nor the account ID can stand in for it.
+	TeamID string `json:"team_id,omitempty"`
 	// BatchID names the batch this request ran inside, or is empty for an
 	// online request. Every line of a batch draws its own record, and this
 	// field is what sums them back into one bill.

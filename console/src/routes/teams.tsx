@@ -12,7 +12,7 @@ import {
   deleteTeam,
   listTeams,
 } from "@/lib/api";
-import { formatRelativeTime } from "@/lib/format";
+import { formatNanoUSD, formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 // A team is the operator's grouping lever: grant an account to a team once
@@ -96,6 +96,7 @@ function TeamsPage() {
           <thead>
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
               <th className="px-4 py-2.5">Team</th>
+              <th className="px-4 py-2.5">Spend budget</th>
               <th className="px-4 py-2.5">Created</th>
               <th className="px-4 py-2.5" />
             </tr>
@@ -115,6 +116,11 @@ function TeamsPage() {
                   >
                     {team.name}
                   </button>
+                </td>
+                <td className="px-4 py-2 text-xs text-text-3">
+                  {team.budget
+                    ? `${formatNanoUSD(team.budget.limit)} / ${team.budget.interval}`
+                    : "—"}
                 </td>
                 <td className="px-4 py-2 text-xs text-text-3">
                   {formatRelativeTime(team.created_at)}

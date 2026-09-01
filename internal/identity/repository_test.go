@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/sqlstore"
 )
 
@@ -178,6 +179,43 @@ func TestTeamRepositoryCRUD(t *testing.T) {
 	}
 	if _, err := teams.GetByID(ctx, "t-1"); !errors.Is(err, ErrTeamNotFound) {
 		t.Fatalf("get after delete = %v", err)
+	}
+}
+
+// TestTeamRepositoryBudgetRoundTrip proves a team budget survives storage,
+// clears on update, and refuses an invalid shape before it lands.
+func TestTeamRepositoryBudgetRoundTrip(t *testing.T) {
+	repositories := newTestRepositories(t)
+	teams := repositories.Teams
+	ctx := context.Background()
+
+	budget := &limits.TeamBudget{Limit: 5_000_000_000, Interval: limits.IntervalMonth}
+	if _, err := teams.Create(ctx, Team{ID: "t-1", Name: "Platform", Budget: budget}); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := teams.GetByID(ctx, "t-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Team.Budget == nil || *stored.Team.Budget != *budget {
+		t.Fatalf("stored budget = %+v, want %+v", stored.Team.Budget, budget)
+	}
+
+	cleared := stored.Team
+	cleared.Budget = nil
+	updated, err := teams.Update(ctx, cleared, stored.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Team.Budget != nil {
+		t.Fatalf("cleared budget = %+v", updated.Team.Budget)
+	}
+
+	invalid := Team{ID: "t-2", Name: "Broke",
+		Budget: &limits.TeamBudget{Limit: -1, Interval: limits.IntervalDay}}
+	if _, err := teams.Create(ctx, invalid); !errors.Is(err, limits.ErrInvalidBudgetLimit) {
+		t.Fatalf("invalid budget create = %v", err)
 	}
 }
 

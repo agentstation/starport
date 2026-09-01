@@ -146,7 +146,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 	start := time.Now()
 	response, err := s.Proxy.ProcessChatCompletion(ctx, req)
 
-	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.Protocol, req.Request.Model, start)
+	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, req.Request.Model, start)
 	record.BatchID = req.BatchID
 	applyOutcome(&record, err)
 	var snapshot *runtimecatalog.RoutableSnapshot
@@ -177,7 +177,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	start := time.Now()
 	stream, err := s.Proxy.ProcessChatCompletionStream(ctx, req)
 
-	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.Protocol, req.Request.Model, start)
+	record := baseUsageRecord(usage.OperationChat, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, req.Request.Model, start)
 	record.BatchID = req.BatchID
 	record.Streaming = true
 	if err != nil {
@@ -207,7 +207,7 @@ func (s *usageCaptureService) ProcessEmbeddings(ctx context.Context, req *Embedd
 	start := time.Now()
 	response, err := s.Proxy.ProcessEmbeddings(ctx, req)
 
-	record := baseUsageRecord(usage.OperationEmbeddings, req.RequestID, req.KeyID, req.AccountID, req.Protocol, req.Request.Model, start)
+	record := baseUsageRecord(usage.OperationEmbeddings, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, req.Request.Model, start)
 	record.BatchID = req.BatchID
 	applyOutcome(&record, err)
 	var snapshot *runtimecatalog.RoutableSnapshot
@@ -272,7 +272,7 @@ func captureOperation[Request, Response any](
 	start := time.Now()
 	response, err := process(ctx, req)
 
-	record := baseUsageRecord(operation, req.RequestID, req.KeyID, req.AccountID, req.Protocol, model, start)
+	record := baseUsageRecord(operation, req.RequestID, req.KeyID, req.AccountID, req.TeamID, req.Protocol, model, start)
 	applyOutcome(&record, err)
 	var snapshot *runtimecatalog.RoutableSnapshot
 	if response != nil {
@@ -463,11 +463,13 @@ func findStreamEvidence(stream ChatCompletionStreamResponse) router.StreamEviden
 	return nil
 }
 
-// A record names both the gateway API key and the account behind it. An
-// operator needs to see which key spent what, and an account-wide cap needs
-// the sum over every key the account holds; neither identity answers for the
-// other, so both travel with the record.
-func baseUsageRecord(operation, requestID, keyID, accountID, protocol, modelRequested string, start time.Time) usage.Record {
+// A record names the gateway API key, the account behind it, and the team the
+// key is attributed to. An operator needs to see which key spent what, an
+// account-wide cap needs the sum over every key the account holds, and a
+// team-wide cap needs the sum over every attributed key; no identity answers
+// for another, so all three travel with the record. The team has no anonymous
+// fallback: a teamless request counts toward no team.
+func baseUsageRecord(operation, requestID, keyID, accountID, teamID, protocol, modelRequested string, start time.Time) usage.Record {
 	if requestID == "" {
 		requestID = fallbackRequestID()
 	}
@@ -481,6 +483,7 @@ func baseUsageRecord(operation, requestID, keyID, accountID, protocol, modelRequ
 		RequestID:      requestID,
 		KeyID:          keyID,
 		AccountID:      accountID,
+		TeamID:         teamID,
 		Timestamp:      start,
 		Protocol:       protocol,
 		Operation:      operation,
