@@ -1,22 +1,13 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-08-29
+Last Updated: 2026-09-01
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-| Plan | Status | Location |
-| --- | --- | --- |
-| Enterprise readiness campaign (ENR) | active | [docs/plans/enterprise-readiness-plan.html](plans/enterprise-readiness-plan.html) |
-
-The ENR campaign closes the competitive gaps against the hosted gateways:
-observability export, audit and events, OpenAI surface parity, distributed
-health, guardrails, team budgets, the semantic cache, preset revisions, and
-an MCP server. `scripts/verify-enterprise-readiness.sh` guards it with 33
-conditions (`ENR-V01` through `ENR-V33`), authored red at baseline `f7dfb6b`.
-The gate joins CI at ENR-Z2.
+No plan is active.
 
 ### Proposed Work
 
@@ -26,6 +17,7 @@ No plan is proposed.
 
 | Task | Team | PR | Completion Date | Notes |
 |------|------|-----|-----------------|-------|
+| Enterprise readiness campaign | ENR | #309–#330 | 2026-09-01 | Closed the competitive gaps against the hosted gateways. `internal/telemetry` opened observability export: Prometheus metrics at `/metrics`, OTLP traces only when configuration names an endpoint, and NDJSON usage export through the activity API. `internal/audit` records every admin mutation with its actor over the relational store (migration `0006_audit_log`), and the console renders the log. `internal/events` delivers signed webhooks under `X-Starport-Signature` for budget, job, and provider-health transitions. Surface parity landed the three routes a 2026 OpenAI SDK expects: `/v1/responses` on the chat contract, `/v1/moderations` behind its own scope, and gateway-executed `/v1/batches` over `internal/jobs`. Routing gained an opt-in spread mode inside the ranking band, and availability state shares through the KV contract when the operator configures a distributed store — and stays local when nothing is configured. `internal/guardrails` owns the fail-closed check pipeline: allow, redact, or refuse verdicts, Luhn card detection, and a moderation check that rides the account's own routing. Team budgets meter every key a team reaches and refuse pre-flight. The semantic cache answers beside the exact identity, opt-in twice over, and never crosses an account boundary. Preset saves became immutable numbered revisions with `@preset/name@N` pinning and rollback. The agent surface replaced the planned MCP server after the Stripe `agent setup` exemplar review: `starport models search` and `show` answer the embedded catalog offline with `--json`, and `starport agent setup` installs the embedded skill from `skills/starport`; MCP stays deferred with named re-open conditions. The campaign closed IDENTITY-001: deleting an API key now repairs a corrupt hash-index record and leaves a foreign one in place. `scripts/verify-enterprise-readiness.sh` is terminal at 33 conditions (`ENR-V01`–`ENR-V33`), authored red at baseline `f7dfb6b`, fully green at close, and runs in CI. |
 | In-console incident log | Providers | #306 | 2026-08-29 | Let an operator read a provider's incident history without leaving Starport, in two provenances that never blur. The provider's own published log is read on demand through the catalog-declared health API — a Statuspage `incidents.json`, an RSS feed, or the Google Cloud incident feed — normalized into one incident shape, bounded to 90 days and 25 entries, and cached for five minutes; a provider whose convention carries no history (Hyperping, or no declared API) answers `unpublished` rather than an empty list, and a declared log that does not answer says `unreachable`, so a clean quarter is a stated fact and never a guess. The gateway's own record is the second provenance: `internal/providers/state` now returns the indicator transitions each poll pass produces — with a detection memory that survives an unanswered pass, so a recovery seen after an API gap still records the close — and the app layer persists them to `internal/sqlstore` (migration `0005_incident_transitions` in all three dialects, 90-day retention pruned on write). The live indicator stays in the in-memory store the router reads; no model request touches the relational plane. `GET /api/v1/admin/providers/{provider}/incidents` serves both under one response, and the provider detail page renders them as an Incidents section with severity chips, deep links, an honest sentence per availability verdict, and an "Observed by this gateway" subsection on the deployment's own clock. |
 | Credential sharing and identity | CSH | #281–#299 | 2026-08-29 | Gave one deployment many credentials, many people, and the grants that join them. `internal/sqlstore` opened the relational plane: an embedded, cgo-free SQLite database rides the binary by default, and a configured PostgreSQL or MySQL connect scales it, the way Badger pairs with Valkey. `internal/providers/keyring` now holds many shared credentials per provider, each one either open to every account or granted to some, chosen per credential at creation with open as the default; the source word on the wire stays `shared`, because who may use a credential is policy and not a new kind of credential. `internal/account` gained the operator's BYOK policy and the account's provider and model access, enforced at the BYOK put, at keyring resolution, and at route planning, so a refusal happens at the earliest seam that can name it. Account templates stamp creation defaults and never rewrite an existing account. `internal/identity` opened the people plane: users, teams, memberships, and account grants, acquired through gothic OAuth or WorkOS enterprise SSO into one user model, filling the identity slot that `internal/localauth` registered inert in the CSG campaign — that grant now mints a console session from a provider-asserted identity, which is the CSG revision this row records. An account is granted to a user or a team, a session resolves its reachable accounts through those grants, and granted shared credentials resolve through the same rows. The console gained members, teams, and grant surfaces. The campaign closed with the identity handoff: every identifier on the API-key surface now says API key, and the identity words refer only to people; the storage prefix `identity:v1:` and the stored JSON tags stay, because durable data does not move. `scripts/verify-credential-sharing.sh` is terminal at 23 conditions (`CSH-V01`–`CSH-V23`) and runs in CI. |
 | Reranking | RNK | #260–#270, starmap#107–#108 | 2026-08-28 | Gave Starport a rerank route on models the catalog already knew. Starmap named the `rerank` operation and the two billing bases the providers use, then catalogued five offerings: three Cohere generations billed by the search unit, and two Voyage ones billed by the tokens they read. Jina is deferred, because it publishes no first-party price. `internal/inference` owns the canonical request, the ranked result, and the search unit in `Usage`, and the transport descriptor and connector call carry them to a provider without either protocol's vocabulary. The two codecs own every wire name each protocol states: the OpenAI path takes `return_documents` and echoes the ranked text only when asked, and the OpenRouter schema requires `index`, `relevance_score`, and `document` on every result. Both encoders refuse a result that names a document the request never held, or a score outside the unit interval, because either one produces output that reads as correct. `POST /v1/rerank` and `POST /api/v1/rerank` sit behind `rerank:write` alone: a rerank reads the documents the caller sent rather than a stored one, and it generates no message, so neither `chat:write` nor `files:read` covers it. Routing became operation-aware, so a rerank request to a model that serves only chat is refused at planning rather than at the provider, and the gateway bounds a request against the offering's document limit. The meter records search units and prices them, because a Cohere rerank turn reports no tokens at all and a token-reading meter would bill every such turn as free; an offering that bills in a unit it publishes no price for records `no_pricing` instead of a zero cost. The spend bound refuses a turn before the provider call, priced against the generation's cheapest search unit, because the floor is known before the money is spent. The catalog projection gained the search unit price and the document limit, which a Cohere offering had rendered as four empty price columns, and the OpenRouter offering shape gained both beside it. The console gained an operations column and facet, `Unit price` and `Max docs` columns in the offering table, and `rerank:write` in the key form, and it omits a rerank-only model from the chat picker. `docs/ARCHITECTURE.md` also gained the three operations and the five video routes that earlier plans never added to it. `scripts/verify-reranking.sh` is terminal at 22 conditions (`RNK-V01`–`RNK-V22`) and runs in CI. The proof root stays at `docs/proof/reranking/`. |
@@ -82,15 +74,15 @@ blocks the delete, and runtime authentication still fails closed.
 - Authentication uses hash-based identity lookup and fails closed.
 - Response caching uses account-safe canonical semantic keys.
 - HTTP middleware enforces rate limits through the concept repository.
-- Starmap v0.6.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
+- Starmap v0.15.0 owns provider, model, offering, endpoint, operation, and acquisition-auth facts.
 - Starport owns inference credentials, request policy, route planning, execution, and protocol adaptation.
 - OpenAI and OpenRouter raw protocol smoke tests pass.
 - The pinned official OpenRouter Python, TypeScript, and Go SDK gates pass.
 - Release archives, SBOMs, checksums, attestations, and GHCR publication are
   fail-closed release requirements.
-- Independent checks verify public immutable release `v1.0.3` and its public,
+- Independent checks verify public immutable release `v1.1.0` and its public,
   attested GHCR image at
-  `sha256:a90373ce690fb5ef836a4b4af3d6d82a931db7eca7865031eb9b6ffbb1dfea6a`.
+  `sha256:0fbb56d1424d1d0ff0e8aa8ea63c6bedbad62f00e175677b64bd14fc51910f14`.
 
 This file keeps task status and the Phase 1 completion history. The canonical
 v1 design is in `docs/ARCHITECTURE.md`.
