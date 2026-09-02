@@ -1,9 +1,17 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Download, Eye, EyeOff, Monitor, Moon, Sun, Trash2 } from "lucide-react";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { AuthModeControl } from "@/components/settings/AuthModeControl";
+import {
+  GuardrailsSection,
+  ObservabilitySection,
+  RetentionSection,
+  SystemSection,
+  WebhooksSection,
+} from "@/components/settings/Deployment";
+import { Section } from "@/components/settings/Section";
 import { ExternalLink } from "@/components/ui/ExternalLink";
 import { GitHubMark } from "@/components/ui/icons";
 import { DestructiveButton, GhostButton, INPUT_CLASS, PrimaryButton } from "@/components/ui/Form";
@@ -15,7 +23,6 @@ import {
   onCredentialChange,
   setApiKey,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
 import {
   onLogoStyleChange,
   savedLogoStyle,
@@ -32,26 +39,6 @@ export const Route = createFileRoute("/settings")({
 // stay readable so history from an earlier console survives an upgrade.
 const CHAT_STORAGE = "starport.chats";
 const LEGACY_CHAT_STORAGE = "starport_chats";
-
-// Calm density (DESIGN.md): sequential content uses flat sections with
-// hairline dividers, not cards; 48px between sections.
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="border-t border-border-1 py-6 first:border-t-0 first:pt-0">
-      <h2 className="text-sm font-medium text-text-1">{title}</h2>
-      {description && <p className="mt-1 text-sm text-text-3">{description}</p>}
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
 
 function maskKey(key: string): string {
   if (key.length <= 16) return key;
@@ -355,50 +342,17 @@ function ChatDataSection() {
   );
 }
 
-function AboutSection() {
-  // Version and storage need admin scope; the section degrades to the
-  // gateway origin alone when /admin/info is locked.
-  const { data: info } = useQuery({
-    ...queries.systemInfo(),
-  });
+function SourceSection() {
   return (
     <Section
-      title="About"
-      description="The Starport gateway is local and open source — an OpenRouter-compatible drop-in that routes against the Starmap catalog."
+      title="Source"
+      description="The Starport gateway is local and open source: an OpenRouter-compatible drop-in that routes against the Starmap catalog."
     >
-      <dl className="grid max-w-md grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
-        <dt className="text-text-3">Gateway</dt>
-        <dd className="font-mono text-text-2">{location.origin}</dd>
-        {info?.version && (
-          <>
-            <dt className="text-text-3">Version</dt>
-            <dd className="font-mono text-text-2">{info.version}</dd>
-          </>
-        )}
-        {info?.storage?.type && (
-          <>
-            <dt className="text-text-3">Storage</dt>
-            <dd className="font-mono text-text-2">{info.storage.type}</dd>
-          </>
-        )}
-        {info?.files?.backend && (
-          <>
-            <dt className="text-text-3">File storage</dt>
-            <dd className="font-mono text-text-2">{info.files.backend}</dd>
-          </>
-        )}
-        {info?.uptime && info.uptime !== "unavailable" && (
-          <>
-            <dt className="text-text-3">Uptime</dt>
-            <dd className="font-mono text-text-2">{info.uptime}</dd>
-          </>
-        )}
-      </dl>
       <ExternalLink
         href="https://github.com/agentstation/starport"
         icon={GitHubMark}
         iconClassName="size-4 shrink-0"
-        className="mt-4 h-9 rounded-sm px-3 text-sm text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover"
+        className="h-9 rounded-sm px-3 text-sm text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover"
       >
         agentstation/starport
       </ExternalLink>
@@ -412,15 +366,20 @@ function SettingsPage() {
       <div className="mb-8">
         <h1 className="text-xl font-semibold tracking-[-0.01em]">Settings</h1>
         <p className="mt-1 text-sm text-text-3">
-          Connection, appearance, and local chat data.
+          Connection, the gateway as configured, appearance, and local chat data.
         </p>
       </div>
       <div className="max-w-2xl">
         <ConnectionSection />
         <AuthenticationSection />
+        <SystemSection />
+        <ObservabilitySection />
+        <GuardrailsSection />
+        <WebhooksSection />
+        <RetentionSection />
         <AppearanceSection />
         <ChatDataSection />
-        <AboutSection />
+        <SourceSection />
       </div>
     </div>
   );
