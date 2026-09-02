@@ -1,4 +1,4 @@
-import { RECOGNITION_OPERATION, RERANK_OPERATION, type Model } from "@/lib/api";
+import type { Model } from "@/lib/api";
 
 // The models-list filter predicate. Filter state lives in the URL, so
 // this seam defines what each search param means. Every facet param is
@@ -61,42 +61,67 @@ export function operationsOf(model: Model): string[] {
   return [...seen].sort();
 }
 
-// SILENT_OPERATIONS are the operations that answer no chat turn. A document
-// reader returns the text it read and a reranker returns scores, and each
-// reaches this gateway through its own route rather than through the model
-// field of a chat request.
-const SILENT_OPERATIONS = new Set<string>([
-  RECOGNITION_OPERATION,
-  RERANK_OPERATION,
-]);
+// CHAT_OPERATION is the catalog's own name for a chat completion. A model
+// answers a chat turn only through an offering that serves it.
+export const CHAT_OPERATION = "chat-completions";
 
-// chattableModels drops the models that answer no chat turn.
+// chattableModels keeps the models that answer a chat turn.
 //
-// A document reader or a reranker reaches this gateway through its own route,
-// not through the model field, so offering one in a chat picker hands the
-// reader a routing refusal that says nothing about the mistake. A model that
-// serves one of them beside chat stays: it can answer, and these are chat
-// pickers.
+// An embedding model, a reranker, a document reader, a speech model, and an
+// image generator each reach this gateway through their own route, not through
+// the model field of a chat request. Offering one in a chat picker hands the
+// reader a routing refusal that says nothing about the mistake. The test is
+// positive: an offering that names chat completions answers, and one that
+// names only other operations does not. A model that serves chat beside one of
+// them stays.
 //
-// A model with no offerings stays too. That is a catalog this console could not
-// read rather than a model that serves nothing, and hiding it would shrink the
-// picker over a fact nobody established.
+// A model with no offerings stays, and so does an offering that names no
+// operation. Each is a catalog this console could not read rather than a model
+// that serves nothing, and hiding it would shrink the picker over a fact
+// nobody established.
 export function chattableModels(models: Model[]): Model[] {
   return models.filter((model) => {
     const offerings = model.offerings ?? [];
     if (offerings.length === 0) return true;
-    return !offerings.every((offering) => answersNoChatTurn(offering));
+    return offerings.some((offering) => answersChatTurn(offering));
   });
 }
 
-// answersNoChatTurn reads one offering. A silent operation beside any other one
-// is a model that answers, so the test is what the list holds apart from the
-// silent ones, not whether a silent one is in it. An offering that names no
-// operation is one the catalog did not describe, and it is not excluded.
-function answersNoChatTurn(offering: { operations?: string[] }): boolean {
+function answersChatTurn(offering: { operations?: string[] }): boolean {
   const operations = offering.operations ?? [];
-  if (operations.length === 0) return false;
-  return operations.every((operation) => SILENT_OPERATIONS.has(operation));
+  return operations.length === 0 || operations.includes(CHAT_OPERATION);
+}
+
+// PRESET_PREFIX marks a preset id in a model field. A preset is the reader's
+// own routing choice, so the default rule never replaces one.
+const PRESET_PREFIX = "@preset/";
+
+// defaultChatModel picks the model a new conversation opens on.
+//
+// The model the reader chose last wins while the catalog still routes it as a
+// chat model, and a preset always wins. Otherwise the first chat model in
+// catalog order that a provider with a usable operator credential serves, so
+// a default the reader never chose is one that can answer. Without such a
+// provider the first chat model stands in, and without any chat model the
+// first catalog model does.
+export function defaultChatModel(
+  remembered: string,
+  models: Model[],
+  usableProviders: ReadonlySet<string>,
+): string {
+  if (remembered.startsWith(PRESET_PREFIX)) return remembered;
+  const candidates = chattableModels(models);
+  if (remembered && candidates.some((model) => model.id === remembered)) {
+    return remembered;
+  }
+  const credentialed = usableProviders.size
+    ? candidates.find((model) =>
+        (model.offerings ?? []).some((offering) =>
+          usableProviders.has(offering.provider),
+        ),
+      )
+    : undefined;
+  return (credentialed ?? candidates[0] ?? models[0])?.id ?? "";
 }
 
 export function hasCapability(model: Model, capability: string): boolean {

@@ -355,7 +355,7 @@ function ColumnCard({
               onClick={onStop}
               className="size-6 rounded-sm text-text-3 hover:bg-bg-hover hover:text-text-1"
             >
-              <Square className="size-3" fill="currentColor" />
+              <Square aria-hidden="true" className="size-3" fill="currentColor" />
             </IconButton>
           ) : (
             <IconButton
@@ -363,7 +363,7 @@ function ColumnCard({
               onClick={onRetry}
               className="size-6 rounded-sm text-text-3 hover:bg-bg-hover hover:text-text-1"
             >
-              <RefreshCcw className="size-3" />
+              <RefreshCcw aria-hidden="true" className="size-3" />
             </IconButton>
           )}
         </div>
@@ -398,7 +398,7 @@ function ColumnCard({
             className="flex items-center gap-1.5 text-xs text-text-3 transition-colors duration-150 ease-standard hover:text-text-1"
           >
             Continue with this model
-            <ArrowRight className="size-3" />
+            <ArrowRight aria-hidden="true" className="size-3" />
           </button>
         </div>
       )}

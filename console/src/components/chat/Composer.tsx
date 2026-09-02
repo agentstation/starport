@@ -164,7 +164,7 @@ function AttachControl({
         }
         disabled={!enabled}
       >
-        <Icon className="size-4" />
+        <Icon aria-hidden="true" className="size-4" />
       </BarButton>
     </>
   );
@@ -456,9 +456,9 @@ export function Composer({
                 // chip carries the name the reader picked the file by.
                 <span className="flex h-14 items-center gap-1.5 bg-bg-panel pl-2 pr-6 text-xs text-text-2">
                   {attachment.kind === "audio" ? (
-                    <AudioLines className="size-3.5 shrink-0 text-text-4" />
+                    <AudioLines aria-hidden="true" className="size-3.5 shrink-0 text-text-4" />
                   ) : (
-                    <FileText className="size-3.5 shrink-0 text-text-4" />
+                    <FileText aria-hidden="true" className="size-3.5 shrink-0 text-text-4" />
                   )}
                   <span className="max-w-32 truncate">{attachment.name}</span>
                 </span>
@@ -473,7 +473,7 @@ export function Composer({
                 aria-label={`Remove attachment ${index + 1}`}
                 className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white transition-colors duration-150 ease-standard hover:bg-black/80"
               >
-                <X className="size-3" />
+                <X aria-hidden="true" className="size-3" />
               </button>
             </span>
           ))}
@@ -496,7 +496,7 @@ export function Composer({
             label={compareActive ? "Exit compare" : "Compare models"}
             active={compareActive}
           >
-            <Columns2 className="size-4" />
+            <Columns2 aria-hidden="true" className="size-4" />
             {compareActive && <span>Compare</span>}
           </BarButton>
         )}
@@ -517,7 +517,7 @@ export function Composer({
                   aria-label={`Remove ${id} from comparison`}
                   className="rounded-full p-0.5 text-text-4 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 disabled:opacity-40"
                 >
-                  <X className="size-3" />
+                  <X aria-hidden="true" className="size-3" />
                 </button>
               </span>
             ))}
@@ -541,7 +541,7 @@ export function Composer({
                   ? `Add model (${compareCount}/4)`
                   : shortModelName(model)}
               </span>
-              <ChevronDown className="size-3.5" />
+              <ChevronDown aria-hidden="true" className="size-3.5" />
             </PopoverTrigger>
             <PopoverContent
               side="top"
@@ -581,7 +581,7 @@ export function Composer({
               <PopoverTrigger
                 render={<BarButton label="Reasoning effort" active={menu === "effort"} />}
               >
-                <Brain className="size-4" />
+                <Brain aria-hidden="true" className="size-4" />
                 {effort && <span className="capitalize">{effort}</span>}
               </PopoverTrigger>
               <PopoverContent
@@ -616,7 +616,7 @@ export function Composer({
             <PopoverTrigger
               render={<BarButton label="Request parameters" active={menu === "params"} />}
             >
-              <SlidersHorizontal className="size-4" />
+              <SlidersHorizontal aria-hidden="true" className="size-4" />
             </PopoverTrigger>
             <ParamsPopover params={params} onChange={onParamsChange} />
           </Popover>
@@ -628,7 +628,7 @@ export function Composer({
               aria-label="Stop generating"
               className="flex size-8 items-center justify-center rounded-sm bg-bg-hover text-text-1 transition-colors duration-150 ease-standard hover:bg-border-2"
             >
-              <Square className="size-3.5" fill="currentColor" />
+              <Square aria-hidden="true" className="size-3.5" fill="currentColor" />
             </button>
           ) : (
             <button
@@ -642,7 +642,7 @@ export function Composer({
                   : "bg-bg-hover text-text-4"
               }`}
             >
-              <ArrowUp className="size-4" />
+              <ArrowUp aria-hidden="true" className="size-4" />
             </button>
           )}
         </div>
