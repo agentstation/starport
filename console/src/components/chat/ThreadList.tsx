@@ -1,8 +1,8 @@
 import { Pencil, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { GhostButton } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
+import { DestructiveButton, GhostButton } from "@/components/ui/Form";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Conversation } from "@/lib/chatStore";
 
 // ThreadList is the chat sidebar: search, then conversations grouped
@@ -233,33 +233,38 @@ export function ThreadList({
         ))}
       </nav>
       {deleting && (
-        <Modal
-          title="Delete conversation"
-          onClose={() => setDeleting(null)}
-          footer={
-            <>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDeleting(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete conversation</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <p className="text-sm text-text-2">
+                This removes{" "}
+                <strong className="font-semibold text-text-1">
+                  {deleting.title || "Untitled"}
+                </strong>{" "}
+                from this browser. There is no undo.
+              </p>
+            </DialogBody>
+            <DialogFooter>
               <GhostButton onClick={() => setDeleting(null)}>Cancel</GhostButton>
-              <button
-                type="button"
+              <DestructiveButton
                 onClick={() => {
                   onDelete(deleting.id);
                   setDeleting(null);
                 }}
-                className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-opacity duration-150 ease-standard hover:opacity-90"
               >
                 Delete
-              </button>
-            </>
-          }
-        >
-          <p className="text-sm text-text-2">
-            This removes{" "}
-            <strong className="font-semibold text-text-1">
-              {deleting.title || "Untitled"}
-            </strong>{" "}
-            from this browser. There is no undo.
-          </p>
-        </Modal>
+              </DestructiveButton>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

@@ -60,6 +60,24 @@ export function PrimaryButton({
   );
 }
 
+// DestructiveButton is the error-solid confirm action of a destructive
+// dialog (DESIGN.md buttons). The dialog restates the object name; this
+// button names the verb.
+export function DestructiveButton({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className="flex h-9 items-center gap-1.5 rounded-sm bg-error px-4 text-sm font-medium text-error-ink transition-opacity duration-150 ease-standard hover:opacity-90 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 export function RowAction({
   children,
   ...props

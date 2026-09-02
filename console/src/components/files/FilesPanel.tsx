@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Upload } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
-import { GhostButton, PrimaryButton } from "@/components/ui/Form";
+import { DestructiveButton, GhostButton, PrimaryButton } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { Modal } from "@/components/ui/Modal";
+import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   accessMessage,
   ApiError,
@@ -111,6 +111,7 @@ export function FilesPanel() {
   const chooser = useRef<HTMLInputElement>(null);
   const [purpose, setPurpose] = useState<Purpose>("user_data");
   const [confirming, setConfirming] = useState<StoredFile | null>(null);
+  const [removeError, setRemoveError] = useState("");
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -147,10 +148,7 @@ export function FilesPanel() {
       setNotice({ text: `Deleted ${file.filename}` });
       await queryClient.invalidateQueries({ queryKey: queries.files().queryKey });
     },
-    onError: (error) => {
-      setConfirming(null);
-      setNotice({ text: `Delete failed: ${refusalText(error)}`, error: true });
-    },
+    onError: (error) => setRemoveError(`Delete failed: ${refusalText(error)}`),
   });
 
   const rows = files.data?.files ?? [];
@@ -211,7 +209,10 @@ export function FilesPanel() {
                   <div className="flex items-center justify-end">
                     <button
                       type="button"
-                      onClick={() => setConfirming(file)}
+                      onClick={() => {
+                        setRemoveError("");
+                        setConfirming(file);
+                      }}
                       aria-label={`Delete ${file.filename}`}
                       className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error"
                     >
@@ -280,31 +281,39 @@ export function FilesPanel() {
       )}
       {body}
       {confirming && (
-        <Modal
-          title="Delete this file?"
-          onClose={() => setConfirming(null)}
-          footer={
-            <>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirming(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete this file?</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <p className="text-sm text-text-2">
+                The gateway deletes the bytes of{" "}
+                <span className="font-mono text-xs">{confirming.filename}</span> and
+                never reuses{" "}
+                <span className="font-mono text-xs">{confirming.id}</span>. A request
+                that names it after this reads as a file that never existed.
+              </p>
+            </DialogBody>
+            <DialogError>{removeError}</DialogError>
+            <DialogFooter>
               <GhostButton onClick={() => setConfirming(null)}>
                 Cancel
               </GhostButton>
-              <PrimaryButton
+              <DestructiveButton
                 onClick={() => remove.mutate(confirming)}
                 disabled={remove.isPending}
               >
                 Delete
-              </PrimaryButton>
-            </>
-          }
-        >
-          <p className="text-sm text-text-2">
-            The gateway deletes the bytes of{" "}
-            <span className="font-mono text-xs">{confirming.filename}</span> and
-            never reuses{" "}
-            <span className="font-mono text-xs">{confirming.id}</span>. A request
-            that names it after this reads as a file that never existed.
-          </p>
-        </Modal>
+              </DestructiveButton>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

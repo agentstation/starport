@@ -6,8 +6,8 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { AuthModeControl } from "@/components/settings/AuthModeControl";
 import { ExternalLink } from "@/components/ui/ExternalLink";
 import { GitHubMark } from "@/components/ui/icons";
-import { GhostButton, INPUT_CLASS, PrimaryButton } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
+import { DestructiveButton, GhostButton, INPUT_CLASS, PrimaryButton } from "@/components/ui/Form";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   getApiKey,
   hasSession,
@@ -320,32 +320,36 @@ function ChatDataSection() {
         </button>
       </div>
       {confirming && (
-        <Modal
-          title="Delete all conversations"
-          onClose={() => setConfirming(false)}
-          footer={
-            <>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setConfirming(false);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete all conversations</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <p className="text-sm text-text-2">
+                This removes all{" "}
+                <strong className="font-semibold text-text-1">
+                  {count} conversation{count === 1 ? "" : "s"}
+                </strong>{" "}
+                stored in this browser. There is no undo.
+              </p>
+            </DialogBody>
+            <DialogFooter>
               <GhostButton onClick={() => setConfirming(false)}>
                 Cancel
               </GhostButton>
-              <button
-                type="button"
-                onClick={deleteAll}
-                className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-opacity duration-150 ease-standard hover:opacity-90"
-              >
+              <DestructiveButton
+                onClick={deleteAll}>
                 Delete all
-              </button>
-            </>
-          }
-        >
-          <p className="text-sm text-text-2">
-            This removes all{" "}
-            <strong className="font-semibold text-text-1">
-              {count} conversation{count === 1 ? "" : "s"}
-            </strong>{" "}
-            stored in this browser. There is no undo.
-          </p>
-        </Modal>
+              </DestructiveButton>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </Section>
   );

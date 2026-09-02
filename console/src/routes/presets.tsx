@@ -4,16 +4,9 @@ import { History, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ModelPicker } from "@/components/models/ModelPicker";
-import {
-  Field,
-  GhostButton,
-  INPUT_CLASS,
-  PrimaryButton,
-  RowAction,
-  TEXTAREA_CLASS,
-} from "@/components/ui/Form";
+import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction, TEXTAREA_CLASS } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { Modal } from "@/components/ui/Modal";
+import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   accessMessage,
   ApiError,
@@ -285,198 +278,204 @@ function EditorModal({
   };
 
   return (
-    <Modal
-      title={editing ? `Edit @preset/${preset.name}` : "New preset"}
-      onClose={onClose}
-      wide
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{editing ? `Edit @preset/${preset.name}` : "New preset"}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Field
+                label="Name"
+                hint={editing ? "names are immutable" : "letters, digits, - and _"}
+              >
+                <input
+                  type="text"
+                  value={draft.name}
+                  onChange={(event) => patch({ name: event.target.value })}
+                  placeholder="e.g. fast-cheap"
+                  autoComplete="off"
+                  disabled={editing}
+                  className={`${INPUT_CLASS} font-mono disabled:opacity-50`}
+                />
+              </Field>
+              <Field label="Description">
+                <input
+                  type="text"
+                  value={draft.description}
+                  onChange={(event) => patch({ description: event.target.value })}
+                  placeholder="what this preset is for"
+                  autoComplete="off"
+                  className={INPUT_CLASS}
+                />
+              </Field>
+            </div>
+
+            <SectionTitle>Model</SectionTitle>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Model">
+                <ModelPicker
+                  value={draft.model}
+                  onChange={(model) => patch({ model })}
+                  placeholder="search the catalog"
+                />
+              </Field>
+              <Field label="Fallback models" hint="comma-separated, tried in order">
+                <input
+                  type="text"
+                  value={draft.models}
+                  onChange={(event) => patch({ models: event.target.value })}
+                  placeholder="fallbacks, comma-separated"
+                  autoComplete="off"
+                  className={`${INPUT_CLASS} font-mono`}
+                />
+              </Field>
+            </div>
+            <Field label="System prompt">
+              <textarea
+                rows={3}
+                value={draft.system}
+                onChange={(event) => patch({ system: event.target.value })}
+                placeholder="You are a helpful assistant…"
+                className={TEXTAREA_CLASS}
+              />
+            </Field>
+
+            <SectionTitle>Sampling</SectionTitle>
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="Temperature">
+                {numberInput(draft.temperature, (temperature) => patch({ temperature }), {
+                  step: 0.1,
+                  min: 0,
+                  max: 2,
+                })}
+              </Field>
+              <Field label="Top-p">
+                {numberInput(draft.topP, (topP) => patch({ topP }), {
+                  step: 0.05,
+                  min: 0,
+                  max: 1,
+                })}
+              </Field>
+              <Field label="Max tokens">
+                {numberInput(draft.maxTokens, (maxTokens) => patch({ maxTokens }), {
+                  min: 1,
+                })}
+              </Field>
+              <Field label="Seed">
+                {numberInput(draft.seed, (seed) => patch({ seed }))}
+              </Field>
+              <Field label="Presence penalty">
+                {numberInput(
+                  draft.presencePenalty,
+                  (presencePenalty) => patch({ presencePenalty }),
+                  { step: 0.1, min: -2, max: 2 },
+                )}
+              </Field>
+              <Field label="Frequency penalty">
+                {numberInput(
+                  draft.frequencyPenalty,
+                  (frequencyPenalty) => patch({ frequencyPenalty }),
+                  { step: 0.1, min: -2, max: 2 },
+                )}
+              </Field>
+            </div>
+            <Field label="Stop sequences" hint="comma-separated">
+              <input
+                type="text"
+                value={draft.stop}
+                onChange={(event) => patch({ stop: event.target.value })}
+                autoComplete="off"
+                className={`${INPUT_CLASS} font-mono`}
+              />
+            </Field>
+
+            <SectionTitle>Provider routing</SectionTitle>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Order" hint="try providers in this order">
+                <input
+                  type="text"
+                  value={draft.order}
+                  onChange={(event) => patch({ order: event.target.value })}
+                  placeholder="e.g. groq, openai"
+                  autoComplete="off"
+                  className={`${INPUT_CLASS} font-mono`}
+                />
+              </Field>
+              <Field label="Sort" hint="price, latency, throughput, or spread">
+                <Select
+                  value={draft.sort}
+                  onChange={(event) => patch({ sort: event.target.value })}
+                >
+                  {SORTS.map((sort) => (
+                    <option key={sort} value={sort}>
+                      {sort || "server default"}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Only" hint="allowlist, comma-separated">
+                <input
+                  type="text"
+                  value={draft.only}
+                  onChange={(event) => patch({ only: event.target.value })}
+                  autoComplete="off"
+                  className={`${INPUT_CLASS} font-mono`}
+                />
+              </Field>
+              <Field label="Ignore" hint="denylist, comma-separated">
+                <input
+                  type="text"
+                  value={draft.ignore}
+                  onChange={(event) => patch({ ignore: event.target.value })}
+                  autoComplete="off"
+                  className={`${INPUT_CLASS} font-mono`}
+                />
+              </Field>
+              <Field label="Max prompt price" hint="USD per million input tokens">
+                {numberInput(
+                  draft.maxPromptPrice,
+                  (maxPromptPrice) => patch({ maxPromptPrice }),
+                  { step: 0.01, min: 0 },
+                )}
+              </Field>
+              <Field
+                label="Max completion price"
+                hint="USD per million output tokens"
+              >
+                {numberInput(
+                  draft.maxCompletionPrice,
+                  (maxCompletionPrice) => patch({ maxCompletionPrice }),
+                  { step: 0.01, min: 0 },
+                )}
+              </Field>
+            </div>
+            <label className="flex items-start gap-2 text-sm text-text-2">
+              <input
+                type="checkbox"
+                checked={draft.allowFallbacks}
+                onChange={(event) => patch({ allowFallbacks: event.target.checked })}
+                className="mt-0.5 accent-(--accent)"
+              />
+              <span>Allow fallbacks beyond the ordered providers</span>
+            </label>
+          </div>
+        </DialogBody>
+        <DialogError>{formError}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
           <PrimaryButton onClick={submit} disabled={save.isPending}>
             {editing ? "Save preset" : "Create preset"}
           </PrimaryButton>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Field
-            label="Name"
-            hint={editing ? "names are immutable" : "letters, digits, - and _"}
-          >
-            <input
-              type="text"
-              value={draft.name}
-              onChange={(event) => patch({ name: event.target.value })}
-              placeholder="e.g. fast-cheap"
-              autoComplete="off"
-              disabled={editing}
-              className={`${INPUT_CLASS} font-mono disabled:opacity-50`}
-            />
-          </Field>
-          <Field label="Description">
-            <input
-              type="text"
-              value={draft.description}
-              onChange={(event) => patch({ description: event.target.value })}
-              placeholder="what this preset is for"
-              autoComplete="off"
-              className={INPUT_CLASS}
-            />
-          </Field>
-        </div>
-
-        <SectionTitle>Model</SectionTitle>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Model">
-            <ModelPicker
-              value={draft.model}
-              onChange={(model) => patch({ model })}
-              placeholder="search the catalog"
-            />
-          </Field>
-          <Field label="Fallback models" hint="comma-separated, tried in order">
-            <input
-              type="text"
-              value={draft.models}
-              onChange={(event) => patch({ models: event.target.value })}
-              placeholder="fallbacks, comma-separated"
-              autoComplete="off"
-              className={`${INPUT_CLASS} font-mono`}
-            />
-          </Field>
-        </div>
-        <Field label="System prompt">
-          <textarea
-            rows={3}
-            value={draft.system}
-            onChange={(event) => patch({ system: event.target.value })}
-            placeholder="You are a helpful assistant…"
-            className={TEXTAREA_CLASS}
-          />
-        </Field>
-
-        <SectionTitle>Sampling</SectionTitle>
-        <div className="grid grid-cols-3 gap-4">
-          <Field label="Temperature">
-            {numberInput(draft.temperature, (temperature) => patch({ temperature }), {
-              step: 0.1,
-              min: 0,
-              max: 2,
-            })}
-          </Field>
-          <Field label="Top-p">
-            {numberInput(draft.topP, (topP) => patch({ topP }), {
-              step: 0.05,
-              min: 0,
-              max: 1,
-            })}
-          </Field>
-          <Field label="Max tokens">
-            {numberInput(draft.maxTokens, (maxTokens) => patch({ maxTokens }), {
-              min: 1,
-            })}
-          </Field>
-          <Field label="Seed">
-            {numberInput(draft.seed, (seed) => patch({ seed }))}
-          </Field>
-          <Field label="Presence penalty">
-            {numberInput(
-              draft.presencePenalty,
-              (presencePenalty) => patch({ presencePenalty }),
-              { step: 0.1, min: -2, max: 2 },
-            )}
-          </Field>
-          <Field label="Frequency penalty">
-            {numberInput(
-              draft.frequencyPenalty,
-              (frequencyPenalty) => patch({ frequencyPenalty }),
-              { step: 0.1, min: -2, max: 2 },
-            )}
-          </Field>
-        </div>
-        <Field label="Stop sequences" hint="comma-separated">
-          <input
-            type="text"
-            value={draft.stop}
-            onChange={(event) => patch({ stop: event.target.value })}
-            autoComplete="off"
-            className={`${INPUT_CLASS} font-mono`}
-          />
-        </Field>
-
-        <SectionTitle>Provider routing</SectionTitle>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Order" hint="try providers in this order">
-            <input
-              type="text"
-              value={draft.order}
-              onChange={(event) => patch({ order: event.target.value })}
-              placeholder="e.g. groq, openai"
-              autoComplete="off"
-              className={`${INPUT_CLASS} font-mono`}
-            />
-          </Field>
-          <Field label="Sort" hint="price, latency, throughput, or spread">
-            <Select
-              value={draft.sort}
-              onChange={(event) => patch({ sort: event.target.value })}
-            >
-              {SORTS.map((sort) => (
-                <option key={sort} value={sort}>
-                  {sort || "server default"}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Only" hint="allowlist, comma-separated">
-            <input
-              type="text"
-              value={draft.only}
-              onChange={(event) => patch({ only: event.target.value })}
-              autoComplete="off"
-              className={`${INPUT_CLASS} font-mono`}
-            />
-          </Field>
-          <Field label="Ignore" hint="denylist, comma-separated">
-            <input
-              type="text"
-              value={draft.ignore}
-              onChange={(event) => patch({ ignore: event.target.value })}
-              autoComplete="off"
-              className={`${INPUT_CLASS} font-mono`}
-            />
-          </Field>
-          <Field label="Max prompt price" hint="USD per million input tokens">
-            {numberInput(
-              draft.maxPromptPrice,
-              (maxPromptPrice) => patch({ maxPromptPrice }),
-              { step: 0.01, min: 0 },
-            )}
-          </Field>
-          <Field
-            label="Max completion price"
-            hint="USD per million output tokens"
-          >
-            {numberInput(
-              draft.maxCompletionPrice,
-              (maxCompletionPrice) => patch({ maxCompletionPrice }),
-              { step: 0.01, min: 0 },
-            )}
-          </Field>
-        </div>
-        <label className="flex items-start gap-2 text-sm text-text-2">
-          <input
-            type="checkbox"
-            checked={draft.allowFallbacks}
-            onChange={(event) => patch({ allowFallbacks: event.target.checked })}
-            className="mt-0.5 accent-(--accent)"
-          />
-          <span>Allow fallbacks beyond the ordered providers</span>
-        </label>
-        {formError && <p className="text-xs text-error">{formError}</p>}
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -486,13 +485,12 @@ function HistoryModal({
   preset,
   onClose,
   onRolledBack,
-  onError,
 }: {
   preset: Preset;
   onClose: () => void;
   onRolledBack: (revision: number) => void;
-  onError: (message: string) => void;
 }) {
+  const [error, setError] = useState("");
   const history = useQuery({
     ...queries.presetHistory(preset.name),
   });
@@ -507,11 +505,11 @@ function HistoryModal({
       });
       onRolledBack(record.revision ?? 0);
     },
-    onError: (error) =>
-      onError(
-        error instanceof ApiError && error.status === 409
+    onError: (problem) =>
+      setError(
+        problem instanceof ApiError && problem.status === 409
           ? "Preset changed elsewhere — reload and retry."
-          : `Rollback failed: ${error instanceof Error ? error.message : error}`,
+          : `Rollback failed: ${problem instanceof Error ? problem.message : problem}`,
       ),
   });
 
@@ -593,23 +591,34 @@ function HistoryModal({
   }
 
   return (
-    <Modal
-      title={`History of @preset/${preset.name}`}
-      onClose={onClose}
-      wide
-      footer={<GhostButton onClick={onClose}>Close</GhostButton>}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-text-3">
-          Every save is an immutable revision. Pin one from a request with{" "}
-          <code className="rounded-xs bg-bg-raised px-1 py-0.5 font-mono text-xs text-text-2">
-            @preset/{preset.name}@N
-          </code>
-          . Restoring copies an old revision into a new one.
-        </p>
-        {body}
-      </div>
-    </Modal>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{`History of @preset/${preset.name}`}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-text-3">
+              Every save is an immutable revision. Pin one from a request with{" "}
+              <code className="rounded-xs bg-bg-raised px-1 py-0.5 font-mono text-xs text-text-2">
+                @preset/{preset.name}@N
+              </code>
+              . Restoring copies an old revision into a new one.
+            </p>
+            {body}
+          </div>
+        </DialogBody>
+        <DialogError>{error}</DialogError>
+        <DialogFooter>
+          <GhostButton onClick={onClose}>Close</GhostButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -619,47 +628,52 @@ function DeleteModal({
   preset,
   onClose,
   onDeleted,
-  onError,
 }: {
   preset: Preset;
   onClose: () => void;
   onDeleted: () => void;
-  onError: (message: string) => void;
 }) {
+  const [error, setError] = useState("");
   const remove = useMutation({
     mutationFn: () => deletePreset(preset.name),
     onSuccess: onDeleted,
-    onError: (error) =>
-      onError(
-        `Delete failed: ${error instanceof Error ? error.message : error}`,
+    onError: (problem) =>
+      setError(
+        `Delete failed: ${problem instanceof Error ? problem.message : problem}`,
       ),
   });
   return (
-    <Modal
-      title="Delete preset"
-      onClose={onClose}
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete preset</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <p className="text-sm text-text-2">
+            Delete{" "}
+            <strong className="font-mono font-semibold text-text-1">
+              @preset/{preset.name}
+            </strong>
+            ? Requests referencing it will start failing immediately.
+          </p>
+        </DialogBody>
+        <DialogError>{error}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
-          <button
-            type="button"
+          <DestructiveButton
             onClick={() => remove.mutate()}
             disabled={remove.isPending}
-            className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-opacity duration-150 ease-standard hover:opacity-90 disabled:opacity-50"
           >
             Delete preset
-          </button>
-        </>
-      }
-    >
-      <p className="text-sm text-text-2">
-        Delete{" "}
-        <strong className="font-mono font-semibold text-text-1">
-          @preset/{preset.name}
-        </strong>
-        ? Requests referencing it will start failing immediately.
-      </p>
-    </Modal>
+          </DestructiveButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -905,7 +919,6 @@ function PresetsPage() {
             say(`Restored as revision ${revision}`);
             await reload();
           }}
-          onError={(message) => say(message, true)}
         />
       )}
       {modal?.kind === "delete" && (
@@ -917,7 +930,6 @@ function PresetsPage() {
             say("Preset deleted");
             await reload();
           }}
-          onError={(message) => say(message, true)}
         />
       )}
     </div>

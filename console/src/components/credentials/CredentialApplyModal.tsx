@@ -6,7 +6,7 @@ import {
   hasSecretValue,
 } from "@/components/credentials/CredentialFields";
 import { GhostButton, PrimaryButton } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
+import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CredentialField } from "@/lib/api";
 
 // CredentialApplyModal is the one flow that stores a provider credential:
@@ -84,37 +84,79 @@ export function CredentialApplyModal({
 
   if (outcome) {
     return (
-      <Modal
-        title={title}
-        onClose={onClose}
-        footer={<PrimaryButton onClick={onClose}>Done</PrimaryButton>}
+      <Dialog
+        open
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
       >
-        {outcome.valid === true ? (
-          <p className="text-sm text-success">
-            Applied and validated — the credential works.
-          </p>
-        ) : outcome.valid === false ? (
-          <p className="text-sm text-warning">
-            Applied, but validation failed — the provider rejected the
-            credential. It is stored; replace it when you have the correct
-            value.
-          </p>
-        ) : (
-          <p className="text-sm text-text-2">
-            Applied. Validation could not run
-            {outcome.validationError ? `: ${outcome.validationError}` : ""}.
-          </p>
-        )}
-      </Modal>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            {outcome.valid === true ? (
+              <p className="text-sm text-success">
+                Applied and validated — the credential works.
+              </p>
+            ) : outcome.valid === false ? (
+              <p className="text-sm text-warning">
+                Applied, but validation failed — the provider rejected the
+                credential. It is stored; replace it when you have the correct
+                value.
+              </p>
+            ) : (
+              <p className="text-sm text-text-2">
+                Applied. Validation could not run
+                {outcome.validationError ? `: ${outcome.validationError}` : ""}.
+              </p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <PrimaryButton onClick={onClose}>Done</PrimaryButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     );
   }
 
   return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-3">
+            {description && <p className="text-sm text-text-3">{description}</p>}
+            {children}
+            {fields.length === 0 ? (
+              // Until the caller's picker settles the address, an empty field
+              // list only means "nothing chosen yet" — say nothing.
+              ready && (
+                <p className="text-sm text-text-3">
+                  This provider declares no credential contract, so there is
+                  nothing to apply.
+                </p>
+              )
+            ) : (
+              <CredentialFieldInputs
+                fields={fields}
+                values={values}
+                onChange={(id, value) =>
+                  setValues((previous) => ({ ...previous, [id]: value }))
+                }
+              />
+            )}
+          </div>
+        </DialogBody>
+        <DialogError>{error}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose} disabled={busy}>
             Cancel
           </GhostButton>
@@ -124,32 +166,8 @@ export function CredentialApplyModal({
           >
             {busy ? "Applying…" : applyLabel}
           </PrimaryButton>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        {description && <p className="text-sm text-text-3">{description}</p>}
-        {error && <p className="text-xs text-error">{error}</p>}
-        {children}
-        {fields.length === 0 ? (
-          // Until the caller's picker settles the address, an empty field
-          // list only means "nothing chosen yet" — say nothing.
-          ready && (
-            <p className="text-sm text-text-3">
-              This provider declares no credential contract, so there is
-              nothing to apply.
-            </p>
-          )
-        ) : (
-          <CredentialFieldInputs
-            fields={fields}
-            values={values}
-            onChange={(id, value) =>
-              setValues((previous) => ({ ...previous, [id]: value }))
-            }
-          />
-        )}
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

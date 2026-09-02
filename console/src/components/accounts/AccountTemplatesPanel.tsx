@@ -10,7 +10,7 @@ import {
   PrimaryButton,
 } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { SidePanel } from "@/components/ui/SidePanel";
+import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   createAccountTemplate,
   CREDENTIAL_STRATEGY_LABELS,
@@ -211,102 +211,114 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
   const rows = templates.data ?? [];
 
   return (
-    <SidePanel title="Account templates" onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-text-3">
-          An account template names creation defaults once. Creating an
-          account from it stamps copies, so editing a template never rewrites
-          an account it already created.
-        </p>
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Account templates</SheetTitle>
+        </SheetHeader>
+        <SheetBody>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-text-3">
+              An account template names creation defaults once. Creating an
+              account from it stamps copies, so editing a template never rewrites
+              an account it already created.
+            </p>
 
-        {notice && (
-          <p
-            className={`text-sm ${notice.error ? "text-error" : "text-success"}`}
-          >
-            {notice.text}
-          </p>
-        )}
-
-        {templates.error ? (
-          <p className="text-sm text-text-3">
-            Failed to load templates:{" "}
-            {templates.error instanceof Error
-              ? templates.error.message
-              : String(templates.error)}
-          </p>
-        ) : templates.isPending ? (
-          <p className="text-sm text-text-3">Loading templates…</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-text-3">No templates yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {rows.map((template) => (
-              <li
-                key={template.id}
-                className="rounded-sm border border-border-1 bg-bg-panel px-3 py-2"
+            {notice && (
+              <p
+                className={`text-sm ${notice.error ? "text-error" : "text-success"}`}
               >
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreating(false);
-                      setOpen(open === template.id ? null : template.id);
-                    }}
-                    className="flex-1 text-left text-sm text-text-1 transition-colors duration-150 ease-standard hover:text-accent-link"
-                  >
-                    {template.name || template.id}
-                    <span className="ml-2 font-mono text-xs text-text-4">
-                      {template.id}
-                    </span>
-                  </button>
-                  <span className="text-xs text-text-3">
-                    {
-                      CREDENTIAL_STRATEGY_LABELS[
-                        template.credential_strategy ?? "operator_first"
-                      ]
-                    }
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => remove.mutate(template.id)}
-                    disabled={remove.isPending}
-                    aria-label={`Delete the ${template.id} template`}
-                    className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </div>
-                {open === template.id && (
-                  <div className="mt-3">
-                    <TemplateEditor key={template.id} template={template} />
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+                {notice.text}
+              </p>
+            )}
 
-        {creating ? (
-          <CreateTemplateForm
-            onCreated={async () => {
-              setCreating(false);
-              setNotice({ text: "Template created" });
-              await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
-            }}
-          />
-        ) : (
-          <div>
-            <GhostButton
-              onClick={() => {
-                setOpen(null);
-                setCreating(true);
-              }}
-            >
-              New template
-            </GhostButton>
+            {templates.error ? (
+              <p className="text-sm text-text-3">
+                Failed to load templates:{" "}
+                {templates.error instanceof Error
+                  ? templates.error.message
+                  : String(templates.error)}
+              </p>
+            ) : templates.isPending ? (
+              <p className="text-sm text-text-3">Loading templates…</p>
+            ) : rows.length === 0 ? (
+              <p className="text-sm text-text-3">No templates yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {rows.map((template) => (
+                  <li
+                    key={template.id}
+                    className="rounded-sm border border-border-1 bg-bg-panel px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreating(false);
+                          setOpen(open === template.id ? null : template.id);
+                        }}
+                        className="flex-1 text-left text-sm text-text-1 transition-colors duration-150 ease-standard hover:text-accent-link"
+                      >
+                        {template.name || template.id}
+                        <span className="ml-2 font-mono text-xs text-text-4">
+                          {template.id}
+                        </span>
+                      </button>
+                      <span className="text-xs text-text-3">
+                        {
+                          CREDENTIAL_STRATEGY_LABELS[
+                            template.credential_strategy ?? "operator_first"
+                          ]
+                        }
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => remove.mutate(template.id)}
+                        disabled={remove.isPending}
+                        aria-label={`Delete the ${template.id} template`}
+                        className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                    {open === template.id && (
+                      <div className="mt-3">
+                        <TemplateEditor key={template.id} template={template} />
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {creating ? (
+              <CreateTemplateForm
+                onCreated={async () => {
+                  setCreating(false);
+                  setNotice({ text: "Template created" });
+                  await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
+                }}
+              />
+            ) : (
+              <div>
+                <GhostButton
+                  onClick={() => {
+                    setOpen(null);
+                    setCreating(true);
+                  }}
+                >
+                  New template
+                </GhostButton>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </SidePanel>
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }

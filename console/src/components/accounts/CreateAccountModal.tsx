@@ -7,7 +7,7 @@ import {
   INPUT_CLASS,
   PrimaryButton,
 } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
+import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/Select";
 import {
   createAccount,
@@ -60,11 +60,80 @@ export function CreateAccountModal({
   });
 
   return (
-    <Modal
-      title="New account"
-      onClose={onClose}
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New account</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-4">
+            <Field
+              label="Account ID"
+              hint="The identifier keys and BYOK credentials are addressed by. It cannot change later."
+            >
+              <input
+                value={id}
+                onChange={(event) => setId(event.target.value)}
+                placeholder="acme"
+                autoComplete="off"
+                spellCheck={false}
+                className={`${INPUT_CLASS} font-mono`}
+              />
+            </Field>
+            <Field label="Name" hint="What a person calls this account. Optional.">
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Acme Corp"
+                autoComplete="off"
+                className={INPUT_CLASS}
+              />
+            </Field>
+            {(templates.data?.length ?? 0) > 0 && (
+              <Field
+                label="Start from a template"
+                hint="The account starts with the template's limits, credential strategy, BYOK policy, and provider access."
+              >
+                <Select
+                  value={template}
+                  onChange={(event) => setTemplate(event.target.value)}
+                  aria-label="Account template"
+                >
+                  <option value="">No template — open defaults</option>
+                  {(templates.data ?? []).map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name || entry.id}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {!template && (
+              <Field label="Credential strategy">
+                <Select
+                  value={strategy}
+                  onChange={(event) =>
+                    setStrategy(event.target.value as CredentialStrategy)
+                  }
+                  aria-label="Credential strategy"
+                >
+                  {STRATEGIES.map((option) => (
+                    <option key={option} value={option}>
+                      {CREDENTIAL_STRATEGY_LABELS[option]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </div>
+        </DialogBody>
+        <DialogError>{error}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
           <PrimaryButton
             onClick={() => create.mutate()}
@@ -72,70 +141,8 @@ export function CreateAccountModal({
           >
             Create account
           </PrimaryButton>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <Field
-          label="Account ID"
-          hint="The identifier keys and BYOK credentials are addressed by. It cannot change later."
-        >
-          <input
-            value={id}
-            onChange={(event) => setId(event.target.value)}
-            placeholder="acme"
-            autoComplete="off"
-            spellCheck={false}
-            className={`${INPUT_CLASS} font-mono`}
-          />
-        </Field>
-        <Field label="Name" hint="What a person calls this account. Optional.">
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Acme Corp"
-            autoComplete="off"
-            className={INPUT_CLASS}
-          />
-        </Field>
-        {(templates.data?.length ?? 0) > 0 && (
-          <Field
-            label="Start from a template"
-            hint="The account starts with the template's limits, credential strategy, BYOK policy, and provider access."
-          >
-            <Select
-              value={template}
-              onChange={(event) => setTemplate(event.target.value)}
-              aria-label="Account template"
-            >
-              <option value="">No template — open defaults</option>
-              {(templates.data ?? []).map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.name || entry.id}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        {!template && (
-          <Field label="Credential strategy">
-            <Select
-              value={strategy}
-              onChange={(event) =>
-                setStrategy(event.target.value as CredentialStrategy)
-              }
-              aria-label="Credential strategy"
-            >
-              {STRATEGIES.map((option) => (
-                <option key={option} value={option}>
-                  {CREDENTIAL_STRATEGY_LABELS[option]}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        {error && <p className="text-sm text-error">{error}</p>}
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
