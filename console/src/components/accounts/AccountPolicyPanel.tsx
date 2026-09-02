@@ -367,14 +367,6 @@ export function AccountPolicyPanel({
             </span>
           </span>
         </label>
-        <div>
-          <PrimaryButton
-            onClick={() => save.mutate({ byok_policy: byokBody() })}
-            disabled={byokInvalid || save.isPending}
-          >
-            Save BYOK rule
-          </PrimaryButton>
-        </div>
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
@@ -448,15 +440,15 @@ export function AccountPolicyPanel({
             )}
           </div>
         )}
-        <div>
-          <PrimaryButton
-            onClick={() => save.mutate({ access: accessBody() })}
-            disabled={accessInvalid || save.isPending}
-          >
-            Save provider access
-          </PrimaryButton>
-        </div>
       </fieldset>
+      <div>
+        <PrimaryButton
+          onClick={() => save.mutate({ byok_policy: byokBody(), access: accessBody() })}
+          disabled={byokInvalid || accessInvalid || save.isPending}
+        >
+          Save policy
+        </PrimaryButton>
+      </div>
     </section>
   );
 }

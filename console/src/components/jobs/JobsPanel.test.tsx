@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { JobsPanel } from "./JobsPanel";
@@ -15,6 +15,7 @@ import { JobsPanel } from "./JobsPanel";
 const gateway = vi.hoisted(() => ({
   jobs: [] as unknown[],
   models: [] as unknown[],
+  cancelled: [] as string[],
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -26,6 +27,10 @@ vi.mock("@/lib/api", async (importOriginal) => {
     onCredentialChange: () => () => {},
     listJobs: async () => ({ jobs: gateway.jobs, capped: false }),
     listModels: async () => gateway.models,
+    cancelJob: async (jobID: string) => {
+      gateway.cancelled.push(jobID);
+      return {};
+    },
     // A fetch here would mean the panel decided to play something. Every test
     // in this file asserts it did not, so a call is a failure rather than a
     // fixture.
@@ -44,6 +49,7 @@ function nowSeconds(): number {
 beforeEach(() => {
   gateway.jobs = [];
   gateway.models = [];
+  gateway.cancelled = [];
 });
 
 afterEach(cleanup);
@@ -178,4 +184,27 @@ test("a running job renders its state as a lifecycle pill", async () => {
   expect(classes).toContain("rounded-full");
   expect(classes).toContain("bg-info-tint");
   expect(screen.queryByText("in_progress")).toBeNull();
+});
+
+// A cancel ends a job the operator paid to start, so it travels only after
+// the dialog that names the job confirms it.
+test("cancels a running job only after the operator confirms", async () => {
+  gateway.jobs = [
+    {
+      id: "job-running",
+      model: "mock/video-1",
+      status: "in_progress",
+      created_at: nowSeconds() - 30,
+    },
+  ];
+  mount();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+  const dialog = await screen.findByRole("dialog", { name: "Cancel job" });
+  expect(within(dialog).getByText("job-running")).toBeTruthy();
+  expect(gateway.cancelled).toEqual([]);
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel job" }));
+
+  await waitFor(() => expect(gateway.cancelled).toEqual(["job-running"]));
 });

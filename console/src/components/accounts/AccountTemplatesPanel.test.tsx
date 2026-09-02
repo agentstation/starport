@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -129,21 +130,30 @@ test("saves a template's BYOK rule through the shared policy panel", async () =>
 
   fireEvent.click(await screen.findByText("Org default"));
   fireEvent.click(screen.getByRole("radio", { name: /Not at all/ }));
-  fireEvent.click(screen.getByText("Save BYOK rule"));
+  fireEvent.click(screen.getByText("Save policy"));
 
   await waitFor(() => expect(gateway.updated).toHaveLength(1));
   expect(gateway.updated).toEqual([
-    { templateId: "org-default", body: { byok_policy: { mode: "none" } } },
+    {
+      templateId: "org-default",
+      body: { byok_policy: { mode: "none" }, access: [] },
+    },
   ]);
 });
 
-// Deleting is addressed by id and touches nothing else.
-test("deletes one template", async () => {
+// Deleting is addressed by id and touches nothing else, and it travels only
+// after the operator confirms it in the dialog that names the template.
+test("deletes one template only after the operator confirms", async () => {
   mount();
 
   fireEvent.click(
     await screen.findByRole("button", { name: "Delete the trial template" }),
   );
+  const dialog = await screen.findByRole("dialog", { name: "Delete template" });
+  expect(within(dialog).getByText("trial")).toBeTruthy();
+  expect(gateway.deleted).toEqual([]);
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Delete template" }));
 
   await waitFor(() => expect(gateway.deleted).toEqual(["trial"]));
 });

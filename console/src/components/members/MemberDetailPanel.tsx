@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
+import { ConfirmDialog, reasonOf } from "@/components/ui/ConfirmDialog";
 import { Field, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -60,12 +61,16 @@ export function MemberDetailPanel({
       report(`Grant failed: ${error instanceof Error ? error.message : error}`),
   });
 
+  // A removal opens a dialog first. The write travels only from there, and
+  // a refusal stays in the dialog's error slot until the operator closes it.
+  const [revoking, setRevoking] = useState<string | null>(null);
   const revoke = useMutation({
     mutationFn: (accountId: string) =>
       deleteAccountGrant({ account_id: accountId, user_id: member.id }),
-    onSuccess: refresh,
-    onError: (error) =>
-      report(`Remove failed: ${error instanceof Error ? error.message : error}`),
+    onSuccess: async () => {
+      setRevoking(null);
+      await refresh();
+    },
   });
 
   const granted = new Set((grants.data ?? []).map((row) => row.account_id));
@@ -117,8 +122,7 @@ export function MemberDetailPanel({
                       {row.account_id}
                     </span>
                     <RowAction
-                      onClick={() => revoke.mutate(row.account_id)}
-                      disabled={revoke.isPending}
+                      onClick={() => setRevoking(row.account_id)}
                       aria-label={`Remove the ${row.account_id} grant`}
                     >
                       remove
@@ -180,6 +184,29 @@ export function MemberDetailPanel({
           </div>
         </SheetBody>
       </SheetContent>
+      {revoking !== null && (
+        <ConfirmDialog
+          title="Remove grant"
+          action="Remove grant"
+          error={revoke.error ? `Remove failed: ${reasonOf(revoke.error)}` : ""}
+          pending={revoke.isPending}
+          onConfirm={() => revoke.mutate(revoking)}
+          onClose={() => {
+            revoke.reset();
+            setRevoking(null);
+          }}
+        >
+          <p>
+            Remove the <strong className="text-text-1">{revoking}</strong> grant
+            from{" "}
+            <strong className="text-text-1">
+              {member.display_name || member.email || member.id}
+            </strong>
+            ? They reach {revoking} only through a team grant from the next
+            request on.
+          </p>
+        </ConfirmDialog>
+      )}
     </Sheet>
   );
 }

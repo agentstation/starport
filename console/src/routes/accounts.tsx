@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { AccountPolicyPanel } from "@/components/accounts/AccountPolicyPanel";
 import { AccountTemplatesPanel } from "@/components/accounts/AccountTemplatesPanel";
 import { CreateAccountModal } from "@/components/accounts/CreateAccountModal";
+import { DeleteAccountModal } from "@/components/accounts/DeleteAccountModal";
 import { ProviderSpendPanel } from "@/components/accounts/ProviderSpendPanel";
 import { ByokPanel } from "@/components/credentials/ByokPanel";
 import { BudgetLine } from "@/components/ui/BudgetLine";
@@ -19,7 +20,6 @@ import {
   ApiError,
   CREDENTIAL_STRATEGY_LABELS,
   DEFAULT_ACCOUNT_ID,
-  deleteAccount,
   updateAccount,
   type CredentialStrategy,
   type GatewayKey,
@@ -34,7 +34,7 @@ import {
   formatWindow,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
-import { announce, report } from "@/lib/mutations";
+import { announce } from "@/lib/mutations";
 
 // An account is the unit an operator governs. Keys belong to one, limits meter
 // the sum across all of its keys, and the provider credentials it brings for
@@ -278,16 +278,8 @@ function AccountsPage() {
     enabled: access,
   });
 
-  const remove = useMutation({
-    mutationFn: (accountId: string) => deleteAccount(accountId),
-    onSuccess: async (_result, accountId) => {
-      announce(`Account ${accountId} deleted`);
-      setSelected(null);
-      await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
-    },
-    onError: (error) =>
-      report(`Delete failed: ${error instanceof Error ? error.message : error}`),
-  });
+  // A delete opens a dialog first; the write travels only from there.
+  const [deleting, setDeleting] = useState<Account | null>(null);
 
   const rows = accounts.data ?? [];
   const keysFor = (accountId: string) =>
@@ -364,8 +356,7 @@ function AccountsPage() {
                     {account.id !== DEFAULT_ACCOUNT_ID && (
                       <button
                         type="button"
-                        onClick={() => remove.mutate(account.id)}
-                        disabled={remove.isPending}
+                        onClick={() => setDeleting(account)}
                         aria-label={`Delete the ${account.id} account`}
                         className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
                       >
@@ -410,6 +401,20 @@ function AccountsPage() {
           account={open}
           keys={keysFor(open.id)}
           onClose={() => setSelected(null)}
+        />
+      )}
+      {deleting && (
+        <DeleteAccountModal
+          account={deleting}
+          keyCount={keysFor(deleting.id).length}
+          onClose={() => setDeleting(null)}
+          onDeleted={async () => {
+            const accountId = deleting.id;
+            setDeleting(null);
+            announce(`Account ${accountId} deleted`);
+            setSelected(null);
+            await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
+          }}
         />
       )}
       {creating && (

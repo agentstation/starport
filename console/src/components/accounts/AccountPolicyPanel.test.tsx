@@ -78,11 +78,11 @@ test("saves the no-BYOK rule", async () => {
   mount();
 
   fireEvent.click(screen.getByRole("radio", { name: /Not at all/ }));
-  fireEvent.click(screen.getByText("Save BYOK rule"));
+  fireEvent.click(screen.getByText("Save policy"));
 
   await waitFor(() => expect(gateway.updated).toHaveLength(1));
   expect(gateway.updated).toEqual([
-    { accountId: "acme", body: { byok_policy: { mode: "none" } } },
+    { accountId: "acme", body: { byok_policy: { mode: "none" }, access: [] } },
   ]);
 });
 
@@ -95,20 +95,20 @@ test("saves a selected-providers BYOK rule, and refuses an empty one", async () 
     screen.getByRole("radio", { name: /Only for selected providers/ }),
   );
   expect(
-    screen.getByText("Save BYOK rule").hasAttribute("disabled"),
+    screen.getByText("Save policy").hasAttribute("disabled"),
   ).toBe(true);
 
   await waitFor(() =>
     expect(screen.getByRole("checkbox", { name: "BYOK for Groq" })).toBeTruthy(),
   );
   fireEvent.click(screen.getByRole("checkbox", { name: "BYOK for Groq" }));
-  fireEvent.click(screen.getByText("Save BYOK rule"));
+  fireEvent.click(screen.getByText("Save policy"));
 
   await waitFor(() => expect(gateway.updated).toHaveLength(1));
   expect(gateway.updated).toEqual([
     {
       accountId: "acme",
-      body: { byok_policy: { mode: "selected", providers: ["groq"] } },
+      body: { byok_policy: { mode: "selected", providers: ["groq"] }, access: [] },
     },
   ]);
 });
@@ -136,11 +136,11 @@ test("clears a stored BYOK rule with the all sentinel", async () => {
   ).toBe(true);
 
   fireEvent.click(screen.getByRole("radio", { name: /For every provider/ }));
-  fireEvent.click(screen.getByText("Save BYOK rule"));
+  fireEvent.click(screen.getByText("Save policy"));
 
   await waitFor(() => expect(gateway.updated).toHaveLength(1));
   expect(gateway.updated).toEqual([
-    { accountId: "acme", body: { byok_policy: { mode: "all" } } },
+    { accountId: "acme", body: { byok_policy: { mode: "all" }, access: [] } },
   ]);
 });
 
@@ -159,11 +159,11 @@ test("grants a provider with every model as the unasked default", async () => {
     ).toBeTruthy(),
   );
   fireEvent.click(screen.getByRole("checkbox", { name: "Access to Groq" }));
-  fireEvent.click(screen.getByText("Save provider access"));
+  fireEvent.click(screen.getByText("Save policy"));
 
   await waitFor(() => expect(gateway.updated).toHaveLength(1));
   expect(gateway.updated).toEqual([
-    { accountId: "acme", body: { access: [{ provider: "groq" }] } },
+    { accountId: "acme", body: { byok_policy: { mode: "all" }, access: [{ provider: "groq" }] } },
   ]);
 });
 
@@ -186,17 +186,17 @@ test("narrows one provider to chosen models through the opt-in", async () => {
     screen.getByRole("checkbox", { name: "Only specific models on Groq" }),
   );
   expect(
-    screen.getByText("Save provider access").hasAttribute("disabled"),
+    screen.getByText("Save policy").hasAttribute("disabled"),
   ).toBe(true);
 
   fireEvent.click(screen.getByRole("checkbox", { name: "Grant llama-b" }));
-  fireEvent.click(screen.getByText("Save provider access"));
+  fireEvent.click(screen.getByText("Save policy"));
 
   await waitFor(() => expect(gateway.updated).toHaveLength(1));
   expect(gateway.updated).toEqual([
     {
       accountId: "acme",
-      body: { access: [{ provider: "groq", models: ["llama-b"] }] },
+      body: { byok_policy: { mode: "all" }, access: [{ provider: "groq", models: ["llama-b"] }] },
     },
   ]);
 });
@@ -228,10 +228,10 @@ test("clears stored grants with the empty-list sentinel", async () => {
   fireEvent.click(
     screen.getByRole("radio", { name: /Every provider and model/ }),
   );
-  fireEvent.click(screen.getByText("Save provider access"));
+  fireEvent.click(screen.getByText("Save policy"));
 
   await waitFor(() => expect(gateway.updated).toHaveLength(1));
   expect(gateway.updated).toEqual([
-    { accountId: "acme", body: { access: [] } },
+    { accountId: "acme", body: { byok_policy: { mode: "all" }, access: [] } },
   ]);
 });

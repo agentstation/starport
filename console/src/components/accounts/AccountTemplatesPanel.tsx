@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { AccountPolicyPanel } from "@/components/accounts/AccountPolicyPanel";
+import { ConfirmDialog, reasonOf } from "@/components/ui/ConfirmDialog";
 import {
   Field,
   GhostButton,
@@ -21,7 +22,7 @@ import {
   type CredentialStrategy,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { announce, report } from "@/lib/mutations";
+import { announce } from "@/lib/mutations";
 
 // AccountTemplatesPanel manages the account templates this gateway holds. A
 // template names creation defaults once — limits, credential strategy, BYOK
@@ -193,15 +194,17 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
     ...queries.accountTemplates(),
   });
 
+  // A delete opens a dialog first. The write travels only from there, and
+  // a refusal stays in the dialog's error slot until the operator closes it.
+  const [deleting, setDeleting] = useState<string | null>(null);
   const remove = useMutation({
     mutationFn: (templateId: string) => deleteAccountTemplate(templateId),
     onSuccess: async (_result, templateId) => {
+      setDeleting(null);
       announce(`Template ${templateId} deleted`);
       setOpen((current) => (current === templateId ? null : current));
       await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
     },
-    onError: (error) =>
-      report(`Delete failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const rows = templates.data ?? [];
@@ -270,8 +273,7 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => remove.mutate(template.id)}
-                        disabled={remove.isPending}
+                        onClick={() => setDeleting(template.id)}
                         aria-label={`Delete the ${template.id} template`}
                         className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
                       >
@@ -311,6 +313,25 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
           </div>
         </SheetBody>
       </SheetContent>
+      {deleting !== null && (
+        <ConfirmDialog
+          title="Delete template"
+          action="Delete template"
+          error={remove.error ? `Delete failed: ${reasonOf(remove.error)}` : ""}
+          pending={remove.isPending}
+          onConfirm={() => remove.mutate(deleting)}
+          onClose={() => {
+            remove.reset();
+            setDeleting(null);
+          }}
+        >
+          <p>
+            Delete the <strong className="text-text-1">{deleting}</strong>{" "}
+            template? Accounts already stamped from it keep their settings. No
+            new account can start from it.
+          </p>
+        </ConfirmDialog>
+      )}
     </Sheet>
   );
 }

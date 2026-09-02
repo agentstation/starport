@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { DeleteTeamModal } from "@/components/teams/DeleteTeamModal";
 import { TeamDetailPanel } from "@/components/teams/TeamDetailPanel";
 import { INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { TableSkeleton } from "@/components/ui/skeleton";
@@ -11,7 +12,7 @@ import {
   accessMessage,
   ApiError,
   createTeam,
-  deleteTeam,
+  type Team,
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
@@ -60,16 +61,8 @@ function TeamsPage() {
       report(`Create failed: ${error instanceof Error ? error.message : error}`),
   });
 
-  const remove = useMutation({
-    mutationFn: (teamId: string) => deleteTeam(teamId),
-    onSuccess: async (_result, teamId) => {
-      announce("Team deleted");
-      if (selected === teamId) setSelected(null);
-      await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
-    },
-    onError: (error) =>
-      report(`Delete failed: ${error instanceof Error ? error.message : error}`),
-  });
+  // A delete opens a dialog first; the write travels only from there.
+  const [deleting, setDeleting] = useState<Team | null>(null);
 
   const rows = teams.data ?? [];
 
@@ -134,8 +127,7 @@ function TeamsPage() {
                     </RowAction>
                     <button
                       type="button"
-                      onClick={() => remove.mutate(team.id)}
-                      disabled={remove.isPending}
+                      onClick={() => setDeleting(team)}
                       aria-label={`Delete the ${team.name} team`}
                       className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
                     >
@@ -182,6 +174,19 @@ function TeamsPage() {
       </div>
       {body}
       {open && <TeamDetailPanel team={open} onClose={() => setSelected(null)} />}
+      {deleting && (
+        <DeleteTeamModal
+          team={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={async () => {
+            const teamId = deleting.id;
+            setDeleting(null);
+            announce("Team deleted");
+            if (selected === teamId) setSelected(null);
+            await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
+          }}
+        />
+      )}
     </div>
   );
 }

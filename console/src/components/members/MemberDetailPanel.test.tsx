@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -95,7 +96,8 @@ test("grants an account to the member", async () => {
 });
 
 // Removing a direct grant names the whole row: the account and the member.
-test("removes a direct grant", async () => {
+// The write travels only after the dialog that names both confirms it.
+test("removes a direct grant only after the operator confirms", async () => {
   mount();
 
   fireEvent.click(
@@ -103,6 +105,11 @@ test("removes a direct grant", async () => {
       name: "Remove the acct-direct grant",
     }),
   );
+  const dialog = await screen.findByRole("dialog", { name: "Remove grant" });
+  expect(within(dialog).getByText("acct-direct")).toBeTruthy();
+  expect(gateway.removed).toEqual([]);
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Remove grant" }));
 
   await waitFor(() =>
     expect(gateway.removed).toEqual([
