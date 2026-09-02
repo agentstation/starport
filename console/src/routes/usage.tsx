@@ -858,7 +858,7 @@ function UsagePage() {
           {!hasFilters && (
             <pre className="mt-1 max-w-full overflow-x-auto rounded-sm border border-border-1 bg-bg-raised px-4 py-3 text-left font-mono text-xs leading-5 text-text-2">
               {`curl ${window.location.origin}/v1/chat/completions \\
-  -H "Authorization: Bearer $STARPORT_KEY" \\
+  -H "Authorization: Bearer $STARPORT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"<model id from /models>","messages":[{"role":"user","content":"hello"}]}'`}
             </pre>
