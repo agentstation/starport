@@ -9,7 +9,7 @@ import {
   ApiError,
   type ActivityRecord,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { ACTIVITY_24H_LIMIT, queries } from "@/lib/queries";
 import { formatCount, formatMs, formatNanoUSD } from "@/lib/format";
 
 // bucketize folds activity records into hourly counts for the last day,
@@ -32,23 +32,53 @@ function bucketize(
   return buckets;
 }
 
+function sum(records: ActivityRecord[], value: (record: ActivityRecord) => number): number {
+  let total = 0;
+  for (const record of records) total += value(record);
+  return total;
+}
+
+// describeDelta compares one day against the day before it. A prior day of
+// nothing gives no rate to compare against, so the stat stays silent rather
+// than claiming an infinite rise.
+export function describeDelta(current: number, prior: number): string | null {
+  if (prior <= 0) return null;
+  const percent = Math.round(((current - prior) / prior) * 100);
+  if (percent === 0) return "±0%";
+  return `${percent > 0 ? "+" : "−"}${Math.abs(percent)}%`;
+}
+
 function Stat({
   label,
   value,
   detail,
   trend,
+  max,
+  delta,
 }: {
   label: string;
   value: string;
   detail?: string | null;
   trend?: number[];
+  max?: number;
+  delta?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="text-xs text-text-3">{label}</div>
-      <div className="font-mono text-xl font-medium tabular-nums text-text-1">{value}</div>
+      <div className="flex items-baseline gap-2">
+        <span className="font-mono text-xl font-medium tabular-nums text-text-1">{value}</span>
+        {delta && (
+          <span
+            className="text-xs tabular-nums text-text-3"
+            title="Against the 24 hours before this window"
+          >
+            {delta}
+          </span>
+        )}
+      </div>
       <div className="flex h-5 items-center gap-2">
-        {trend && <Sparkline points={trend} />}
+        {trend && <Sparkline points={trend} max={max} />}
         {detail && <span className="text-xs text-text-3">{detail}</span>}
       </div>
     </div>
@@ -64,12 +94,17 @@ function LockedCard({ children }: { children: ReactNode }) {
 }
 
 // StatsRow shows the last 24 hours of recorded traffic. Spend the gateway
-// could not price is surfaced as "without cost", never as zero.
+// could not price is surfaced as "without cost", never as zero. The
+// sparklines and the day-over-day deltas come from a bounded sample of the
+// request log. When the sample fills its bound, the newest requests alone
+// would draw a trend that contradicts the headline above it, so the card
+// drops the trend and says why.
 export function StatsRow() {
   const metrics = useQuery({
     ...queries.systemMetrics(),
   });
   const activity = useQuery(queries.adminActivity24h());
+  const prior = useQuery(queries.adminActivityPrior24h());
 
   if (metrics.isPending) return <StatSkeleton />;
   if (metrics.error) {
@@ -91,11 +126,19 @@ export function StatsRow() {
   const tokens = metrics.data?.tokens ?? {};
   const spend = metrics.data?.spend ?? {};
   const records = activity.data?.data ?? [];
-  const requestTrend = bucketize(records, () => 1);
-  const tokenTrend = bucketize(records, (record) => record.tokens?.total ?? 0);
-  const errorTrend = bucketize(records, (record) =>
-    record.status === "error" ? 1 : 0,
-  );
+  const priorRecords = prior.data?.data ?? [];
+  const capped = records.length >= ACTIVITY_24H_LIMIT;
+  const comparable =
+    Boolean(activity.data && prior.data) && !capped && priorRecords.length < ACTIVITY_24H_LIMIT;
+
+  const countTokens = (record: ActivityRecord) => record.tokens?.total ?? 0;
+  const countErrors = (record: ActivityRecord) => (record.status === "error" ? 1 : 0);
+  const requestTrend = capped ? undefined : bucketize(records, () => 1);
+  const tokenTrend = capped ? undefined : bucketize(records, countTokens);
+  const errorTrend = capped ? undefined : bucketize(records, countErrors);
+  const requestPeak = requestTrend ? Math.max(...requestTrend) : undefined;
+  const delta = (value: (record: ActivityRecord) => number) =>
+    comparable ? describeDelta(sum(records, value), sum(priorRecords, value)) : null;
 
   const total = requests.total ?? 0;
   const errors = requests.errors ?? 0;
@@ -107,14 +150,22 @@ export function StatsRow() {
           value={formatCount(total)}
           detail={`${formatCount(requests.rate_1min ?? 0)}/min now`}
           trend={requestTrend}
+          delta={delta(() => 1)}
         />
         <Stat
           label="Errors"
           value={formatCount(errors)}
           detail={total ? `${((errors / total) * 100).toFixed(1)}% of total` : null}
           trend={errorTrend}
+          max={requestPeak}
+          delta={delta(countErrors)}
         />
-        <Stat label="Tokens" value={formatCount(tokens.total ?? 0)} trend={tokenTrend} />
+        <Stat
+          label="Tokens"
+          value={formatCount(tokens.total ?? 0)}
+          trend={tokenTrend}
+          delta={delta(countTokens)}
+        />
         <Stat
           label="Spend"
           value={
@@ -141,7 +192,9 @@ export function StatsRow() {
       </div>
       <div className="mt-4 flex justify-end border-t border-border-1 pt-3">
         <span className="text-xs text-text-3">
-          Per-request detail arrives with the usage page
+          {capped
+            ? `Trends hidden: the sample holds only the newest ${formatCount(ACTIVITY_24H_LIMIT)} requests. Usage has the full window.`
+            : "Per-request detail arrives with the usage page"}
         </span>
       </div>
     </Card>

@@ -11,12 +11,22 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceDot,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-import { AXIS_TICK, CHART, ChartCard, ChartTip } from "@/components/ui/Chart";
+import {
+  AXIS_TICK,
+  CHART,
+  ChartCard,
+  ChartTip,
+  CURSOR,
+  USAGE_SYNC_ID,
+  endpointOf,
+  useChartMotion,
+} from "@/components/ui/Chart";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TableSkeleton } from "@/components/ui/skeleton";
@@ -33,13 +43,13 @@ import {
   providerLabel,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { bucketize, describeBuckets, type Bucket } from "@/lib/usageBuckets";
 
 const PAGE_LIMIT = 200;
 // Pages fetched eagerly so the charts and counts cover the window, not
 // just the first screen. Beyond this the counts report themselves as
 // partial with a "+" suffix.
 const AUTO_PAGES = 5;
-const BUCKETS = 32;
 const ROW_HEIGHT = 40;
 
 const RANGE_SECONDS: Record<string, number> = {
@@ -56,6 +66,23 @@ const RANGE_LABELS: Record<string, string> = {
   all: "all time",
 };
 const STATUSES = ["ok", "error", "cancelled"] as const;
+
+// The request stack: three steps a reader can tell apart. The legend under
+// the chart carries the same three, so the encoding is on the card.
+const REQUEST_SERIES = [
+  { name: "ok", color: CHART.neutralStrong, opacity: 0.45 },
+  { name: "cancelled", color: CHART.neutralSoft, opacity: 0.7 },
+  { name: "error", color: CHART.error, opacity: 0.8 },
+] as const;
+
+const requestsOf = (bucket: Bucket) => bucket.ok + bucket.cancelled + bucket.error;
+
+// titleOf reads the slice's own start-to-end heading from the hovered
+// point, so a tooltip names the exact slice and never only its tick.
+function titleOf(payload: readonly { payload?: unknown }[] | undefined, label: unknown): string {
+  const bucket = payload?.[0]?.payload as Bucket | undefined;
+  return bucket?.title ?? String(label ?? "");
+}
 
 // Recorded cost-unavailability reasons: an absent cost always carries
 // its reason, never a silent zero.
@@ -103,78 +130,6 @@ export const Route = createFileRoute("/usage")({
 
 function useActivityScope(enabled: boolean) {
   return useQuery({ ...queries.activityScope(), enabled });
-}
-
-// --- Chart buckets: fixed-width time slices over the selected window,
-// aggregated from the loaded records only.
-
-type Bucket = {
-  label: string;
-  iso: string;
-  ok: number;
-  error: number;
-  cancelled: number;
-  tokens: number;
-  spend: number;
-  latency: number | null;
-};
-
-function bucketize(records: ActivityRecord[], rangeSeconds: number | undefined): Bucket[] {
-  const end = Date.now();
-  let start: number;
-  if (rangeSeconds) {
-    start = end - rangeSeconds * 1000;
-  } else {
-    let min = Number.POSITIVE_INFINITY;
-    for (const record of records) {
-      const t = new Date(record.timestamp).getTime();
-      if (Number.isFinite(t) && t < min) min = t;
-    }
-    if (!Number.isFinite(min)) return [];
-    start = Math.min(min, end - 60_000);
-  }
-
-  const width = (end - start) / BUCKETS;
-  const shortWindow = end - start <= 26 * 3600 * 1000;
-  const raw = Array.from({ length: BUCKETS }, (_, index) => {
-    const at = new Date(start + index * width);
-    return {
-      label: shortWindow
-        ? at.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit" })
-        : at.toLocaleDateString("en-US", { month: "numeric", day: "numeric" }),
-      iso: at.toISOString(),
-      ok: 0,
-      error: 0,
-      cancelled: 0,
-      tokens: 0,
-      spend: 0,
-      latencyTotal: 0,
-      latencyCount: 0,
-    };
-  });
-
-  for (const record of records) {
-    const t = new Date(record.timestamp).getTime();
-    if (!Number.isFinite(t)) continue;
-    let index = Math.floor((t - start) / width);
-    if (index === BUCKETS) index = BUCKETS - 1;
-    if (index < 0 || index >= BUCKETS) continue;
-    const bucket = raw[index]!;
-    if (record.status === "ok") bucket.ok++;
-    else if (record.status === "error") bucket.error++;
-    else bucket.cancelled++;
-    bucket.tokens += record.tokens?.total ?? 0;
-    bucket.spend += (record.cost?.nano_usd ?? 0) / 1_000_000_000;
-    if (Number.isFinite(record.latency_ms)) {
-      bucket.latencyTotal += record.latency_ms ?? 0;
-      bucket.latencyCount++;
-    }
-  }
-
-  return raw.map(({ latencyTotal, latencyCount, ...bucket }) => ({
-    ...bucket,
-    latency: latencyCount ? latencyTotal / latencyCount : null,
-  }));
 }
 
 // --- Cells ---
@@ -574,10 +529,19 @@ function UsagePage() {
   const setSelected = (record: ActivityRecord | null) =>
     setSearch({ selected: record ? recordKey(record) : undefined });
 
-  const buckets = useMemo(
-    () => bucketize(records, rangeSeconds),
-    [records, rangeSeconds],
+  // A sample that still has pages behind it is the newest slice of the
+  // window, so the charts cover only what loaded and the caption says so.
+  const series = useMemo(
+    () => bucketize(records, rangeSeconds, { truncated: partial }),
+    [records, rangeSeconds, partial],
   );
+  const buckets = series.buckets;
+  const caption = describeBuckets(series, records.length);
+  const animate = useChartMotion();
+  const requestsEnd = endpointOf(buckets, requestsOf, CHART.neutral);
+  const tokensEnd = endpointOf(buckets, (bucket) => bucket.tokens, CHART.neutral);
+  const spendEnd = endpointOf(buckets, (bucket) => bucket.spendNano, CHART.neutral);
+  const latencyEnd = endpointOf(buckets, (bucket) => bucket.latency, CHART.neutral);
 
   const totals = useMemo(() => {
     let tokens = 0;
@@ -758,8 +722,14 @@ function UsagePage() {
                   )}
                 </>
               }
+              series={REQUEST_SERIES}
+              caption={caption}
             >
-              <BarChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <BarChart
+                data={buckets}
+                syncId={USAGE_SYNC_ID}
+                margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+              >
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -782,7 +752,7 @@ function UsagePage() {
                   content={({ active, payload, label }) => (
                     <ChartTip
                       active={active}
-                      label={label}
+                      label={titleOf(payload, label)}
                       rows={(payload ?? [])
                         .filter((item) => Number(item.value) > 0)
                         .map((item) => ({
@@ -793,14 +763,31 @@ function UsagePage() {
                     />
                   )}
                 />
-                <Bar dataKey="ok" stackId="req" name="ok" fill={CHART.neutral} fillOpacity={0.55} />
-                <Bar dataKey="cancelled" stackId="req" name="cancelled" fill={CHART.neutralSoft} fillOpacity={0.5} />
-                <Bar dataKey="error" stackId="req" name="error" fill={CHART.error} fillOpacity={0.8} />
+                {REQUEST_SERIES.map((item) => (
+                  <Bar
+                    key={item.name}
+                    dataKey={item.name}
+                    stackId="req"
+                    name={item.name}
+                    fill={item.color}
+                    fillOpacity={item.opacity}
+                    isAnimationActive={animate}
+                  />
+                ))}
+                {requestsEnd && <ReferenceDot {...requestsEnd} />}
               </BarChart>
             </ChartCard>
 
-            <ChartCard title="Tokens" value={`${formatCount(totals.tokens)}${suffix}`}>
-              <AreaChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+            <ChartCard
+              title="Tokens"
+              value={`${formatCount(totals.tokens)}${suffix}`}
+              caption={caption}
+            >
+              <AreaChart
+                data={buckets}
+                syncId={USAGE_SYNC_ID}
+                margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+              >
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -815,14 +802,15 @@ function UsagePage() {
                   tick={AXIS_TICK}
                   tickLine={false}
                   axisLine={false}
+                  allowDecimals={false}
                   tickFormatter={(value: number) => formatCount(value)}
                 />
                 <Tooltip
-                  cursor={{ stroke: CHART.grid }}
+                  cursor={CURSOR}
                   content={({ active, payload, label }) => (
                     <ChartTip
                       active={active}
-                      label={label}
+                      label={titleOf(payload, label)}
                       rows={(payload ?? []).map((item) => ({
                         name: "tokens",
                         value: formatCount(Number(item.value)),
@@ -838,7 +826,9 @@ function UsagePage() {
                   fillOpacity={0.12}
                   dot={false}
                   activeDot={{ r: 2.5, fill: CHART.neutral, stroke: "none" }}
+                  isAnimationActive={animate}
                 />
+                {tokensEnd && <ReferenceDot {...tokensEnd} />}
               </AreaChart>
             </ChartCard>
 
@@ -859,8 +849,13 @@ function UsagePage() {
                   "—"
                 )
               }
+              caption={caption}
             >
-              <AreaChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <AreaChart
+                data={buckets}
+                syncId={USAGE_SYNC_ID}
+                margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+              >
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -871,44 +866,49 @@ function UsagePage() {
                   minTickGap={32}
                 />
                 <YAxis
-                  width={44}
+                  width={60}
                   tick={AXIS_TICK}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(value: number) =>
-                    value === 0 ? "$0" : formatNanoUSD(value * 1_000_000_000)
-                  }
+                  tickFormatter={(value: number) => (value === 0 ? "$0" : formatNanoUSD(value))}
                 />
                 <Tooltip
-                  cursor={{ stroke: CHART.grid }}
+                  cursor={CURSOR}
                   content={({ active, payload, label }) => (
                     <ChartTip
                       active={active}
-                      label={label}
+                      label={titleOf(payload, label)}
                       rows={(payload ?? []).map((item) => ({
                         name: "spend",
-                        value: formatNanoUSD(Number(item.value) * 1_000_000_000),
+                        value: formatNanoUSD(Number(item.value)),
                       }))}
                     />
                   )}
                 />
                 <Area
-                  dataKey="spend"
+                  dataKey="spendNano"
                   stroke={CHART.neutral}
                   strokeWidth={1.5}
                   fill={CHART.neutral}
                   fillOpacity={0.12}
                   dot={false}
                   activeDot={{ r: 2.5, fill: CHART.neutral, stroke: "none" }}
+                  isAnimationActive={animate}
                 />
+                {spendEnd && <ReferenceDot {...spendEnd} />}
               </AreaChart>
             </ChartCard>
 
             <ChartCard
               title="Latency"
               value={totals.avgLatency !== undefined ? `${formatMs(totals.avgLatency)} avg` : "—"}
+              caption={caption}
             >
-              <LineChart data={buckets} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+              <LineChart
+                data={buckets}
+                syncId={USAGE_SYNC_ID}
+                margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+              >
                 <CartesianGrid stroke={CHART.grid} vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -926,11 +926,11 @@ function UsagePage() {
                   tickFormatter={(value: number) => formatMs(value)}
                 />
                 <Tooltip
-                  cursor={{ stroke: CHART.grid }}
+                  cursor={CURSOR}
                   content={({ active, payload, label }) => (
                     <ChartTip
                       active={active}
-                      label={label}
+                      label={titleOf(payload, label)}
                       rows={(payload ?? [])
                         .filter((item) => item.value !== null && item.value !== undefined)
                         .map((item) => ({
@@ -944,10 +944,11 @@ function UsagePage() {
                   dataKey="latency"
                   stroke={CHART.neutral}
                   strokeWidth={1.5}
-                  connectNulls
-                  dot={{ r: 1.5, fill: CHART.neutral, strokeWidth: 0 }}
+                  dot={false}
                   activeDot={{ r: 2.5, fill: CHART.neutral, stroke: "none" }}
+                  isAnimationActive={animate}
                 />
+                {latencyEnd && <ReferenceDot {...latencyEnd} />}
               </LineChart>
             </ChartCard>
           </div>
