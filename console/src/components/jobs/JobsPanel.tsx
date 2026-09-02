@@ -22,6 +22,7 @@ import {
 import { queries } from "@/lib/queries";
 import { formatMs, formatUnixTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { announce, report } from "@/lib/mutations";
 
 // A video job is the one piece of work in this gateway that outlives the
 // request that started it. Everything else on this console answers inside one
@@ -139,9 +140,6 @@ export function JobsPanel() {
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
 
   // The clock is state rather than a read at render time, because a running
   // job's elapsed time has to move without anything else changing. A poll would
@@ -171,22 +169,22 @@ export function JobsPanel() {
   const submit = useMutation({
     mutationFn: () => submitJob(model, prompt),
     onSuccess: async (job) => {
-      setNotice({ text: `Submitted ${job.id}` });
+      announce(`Submitted ${job.id}`);
       setPrompt("");
       await queryClient.invalidateQueries({ queryKey: queries.videoJobs().queryKey });
     },
     onError: (error) =>
-      setNotice({ text: `Submission refused: ${refusalText(error)}`, error: true }),
+      report(`Submission refused: ${refusalText(error)}`),
   });
 
   const stop = useMutation({
     mutationFn: (job: VideoJob) => cancelJob(job.id),
     onSuccess: async (_result, job) => {
-      setNotice({ text: `Cancelled ${job.id}` });
+      announce(`Cancelled ${job.id}`);
       await queryClient.invalidateQueries({ queryKey: queries.videoJobs().queryKey });
     },
     onError: (error) =>
-      setNotice({ text: `Cancel failed: ${refusalText(error)}`, error: true }),
+      report(`Cancel failed: ${refusalText(error)}`),
   });
 
   const rows = jobs.data?.jobs ?? [];
@@ -332,14 +330,6 @@ export function JobsPanel() {
           No model this deployment routes to serves video generation. The
           catalog names what each offering serves, so a provider that gains one
           shows up here without a console change.
-        </p>
-      )}
-      {notice && (
-        <p
-          data-testid="job-notice"
-          className={`text-sm ${notice.error ? "text-error" : "text-success"}`}
-        >
-          {notice.text}
         </p>
       )}
       {body}

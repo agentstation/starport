@@ -28,6 +28,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "recharts": "3.10.1",
+    "sonner": "^2.0.8",
     "streamdown": "2.6.0",
     "tailwind-merge": "3.6.0"
   },

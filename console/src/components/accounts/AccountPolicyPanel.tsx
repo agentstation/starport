@@ -9,6 +9,7 @@ import {
   type AccountProviderAccess,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
+import { announce, report } from "@/lib/mutations";
 
 // AccountPolicyPanel is the operator's policy for one account: whether it may
 // bring its own provider credentials, and which providers — and optionally
@@ -211,9 +212,6 @@ export function AccountPolicyPanel({
   const queryClient = useQueryClient();
   const [byok, setByok] = useState(() => byokDraftOf(account.byok_policy));
   const [access, setAccess] = useState(() => accessDraftOf(account.access));
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
 
   const catalog = useQuery({
     ...queries.providerCatalog(),
@@ -226,14 +224,11 @@ export function AccountPolicyPanel({
       access?: AccountProviderAccess[];
     }) => (saveBody ? saveBody(body) : updateAccount(account.id, body)),
     onSuccess: async () => {
-      setNotice({ text: "Policy saved" });
+      announce("Policy saved");
       await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
     },
     onError: (error) =>
-      setNotice({
-        text: `Save failed: ${error instanceof Error ? error.message : error}`,
-        error: true,
-      }),
+      report(`Save failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const toggleByokProvider = (providerId: string) => {
@@ -307,11 +302,6 @@ export function AccountPolicyPanel({
 
   return (
     <section data-testid="account-policy-panel" className="flex flex-col gap-4">
-      {notice && (
-        <p className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
-          {notice.text}
-        </p>
-      )}
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-xs font-medium text-text-2">

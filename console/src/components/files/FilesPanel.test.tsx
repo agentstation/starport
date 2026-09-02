@@ -9,6 +9,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
+import { Toaster } from "@/components/ui/sonner";
+
 import { FilesPanel } from "./FilesPanel";
 
 // The file surface has three properties an operator depends on, and each one
@@ -78,6 +80,7 @@ function mount() {
   return render(
     <QueryClientProvider client={client}>
       <FilesPanel />
+      <Toaster />
     </QueryClientProvider>,
   );
 }
@@ -127,10 +130,11 @@ test("a refused upload renders the reason the gateway gave", async () => {
     target: { files: [new File(["%PDF"], "big.pdf")] },
   });
 
-  const notice = await waitFor(() => screen.getByTestId("file-notice"));
-  expect(notice.textContent).toContain(
-    "The stored file limit for this account is full. Delete a file to make room.",
-  );
+  expect(
+    await screen.findByText(
+      "Upload refused: The stored file limit for this account is full. Delete a file to make room.",
+    ),
+  ).toBeTruthy();
 });
 
 // FIL-V20, third statement. A total alone answers a question nobody asked. The

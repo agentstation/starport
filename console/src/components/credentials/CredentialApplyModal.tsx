@@ -1,3 +1,4 @@
+import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import {
@@ -8,6 +9,7 @@ import {
 import { GhostButton, PrimaryButton } from "@/components/ui/Form";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CredentialField } from "@/lib/api";
+import { errorText } from "@/lib/mutations";
 
 // CredentialApplyModal is the one flow that stores a provider credential:
 // apply, then immediately validate, then say what happened — in the modal,
@@ -51,36 +53,26 @@ export function CredentialApplyModal({
   onClose: () => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
-  const submit = async () => {
-    setBusy(true);
-    setError(null);
-    try {
+  // submit applies, then validates. An apply failure stays in the dialog as a
+  // form error. A validation failure is an outcome: the credential was stored
+  // either way, and the operator needs to know it is in place but unproven.
+  const submit = useMutation({
+    mutationFn: async (): Promise<Outcome> => {
       await apply(credentialBody(fields, values));
-    } catch (applyError) {
-      setError(
-        `Apply failed: ${applyError instanceof Error ? applyError.message : applyError}`,
-      );
-      setBusy(false);
-      return;
-    }
-    try {
-      const result = await validate();
-      setOutcome({ valid: result?.valid !== false });
-    } catch (validationError) {
-      setOutcome({
-        valid: undefined,
-        validationError:
-          validationError instanceof Error
-            ? validationError.message
-            : String(validationError),
-      });
-    }
-    setBusy(false);
-  };
+      try {
+        const result = await validate();
+        return { valid: result?.valid !== false };
+      } catch (validationError) {
+        return { valid: undefined, validationError: errorText(validationError) };
+      }
+    },
+    onMutate: () => setError(null),
+    onSuccess: (result) => setOutcome(result),
+    onError: (applyError) => setError(`Apply failed: ${errorText(applyError)}`),
+  });
 
   if (outcome) {
     return (
@@ -157,14 +149,14 @@ export function CredentialApplyModal({
         </DialogBody>
         <DialogError>{error}</DialogError>
         <DialogFooter>
-          <GhostButton onClick={onClose} disabled={busy}>
+          <GhostButton onClick={onClose} disabled={submit.isPending}>
             Cancel
           </GhostButton>
           <PrimaryButton
-            onClick={() => void submit()}
-            disabled={!ready || !hasSecretValue(fields, values) || busy}
+            onClick={() => submit.mutate()}
+            disabled={!ready || !hasSecretValue(fields, values) || submit.isPending}
           >
-            {busy ? "Applying…" : applyLabel}
+            {submit.isPending ? "Applying…" : applyLabel}
           </PrimaryButton>
         </DialogFooter>
       </DialogContent>

@@ -30,6 +30,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 
 import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
 import { GitHubMark } from "@/components/ui/icons";
+import { Toaster } from "@/components/ui/sonner";
 import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
@@ -362,6 +363,7 @@ export function Shell({ children }: { children: ReactNode }) {
         )}
       </main>
       <CommandPalette />
+      <Toaster />
     </div>
   );
 }

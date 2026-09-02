@@ -1,7 +1,10 @@
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-// CopyButton copies text and confirms with a brief check mark.
+import { report } from "@/lib/mutations";
+
+// CopyButton copies text, says "Copied" for two seconds where a screen
+// reader hears it, and reports a copy the browser refused.
 export function CopyButton({
   text,
   label,
@@ -19,9 +22,9 @@ export function CopyButton({
       await navigator.clipboard.writeText(value);
       setCopied(true);
       clearTimeout(timer.current);
-      timer.current = setTimeout(() => setCopied(false), 1500);
+      timer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard access denied; nothing useful to show.
+      report("Copy failed. Select the text and copy it by hand.");
     }
   };
 
@@ -37,7 +40,7 @@ export function CopyButton({
       }`}
     >
       <Icon className="size-3.5" />
-      {label}
+      <span role="status">{copied ? "Copied" : label}</span>
     </button>
   );
 }

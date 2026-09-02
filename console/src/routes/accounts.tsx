@@ -31,6 +31,7 @@ import {
   formatWindow,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { announce, report } from "@/lib/mutations";
 
 // An account is the unit an operator governs. Keys belong to one, limits meter
 // the sum across all of its keys, and the provider credentials it brings for
@@ -240,9 +241,6 @@ function AccountsPage() {
   const setCreating = (open: boolean) => setSearch({ panel: open ? "create" : undefined });
   const setManagingTemplates = (open: boolean) =>
     setSearch({ panel: open ? "templates" : undefined });
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
 
   const accounts = useQuery({
     ...queries.accounts(),
@@ -256,15 +254,12 @@ function AccountsPage() {
   const remove = useMutation({
     mutationFn: (accountId: string) => deleteAccount(accountId),
     onSuccess: async (_result, accountId) => {
-      setNotice({ text: `Account ${accountId} deleted` });
+      announce(`Account ${accountId} deleted`);
       setSelected(null);
       await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
     },
     onError: (error) =>
-      setNotice({
-        text: `Delete failed: ${error instanceof Error ? error.message : error}`,
-        error: true,
-      }),
+      report(`Delete failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const rows = accounts.data ?? [];
@@ -378,11 +373,6 @@ function AccountsPage() {
           </PrimaryButton>
         </div>
       </div>
-      {notice && (
-        <p className={`text-sm ${notice.error ? "text-error" : "text-success"}`}>
-          {notice.text}
-        </p>
-      )}
       {body}
       {managingTemplates && (
         <AccountTemplatesPanel onClose={() => setManagingTemplates(false)} />
@@ -399,7 +389,7 @@ function AccountsPage() {
           onClose={() => setCreating(false)}
           onCreated={async (account) => {
             setCreating(false);
-            setNotice({ text: `Account ${account.id} created` });
+            announce(`Account ${account.id} created`);
             await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
             setSelected(account.id);
           }}

@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatRelativeTime, providerLabel } from "@/lib/format";
+import { announce, report } from "@/lib/mutations";
 
 // BYOK is a provider credential one account brings for itself. It is addressed
 // by account, never by gateway API key: the account's credentials outlive any
@@ -27,11 +28,7 @@ export function ByokPanel({ accountId }: { accountId: string }) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [provider, setProvider] = useState("");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
 
-  const say = (text: string, error = false) => setNotice({ text, error });
   // A stored credential changes what the provider can serve for this
   // account, so the status read refreshes with the list.
   const reload = () =>
@@ -66,26 +63,21 @@ export function ByokPanel({ accountId }: { accountId: string }) {
     mutationFn: (target: string) => validateBYOKCredential(accountId, target),
     onSuccess: (result, target) => {
       const valid = result?.valid !== false;
-      say(
-        `${nameOf(target)} BYOK credential is ${valid ? "valid" : "invalid"}`,
-        !valid,
-      );
+      if (valid) announce(`${nameOf(target)} BYOK credential is valid`);
+      else report(`${nameOf(target)} BYOK credential is invalid`);
     },
     onError: (error) =>
-      say(
-        `Validation failed: ${error instanceof Error ? error.message : error}`,
-        true,
-      ),
+      report(`Validation failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const remove = useMutation({
     mutationFn: (target: string) => deleteBYOKCredential(accountId, target),
     onSuccess: async (_result, target) => {
-      say(`${nameOf(target)} BYOK credential removed`);
+      announce(`${nameOf(target)} BYOK credential removed`);
       await reload();
     },
     onError: (error) =>
-      say(`Remove failed: ${error instanceof Error ? error.message : error}`, true),
+      report(`Remove failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const stored = credentials.data ?? [];
@@ -108,11 +100,6 @@ export function ByokPanel({ accountId }: { accountId: string }) {
         </p>
       </div>
 
-      {notice && (
-        <p className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
-          {notice.text}
-        </p>
-      )}
 
       {credentials.isPending ? (
         <p className="text-sm text-text-3">Loading BYOK credentials…</p>

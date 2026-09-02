@@ -1,11 +1,12 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { ChangesPanel } from "@/components/models/ChangesPanel";
 import { accessMessage, ApiError, refreshCatalog } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatRelativeTime, shortGenerationID } from "@/lib/format";
+import { announce, errorText, report } from "@/lib/mutations";
 
 // A catalog older than a week is worth flagging: an embedded bootstrap
 // snapshot ships with the binary and can predate the install by releases.
@@ -45,40 +46,25 @@ export function FreshnessBar() {
   });
   const [changesOpen, setChangesOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
-  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(noticeTimer.current), []);
-
-  const say = (text: string, error = false) => {
-    setNotice({ text, error });
-    clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 6000);
-  };
-
-  const refresh = async () => {
-    setRefreshing(true);
-    try {
-      const report = await refreshCatalog();
-      if (report?.changed) {
-        say(`Catalog updated to generation ${shortGenerationID(report.generation_id)}`);
+  const refresh = useMutation({
+    mutationFn: () => refreshCatalog(),
+    onSuccess: async (result) => {
+      if (result?.changed) {
+        announce(`Catalog updated to generation ${shortGenerationID(result.generation_id)}`);
       } else {
-        say("Catalog is already current");
+        announce("Catalog is already current");
       }
       await queryClient.invalidateQueries({ queryKey: queries.models().queryKey });
       await queryClient.invalidateQueries({ queryKey: queries.catalogMetadata().queryKey });
-    } catch (error) {
+    },
+    onError: (error) => {
       if (error instanceof ApiError && error.needsKey) {
-        say(accessMessage(error, "admin"), true);
+        report(accessMessage(error, "admin"));
       } else {
-        say(`Refresh failed: ${error instanceof Error ? error.message : error}`, true);
+        report(`Refresh failed: ${errorText(error)}`);
       }
-    } finally {
-      setRefreshing(false);
-    }
-  };
+    },
+  });
 
   const data = metadata.data;
   return (
@@ -124,11 +110,6 @@ export function FreshnessBar() {
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
-        {notice && (
-          <span className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
-            {notice.text}
-          </span>
-        )}
         {data && (
           <button
             type="button"
@@ -150,13 +131,13 @@ export function FreshnessBar() {
         )}
         <button
           type="button"
-          onClick={refresh}
-          disabled={refreshing}
+          onClick={() => refresh.mutate()}
+          disabled={refresh.isPending}
           aria-label="Refresh catalog"
           title="Refresh catalog"
           className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 disabled:opacity-50"
         >
-          <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          <RefreshCw className={`size-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
         </button>
       </div>
       {detailsOpen && data && (

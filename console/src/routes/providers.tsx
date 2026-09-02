@@ -1,7 +1,7 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RefreshCw, Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import {
   CatalogProviderCard,
@@ -20,6 +20,7 @@ import { queries, settle } from "@/lib/queries";
 import { oneOf, optionalString } from "@/lib/search";
 import { providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { announce, errorText, report } from "@/lib/mutations";
 
 const SORT_KEYS = ["status", "name", "models"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
@@ -108,7 +109,6 @@ function CatalogOnly({
 function ProvidersPage() {
   const keyUsable = useGatewayAccess();
   const queryClient = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const setSearch = (patch: Partial<ProvidersSearch>) =>
@@ -120,11 +120,6 @@ function ProvidersPage() {
   const sort = search.sort ?? "status";
   const setQuery = (value: string) => setSearch({ q: value || undefined });
   const setSort = (value: SortKey) => setSearch({ sort: value === "status" ? undefined : value });
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
-  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(noticeTimer.current), []);
 
   const status = useQuery({
     ...queries.providerStatus(),
@@ -153,36 +148,26 @@ function ProvidersPage() {
     [status.data, byId, trimmed, sort],
   );
 
-  const say = (text: string, error = false) => {
-    setNotice({ text, error });
-    clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 6000);
-  };
 
-  const refresh = async () => {
-    setRefreshing(true);
-    try {
-      const report = await refreshProviders();
-      if (report?.failure_count) {
-        const count = report.failure_count;
-        say(`Refresh finished with ${count} failure${count === 1 ? "" : "s"}`, true);
+  const refresh = useMutation({
+    mutationFn: () => refreshProviders(),
+    onSuccess: async (result) => {
+      if (result?.failure_count) {
+        const count = result.failure_count;
+        report(`Refresh finished with ${count} failure${count === 1 ? "" : "s"}`);
       } else {
-        say(report?.changed ? "Provider state updated" : "Provider state unchanged");
+        announce(result?.changed ? "Provider state updated" : "Provider state unchanged");
       }
       await queryClient.invalidateQueries({ queryKey: queries.providerStatus().queryKey });
-    } catch (error) {
+    },
+    onError: (error) => {
       if (error instanceof ApiError && error.needsKey) {
-        say(accessMessage(error, "admin"), true);
+        report(accessMessage(error, "admin"));
       } else {
-        say(
-          `Refresh failed: ${error instanceof Error ? error.message : error}`,
-          true,
-        );
+        report(`Refresh failed: ${errorText(error)}`);
       }
-    } finally {
-      setRefreshing(false);
-    }
-  };
+    },
+  });
 
   let body: ReactNode;
   if (status.error) {
@@ -228,22 +213,15 @@ function ProvidersPage() {
       <div className="flex items-start justify-between gap-4">
         <Header />
         <div className="flex items-center gap-3">
-          {notice && (
-            <span
-              className={`text-xs ${notice.error ? "text-error" : "text-success"}`}
-            >
-              {notice.text}
-            </span>
-          )}
           <button
             type="button"
-            onClick={refresh}
-            disabled={refreshing}
+            onClick={() => refresh.mutate()}
+            disabled={refresh.isPending}
             aria-label="Refresh provider status"
             title="Refresh provider status"
             className="flex size-8 items-center justify-center rounded-sm border border-border-2 bg-bg-raised text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover disabled:opacity-50"
           >
-            <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`size-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
