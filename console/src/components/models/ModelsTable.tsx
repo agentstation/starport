@@ -1,35 +1,13 @@
-import {
-  columnResizingFeature,
-  columnSizingFeature,
-  createColumnHelper,
-  createSortedRowModel,
-  rowSortingFeature,
-  sortFn_alphanumeric,
-  sortFn_basic,
-  tableFeatures,
-  useTable,
-} from "@tanstack/react-table";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, ArrowUp } from "lucide-react";
-import { useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import { CopyButton } from "@/components/ui/CopyButton";
+import { DataTable, dataColumns } from "@/components/ui/DataTable";
 import type { Model } from "@/lib/api";
 import { formatContext, formatPricePair } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
 
-const ROW_HEIGHT = 40;
-
-const features = tableFeatures({
-  rowSortingFeature,
-  columnSizingFeature,
-  columnResizingFeature,
-  sortedRowModel: createSortedRowModel(),
-  sortFns: { alphanumeric: sortFn_alphanumeric, basic: sortFn_basic },
-});
-
-const helper = createColumnHelper<typeof features, Model>();
+const helper = dataColumns<Model>();
 
 function CapabilityBadge({
   children,
@@ -111,13 +89,17 @@ function promptPriceNumber(model: Model): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+// Default widths sum to 1,100px so the table fits a 1,440px viewport beside
+// the sidebar without a horizontal scrollbar; a reader drags a column wider.
 const columns = helper.columns([
   helper.accessor((row) => row.name ?? row.id, {
     id: "model",
     header: "Model",
     sortFn: "alphanumeric",
-    size: 260,
+    size: 240,
     minSize: 160,
+    meta: { flex: true },
+    cell: ({ row }) => <ModelCell model={row.original} />,
   }),
   // The routable id is its own column so every id starts at the same
   // x-position; trailing it after the name left the ids ragged and
@@ -129,14 +111,20 @@ const columns = helper.columns([
     id: "id",
     header: "ID",
     sortFn: "alphanumeric",
-    size: 260,
+    size: 210,
     minSize: 160,
+    cell: ({ row }) => <IdCell model={row.original} />,
   }),
   helper.display({
     id: "capabilities",
     header: "Capabilities",
-    size: 190,
+    size: 170,
     minSize: 120,
+    cell: ({ row }) => (
+      <div className="flex gap-1 overflow-hidden">
+        <BadgeList labels={capabilityLabels(row.original)} max={3} />
+      </div>
+    ),
   }),
   // Sorting by the joined operation list groups the models that serve the
   // same set, which is the order a reader scanning for one of them wants.
@@ -144,8 +132,13 @@ const columns = helper.columns([
     id: "operations",
     header: "Operations",
     sortFn: "alphanumeric",
-    size: 190,
+    size: 170,
     minSize: 120,
+    cell: ({ row }) => (
+      <div className="flex gap-1 overflow-hidden">
+        <BadgeList labels={operationsOf(row.original).map(operationLabel)} max={2} />
+      </div>
+    ),
   }),
   helper.accessor((row) => row.context_length ?? undefined, {
     id: "context",
@@ -153,15 +146,23 @@ const columns = helper.columns([
     sortFn: "basic",
     sortUndefined: "last",
     size: 90,
-    minSize: 70,
+    minSize: 80,
+    meta: { align: "end" },
+    cell: ({ row }) => (
+      <span className="font-mono text-xs tabular-nums text-text-2">
+        {formatContext(row.original.context_length)}
+      </span>
+    ),
   }),
   helper.accessor(promptPriceNumber, {
     id: "price",
     header: "Price / 1M",
     sortFn: "basic",
     sortUndefined: "last",
-    size: 180,
+    size: 220,
     minSize: 120,
+    meta: { align: "end" },
+    cell: ({ row }) => <PriceCell model={row.original} />,
   }),
 ]);
 
@@ -205,163 +206,29 @@ function PriceCell({ model }: { model: Model }) {
     return <span className="text-text-4">—</span>;
   }
   return (
-    <span className="font-mono text-xs tabular-nums text-text-2">{pair}</span>
+    <span className="whitespace-nowrap font-mono text-xs tabular-nums text-text-2">
+      {pair}
+    </span>
   );
 }
 
-// ModelsTable renders the filtered catalog: TanStack Table owns column
-// order, sorting, and sizing; TanStack Virtual keeps 400+ rows cheap
-// through the window scroller; the header stays sticky above the list.
+// ModelsTable renders the filtered catalog through the shared DataTable:
+// the column definitions above own every cell, the table owns sorting,
+// dragged sizes, virtualization, and the keyboard path, and a row opens
+// the model detail page.
 export function ModelsTable({ models }: { models: Model[] }) {
   const navigate = useNavigate();
-  const table = useTable({
-    features,
-    columns,
-    data: models,
-    getRowId: (model) => model.id,
-    columnResizeMode: "onChange",
-    initialState: { sorting: [{ id: "model", desc: false }] },
-  });
-
-  // The first column flexes to fill the viewport; the rest hold their
-  // dragged size. One template string serves the header and every row.
-  const template = table
-    .getAllLeafColumns()
-    .map((column, index) =>
-      index === 0 ? `minmax(${column.getSize()}px, 1fr)` : `${column.getSize()}px`,
-    )
-    .join(" ");
-
-  const rows = table.getRowModel().rows;
-  const listRef = useRef<HTMLDivElement>(null);
-  const virtualizer = useWindowVirtualizer({
-    count: rows.length,
-    estimateSize: () => ROW_HEIGHT,
-    overscan: 12,
-    scrollMargin: listRef.current?.offsetTop ?? 0,
-  });
-
   return (
-    <div role="table" aria-rowcount={rows.length} className="text-sm">
-      <div role="rowgroup" className="sticky top-0 z-10 bg-bg-canvas">
-        {table.getHeaderGroups().map((headerGroup) => (
-          <div
-            role="row"
-            key={headerGroup.id}
-            className="grid h-8 items-center border-b border-border-1"
-            style={{ gridTemplateColumns: template }}
-          >
-            {headerGroup.headers.map((header) => {
-              const sorted = header.column.getIsSorted();
-              const numeric = header.column.id === "context" || header.column.id === "price";
-              return (
-                <div
-                  role="columnheader"
-                  key={header.id}
-                  aria-sort={
-                    sorted === "asc"
-                      ? "ascending"
-                      : sorted === "desc"
-                        ? "descending"
-                        : undefined
-                  }
-                  className={`relative ${numeric ? "text-right" : ""}`}
-                >
-                  <button
-                    type="button"
-                    onClick={header.column.getToggleSortingHandler()}
-                    className={`group inline-flex h-8 items-center gap-1 px-2.5 text-xs font-medium text-text-3 transition-colors duration-150 ease-standard hover:text-text-1 ${
-                      numeric ? "flex-row-reverse" : ""
-                    }`}
-                  >
-                    {typeof header.column.columnDef.header === "string"
-                      ? header.column.columnDef.header
-                      : header.column.id}
-                    {sorted === "asc" && <ArrowUp className="size-3" />}
-                    {sorted === "desc" && <ArrowDown className="size-3" />}
-                    {!sorted && (
-                      <ArrowUp className="size-3 opacity-0 transition-opacity group-hover:opacity-40" />
-                    )}
-                  </button>
-                  {header.column.getCanResize() && (
-                    <div
-                      role="separator"
-                      aria-orientation="vertical"
-                      aria-label={`Resize ${header.column.id} column`}
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      onDoubleClick={() => header.column.resetSize()}
-                      className={`absolute -right-0.5 top-1/2 z-10 h-5 w-1 -translate-y-1/2 cursor-col-resize rounded-full transition-colors duration-150 ${
-                        header.column.getIsResizing()
-                          ? "bg-accent"
-                          : "hover:bg-border-3"
-                      }`}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <div
-        ref={listRef}
-        role="rowgroup"
-        className="relative"
-        style={{ height: virtualizer.getTotalSize() }}
-      >
-        {virtualizer.getVirtualItems().map((item) => {
-          const row = rows[item.index];
-          if (!row) return null;
-          const model = row.original;
-          return (
-            <div
-              role="row"
-              key={row.id}
-              onClick={(event) => {
-                // Inner links and the copy button own their own clicks.
-                const target = event.target as HTMLElement | null;
-                if (target?.closest("a,button")) return;
-                void navigate({
-                  to: "/models/$modelId",
-                  params: { modelId: model.id },
-                });
-              }}
-              className="group absolute left-0 top-0 grid w-full cursor-pointer items-center border-b border-border-1 transition-colors duration-150 ease-standard hover:bg-bg-hover"
-              style={{
-                gridTemplateColumns: template,
-                height: item.size,
-                transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
-              }}
-            >
-              <div role="cell" className="min-w-0 px-2.5">
-                <ModelCell model={model} />
-              </div>
-              <div role="cell" className="min-w-0 px-2.5">
-                <IdCell model={model} />
-              </div>
-              <div role="cell" className="flex gap-1 overflow-hidden px-2.5">
-                <BadgeList labels={capabilityLabels(model)} max={3} />
-              </div>
-              <div role="cell" className="flex gap-1 overflow-hidden px-2.5">
-                <BadgeList
-                  labels={operationsOf(model).map(operationLabel)}
-                  max={2}
-                />
-              </div>
-              <div
-                role="cell"
-                className="px-2.5 text-right font-mono text-xs tabular-nums text-text-2"
-              >
-                {formatContext(model.context_length)}
-              </div>
-              <div role="cell" className="px-2.5 text-right">
-                <PriceCell model={model} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <DataTable
+      aria-label="Models"
+      columns={columns}
+      data={models}
+      getRowId={(model) => model.id}
+      initialSorting={[{ id: "model", desc: false }]}
+      resizable
+      onRowActivate={(model) =>
+        void navigate({ to: "/models/$modelId", params: { modelId: model.id } })
+      }
+    />
   );
 }

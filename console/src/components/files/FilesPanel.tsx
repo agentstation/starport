@@ -5,12 +5,14 @@ import { useRef, useState, type ReactNode } from "react";
 import { DestructiveButton, GhostButton, PrimaryButton } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DataTableFooter } from "@/components/ui/DataTable";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
   DEFAULT_ACCOUNT_ID,
   deleteFile,
+  FILE_PAGE_LIMIT,
   hasSession,
   uploadFile,
   type StoredFile,
@@ -172,7 +174,8 @@ export function FilesPanel() {
     );
   } else {
     body = (
-      <div className="overflow-x-auto rounded-md border border-border-1 bg-bg-panel">
+      <div className="flex flex-col gap-3">
+        <div className="overflow-x-auto rounded-md border border-border-1 bg-bg-panel">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
@@ -223,6 +226,13 @@ export function FilesPanel() {
             ))}
           </tbody>
         </table>
+        </div>
+        <DataTableFooter
+          loaded={rows.length}
+          unit={{ one: "file", other: "files" }}
+          bound={FILE_PAGE_LIMIT}
+          hasMore={files.data?.hasMore === true}
+        />
       </div>
     );
   }

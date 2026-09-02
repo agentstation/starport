@@ -2,10 +2,11 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 
-import { accessMessage, ApiError } from "@/lib/api";
+import { accessMessage, ApiError, type AuditRecord } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
+import { DataTable, DataTableFooter, dataColumns } from "@/components/ui/DataTable";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 
@@ -18,6 +19,61 @@ export const Route = createFileRoute("/audit")({
 });
 
 const PAGE_LIMIT = 100;
+
+const helper = dataColumns<AuditRecord>();
+const MONO = "font-mono text-xs text-text-2";
+const columns = helper.columns([
+  helper.accessor("time", {
+    id: "time",
+    header: "Time",
+    sortFn: "alphanumeric",
+    size: 120,
+    minSize: 100,
+    cell: ({ getValue }) => (
+      <RelativeTime iso={getValue()} className="text-xs text-text-3" />
+    ),
+  }),
+  helper.accessor("actor", {
+    id: "actor",
+    header: "Actor",
+    sortFn: "alphanumeric",
+    size: 180,
+    minSize: 120,
+    meta: { className: MONO },
+  }),
+  helper.accessor("action", {
+    id: "action",
+    header: "Action",
+    sortFn: "alphanumeric",
+    size: 200,
+    minSize: 120,
+    meta: { className: MONO },
+  }),
+  helper.accessor("subject", {
+    id: "subject",
+    header: "Subject",
+    sortFn: "alphanumeric",
+    size: 240,
+    minSize: 160,
+    meta: { flex: true, className: MONO },
+  }),
+  helper.accessor("outcome", {
+    id: "outcome",
+    header: "Outcome",
+    sortFn: "alphanumeric",
+    size: 110,
+    minSize: 90,
+    cell: ({ getValue }) => (
+      <span
+        className={
+          getValue() === "ok" ? "text-xs text-text-3" : "text-xs font-medium text-error"
+        }
+      >
+        {getValue()}
+      </span>
+    ),
+  }),
+]);
 
 function AuditLog() {
   const access = useGatewayAccess();
@@ -50,62 +106,22 @@ function AuditLog() {
   } else {
     body = (
       <div className="flex flex-col gap-3">
-        <div className="overflow-x-auto rounded-md border border-border-1 bg-bg-panel">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-                <th className="px-4 py-2.5">Time</th>
-                <th className="px-4 py-2.5">Actor</th>
-                <th className="px-4 py-2.5">Action</th>
-                <th className="px-4 py-2.5">Subject</th>
-                <th className="px-4 py-2.5">Outcome</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((record) => (
-                <tr
-                  key={record.id}
-                  data-testid="audit-row"
-                  className="border-b border-border-1 last:border-0"
-                >
-                  <td className="px-4 py-2 text-xs text-text-3">
-                    <RelativeTime iso={record.time} />
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-text-2">
-                    {record.actor}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-text-2">
-                    {record.action}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-text-2">
-                    {record.subject}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span
-                      className={
-                        record.outcome === "ok"
-                          ? "text-xs text-text-3"
-                          : "text-xs font-medium text-error"
-                      }
-                    >
-                      {record.outcome}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {trail.hasNextPage && (
-          <button
-            type="button"
-            onClick={() => void trail.fetchNextPage()}
-            disabled={trail.isFetchingNextPage}
-            className="self-start rounded-md border border-border-1 px-3 py-1.5 text-sm text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-panel disabled:opacity-50"
-          >
-            {trail.isFetchingNextPage ? "Loading…" : "Load older records"}
-          </button>
-        )}
+        <DataTable
+          aria-label="Audit log"
+          columns={columns}
+          data={rows}
+          getRowId={(record, index) => String(record.id ?? index)}
+          rowTestId="audit-row"
+        />
+        <DataTableFooter
+          loaded={rows.length}
+          unit={{ one: "record", other: "records" }}
+          bound={PAGE_LIMIT}
+          hasMore={trail.hasNextPage}
+          loading={trail.isFetchingNextPage}
+          onLoadMore={() => void trail.fetchNextPage()}
+          loadLabel="Load older records"
+        />
       </div>
     );
   }

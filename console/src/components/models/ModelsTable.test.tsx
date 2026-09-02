@@ -56,9 +56,11 @@ test("virtualizes the catalog: 422 models render a bounded number of rows", () =
   // Header row plus the visible window and overscan — never all 422.
   expect(rows.length).toBeGreaterThan(1);
   expect(rows.length).toBeLessThan(100);
+  // aria-rowcount counts the header row with the 422 model rows (ARIA
+  // 1.2, aria-rowcount: the total number of rows in the table).
   expect(
     document.querySelector('[role="table"]')?.getAttribute("aria-rowcount"),
-  ).toBe("422");
+  ).toBe("423");
   // Frame-budget smoke check: a virtualized render of the full catalog
   // stays well under a second even in jsdom.
   expect(elapsed).toBeLessThan(1000);

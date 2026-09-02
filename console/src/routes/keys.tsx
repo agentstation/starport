@@ -4,6 +4,8 @@ import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { CopyButton } from "@/components/ui/CopyButton";
+import { DataTable, dataColumns } from "@/components/ui/DataTable";
+import type { RowData, TableFeatures } from "@tanstack/react-table";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -718,6 +720,136 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 
 // --- Page ---
 
+// KeysTableMeta is what a cell needs from the page: the budget lookups and
+// the row actions. It travels through table.options.meta so the columns
+// stay module-level and a control inside a cell keeps its focus.
+type KeysTableMeta = {
+  budgets: Map<string, Budgets>;
+  select: (keyId: string) => void;
+  toggle: (apiKey: GatewayKey) => void;
+  toggling: boolean;
+  remove: (apiKey: GatewayKey) => void;
+};
+
+declare module "@tanstack/react-table" {
+  interface TableMeta<in out TFeatures extends TableFeatures, in out TData extends RowData> {
+    keys?: KeysTableMeta;
+  }
+}
+
+function keysMeta(table: { options: { meta?: { keys?: KeysTableMeta } } }): KeysTableMeta {
+  const meta = table.options.meta?.keys;
+  if (!meta) throw new Error("keys table rendered without its meta");
+  return meta;
+}
+
+const keyColumns = dataColumns<GatewayKey>();
+// Default widths sum to 1,120px so the table fits a 1,440px viewport beside
+// the sidebar; the name column takes the slack and every column resizes.
+const KEY_COLUMNS = keyColumns.columns([
+  keyColumns.accessor((apiKey) => apiKey.name || "unnamed", {
+    id: "name",
+    header: "Name",
+    sortFn: "alphanumeric",
+    size: 140,
+    minSize: 120,
+    meta: { flex: true, className: "whitespace-nowrap font-medium text-text-1" },
+  }),
+  keyColumns.display({
+    id: "key",
+    header: "Key",
+    size: 190,
+    minSize: 140,
+    cell: ({ row }) => (
+      <span className="inline-flex items-center gap-1">
+        <code
+          title={row.original.id}
+          className="whitespace-nowrap rounded-xs bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2"
+        >
+          {truncateKeyId(row.original.id)}
+        </code>
+        <CopyButton text={row.original.id} label="" />
+      </span>
+    ),
+  }),
+  keyColumns.accessor((apiKey) => apiKey.account_id || DEFAULT_ACCOUNT_ID, {
+    id: "account",
+    header: "Account",
+    sortFn: "alphanumeric",
+    size: 110,
+    minSize: 90,
+    cell: ({ getValue }) => (
+      <Link
+        to="/accounts"
+        className="font-mono text-xs text-accent-link transition-colors duration-150 ease-standard hover:underline"
+      >
+        {getValue()}
+      </Link>
+    ),
+  }),
+  keyColumns.display({
+    id: "scopes",
+    header: "Scopes",
+    size: 150,
+    minSize: 120,
+    cell: ({ row }) => <ScopePills scopes={row.original.scopes ?? []} />,
+  }),
+  keyColumns.display({
+    id: "limits",
+    header: "Limits",
+    size: 140,
+    minSize: 120,
+    cell: ({ row, table }) => (
+      <LimitsCell apiKey={row.original} budgets={keysMeta(table).budgets.get(row.original.id)} />
+    ),
+  }),
+  keyColumns.accessor((apiKey) => (apiKey.active === false ? "disabled" : "active"), {
+    id: "status",
+    header: "Status",
+    sortFn: "alphanumeric",
+    size: 90,
+    minSize: 80,
+    cell: ({ row }) => <StatusPill apiKey={row.original} />,
+  }),
+  keyColumns.accessor((apiKey) => apiKey.created_at ?? "", {
+    id: "created",
+    header: "Created",
+    sortFn: "alphanumeric",
+    size: 100,
+    minSize: 90,
+    cell: ({ row }) => (
+      <RelativeTime iso={row.original.created_at} className="text-xs text-text-3" />
+    ),
+  }),
+  keyColumns.display({
+    id: "actions",
+    size: 200,
+    minSize: 200,
+    cell: ({ row, table }) => {
+      const apiKey = row.original;
+      return (
+        <div className="flex items-center justify-end gap-1">
+          <RowAction onClick={() => keysMeta(table).select(apiKey.id)}>edit</RowAction>
+          <RowAction
+            onClick={() => keysMeta(table).toggle(apiKey)}
+            disabled={keysMeta(table).toggling}
+          >
+            {apiKey.active === false ? "enable" : "disable"}
+          </RowAction>
+          <button
+            type="button"
+            onClick={() => keysMeta(table).remove(apiKey)}
+            aria-label={`Delete ${apiKey.name || apiKey.id}`}
+            className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      );
+    },
+  }),
+]);
+
 type ModalState =
   | { kind: "create" }
   | { kind: "secret"; secret: string }
@@ -777,88 +909,22 @@ function KeysPage() {
     body = <EmptyState onCreate={() => setModal({ kind: "create" })} />;
   } else {
     body = (
-      <div className="overflow-x-auto rounded-md border border-border-1 bg-bg-panel">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-              <th className="px-4 py-2.5">Name</th>
-              <th className="px-4 py-2.5">Key</th>
-              <th className="px-4 py-2.5">Account</th>
-              <th className="px-4 py-2.5">Scopes</th>
-              <th className="px-4 py-2.5">Limits</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Created</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {(keys.data ?? []).map((apiKey) => (
-              <tr
-                key={apiKey.id}
-                className="h-10 border-b border-border-1 transition-colors duration-150 ease-standard last:border-b-0 hover:bg-bg-hover"
-              >
-                <td className="whitespace-nowrap px-4 py-2 font-medium text-text-1">
-                  {apiKey.name || "unnamed"}
-                </td>
-                <td className="px-4 py-2">
-                  <span className="inline-flex items-center gap-1">
-                    <code
-                      title={apiKey.id}
-                      className="whitespace-nowrap rounded-xs bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2"
-                    >
-                      {truncateKeyId(apiKey.id)}
-                    </code>
-                    <CopyButton text={apiKey.id} label="" />
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  <Link
-                    to="/accounts"
-                    className="font-mono text-xs text-accent-link transition-colors duration-150 ease-standard hover:underline"
-                  >
-                    {apiKey.account_id || DEFAULT_ACCOUNT_ID}
-                  </Link>
-                </td>
-                <td className="px-4 py-2">
-                  <ScopePills scopes={apiKey.scopes ?? []} />
-                </td>
-                <td className="px-4 py-2">
-                  <LimitsCell apiKey={apiKey} budgets={budgets.get(apiKey.id)} />
-                </td>
-                <td className="px-4 py-2">
-                  <StatusPill apiKey={apiKey} />
-                </td>
-                <td className="px-4 py-2 text-xs text-text-3">
-                  <RelativeTime iso={apiKey.created_at} />
-                </td>
-                <td className="px-4 py-2">
-                  <div className="flex items-center justify-end gap-1">
-                    <RowAction
-                      onClick={() => select(apiKey.id)}
-                    >
-                      edit
-                    </RowAction>
-                    <RowAction
-                      onClick={() => toggle.mutate(apiKey)}
-                      disabled={toggle.isPending}
-                    >
-                      {apiKey.active === false ? "enable" : "disable"}
-                    </RowAction>
-                    <button
-                      type="button"
-                      onClick={() => setModal({ kind: "delete", apiKey })}
-                      aria-label={`Delete ${apiKey.name || apiKey.id}`}
-                      className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        aria-label="Gateway API keys"
+        columns={KEY_COLUMNS}
+        data={keys.data ?? []}
+        meta={{
+          keys: {
+            budgets,
+            select,
+            toggle: (apiKey) => toggle.mutate(apiKey),
+            toggling: toggle.isPending,
+            remove: (apiKey) => setModal({ kind: "delete", apiKey }),
+          },
+        }}
+        getRowId={(apiKey) => apiKey.id}
+        initialSorting={[{ id: "created", desc: true }]}
+      />
     );
   }
 

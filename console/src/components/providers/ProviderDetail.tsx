@@ -1,6 +1,9 @@
 import { Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
 
+import { DataTable, dataColumns } from "@/components/ui/DataTable";
 import { ExternalLink } from "@/components/ui/ExternalLink";
+import { FacetFilter, type FacetOption } from "@/components/ui/FacetFilter";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 import type {
   ActivityRecord,
@@ -9,6 +12,7 @@ import type {
   ProviderRuntimeStatus,
 } from "@/lib/api";
 import { formatCount, formatMs } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 // One circuit vocabulary (internal/availability): healthy and half_open
 // admit attempts; open and unavailable reject them.
@@ -398,7 +402,81 @@ export function HealthPanel({
 
 // --- Served models: every offering the runtime tracks, with its
 // circuit state. Rows link into the models list filtered to this
-// provider until the model detail page (CP9) exists.
+// provider until the model detail page (CP9) exists. Two facets narrow
+// the list to a circuit state or a routing state, because the row a
+// reader wants on a provider with a hundred offerings is the open one.
+
+const offeringColumns = dataColumns<ProviderOfferingStatus>();
+
+function offeringColumnsFor(providerId: string) {
+  return offeringColumns.columns([
+    offeringColumns.accessor("provider_model_id", {
+      id: "model",
+      header: "Model",
+      sortFn: "alphanumeric",
+      size: 260,
+      minSize: 160,
+      meta: { flex: true },
+      cell: ({ getValue }) => (
+        <Link
+          to="/models"
+          search={{ provider: providerId, q: getValue() }}
+          className="font-mono text-xs text-text-1 transition-colors duration-150 ease-standard hover:text-accent-link"
+        >
+          {getValue()}
+        </Link>
+      ),
+    }),
+    offeringColumns.accessor((row) => row.state ?? "unknown", {
+      id: "circuit",
+      header: "Circuit",
+      sortFn: "alphanumeric",
+      size: 120,
+      minSize: 100,
+      cell: ({ row }) => <CircuitChip state={row.original.state} />,
+    }),
+    offeringColumns.accessor((row) => row.routing?.state ?? "unknown", {
+      id: "routing",
+      header: "Routing",
+      sortFn: "alphanumeric",
+      size: 220,
+      minSize: 120,
+      cell: ({ row }) => <RoutingChip routing={row.original.routing} />,
+    }),
+    offeringColumns.accessor((row) => row.reason ?? "", {
+      id: "reason",
+      header: "Reason",
+      sortFn: "alphanumeric",
+      size: 200,
+      minSize: 120,
+      cell: ({ getValue }) => (
+        <span className={cn("text-xs", getValue() ? "text-text-3" : "text-text-4")}>
+          {getValue() ? getValue().replaceAll("_", " ") : "\u2014"}
+        </span>
+      ),
+    }),
+  ]);
+}
+
+// facetOptions counts the offerings per value, in the order the table
+// sorts them, so a chip reads "open · 3" before the reader opens it.
+function facetOptions(
+  offerings: ProviderOfferingStatus[],
+  read: (offering: ProviderOfferingStatus) => string,
+): FacetOption[] {
+  const counts = new Map<string, number>();
+  for (const offering of offerings) {
+    const value = read(offering);
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([value, count]) => ({ value, label: value.replaceAll("_", " "), count }));
+}
+
+const circuitOf = (offering: ProviderOfferingStatus) => offering.state ?? "unknown";
+const routingOf = (offering: ProviderOfferingStatus) =>
+  offering.routing?.state ?? "unknown";
 
 export function OfferingsTable({
   providerId,
@@ -407,54 +485,53 @@ export function OfferingsTable({
   providerId: string;
   offerings: ProviderOfferingStatus[];
 }) {
+  const [circuits, setCircuits] = useState<string[]>([]);
+  const [routings, setRoutings] = useState<string[]>([]);
+  const columns = useMemo(() => offeringColumnsFor(providerId), [providerId]);
+  const visible = useMemo(
+    () =>
+      offerings.filter(
+        (offering) =>
+          (circuits.length === 0 || circuits.includes(circuitOf(offering))) &&
+          (routings.length === 0 || routings.includes(routingOf(offering))),
+      ),
+    [offerings, circuits, routings],
+  );
   if (offerings.length === 0) return null;
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
-        Served models
-      </h2>
-      <div className="overflow-x-auto rounded-md border border-border-1">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border-1 text-left text-xs text-text-4">
-              <th className="px-3 py-2 font-medium">Model</th>
-              <th className="px-3 py-2 font-medium">Circuit</th>
-              <th className="px-3 py-2 font-medium">Routing</th>
-              <th className="px-3 py-2 font-medium">Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {offerings.map((offering) => (
-              <tr
-                key={offering.provider_model_id}
-                className="border-b border-border-1 last:border-b-0"
-              >
-                <td className="px-3 py-2">
-                  <Link
-                    to="/models"
-                    search={{
-                      provider: providerId,
-                      q: offering.provider_model_id,
-                    }}
-                    className="font-mono text-xs text-text-1 transition-colors duration-150 ease-standard hover:text-accent-link"
-                  >
-                    {offering.provider_model_id}
-                  </Link>
-                </td>
-                <td className="px-3 py-2">
-                  <CircuitChip state={offering.state} />
-                </td>
-                <td className="px-3 py-2">
-                  <RoutingChip routing={offering.routing} />
-                </td>
-                <td className="px-3 py-2 text-xs text-text-3">
-                  {offering.reason ? offering.reason.replaceAll("_", " ") : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+          Served models
+        </h2>
+        <div className="ml-auto flex items-center gap-2">
+          <FacetFilter
+            label="Circuit"
+            searchable={false}
+            options={facetOptions(offerings, circuitOf)}
+            selected={circuits}
+            onChange={setCircuits}
+          />
+          <FacetFilter
+            label="Routing"
+            searchable={false}
+            options={facetOptions(offerings, routingOf)}
+            selected={routings}
+            onChange={setRoutings}
+          />
+          <span className="text-xs tabular-nums text-text-3">
+            {formatCount(visible.length)} of {formatCount(offerings.length)}
+          </span>
+        </div>
       </div>
+      <DataTable
+        aria-label="Served models"
+        columns={columns}
+        data={visible}
+        getRowId={(offering) => offering.provider_model_id}
+        initialSorting={[{ id: "model", desc: false }]}
+        emptyMessage="No offering matches these filters."
+      />
     </section>
   );
 }

@@ -8,7 +8,7 @@ import {
   type ActivityRecord,
   type Model,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { DOCUMENT_ACTIVITY_LIMIT, queries } from "@/lib/queries";
 import {
   formatMs,
   formatNanoUSD,
@@ -16,6 +16,7 @@ import {
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
+import { DataTableFooter } from "@/components/ui/DataTable";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 
@@ -269,7 +270,17 @@ export function DocumentsPanel() {
       </p>
     );
   } else {
-    body = <ExtractionRows records={rows} />;
+    body = (
+      <div className="flex flex-col gap-3">
+        <ExtractionRows records={rows} />
+        <DataTableFooter
+          loaded={rows.length}
+          unit={{ one: "read", other: "reads" }}
+          bound={DOCUMENT_ACTIVITY_LIMIT}
+          hasMore={(activity.data ?? []).length >= DOCUMENT_ACTIVITY_LIMIT}
+        />
+      </div>
+    );
   }
 
   return (
