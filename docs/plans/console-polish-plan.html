@@ -120,7 +120,7 @@
     Created: 2026-09-01 ·
     Baseline: main @ 6db57d8 ·
     Proof root: <code>docs/proof/console-polish/</code> ·
-    Next action: finish CPL-E3 on codex/cpl-e3, then start CPL-E4
+    Next action: finish CPL-E4 on codex/cpl-e4, then start CPL-E5
   </p>
 
   <section id="outcome">
@@ -523,8 +523,8 @@
         <tr id="CPL-D4" data-status="done"><td>CPL-D4</td><td>Charts: series descriptor, interval, legend, honesty.</td><td><code>done</code></td><td>PR #344. Verifier 29 passed, 19 failed. Proof <code>docs/proof/console-polish/CPL-D4.md</code>.</td></tr>
         <tr id="CPL-E1" data-status="done"><td>CPL-E1</td><td>Honest system info and a webhook summary route.</td><td><code>done</code></td><td>PR #345. Verifier 31 passed, 17 failed. Proof <code>docs/proof/console-polish/CPL-E1.md</code>.</td></tr>
         <tr id="CPL-E2" data-status="done"><td>CPL-E2</td><td>Settings sections for system, observability, guardrails, webhooks, and retention.</td><td><code>done</code></td><td>PR #346. Verifier 32 passed, 16 failed. Proof <code>docs/proof/console-polish/CPL-E2.md</code>.</td></tr>
-        <tr id="CPL-E3" data-status="in_progress"><td>CPL-E3</td><td>Budgets as meters on teams and accounts.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e3</code>.</td></tr>
-        <tr id="CPL-E4" data-status="todo"><td>CPL-E4</td><td>Confirmations for every cascading write.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E3" data-status="done"><td>CPL-E3</td><td>Budgets as meters on teams and accounts.</td><td><code>done</code></td><td>PR #347. Verifier 34 passed, 14 failed. Proof <code>docs/proof/console-polish/CPL-E3.md</code>.</td></tr>
+        <tr id="CPL-E4" data-status="in_progress"><td>CPL-E4</td><td>Confirmations for every cascading write.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e4</code>.</td></tr>
         <tr id="CPL-E5" data-status="todo"><td>CPL-E5</td><td>Audit log as an investigation tool.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-E6" data-status="todo"><td>CPL-E6</td><td>Usage: guardrail fields, export, semantic cache.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-E7" data-status="todo"><td>CPL-E7</td><td>Batches panel on the jobs page.</td><td><code>todo</code></td><td></td></tr>
@@ -1320,6 +1320,12 @@
     <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
       then the verifier.</p>
 
+    <p><strong>Amendment (2026-09-02):</strong> a preset carries no account
+      on the gateway, so the account dialog names the key count alone. A
+      restore lands as a new head revision and the old head stays. The
+      restore step names the three revisions instead of "There is no
+      undo." and uses the primary button.</p>
+
     <h3 id="task-CPL-E5">CPL-E5 Audit log as an investigation tool</h3>
 
     <p><strong>Problem:</strong> the audit page lists every record unbounded
@@ -1869,6 +1875,14 @@ deleted this plan.</code></pre>
           BudgetLine draws the meter in three scopes, a confirmed dialog
           removes a team budget, and the account detail lists provider
           spend.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E3</td><td>done</td><td>PR #347 merged.
+          Verifier 34 passed, 14 failed. Console tests 350.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E4</td><td>started</td><td>Branch
+          codex/cpl-e4. A shared ConfirmDialog owns the confirm shape, team
+          and account deletes open modals that name the cascade counts,
+          member, grant, template, and job writes confirm first, the
+          preset history stages a restore that names both revisions, and
+          the account policy panel saves through one button.</td></tr>
       </tbody>
     </table>
   </section>
