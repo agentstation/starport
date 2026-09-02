@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { Card, CardTitle } from "@/components/ui/Card";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/docs")({
   component: DocsPage,
@@ -44,30 +45,27 @@ function DocsPage() {
           How to call, manage, and run the Starport gateway.
         </p>
       </div>
-      <div role="tablist" aria-label="Documentation audience" className="flex flex-wrap gap-2">
-        {PERSONAS.map((entry) => (
-          <button
-            key={entry.id}
-            role="tab"
-            type="button"
-            aria-selected={persona === entry.id}
-            onClick={() => setPersona(entry.id)}
-            className={`flex h-9 items-center rounded-sm border px-3 text-sm transition-colors duration-150 ease-standard ${
-              persona === entry.id
-                ? "border-border-3 bg-bg-raised text-text-1"
-                : "border-border-1 bg-bg-panel text-text-3 hover:border-border-2 hover:text-text-2"
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
-      <p className="text-sm text-text-3">
-        {PERSONAS.find((entry) => entry.id === persona)?.blurb}
-      </p>
-      {persona === "build" && <BuildDocs />}
-      {persona === "account" && <AccountDocs />}
-      {persona === "operate" && <OperateDocs />}
+      <Tabs value={persona} onValueChange={(value) => setPersona(value as Persona)}>
+        <TabsList variant="chips" aria-label="Documentation audience">
+          {PERSONAS.map((entry) => (
+            <TabsTrigger key={entry.id} value={entry.id}>
+              {entry.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <p className="text-sm text-text-3">
+          {PERSONAS.find((entry) => entry.id === persona)?.blurb}
+        </p>
+        <TabsContent value="build">
+          <BuildDocs />
+        </TabsContent>
+        <TabsContent value="account">
+          <AccountDocs />
+        </TabsContent>
+        <TabsContent value="operate">
+          <OperateDocs />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

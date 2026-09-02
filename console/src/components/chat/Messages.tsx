@@ -18,9 +18,18 @@ import {
   Pencil,
   RefreshCcw,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Streamdown, type ControlsConfig } from "streamdown";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { IconButton } from "@/components/ui/IconButton";
 import type { Model } from "@/lib/api";
 import type { GeneratedMedia } from "@/lib/attachments";
 import { turnAttachments } from "@/lib/chatStore";
@@ -53,23 +62,21 @@ export function Markdown({ text, streaming }: { text: string; streaming: boolean
 
 function ActionIcon({
   label,
-  onClick,
+  className,
   children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+  ...props
+}: { label: string; children?: ReactNode } & Omit<
+  ComponentProps<"button">,
+  "aria-label" | "title"
+>) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="rounded-sm p-1.5 text-text-4 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
+    <IconButton
+      label={label}
+      className={`rounded-sm p-1.5 text-text-4 hover:bg-bg-hover hover:text-text-2 ${className ?? ""}`}
+      {...props}
     >
       {children}
-    </button>
+    </IconButton>
   );
 }
 
@@ -97,7 +104,8 @@ function CopyAction({ text }: { text: string }) {
 }
 
 // RetryMenu offers a plain retry plus retry-with-model for the current
-// model and pinned favorites.
+// model and pinned favorites. The menu primitive owns typeahead, arrow
+// keys, Escape, and outside dismiss.
 function RetryMenu({
   models,
   onRetry,
@@ -105,59 +113,30 @@ function RetryMenu({
   models: string[];
   onRetry: (model?: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-
   return (
-    <div ref={ref} className="relative">
-      <ActionIcon label="Retry" onClick={() => setOpen((value) => !value)}>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<ActionIcon label="Retry" />}>
         <RefreshCcw className="size-3.5" />
-      </ActionIcon>
-      {open && (
-        <div className="absolute bottom-full left-0 z-20 mb-1 w-64 rounded-md border border-border-2 bg-bg-panel p-1 shadow-lg">
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onRetry();
-            }}
-            className="block w-full rounded-sm px-2.5 py-1.5 text-left text-sm text-text-1 hover:bg-bg-hover"
-          >
-            Retry
-          </button>
-          {models.length > 0 && (
-            <>
-              <div className="my-1 border-t border-border-1" />
-              <p className="px-2.5 py-1 text-xs uppercase tracking-wide text-text-4">
-                Retry with
-              </p>
-              {models.map((model) => (
-                <button
-                  key={model}
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onRetry(model);
-                  }}
-                  className="block w-full truncate rounded-sm px-2.5 py-1.5 text-left font-mono text-xs text-text-2 hover:bg-bg-hover hover:text-text-1"
-                >
-                  {model}
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-64">
+        <DropdownMenuItem onClick={() => onRetry()}>Retry</DropdownMenuItem>
+        {models.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Retry with</DropdownMenuLabel>
+            {models.map((model) => (
+              <DropdownMenuItem
+                key={model}
+                onClick={() => onRetry(model)}
+                className="truncate font-mono text-xs"
+              >
+                {model}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

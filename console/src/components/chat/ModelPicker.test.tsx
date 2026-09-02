@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { ModelPicker } from "./ModelPicker";
@@ -127,4 +127,20 @@ test("the chat picker omits a model that only reranks", async () => {
   // The exclusion reads the whole operation list rather than looking for one
   // name in it, so a model that reranks and also answers chat stays.
   expect(screen.getByText("Gemini 2.5 Flash")).toBeTruthy();
+});
+
+test("the search box announces the highlighted option", async () => {
+  mount();
+  await waitFor(() => expect(screen.getByText("GPT-4o Search")).toBeTruthy());
+  const input = screen.getByRole("combobox", { name: "Search models and presets" });
+  const [first, second] = screen.getAllByRole("option");
+  if (!first || !second) throw new Error("expected at least two options");
+
+  expect(first.id).toBeTruthy();
+  expect(input.getAttribute("aria-activedescendant")).toBe(first.id);
+
+  fireEvent.keyDown(input, { key: "ArrowDown" });
+  await waitFor(() => {
+    expect(input.getAttribute("aria-activedescendant")).toBe(second.id);
+  });
 });

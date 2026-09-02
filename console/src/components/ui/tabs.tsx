@@ -1,46 +1,35 @@
-"use client"
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
-import { cva, type VariantProps } from "class-variance-authority"
+import { cn } from "@/lib/utils";
 
-import { cn } from "@/lib/utils"
+// Tabs are the DESIGN.md tab row: the `line` variant underlines the
+// active tab in accent, the `chips` variant raises it as a bordered
+// chip. Base UI owns the roving focus, arrow keys, and aria-controls.
 
-function Tabs({
-  className,
-  orientation = "horizontal",
-  ...props
-}: TabsPrimitive.Root.Props) {
+function Tabs({ className, ...props }: TabsPrimitive.Root.Props) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      data-orientation={orientation}
-      className={cn(
-        "group/tabs flex gap-2 data-horizontal:flex-col",
-        className
-      )}
+      className={cn("group/tabs flex flex-col gap-3", className)}
       {...props}
     />
-  )
+  );
 }
 
-const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
-  {
-    variants: {
-      variant: {
-        default: "bg-muted",
-        line: "gap-1 bg-transparent",
-      },
+const tabsListVariants = cva("group/tabs-list flex flex-wrap items-center", {
+  variants: {
+    variant: {
+      line: "gap-1 border-b border-border-1",
+      chips: "gap-2",
     },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
+  },
+  defaultVariants: { variant: "line" },
+});
 
 function TabsList({
   className,
-  variant = "default",
+  variant = "line",
   ...props
 }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
   return (
@@ -50,7 +39,7 @@ function TabsList({
       className={cn(tabsListVariants({ variant }), className)}
       {...props}
     />
-  )
+  );
 }
 
 function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
@@ -58,25 +47,25 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 aria-disabled:pointer-events-none aria-disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-sm group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
-        "data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground",
-        "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
-        className
+        "relative inline-flex items-center gap-1.5 whitespace-nowrap text-sm transition-colors duration-150 ease-standard outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:pointer-events-none disabled:opacity-50",
+        "group-data-[variant=line]/tabs-list:h-9 group-data-[variant=line]/tabs-list:rounded-t-xs group-data-[variant=line]/tabs-list:px-3 group-data-[variant=line]/tabs-list:text-text-3 group-data-[variant=line]/tabs-list:hover:text-text-1 group-data-[variant=line]/tabs-list:data-active:text-text-1",
+        "group-data-[variant=line]/tabs-list:after:absolute group-data-[variant=line]/tabs-list:after:inset-x-0 group-data-[variant=line]/tabs-list:after:-bottom-px group-data-[variant=line]/tabs-list:after:h-0.5 group-data-[variant=line]/tabs-list:after:bg-accent group-data-[variant=line]/tabs-list:after:opacity-0 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
+        "group-data-[variant=chips]/tabs-list:h-9 group-data-[variant=chips]/tabs-list:rounded-sm group-data-[variant=chips]/tabs-list:border group-data-[variant=chips]/tabs-list:border-border-1 group-data-[variant=chips]/tabs-list:bg-bg-panel group-data-[variant=chips]/tabs-list:px-3 group-data-[variant=chips]/tabs-list:text-text-3 group-data-[variant=chips]/tabs-list:hover:border-border-2 group-data-[variant=chips]/tabs-list:hover:text-text-2 group-data-[variant=chips]/tabs-list:data-active:border-border-3 group-data-[variant=chips]/tabs-list:data-active:bg-bg-raised group-data-[variant=chips]/tabs-list:data-active:text-text-1",
+        className,
       )}
       {...props}
     />
-  )
+  );
 }
 
 function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      className={cn("outline-none", className)}
       {...props}
     />
-  )
+  );
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants }
+export { Tabs, TabsContent, TabsList, TabsTrigger };

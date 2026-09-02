@@ -4,6 +4,7 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  Clock,
   FileText,
   Film,
   Key,
@@ -11,7 +12,6 @@ import {
   MessageSquare,
   Moon,
   ScanText,
-  Search,
   Server,
   Settings,
   SlidersHorizontal,
@@ -25,14 +25,26 @@ import {
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import {
   KIND_LABELS,
+  KIND_ORDER,
   searchPalette,
   type PaletteItem,
+  type PaletteItemKind,
 } from "./paletteIndex";
+import { readRecents, rememberRecent } from "./paletteRecents";
 
 // The shell's Search button and the ⌘K shortcut share one entry point:
 // a window event, so no state needs lifting into the shell.
@@ -71,17 +83,46 @@ function Kbd({ children }: { children: string }) {
   );
 }
 
-// CommandPalette is the global ⌘K surface over models, providers,
-// authors, pages, and actions. It stays mounted (and dormant) in the
-// shell; opening it starts the catalog queries, which share their
-// cache keys with the pages.
+type Group = { key: string; heading: string; items: PaletteItem[] };
+
+// groupResults keeps the index's kind order and puts recents first when
+// the query is empty, so the browsable surface opens on the reader's
+// own trail.
+function groupResults(query: string, results: PaletteItem[], recents: PaletteItem[]): Group[] {
+  const groups: Group[] = [];
+  if (!query.trim() && recents.length > 0) {
+    groups.push({ key: "recent", heading: "Recent", items: recents });
+  }
+  const byKind = new Map<PaletteItemKind, PaletteItem[]>();
+  for (const item of results) {
+    const bucket = byKind.get(item.kind);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      byKind.set(item.kind, [item]);
+    }
+  }
+  for (const kind of KIND_ORDER) {
+    const items = byKind.get(kind);
+    if (items?.length) groups.push({ key: kind, heading: KIND_LABELS[kind], items });
+  }
+  return groups;
+}
+
+// CommandPalette is the global ⌘K surface over pages, actions, models,
+// providers, authors, and keys, plus the last five destinations. It
+// stays mounted (and dormant) in the shell; opening it starts the
+// catalog queries, which share their cache keys with the pages. cmdk
+// owns the combobox roles, the highlight, and the arrow keys; the
+// palette index owns matching and ranking, so the fuzzy contract the
+// pages use stays in one place.
 export function CommandPalette() {
   const navigate = useNavigate();
   const keyUsable = useGatewayAccess();
   const theme = useSyncExternalStore(onThemeChange, appliedTheme);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
+  const [recents, setRecents] = useState<PaletteItem[]>([]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -99,19 +140,15 @@ export function CommandPalette() {
     };
   }, []);
 
+  useEffect(() => {
+    if (open) setRecents(readRecents());
+  }, [open]);
+
   const enabled = open && keyUsable;
-  const models = useQuery({
-    ...queries.models(),
-    enabled,
-  });
-  const providers = useQuery({
-    ...queries.providerCatalog(),
-    enabled,
-  });
-  const authors = useQuery({
-    ...queries.authors(),
-    enabled,
-  });
+  const models = useQuery({ ...queries.models(), enabled });
+  const providers = useQuery({ ...queries.providerCatalog(), enabled });
+  const authors = useQuery({ ...queries.authors(), enabled });
+  const keys = useQuery({ ...queries.keys(), enabled });
 
   const items = useMemo<PaletteItem[]>(
     () => [
@@ -152,24 +189,21 @@ export function CommandPalette() {
         label: author.name || author.id,
         hint: author.id,
       })),
+      ...(keys.data ?? []).map((key) => ({
+        kind: "key" as const,
+        id: key.id,
+        label: key.name || key.id,
+        hint: key.id,
+      })),
     ],
-    [models.data, providers.data, authors.data, theme],
+    [models.data, providers.data, authors.data, keys.data, theme],
   );
 
   const visible = useMemo(() => searchPalette(query, items), [query, items]);
-
-  // Query and result changes reset the cursor to the first row.
-  useEffect(() => {
-    setActive(0);
-  }, [query, open]);
-  const activeItem = visible[Math.min(active, visible.length - 1)];
-
-  useEffect(() => {
-    if (!activeItem) return;
-    document
-      .getElementById(`palette-${activeItem.kind}-${activeItem.id}`)
-      ?.scrollIntoView?.({ block: "nearest" });
-  }, [activeItem]);
+  const groups = useMemo(
+    () => groupResults(query, visible, recents),
+    [query, visible, recents],
+  );
 
   const close = () => {
     setOpen(false);
@@ -178,6 +212,7 @@ export function CommandPalette() {
 
   const run = (item: PaletteItem) => {
     close();
+    setRecents(rememberRecent(item));
     if (item.kind === "page") {
       void navigate({ to: item.id });
     } else if (item.kind === "model") {
@@ -189,6 +224,8 @@ export function CommandPalette() {
       });
     } else if (item.kind === "author") {
       void navigate({ to: "/authors/$authorId", params: { authorId: item.id } });
+    } else if (item.kind === "key") {
+      void navigate({ to: "/keys", search: { selected: item.id } });
     } else if (item.id === "toggle-theme") {
       setTheme(appliedTheme() === "dark" ? "light" : "dark");
     } else if (item.id === "new-chat") {
@@ -196,108 +233,63 @@ export function CommandPalette() {
     }
   };
 
-  if (!open) return null;
+  const iconFor = (item: PaletteItem) => {
+    if (item.kind === "page") {
+      const PageIcon = PAGE_ICONS.get(item.id) ?? LayoutDashboard;
+      return <PageIcon className="size-4 shrink-0 text-text-3" />;
+    }
+    if (item.kind === "action") {
+      const ActionIcon =
+        item.id === "toggle-theme" ? (theme === "dark" ? Sun : Moon) : SquarePen;
+      return <ActionIcon className="size-4 shrink-0 text-text-3" />;
+    }
+    if (item.kind === "provider" || item.kind === "author") {
+      return (
+        <EntityLogo
+          kind={item.kind === "provider" ? "providers" : "authors"}
+          id={item.id}
+          name={item.label}
+          size={20}
+        />
+      );
+    }
+    if (item.kind === "key") return <Key className="size-4 shrink-0 text-text-4" />;
+    return <Sparkles className="size-4 shrink-0 text-text-4" />;
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-6 pt-[14vh]">
-      <button
-        type="button"
-        aria-label="Close command palette"
-        onClick={close}
-        className="absolute inset-0 cursor-default bg-black/60"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command palette"
-        className="relative flex max-h-[58vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border-2 bg-bg-raised shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
-      >
-        <div className="flex items-center gap-3 border-b border-border-1 px-4">
-          <Search className="size-5 shrink-0 text-text-4" />
-          <input
-            autoFocus
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                setActive((index) => Math.min(index + 1, visible.length - 1));
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setActive((index) => Math.max(index - 1, 0));
-              } else if (event.key === "Home") {
-                event.preventDefault();
-                setActive(0);
-              } else if (event.key === "End") {
-                event.preventDefault();
-                setActive(visible.length - 1);
-              } else if (event.key === "Enter") {
-                event.preventDefault();
-                if (activeItem) run(activeItem);
-              } else if (event.key === "Escape") {
-                close();
-              }
-            }}
-            placeholder="Search models, providers, authors, pages…"
-            aria-label="Search everything"
-            aria-activedescendant={
-              activeItem
-                ? `palette-${activeItem.kind}-${activeItem.id}`
-                : undefined
-            }
-            className="h-14 w-full bg-transparent text-md text-text-1 outline-none placeholder:text-text-4"
-          />
-        </div>
-        <div role="listbox" aria-label="Results" className="overflow-y-auto p-1.5">
-          {visible.length === 0 && (
-            <p className="px-3 py-4 text-sm text-text-3">
-              No matches for “{query.trim()}”.
-            </p>
-          )}
-          {visible.map((item, index) => {
-            const first =
-              index === 0 || visible[index - 1]?.kind !== item.kind;
-            const PageIcon =
-              item.kind === "page"
-                ? (PAGE_ICONS.get(item.id) ?? LayoutDashboard)
-                : item.kind === "action"
-                  ? item.id === "toggle-theme"
-                    ? theme === "dark"
-                      ? Sun
-                      : Moon
-                    : SquarePen
-                  : null;
-            return (
-              <div key={`${item.kind}:${item.id}`}>
-                {first && (
-                  <p className="px-3 pb-1 pt-2.5 text-[10px] font-medium uppercase tracking-[0.08em] text-text-4">
-                    {KIND_LABELS[item.kind]}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  id={`palette-${item.kind}-${item.id}`}
-                  role="option"
-                  aria-selected={item === activeItem}
-                  onMouseEnter={() => setActive(index)}
-                  onClick={() => run(item)}
-                  className={`flex h-10 w-full items-center gap-3 rounded-sm px-3 text-left ${
-                    item === activeItem ? "bg-bg-hover" : ""
-                  }`}
+    <CommandDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          setOpen(true);
+        } else {
+          close();
+        }
+      }}
+      title="Command palette"
+      description="Search models, providers, authors, keys, pages, and actions."
+    >
+      <Command shouldFilter={false} loop label="Search everything">
+        <CommandInput
+          value={query}
+          onValueChange={setQuery}
+          placeholder="Search models, providers, authors, keys, pages…"
+        />
+        <CommandList aria-label="Results">
+          <CommandEmpty>No matches for “{query.trim()}”.</CommandEmpty>
+          {groups.map((group) => (
+            <CommandGroup key={group.key} heading={group.heading}>
+              {group.items.map((item) => (
+                <CommandItem
+                  key={`${group.key}:${item.kind}:${item.id}`}
+                  value={`${group.key}:${item.kind}:${item.id}`}
+                  onSelect={() => run(item)}
                 >
-                  {PageIcon && (
-                    <PageIcon className="size-4 shrink-0 text-text-3" />
-                  )}
-                  {(item.kind === "provider" || item.kind === "author") && (
-                    <EntityLogo
-                      kind={item.kind === "provider" ? "providers" : "authors"}
-                      id={item.id}
-                      name={item.label}
-                      size={20}
-                    />
-                  )}
-                  {item.kind === "model" && (
-                    <Sparkles className="size-4 shrink-0 text-text-4" />
+                  {group.key === "recent" ? (
+                    <Clock className="size-4 shrink-0 text-text-4" />
+                  ) : (
+                    iconFor(item)
                   )}
                   <span
                     className={`min-w-0 truncate text-text-1 ${
@@ -311,11 +303,11 @@ export function CommandPalette() {
                       {item.hint}
                     </span>
                   )}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
+        </CommandList>
         <div className="flex items-center gap-4 border-t border-border-1 px-4 py-2 text-[11px] text-text-4">
           <span className="flex items-center gap-1.5">
             <Kbd>↑</Kbd>
@@ -331,7 +323,7 @@ export function CommandPalette() {
             close
           </span>
         </div>
-      </div>
-    </div>
+      </Command>
+    </CommandDialog>
   );
 }

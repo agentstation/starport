@@ -31,6 +31,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
 import { GitHubMark } from "@/components/ui/icons";
 import { Toaster } from "@/components/ui/sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
@@ -119,16 +120,24 @@ function ThemeToggle({ collapsed }: { collapsed: boolean }) {
   const Icon = theme === "dark" ? Moon : Sun;
   const label = theme === "dark" ? "Dark theme" : "Light theme";
   return (
-    <button
-      type="button"
-      onClick={flip}
-      title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      aria-label={theme === "dark" ? "Dark theme — switch to light" : "Light theme — switch to dark"}
-      className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
-    >
-      <Icon className="size-4 shrink-0" />
-      {!collapsed && <span>{label}</span>}
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            onClick={flip}
+            aria-label={theme === "dark" ? "Dark theme — switch to light" : "Light theme — switch to dark"}
+            className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
+          />
+        }
+      >
+        <Icon className="size-4 shrink-0" />
+        {!collapsed && <span>{label}</span>}
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        {theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -214,6 +223,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const openGateway = useOpenGateway();
 
   return (
+    <TooltipProvider>
     <div className="flex min-h-screen bg-bg-canvas text-text-1">
       <a
         href="#main"
@@ -324,12 +334,17 @@ export function Shell({ children }: { children: ReactNode }) {
               </>
             )}
           </a>
-          <button
-            type="button"
-            onClick={() => setCollapsed((value) => !value)}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
-          >
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((value) => !value)}
+                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
+                />
+              }
+            >
             {collapsed ? (
               <PanelLeftOpen className="size-4 shrink-0" />
             ) : (
@@ -338,7 +353,11 @@ export function Shell({ children }: { children: ReactNode }) {
                 <span>Collapse</span>
               </>
             )}
-          </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </aside>
 
@@ -365,5 +384,6 @@ export function Shell({ children }: { children: ReactNode }) {
       <CommandPalette />
       <Toaster />
     </div>
+    </TooltipProvider>
   );
 }

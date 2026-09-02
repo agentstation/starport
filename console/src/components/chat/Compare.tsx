@@ -13,6 +13,7 @@ import {
   MetadataLine,
   ReasoningFold,
 } from "@/components/chat/Messages";
+import { IconButton } from "@/components/ui/IconButton";
 import { ApiError, streamChat, type Model } from "@/lib/api";
 import {
   providerPreferences,
@@ -344,25 +345,21 @@ function ColumnCard({
         )}
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {streaming ? (
-            <button
-              type="button"
+            <IconButton
+              label={`Stop ${column.model}`}
               onClick={onStop}
-              aria-label={`Stop ${column.model}`}
-              title="Stop"
-              className="flex size-6 items-center justify-center rounded-sm text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
+              className="size-6 rounded-sm text-text-3 hover:bg-bg-hover hover:text-text-1"
             >
               <Square className="size-3" fill="currentColor" />
-            </button>
+            </IconButton>
           ) : (
-            <button
-              type="button"
+            <IconButton
+              label={`Retry ${column.model}`}
               onClick={onRetry}
-              aria-label={`Retry ${column.model}`}
-              title="Retry"
-              className="flex size-6 items-center justify-center rounded-sm text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
+              className="size-6 rounded-sm text-text-3 hover:bg-bg-hover hover:text-text-1"
             >
               <RefreshCcw className="size-3" />
-            </button>
+            </IconButton>
           )}
         </div>
       </div>
