@@ -16,7 +16,7 @@ import { useRef, type ReactNode } from "react";
 
 import { CopyButton } from "@/components/ui/CopyButton";
 import type { Model } from "@/lib/api";
-import { formatContext, formatPricePerM } from "@/lib/format";
+import { formatContext, formatPricePair } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
 
 const ROW_HEIGHT = 40;
@@ -200,15 +200,12 @@ function IdCell({ model }: { model: Model }) {
 }
 
 function PriceCell({ model }: { model: Model }) {
-  const prompt = formatPricePerM(model.pricing?.prompt);
-  const completion = formatPricePerM(model.pricing?.completion);
-  if (prompt === null && completion === null) {
+  const pair = formatPricePair(model.pricing?.prompt, model.pricing?.completion);
+  if (pair === null) {
     return <span className="text-text-4">—</span>;
   }
   return (
-    <span className="font-mono text-xs tabular-nums text-text-2">
-      {prompt ?? "—"} in · {completion ?? "—"} out
-    </span>
+    <span className="font-mono text-xs tabular-nums text-text-2">{pair}</span>
   );
 }
 

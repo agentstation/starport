@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { TeamDetailPanel } from "@/components/teams/TeamDetailPanel";
 import { INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   accessMessage,
   ApiError,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
-import { formatNanoUSD, formatRelativeTime } from "@/lib/format";
+import { formatNanoUSD } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce, report } from "@/lib/mutations";
 
@@ -124,7 +125,7 @@ function TeamsPage() {
                     : "—"}
                 </td>
                 <td className="px-4 py-2 text-xs text-text-3">
-                  {formatRelativeTime(team.created_at)}
+                  <RelativeTime iso={team.created_at} />
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-1">

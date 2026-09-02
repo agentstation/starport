@@ -8,6 +8,7 @@ import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowA
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   accessMessage,
   ApiError,
@@ -27,6 +28,7 @@ import {
   formatNanoUSD,
   formatRelativeTime,
   formatWindow,
+  utcTooltip,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce, report } from "@/lib/mutations";
@@ -48,12 +50,6 @@ export const Route = createFileRoute("/keys")({
 // the credential family, enough tail to tell records apart.
 function truncateKeyId(id: string): string {
   return id.length > 20 ? `${id.slice(0, 13)}…${id.slice(-4)}` : id;
-}
-
-function utcTooltip(iso: string | undefined | null): string | undefined {
-  if (!iso) return undefined;
-  const date = new Date(iso);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }
 
 // The lifecycle pill is one tint per state: active (success), disabled
@@ -832,11 +828,8 @@ function KeysPage() {
                 <td className="px-4 py-2">
                   <StatusPill apiKey={apiKey} />
                 </td>
-                <td
-                  className="px-4 py-2 text-xs text-text-3"
-                  title={utcTooltip(apiKey.created_at)}
-                >
-                  {formatRelativeTime(apiKey.created_at)}
+                <td className="px-4 py-2 text-xs text-text-3">
+                  <RelativeTime iso={apiKey.created_at} />
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-1">

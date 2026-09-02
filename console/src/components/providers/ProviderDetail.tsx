@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router";
 
 import { ExternalLink } from "@/components/ui/ExternalLink";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import type {
   ActivityRecord,
   ProviderCatalogEntry,
   ProviderOfferingStatus,
   ProviderRuntimeStatus,
 } from "@/lib/api";
-import { formatCount, formatMs, formatRelativeTime } from "@/lib/format";
+import { formatCount, formatMs } from "@/lib/format";
 
 // One circuit vocabulary (internal/availability): healthy and half_open
 // admit attempts; open and unavailable reject them.
@@ -208,9 +209,14 @@ export function EnvironmentCredentialPanel({
           <code className="font-mono text-xs text-text-2">{envName}</code> or{" "}
           <code className="font-mono text-xs text-text-2">{prefixedEnvName}</code>{" "}
           in the gateway environment
-          {credential?.updated_at
-            ? ` · read ${formatRelativeTime(credential.updated_at)}`
-            : ""}
+          {credential?.updated_at ? (
+            <>
+              {" · read "}
+              <RelativeTime iso={credential.updated_at} />
+            </>
+          ) : (
+            ""
+          )}
           .
         </p>
       ) : (

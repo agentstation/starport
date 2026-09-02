@@ -13,11 +13,11 @@ import {
   formatMs,
   formatNanoUSD,
   formatPricePerK,
-  formatRelativeTime,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 
 // Reading a document is the one provider call this gateway makes that the
 // request never named. It runs before the model the caller asked for, it bills
@@ -141,7 +141,7 @@ function ExtractionRows({ records }: { records: ActivityRecord[] }) {
                 className="border-b border-border-1 last:border-0"
               >
                 <td className="px-4 py-2 text-xs text-text-3">
-                  {formatRelativeTime(record.timestamp)}
+                  <RelativeTime iso={record.timestamp} />
                 </td>
                 <td className="px-4 py-2 font-mono text-xs text-text-2">
                   {record.model_used ?? record.model_requested ?? "—"}

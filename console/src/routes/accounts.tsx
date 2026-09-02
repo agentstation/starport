@@ -11,6 +11,7 @@ import { Field, GhostButton, PrimaryButton, RowAction } from "@/components/ui/Fo
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   accessMessage,
   ApiError,
@@ -28,7 +29,6 @@ import { oneOf, optionalString } from "@/lib/search";
 import {
   formatCount,
   formatNanoUSD,
-  formatRelativeTime,
   formatWindow,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
@@ -139,7 +139,7 @@ function AccountDetail({
               <span className="text-xs font-medium text-text-2">Account ID</span>
               <span className="font-mono text-sm text-text-1">{account.id}</span>
               <span className="text-xs text-text-4">
-                created {formatRelativeTime(account.created_at)}
+                created <RelativeTime iso={account.created_at} />
               </span>
             </div>
 

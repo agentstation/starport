@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Field, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   addTeamMember,
   createAccountGrant,
@@ -15,7 +16,6 @@ import {
   type TeamBudget,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { formatRelativeTime } from "@/lib/format";
 import { report } from "@/lib/mutations";
 
 // TeamDetailPanel governs one team: who is on the roster and which accounts
@@ -152,10 +152,9 @@ export function TeamDetailPanel({
               <span className="text-xs font-medium text-text-2">Team ID</span>
               <span className="font-mono text-sm text-text-1">{team.id}</span>
               <span className="text-xs text-text-4">
-                created {formatRelativeTime(team.created_at)}
+                created <RelativeTime iso={team.created_at} />
               </span>
             </div>
-
 
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-text-2">Spend budget</span>

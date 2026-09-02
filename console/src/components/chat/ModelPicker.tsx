@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { type Model } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { formatContext, formatPricePerM, providerLabel } from "@/lib/format";
+import { formatContext, formatPricePair, providerLabel } from "@/lib/format";
 import { chattableModels } from "@/lib/modelFilter";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,9 +62,8 @@ function modelFacts(model: Model): string {
   const parts: string[] = [];
   const context = formatContext(model.context_length);
   if (context !== "—") parts.push(context);
-  const input = formatPricePerM(model.pricing?.prompt);
-  const output = formatPricePerM(model.pricing?.completion);
-  if (input !== null && output !== null) parts.push(`${input}/${output} per M`);
+  const pair = formatPricePair(model.pricing?.prompt, model.pricing?.completion);
+  if (pair !== null) parts.push(pair);
   return parts.join(" · ");
 }
 

@@ -20,6 +20,7 @@ import { AXIS_TICK, CHART, ChartCard, ChartTip } from "@/components/ui/Chart";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   ApiError,
   type ActivityRecord,
@@ -29,7 +30,6 @@ import {
   formatCount,
   formatMs,
   formatNanoUSD,
-  formatRelativeTime,
   providerLabel,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
@@ -265,8 +265,8 @@ function resolutionDiffers(record: ActivityRecord): boolean {
 
 // Usage rows show absolute times when a range filter is active
 // (DESIGN.md); the all-time view falls back to relative times.
-function rowTime(record: ActivityRecord, rangeSeconds: number | undefined): string {
-  if (!rangeSeconds) return formatRelativeTime(record.timestamp);
+function rowTime(record: ActivityRecord, rangeSeconds: number | undefined): React.ReactNode {
+  if (!rangeSeconds) return <RelativeTime iso={record.timestamp} />;
   const at = new Date(record.timestamp);
   if (Number.isNaN(at.getTime())) return "—";
   if (rangeSeconds <= 86400) {
@@ -997,7 +997,11 @@ function UsagePage() {
                       transform: `translateY(${item.start - (listRef.current?.offsetTop ?? 0)}px)`,
                     }}
                   >
-                    <div role="cell" className="px-2.5 font-mono text-xs tabular-nums text-text-3" title={record.timestamp}>
+                    <div
+                      role="cell"
+                      className="px-2.5 font-mono text-xs tabular-nums text-text-3"
+                      title={rangeSeconds ? record.timestamp : undefined}
+                    >
                       {rowTime(record, rangeSeconds)}
                     </div>
                     <div role="cell" className="min-w-0 px-2.5">

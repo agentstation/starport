@@ -5,10 +5,10 @@ import type { ReactNode } from "react";
 import { MemberDetailPanel } from "@/components/members/MemberDetailPanel";
 import { RowAction } from "@/components/ui/Form";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import { accessMessage, ApiError } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
-import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 // A member is a user the identity provider resolved for this gateway. The
@@ -94,7 +94,7 @@ function MembersPage() {
                 </td>
                 <td className="px-4 py-2 text-text-2">{member.email || "—"}</td>
                 <td className="px-4 py-2 text-xs text-text-3">
-                  {formatRelativeTime(member.created_at)}
+                  <RelativeTime iso={member.created_at} />
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end">

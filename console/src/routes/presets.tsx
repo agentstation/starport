@@ -8,6 +8,7 @@ import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowA
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   accessMessage,
   ApiError,
@@ -21,7 +22,7 @@ import {
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
-import { formatRelativeTime } from "@/lib/format";
+import { formatUSD } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { announce } from "@/lib/mutations";
 
@@ -41,12 +42,6 @@ export const Route = createFileRoute("/presets")({
 // domain accepts; empty keeps the server default.
 const SORTS = ["", "price", "latency", "throughput", "spread"] as const;
 
-function utcTooltip(iso: string | undefined): string | undefined {
-  if (!iso) return undefined;
-  const date = new Date(iso);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
-}
-
 // RoutingPills compresses the stored provider policy into scannable
 // neutral chips; a preset without routing shows a quiet dash.
 function RoutingPills({
@@ -62,9 +57,9 @@ function RoutingPills({
     if (provider.ignore?.length)
       parts.push(`ignore ${provider.ignore.join(", ")}`);
     if (provider.max_prompt_price_per_1m)
-      parts.push(`≤$${provider.max_prompt_price_per_1m}/M in`);
+      parts.push(`≤${formatUSD(Number(provider.max_prompt_price_per_1m)) ?? "—"} / M in`);
     if (provider.max_completion_price_per_1m)
-      parts.push(`≤$${provider.max_completion_price_per_1m}/M out`);
+      parts.push(`≤${formatUSD(Number(provider.max_completion_price_per_1m)) ?? "—"} / M out`);
     if (provider.allow_fallbacks === false) parts.push("no fallbacks");
   }
   if (parts.length === 0) return <span className="text-text-4">—</span>;
@@ -565,13 +560,8 @@ function HistoryModal({
                       <span className="text-text-4">—</span>
                     )}
                   </td>
-                  <td
-                    className="whitespace-nowrap px-3 py-2 text-xs text-text-3"
-                    title={utcTooltip(revision.updated_at)}
-                  >
-                    {revision.updated_at
-                      ? formatRelativeTime(revision.updated_at)
-                      : "—"}
+                  <td className="whitespace-nowrap px-3 py-2 text-xs text-text-3">
+                    <RelativeTime iso={revision.updated_at} />
                   </td>
                   <td className="px-3 py-2 text-right">
                     {!isHead && (
@@ -825,13 +815,8 @@ function PresetsPage() {
                     <span className="text-text-4">—</span>
                   )}
                 </td>
-                <td
-                  className="whitespace-nowrap px-4 py-2 text-xs text-text-3"
-                  title={utcTooltip(preset.updated_at)}
-                >
-                  {preset.updated_at
-                    ? formatRelativeTime(preset.updated_at)
-                    : "—"}
+                <td className="whitespace-nowrap px-4 py-2 text-xs text-text-3">
+                  <RelativeTime iso={preset.updated_at} />
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-1">

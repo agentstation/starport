@@ -7,6 +7,7 @@ import { SourcePill } from "@/components/credentials/SourcePill";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LoadingStatus, Skeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   ApiError,
   createSharedCredential,
@@ -17,7 +18,7 @@ import {
   type SharedCredentialSummary,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { formatCount, formatRelativeTime } from "@/lib/format";
+import { formatCount } from "@/lib/format";
 import { announce, errorText, report } from "@/lib/mutations";
 
 // A shared credential is a provider credential an operator shares with the
@@ -326,12 +327,22 @@ export function SharedCredentialPanel({
               <p className="text-xs text-text-3">{accessWords(credential)}</p>
               <p className="text-xs text-text-4">
                 Stored encrypted and never returned
-                {credential.created_at
-                  ? ` · applied ${formatRelativeTime(credential.created_at)}`
-                  : ""}
-                {credential.last_used
-                  ? ` · last used ${formatRelativeTime(credential.last_used)}`
-                  : ""}
+                {credential.created_at ? (
+                  <>
+                    {" · applied "}
+                    <RelativeTime iso={credential.created_at} />
+                  </>
+                ) : (
+                  ""
+                )}
+                {credential.last_used ? (
+                  <>
+                    {" · last used "}
+                    <RelativeTime iso={credential.last_used} />
+                  </>
+                ) : (
+                  ""
+                )}
                 {typeof credential.usage_count === "number"
                   ? ` · ${formatCount(credential.usage_count)} requests`
                   : ""}
