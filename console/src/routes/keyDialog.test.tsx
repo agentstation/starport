@@ -75,3 +75,24 @@ test("a failed delete shows its error inside the dialog", async () => {
   expect(alert.textContent).toMatch(/^Delete failed: /);
   expect(screen.getByRole("dialog", { name: "Delete key" })).toBeTruthy();
 });
+
+// A control names its outcome. The create dialog hands off to the secret
+// dialog, so the toast is the one place that says the key now exists.
+test("creating a key announces it in a toast", async () => {
+  stubGateway({
+    "/api/v1/admin/keys": {
+      keys: [KEY],
+      key: { ...KEY, id: "sk-starport-test-0002", key: "sk-starport-secret" },
+    },
+  });
+  openConsole("/keys");
+  fireEvent.click(await screen.findByRole("button", { name: "New key" }));
+  const dialog = await screen.findByRole("dialog", { name: "New API key" });
+  fireEvent.change(within(dialog).getByLabelText("Name"), {
+    target: { value: "CI key" },
+  });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Create key" }));
+
+  expect(await screen.findByText("Key created")).toBeTruthy();
+  expect(await screen.findByText("sk-starport-secret")).toBeTruthy();
+});

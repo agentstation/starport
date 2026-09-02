@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { History, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { ModelPicker } from "@/components/models/ModelPicker";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction, TEXTAREA_CLASS } from "@/components/ui/Form";
@@ -22,6 +22,7 @@ import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { announce } from "@/lib/mutations";
 
 // The preset under edit lives in the address, so a reload or a shared link
 // opens the same editor. The create, history, and delete dialogs stay local.
@@ -731,11 +732,6 @@ function PresetsPage() {
   const keyUsable = useGatewayAccess();
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<ModalState>(null);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
-  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(noticeTimer.current), []);
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const select = (name?: string) =>
@@ -749,11 +745,6 @@ function PresetsPage() {
     ? (presets.data ?? []).find((preset) => preset.name === search.selected)
     : undefined;
 
-  const say = (text: string, error = false) => {
-    setNotice({ text, error });
-    clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 6000);
-  };
 
   const reload = () =>
     queryClient.invalidateQueries({ queryKey: queries.presets().queryKey });
@@ -879,13 +870,6 @@ function PresetsPage() {
       <div className="flex items-start justify-between gap-4">
         <Header />
         <div className="flex items-center gap-3">
-          {notice && (
-            <span
-              className={`text-xs ${notice.error ? "text-error" : "text-success"}`}
-            >
-              {notice.text}
-            </span>
-          )}
           {canCreate && (
             <PrimaryButton onClick={() => setModal({ kind: "create" })}>
               <Plus className="size-3.5" />
@@ -905,7 +889,7 @@ function PresetsPage() {
           onSaved={async (name, created) => {
             setModal(null);
             select();
-            say(created ? `Created @preset/${name}` : "Preset saved");
+            announce(created ? `Created @preset/${name}` : "Preset saved");
             await reload();
           }}
         />
@@ -916,7 +900,7 @@ function PresetsPage() {
           onClose={() => setModal(null)}
           onRolledBack={async (revision) => {
             setModal(null);
-            say(`Restored as revision ${revision}`);
+            announce(`Restored as revision ${revision}`);
             await reload();
           }}
         />
@@ -927,7 +911,7 @@ function PresetsPage() {
           onClose={() => setModal(null)}
           onDeleted={async () => {
             setModal(null);
-            say("Preset deleted");
+            announce("Preset deleted");
             await reload();
           }}
         />

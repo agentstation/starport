@@ -169,6 +169,21 @@ export class ApiError extends Error {
   get needsKey(): boolean {
     return this.status === 401 || this.status === 403;
   }
+
+  // budgetExhausted reports that a spend or token budget for this request's
+  // account, team, or key is spent for the current window. The gateway
+  // answers 402 and names the budget in the message.
+  get budgetExhausted(): boolean {
+    return this.status === 402;
+  }
+
+  // guardrailRefusal reports that a configured guardrail refused the
+  // request's content. The gateway answers 400 with its own error type, so
+  // the status alone cannot tell it from a malformed request.
+  get guardrailRefusal(): boolean {
+    const parsed = this.body as { error?: { type?: string } } | null;
+    return parsed?.error?.type === "guardrail_refusal";
+  }
 }
 
 // accessMessage phrases a denied request from its actual cause. A 401 means

@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
+import { report } from "@/lib/mutations";
 
 // MemberDetailPanel is the operator's view of one member: who the identity
 // provider resolved, which accounts this member holds directly, and which
@@ -28,7 +29,6 @@ export function MemberDetailPanel({
 }) {
   const queryClient = useQueryClient();
   const [draftAccount, setDraftAccount] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
 
   const grants = useQuery({
     ...queries.memberGrants(member.id),
@@ -41,7 +41,6 @@ export function MemberDetailPanel({
   });
 
   const refresh = async () => {
-    setNotice(null);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queries.memberGrants(member.id).queryKey }),
       queryClient.invalidateQueries({
@@ -58,9 +57,7 @@ export function MemberDetailPanel({
       await refresh();
     },
     onError: (error) =>
-      setNotice(
-        `Grant failed: ${error instanceof Error ? error.message : error}`,
-      ),
+      report(`Grant failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const revoke = useMutation({
@@ -68,9 +65,7 @@ export function MemberDetailPanel({
       deleteAccountGrant({ account_id: accountId, user_id: member.id }),
     onSuccess: refresh,
     onError: (error) =>
-      setNotice(
-        `Remove failed: ${error instanceof Error ? error.message : error}`,
-      ),
+      report(`Remove failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const granted = new Set((grants.data ?? []).map((row) => row.account_id));
@@ -104,7 +99,6 @@ export function MemberDetailPanel({
               </span>
             </div>
 
-            {notice && <p className="text-xs text-error">{notice}</p>}
 
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-text-2">Direct grants</span>

@@ -17,6 +17,7 @@ import {
 import { queries } from "@/lib/queries";
 import { formatBytes, formatUnixTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { announce, report } from "@/lib/mutations";
 
 // A stored file belongs to the account whose credential asked for it. The
 // routes scope every answer to the caller, so this panel shows one account's
@@ -112,9 +113,6 @@ export function FilesPanel() {
   const [purpose, setPurpose] = useState<Purpose>("user_data");
   const [confirming, setConfirming] = useState<StoredFile | null>(null);
   const [removeError, setRemoveError] = useState("");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
 
   const files = useQuery({
     ...queries.files(),
@@ -134,18 +132,18 @@ export function FilesPanel() {
   const upload = useMutation({
     mutationFn: (file: File) => uploadFile(file, purpose),
     onSuccess: async (stored) => {
-      setNotice({ text: `Uploaded ${stored.filename}` });
+      announce(`Uploaded ${stored.filename}`);
       await queryClient.invalidateQueries({ queryKey: queries.files().queryKey });
     },
     onError: (error) =>
-      setNotice({ text: `Upload refused: ${refusalText(error)}`, error: true }),
+      report(`Upload refused: ${refusalText(error)}`),
   });
 
   const remove = useMutation({
     mutationFn: (file: StoredFile) => deleteFile(file.id),
     onSuccess: async (_result, file) => {
       setConfirming(null);
-      setNotice({ text: `Deleted ${file.filename}` });
+      announce(`Deleted ${file.filename}`);
       await queryClient.invalidateQueries({ queryKey: queries.files().queryKey });
     },
     onError: (error) => setRemoveError(`Delete failed: ${refusalText(error)}`),
@@ -271,14 +269,6 @@ export function FilesPanel() {
           </PrimaryButton>
         </div>
       </div>
-      {notice && (
-        <p
-          data-testid="file-notice"
-          className={`text-sm ${notice.error ? "text-error" : "text-success"}`}
-        >
-          {notice.text}
-        </p>
-      )}
       {body}
       {confirming && (
         <Dialog

@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
+import { report } from "@/lib/mutations";
 
 // TeamDetailPanel governs one team: who is on the roster and which accounts
 // the team grants. Both lists are the gateway's — every edit travels before
@@ -32,7 +33,6 @@ export function TeamDetailPanel({
   const queryClient = useQueryClient();
   const [draftMember, setDraftMember] = useState("");
   const [draftAccount, setDraftAccount] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
   const [draftBudget, setDraftBudget] = useState(
     team.budget ? String(team.budget.limit / 1e9) : "",
   );
@@ -57,25 +57,19 @@ export function TeamDetailPanel({
     mutationFn: (userId: string) => addTeamMember(team.id, userId),
     onSuccess: async () => {
       setDraftMember("");
-      setNotice(null);
       await queryClient.invalidateQueries({ queryKey: queries.teamMembers(team.id).queryKey });
     },
     onError: (error) =>
-      setNotice(
-        `Add failed: ${error instanceof Error ? error.message : error}`,
-      ),
+      report(`Add failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const drop = useMutation({
     mutationFn: (userId: string) => removeTeamMember(team.id, userId),
     onSuccess: async () => {
-      setNotice(null);
       await queryClient.invalidateQueries({ queryKey: queries.teamMembers(team.id).queryKey });
     },
     onError: (error) =>
-      setNotice(
-        `Remove failed: ${error instanceof Error ? error.message : error}`,
-      ),
+      report(`Remove failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const grant = useMutation({
@@ -83,51 +77,44 @@ export function TeamDetailPanel({
       createAccountGrant({ account_id: accountId, team_id: team.id }),
     onSuccess: async () => {
       setDraftAccount("");
-      setNotice(null);
       await queryClient.invalidateQueries({ queryKey: queries.teamGrants(team.id).queryKey });
     },
     onError: (error) =>
-      setNotice(
-        `Grant failed: ${error instanceof Error ? error.message : error}`,
-      ),
+      report(`Grant failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const revoke = useMutation({
     mutationFn: (accountId: string) =>
       deleteAccountGrant({ account_id: accountId, team_id: team.id }),
     onSuccess: async () => {
-      setNotice(null);
       await queryClient.invalidateQueries({ queryKey: queries.teamGrants(team.id).queryKey });
     },
     onError: (error) =>
-      setNotice(
-        `Remove failed: ${error instanceof Error ? error.message : error}`,
-      ),
+      report(`Remove failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const saveBudget = useMutation({
     mutationFn: (budget: TeamBudget | undefined) =>
       updateTeam(team.id, { name: team.name, budget }),
     onSuccess: async () => {
-      setNotice(null);
       await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
     },
     onError: (error) =>
-      setNotice(
-        `Budget save failed: ${error instanceof Error ? error.message : error}`,
-      ),
+      report(`Budget save failed: ${error instanceof Error ? error.message : error}`),
   });
 
   // submitBudget reads the draft: an empty amount clears the budget, and
   // anything else must be a positive dollar amount.
+  const [budgetError, setBudgetError] = useState<string | null>(null);
   const submitBudget = () => {
+    setBudgetError(null);
     if (!draftBudget.trim()) {
       saveBudget.mutate(undefined);
       return;
     }
     const usd = Number(draftBudget);
     if (!Number.isFinite(usd) || usd <= 0) {
-      setNotice("The spend budget must be a positive amount.");
+      setBudgetError("The spend budget must be a positive amount.");
       return;
     }
     saveBudget.mutate({
@@ -169,7 +156,6 @@ export function TeamDetailPanel({
               </span>
             </div>
 
-            {notice && <p className="text-xs text-error">{notice}</p>}
 
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-text-2">Spend budget</span>
@@ -209,6 +195,7 @@ export function TeamDetailPanel({
                   Save budget
                 </PrimaryButton>
               </div>
+              {budgetError && <p className="text-xs text-error">{budgetError}</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">

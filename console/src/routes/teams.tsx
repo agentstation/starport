@@ -15,6 +15,7 @@ import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
 import { formatNanoUSD, formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { announce, report } from "@/lib/mutations";
 
 // A team is the operator's grouping lever: grant an account to a team once
 // and everyone on the roster reaches it, including whoever joins later.
@@ -39,9 +40,6 @@ function TeamsPage() {
   const setSelected = (teamId: string | null) =>
     void navigate({ search: { selected: teamId ?? undefined }, replace: true });
   const [draftName, setDraftName] = useState("");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
 
   const teams = useQuery({
     ...queries.teams(),
@@ -52,29 +50,23 @@ function TeamsPage() {
     mutationFn: (name: string) => createTeam(name),
     onSuccess: async (team) => {
       setDraftName("");
-      setNotice({ text: `Team ${team.name} created` });
+      announce(`Team ${team.name} created`);
       await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
       setSelected(team.id);
     },
     onError: (error) =>
-      setNotice({
-        text: `Create failed: ${error instanceof Error ? error.message : error}`,
-        error: true,
-      }),
+      report(`Create failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const remove = useMutation({
     mutationFn: (teamId: string) => deleteTeam(teamId),
     onSuccess: async (_result, teamId) => {
-      setNotice({ text: "Team deleted" });
+      announce("Team deleted");
       if (selected === teamId) setSelected(null);
       await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
     },
     onError: (error) =>
-      setNotice({
-        text: `Delete failed: ${error instanceof Error ? error.message : error}`,
-        error: true,
-      }),
+      report(`Delete failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const rows = teams.data ?? [];
@@ -186,11 +178,6 @@ function TeamsPage() {
           </PrimaryButton>
         </div>
       </div>
-      {notice && (
-        <p className={`text-sm ${notice.error ? "text-error" : "text-success"}`}>
-          {notice.text}
-        </p>
-      )}
       {body}
       {open && <TeamDetailPanel team={open} onClose={() => setSelected(null)} />}
     </div>

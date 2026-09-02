@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatCount, formatRelativeTime } from "@/lib/format";
+import { announce, errorText, report } from "@/lib/mutations";
 
 // A shared credential is a provider credential an operator shares with the
 // deployment's accounts. It belongs to no account, so it is addressed by
@@ -179,15 +180,11 @@ export function SharedCredentialPanel({
     null,
   );
   const [removeError, setRemoveError] = useState("");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
   // The id the apply modal's validate call addresses. A replace knows it up
   // front; a create learns it from the response, after apply and before
   // validate, so a ref carries it across the two calls.
   const applyTarget = useRef<string | null>(null);
 
-  const say = (text: string, error = false) => setNotice({ text, error });
   // A stored credential changes what the provider can serve, so the status
   // read refreshes with the list.
   const refresh = () =>
@@ -208,13 +205,11 @@ export function SharedCredentialPanel({
     onSuccess: (result, credential) => {
       const valid = result?.valid !== false;
       const who = credential.label || "The shared credential";
-      say(valid ? `${who} is valid` : `${who} is invalid`, !valid);
+      if (valid) announce(`${who} is valid`);
+      else report(`${who} is invalid`);
     },
     onError: (error) =>
-      say(
-        `Validation failed: ${error instanceof Error ? error.message : error}`,
-        true,
-      ),
+      report(`Validation failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const remove = useMutation({
@@ -222,7 +217,7 @@ export function SharedCredentialPanel({
       deleteSharedCredential(providerId, credential.id),
     onSuccess: async () => {
       setRemoving(null);
-      say("Shared credential removed");
+      announce("Shared credential removed");
       await refresh();
     },
     onError: (error) =>
@@ -259,11 +254,6 @@ export function SharedCredentialPanel({
         )}
       </div>
 
-      {notice && (
-        <p className={`text-xs ${notice.error ? "text-error" : "text-success"}`}>
-          {notice.text}
-        </p>
-      )}
 
       {credentials.isPending ? (
         <p className="text-sm text-text-3">Loading credentials…</p>
@@ -423,7 +413,7 @@ export function SharedCredentialPanel({
           credential={editingAccess}
           onSaved={async () => {
             setEditingAccess(null);
-            say("Access updated");
+            announce("Access updated");
             await refresh();
           }}
           onClose={() => setEditingAccess(null)}
@@ -491,25 +481,17 @@ function AccessEditModal({
     credential.access === "granted" ? "granted" : "open",
   );
   const [grants, setGrants] = useState<string[]>(credential.grants ?? []);
-  const [busy, setBusy] = useState(false);
 
-  const save = async () => {
-    setBusy(true);
-    try {
-      await updateSharedCredential(providerId, credential.id, {
+  const save = useMutation({
+    mutationFn: () =>
+      updateSharedCredential(providerId, credential.id, {
         access,
         grants: access === "granted" ? grants : [],
-      });
-    } catch (problem) {
-      setBusy(false);
-      setError(
-        `Access update failed: ${problem instanceof Error ? problem.message : problem}`,
-      );
-      return;
-    }
-    setBusy(false);
-    await onSaved();
-  };
+      }),
+    onMutate: () => setError(""),
+    onSuccess: () => onSaved(),
+    onError: (problem) => setError(`Access update failed: ${errorText(problem)}`),
+  });
 
   return (
     <Dialog
@@ -534,11 +516,11 @@ function AccessEditModal({
         </DialogBody>
         <DialogError>{error}</DialogError>
         <DialogFooter>
-          <GhostButton onClick={onClose} disabled={busy}>
+          <GhostButton onClick={onClose} disabled={save.isPending}>
             Cancel
           </GhostButton>
-          <PrimaryButton onClick={() => void save()} disabled={busy}>
-            {busy ? "Saving…" : "Save access"}
+          <PrimaryButton onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending ? "Saving…" : "Save access"}
           </PrimaryButton>
         </DialogFooter>
       </DialogContent>

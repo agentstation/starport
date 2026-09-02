@@ -62,6 +62,37 @@ test("a 401 marks the stored key rejected", async () => {
   expect(isCredentialRejected()).toBe(true);
 });
 
+// The gateway answers a spent budget with 402 and names the budget in the
+// message. The console reads the status, not the text, so a reworded message
+// still renders as a budget, not as a generic failure.
+test("a 402 parses to an exhausted budget", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              type: "permission_error",
+              message: "team budget is spent for this day",
+            },
+          }),
+          { status: 402, headers: { "Content-Type": "application/json" } },
+        ),
+    ),
+  );
+
+  const error = await request("/v1/chat/completions", { method: "POST" }).catch(
+    (caught: unknown) => caught,
+  );
+  expect(error).toBeInstanceOf(ApiError);
+  const apiError = error as ApiError;
+  expect(apiError.budgetExhausted).toBe(true);
+  expect(apiError.guardrailRefusal).toBe(false);
+  expect(apiError.message).toBe("team budget is spent for this day");
+  expect(isCredentialRejected()).toBe(false);
+});
+
 // A 403 proves the key authenticated, so it must not send the console back to
 // the connect prompt; the reader would replace a key that works.
 test("a 403 leaves the stored key usable", async () => {

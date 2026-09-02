@@ -103,7 +103,7 @@ one_contract_two_backends() {
 console_files() {
   all_present queries.files uploadFile deleteFile \
     -- console/src/components/files/FilesPanel.tsx || return 1
-  all_present file-row file-notice stored-total \
+  all_present file-row "Upload refused" stored-total \
     -- console/src/components/files/FilesPanel.test.tsx || return 1
   grep_q FilesPanel console/src/routes/files.tsx
 }

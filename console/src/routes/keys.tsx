@@ -1,7 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { CopyButton } from "@/components/ui/CopyButton";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
@@ -28,6 +28,7 @@ import {
   formatWindow,
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+import { announce, report } from "@/lib/mutations";
 
 // The key under edit lives in the address, so a reload or a shared link
 // opens the same panel. The create, secret, and delete dialogs stay local:
@@ -730,11 +731,6 @@ function KeysPage() {
   const keyUsable = useGatewayAccess();
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<ModalState>(null);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
-  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(noticeTimer.current), []);
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const select = (keyId?: string) =>
@@ -749,11 +745,6 @@ function KeysPage() {
     ? (keys.data ?? []).find((apiKey) => apiKey.id === search.selected)
     : undefined;
 
-  const say = (text: string, error = false) => {
-    setNotice({ text, error });
-    clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 6000);
-  };
 
   const reload = () => queryClient.invalidateQueries({ queryKey: queries.keys().queryKey });
 
@@ -761,14 +752,11 @@ function KeysPage() {
     mutationFn: (apiKey: GatewayKey) =>
       updateKey(apiKey.id, { active: apiKey.active === false }),
     onSuccess: async (_result, apiKey) => {
-      say(apiKey.active === false ? "Key enabled" : "Key disabled");
+      announce(apiKey.active === false ? "Key enabled" : "Key disabled");
       await reload();
     },
     onError: (error) =>
-      say(
-        `Update failed: ${error instanceof Error ? error.message : error}`,
-        true,
-      ),
+      report(`Update failed: ${error instanceof Error ? error.message : error}`),
   });
 
   let body: ReactNode;
@@ -888,13 +876,6 @@ function KeysPage() {
       <div className="flex items-start justify-between gap-4">
         <Header />
         <div className="flex items-center gap-3">
-          {notice && (
-            <span
-              className={`text-xs ${notice.error ? "text-error" : "text-success"}`}
-            >
-              {notice.text}
-            </span>
-          )}
           {canCreate && (
             <PrimaryButton onClick={() => setModal({ kind: "create" })}>
               <Plus className="size-3.5" />
@@ -909,6 +890,7 @@ function KeysPage() {
           onClose={() => setModal(null)}
           onCreated={async (secret) => {
             setModal({ kind: "secret", secret });
+            announce("Key created");
             await reload();
           }}
         />
@@ -922,7 +904,7 @@ function KeysPage() {
           onClose={() => select()}
           onSaved={async () => {
             select();
-            say("Key updated");
+            announce("Key updated");
             await reload();
           }}
         />
@@ -933,7 +915,7 @@ function KeysPage() {
           onClose={() => setModal(null)}
           onDeleted={async () => {
             setModal(null);
-            say("Key deleted");
+            announce("Key deleted");
             await reload();
           }}
         />

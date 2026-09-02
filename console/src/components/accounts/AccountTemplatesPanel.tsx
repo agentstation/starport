@@ -20,6 +20,7 @@ import {
   type CredentialStrategy,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
+import { announce, report } from "@/lib/mutations";
 
 // AccountTemplatesPanel manages the account templates this gateway holds. A
 // template names creation defaults once — limits, credential strategy, BYOK
@@ -186,9 +187,6 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
-    null,
-  );
 
   const templates = useQuery({
     ...queries.accountTemplates(),
@@ -197,15 +195,12 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
   const remove = useMutation({
     mutationFn: (templateId: string) => deleteAccountTemplate(templateId),
     onSuccess: async (_result, templateId) => {
-      setNotice({ text: `Template ${templateId} deleted` });
+      announce(`Template ${templateId} deleted`);
       setOpen((current) => (current === templateId ? null : current));
       await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
     },
     onError: (error) =>
-      setNotice({
-        text: `Delete failed: ${error instanceof Error ? error.message : error}`,
-        error: true,
-      }),
+      report(`Delete failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const rows = templates.data ?? [];
@@ -229,13 +224,6 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
               an account it already created.
             </p>
 
-            {notice && (
-              <p
-                className={`text-sm ${notice.error ? "text-error" : "text-success"}`}
-              >
-                {notice.text}
-              </p>
-            )}
 
             {templates.error ? (
               <p className="text-sm text-text-3">
@@ -300,7 +288,7 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
               <CreateTemplateForm
                 onCreated={async () => {
                   setCreating(false);
-                  setNotice({ text: "Template created" });
+                  announce("Template created");
                   await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
                 }}
               />
