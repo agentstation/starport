@@ -40,7 +40,7 @@ import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 // caller owns, and the gateway surface an operator runs. A local
 // developer is all three at once, so nothing hides — the labels only
 // say which hat a page belongs to.
-const NAV_SECTIONS: ReadonlyArray<{
+export const NAV_SECTIONS: ReadonlyArray<{
   label: string | null;
   items: ReadonlyArray<{ to: string; label: string; icon: typeof LayoutDashboard }>;
 }> = [
