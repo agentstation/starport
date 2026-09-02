@@ -249,7 +249,7 @@ export function MetadataLine({
   if (stats?.cache) {
     items.push({
       key: "cache",
-      text: `cache ${stats.cache.toLowerCase()}${stats.cacheAge ? ` · ${stats.cacheAge}` : ""}`,
+      text: `cache ${stats.cache.toLowerCase()}${stats.cacheAge ? ` · ${stats.cacheAge}` : ""}${stats.cacheSimilarity ? ` · ${stats.cacheSimilarity} similar` : ""}`,
       tone: stats.cache.toUpperCase() === "HIT" ? "text-success" : undefined,
     });
   }

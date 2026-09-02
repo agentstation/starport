@@ -120,7 +120,7 @@
     Created: 2026-09-01 ·
     Baseline: main @ 6db57d8 ·
     Proof root: <code>docs/proof/console-polish/</code> ·
-    Next action: finish CPL-E5 on codex/cpl-e5, then start CPL-E6
+    Next action: finish CPL-E6 on codex/cpl-e6, then start CPL-E7
   </p>
 
   <section id="outcome">
@@ -525,8 +525,8 @@
         <tr id="CPL-E2" data-status="done"><td>CPL-E2</td><td>Settings sections for system, observability, guardrails, webhooks, and retention.</td><td><code>done</code></td><td>PR #346. Verifier 32 passed, 16 failed. Proof <code>docs/proof/console-polish/CPL-E2.md</code>.</td></tr>
         <tr id="CPL-E3" data-status="done"><td>CPL-E3</td><td>Budgets as meters on teams and accounts.</td><td><code>done</code></td><td>PR #347. Verifier 34 passed, 14 failed. Proof <code>docs/proof/console-polish/CPL-E3.md</code>.</td></tr>
         <tr id="CPL-E4" data-status="done"><td>CPL-E4</td><td>Confirmations for every cascading write.</td><td><code>done</code></td><td>PR #348. Verifier 35 passed, 13 failed. Proof <code>docs/proof/console-polish/CPL-E4.md</code>.</td></tr>
-        <tr id="CPL-E5" data-status="in_progress"><td>CPL-E5</td><td>Audit log as an investigation tool.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e5</code>.</td></tr>
-        <tr id="CPL-E6" data-status="todo"><td>CPL-E6</td><td>Usage: guardrail fields, export, semantic cache.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E5" data-status="done"><td>CPL-E5</td><td>Audit log as an investigation tool.</td><td><code>done</code></td><td>PR #349. Verifier 36 passed, 12 failed. Proof <code>docs/proof/console-polish/CPL-E5.md</code>.</td></tr>
+        <tr id="CPL-E6" data-status="in_progress"><td>CPL-E6</td><td>Usage: guardrail fields, export, semantic cache.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e6</code>.</td></tr>
         <tr id="CPL-E7" data-status="todo"><td>CPL-E7</td><td>Batches panel on the jobs page.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-F1" data-status="todo"><td>CPL-F1</td><td>Shell and navigation polish.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-F2" data-status="todo"><td>CPL-F2</td><td>Models and providers copy and states.</td><td><code>todo</code></td><td></td></tr>
@@ -1892,6 +1892,18 @@ deleted this plan.</code></pre>
           Request column links to the usage page filtered by request ID,
           the outcome is a chip, the actor is a name with the raw subject
           in a tooltip, and an empty window offers a wider range.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E5</td><td>done</td><td>PR #349 merged.
+          Verifier 36 passed, 12 failed. Console tests 360.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E6</td><td>started</td><td>Branch
+          codex/cpl-e6. The usage record persists the cache similarity and
+          the semantic flag, the listing and the export filter by guardrail
+          verdict, an admin export route spans keys, the CSV carries the
+          cache and guardrail columns, the usage page gains a Guardrail
+          column, the refused and redacted facets, export controls, and a
+          semantic hit count, and chat gains the X-Semantic-Cache toggle.
+          Semantic status is <code>cache_semantic</code>, derived from a
+          similarity above zero, because the proxy has no semantic status
+          word.</td></tr>
       </tbody>
     </table>
   </section>

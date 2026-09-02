@@ -17,6 +17,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { ApiError, streamChat, type Model } from "@/lib/api";
 import {
   providerPreferences,
+  requestHeaders,
   statsFromUsage,
   type ChatMessage,
   type ChatParams,
@@ -75,6 +76,8 @@ export function useCompare({
   // The request body shared by every column (everything but "model"),
   // frozen at send time so a per-column retry replays the same request.
   const baseBodyRef = useRef<Record<string, unknown>>({});
+  // The headers beside that body, frozen the same way.
+  const headersRef = useRef<Record<string, string>>({});
 
   const streaming = columns?.some((column) => column.streaming) ?? false;
 
@@ -111,6 +114,7 @@ export function useCompare({
 
     streamChat(body, {
       signal: controller.signal,
+      headers: headersRef.current,
       onDelta: (delta) => {
         const now = performance.now();
         if (firstTokenAt === undefined) firstTokenAt = now;
@@ -236,6 +240,7 @@ export function useCompare({
     const provider = providerPreferences(params);
     if (provider) base.provider = provider;
     baseBodyRef.current = base;
+    headersRef.current = requestHeaders(params);
 
     setPrompt(text);
     setColumns(

@@ -32,6 +32,11 @@ export type ChatParams = {
   // Reasoning effort ("" = provider default). New in CM10; absent on
   // legacy records, so readers use `params.effort ?? ""`.
   effort?: string;
+  // semanticCache opts the request into the semantic cache layer through
+  // the X-Semantic-Cache header. The layer answers only when the operator
+  // enabled it, so the flag is a request, not a promise. Absent on records
+  // written before it existed.
+  semanticCache?: boolean;
 };
 
 export const DEFAULT_PARAMS: ChatParams = {
@@ -43,6 +48,7 @@ export const DEFAULT_PARAMS: ChatParams = {
   ignore: "",
   sort: "",
   effort: "",
+  semanticCache: false,
 };
 
 export type ChatStats = {
@@ -55,6 +61,7 @@ export type ChatStats = {
   tokens?: number;
   cache?: string;
   cacheAge?: string;
+  cacheSimilarity?: string;
   unenforced?: string;
 };
 
@@ -205,7 +212,7 @@ export function saveSidebarClosed(closed: boolean): void {
 export function statsFromUsage(
   usage: ChatUsage | null,
   timing: { ttftMs?: number; latencyMs: number },
-  meta: { cache?: string; cacheAge?: string; unenforced?: string },
+  meta: { cache?: string; cacheAge?: string; cacheSimilarity?: string; unenforced?: string },
 ): ChatStats {
   const completionTokens = usage?.completion_tokens;
   const stats: ChatStats = {
@@ -217,6 +224,7 @@ export function statsFromUsage(
     tokens: usage?.total_tokens,
     cache: meta.cache || undefined,
     cacheAge: meta.cacheAge || undefined,
+    cacheSimilarity: meta.cacheSimilarity || undefined,
     unenforced: meta.unenforced || undefined,
   };
   const generationMs = timing.latencyMs - (timing.ttftMs ?? 0);
@@ -228,6 +236,16 @@ export function statsFromUsage(
 
 // providerPreferences builds the request "provider" object from the
 // comma-separated params; null when nothing is set.
+// SEMANTIC_CACHE_HEADER is the per-request opt-in the gateway reads. The
+// deployment flag alone never turns the layer on for a caller.
+export const SEMANTIC_CACHE_HEADER = "X-Semantic-Cache";
+
+// requestHeaders reads the headers a chat request carries beside its body:
+// the semantic cache opt-in when the params ask for it, nothing otherwise.
+export function requestHeaders(params: ChatParams): Record<string, string> {
+  return params.semanticCache ? { [SEMANTIC_CACHE_HEADER]: "true" } : {};
+}
+
 export function providerPreferences(
   params: ChatParams,
 ): Record<string, unknown> | null {

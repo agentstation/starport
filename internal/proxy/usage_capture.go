@@ -157,6 +157,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		record.Attempts = response.Attempts
 		record.RoutingMS = response.RoutingDuration.Milliseconds()
 		record.CacheStatus = response.CacheStatus
+		record.CacheSimilarity, record.CacheSemantic = cacheSimilarity(response.CacheSimilarity)
 		record.Tokens = usageTokens(response.Response.Usage)
 		record.Media = usageMedia(response.Response.Usage)
 		record.GuardrailVerdict = response.GuardrailVerdict
@@ -386,6 +387,25 @@ func (s *usageCaptureStream) GetCacheAge() int {
 	return 0
 }
 
+// GetCacheSimilarity forwards the inner stream's semantic similarity, or
+// zero for a stream that served exactly or not from cache at all.
+func (s *usageCaptureStream) GetCacheSimilarity() float64 {
+	if provider, ok := s.stream.(CacheSimilarityProvider); ok {
+		return provider.GetCacheSimilarity()
+	}
+	return 0
+}
+
+// cacheSimilarity reads the two cache fields a record persists from the
+// similarity a hit served under. Only the semantic layer reports one, so
+// a positive value is the semantic status itself.
+func cacheSimilarity(similarity float64) (float64, bool) {
+	if similarity <= 0 {
+		return 0, false
+	}
+	return similarity, true
+}
+
 func (s *usageCaptureStream) finalize(terminal error) {
 	s.once.Do(func() {
 		record := s.record
@@ -396,6 +416,7 @@ func (s *usageCaptureStream) finalize(terminal error) {
 		record.LatencyMS = time.Since(s.start).Milliseconds()
 		record.ModelUsed = s.modelUsed
 		record.CacheStatus = s.GetCacheStatus()
+		record.CacheSimilarity, record.CacheSemantic = cacheSimilarity(s.GetCacheSimilarity())
 		if verdict := findStreamGuardrailVerdict(s.stream); verdict != "" && record.GuardrailVerdict == "" {
 			record.GuardrailVerdict = verdict
 		}

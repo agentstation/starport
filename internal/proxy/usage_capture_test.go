@@ -623,3 +623,88 @@ func TestUsageCaptureNotifiesObservers(t *testing.T) {
 	require.EqualValues(t, 100, observed[0].Tokens.Input)
 	require.EqualValues(t, 40, observed[0].Tokens.Output)
 }
+
+// semanticCacheProxy stands in for the cache layer beneath the capture: it
+// answers a stream that reports a semantic similarity.
+type semanticCacheProxy struct {
+	*mockProxyImpl
+	stream ChatCompletionStreamResponse
+}
+
+func (p *semanticCacheProxy) ProcessChatCompletionStream(context.Context, *ChatCompletionRequest) (ChatCompletionStreamResponse, error) {
+	return p.stream, nil
+}
+
+// similarityStream is a cache-served stream that names its similarity the
+// way cachedEventStream does.
+type similarityStream struct {
+	ChatCompletionStreamResponse
+	similarity float64
+}
+
+func (s *similarityStream) GetCacheStatus() string      { return CacheStatusHit }
+func (s *similarityStream) GetCacheAge() int            { return 1 }
+func (s *similarityStream) GetCacheSimilarity() float64 { return s.similarity }
+
+func TestUsageRecordCarriesSemanticCacheSimilarity(t *testing.T) {
+	tests := []struct {
+		name       string
+		similarity float64
+		semantic   bool
+	}{
+		{name: "semantic hit", similarity: 0.93, semantic: true},
+		{name: "exact hit", similarity: 0, semantic: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := canonicalChatResponse()
+			response.CacheStatus = CacheStatusHit
+			response.CacheSimilarity = tt.similarity
+			repository := &recordingUsageRepository{}
+			capture := NewUsageCapture(repository)
+			service := capture.Wrap(&mockProxyImpl{chatResponse: response})
+
+			_, err := service.ProcessChatCompletion(context.Background(), usageChatRequest())
+			require.NoError(t, err)
+			capture.Flush()
+
+			records := repository.all()
+			require.Len(t, records, 1)
+			require.Equal(t, CacheStatusHit, records[0].CacheStatus)
+			require.InDelta(t, tt.similarity, records[0].CacheSimilarity, 1e-9)
+			require.Equal(t, tt.semantic, records[0].CacheSemantic)
+		})
+	}
+}
+
+func TestStreamingUsageRecordCarriesSemanticCacheSimilarity(t *testing.T) {
+	response := canonicalChatResponse()
+	stream := &similarityStream{ChatCompletionStreamResponse: newMockStream(response), similarity: 0.88}
+	repository := &recordingUsageRepository{}
+	capture := NewUsageCapture(repository)
+	service := capture.Wrap(&semanticCacheProxy{mockProxyImpl: &mockProxyImpl{chatResponse: response}, stream: stream})
+
+	request := usageChatRequest()
+	request.Request.Stream = true
+	streamResponse, err := service.ProcessChatCompletionStream(context.Background(), request)
+	require.NoError(t, err)
+	for {
+		if _, readErr := streamResponse.Read(); readErr != nil {
+			require.ErrorIs(t, readErr, io.EOF)
+			break
+		}
+	}
+	require.NoError(t, streamResponse.Close())
+	capture.Flush()
+
+	// The wrapper forwards the similarity for the header beside the status.
+	provider, ok := streamResponse.(CacheSimilarityProvider)
+	require.True(t, ok)
+	require.InDelta(t, 0.88, provider.GetCacheSimilarity(), 1e-9)
+
+	records := repository.all()
+	require.Len(t, records, 1)
+	require.Equal(t, CacheStatusHit, records[0].CacheStatus)
+	require.InDelta(t, 0.88, records[0].CacheSimilarity, 1e-9)
+	require.True(t, records[0].CacheSemantic)
+}

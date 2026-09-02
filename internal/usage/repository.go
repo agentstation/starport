@@ -139,9 +139,12 @@ type Query struct {
 	// RequestID selects the one record a request left, so an audit record
 	// or a log line reaches its usage row.
 	RequestID string
-	Since     time.Time
-	Until     time.Time
-	Limit     int
+	// GuardrailVerdict keeps only records a guardrail closed with this
+	// verdict: `refuse` or `redact`. Empty places no filter.
+	GuardrailVerdict string
+	Since            time.Time
+	Until            time.Time
+	Limit            int
 	// Cursor continues a previous page: the opaque NextCursor value.
 	Cursor string
 }
@@ -429,6 +432,9 @@ func matches(record Record, query Query) bool {
 		return false
 	}
 	if query.RequestID != "" && record.RequestID != query.RequestID {
+		return false
+	}
+	if query.GuardrailVerdict != "" && record.GuardrailVerdict != query.GuardrailVerdict {
 		return false
 	}
 	return true

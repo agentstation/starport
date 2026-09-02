@@ -1,7 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { BarChart3, Search } from "lucide-react";
+import { BarChart3, Download, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
@@ -27,12 +27,16 @@ import {
   endpointOf,
   useChartMotion,
 } from "@/components/ui/Chart";
+import { GhostButton } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   ApiError,
+  exportActivity,
+  type ActivityExportFormat,
+  type ActivityFilters,
   type ActivityRecord,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
@@ -54,6 +58,17 @@ const AUTO_PAGES = 5;
 const ROW_HEIGHT = 40;
 
 const STATUSES = ["ok", "error", "cancelled"] as const;
+// The two verdicts a guardrail leaves on a record it closed. An allowed
+// turn carries no facet: it is the ordinary case.
+const GUARDRAIL_VERDICTS = ["refuse", "redact"] as const;
+const GUARDRAIL_LABELS: Record<(typeof GUARDRAIL_VERDICTS)[number], string> = {
+  refuse: "refused",
+  redact: "redacted",
+};
+// The status select carries both facets under one value, so a reader picks
+// "refused" beside "error" instead of hunting a second control. A guardrail
+// value wears this prefix to stay apart from a status.
+const GUARDRAIL_OPTION = "guardrail:";
 
 // The request stack: three steps a reader can tell apart. The legend under
 // the chart carries the same three, so the encoding is on the card.
@@ -92,6 +107,8 @@ type UsageSearch = {
   // audit log links here with it.
   request?: string;
   status?: string;
+  // guardrail keeps only the turns a guardrail refused or redacted.
+  guardrail?: string;
   range?: string;
   selected?: string;
 };
@@ -102,12 +119,17 @@ export const Route = createFileRoute("/usage")({
     const str = (value: unknown) =>
       typeof value === "string" && value !== "" ? value : undefined;
     const status = str(search.status);
+    const guardrail = str(search.guardrail);
     return {
       model: str(search.model),
       provider: str(search.provider),
       key: str(search.key),
       request: str(search.request),
       status: status && (STATUSES as readonly string[]).includes(status) ? status : undefined,
+      guardrail:
+        guardrail && (GUARDRAIL_VERDICTS as readonly string[]).includes(guardrail)
+          ? guardrail
+          : undefined,
       range: rangeOf(search.range),
       selected: str(search.selected),
     };
@@ -180,15 +202,52 @@ function CostCell({ record }: { record: ActivityRecord }) {
   );
 }
 
-function CacheCell({ status }: { status?: string }) {
+// CacheCell names the layer that answered: an exact replay reads "hit", and
+// a semantic hit reads "semantic" with its similarity one hover away, so a
+// reader separates a near-duplicate answer from a verbatim one.
+function CacheCell({ record }: { record: ActivityRecord }) {
+  const status = record.cache_status;
   if (status === "HIT") {
+    const semantic = record.cache_semantic || (record.cache_similarity ?? 0) > 0;
+    const similarity = record.cache_similarity ? formatSimilarity(record.cache_similarity) : undefined;
     return (
-      <span className="inline-flex h-5 items-center rounded-full bg-info-tint px-2 text-xs font-medium text-info">
-        hit
+      <span
+        className="inline-flex h-5 items-center rounded-full bg-info-tint px-2 text-xs font-medium text-info"
+        title={similarity ? `semantic hit · similarity ${similarity}` : undefined}
+      >
+        {semantic ? "semantic" : "hit"}
       </span>
     );
   }
   return <span className="text-xs text-text-4">{status ? status.toLowerCase() : "—"}</span>;
+}
+
+function formatSimilarity(similarity: number): string {
+  return similarity.toFixed(2);
+}
+
+// GuardrailCell reports how a guardrail closed the turn. A refusal is a
+// failed request from the caller's side, so it wears the error tone; a
+// redaction answered, so it wears the warning tone. An allowed turn reads
+// as the quiet default.
+function GuardrailCell({ record }: { record: ActivityRecord }) {
+  const verdict = record.guardrail_verdict;
+  const title = record.guardrail_check ? `check: ${record.guardrail_check}` : undefined;
+  if (verdict === "refuse") {
+    return (
+      <span className="inline-flex h-5 items-center rounded-full bg-error-tint px-2 text-xs font-medium text-error" title={title}>
+        refused
+      </span>
+    );
+  }
+  if (verdict === "redact") {
+    return (
+      <span className="inline-flex h-5 items-center rounded-full bg-warning-tint px-2 text-xs font-medium text-warning" title={title}>
+        redacted
+      </span>
+    );
+  }
+  return <span className="text-xs text-text-4" title={title}>{verdict ? verdict : "—"}</span>;
 }
 
 function truncateKeyId(id: string | undefined): string {
@@ -342,7 +401,20 @@ function RequestDetail({
             )}
             {record.cache_status && (
               <DetailRow label="Cache">
-                <CacheCell status={record.cache_status} />
+                <CacheCell record={record} />
+                {record.cache_similarity ? (
+                  <span className="ml-2 font-mono text-xs tabular-nums text-text-3">
+                    {formatSimilarity(record.cache_similarity)} similar
+                  </span>
+                ) : null}
+              </DetailRow>
+            )}
+            {record.guardrail_verdict && (
+              <DetailRow label="Guardrail">
+                <GuardrailCell record={record} />
+                {record.guardrail_check ? (
+                  <span className="ml-2 font-mono text-xs text-text-3">{record.guardrail_check}</span>
+                ) : null}
               </DetailRow>
             )}
             <DetailRow label="Cost">
@@ -464,20 +536,31 @@ function UsagePage() {
   const sinceISO = useMemo(
     () => (rangeSeconds ? new Date(Date.now() - rangeSeconds * 1000).toISOString() : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rangeSeconds, search.model, search.provider, search.status, search.key, search.request],
+    [
+      rangeSeconds,
+      search.model,
+      search.provider,
+      search.status,
+      search.guardrail,
+      search.key,
+      search.request,
+    ],
   );
+
+  const filters: ActivityFilters = {
+    model: search.model,
+    provider: search.provider,
+    status: search.status,
+    guardrail: search.guardrail,
+    key_id: admin ? search.key : undefined,
+    request_id: search.request,
+    limit: PAGE_LIMIT,
+  };
 
   const activity = useInfiniteQuery({
     ...queries.activity({
       scope: scope.data ?? "own",
-      filters: {
-        model: search.model,
-        provider: search.provider,
-        status: search.status,
-        key_id: admin ? search.key : undefined,
-        request_id: search.request,
-        limit: PAGE_LIMIT,
-      },
+      filters,
       sinceISO,
     }),
     enabled: scope.data === "admin" || scope.data === "own",
@@ -543,9 +626,11 @@ function UsagePage() {
     let priced = 0;
     let withoutCost = 0;
     let errors = 0;
+    let semantic = 0;
     let latencyTotal = 0;
     let latencyCount = 0;
     for (const record of records) {
+      if (record.cache_semantic || (record.cache_similarity ?? 0) > 0) semantic++;
       tokens += record.tokens?.total ?? 0;
       if (record.cost) {
         spendNano += record.cost.nano_usd ?? 0;
@@ -565,9 +650,35 @@ function UsagePage() {
       priced,
       withoutCost,
       errors,
+      semantic,
       avgLatency: latencyCount ? latencyTotal / latencyCount : undefined,
     };
   }, [records]);
+
+  // The export streams the rows the listing shows, under the same filters
+  // and window, as a file the browser saves. The page fetches the bytes
+  // itself because a bearer key never rides a plain link.
+  const [exporting, setExporting] = useState<ActivityExportFormat | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportRows = async (format: ActivityExportFormat) => {
+    setExporting(format);
+    setExportError(null);
+    try {
+      const blob = await exportActivity(scope.data === "admin" ? "admin" : "own", { ...filters, since: sinceISO }, format);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `starport-activity-${range}.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const listRef = useRef<HTMLDivElement>(null);
   const virtualizer = useWindowVirtualizer({
@@ -599,11 +710,20 @@ function UsagePage() {
     );
   }
 
+  // Twelve fixed columns beside one that grows. Their minimum sum stays
+  // under the 1136px content width of a 1440px viewport, so the guardrail
+  // column at the end never clips: the table has no scroll axis of its own
+  // because the header sticks to the window.
   const grid = admin
-    ? "grid grid-cols-[120px_minmax(180px,1fr)_150px_110px_130px_80px_85px_70px_80px_90px_70px] items-center"
-    : "grid grid-cols-[120px_minmax(180px,1fr)_110px_130px_80px_85px_70px_80px_90px_70px] items-center";
+    ? "grid grid-cols-[100px_minmax(150px,1fr)_130px_100px_120px_70px_75px_65px_75px_85px_80px_80px] items-center"
+    : "grid grid-cols-[100px_minmax(150px,1fr)_100px_120px_70px_75px_65px_75px_85px_80px_80px] items-center";
   const hasFilters = Boolean(
-    search.model || search.provider || search.status || search.key || search.request,
+    search.model ||
+      search.provider ||
+      search.status ||
+      search.guardrail ||
+      search.key ||
+      search.request,
   );
   const loading = scope.isPending || activity.isPending;
 
@@ -653,8 +773,15 @@ function UsagePage() {
         <Select
           uiSize="sm"
           aria-label="Filter by status"
-          value={search.status ?? ""}
-          onChange={(event) => setSearch({ status: event.target.value || undefined })}
+          value={search.guardrail ? `${GUARDRAIL_OPTION}${search.guardrail}` : (search.status ?? "")}
+          onChange={(event) => {
+            const value = event.target.value;
+            if (value.startsWith(GUARDRAIL_OPTION)) {
+              setSearch({ status: undefined, guardrail: value.slice(GUARDRAIL_OPTION.length) });
+            } else {
+              setSearch({ status: value || undefined, guardrail: undefined });
+            }
+          }}
         >
           <option value="">Any status</option>
           {STATUSES.map((status) => (
@@ -662,6 +789,13 @@ function UsagePage() {
               {status}
             </option>
           ))}
+          <optgroup label="Guardrail">
+            {GUARDRAIL_VERDICTS.map((verdict) => (
+              <option key={verdict} value={`${GUARDRAIL_OPTION}${verdict}`}>
+                {GUARDRAIL_LABELS[verdict]}
+              </option>
+            ))}
+          </optgroup>
         </Select>
         <Select
           uiSize="sm"
@@ -677,12 +811,35 @@ function UsagePage() {
             </option>
           ))}
         </Select>
-        <span className="ml-auto text-xs tabular-nums text-text-3">
+        <div className="ml-auto flex items-center gap-2">
+        <span className="text-xs tabular-nums text-text-3">
           {loading
             ? "loading…"
             : `${formatCount(records.length)}${suffix} requests · ${scope.data === "admin" ? "all keys" : "your key"}`}
         </span>
+        <GhostButton
+          disabled={exporting !== null || loading}
+          onClick={() => void exportRows("ndjson")}
+          title="Download the filtered rows as NDJSON, one JSON record per line"
+        >
+          <Download className="mr-1.5 size-3.5" aria-hidden="true" />
+          {exporting === "ndjson" ? "Exporting…" : "Export NDJSON"}
+        </GhostButton>
+        <GhostButton
+          disabled={exporting !== null || loading}
+          onClick={() => void exportRows("csv")}
+          title="Download the filtered rows as CSV"
+        >
+          <Download className="mr-1.5 size-3.5" aria-hidden="true" />
+          {exporting === "csv" ? "Exporting…" : "Export CSV"}
+        </GhostButton>
+        </div>
       </div>
+      {exportError && (
+        <p role="alert" className="text-xs text-error">
+          Export failed: {exportError}
+        </p>
+      )}
 
       {activity.error ? (
         <p className="text-base text-text-3">
@@ -721,6 +878,14 @@ function UsagePage() {
                       <span className="mx-1.5 font-normal text-text-4">·</span>
                       <span className="text-error">
                         {formatCount(totals.errors)} errors
+                      </span>
+                    </>
+                  )}
+                  {totals.semantic > 0 && (
+                    <>
+                      <span className="mx-1.5 font-normal text-text-4">·</span>
+                      <span className="text-info" title="Answered by the semantic cache">
+                        {formatCount(totals.semantic)} semantic
                       </span>
                     </>
                   )}
@@ -973,6 +1138,7 @@ function UsagePage() {
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Latency</div>
                 <div role="columnheader" className="px-2.5 text-right text-xs font-medium text-text-3">Cost</div>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Cache</div>
+                <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3" title="How a guardrail closed the turn">Guardrail</div>
               </div>
             </div>
             <div
@@ -1048,7 +1214,10 @@ function UsagePage() {
                       <CostCell record={record} />
                     </div>
                     <div role="cell" className="px-2.5">
-                      <CacheCell status={record.cache_status} />
+                      <CacheCell record={record} />
+                    </div>
+                    <div role="cell" className="px-2.5">
+                      <GuardrailCell record={record} />
                     </div>
                   </div>
                 );

@@ -35,6 +35,8 @@ var activityExportCSVHeader = []string{
 	"streaming", "tokens_input", "tokens_output", "tokens_total",
 	"latency_ms", "overhead_ms", "ttft_ms",
 	"cost_nano_usd", "cost_currency", "cost_unavailable_reason",
+	"cache_status", "cache_semantic", "cache_similarity",
+	"guardrail_verdict", "guardrail_check",
 }
 
 // ActivityExport handles GET /api/v1/activity/export. It streams the
@@ -59,6 +61,31 @@ func (h *ActivityController) ActivityExport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	query.KeyID = keyID
+	h.exportRecords(w, r, query)
+}
+
+// AdminExport handles GET /api/v1/admin/activity/export. It streams the
+// records the admin listing reads under the same filters, across every key
+// unless key_id names one. The console's usage page downloads here, so the
+// file it saves matches the rows it shows.
+func (h *ActivityController) AdminExport(w http.ResponseWriter, r *http.Request) {
+	if h.usageRecords == nil {
+		dto.WriteError(w, http.StatusServiceUnavailable, dto.ErrorTypeServerError, usageNotConfiguredMessage)
+		return
+	}
+
+	query, err := activityQueryFromRequest(r)
+	if err != nil {
+		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, err.Error())
+		return
+	}
+	query.KeyID = r.URL.Query().Get(fieldKeyID)
+	h.exportRecords(w, r, query)
+}
+
+// exportRecords walks every page the query reaches and streams it in the
+// format the request names. The caller owns the KeyID scope decision.
+func (h *ActivityController) exportRecords(w http.ResponseWriter, r *http.Request, query usage.Query) {
 	query.Limit = usage.MaxListLimit
 
 	format := r.URL.Query().Get("format")
@@ -150,5 +177,20 @@ func activityExportCSVRow(record usage.Record) []string {
 		costNanoUSD,
 		costCurrency,
 		record.CostUnavailableReason,
+		record.CacheStatus,
+		strconv.FormatBool(record.CacheSemantic),
+		cacheSimilarityColumn(record.CacheSimilarity),
+		record.GuardrailVerdict,
+		record.GuardrailCheck,
 	}
+}
+
+// cacheSimilarityColumn writes a semantic similarity as a short decimal and
+// leaves an exact hit or a miss blank, so a spreadsheet column reads as
+// "no similarity" rather than as a zero score.
+func cacheSimilarityColumn(similarity float64) string {
+	if similarity <= 0 {
+		return ""
+	}
+	return strconv.FormatFloat(similarity, 'f', 4, 64)
 }

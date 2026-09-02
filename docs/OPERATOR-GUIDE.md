@@ -1355,13 +1355,22 @@ the streamed copy.
 `GET /api/v1/activity/export` streams the stored records for the
 authenticated key under the `activity:read` scope. It takes the same
 filters the activity listing takes (`model`, `provider`, `status`,
-`request_id`, `since`, `until`) and serves NDJSON by default or CSV with
-`format=csv`:
+`request_id`, `guardrail`, `since`, `until`) and serves NDJSON by default or
+CSV with `format=csv`:
 
 ```bash
 curl -H "Authorization: Bearer $STARPORT_API_KEY" \
   "http://127.0.0.1:8080/api/v1/activity/export?format=csv" > activity.csv
 ```
+
+`GET /api/v1/admin/activity/export` streams the records of every key under
+the admin scope. A `key_id` filter narrows it to one key. The `guardrail`
+filter on both routes takes `refuse` or `redact` and keeps only the turns a
+guardrail closed with that verdict. Each row carries the cache fields
+(`cache_status`, `cache_semantic`, `cache_similarity`) and the guardrail
+fields (`guardrail_verdict`, `guardrail_check`) after the cost columns. The
+console usage page downloads the same file under its active filters with the
+Export NDJSON and Export CSV controls.
 
 ## Audit Log
 

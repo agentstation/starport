@@ -323,6 +323,7 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					// carry, and what never delivered.
 					r.Get("/webhooks", s.controllers.Admin.Webhooks)
 					r.Get("/activity", s.controllers.Activity.AdminList)
+					r.Get("/activity/export", s.controllers.Activity.AdminExport)
 					// The audit trail: who changed what on this admin
 					// surface, newest first.
 					r.Get("/audit", s.controllers.Audit.List)
@@ -520,6 +521,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   GET    /api/v1/admin/metrics           - System metrics
 //   GET    /api/v1/admin/webhooks          - Webhook summary
 //   GET    /api/v1/admin/activity          - List request activity across keys
+//   GET    /api/v1/admin/activity/export   - Stream that activity as NDJSON or CSV
 //   GET    /api/v1/admin/providers         - Provider runtime status
 //   GET    /api/v1/admin/providers/{provider}/incidents - Provider incident log and observed transitions
 //   POST   /api/v1/admin/providers/refresh - Reconcile provider credentials
