@@ -169,7 +169,7 @@ function AuthorDetailPage() {
             No models from this author in the current catalog snapshot.
           </p>
         ) : (
-          <div className="text-sm">
+          <div className="text-sm max-sm:overflow-x-auto">
             <div className="grid grid-cols-[minmax(280px,1fr)_110px_170px] border-b border-border-1 px-2.5 py-1.5 text-xs font-medium text-text-3">
               <span>model</span>
               <span className="text-right">context</span>

@@ -26,7 +26,14 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Suspense,
+  lazy,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
 import { GitHubMark } from "@/components/ui/icons";
@@ -34,6 +41,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
+import { SMALL_SCREEN, useMediaQuery } from "@/lib/useMediaQuery";
+
+// The small-screen top bar carries the sheet machinery, which a desktop
+// first paint does not need.
+const SmallScreenNav = lazy(() => import("@/components/shell/SmallScreenNav"));
 
 // Nav is grouped by who reaches for it (DESIGN.md information
 // architecture): the catalog everyone browses, the account surface a
@@ -200,7 +212,7 @@ function OpenGatewayBanner() {
     <div
       role="status"
       data-testid="auth-mode-banner"
-      className="flex h-9 items-center gap-2 border-b border-border-1 bg-warning-tint px-8 text-sm text-text-1"
+      className="flex h-9 items-center gap-2 border-b border-border-1 bg-warning-tint px-4 text-sm text-text-1 sm:px-8"
     >
       <ShieldAlert aria-hidden="true" className="size-4 shrink-0 text-warning" />
       <span>
@@ -217,6 +229,158 @@ function OpenGatewayBanner() {
   );
 }
 
+// SidebarBody is the navigation column's content. The desktop aside and
+// the small-screen sheet render the same body, so one list of destinations
+// serves both. Inside the sheet a tap on a link closes it, the rows grow
+// to a touch target, and the collapse control and the keyboard hint go
+// away because neither applies.
+function SidebarBody({
+  collapsed,
+  inSheet,
+  onCollapse,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  inSheet: boolean;
+  onCollapse: () => void;
+  onNavigate?: () => void;
+}) {
+  const rowHeight = inSheet ? "h-11" : "h-9";
+  return (
+    <>
+      <div className={`flex h-14 items-center gap-2.5 ${collapsed ? "justify-center px-0" : "px-4"}`}>
+        <StarMark />
+        {!collapsed && (
+          <span className="text-sm font-semibold tracking-[0.08em]">STARPORT</span>
+        )}
+      </div>
+
+      <div className="px-2 pt-2">
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate?.();
+            openCommandPalette();
+          }}
+          className={`flex ${rowHeight} w-full items-center gap-2.5 rounded-sm border border-border-1 bg-bg-raised px-3 text-text-4 transition-colors duration-150 ease-standard hover:border-border-2 hover:text-text-2 ${collapsed ? "justify-center px-0" : ""}`}
+        >
+          <SearchIcon className="size-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="text-sm">Search</span>
+              {!inSheet && (
+                <kbd className="ml-auto rounded-xs border border-border-1 px-1.5 py-0.5 font-sans text-[10px] tracking-[0.08em]">
+                  ⌘ K
+                </kbd>
+              )}
+            </>
+          )}
+        </button>
+      </div>
+
+      <nav aria-label="Console" className="flex flex-1 flex-col px-2 pt-2">
+        {NAV_SECTIONS.map((section, sectionIndex) => (
+          <div key={section.label ?? sectionIndex} className="flex flex-col gap-0.5">
+            {sectionIndex > 0 &&
+              (collapsed ? (
+                <div aria-hidden="true" className="mx-2 my-2 border-t border-border-1" />
+              ) : section.label ? (
+                <p className="px-3 pb-1 pt-4 text-[10px] font-medium uppercase tracking-[0.08em] text-text-4">
+                  {section.label}
+                </p>
+              ) : (
+                <div aria-hidden="true" className="mx-1 my-2 border-t border-border-1" />
+              ))}
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              // The link owns its active state. Every page except the
+              // overview matches by prefix, so a detail route keeps its
+              // list highlighted.
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={onNavigate}
+                  activeOptions={{ exact: item.to === "/" }}
+                  activeProps={{ "aria-current": "page" }}
+                  className={`relative flex ${rowHeight} items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""}`}
+                  inactiveProps={{
+                    className: "text-text-3 hover:bg-bg-hover hover:text-text-2",
+                  }}
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+                        />
+                      )}
+                      <Icon className="size-4 shrink-0" />
+                      {!collapsed && <span>{item.label}</span>}
+                    </>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+
+      <div className="flex flex-col gap-0.5 border-t border-border-1 p-2">
+        <GatewayStatus collapsed={collapsed} />
+        <ThemeToggle collapsed={collapsed} />
+        <a
+          href="https://github.com/agentstation/starport"
+          target="_blank"
+          rel="noreferrer"
+          className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
+        >
+          <GitHubMark className="size-4 shrink-0" />
+          {!collapsed && (
+            <>
+              <span>GitHub</span>
+              <NewTabIcon aria-hidden="true" className="size-3 shrink-0" />
+            </>
+          )}
+        </a>
+        {!inSheet && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onCollapse}
+                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-expanded={!collapsed}
+                  aria-controls={SIDEBAR_ID}
+                  className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
+                />
+              }
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="size-4 shrink-0" />
+              ) : (
+                <>
+                  <PanelLeftClose className="size-4 shrink-0" />
+                  <span>Collapse</span>
+                </>
+              )}
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+    </>
+  );
+}
+
+// The small-screen top bar is this tall. Chat reads the space above the
+// main column through the --app-banner variable to size its own layout.
+const TOP_BAR_HEIGHT = "3rem";
+
 export function Shell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === "1",
@@ -225,153 +389,77 @@ export function Shell({ children }: { children: ReactNode }) {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
+  // Below the breakpoint the sidebar is a sheet behind a top-bar trigger,
+  // and the main column takes the whole width.
+  const small = useMediaQuery(SMALL_SCREEN);
+  const [navOpen, setNavOpen] = useState(false);
+
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const openGateway = useOpenGateway();
 
+  const above = [small ? TOP_BAR_HEIGHT : null, openGateway ? BANNER_HEIGHT : null].filter(
+    (part): part is string => part !== null,
+  );
+  const aboveMain = above.length === 0 ? "0px" : above.length === 1 ? above[0] : `calc(${above.join(" + ")})`;
+
   return (
     <TooltipProvider>
-    <div className="flex min-h-screen bg-bg-canvas text-text-1">
+    <div className={`flex min-h-screen bg-bg-canvas text-text-1 ${small ? "flex-col" : ""}`}>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:border focus:border-border-2 focus:bg-bg-raised focus:px-3 focus:py-2 focus:text-sm focus:text-text-1"
       >
         Skip to content
       </a>
-      <aside
-        id={SIDEBAR_ID}
-        className={`fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-[width] duration-150 ease-standard ${
-          collapsed ? "w-16" : "w-60"
-        }`}
-      >
-        <div className={`flex h-14 items-center gap-2.5 ${collapsed ? "justify-center px-0" : "px-4"}`}>
-          <StarMark />
-          {!collapsed && (
-            <span className="text-sm font-semibold tracking-[0.08em]">STARPORT</span>
-          )}
-        </div>
-
-        <div className="px-2 pt-2">
-          <button
-            type="button"
-            onClick={openCommandPalette}
-            className={`flex h-9 w-full items-center gap-2.5 rounded-sm border border-border-1 bg-bg-raised px-3 text-text-4 transition-colors duration-150 ease-standard hover:border-border-2 hover:text-text-2 ${collapsed ? "justify-center px-0" : ""}`}
-          >
-            <SearchIcon className="size-4 shrink-0" />
-            {!collapsed && (
+      {small ? (
+        <Suspense
+          fallback={<header className="h-12 shrink-0 border-b border-border-1 bg-bg-panel" />}
+        >
+          <SmallScreenNav
+            open={navOpen}
+            onOpenChange={setNavOpen}
+            onSearch={openCommandPalette}
+            brand={
               <>
-                <span className="text-sm">Search</span>
-                <kbd className="ml-auto rounded-xs border border-border-1 px-1.5 py-0.5 font-sans text-[10px] tracking-[0.08em]">
-                  ⌘ K
-                </kbd>
+                <StarMark />
+                <span className="text-sm font-semibold tracking-[0.08em]">STARPORT</span>
               </>
-            )}
-          </button>
-        </div>
-
-        <nav aria-label="Console" className="flex flex-1 flex-col px-2 pt-2">
-          {NAV_SECTIONS.map((section, sectionIndex) => (
-            <div key={section.label ?? sectionIndex} className="flex flex-col gap-0.5">
-              {sectionIndex > 0 &&
-                (collapsed ? (
-                  <div aria-hidden="true" className="mx-2 my-2 border-t border-border-1" />
-                ) : section.label ? (
-                  <p className="px-3 pb-1 pt-4 text-[10px] font-medium uppercase tracking-[0.08em] text-text-4">
-                    {section.label}
-                  </p>
-                ) : (
-                  <div aria-hidden="true" className="mx-1 my-2 border-t border-border-1" />
-                ))}
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                // The link owns its active state. Every page except the
-                // overview matches by prefix, so a detail route keeps its
-                // list highlighted.
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    activeOptions={{ exact: item.to === "/" }}
-                    activeProps={{ "aria-current": "page" }}
-                    className={`relative flex h-9 items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""}`}
-                    inactiveProps={{
-                      className: "text-text-3 hover:bg-bg-hover hover:text-text-2",
-                    }}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
-                          />
-                        )}
-                        <Icon className="size-4 shrink-0" />
-                        {!collapsed && <span>{item.label}</span>}
-                      </>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-
-        <div className="flex flex-col gap-0.5 border-t border-border-1 p-2">
-          <GatewayStatus collapsed={collapsed} />
-          <ThemeToggle collapsed={collapsed} />
-          <a
-            href="https://github.com/agentstation/starport"
-            target="_blank"
-            rel="noreferrer"
-            className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
-          >
-            <GitHubMark className="size-4 shrink-0" />
-            {!collapsed && (
-              <>
-                <span>GitHub</span>
-                <NewTabIcon aria-hidden="true" className="size-3 shrink-0" />
-              </>
-            )}
-          </a>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  onClick={() => setCollapsed((value) => !value)}
-                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  aria-expanded={!collapsed}
-                  aria-controls={SIDEBAR_ID}
-                  className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
-                />
-              }
-            >
-            {collapsed ? (
-              <PanelLeftOpen className="size-4 shrink-0" />
-            ) : (
-              <>
-                <PanelLeftClose className="size-4 shrink-0" />
-                <span>Collapse</span>
-              </>
-            )}
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </aside>
+            }
+            body={
+              <SidebarBody
+                collapsed={false}
+                inSheet
+                onCollapse={() => {}}
+                onNavigate={() => setNavOpen(false)}
+              />
+            }
+          />
+        </Suspense>
+      ) : (
+        <aside
+          id={SIDEBAR_ID}
+          className={`fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-[width] duration-150 ease-standard ${
+            collapsed ? "w-16" : "w-60"
+          }`}
+        >
+          <SidebarBody
+            collapsed={collapsed}
+            inSheet={false}
+            onCollapse={() => setCollapsed((value) => !value)}
+          />
+        </aside>
+      )}
 
       <main
         id="main"
         tabIndex={-1}
         style={
           {
-            "--app-banner": openGateway ? BANNER_HEIGHT : "0px",
+            "--app-banner": aboveMain,
           } as React.CSSProperties
         }
         className={`min-w-0 flex-1 transition-[margin] duration-150 ease-standard ${
-          collapsed ? "ml-16" : "ml-60"
+          small ? "" : collapsed ? "ml-16" : "ml-60"
         }`}
       >
         {openGateway && <OpenGatewayBanner />}
@@ -379,7 +467,7 @@ export function Shell({ children }: { children: ReactNode }) {
           // Chat owns its full-height layout (thread sidebar + column).
           children
         ) : (
-          <div className="mx-auto max-w-[1280px] px-8 py-8">{children}</div>
+          <div className="mx-auto max-w-[1280px] px-4 py-6 sm:px-8 sm:py-8">{children}</div>
         )}
       </main>
       <CommandPalette />

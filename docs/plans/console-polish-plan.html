@@ -120,7 +120,7 @@
     Created: 2026-09-01 ·
     Baseline: main @ 6db57d8 ·
     Proof root: <code>docs/proof/console-polish/</code> ·
-    Next action: finish CPL-F5 on codex/cpl-f5, then start CPL-G1
+    Next action: finish CPL-G1 on codex/cpl-g1, then start CPL-Z1
   </p>
 
   <section id="outcome">
@@ -532,8 +532,8 @@
         <tr id="CPL-F2" data-status="done"><td>CPL-F2</td><td>Models and providers copy and states.</td><td><code>done</code></td><td>PR #353. Verifier 41 passed, 7 failed. Proof <code>docs/proof/console-polish/CPL-F2.md</code>.</td></tr>
         <tr id="CPL-F3" data-status="done"><td>CPL-F3</td><td>Keys, presets, teams, members, and accounts forms.</td><td><code>done</code></td><td>PR #354. Verifier 42 passed, 6 failed. Proof <code>docs/proof/console-polish/CPL-F3.md</code>.</td></tr>
         <tr id="CPL-F4" data-status="done"><td>CPL-F4</td><td>Chat defaults, picker filter, and tone.</td><td><code>done</code></td><td>PR #355. Verifier 43 passed, 5 failed. Proof <code>docs/proof/console-polish/CPL-F4.md</code>.</td></tr>
-        <tr id="CPL-F5" data-status="in_progress"><td>CPL-F5</td><td>Docs page re-sync with a navigation coverage test.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-f5</code>.</td></tr>
-        <tr id="CPL-G1" data-status="todo"><td>CPL-G1</td><td>Small screens: sidebar sheet, picker bottom sheet, touch targets.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-F5" data-status="done"><td>CPL-F5</td><td>Docs page re-sync with a navigation coverage test.</td><td><code>done</code></td><td>PR #356. Verifier 45 passed, 3 failed. Proof <code>docs/proof/console-polish/CPL-F5.md</code>.</td></tr>
+        <tr id="CPL-G1" data-status="in_progress"><td>CPL-G1</td><td>Small screens: sidebar sheet, picker bottom sheet, touch targets.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-g1</code>.</td></tr>
         <tr id="CPL-Z1" data-status="todo"><td>CPL-Z1</td><td>Close: verifier joins CI, walkthrough re-run, documentation drift.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-Z2" data-status="todo"><td>CPL-Z2</td><td>Release v1.2.0.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-Z3" data-status="todo"><td>CPL-Z3</td><td>Cleanup after the release: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
@@ -1960,6 +1960,15 @@ deleted this plan.</code></pre>
           observability sections, the health section cites the live and
           ready paths, and a coverage test reads the sidebar list from the
           shell and fails when a destination has no docs link.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-F5</td><td>done</td><td>PR #356 merged.
+          Verifier 45 passed, 3 failed. Console tests 402.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-G1</td><td>started</td><td>Branch
+          codex/cpl-g1. A media query hook owns the 639 px breakpoint, the
+          sheet gains a side prop, the shell renders the sidebar body in a
+          lazy left sheet behind a top bar trigger, the chat thread list and
+          the model picker become sheets, row actions and icon buttons grow
+          to 44 px, single-column grids declare a zero minimum track, and
+          the usage and author tables scroll inside their boxes.</td></tr>
       </tbody>
     </table>
   </section>

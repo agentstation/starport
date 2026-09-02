@@ -14,6 +14,7 @@ import { Composer } from "@/components/chat/Composer";
 import { AssistantMessage, UserMessage } from "@/components/chat/Messages";
 import { supportsReasoning } from "@/components/chat/ModelPicker";
 import { ThreadList } from "@/components/chat/ThreadList";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   ApiError,
   completeChat,
@@ -22,6 +23,7 @@ import {
 import { queries } from "@/lib/queries";
 import type { Attachment, ContentPart } from "@/lib/attachments";
 import { defaultChatModel } from "@/lib/modelFilter";
+import { SMALL_SCREEN, useMediaQuery } from "@/lib/useMediaQuery";
 import {
   DEFAULT_PARAMS,
   lastModel,
@@ -119,7 +121,10 @@ function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
-  const [sidebarOpen, setSidebarOpen] = useState(() => !sidebarClosed());
+  // Below the breakpoint the thread list is a sheet, closed until asked
+  // for, and its stored preference belongs to the desktop layout only.
+  const small = useMediaQuery(SMALL_SCREEN);
+  const [sidebarOpen, setSidebarOpen] = useState(() => !small && !sidebarClosed());
   const [pickerOpen, setPickerOpen] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [newModel, setNewModel] = useState<string>(() => seedModel ?? lastModel());
@@ -581,35 +586,52 @@ function ChatPage() {
     />
   );
 
+  const threadList = (
+    <ThreadList
+      conversations={conversations}
+      activeId={activeId}
+      onOpen={(id) => {
+        compare.exit();
+        setActiveId(id);
+        setPickerOpen(false);
+        if (small) setSidebarOpen(false);
+      }}
+      onNew={() => {
+        compare.exit();
+        setActiveId(null);
+        if (small) setSidebarOpen(false);
+      }}
+      onTogglePin={(id) =>
+        updateConversation(id, (conversation) => ({
+          ...conversation,
+          pinned: !conversation.pinned,
+        }))
+      }
+      onRename={(id, title) =>
+        updateConversation(id, (conversation) => ({ ...conversation, title }))
+      }
+      onDelete={(id) => {
+        persist(conversations.filter((conversation) => conversation.id !== id));
+        if (activeId === id) setActiveId(null);
+      }}
+    />
+  );
+
   return (
     <div className="flex h-[calc(100vh-var(--app-banner,0px))] min-w-0">
-      {sidebarOpen && (
-        <ThreadList
-          conversations={conversations}
-          activeId={activeId}
-          onOpen={(id) => {
-            compare.exit();
-            setActiveId(id);
-            setPickerOpen(false);
-          }}
-          onNew={() => {
-            compare.exit();
-            setActiveId(null);
-          }}
-          onTogglePin={(id) =>
-            updateConversation(id, (conversation) => ({
-              ...conversation,
-              pinned: !conversation.pinned,
-            }))
-          }
-          onRename={(id, title) =>
-            updateConversation(id, (conversation) => ({ ...conversation, title }))
-          }
-          onDelete={(id) => {
-            persist(conversations.filter((conversation) => conversation.id !== id));
-            if (activeId === id) setActiveId(null);
-          }}
-        />
+      {small ? (
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent
+            side="left"
+            aria-label="Conversations"
+            showCloseButton={false}
+            className="w-64 p-0"
+          >
+            {threadList}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        sidebarOpen && threadList
       )}
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 px-3">
@@ -617,7 +639,7 @@ function ChatPage() {
             type="button"
             onClick={() => {
               setSidebarOpen((open) => {
-                saveSidebarClosed(open);
+                if (!small) saveSidebarClosed(open);
                 return !open;
               });
             }}

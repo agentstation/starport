@@ -99,7 +99,7 @@ function CatalogOnly({
         Credential and availability detail needs an admin-scoped key. Showing
         the catalog view.
       </p>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {visible.map((entry) => (
           <CatalogProviderCard key={entry.id} entry={entry} />
         ))}
@@ -198,7 +198,7 @@ function ProvidersPage() {
     );
   } else {
     body = (
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {visible.map((provider) => (
           <ProviderCard
             key={provider.provider_id}
