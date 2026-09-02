@@ -7,6 +7,7 @@ import { CopyButton } from "@/components/ui/CopyButton";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -775,7 +776,7 @@ function KeysPage() {
       );
     }
   } else if (keys.isPending) {
-    body = <p className="text-base text-text-3">Loading keys…</p>;
+    body = <TableSkeleton columns={6} />;
   } else if ((keys.data ?? []).length === 0) {
     body = <EmptyState onCreate={() => setModal({ kind: "create" })} />;
   } else {

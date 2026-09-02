@@ -13,6 +13,8 @@ import {
 } from "@/components/providers/ProviderCard";
 import { ProviderCredentialCard } from "@/components/credentials/ProviderCredentialCard";
 import { IncidentLog } from "@/components/providers/IncidentLog";
+import { DetailSkeleton } from "@/components/ui/skeleton";
+import { LoadFailed } from "@/components/ui/LoadFailed";
 import {
   HealthPanel,
   OfferingsTable,
@@ -82,7 +84,7 @@ function ProviderDetailPage() {
   const name = providerLabel(providerId, entry?.name);
 
   if (catalog.isPending && !entry) {
-    return <p className="text-base text-text-3">Loading provider…</p>;
+    return <DetailSkeleton />;
   }
 
   return (
@@ -180,9 +182,21 @@ function ProviderDetailPage() {
                 fields={entry?.credential_fields ?? []}
               />
             </div>
-            <ServedCredentialPanel records={activity.data?.data} />
+            {activity.isError ? (
+              <LoadFailed
+                what="the last hour of activity"
+                error={activity.error}
+                onRetry={() => void activity.refetch()}
+              />
+            ) : (
+              <ServedCredentialPanel records={activity.data?.data} />
+            )}
           </div>
-          <HealthPanel offerings={offerings} records={activity.data?.data} />
+          <HealthPanel
+            offerings={offerings}
+            records={activity.data?.data}
+            activityFailed={activity.isError}
+          />
           <IncidentLog
             name={name}
             statusPageUrl={entry?.status_page_url}

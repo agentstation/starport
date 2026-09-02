@@ -8,6 +8,7 @@ import {
   PrimaryButton,
 } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
+import { LoadingStatus, Skeleton, TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -122,7 +123,11 @@ export function JobPlayer({ jobID }: { jobID: string }) {
     );
   }
   if (!source) {
-    return <p className="text-sm text-text-3">Loading the video…</p>;
+    return (
+      <LoadingStatus>
+        <Skeleton className="aspect-video w-full rounded-md" />
+      </LoadingStatus>
+    );
   }
   return (
     <video
@@ -199,7 +204,7 @@ export function JobsPanel() {
       </p>
     );
   } else if (jobs.isPending) {
-    body = <p className="text-base text-text-3">Loading jobs…</p>;
+    body = <TableSkeleton columns={6} />;
   } else if (rows.length === 0) {
     body = (
       <p className="text-base text-text-3">

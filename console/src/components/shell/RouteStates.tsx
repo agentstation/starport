@@ -1,20 +1,20 @@
 import { Link, useLocation, useRouter, type ErrorComponentProps } from "@tanstack/react-router";
 import { ArrowLeft, RotateCw } from "lucide-react";
 
+import { Skeleton, TableSkeleton } from "@/components/ui/skeleton";
+
 // RouteStates owns what a route shows when it has no page to show: the
 // placeholder while a loader runs, the card when a loader or a render fails,
 // and the page for an address that names nothing.
 
 // RoutePending holds the page area while a loader runs past the router's
-// pending threshold. It is deliberately plain; the page skeletons that
-// replace it know the shape of each page.
+// pending threshold: a title, a lede, and the table most pages open with.
 export function RoutePending() {
   return (
-    <div role="status" aria-live="polite" className="flex flex-col gap-3">
-      <span className="sr-only">Loading</span>
-      <div aria-hidden="true" className="h-6 w-48 animate-pulse rounded-sm bg-bg-raised" />
-      <div aria-hidden="true" className="h-4 w-80 animate-pulse rounded-sm bg-bg-raised" />
-      <div aria-hidden="true" className="mt-2 h-40 animate-pulse rounded-md bg-bg-raised" />
+    <div className="flex flex-col gap-4">
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="h-4 w-80" />
+      <TableSkeleton rows={5} className="mt-2" />
     </div>
   );
 }

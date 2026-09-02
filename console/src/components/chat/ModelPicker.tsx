@@ -7,6 +7,8 @@ import { queries } from "@/lib/queries";
 import { formatContext, formatPricePerM, providerLabel } from "@/lib/format";
 import { chattableModels } from "@/lib/modelFilter";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 // ModelPicker is the chat model combobox (DESIGN.md): search, pinned
 // models first, presets, then provider groups. Rows show capability
 // badges and catalog facts from the live /models response — the picker
@@ -213,7 +215,12 @@ export function ModelPicker({
         className="max-h-[min(60vh,26rem)] overflow-y-auto py-1"
       >
         {models.isPending && (
-          <p className="px-3 py-2 text-sm text-text-3">Loading models…</p>
+          <div className="flex flex-col gap-2.5 px-3 py-2">
+            <Skeleton className="h-3.5 w-3/5" />
+            <Skeleton className="h-3.5 w-2/5" />
+            <Skeleton className="h-3.5 w-1/2" />
+            <Skeleton className="h-3.5 w-1/3" />
+          </div>
         )}
         {models.isError && (
           <p className="px-3 py-2 text-sm text-text-3">

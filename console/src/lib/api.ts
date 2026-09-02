@@ -115,19 +115,17 @@ export async function openSession(token: string): Promise<void> {
 const IDENTITY_PATH = "/console/identity";
 
 // identityProviders reports which identity providers this deployment
-// configured. An unconfigured deployment answers with an empty list, and so
-// does any failure here: first contact renders the same page either way, just
-// without the provider choices.
+// configured. An unconfigured deployment answers with an empty list. A
+// request that fails throws, so first contact can tell a gateway with no
+// providers from a gateway it could not reach.
 export async function identityProviders(): Promise<string[]> {
-  try {
-    const response = await fetch(`${IDENTITY_PATH}/providers`);
-    if (!response.ok) return [];
-    const parsed = (await response.json()) as { providers?: unknown };
-    if (!Array.isArray(parsed.providers)) return [];
-    return parsed.providers.filter((name): name is string => typeof name === "string");
-  } catch {
-    return [];
+  const response = await fetch(`${IDENTITY_PATH}/providers`);
+  if (!response.ok) {
+    throw new Error(`Identity providers request failed with status ${response.status}`);
   }
+  const parsed = (await response.json()) as { providers?: unknown };
+  if (!Array.isArray(parsed.providers)) return [];
+  return parsed.providers.filter((name): name is string => typeof name === "string");
 }
 
 // identityBeginPath is where a browser goes to authenticate through a named

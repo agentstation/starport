@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { Card, CardTitle } from "@/components/ui/Card";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatRelativeTime, shortGenerationID } from "@/lib/format";
@@ -13,7 +15,7 @@ export function CatalogCard() {
     ...queries.catalogMetadata(),
   });
 
-  if (metadata.isPending) return null;
+  if (metadata.isPending) return <CardSkeleton lines={4} />;
   if (metadata.error) {
     if (metadata.error instanceof ApiError && metadata.error.needsKey) {
       return (
@@ -25,7 +27,13 @@ export function CatalogCard() {
         </Card>
       );
     }
-    return null;
+    return (
+      <LoadFailed
+        what="the Starmap catalog"
+        error={metadata.error}
+        onRetry={() => void metadata.refetch()}
+      />
+    );
   }
 
   const data = metadata.data ?? {};

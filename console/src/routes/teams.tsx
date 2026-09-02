@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 
 import { TeamDetailPanel } from "@/components/teams/TeamDetailPanel";
 import { INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -81,7 +82,7 @@ function TeamsPage() {
       </p>
     );
   } else if (teams.isPending) {
-    body = <p className="text-base text-text-3">Loading teams…</p>;
+    body = <TableSkeleton columns={4} />;
   } else if (rows.length === 0) {
     body = (
       <p className="text-base text-text-3">

@@ -10,6 +10,7 @@ import {
 } from "@/components/providers/ProviderCard";
 import { IconButton } from "@/components/ui/IconButton";
 import { Select } from "@/components/ui/Select";
+import { CardGridSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -182,7 +183,7 @@ function ProvidersPage() {
       );
     }
   } else if (status.isPending) {
-    body = <p className="text-base text-text-3">Loading providers…</p>;
+    body = <CardGridSkeleton />;
   } else if ((status.data?.providers ?? []).length === 0) {
     body = (
       <p className="text-base text-text-3">

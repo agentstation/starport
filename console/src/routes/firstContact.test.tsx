@@ -221,14 +221,20 @@ test("the token never reaches browser storage, and the gateway API key does", as
 // swallowing it here would put the reader back to guessing.
 test("a refused paste shows the gateway's own message and stays put", async () => {
   const assign = interceptNavigation();
+  // The provider list answers as an unconfigured gateway does; only the
+  // ticket exchange refuses.
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      async () =>
-        new Response(JSON.stringify({ message: "That is a gateway API key, which…" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        }),
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).endsWith("/console/identity/providers")
+        ? new Response(JSON.stringify({ providers: [] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          })
+        : new Response(JSON.stringify({ message: "That is a gateway API key, which…" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          }),
     ),
   );
 

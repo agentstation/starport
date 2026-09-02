@@ -13,6 +13,8 @@ import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
+import { CardGridSkeleton } from "@/components/ui/skeleton";
+
 // The search text lives in the address, so Back and a reload keep it.
 type AuthorsSearch = { q?: string };
 
@@ -72,7 +74,7 @@ function AuthorsPage() {
       </p>
     );
   } else if (authors.isPending) {
-    body = <p className="text-base text-text-3">Loading authors…</p>;
+    body = <CardGridSkeleton />;
   } else if ((authors.data ?? []).length === 0) {
     body = (
       <p className="text-base text-text-3">

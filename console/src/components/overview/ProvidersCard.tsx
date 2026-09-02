@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { Card, CardTitle } from "@/components/ui/Card";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { queries } from "@/lib/queries";
 
@@ -20,7 +22,7 @@ export function ProvidersCard() {
     ...queries.providerStatus(),
   });
 
-  if (status.isPending) return null;
+  if (status.isPending) return <CardSkeleton lines={2} />;
   if (status.error) {
     if (status.error instanceof ApiError && status.error.needsKey) {
       return (
@@ -32,7 +34,13 @@ export function ProvidersCard() {
         </Card>
       );
     }
-    return null;
+    return (
+      <LoadFailed
+        what="provider status"
+        error={status.error}
+        onRetry={() => void status.refetch()}
+      />
+    );
   }
 
   const providers = status.data?.providers ?? [];

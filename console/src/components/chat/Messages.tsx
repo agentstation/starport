@@ -337,9 +337,17 @@ export function AssistantMessage({
     }
   }
   const reasoningActive = streaming && !message.content && !message.error;
+  // The live region is empty while the turn streams and names the model
+  // once the turn ends, so a screen reader hears one sentence per answer
+  // instead of every token. A finished turn that mounts finished says
+  // nothing: live regions announce changes, not initial text.
+  const finished = !streaming && !message.error && Boolean(message.content);
 
   return (
     <div className="group text-base text-text-1">
+      <p aria-live="polite" className="sr-only">
+        {finished && `Response finished${message.model ? ` from ${message.model}` : ""}.`}
+      </p>
       {(message.model || liveTps !== null) && (
         <p className="mb-1 flex items-center gap-2 font-mono text-xs text-text-4">
           {message.model && <span>{message.model}</span>}

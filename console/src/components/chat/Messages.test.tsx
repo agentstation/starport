@@ -30,6 +30,24 @@ function assistantTurn(generated: ChatMessage["generated"]): ChatMessage {
   };
 }
 
+test("a finished turn announces itself once through the live region", () => {
+  const message: ChatMessage = {
+    role: "assistant",
+    content: "The answer.",
+    model: "openai/gpt-oss-120b",
+  };
+  const { rerender } = render(
+    <AssistantMessage message={message} streaming retryModels={[]} />,
+  );
+
+  const region = document.querySelector('[aria-live="polite"]');
+  if (!region) throw new Error("no live region");
+  expect(region.textContent).toBe("");
+
+  rerender(<AssistantMessage message={message} streaming={false} retryModels={[]} />);
+  expect(region.textContent).toBe("Response finished from openai/gpt-oss-120b.");
+});
+
 test("a turn holding a generated image renders an image element", () => {
   render(
     <AssistantMessage

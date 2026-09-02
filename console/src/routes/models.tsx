@@ -10,6 +10,7 @@ import { accessMessage, ApiError } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
 import { formatCount, providerLabel } from "@/lib/format";
 import { operationLabel } from "@/components/models/ModelsTable";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   authorIdsOf,
   facetValues,
@@ -279,7 +280,7 @@ function ModelsPage() {
             : `Failed to load models: ${models.error.message}`}
         </p>
       ) : models.isPending ? (
-        <p className="text-base text-text-3">Loading the model catalog…</p>
+        <TableSkeleton columns={6} rows={10} />
       ) : filtered.length === 0 ? (
         <p className="text-base text-text-3">
           No models match these filters.{" "}
