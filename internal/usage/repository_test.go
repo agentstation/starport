@@ -355,3 +355,48 @@ func TestListByAccountSpansEveryKey(t *testing.T) {
 		require.ElementsMatch(t, []string{"key-a", "key-b"}, keys)
 	})
 }
+
+func TestListFiltersByGuardrailVerdictAndKeepsCacheFields(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := context.Background()
+		repository, err := Open(store, Options{})
+		require.NoError(t, err)
+
+		for i := range 6 {
+			record := testRecord("key-a", "req-"+string(rune('a'+i)), testBase.Add(time.Duration(i)*time.Minute))
+			switch i % 3 {
+			case 1:
+				record.GuardrailVerdict = "refuse"
+				record.GuardrailCheck = "prompt-injection"
+			case 2:
+				record.GuardrailVerdict = "redact"
+			}
+			if i == 0 {
+				record.CacheStatus = "HIT"
+				record.CacheSimilarity = 0.91
+				record.CacheSemantic = true
+			}
+			require.NoError(t, repository.Put(ctx, record))
+		}
+
+		refused, err := repository.List(ctx, Query{KeyID: "key-a", GuardrailVerdict: "refuse"})
+		require.NoError(t, err)
+		require.Len(t, refused.Records, 2)
+		for _, record := range refused.Records {
+			require.Equal(t, "refuse", record.GuardrailVerdict)
+			require.Equal(t, "prompt-injection", record.GuardrailCheck)
+		}
+
+		redacted, err := repository.List(ctx, Query{KeyID: "key-a", GuardrailVerdict: "redact"})
+		require.NoError(t, err)
+		require.Len(t, redacted.Records, 2)
+
+		// The cache fields survive the round trip through the stored blob.
+		semantic, err := repository.List(ctx, Query{KeyID: "key-a", RequestID: "req-a"})
+		require.NoError(t, err)
+		require.Len(t, semantic.Records, 1)
+		require.Equal(t, "HIT", semantic.Records[0].CacheStatus)
+		require.InDelta(t, 0.91, semantic.Records[0].CacheSimilarity, 1e-9)
+		require.True(t, semantic.Records[0].CacheSemantic)
+	})
+}

@@ -166,6 +166,13 @@ type Record struct {
 	TTFTMS      int64  `json:"ttft_ms,omitempty"`
 	Attempts    int    `json:"attempts,omitempty"`
 	CacheStatus string `json:"cache_status,omitempty"`
+	// CacheSimilarity is the cosine similarity a semantic cache hit served
+	// under. It is zero for an exact hit and for a miss.
+	CacheSimilarity float64 `json:"cache_similarity,omitempty"`
+	// CacheSemantic reports that the hit came from the semantic layer, so
+	// a reader separates a near-duplicate answer from an exact replay
+	// without a similarity threshold of its own.
+	CacheSemantic bool `json:"cache_semantic,omitempty"`
 
 	// ParserEngine names which engine read the documents this turn attached:
 	// `native` for the in-process reader, `recognition` for a catalogued model.

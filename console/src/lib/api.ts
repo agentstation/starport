@@ -674,6 +674,16 @@ export type ActivityRecord = {
   ttft_ms?: number;
   attempts?: number;
   cache_status?: string;
+  // cache_similarity is the cosine similarity a semantic cache hit served
+  // under, and cache_semantic marks that hit as the near-duplicate kind.
+  // An exact hit and a miss carry neither.
+  cache_similarity?: number;
+  cache_semantic?: boolean;
+  // guardrail_verdict is the strongest verdict a guardrail returned on the
+  // turn: allow, redact, or refuse. guardrail_check names the check behind
+  // a refusal. A turn no guardrail inspected carries neither.
+  guardrail_verdict?: string;
+  guardrail_check?: string;
   // Which engine read the documents this turn attached: "native" for the
   // in-process reader, "recognition" for a catalogued model. Absent on a turn
   // that attached none, which is every ordinary chat turn.
@@ -694,6 +704,47 @@ export type ActivityRecord = {
   cost_unavailable_reason?: string;
 };
 
+// ACTIVITY_RECORD_KEYS names every wire field the record type reads, so a
+// test can hold the type to the Go JSON tags in internal/usage/model.go. A
+// key the gateway never writes would read as an absent value forever.
+export const ACTIVITY_RECORD_KEYS = [
+  "request_id",
+  "key_id",
+  "timestamp",
+  "protocol",
+  "operation",
+  "model_requested",
+  "model_used",
+  "provider",
+  "credential_source",
+  "streaming",
+  "status",
+  "status_code",
+  "error_class",
+  "tokens",
+  "media",
+  "tokens_estimated",
+  "latency_ms",
+  "routing_ms",
+  "overhead_ms",
+  "ttft_ms",
+  "attempts",
+  "cache_status",
+  "cache_similarity",
+  "cache_semantic",
+  "guardrail_verdict",
+  "guardrail_check",
+  "parser_engine",
+  "document_pages",
+  "recognized_pages",
+  "native_pages",
+  "extraction_cached",
+  "extraction_millis",
+  "extraction_cost",
+  "cost",
+  "cost_unavailable_reason",
+] as const satisfies readonly (keyof ActivityRecord)[];
+
 export type ActivityPage = {
   data?: ActivityRecord[];
   next_cursor?: string;
@@ -707,6 +758,9 @@ export type ActivityFilters = {
   // request_id selects the one record a request left, so an audit record
   // reaches its usage row.
   request_id?: string;
+  // guardrail keeps only the turns a guardrail closed with this verdict:
+  // refuse or redact.
+  guardrail?: string;
   since?: string;
   until?: string;
   limit?: number;
@@ -1465,6 +1519,7 @@ function activityQuery(filters: ActivityFilters): string {
   if (filters.status) params.set("status", filters.status);
   if (filters.key_id) params.set("key_id", filters.key_id);
   if (filters.request_id) params.set("request_id", filters.request_id);
+  if (filters.guardrail) params.set("guardrail", filters.guardrail);
   if (filters.since) params.set("since", filters.since);
   if (filters.until) params.set("until", filters.until);
   if (filters.limit) params.set("limit", String(filters.limit));
@@ -1586,6 +1641,10 @@ export type ChatStreamMeta = {
   usage: ChatUsage | null;
   cache: string;
   cacheAge: string;
+  // cacheSimilarity is the X-Cache-Similarity header a semantic hit
+  // reports, as the gateway wrote it. It is empty for an exact hit or a
+  // miss.
+  cacheSimilarity: string;
   unenforced: string;
   // media holds what the turn produced beside its text. It is empty for a
   // text answer, which is most of them.
@@ -1612,10 +1671,14 @@ export async function streamChat(
     signal,
     onDelta,
     onReasoning,
+    headers,
   }: {
     signal?: AbortSignal;
     onDelta: (text: string) => void;
     onReasoning?: (text: string) => void;
+    // headers carries a per-request opt-in the body cannot state, such as
+    // X-Semantic-Cache.
+    headers?: Record<string, string>;
   },
 ): Promise<ChatStreamMeta> {
   const response = await fetch("/api/v1/chat/completions", {
@@ -1624,6 +1687,7 @@ export async function streamChat(
     headers: {
       ...authorization(credential()),
       "Content-Type": "application/json",
+      ...headers,
     },
     body: JSON.stringify({
       ...body,
@@ -1638,6 +1702,7 @@ export async function streamChat(
     usage: null,
     cache: response.headers.get("X-Cache") ?? "",
     cacheAge: response.headers.get("X-Cache-Age") ?? "",
+    cacheSimilarity: response.headers.get("X-Cache-Similarity") ?? "",
     unenforced:
       response.headers.get("X-Starport-Unenforced-Provider-Fields") ?? "",
     media: [],
@@ -1832,6 +1897,41 @@ export function listActivity(filters: ActivityFilters, { signal }: ReadOptions =
 
 export function listAdminActivity(filters: ActivityFilters, { signal }: ReadOptions = {}): Promise<ActivityPage> {
   return request<ActivityPage>(`/api/v1/admin/activity${activityQuery(filters)}`, { signal });
+}
+
+// ActivityExportFormat names the two shapes the export route streams: one
+// JSON record per line, or the flat CSV a spreadsheet reads.
+export type ActivityExportFormat = "ndjson" | "csv";
+
+// activityExportPath is the export route for a scope under the listing's
+// own filters, so the file a reader saves holds the rows the page shows.
+// The page limit and cursor belong to the listing and stay out of it.
+export function activityExportPath(
+  scope: "admin" | "own",
+  filters: ActivityFilters,
+  format: ActivityExportFormat,
+): string {
+  const { limit: _limit, cursor: _cursor, ...rest } = filters;
+  const query = activityQuery(scope === "admin" ? rest : { ...rest, key_id: undefined });
+  const route = scope === "admin" ? "/api/v1/admin/activity/export" : "/api/v1/activity/export";
+  return `${route}${query ? `${query}&` : "?"}format=${format}`;
+}
+
+// exportActivity downloads the export as a blob under the held credential.
+// A bearer key never rides a plain link, so the page fetches the bytes and
+// hands them to the browser itself.
+export async function exportActivity(
+  scope: "admin" | "own",
+  filters: ActivityFilters,
+  format: ActivityExportFormat,
+  { signal }: ReadOptions = {},
+): Promise<Blob> {
+  const response = await fetch(activityExportPath(scope, filters, format), {
+    signal,
+    headers: authorization(credential()),
+  });
+  if (!response.ok) throw await parseError(response);
+  return response.blob();
 }
 
 // --- Audit log ---

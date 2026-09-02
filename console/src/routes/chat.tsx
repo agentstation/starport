@@ -31,6 +31,7 @@ import {
   newConversation,
   providerPreferences,
   rememberModel,
+  requestHeaders,
   saveConversations,
   saveFavorites,
   saveSidebarClosed,
@@ -414,6 +415,7 @@ function ChatPage() {
 
     streamChat(body, {
       signal: controller.signal,
+      headers: requestHeaders(conversation.params),
       onDelta: (delta) => {
         const now = performance.now();
         if (firstTokenAt === undefined) firstTokenAt = now;

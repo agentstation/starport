@@ -26,7 +26,7 @@ import {
   readAttachment,
 } from "@/lib/attachments";
 import type { Attachment, AttachmentKind } from "@/lib/attachments";
-import type { ChatParams } from "@/lib/chatStore";
+import { SEMANTIC_CACHE_HEADER, type ChatParams } from "@/lib/chatStore";
 
 // Composer is the DESIGN.md chat input card: one rounded surface with
 // the textarea on top and a control bar below — attach button left;
@@ -288,6 +288,21 @@ function ParamsPopover({
             </Select>,
           )}
         </div>
+        <label className="flex items-start gap-2 text-xs text-text-3">
+          <input
+            type="checkbox"
+            checked={params.semanticCache ?? false}
+            onChange={(event) => onChange({ ...params, semanticCache: event.target.checked })}
+            aria-label="Semantic cache"
+            className="mt-0.5"
+          />
+          <span>
+            <span className="block text-text-2">Semantic cache</span>
+            Sends <code className="font-mono">{SEMANTIC_CACHE_HEADER}: true</code>, so a
+            near-duplicate prompt can answer from the cache when the operator
+            enabled the layer.
+          </span>
+        </label>
       </div>
     </PopoverContent>
   );

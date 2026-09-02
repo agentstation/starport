@@ -101,6 +101,7 @@ func activityQueryFromRequest(r *http.Request) (usage.Query, error) {
 		Cursor:   values.Get("cursor"),
 	}
 	query.RequestID = values.Get("request_id")
+	query.GuardrailVerdict = values.Get("guardrail")
 
 	since, err := activityTimeParameter(values.Get("since"), "since")
 	if err != nil {
