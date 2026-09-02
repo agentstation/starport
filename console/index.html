@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/src/favicon.svg" />
     <title>Starport</title>
+    <script>
+      // Theme bootstrap. The saved choice, or the system preference, lands
+      // on <html data-theme> before the first paint, so a light reader
+      // never sees a dark flash. lib/theme.ts owns the same rule at runtime.
+      (function () {
+        var choice = null;
+        try {
+          choice = localStorage.getItem("starport.theme");
+        } catch (error) {
+          // A locked-down context keeps the design-first dark default.
+        }
+        var light =
+          choice === "light" ||
+          (choice !== "dark" && window.matchMedia("(prefers-color-scheme: light)").matches);
+        document.documentElement.dataset.theme = light ? "light" : "dark";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

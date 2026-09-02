@@ -24,7 +24,7 @@ export function Select({
     <span className={`relative inline-flex ${className}`}>
       <select
         {...props}
-        className={`w-full appearance-none rounded-sm border border-border-2 bg-bg-raised text-text-1 outline-none transition-colors duration-150 ease-standard hover:border-border-3 focus:border-accent disabled:cursor-not-allowed disabled:opacity-60 ${sizing}`}
+        className={`w-full appearance-none rounded-sm border border-border-2 bg-bg-raised text-text-1 outline-none transition-colors duration-150 ease-standard hover:border-border-3 focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-60 ${sizing}`}
       >
         {children}
       </select>

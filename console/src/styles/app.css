@@ -3,6 +3,12 @@
 @import "streamdown/styles.css";
 @import "katex/dist/katex.min.css";
 
+/* shadcn on Base UI: the data-* state variants its components use, and
+ * the enter and exit animation utilities. Every color the components
+ * name resolves through the bridge in tokens.css (law 4). */
+@import "shadcn/tailwind.css";
+@import "tw-animate-css";
+
 /* Streamdown components carry Tailwind utility classes; Tailwind must
  * scan their dists to generate them. */
 @source "../../node_modules/streamdown/dist/*.js";
@@ -10,7 +16,8 @@
 @source "../../node_modules/@streamdown/math/dist/*.js";
 @source "../../node_modules/@streamdown/mermaid/dist/*.js";
 
-/* Our theme is class-based with dark as the default: html.light is the
- * light theme. Streamdown's dark: utilities (shiki dark palette) must
- * follow that class, not the OS preference. */
-@custom-variant dark (&:where(html:not(.light), html:not(.light) *));
+/* Our theme is attribute-based with dark as the default:
+ * html[data-theme="light"] is the light theme. Streamdown's dark:
+ * utilities (shiki dark palette) must follow that attribute, not the OS
+ * preference. */
+@custom-variant dark (&:where(html:not([data-theme="light"]), html:not([data-theme="light"]) *));

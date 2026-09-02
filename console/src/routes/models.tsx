@@ -207,7 +207,7 @@ function ModelsPage() {
             aria-label="Search models"
             value={draftQuery}
             onChange={(event) => setDraftQuery(event.target.value)}
-            className="h-8 w-64 rounded-sm border border-border-1 bg-bg-panel pl-8 pr-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 hover:border-border-2 focus:border-accent"
+            className="h-8 w-64 rounded-sm border border-border-1 bg-bg-panel pl-8 pr-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 hover:border-border-2 focus-visible:border-accent"
           />
         </div>
         <FacetFilter

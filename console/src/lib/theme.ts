@@ -1,6 +1,8 @@
-// Theme state. Dark is the design-first default on :root; the .light
-// class applies the light palette (DESIGN.md, implementation mapping).
-// The saved choice wins; "system" follows prefers-color-scheme.
+// Theme state. Dark is the design-first default on :root; the
+// data-theme="light" attribute applies the light palette (DESIGN.md,
+// implementation mapping). The saved choice wins; "system" follows
+// prefers-color-scheme. index.html sets the same attribute before the
+// first paint, so this module only keeps it current.
 
 export type ThemeChoice = "dark" | "light" | "system";
 
@@ -34,7 +36,7 @@ export function appliedTheme(): "dark" | "light" {
 }
 
 export function applyTheme(choice: ThemeChoice): void {
-  document.documentElement.classList.toggle("light", resolve(choice) === "light");
+  document.documentElement.dataset.theme = resolve(choice);
 }
 
 export function setTheme(choice: ThemeChoice): void {
@@ -56,8 +58,8 @@ export function onThemeChange(listener: () => void): () => void {
   return () => themeListeners.delete(listener);
 }
 
-// Bootstrap: apply before first paint (imported from main.tsx, which
-// runs before render) and track system changes while on "system".
+// Bootstrap: confirm what index.html applied before paint (main.tsx runs
+// this before render) and track system changes while on "system".
 export function initTheme(): void {
   applyTheme(savedTheme());
   window.matchMedia(lightQuery).addEventListener("change", () => {

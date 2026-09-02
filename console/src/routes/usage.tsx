@@ -427,7 +427,7 @@ function RequestDetail({
 // --- Page ---
 
 const INPUT_CLASS =
-  "h-8 rounded-sm border border-border-1 bg-bg-panel px-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 hover:border-border-2 focus:border-accent";
+  "h-8 rounded-sm border border-border-1 bg-bg-panel px-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 hover:border-border-2 focus-visible:border-accent";
 
 function Header() {
   return (

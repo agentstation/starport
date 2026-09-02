@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
 
 // Shared form scaffolding (DESIGN.md): 36px controls on the raised
-// ground with a hairline border that turns accent on focus. Routes
-// compose these instead of restating the control contract.
+// ground with a hairline border that turns accent under focus-visible,
+// beside the two-layer accent ring that tokens.css gives every
+// focus-visible control. Routes compose these instead of restating the
+// control contract.
 
 export const INPUT_CLASS =
-  "h-9 rounded-sm border border-border-2 bg-bg-raised px-3 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 focus:border-accent";
+  "h-9 rounded-sm border border-border-2 bg-bg-raised px-3 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 focus-visible:border-accent";
 
 export const TEXTAREA_CLASS =
-  "rounded-sm border border-border-2 bg-bg-raised px-3 py-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 focus:border-accent";
+  "rounded-sm border border-border-2 bg-bg-raised px-3 py-2 text-sm text-text-1 outline-none transition-colors duration-150 ease-standard placeholder:text-text-4 focus-visible:border-accent";
 
 export function Field({
   label,
