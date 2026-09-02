@@ -164,7 +164,10 @@ function GatewayStatus({ collapsed }: { collapsed: boolean }) {
         <span className="truncate text-base text-text-3">
           {label}
           {ok && health.data?.version ? (
-            <span className="text-text-4"> · v{health.data.version}</span>
+            <span className="text-text-4">
+              {" · "}
+              {health.data.version === "dev" ? "dev build" : `v${health.data.version}`}
+            </span>
           ) : null}
         </span>
       )}

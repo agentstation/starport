@@ -69,6 +69,8 @@ export const queries = {
     queryOptions({ queryKey: ["system-info"], queryFn: ({ signal }) => api.systemInfo({ signal }) }),
   systemMetrics: () =>
     queryOptions({ queryKey: ["system-metrics"], queryFn: ({ signal }) => api.systemMetrics({ signal }) }),
+  webhooks: () =>
+    queryOptions({ queryKey: ["webhooks"], queryFn: ({ signal }) => api.webhookSummary({ signal }) }),
   authMode: () =>
     queryOptions({ queryKey: ["auth-mode"], queryFn: ({ signal }) => api.readAuthMode({ signal }) }),
 

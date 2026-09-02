@@ -152,6 +152,26 @@ export function formatWindow(seconds: number | undefined): string {
   return `${seconds}s`;
 }
 
+// formatRetention says how long a record lives, in the largest whole unit
+// that fits. A zero window means the sweep never runs, and the reader
+// learns that in words rather than as "0 days".
+export function formatRetention(seconds: number | undefined): string {
+  if (seconds === undefined) return "unavailable";
+  if (seconds <= 0) return "no expiry";
+  const units: [number, string][] = [
+    [86400, "day"],
+    [3600, "hour"],
+    [60, "minute"],
+  ];
+  for (const [size, name] of units) {
+    if (seconds % size === 0) {
+      const count = seconds / size;
+      return `${formatCount(count)} ${name}${count === 1 ? "" : "s"}`;
+    }
+  }
+  return `${formatCount(seconds)} seconds`;
+}
+
 // instant parses an ISO stamp into epoch milliseconds, or undefined. A
 // zero-value Go time serializes as "0001-01-01T00:00:00Z", which parses to a
 // finite pre-epoch instant. An absent stamp renders as absent, never as a

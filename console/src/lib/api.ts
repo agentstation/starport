@@ -247,13 +247,41 @@ export async function request<T>(
 
 export type Health = { status?: string; version?: string };
 
+// SystemInfo is what GET /api/v1/admin/info states about the running
+// gateway. Every value comes from the linker, the clock, or the loaded
+// configuration; a fact the process cannot know reads "unavailable", and an
+// unstamped build reads "dev" in its three provenance fields.
 export type SystemInfo = {
   version?: string;
+  commit?: string;
+  build_time?: string;
+  started_at?: string;
   uptime?: string;
-  storage?: { type?: string };
+  go_version?: string;
+  os?: string;
+  arch?: string;
+  storage?: { type?: string; relational?: string };
   // Stored file bytes do not live in the record store, so the backend that
   // holds them is a separate fact.
   files?: { backend?: string };
+  telemetry?: {
+    metrics?: string;
+    traces?: { endpoint_host?: string } | null;
+    usage_export?: { kind?: string; dropped?: number };
+  };
+  guardrails?: { checks?: string[]; pii_mode?: string; moderation_model?: string };
+  retention?: { audit_seconds?: number; files_seconds?: number; job_assets_seconds?: number };
+  webhooks?: WebhookSummary;
+};
+
+// WebhookSummary is what GET /api/v1/admin/webhooks states: receivers with
+// their credential and query removed, the event names, and delivery state.
+export type WebhookSummary = {
+  configured?: boolean;
+  endpoints?: string[];
+  events?: string[];
+  queue?: { depth?: number; capacity?: number };
+  dead_letters?: number;
 };
 
 export type SystemMetrics = {
@@ -689,6 +717,10 @@ export function systemInfo({ signal }: ReadOptions = {}): Promise<SystemInfo> {
 
 export function systemMetrics({ signal }: ReadOptions = {}): Promise<SystemMetrics> {
   return request<SystemMetrics>("/api/v1/admin/metrics", { signal });
+}
+
+export function webhookSummary({ signal }: ReadOptions = {}): Promise<WebhookSummary> {
+  return request<WebhookSummary>("/api/v1/admin/webhooks", { signal });
 }
 
 export async function listAuthors({ signal }: ReadOptions = {}): Promise<CatalogAuthor[]> {
