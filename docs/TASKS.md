@@ -7,7 +7,7 @@ Last Updated: 2026-09-01
 
 ### Active Work
 
-No plan is active.
+- [Console polish plan](plans/console-polish-plan.html) (CPL): one primitive layer on shadcn and Base UI, one query layer, one data table. It also covers honest enterprise surfaces and small screens, then the v1.2.0 release. Active since 2026-09-01. The verifier `scripts/verify-console-polish.sh` holds 48 conditions. The proof root is `docs/proof/console-polish/`.
 
 ### Proposed Work
 

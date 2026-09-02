@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console polish plan</title>
+<style>
+  :root {
+    --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+    --page: #ffffff; --accent: #2563eb;
+    --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+    --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+    --rejected: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e5e9ee; --muted: #9aa4af; --line: #333a43; --soft: #1b2027;
+      --page: #11151a; --accent: #60a5fa;
+      --todo: #9aa4af; --in-progress: #60a5fa; --blocked: #f87171;
+      --deferred: #a78bfa; --done: #4ade80; --no-action: #94a3b8;
+      --rejected: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 1080px;
+    background: var(--page); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; border-bottom: 1px solid
+    var(--line); padding-bottom: 0.25rem; }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+  code { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 4px; padding: 0.05rem 0.35rem; font-size: 0.85em; }
+  pre { background: var(--soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0.9rem 1rem; overflow-x: auto;
+    line-height: 1.45; }
+  pre code { background: none; border: none; padding: 0; }
+  blockquote { margin: 0.75rem 0; padding: 0.6rem 1rem; border-left: 3px
+    solid var(--accent); background: var(--soft); }
+  table { border-collapse: collapse; width: 100%; margin: 0.75rem 0;
+    font-size: 0.92rem; }
+  th, td { border: 1px solid var(--line); padding: 0.35rem 0.55rem;
+    text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  #status-line { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+  .bar { height: 0.75rem; border: 1px solid var(--line); border-radius:
+    999px; overflow: hidden; background: var(--soft); }
+  .bar .fill { height: 100%; width: 0; background: var(--done);
+    transition: width 0.3s; }
+  .counts { color: var(--muted); font-size: 0.92rem; margin: 0.4rem 0 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit,
+    minmax(280px, 1fr)); gap: 1rem; }
+  figure { margin: 0; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0.75rem; background: var(--soft); }
+  figcaption { font-weight: 600; margin-bottom: 0.5rem; }
+  figure svg { max-width: 100%; height: auto; }
+  tr[data-status] td:nth-child(3) code { font-weight: 600; }
+  tr[data-status="todo"] td:nth-child(3) code,
+  tr[data-status^="todo("] td:nth-child(3) code { color: var(--todo); }
+  tr[data-status="in_progress"] td:nth-child(3) code,
+  tr[data-status^="in_progress("] td:nth-child(3) code {
+    color: var(--in-progress); }
+  tr[data-status="blocked"] td:nth-child(3) code,
+  tr[data-status^="blocked("] td:nth-child(3) code {
+    color: var(--blocked); }
+  tr[data-status="deferred"] td:nth-child(3) code,
+  tr[data-status^="deferred("] td:nth-child(3) code {
+    color: var(--deferred); }
+  tr[data-status="done"] td:nth-child(3) code,
+  tr[data-status^="done("] td:nth-child(3) code { color: var(--done); }
+  tr[data-status="no-action"] td:nth-child(3) code,
+  tr[data-status^="no-action("] td:nth-child(3) code {
+    color: var(--no-action); }
+  tr[data-status="rejected"] td:nth-child(3) code,
+  tr[data-status^="rejected("] td:nth-child(3) code {
+    color: var(--rejected); }
+  @page { margin: 0.7in 0.6in; size: letter; }
+  @media print {
+    :root {
+      --ink: #1a1e24; --muted: #5c6570; --line: #d8dde3; --soft: #f4f6f8;
+      --page: #ffffff; --accent: #2563eb;
+      --todo: #6b7280; --in-progress: #2563eb; --blocked: #dc2626;
+      --deferred: #7c3aed; --done: #16a34a; --no-action: #64748b;
+      --rejected: #b45309;
+    }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var rows = document.querySelectorAll("#ledger tbody tr");
+    var terminal = { "done": 1, "no-action": 1, "rejected": 1 };
+    var total = rows.length, closed = 0, current = "";
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-status") || "";
+      var status = raw.split("(")[0].trim();
+      if (terminal[status]) { closed += 1; }
+      if (status === "in_progress" && !current) {
+        current = row.id + " " + row.cells[1].textContent.trim();
+      }
+    });
+    var pct = total ? Math.round((closed / total) * 100) : 0;
+    document.querySelector("#progress .fill").style.width = pct + "%";
+    var text = closed + " of " + total + " tasks terminal (" + pct + "%).";
+    if (current) { text += " In progress: " + current; }
+    document.querySelector("#progress .counts").textContent = text;
+  });
+</script>
+</head>
+<body>
+
+<header id="overview">
+  <h1>Console polish plan</h1>
+  <p id="status-line">
+    Status: <code data-plan-status="active">active</code> ·
+    Owner: this plan ·
+    Created: 2026-09-01 ·
+    Baseline: main @ 6db57d8 ·
+    Proof root: <code>docs/proof/console-polish/</code> ·
+    Next action: finish CPL-A0 on codex/cpl-a0, then start CPL-B1
+  </p>
+
+  <section id="outcome">
+    <h2>Outcome</h2>
+    <blockquote>
+      Every console surface is built from one set of accessible primitives,
+      one query layer, one table, one chart wrapper, and one formatting
+      vocabulary. Every enterprise feature that the gateway ships has a
+      console read surface, and every cascading write asks first. The
+      console reads the same on a phone and on a desk. Starport v1.2.0 ships
+      with these changes and a verifier that stays green at 48 conditions
+      in CI.
+    </blockquote>
+  </section>
+
+  <section id="progress">
+    <h2>Progress</h2>
+    <div class="bar"><div class="fill"></div></div>
+    <p class="counts">Progress appears here when the page loads. The status
+      ledger below is the source of truth.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>Architecture</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Before</figcaption>
+        <svg viewBox="0 0 460 240" role="img" aria-label="Before diagram">
+          <rect x="10" y="10" width="440" height="220" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="230" y="36" text-anchor="middle" font-weight="600"
+            fill="currentColor">console routes</text>
+          <text x="230" y="64" text-anchor="middle"
+            fill="currentColor">each route owns its query keys, notices,</text>
+          <text x="230" y="84" text-anchor="middle"
+            fill="currentColor">tables, dialogs, and number formats</text>
+          <rect x="30" y="110" width="120" height="44" rx="6" fill="none"
+            stroke="currentColor" stroke-dasharray="4 3"/>
+          <text x="90" y="137" text-anchor="middle" font-size="13"
+            fill="currentColor">Modal, SidePanel</text>
+          <rect x="170" y="110" width="120" height="44" rx="6" fill="none"
+            stroke="currentColor" stroke-dasharray="4 3"/>
+          <text x="230" y="137" text-anchor="middle" font-size="13"
+            fill="currentColor">11 plain tables</text>
+          <rect x="310" y="110" width="120" height="44" rx="6" fill="none"
+            stroke="currentColor" stroke-dasharray="4 3"/>
+          <text x="370" y="137" text-anchor="middle" font-size="13"
+            fill="currentColor">11 notice states</text>
+          <rect x="30" y="170" width="400" height="44" rx="6" fill="none"
+            stroke="currentColor"/>
+          <text x="230" y="197" text-anchor="middle" font-size="13"
+            fill="currentColor">gateway API: system info stub, no webhook or budget-usage reads</text>
+        </svg>
+      </figure>
+      <figure>
+        <figcaption>After</figcaption>
+        <svg viewBox="0 0 460 240" role="img" aria-label="After diagram">
+          <defs>
+            <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4"
+              markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <rect x="10" y="10" width="440" height="220" rx="8" fill="none"
+            stroke="currentColor"/>
+          <text x="230" y="36" text-anchor="middle" font-weight="600"
+            fill="currentColor">console routes</text>
+          <text x="230" y="58" text-anchor="middle" font-size="13"
+            fill="currentColor">loaders, search params, mutations, toasts</text>
+          <rect x="30" y="76" width="120" height="44" rx="6" fill="none"
+            stroke="currentColor"/>
+          <text x="90" y="95" text-anchor="middle" font-size="12"
+            fill="currentColor">lib/queries.ts</text>
+          <text x="90" y="111" text-anchor="middle" font-size="12"
+            fill="currentColor">lib/format.ts</text>
+          <rect x="170" y="76" width="120" height="44" rx="6" fill="none"
+            stroke="currentColor"/>
+          <text x="230" y="95" text-anchor="middle" font-size="12"
+            fill="currentColor">ui: shadcn on Base UI</text>
+          <text x="230" y="111" text-anchor="middle" font-size="12"
+            fill="currentColor">Dialog, Sheet, Toast</text>
+          <rect x="310" y="76" width="120" height="44" rx="6" fill="none"
+            stroke="currentColor"/>
+          <text x="370" y="95" text-anchor="middle" font-size="12"
+            fill="currentColor">ui: DataTable</text>
+          <text x="370" y="111" text-anchor="middle" font-size="12"
+            fill="currentColor">ui: ChartCard series</text>
+          <line x1="230" y1="120" x2="230" y2="164" stroke="currentColor"
+            marker-end="url(#arrow)"/>
+          <rect x="30" y="170" width="400" height="44" rx="6" fill="none"
+            stroke="currentColor"/>
+          <text x="230" y="189" text-anchor="middle" font-size="13"
+            fill="currentColor">gateway API: honest system info, webhook summary,</text>
+          <text x="230" y="205" text-anchor="middle" font-size="13"
+            fill="currentColor">budget usage on team and account reads, typed guardrail fields</text>
+        </svg>
+      </figure>
+    </div>
+    <p>Dashed boxes are the parts this plan replaces. Solid boxes in the
+      after view are the parts it creates. Route files keep their names.</p>
+  </section>
+</header>
+
+<main>
+  <section id="scope">
+    <h2>Scope</h2>
+    <p><strong>Owns:</strong> the console at <code>console/</code>: its
+      query layer, router setup, primitives, tables, charts, formatting,
+      page copy, and small-screen layout.</p>
+
+    <p><strong>Owns, gateway side:</strong> the read surfaces the console
+      needs. Honest system info. A webhook summary. Budget usage on team and
+      account reads. Typed guardrail fields on activity records and the
+      <code>until</code> audit filter. The v1.2.0 release.</p>
+
+    <p><strong>Does not own:</strong> new gateway features. A server
+      aggregate endpoint for usage series stays with a future usage plan.
+      Bulk row actions stay with a future keys and files plan. The
+      agentstation/skills mirror stays with the skills repository.</p>
+
+    <p><strong>Non-goals:</strong> a visual redesign. DESIGN.md stays the
+      design system and this plan applies it. A component library other than
+      shadcn on Base UI. A chart library other than Recharts. A form
+      library. Organization tiers above accounts.</p>
+  </section>
+
+  <section id="promotion-gate">
+    <h2>Promotion gate</h2>
+    <p>Promote this plan to <code>active</code> only when every item
+      holds.</p>
+
+    <ul>
+      <li>Scope and non-goals complete.</li>
+      <li>Verifiable acceptance criteria on every task.</li>
+      <li>Baseline commit and proof root in place.</li>
+      <li>Real documents, paths, and gates in the goal block.</li>
+      <li>One review pass complete with its coherence fixes applied.</li>
+      <li>Owner approval for activation.</li>
+    </ul>
+  </section>
+
+  <section id="invariants">
+    <h2>Invariants</h2>
+    <p><strong>I1 Design system.</strong> The seven laws in DESIGN.md hold
+      on every screen. The laws are one accent, mono for data, borders as
+      elevation, role-mapped neutrals, a weight 600 ceiling, dense tables,
+      and color as state. Components from shadcn take their colors from
+      <code>tokens.css</code>. No default shadcn palette reaches the
+      bundle.</p>
+
+    <p><strong>I2 Self-hosted.</strong> The built console stays self-hosted.
+      No runtime request leaves the gateway origin for a script, style, or
+      font.</p>
+
+    <p><strong>I3 Credentials.</strong> The console keeps the two credential
+      paths that exist today, the launch-ticket session and the stored
+      gateway API key. This plan adds no third path and shows no secret
+      that the console does not show today.</p>
+
+    <p><strong>I4 Overlays.</strong> Every modal overlay traps focus,
+      restores focus on close, closes one layer on Escape, locks page
+      scroll, and names itself with <code>aria-labelledby</code>. Every
+      non-modal overlay closes on Escape, returns focus to its trigger, and
+      carries an accessible name.</p>
+
+    <p><strong>I5 Motion.</strong> Every animation honors
+      <code>prefers-reduced-motion</code>.</p>
+
+    <p><strong>I6 API.</strong> Gateway API changes are additive. Existing
+      JSON fields keep their names and types. The health endpoints keep
+      their version contract.</p>
+
+    <p><strong>I7 Checks.</strong> <code>pnpm -C console check</code> is
+      green at every merge. The console test count never decreases.</p>
+
+    <p><strong>I8 Bundle.</strong> The entry chunk of the built console
+      stays at or under 130 kB gzip against the baseline that CPL-A0
+      records.</p>
+
+    <p><strong>I9 Gates.</strong> Existing verifier gates keep their
+      terminal counts. AON 26, CSG 16, MMD 26, FIL 22, AMJ 18, PLG 20, and
+      RNK 22 hold. CSH 23, ORP 17, CDP 19, ENR 33, CM 21, and CP 20
+      hold.</p>
+  </section>
+
+  <section id="verifier-contract">
+    <h2>Verifier contract</h2>
+    <p><code>scripts/verify-console-polish.sh</code> holds 48 conditions,
+      <code>CPL-V01</code> through <code>CPL-V48</code>. Every condition
+      is red at baseline. CPL-A0 probes each grep term at baseline and
+      records the probe table in its proof file. A condition turns green
+      only in the task that owns it.</p>
+    <table>
+      <thead>
+        <tr><th>Phase</th><th>Conditions</th><th>Green after</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>B data layer</td><td>V01 query factories file. V02 client
+          defaults. V03 intent preload. V04 not-found component. V05 every
+          factory in <code>lib/queries.ts</code> passes the query signal.
+          V06 at least eleven route files validate search params.</td><td>CPL-B1 (V01, V02), CPL-B2 (V03, V04, V05),
+          CPL-B3 (V06)</td></tr>
+        <tr><td>C primitives</td><td>V07 components manifest. V08 Base UI
+          dependency. V09 theme bootstrap in index.html. V10 skip link.
+          V11 dialog present and Modal absent. V12 sheet present and
+          SidePanel absent. V13 destructive button. V14 toast dependency.
+          V15 typed budget error. V16 zero notice setters. V17 tooltip and
+          dropdown menu. V18 active descendant in
+          <code>chat/ModelPicker.tsx</code>. V19 skeleton.
+          V20 field invalid state. V21 chat live region.</td>
+          <td>CPL-C1 (V07 to V10), CPL-C2 (V11 to V13), CPL-C3 (V14 to
+          V16), CPL-C4 (V17, V18), CPL-C5 (V19 to V21)</td></tr>
+        <tr><td>D data display</td><td>V22 currency format test. V23 price
+          pair format. V24 shared data table. V25 audit uses it. V26
+          provider offerings use it. V27 column scopes in the seven plain tables. V28 synced
+          charts. V29 endpoint emphasis.</td><td>CPL-D1 (V22, V23),
+          CPL-D2 (V24 to V26), CPL-D3 (V27), CPL-D4 (V28, V29)</td></tr>
+        <tr><td>E enterprise surfaces</td><td>V30 build provenance test
+          <code>TestSystemInfoReportsBuildVersion</code>.
+          V31 webhook summary route. V32 observability and guardrails
+          sections. V33 shared budget line. V34 team read budget usage
+          test. V35 delete team and delete account dialogs. V36 audit
+          until filter. V37 guardrail verdict field in
+          <code>lib/api.ts</code>. V38 export control.
+          V39 semantic cache header. V40 batches panel.</td>
+          <td>CPL-E1 (V30, V31), CPL-E2 (V32), CPL-E3 (V33, V34), CPL-E4
+          (V35), CPL-E5 (V36), CPL-E6 (V37 to V39), CPL-E7 (V40)</td></tr>
+        <tr><td>F page polish</td><td>V41 sentence-case navigation. V42
+          model picker on the key form. V43 chat default model test. V44
+          docs cite the real health paths. V45 docs navigation
+          test.</td><td>CPL-F1 (V41), CPL-F3 (V42), CPL-F4 (V43), CPL-F5
+          (V44, V45)</td></tr>
+        <tr><td>G small screens</td><td>V46 media query hook.</td>
+          <td>CPL-G1 (V46)</td></tr>
+        <tr><td>Z close</td><td>V47 verifier in CI. V48 verifier in the
+          AGENTS.md evidence list.</td><td>CPL-Z1 (V47, V48)</td></tr>
+      </tbody>
+    </table>
+    <p>CPL-F2, CPL-Z2, and CPL-Z3 hold no conditions. CPL-F2 is copy work
+      that named tests cover. CPL-Z2 is a tag. CPL-Z3 deletes this
+      plan.</p>
+  </section>
+
+  <section id="findings">
+    <h2>Findings routing</h2>
+    <p>Six review reports produced the findings. TQ is the TanStack review.
+      DV is the data display review. CA is the components and accessibility
+      review. EU is the enterprise feature review. LW is the live
+      walkthrough.</p>
+
+    <p>HS is the holistic second-model review. Every finding maps to one
+      owning task or to one decision below.</p>
+    <table>
+      <thead>
+        <tr><th>Owning task</th><th>Findings</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>CPL-B1</td><td>HS-14 (freshness), TQ-01, TQ-02, TQ-03, TQ-04, TQ-09, TQ-12,
+          TQ-16, TQ-17, TQ-18, TQ-19, TQ-23, TQ-24, DV-24, LW-25</td></tr>
+        <tr><td>CPL-B2</td><td>TQ-05, TQ-06, TQ-07, TQ-08, TQ-15, TQ-22,
+          LW-02, LW-07</td></tr>
+        <tr><td>CPL-B3</td><td>HS-12, TQ-10, TQ-13, TQ-14, TQ-21</td></tr>
+        <tr><td>CPL-C1</td><td>HS-11 (focus ring), CA-22, CA-30, CA-32</td></tr>
+        <tr><td>CPL-C2</td><td>HS-04, HS inset ring, CA-01, CA-02, CA-03, CA-04, CA-06, CA-07,
+          CA-08, CA-09, CA-24, CA-25, CA-33, LW-06</td></tr>
+        <tr><td>CPL-C3</td><td>HS-06, HS-08, TQ-11, TQ-20, CA-05, CA-28, CA-31, EU-20,
+          LW-04</td></tr>
+        <tr><td>CPL-C4</td><td>HS-10, CA-15, CA-18, CA-19, CA-20, CA-27, CA-29,
+          LW-08</td></tr>
+        <tr><td>CPL-C5</td><td>HS-05, HS-13, CA-12, CA-13, CA-23, DV-26, LW-05,
+          LW-30 (required marker)</td></tr>
+        <tr><td>CPL-D1</td><td>HS-09, DV-02, DV-03, DV-28, DV-29, DV-31, LW-21,
+          LW-32, LW-97</td></tr>
+        <tr><td>CPL-D2</td><td>HS-07, HS-14 (bounds), EU-28, DV-18, DV-19, DV-20 (table part), DV-21,
+          DV-23, DV-25, DV-27, DV-33, CA-16, CA-17, CA-26</td></tr>
+        <tr><td>CPL-D3</td><td>HS radius, fills, and status chips, DV-22, DV-30, DV-32, CA-11, LW-26, LW-61,
+          LW-98</td></tr>
+        <tr><td>CPL-D4</td><td>DV-01 (clamp and caption), DV-04, DV-05,
+          DV-06, DV-07, DV-08, DV-09, DV-10, DV-11, DV-12, DV-13, DV-14,
+          DV-15, DV-16, DV-17</td></tr>
+        <tr><td>CPL-E1</td><td>EU-01, EU-06 (read surface), LW-03</td></tr>
+        <tr><td>CPL-E2</td><td>EU-06 (settings section), EU-16, EU-21,
+          EU-31, LW-90</td></tr>
+        <tr><td>CPL-E3</td><td>EU-04, EU-18, EU-19, EU-26, EU-27</td></tr>
+        <tr><td>CPL-E4</td><td>HS-03, EU-02, EU-03, EU-11, EU-17, LW-70</td></tr>
+        <tr><td>CPL-E5</td><td>EU-07, EU-08, EU-09, EU-29, DV-20
+          (filters part), LW-40, LW-41, LW-42</td></tr>
+        <tr><td>CPL-E6</td><td>EU-05, EU-13, EU-14, EU-15</td></tr>
+        <tr><td>CPL-E7</td><td>EU-10, EU-32, LW-95</td></tr>
+        <tr><td>CPL-F1</td><td>HS palette (Audit log), CA-10, CA-21, LW-01</td></tr>
+        <tr><td>CPL-F2</td><td>LW-10, LW-11, LW-12, LW-20, LW-22, LW-23,
+          LW-24</td></tr>
+        <tr><td>CPL-F3</td><td>EU-12, LW-30 (picker and date), LW-31,
+          LW-33, LW-34, LW-50, LW-60, LW-96</td></tr>
+        <tr><td>CPL-F4</td><td>LW-80, LW-81, LW-82</td></tr>
+        <tr><td>CPL-F5</td><td>HS-01, HS docs sections, EU-22, EU-23, EU-24, EU-25, EU-30</td></tr>
+        <tr><td>CPL-G1</td><td>HS-02, HS-11 (targets), CA-14</td></tr>
+        <tr><td>Rejected designs</td><td>DV-01 (server aggregate), DV-34,
+          TQ-05 (full loader ownership), HS upgrade 1 (navigation
+          regrouping)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="rejected">
+    <h2>Rejected designs</h2>
+    <table>
+      <thead>
+        <tr><th>Design</th><th>Reason</th><th>Re-open when</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Navigation regrouping into Explore, Requests, Catalog, and
+          Administration (HS upgrade 1)</td><td>DESIGN.md documents the
+          three current groups. A regrouping moves every destination that
+          operators know, and the holistic review names no lost
+          destination.</td><td>Operator feedback names a destination
+          that the three groups hide.</td></tr>
+        <tr><td>Radix primitives under shadcn</td><td>Base UI is the shadcn
+          default since July 2026 and ships as <code>@base-ui/react</code>.
+          Radix adds a second styling model the console does not
+          need.</td><td>A required component exists only for
+          Radix.</td></tr>
+        <tr><td>Repair the hand-rolled Modal and SidePanel</td><td>Focus
+          trap, focus restore, scroll lock, inert, and stacking are solved
+          by Base UI. A local copy would hold the same defects
+          again.</td><td>Never.</td></tr>
+        <tr><td>Server aggregate endpoint for usage series (DV-01
+          large option)</td><td>The console can state its window from the
+          oldest loaded record today. A series endpoint is a usage plan
+          with its own storage work.</td><td>An operator needs a 30-day
+          chart over more than one thousand records.</td></tr>
+        <tr><td>Bulk row actions on keys, presets, and files
+          (DV-34)</td><td>No operator request. The shared table keeps a
+          selection column slot for it.</td><td>A second operator asks for
+          bulk revoke or bulk delete.</td></tr>
+        <tr><td>Route loaders that own every fetch (TQ-05 full
+          form)</td><td>Loaders prefetch and set the pending state. Queries
+          stay in components so the cache keeps the render-time
+          contract.</td><td>A route needs data before it can decide its
+          layout.</td></tr>
+        <tr><td>A form library</td><td>Nine forms with under eight fields
+          each. Native forms with the repaired <code>Field</code> cover
+          them.</td><td>A form needs nested arrays or async
+          validation.</td></tr>
+        <tr><td>A chart library other than Recharts</td><td>Recharts 3 with
+          the shadcn chart pattern covers every chart the console
+          draws.</td><td>Never within this plan.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decisions">
+    <h2>Decisions</h2>
+    <p><strong>Primitives.</strong> shadcn 4.19 on Base UI
+      (<code>@base-ui/react</code> 1.7). The package
+      <code>@base-ui-components/react</code> is stale at a release candidate
+      and is not used.</p>
+
+    <p><strong>Toasts.</strong> Toasts use sonner. One line, bottom right,
+      four seconds, a semantic left rule, <code>role="status"</code>.</p>
+
+    <p><strong>Palette.</strong> The command palette moves to cmdk. Keyboard
+      behavior stays as it is today.</p>
+
+    <p><strong>Select.</strong> The native <code>Select</code> stays. The
+      DESIGN.md styled select is a styling pass, not a primitive swap.</p>
+
+    <p><strong>Chart interval.</strong> The interval follows the range. One
+      hour uses five minutes. One day uses one hour. Seven days use six
+      hours. Thirty days use one day.</p>
+
+    <p><strong>Order.</strong> Task order inside a phase is the listed
+      order. Phases B and C land before D, E, F, and G, because the later
+      phases build on the primitives and the query layer.</p>
+
+    <p><strong>Delivery.</strong> Every task ships as one pull request on a
+      <code>codex/</code> branch, with the pre-PR autoreview gate. It merges
+      by squash after CI is green.</p>
+  </section>
+
+  <section id="ledger">
+    <h2>Status ledger</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Task</th><th>Status</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr id="CPL-A0" data-status="in_progress"><td>CPL-A0</td><td>Baseline: pin 6db57d8, create the proof root, author the verifier red at 48, record bundle size and test count.</td><td><code>in_progress</code></td><td>branch codex/cpl-a0</td></tr>
+        <tr id="CPL-B1" data-status="todo"><td>CPL-B1</td><td>Query client defaults and query factories.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-B2" data-status="todo"><td>CPL-B2</td><td>Router context, loaders, preload, pending, error, and not-found states.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-B3" data-status="todo"><td>CPL-B3</td><td>List state in search params and effect hygiene.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-C1" data-status="todo"><td>CPL-C1</td><td>Adopt shadcn on Base UI, theme bootstrap, skip link.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-C2" data-status="todo"><td>CPL-C2</td><td>Dialogs and sheets replace Modal and SidePanel.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-C3" data-status="todo"><td>CPL-C3</td><td>Toasts and mutations replace notice state.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-C4" data-status="todo"><td>CPL-C4</td><td>Popovers, menus, tooltips, command palette, and combobox.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-C5" data-status="todo"><td>CPL-C5</td><td>Skeletons, field validation, and live regions.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-D1" data-status="todo"><td>CPL-D1</td><td>Formatting vocabulary with tests.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-D2" data-status="todo"><td>CPL-D2</td><td>Shared data table and four conversions.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-D3" data-status="todo"><td>CPL-D3</td><td>Plain table and label pass.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-D4" data-status="todo"><td>CPL-D4</td><td>Charts: series descriptor, interval, legend, honesty.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E1" data-status="todo"><td>CPL-E1</td><td>Honest system info and a webhook summary route.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E2" data-status="todo"><td>CPL-E2</td><td>Settings sections for system, observability, guardrails, webhooks, and retention.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E3" data-status="todo"><td>CPL-E3</td><td>Budgets as meters on teams and accounts.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E4" data-status="todo"><td>CPL-E4</td><td>Confirmations for every cascading write.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E5" data-status="todo"><td>CPL-E5</td><td>Audit log as an investigation tool.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E6" data-status="todo"><td>CPL-E6</td><td>Usage: guardrail fields, export, semantic cache.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E7" data-status="todo"><td>CPL-E7</td><td>Batches panel on the jobs page.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-F1" data-status="todo"><td>CPL-F1</td><td>Shell and navigation polish.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-F2" data-status="todo"><td>CPL-F2</td><td>Models and providers copy and states.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-F3" data-status="todo"><td>CPL-F3</td><td>Keys, presets, teams, members, and accounts forms.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-F4" data-status="todo"><td>CPL-F4</td><td>Chat defaults, picker filter, and tone.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-F5" data-status="todo"><td>CPL-F5</td><td>Docs page re-sync with a navigation coverage test.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-G1" data-status="todo"><td>CPL-G1</td><td>Small screens: sidebar sheet, picker bottom sheet, touch targets.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-Z1" data-status="todo"><td>CPL-Z1</td><td>Close: verifier joins CI, walkthrough re-run, documentation drift.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-Z2" data-status="todo"><td>CPL-Z2</td><td>Release v1.2.0.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-Z3" data-status="todo"><td>CPL-Z3</td><td>Cleanup after the release: delete this plan, its proof root, and its index entry.</td><td><code>todo</code></td><td></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="tasks">
+    <h2>Tasks</h2>
+    <p>Every task follows the same loop. Branch from main as
+      <code>codex/cpl-&lt;id&gt;</code>. Capture fail-before evidence. Make
+      the change at the owning boundary. Run the checks that match the
+      change. Run the verifier.</p>
+
+    <p>Console changes run <code>pnpm -C console check</code>. Gateway
+      changes run <code>go test ./...</code>. Write the proof file. Open the
+      pull request through the pre-PR autoreview gate. Merge by squash after
+      CI is green. Flip the ledger on the next branch.</p>
+
+    <h3 id="task-CPL-A0">CPL-A0 Baseline</h3>
+
+    <p><strong>Problem:</strong> the campaign needs a pinned baseline, a red
+      verifier, and measured starting values.</p>
+
+    <p><strong>Owner and paths:</strong> this plan,
+      <code>docs/proof/console-polish/</code>,
+      <code>scripts/verify-console-polish.sh</code>, and
+      <code>docs/TASKS.md</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Pin baseline <code>6db57d8</code>.</li>
+      <li>Create the proof root.</li>
+      <li>Probe every grep term at baseline and replace each term that
+        collides with existing code.</li>
+      <li>Author the verifier with all 48 conditions failing.</li>
+      <li>Record the entry chunk gzip size and the console test count.</li>
+      <li>Register the plan under Active Work.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the verifier prints <code>Summary: 0
+      passed, 48 failed</code> and exits nonzero. The proof file holds the
+      probe table and the two baseline numbers. No production file
+      changes.</p>
+
+    <p><strong>Fail-before:</strong> not applicable. CPL-A0 creates the
+      fail-before evidence for every later task. Its proof is the 48-red
+      summary and the probe table.</p>
+
+    <p><strong>Verification:</strong> run <code>bash
+      scripts/verify-console-polish.sh</code> and <code>pnpm -C console
+      check</code>.</p>
+
+    <h3 id="task-CPL-B1">CPL-B1 Query client defaults and query factories</h3>
+
+    <p><strong>Problem:</strong> the client is a bare <code>new
+      QueryClient()</code>. Seventy-one production call sites in
+      thirty-eight files repeat <code>retry: false</code>. Twelve files spell the models key by hand. Two fetchers
+      share the health key. Credential mutations do not invalidate provider
+      status. The keys page fans out one query per row.</p>
+
+    <p><strong>Owner and paths:</strong> new
+      <code>console/src/lib/queries.ts</code> owns every query key and
+      fetcher through <code>queryOptions</code>. <code>main.tsx</code> owns
+      the client defaults. Routes and components consume the factories.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Set client defaults for stale time, cache time, retry, and window
+        focus.</li>
+      <li>Add one factory per resource, with <code>sinceISO</code> in the
+        usage key and a distinct presets prefix.</li>
+      <li>Replace every hand-written key and delete every production
+        <code>retry: false</code>, keeping the test harness clients.</li>
+      <li>Give credential mutations a provider status invalidation.</li>
+      <li>Move the keys budget fan-out to one <code>useQueries</code> at
+        page level.</li>
+      <li>Add the query and router devtools in development builds only.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Await the settings invalidation.</li>
+      <li>Add <code>select</code> to the hero, the model and provider
+        detail routes, and the BYOK panel, so each reads one slice.</li>
+      <li>Replace the two-request usage scope probe with one probe cached
+        under a long stale time.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> <code>grep -r "retry: false"
+      console/src | grep -v "\.test\." | wc -l</code> returns 0. A test in
+      <code>queries.test.ts</code> asserts that every factory key is unique
+      by prefix. A test asserts that a credential save invalidates provider
+      status. V01 and V02 green.</p>
+
+    <p><strong>Fail-before:</strong> V01 and V02 red. The invalidation test
+      fails on the current mutation.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-B2">CPL-B2 Router context, loaders, preload, pending, error, and not-found states</h3>
+
+    <p><strong>Problem:</strong> the router has no context, no loaders, no
+      preload, no pending or error component, and no not-found component. A
+      detail route for an unknown model prints a bare message. The sidebar
+      loses its highlight on detail routes. A route change cannot cancel a
+      fetch.</p>
+
+    <p><strong>Owner and paths:</strong> <code>console/src/main.tsx</code>
+      and <code>routes/__root.tsx</code> own router setup.
+      <code>lib/queries.ts</code> passes the abort signal that
+      <code>lib/api.ts</code> already accepts.
+      <code>components/shell/Shell.tsx</code> owns navigation links.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Pass the query client through router context.</li>
+      <li>Add loaders that call <code>ensureQueryData</code> on the list and
+        detail factories.</li>
+      <li>Set intent preload and scroll restoration.</li>
+      <li>Add a default pending component that renders a neutral
+        placeholder, which CPL-C5 replaces with the page skeleton.</li>
+      <li>Add a default error component that renders the error card with a
+        retry.</li>
+      <li>Add a not-found component that names the missing entity and links
+        to its list.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Pass the query function signal from every factory in
+        <code>lib/queries.ts</code> into the API client.</li>
+      <li>Switch sidebar links to <code>activeProps</code> with prefix
+        matching.</li>
+      <li>Encode the model id into one path segment at every
+        <code>Link</code> and <code>navigate</code> call, and decode it in
+        the route.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a test renders
+      <code>/models/unknown/unknown</code> and asserts the not-found copy
+      and the link. A test asserts that the models link is active on a model
+      detail route. A test asserts that a model id with a slash round-trips
+      through the URL. V03, V04, and V05 green.</p>
+
+    <p><strong>Fail-before:</strong> the three tests fail at baseline. V03
+      to V05 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-B3">CPL-B3 List state in search params and effect hygiene</h3>
+
+    <p><strong>Problem:</strong> selection and list state on keys, teams,
+      members, accounts, usage, presets, providers, and authors lives in
+      component state. A refresh loses it. Usage filters blank the table
+      while a new page loads. Two effects have incomplete dependencies.</p>
+
+    <p><strong>Owner and paths:</strong> each route file owns its
+      <code>validateSearch</code> schema. <code>usage.tsx</code> and
+      <code>models.tsx</code> own the effect repairs.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Add <code>validateSearch</code> with typed defaults to
+        <code>keys.tsx</code>, <code>teams.tsx</code>,
+        <code>members.tsx</code>, <code>accounts.tsx</code>,
+        <code>presets.tsx</code>, <code>providers.tsx</code>, and
+        <code>authors.tsx</code>, and extend the <code>usage.tsx</code>
+        schema.</li>
+      <li>Move selected ids, tabs, and filters into search params through
+        <code>navigate</code> with <code>replace</code>.</li>
+      <li>Set <code>placeholderData: keepPreviousData</code> on filtered
+        lists.</li>
+      <li>Repair the usage auto-pager and the models debounce
+        dependencies.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a test opens a key from a URL with
+      <code>?selected=</code> and asserts the panel. A usage test asserts
+      that the previous rows stay visible during a filter change. V06
+      green.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline. V06
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-C1">CPL-C1 Adopt shadcn on Base UI, theme bootstrap, skip link</h3>
+
+    <p><strong>Problem:</strong> the console has no accessible primitive
+      layer. Light-theme users see a dark flash on load. Keyboard users have
+      no skip link. The mono mark filter hard-codes black and white.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>console/components.json</code>,
+      <code>console/src/components/ui/</code>,
+      <code>console/index.html</code>, <code>tokens.css</code>, and
+      <code>Shell.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Run <code>pnpm dlx shadcn@latest init</code> with Base UI,
+        Tailwind v4, the <code>@</code> alias, and CSS variables.</li>
+      <li>Map every shadcn color variable to an existing token in
+        <code>tokens.css</code> and delete the generated palette.</li>
+      <li>Add the dialog, sheet, popover, dropdown menu, tooltip, skeleton,
+        tabs, and command components.</li>
+      <li>Add an inline bootstrap script in <code>index.html</code> that
+        reads <code>starport.theme</code> before paint.</li>
+      <li>Add a skip link to <code>#main</code>.</li>
+    </ol>
+
+    <ol start="6">
+      <li>Give <code>INPUT_CLASS</code> and <code>TEXTAREA_CLASS</code> the
+        two-layer focus ring from DESIGN.md and remove the input ring
+        reset in <code>tokens.css</code>. Rewrite its rationale comment to
+        state that the ring applies under <code>:focus-visible</code>
+        only.</li>
+      <li>Replace the mono mark filter with a <code>currentColor</code>
+        mask.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the build contains no shadcn zinc or
+      neutral color literal. <code>grep -rE "oklch|#[0-9a-f]{6}"
+      console/src/components/ui | wc -l</code> returns 0. A mouse click
+      into a text field shows no ring. A test asserts
+      the skip link is the first focusable element. V07 to V10 green.</p>
+
+    <p><strong>Fail-before:</strong> V07 to V10 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      <code>pnpm -C console build</code> with the entry chunk size recorded
+      in the proof, then the verifier.</p>
+
+    <h3 id="task-CPL-C2">CPL-C2 Dialogs and sheets replace Modal and SidePanel</h3>
+
+    <p><strong>Problem:</strong> fourteen dialog call sites and the side
+      panel lack a focus trap, focus restore, scroll lock, and
+      <code>inert</code>. The backdrop is a tabbable button. Escape closes
+      the whole stack. Mutation errors render behind the backdrop. Delete
+      actions use the primary button.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>components/ui/dialog.tsx</code> and
+      <code>components/ui/sheet.tsx</code> own overlay behavior.
+      <code>components/ui/Form.tsx</code> owns
+      <code>DestructiveButton</code>. Call sites in keys, presets,
+      credentials, files, teams, accounts, and members consume them.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Replace <code>Modal.tsx</code> with the shadcn dialog restyled to
+        DESIGN.md: radius 12, inset ring, backdrop black at 0.6, entrance
+        motion under reduced-motion guard.</li>
+      <li>Replace <code>SidePanel.tsx</code> with the sheet.</li>
+      <li>Give every dialog a title through <code>aria-labelledby</code> and
+        an error slot above the actions.</li>
+      <li>Add <code>DestructiveButton</code> with an
+        <code>--error-ink</code> token and use it at the six delete
+        sites.</li>
+      <li>Delete the two old files.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a test opens the delete key dialog, tabs
+      past the last control, and asserts focus stays inside. A test asserts
+      focus returns to the trigger on close. A test asserts the open dialog
+      locks body scroll and carries <code>aria-labelledby</code>. A test asserts a failed delete shows
+      its error inside the dialog. V11 to V13 green.</p>
+
+    <p><strong>Fail-before:</strong> the four tests fail at baseline. V11
+      to V13 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-C3">CPL-C3 Toasts and mutations replace notice state</h3>
+
+    <p><strong>Problem:</strong> fourteen components hold their own notice
+      state with their own timers. Success has no announcement. Three files
+      hand-roll mutations. The API error type cannot name a budget refusal
+      or a guardrail refusal. Copy failures are silent.</p>
+
+    <p><strong>Owner and paths:</strong> <code>Shell.tsx</code> mounts the
+      toaster. <code>lib/api.ts</code> owns <code>ApiError</code>. Every
+      write site uses <code>useMutation</code> with a shared
+      <code>onSettled</code> toast helper in
+      <code>lib/mutations.ts</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Add sonner with the DESIGN.md toast style.</li>
+      <li>Convert every write in providers, settings, keys, presets, teams,
+        members, accounts, files, documents, jobs, and credentials to
+        <code>useMutation</code>.</li>
+      <li>Name outcomes: "Key created", "Team deleted", "Budget saved".</li>
+      <li>Delete every notice state and timer.</li>
+      <li>Add <code>budgetExhausted</code> and <code>guardrailRefusal</code>
+        to <code>ApiError</code>.</li>
+      <li>Make <code>CopyButton</code> show "Copied" for two seconds,
+        announce it, and report a failed copy.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> <code>grep -r "setNotice("
+      console/src | wc -l</code> returns 0. A test asserts a 402 response parses
+      to <code>budgetExhausted</code>. A test asserts a key creation
+      produces a status toast. V14 to V16 green.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline. V14 to V16
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-C4">CPL-C4 Popovers, menus, tooltips, command palette, and combobox</h3>
+
+    <p><strong>Problem:</strong> three hand-rolled popovers are not keyboard
+      closable. The retry menu is not a menu. The facet filter nests a
+      button inside a button. The model picker announces no active option.
+      Icon buttons have no accessible name. The command palette has no
+      entities or recents.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>components/ui/popover.tsx</code>,
+      <code>dropdown-menu.tsx</code>, <code>tooltip.tsx</code>, and
+      <code>command.tsx</code>. Consumers are <code>Composer.tsx</code>,
+      <code>FreshnessBar.tsx</code>, <code>FacetFilter.tsx</code>,
+      <code>Messages.tsx</code>, <code>CommandPalette.tsx</code>, and
+      <code>chat/ModelPicker.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Move the three popovers to the popover primitive.</li>
+      <li>Move the retry menu to the dropdown menu.</li>
+      <li>Rebuild the facet filter with roving focus and no nested
+        buttons.</li>
+      <li>Wrap every icon-only button in a tooltip that also sets the
+        accessible name.</li>
+      <li>Move the palette to cmdk, keep every existing shortcut, and keep
+        the file at <code>components/palette/CommandPalette.tsx</code> so
+        CM-V19 holds.</li>
+      <li>Add model, provider, and key entities and the last five
+        destinations.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Give the model picker <code>aria-activedescendant</code>,
+        <code>aria-controls</code>, and group roles for its headings.</li>
+      <li>Add <code>tabs.tsx</code> and use it in <code>docs.tsx</code>
+        and <code>QuickstartCard.tsx</code>, so each tab has
+        <code>aria-controls</code> and arrow-key movement.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a test opens the freshness popover and
+      closes it with Escape. A test asserts the palette finds a model by id.
+      A test asserts the picker announces the highlighted option. V17 and
+      V18 green.</p>
+
+    <p><strong>Fail-before:</strong> the three tests fail at baseline. V17
+      and V18 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      <code>bash scripts/verify-console-modernization.sh</code>, then the
+      verifier.</p>
+
+    <h3 id="task-CPL-C5">CPL-C5 Skeletons, field validation, and live regions</h3>
+
+    <p><strong>Problem:</strong> twenty-five loading states are a paragraph
+      of text and cause layout shift. <code>Field</code> has no required
+      marker, error slot, or description wiring. Streamed chat text has no
+      live region.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>components/ui/skeleton.tsx</code> and a
+      <code>TableSkeleton</code>, <code>CardSkeleton</code>, and
+      <code>StatSkeleton</code> beside it. <code>Form.tsx</code> owns
+      <code>Field</code>. <code>Messages.tsx</code> owns the live
+      region.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Add the skeleton primitive with the DESIGN.md shimmer and
+        reduced-motion guard.</li>
+      <li>Build the three shaped skeletons, replace the CPL-B2 placeholder
+        in the router pending component, and use them from every
+        list.</li>
+      <li>Extend <code>Field</code> with <code>required</code>,
+        <code>error</code>, <code>description</code>,
+        <code>aria-describedby</code>, and <code>aria-invalid</code>.</li>
+      <li>Add a polite live region that announces a finished assistant
+        turn.</li>
+      <li>Replace the null returns in the overview cards with a skeleton
+        and an error state that offers a retry.</li>
+      <li>Render an "activity unavailable" state on the provider page
+        and a "could not load" state in <code>IdentitySignIn.tsx</code>,
+        so an error never reads as an empty result.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> <code>grep -rE "Loading [a-z]"
+      console/src/routes | wc -l</code> returns 0, which leaves the
+      load-more button labels in place. A test asserts a field with an
+      error sets <code>aria-invalid</code> and links the message. V19 to V21
+      green.</p>
+
+    <p><strong>Fail-before:</strong> the test fails at baseline. V19 to V21
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-D1">CPL-D1 Formatting vocabulary with tests</h3>
+
+    <p><strong>Problem:</strong> currency formatters emit exponent notation
+      for small values. Counts cap at K and print <code>1000.0K</code>.
+      Per-million prices have four spellings. Two files copy the UTC tooltip
+      helper and four files omit it. Relative times wrap.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>console/src/lib/format.ts</code> and
+      <code>format.test.ts</code>. A <code>RelativeTime</code> component in
+      <code>components/ui/</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Rewrite <code>formatNanoUSD</code>, <code>formatPricePerM</code>,
+        <code>formatPricePerK</code>, <code>formatUnitPrice</code>,
+        <code>formatCount</code>, and <code>formatContext</code> with fixed
+        decimals and a B step, in the DESIGN.md lowercase style.</li>
+      <li>Add <code>formatPricePair</code>.</li>
+      <li>Keep <code>undefined</code> through every price formatter and
+        render the unknown marker, and stop the zero coercion in
+        <code>ChangesPanel.tsx</code>.</li>
+      <li>Move <code>utcTooltip</code> into <code>format.ts</code> and wrap
+        it in <code>RelativeTime</code> with
+        <code>whitespace-nowrap</code>.</li>
+      <li>Use it at every timestamp cell.</li>
+      <li>Add table-driven tests that assert no output contains
+        <code>e-</code>.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the table-driven tests pass with at
+      least forty cases. <code>grep -r "utcTooltip = "
+      console/src/routes | wc -l</code> returns 0. V22 and V23 green.</p>
+
+    <p><strong>Fail-before:</strong> the exponent case fails at baseline.
+      V22 and V23 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-D2">CPL-D2 Shared data table and four conversions</h3>
+
+    <p><strong>Problem:</strong> eleven plain tables have no sorting. The
+      provider offerings table and the audit table render every row. The two
+      virtualized tables hand-position cells and skip
+      <code>flexRender</code>. They read <code>scrollMargin</code> during
+      render and overflow the page at narrow widths. Model rows are
+      clickable divs.</p>
+
+    <p><strong>Owner and paths:</strong> new
+      <code>components/ui/DataTable.tsx</code> extracted from
+      <code>ModelsTable.tsx</code>. Consumers are
+      <code>ModelsTable.tsx</code>, <code>routes/audit.tsx</code>,
+      <code>routes/keys.tsx</code>, <code>routes/presets.tsx</code>, and
+      <code>ProviderDetail.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Extract the table with column definitions,
+        <code>row.getAllCells()</code>, and <code>flexRender</code>, and
+        keep the v9 feature composition from
+        <code>ModelsTable.tsx</code>.</li>
+      <li>Give it sortable headers with <code>aria-sort</code>,
+        <code>scope="col"</code>, and a sticky header.</li>
+      <li>Virtualize above one hundred rows through a layout effect and a
+        resize observer.</li>
+      <li>Wrap it in an <code>overflow-x-auto</code> container and keep a
+        selection column slot.</li>
+      <li>Give the virtualized row a keyboard path with
+        <code>tabIndex</code>, Enter and Space activation, and a visible
+        focus style, and keep the name cell <code>Link</code>.</li>
+      <li>Fix <code>aria-rowindex</code>.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Convert the five consumers.</li>
+      <li>Give the offerings table a facet filter.</li>
+      <li>Add a footer that states the loaded count and the request
+        bound, with a load-more control where the route offers a
+        cursor.</li>
+      <li>Give <code>DocumentsPanel.tsx</code> and <code>FilesPanel.tsx</code>
+        the same footer.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a <code>DataTable.test.tsx</code> covers
+      sort toggle, keyboard sort, keyboard row activation, and virtualized
+      row count. The models
+      tests still pass. V24 to V26 green.</p>
+
+    <p><strong>Fail-before:</strong> V24 to V26 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-D3">CPL-D3 Plain table and label pass</h3>
+
+    <p><strong>Problem:</strong> numbers are left aligned in six tables. Two
+      tables have lowercase headers. Rows are 34 px instead of 40 px.
+      Primary data uses the disabled text tone in eight files. Section
+      labels and chip rows are uppercase on provider, preset, and model
+      detail pages.</p>
+
+    <p><strong>Owner and paths:</strong> the seven remaining plain tables in
+      <code>ModelDetail.tsx</code>, <code>DocumentsPanel.tsx</code>,
+      <code>FilesPanel.tsx</code>, <code>JobsPanel.tsx</code>,
+      <code>accounts.tsx</code>, <code>teams.tsx</code>, and
+      <code>ChangesPanel.tsx</code>. The eight primary-data files from
+      CA-11 are <code>ModelsTable.tsx</code>,
+      <code>chat/ModelPicker.tsx</code>, <code>ProviderCard.tsx</code>,
+      <code>Messages.tsx</code>, <code>Compare.tsx</code>,
+      <code>AuthorCard.tsx</code>, <code>StatsRow.tsx</code>, and
+      <code>FacetFilter.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Right-align every numeric column with
+        <code>tabular-nums</code>.</li>
+      <li>Set every header to sentence case, 12 px, weight 500, Text 3.</li>
+      <li>Set row padding to <code>px-4 py-2.5</code>.</li>
+      <li>Add <code>scope="col"</code>.</li>
+      <li>Move primary data to Text 3.</li>
+      <li>Rewrite uppercase micro-labels and give chip rows a label.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Set the card radius to 8 px, replace the accent progress fills
+        with a neutral fill, and render Files and Jobs status as lifecycle
+        chips.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> <code>grep -r "text-text-4"
+      console/src/components/{models/ModelsTable,chat/ModelPicker,providers/ProviderCard,chat/Messages,chat/Compare,authors/AuthorCard,overview/StatsRow,ui/FacetFilter}.tsx
+      | wc -l</code> returns 0 matching lines. <code>grep -r 'scope="col"'
+      console/src/components/{models/ModelDetail,documents/DocumentsPanel,files/FilesPanel,jobs/JobsPanel,models/ChangesPanel}.tsx
+      console/src/routes/{accounts,teams}.tsx | wc -l</code> returns at
+      least 7 matching lines. V27 green.</p>
+
+    <p><strong>Fail-before:</strong> V27 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-D4">CPL-D4 Charts: series descriptor, interval, legend, honesty</h3>
+
+    <p><strong>Problem:</strong> charts bucket the whole window from the
+      newest thousand records and say nothing about it. Thirty-two fixed
+      buckets produce odd intervals. The latency line joins across gaps. Two
+      neutral series are indistinguishable with no legend. Overview
+      sparklines disagree with the server headline.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>components/ui/Chart.tsx</code> owns a <code>series</code>
+      descriptor, the Recharts 3 <code>responsive</code> prop, cursor style,
+      reduced-motion animation, and endpoint emphasis.
+      <code>routes/usage.tsx</code> and <code>StatsRow.tsx</code> consume
+      it.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Clamp the bucket start to the oldest loaded record and print the
+        covered range under each chart.</li>
+      <li>Pick the interval by range and floor the start.</li>
+      <li>Drop <code>connectNulls</code>.</li>
+      <li>Add a chip legend and distinct neutral steps.</li>
+      <li>Add <code>ReferenceDot</code> on the last point,
+        <code>syncId</code>, a wider spend axis, integer token ticks,
+        nano-integer sums, and a dashed cursor.</li>
+      <li>Hide sparklines when the sample hits the page cap, and show the
+        delta against the previous window.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Label ticks with day and hour when a bucket is shorter than a
+        day.</li>
+      <li>Draw a zero baseline in every sparkline and scale the error
+        sparkline to the request sparkline.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a bucketing test asserts a thirty-day
+      range yields daily buckets floored to midnight. A test asserts a
+      capped sample renders the truncation caption. V28 and V29 green.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline. V28 and
+      V29 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-E1">CPL-E1 Honest system info and a webhook summary route</h3>
+
+    <p><strong>Problem:</strong> <code>GET /api/v1/admin/info</code> returns
+      a hard-coded version, a hard-coded storage type, and an unavailable
+      uptime. Webhooks have no read surface.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>internal/server/controllers/admin.go</code> owns system info.
+      A new <code>WithBuildInfo</code> option carries the version, commit,
+      build time, and start time. The package <code>internal/config</code>
+      supplies storage mode, telemetry, guardrail, retention, and webhook
+      settings. The package <code>internal/events</code> gains a
+      <code>Stats</code> accessor for queue depth and dead-letter count. The file <code>routes.go</code> mounts <code>GET
+      /api/v1/admin/webhooks</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Thread <code>version</code>, <code>gitCommit</code>, and
+        <code>buildTime</code> from <code>cmd/starport/run.go</code>
+        through the server config into a <code>WithBuildInfo</code> admin
+        option with a start time.</li>
+      <li>Report version, commit, build time, uptime, and storage mode.</li>
+      <li>Report metrics mode, tracing endpoint host, and export sink kind
+        with its dropped count.</li>
+      <li>Report guardrail check order with PII mode and moderation model,
+        and retention windows.</li>
+      <li>Add the webhook summary with redacted URLs, event names, queue
+        depth, and dead-letter count.</li>
+      <li>Keep every existing field.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Add <code>Stats()</code> on <code>Dispatcher</code> with the queue
+        depth from the channel length and a retained atomic dead-letter
+        count, with a test.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong>
+      <code>TestSystemInfoReportsBuildVersion</code> asserts the version,
+      commit, and build time fields, and the existing
+      <code>TestAdminHandler_SystemInfo</code> keeps passing.
+      <code>TestAdminWebhooksSummaryRedactsURL</code> passes.
+      <code>docs/OPERATOR-GUIDE.md</code> describes both shapes. V30 and
+      V31 green.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline. V30 and
+      V31 red.</p>
+
+    <p><strong>Verification:</strong> <code>go test
+      ./internal/server/...</code>, <code>go vet ./...</code>, then the
+      verifier.</p>
+
+    <h3 id="task-CPL-E2">CPL-E2 Settings sections for system, observability, guardrails, webhooks, and retention</h3>
+
+    <p><strong>Problem:</strong> no console surface shows the observability,
+      guardrail, webhook, or retention state of the gateway. The docs page
+      promises a retention control that does not exist.</p>
+
+    <p><strong>Owner and paths:</strong> <code>routes/settings.tsx</code>
+      and new panels under <code>components/settings/</code>.
+      <code>lib/api.ts</code> types the CPL-E1 shapes.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Add a System card with version, commit, uptime, and storage
+        mode.</li>
+      <li>Add read-only Observability, Guardrails, Webhooks, and Retention
+        sections that state the configured value and the environment
+        variable that sets it.</li>
+      <li>Show queue depth and dead-letter count on the webhook rows.</li>
+      <li>Fix the version string in the shell from the same query.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a settings test renders each section
+      from a fixture and asserts the variable names. V32 green.</p>
+
+    <p><strong>Fail-before:</strong> the test fails at baseline. V32
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-E3">CPL-E3 Budgets as meters on teams and accounts</h3>
+
+    <p><strong>Problem:</strong> team and account budgets show a ceiling
+      with no spend. A team budget save overwrites a concurrent rename.
+      Clearing a budget is silent. The account provider spend endpoint is
+      never called.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>internal/server/controllers/members.go</code> and
+      <code>admin.go</code> add a <code>budgets</code> usage block and a
+      <code>revision</code> to team reads and updates.
+      <code>components/ui/BudgetLine.tsx</code> comes out of
+      <code>keys.tsx</code>. <code>TeamDetailPanel.tsx</code> and
+      <code>accounts.tsx</code> consume it.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Return a <code>budgets</code> block on team and account reads.
+        Each entry carries <code>limit</code>, <code>interval</code>,
+        <code>spend</code>, and <code>remaining</code> as integer USD
+        cents, plus <code>window_start</code> as RFC 3339.</li>
+      <li>Add a <code>revision</code> to the team record. A present
+        revision that mismatches returns 409, and an absent revision keeps
+        the unconditional update, unlike presets.</li>
+      <li>Extract <code>BudgetLine</code> and use it in three scopes.</li>
+      <li>Replace the silent clear with a Remove budget action that
+        confirms.</li>
+      <li>Add a provider spend table to the account panel with a truncation
+        note.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong>
+      <code>TestTeamReadIncludesBudgetUsage</code> asserts the five entry
+      keys, and <code>TestTeamUpdateRejectsStaleRevision</code> passes. A console test
+      renders a team at 80 percent and asserts the meter. V33 and V34
+      green.</p>
+
+    <p><strong>Fail-before:</strong> the Go tests fail at baseline. V33 and
+      V34 red.</p>
+
+    <p><strong>Verification:</strong> <code>go test ./internal/server/...
+      ./internal/limits/...</code>, <code>pnpm -C console check</code>, then
+      the verifier.</p>
+
+    <h3 id="task-CPL-E4">CPL-E4 Confirmations for every cascading write</h3>
+
+    <p><strong>Problem:</strong> team delete, account delete, member remove,
+      grant revoke, template delete, job cancel, and preset rollback run
+      on one click. The account panel shows three Save buttons.</p>
+
+    <p><strong>Owner and paths:</strong> new
+      <code>DeleteTeamModal.tsx</code>, <code>DeleteAccountModal.tsx</code>,
+      and a shared <code>ConfirmDialog</code> in
+      <code>components/ui/</code>. Consumers in teams, accounts, members,
+      presets, <code>AccountTemplatesPanel.tsx</code>, and
+      <code>JobsPanel.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Build each confirmation on the CPL-C2 dialog.</li>
+      <li>Restate the object name and the cascade.</li>
+      <li>Name member count and grant count for a team, key count and preset
+        count for an account, and both revision numbers for a rollback.</li>
+      <li>State "There is no undo." Derive the cascade counts from the keys
+        and presets lists filtered by account, and show the delete's 409
+        message in the dialog error slot.</li>
+      <li>Collapse the account panel to one Save with one mutation.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a test asserts a team delete does not
+      call the API until the dialog confirms. A test asserts the rollback
+      dialog names both revisions. V35 green.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline. V35
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-E5">CPL-E5 Audit log as an investigation tool</h3>
+
+    <p><strong>Problem:</strong> the audit page lists every record unbounded
+      with no filter, no request correlation, a raw outcome enum, and raw
+      actor subjects.</p>
+
+    <p><strong>Owner and paths:</strong> <code>routes/audit.tsx</code> owns
+      filters in search params. <code>lib/api.ts</code> adds
+      <code>until</code> to <code>AuditFilters</code> and
+      <code>ActivityFilters</code>. The record in <code>internal/audit/audit.go</code>
+      gains a <code>RequestID</code> field.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Add actor, action, and range filters in search params.</li>
+      <li>Add <code>until</code>.</li>
+      <li>Add <code>RequestID</code> to <code>audit.Record</code>, fill it
+        at every write site that has a request context, and migrate the
+        store column.</li>
+      <li>Add a Request column that links to the usage page filtered by
+        request id.</li>
+      <li>Render outcome as a chip.</li>
+      <li>Render the actor as a name with the raw subject in a tooltip.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Add a loaded count and an empty state that suggests a wider
+        range.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong>
+      <code>TestAuditRecordCarriesRequestID</code> passes. A test asserts
+      the action filter reaches the query key. A test asserts the request
+      link carries the id. V36 green.</p>
+
+    <p><strong>Fail-before:</strong> the three tests fail at baseline. V36
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>go test ./internal/audit/...
+      ./internal/server/...</code>, <code>pnpm -C console check</code>, then
+      the verifier.</p>
+
+    <h3 id="task-CPL-E6">CPL-E6 Usage: guardrail fields, export, semantic cache</h3>
+
+    <p><strong>Problem:</strong> guardrail verdicts arrive on the wire and
+      the console drops them. The export route has no button. The semantic
+      cache is invisible, and similarity is not persisted. Chat cannot opt
+      into the semantic cache.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>internal/usage/model.go</code> persists
+      <code>cache_similarity</code> and semantic status.
+      <code>lib/api.ts</code> types <code>ActivityRecord</code>.
+      <code>routes/usage.tsx</code> owns the guardrail cell, the status
+      facet, the export control, and the cache stat.
+      <code>Composer.tsx</code> owns the toggle.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Persist and serve the two cache fields.</li>
+      <li>Add <code>guardrail_verdict</code> and
+        <code>guardrail_check</code> to the record type and a test that
+        compares the type keys with the Go JSON tags.</li>
+      <li>Add the guardrail column, the refuse and redact facets, and a
+        detail row.</li>
+      <li>Add an Export control that downloads NDJSON or CSV with the active
+        filters.</li>
+      <li>Add a semantic cache header stat.</li>
+      <li>Add the <code>X-Semantic-Cache</code> toggle to chat.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the key comparison test passes. A test
+      asserts the export link carries the filters. V37 to V39 green.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline. V37 to V39
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>go test
+      ./internal/usage/...</code>, <code>pnpm -C console check</code>, then
+      the verifier.</p>
+
+    <h3 id="task-CPL-E7">CPL-E7 Batches panel on the jobs page</h3>
+
+    <p><strong>Problem:</strong> batches have no console surface, and the
+      jobs page presents video jobs as all jobs.</p>
+
+    <p><strong>Owner and paths:</strong> new
+      <code>components/jobs/BatchesPanel.tsx</code>.
+      <code>routes/jobs.tsx</code> gains a tab in search params.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>List batches with a status chip and a completed, failed, and total
+        bar.</li>
+      <li>Add a cancel action behind a confirmation and an error file link
+        through the existing job asset fetch.</li>
+      <li>Rename the video panel to Video jobs.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a test renders a batch fixture and
+      asserts the bar counts. V40 green.</p>
+
+    <p><strong>Fail-before:</strong> the test fails at baseline. V40
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-F1">CPL-F1 Shell and navigation polish</h3>
+
+    <p><strong>Problem:</strong> two navigation labels are title case. The
+      sidebar toggle has no expanded state. Whitespace clicks toggle the
+      rail. The send button uses white on the accent.</p>
+
+    <p><strong>Owner and paths:</strong> <code>Shell.tsx</code> and
+      <code>Composer.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Rename to "API keys" and "Audit log".</li>
+      <li>Give the toggle <code>aria-expanded</code> and
+        <code>aria-controls</code>, and stop toggling on whitespace.</li>
+      <li>Use <code>text-accent-ink</code> on the send button.</li>
+      <li>Add Audit log to the command palette destinations.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a shell test asserts the two labels and
+      the toggle state. V41 green.</p>
+
+    <p><strong>Fail-before:</strong> V41 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-F2">CPL-F2 Models and providers copy and states</h3>
+
+    <p><strong>Problem:</strong> the provider card says "Credentialed 2,
+      Usable 1" with no reason. Quickstart snippets clip. A dead caption
+      sits under the overview stats row. Price columns clip. Non-routable rows
+      look broken. "What changed" runs silent when nothing changed. The
+      manifest sentence is raw.</p>
+
+    <p><strong>Owner and paths:</strong> <code>ProviderCard.tsx</code>,
+      <code>ProviderDetail.tsx</code>, <code>ModelsTable.tsx</code>,
+      <code>ModelDetail.tsx</code>, <code>ChangesPanel.tsx</code>, and the
+      overview files <code>ProvidersCard.tsx</code>,
+      <code>QuickstartCard.tsx</code>, and <code>StatsRow.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>State why a credentialed provider is not usable.</li>
+      <li>Give code blocks horizontal scroll.</li>
+      <li>Remove the dead caption under the overview stats row.</li>
+      <li>Widen price columns and use the CPL-D1 price pair.</li>
+      <li>Explain a non-routable row in its own words with the reason
+        chip.</li>
+      <li>Show "No changes since your last visit" instead of an empty
+        panel.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Rewrite the manifest sentence.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a provider card test asserts the reason
+      line. A changes panel test asserts the empty copy.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console
+      check</code>.</p>
+
+    <h3 id="task-CPL-F3">CPL-F3 Keys, presets, teams, members, and accounts forms</h3>
+
+    <p><strong>Problem:</strong> allowed models is free text. Scope pills
+      wrap. A star pill means all scopes. Preset history has no diff or
+      actor. Comma-separated fields, uppercase section labels, a raw
+      <code>user_data</code> enum, and a native date input remain. Teams and
+      members show an enabled action when identity is not configured.</p>
+
+    <p><strong>Owner and paths:</strong> <code>keys.tsx</code>,
+      <code>presets.tsx</code>, <code>teams.tsx</code>,
+      <code>members.tsx</code>, <code>accounts.tsx</code>, and their
+      panels.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Use <code>models/ModelPicker.tsx</code> for allowed models, and
+        extend it to a multi-value selection, because it accepts one string
+        today.</li>
+      <li>Collapse scopes past four into a count with a tooltip and say "all
+        scopes".</li>
+      <li>Render preset history as a diff with the actor.</li>
+      <li>Replace comma fields with token inputs.</li>
+      <li>Sentence-case section labels.</li>
+      <li>Label the <code>user_data</code> values.</li>
+    </ol>
+
+    <ol start="7">
+      <li>Replace the native date input with the shadcn date field.</li>
+      <li>Render an identity-not-configured empty state with the setup steps
+        and no enabled action.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a keys test asserts the picker opens
+      from the form. A teams test asserts the empty state when identity is
+      off. V42 green.</p>
+
+    <p><strong>Fail-before:</strong> both tests fail at baseline. V42
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-F4">CPL-F4 Chat defaults, picker filter, and tone</h3>
+
+    <p><strong>Problem:</strong> chat opens on an arbitrary model. The
+      picker lists non-chat models. The greeting reads as a consumer
+      product. Icons have no label. No provider mark appears on a
+      message.</p>
+
+    <p><strong>Owner and paths:</strong> <code>routes/chat.tsx</code>,
+      <code>chat/ModelPicker.tsx</code>, <code>Messages.tsx</code>, and
+      <code>lib/modelFilter.ts</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Default to the last used model, then the first routable chat model
+        by rank.</li>
+      <li>Filter the picker to chat modalities.</li>
+      <li>Rewrite the greeting and the suggestion label in sentence case for
+        an operator.</li>
+      <li>Label every icon.</li>
+      <li>Show the provider mark beside the model name on each assistant
+        turn.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> <code>chat.test.tsx</code> asserts the
+      default model rule and the picker filter. V43 green.</p>
+
+    <p><strong>Fail-before:</strong> the test fails at baseline. V43
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-F5">CPL-F5 Docs page re-sync with a navigation coverage test</h3>
+
+    <p><strong>Problem:</strong> the operate persona on the docs page covers
+      none of the enterprise features. It cites a health path that does not
+      exist. It omits the agent surface and two scopes.</p>
+
+    <p><strong>Owner and paths:</strong> <code>routes/docs.tsx</code> and a
+      new <code>docs.test.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Add Audit log, Teams and budgets, Policy, Observability, and Use
+        it from a coding agent sections with origin snippets.</li>
+      <li>Cite <code>/health/live</code> and
+        <code>/health/ready</code>.</li>
+      <li>Document the moderations and batches scopes.</li>
+      <li>Use <code>STARPORT_API_KEY</code> in every snippet, including the
+        usage empty state, and read it from the environment in the
+        Python and JavaScript snippets.</li>
+      <li>Render the sequential docs sections flat instead of as
+        cards.</li>
+      <li>Add a test that asserts the docs page mentions every sidebar
+        destination.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the coverage test passes.
+      <code>grep -E "/health([^/]|$)" console/src/routes/docs.tsx | wc
+      -l</code> returns 0, and the file names <code>/health/live</code> and
+      <code>/health/ready</code>. V44 and V45 green.</p>
+
+    <p><strong>Fail-before:</strong> the coverage test fails at baseline.
+      V44 and V45 red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-G1">CPL-G1 Small screens</h3>
+
+    <p><strong>Problem:</strong> the shell is desktop only. The sidebar
+      pushes content with a fixed margin. The model picker has a desktop 400 px width and needs a bottom
+      sheet below 640 px.
+      Row actions are 28 px targets.</p>
+
+    <p><strong>Owner and paths:</strong> new
+      <code>lib/useMediaQuery.ts</code>. <code>Shell.tsx</code>,
+      <code>chat/ModelPicker.tsx</code>, and the row action styles in
+      <code>Form.tsx</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Render the sidebar as a sheet under 640 px with a top bar
+        trigger.</li>
+      <li>Render the picker as a bottom sheet under 640 px.</li>
+      <li>Set touch targets to 44 px under <code>sm</code>.</li>
+      <li>Confirm every table scrolls inside its container at 375 px.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> a test with a 375 px match asserts the
+      sheet trigger. A walkthrough at 375 px in the proof shows no
+      horizontal page scroll on any route. V46 green.</p>
+
+    <p><strong>Fail-before:</strong> the test fails at baseline. V46
+      red.</p>
+
+    <p><strong>Verification:</strong> <code>pnpm -C console check</code>,
+      then the verifier.</p>
+
+    <h3 id="task-CPL-Z1">CPL-Z1 Close</h3>
+
+    <p><strong>Problem:</strong> a verifier outside CI cannot report a
+      regression, and the design system document must match what
+      shipped.</p>
+
+    <p><strong>Owner and paths:</strong>
+      <code>.github/workflows/ci.yml</code>, <code>AGENTS.md</code>,
+      <code>DESIGN.md</code>, <code>console/README.md</code>,
+      <code>CHANGELOG.md</code>, and this plan.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Add the verifier after the enterprise-readiness line in CI and in
+        the AGENTS.md evidence list.</li>
+      <li>Re-run the live walkthrough on every route at desktop and 375 px
+        and record it in the proof.</li>
+      <li>Update DESIGN.md where the shipped primitive differs from the
+        prescription.</li>
+      <li>Write the changelog entry for v1.2.0.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the verifier prints <code>Summary: 48
+      passed, 0 failed</code> in CI. The walkthrough proof lists zero open
+      findings or routes each one to a named follow-up. V47 and V48
+      green.</p>
+
+    <p><strong>Fail-before:</strong> V47 and V48 red.</p>
+
+    <p><strong>Verification:</strong> the CI run on the pull request.</p>
+
+    <h3 id="task-CPL-Z2">CPL-Z2 Release v1.2.0</h3>
+
+    <p><strong>Problem:</strong> the campaign is not delivered until a
+      tagged binary carries it.</p>
+
+    <p><strong>Owner and paths:</strong> the git tag and
+      <code>.github/workflows/release.yaml</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Confirm main is green at the CPL-Z1 merge.</li>
+      <li>Tag <code>v1.2.0</code> on that commit.</li>
+      <li>Watch the release workflow to completion.</li>
+      <li>Confirm the release assets and the console version string on a
+        fresh install.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the release workflow is green, the
+      release page lists the assets, and <code>starport version</code> on
+      the downloaded binary prints v1.2.0.</p>
+
+    <p><strong>Fail-before:</strong> not applicable. The tag does not exist
+      before this task.</p>
+
+    <p><strong>Verification:</strong> <code>gh release view v1.2.0</code>
+      and the smoke run.</p>
+
+    <h3 id="task-CPL-Z3">CPL-Z3 Cleanup</h3>
+
+    <p><strong>Problem:</strong> a merged plan must not linger as a stale
+      control plane.</p>
+
+    <p><strong>Owner and paths:</strong> this plan file, its proof root, and
+      <code>docs/TASKS.md</code>.</p>
+
+    <p><strong>Steps:</strong></p>
+
+    <ol>
+      <li>Confirm the release, then delete the plan and the proof root, move
+        the TASKS.md row to Recently Completed, and write the memory note
+        for the campaign.</li>
+    </ol>
+
+    <p><strong>Acceptance:</strong> the repository holds no reference to the
+      plan slug outside git history.</p>
+
+    <p><strong>Fail-before:</strong> not applicable, because the ledger row
+      records the release.</p>
+
+    <p><strong>Verification:</strong> <code>grep -rn "console-polish"
+      --exclude-dir=.git .</code> returns only the verifier and its CI
+      lines.</p>
+  </section>
+
+  <section id="goal">
+    <h2>Goal</h2>
+    <pre><code>Execute this plan to completion. This is a whole-plan goal, not a
+single-task goal. Read the plan fully, then read: AGENTS.md, DESIGN.md,
+console/README.md, docs/proof/console-polish/CPL-A0.md, and the plans
+skill references. Work in /Users/jack/src/github.com/agentstation/starport
+on a codex/cpl-&lt;id&gt; branch per task. Chat history is not progress
+state. Resume from the status ledger, the execution log, and git state.
+If compaction happens, continue from the plan and git state rather than
+restarting. Loop: keep one task in_progress, implement at the owning
+boundary, capture fail-before evidence, run the verification commands,
+commit the work per the commit policy, write the proof file, append the
+execution log with the work commit, mark the task terminal with
+evidence, commit the plan update the same way, then advance to the next
+task. Decide rather than ask. Mark a wrong or already-satisfied task
+no-action with a one-line reason. Record a blocker and continue with the
+next eligible task. Binding constraints: the nine invariants, the
+non-goals, the rejected designs, and the verifier contract. Commit
+policy: one pull request per task on a codex/ branch, autoreview pre-PR
+gate before push, squash merge after CI is green, ledger flips ride the
+next task's branch, no AI attribution. Stop only at a valid stop state
+from the plans skill. Before you stop, update the ledger and the log,
+and record the next action in the status line. The goal is met when
+CPL-Z2 records a green release workflow for v1.2.0 and CPL-Z3 has
+deleted this plan.</code></pre>
+  </section>
+
+  <section id="execution-log">
+    <h2>Execution log</h2>
+    <!-- Append-only: add rows at the end of this table.
+         This section stays last in the file. -->
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Item</th><th>Action</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2026-09-01</td><td>meta</td><td>authored</td><td>Plan
+          authored from six review reports. No implementation started by
+          this step.</td></tr>
+        <tr><td>2026-09-01</td><td>meta</td><td>amended</td><td>Holistic
+          report folded in. Fourteen HS findings routed, seven task step
+          lists extended, one design rejected.</td></tr>
+        <tr><td>2026-09-01</td><td>meta</td><td>reviewed</td><td>Opus
+          review pass: 26 findings (3 P0, 13 P1, 10 P2) applied. Two
+          conditions rescoped, one invariant corrected, thirteen task
+          facts fixed.</td></tr>
+        <tr><td>2026-09-01</td><td>meta</td><td>reviewed</td><td>Codex
+          review pass: 15 findings (0 P0, 13 P1, 2 P2). Thirteen applied,
+          PS-01 and PS-03 rejected (the verifier is CPL-A0 output, and the
+          call-site count was correct).</td></tr>
+        <tr><td>2026-09-01</td><td>meta</td><td>promoted</td><td>Both
+          review passes applied. Promotion gate holds. Status active.
+          Owner approval is the campaign request of 2026-09-01.</td></tr>
+        <tr><td>2026-09-01</td><td>CPL-A0</td><td>started</td><td>Branch
+          codex/cpl-a0. Verifier authored, 48 red at 6db57d8.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+</body>
+</html>
