@@ -186,6 +186,8 @@ export const queries = {
   files: () => queryOptions({ queryKey: ["files"], queryFn: ({ signal }) => api.listFiles({ signal }) }),
   videoJobs: () =>
     queryOptions({ queryKey: ["video-jobs"], queryFn: ({ signal }) => api.listJobs({ signal }) }),
+  batches: () =>
+    queryOptions({ queryKey: ["batches"], queryFn: ({ signal }) => api.listBatches({ signal }) }),
   documentActivity: () =>
     queryOptions({
       queryKey: ["document-activity"],

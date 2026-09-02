@@ -1874,12 +1874,17 @@ export function cancelJob(jobID: string): Promise<VideoJob> {
 //
 // This is why nothing calls it for a whole listing: a page that fetched every
 // asset would hold every video in memory. A reader asks for one at a time.
-export async function fetchJobAsset(jobID: string): Promise<Blob> {
+export function fetchJobAsset(jobID: string): Promise<Blob> {
+  return fetchBytes(`/v1/videos/${encodeURIComponent(jobID)}/content`);
+}
+
+// fetchBytes reads one stored body under the held credential and hands the
+// caller a blob. Every byte route on this console goes through it, because a
+// plain link sends no Authorization header and a `download` attribute over a
+// refusal saves the refusal.
+async function fetchBytes(path: string): Promise<Blob> {
   const held = credential();
-  const response = await fetch(
-    `/v1/videos/${encodeURIComponent(jobID)}/content`,
-    { headers: authorization(held) },
-  );
+  const response = await fetch(path, { headers: authorization(held) });
   if (!response.ok) {
     const error = await parseError(response);
     if (held.kind !== "none" && error.unauthorized) recordCredentialOutcome(true);
@@ -1887,6 +1892,61 @@ export async function fetchJobAsset(jobID: string): Promise<Blob> {
   }
   if (held.kind !== "none") recordCredentialOutcome(false);
   return response.blob();
+}
+
+// fetchStoredFile reads the bytes of one stored file. A batch's output and
+// error files are stored files, so the jobs page collects them here.
+export function fetchStoredFile(fileID: string): Promise<Blob> {
+  return fetchBytes(`/v1/files/${encodeURIComponent(fileID)}/content`);
+}
+
+// --- Batches ---
+
+// A batch runs a stored JSONL file of requests through the same pipeline the
+// online routes run, and outlives its request the way a video job does. The
+// shape is the OpenAI batch object the /v1/batches routes serve.
+
+export type BatchRequestCounts = { total: number; completed: number; failed: number };
+
+export type Batch = {
+  id: string;
+  object?: string;
+  endpoint: string;
+  input_file_id: string;
+  status: string;
+  output_file_id?: string;
+  error_file_id?: string;
+  created_at: number;
+  completed_at?: number;
+  failed_at?: number;
+  cancelled_at?: number;
+  request_counts: BatchRequestCounts;
+  // errors states why a failed batch stopped before its lines did.
+  errors?: { data?: { message?: string }[] };
+};
+
+// TERMINAL_BATCH_STATES are the states a batch never leaves. A page holding
+// only these stops polling, the way the video listing does.
+export const TERMINAL_BATCH_STATES = ["completed", "failed", "cancelled", "expired"];
+
+// BATCH_PAGE_LIMIT is the cap the listing route serves. It takes no cursor,
+// so reaching it is a floor rather than a page the reader can walk.
+const BATCH_PAGE_LIMIT = 100;
+
+export type BatchList = { batches: Batch[]; capped: boolean };
+
+export async function listBatches({ signal }: ReadOptions = {}): Promise<BatchList> {
+  const body = await request<{ data?: Batch[] }>("/v1/batches", { signal });
+  const batches = body?.data ?? [];
+  return { batches, capped: batches.length >= BATCH_PAGE_LIMIT };
+}
+
+// cancelBatch stops a batch that has not ended. Lines already running drain
+// and keep their results; no new line starts.
+export function cancelBatch(batchID: string): Promise<Batch> {
+  return request<Batch>(`/v1/batches/${encodeURIComponent(batchID)}/cancel`, {
+    method: "POST",
+  });
 }
 
 // listActivity reads the authenticated key's own request log; key_id is
