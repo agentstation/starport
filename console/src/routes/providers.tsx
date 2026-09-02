@@ -16,12 +16,17 @@ import {
   type ProviderCatalogEntry,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/providers")({
   component: ProvidersPage,
+  loader: ({ context }) =>
+    settle(
+      context.queryClient.ensureQueryData(queries.providerCatalog()),
+      context.queryClient.ensureQueryData(queries.providerStatus()),
+    ),
 });
 
 type SortKey = "status" | "name" | "models";

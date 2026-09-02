@@ -9,8 +9,10 @@ import type { ActivityFilters, ActivityPage } from "./api";
 // screen, or a select that narrows the record to the slice it renders.
 //
 // Every factory starts its key with a prefix no other factory uses, so an
-// invalidation by prefix reaches exactly one resource. queries.test.ts holds
-// that rule.
+// invalidation by prefix reaches exactly one resource. Every query function
+// hands the abort signal to the API client, so a route the reader leaves
+// ends the request it started. queries.test.ts holds the first rule and the
+// verifier holds the second.
 
 const MINUTE = 60_000;
 
@@ -34,151 +36,155 @@ export type ActivityQuery = {
 // widestActivity reads the widest activity listing this credential reaches.
 // An admin credential sees the deployment. Every other credential sees the
 // account it belongs to.
-async function widestActivity(filters: ActivityFilters): Promise<ActivityPage> {
+async function widestActivity(
+  filters: ActivityFilters,
+  { signal }: api.ReadOptions = {},
+): Promise<ActivityPage> {
   try {
-    return await api.listAdminActivity(filters);
+    return await api.listAdminActivity(filters, { signal });
   } catch (error) {
     if (!(error instanceof api.ApiError) || !error.needsKey) throw error;
   }
-  return api.listActivity(filters);
+  return api.listActivity(filters, { signal });
 }
 
 export const queries = {
   health: () =>
     queryOptions({
       queryKey: ["health"],
-      queryFn: () => api.healthReady(),
+      queryFn: ({ signal }) => api.healthReady({ signal }),
       refetchInterval: 30_000,
     }),
   systemInfo: () =>
-    queryOptions({ queryKey: ["system-info"], queryFn: () => api.systemInfo() }),
+    queryOptions({ queryKey: ["system-info"], queryFn: ({ signal }) => api.systemInfo({ signal }) }),
   systemMetrics: () =>
-    queryOptions({ queryKey: ["system-metrics"], queryFn: () => api.systemMetrics() }),
+    queryOptions({ queryKey: ["system-metrics"], queryFn: ({ signal }) => api.systemMetrics({ signal }) }),
   authMode: () =>
-    queryOptions({ queryKey: ["auth-mode"], queryFn: () => api.readAuthMode() }),
+    queryOptions({ queryKey: ["auth-mode"], queryFn: ({ signal }) => api.readAuthMode({ signal }) }),
 
   models: () =>
     queryOptions({
       queryKey: ["models"],
-      queryFn: () => api.listModels(),
+      queryFn: ({ signal }) => api.listModels({ signal }),
       staleTime: CATALOG_STALE,
     }),
   authors: () =>
     queryOptions({
       queryKey: ["authors"],
-      queryFn: () => api.listAuthors(),
+      queryFn: ({ signal }) => api.listAuthors({ signal }),
       staleTime: CATALOG_STALE,
     }),
   author: (authorId: string) =>
     queryOptions({
       queryKey: ["author", authorId],
-      queryFn: () => api.getAuthor(authorId),
+      queryFn: ({ signal }) => api.getAuthor(authorId, { signal }),
       staleTime: CATALOG_STALE,
     }),
   providerCatalog: () =>
     queryOptions({
       queryKey: ["provider-catalog"],
-      queryFn: () => api.listProviderCatalog(),
+      queryFn: ({ signal }) => api.listProviderCatalog({ signal }),
       staleTime: CATALOG_STALE,
     }),
   catalogMetadata: () =>
     queryOptions({
       queryKey: ["catalog-metadata"],
-      queryFn: () => api.catalogMetadata(),
+      queryFn: ({ signal }) => api.catalogMetadata({ signal }),
       staleTime: CATALOG_STALE,
     }),
   catalogChanges: () =>
     queryOptions({
       queryKey: ["catalog-changes"],
-      queryFn: () => api.catalogChanges(),
+      queryFn: ({ signal }) => api.catalogChanges({ signal }),
       staleTime: CATALOG_STALE,
     }),
 
   providerStatus: () =>
     queryOptions({
       queryKey: ["provider-status"],
-      queryFn: () => api.providerStatus(),
+      queryFn: ({ signal }) => api.providerStatus({ signal }),
       staleTime: RUNTIME_STALE,
     }),
   providerIncidents: (providerId: string) =>
     queryOptions({
       queryKey: ["provider-incidents", providerId],
-      queryFn: () => api.providerIncidentLog(providerId),
+      queryFn: ({ signal }) => api.providerIncidentLog(providerId, { signal }),
     }),
   // The window is part of the key so a refetch keeps its bounds.
   providerActivity: (providerId: string, sinceISO: string) =>
     queryOptions({
       queryKey: ["provider-activity", providerId, sinceISO],
-      queryFn: () => widestActivity({ provider: providerId, since: sinceISO, limit: 200 }),
+      queryFn: ({ signal }) =>
+        widestActivity({ provider: providerId, since: sinceISO, limit: 200 }, { signal }),
     }),
 
-  keys: () => queryOptions({ queryKey: ["keys"], queryFn: () => api.listKeys() }),
+  keys: () => queryOptions({ queryKey: ["keys"], queryFn: ({ signal }) => api.listKeys({ signal }) }),
   keyDetail: (keyId: string) =>
     queryOptions({
       queryKey: ["key-detail", keyId],
-      queryFn: () => api.getKeyDetail(keyId),
+      queryFn: ({ signal }) => api.getKeyDetail(keyId, { signal }),
     }),
   sharedCredentials: (providerId: string) =>
     queryOptions({
       queryKey: ["shared-credentials", providerId],
-      queryFn: () => api.listSharedCredentials(providerId),
+      queryFn: ({ signal }) => api.listSharedCredentials(providerId, { signal }),
     }),
   byokCredentials: (accountId: string) =>
     queryOptions({
       queryKey: ["byok", accountId],
-      queryFn: () => api.listBYOKCredentials(accountId),
+      queryFn: ({ signal }) => api.listBYOKCredentials(accountId, { signal }),
     }),
 
   accounts: () =>
-    queryOptions({ queryKey: ["accounts"], queryFn: () => api.listAccounts() }),
+    queryOptions({ queryKey: ["accounts"], queryFn: ({ signal }) => api.listAccounts({ signal }) }),
   accountTemplates: () =>
     queryOptions({
       queryKey: ["account-templates"],
-      queryFn: () => api.listAccountTemplates(),
+      queryFn: ({ signal }) => api.listAccountTemplates({ signal }),
     }),
   members: () =>
-    queryOptions({ queryKey: ["members"], queryFn: () => api.listMembers() }),
+    queryOptions({ queryKey: ["members"], queryFn: ({ signal }) => api.listMembers({ signal }) }),
   memberGrants: (userId: string) =>
     queryOptions({
       queryKey: ["member-grants", userId],
-      queryFn: () => api.listMemberGrants(userId),
+      queryFn: ({ signal }) => api.listMemberGrants(userId, { signal }),
     }),
   reachableAccounts: (userId: string) =>
     queryOptions({
       queryKey: ["reachable-accounts", userId],
-      queryFn: () => api.listReachableAccounts(userId),
+      queryFn: ({ signal }) => api.listReachableAccounts(userId, { signal }),
     }),
-  teams: () => queryOptions({ queryKey: ["teams"], queryFn: () => api.listTeams() }),
+  teams: () => queryOptions({ queryKey: ["teams"], queryFn: ({ signal }) => api.listTeams({ signal }) }),
   teamMembers: (teamId: string) =>
     queryOptions({
       queryKey: ["team-members", teamId],
-      queryFn: () => api.listTeamMembers(teamId),
+      queryFn: ({ signal }) => api.listTeamMembers(teamId, { signal }),
     }),
   teamGrants: (teamId: string) =>
     queryOptions({
       queryKey: ["team-grants", teamId],
-      queryFn: () => api.listTeamGrants(teamId),
+      queryFn: ({ signal }) => api.listTeamGrants(teamId, { signal }),
     }),
 
-  files: () => queryOptions({ queryKey: ["files"], queryFn: () => api.listFiles() }),
+  files: () => queryOptions({ queryKey: ["files"], queryFn: ({ signal }) => api.listFiles({ signal }) }),
   videoJobs: () =>
-    queryOptions({ queryKey: ["video-jobs"], queryFn: () => api.listJobs() }),
+    queryOptions({ queryKey: ["video-jobs"], queryFn: ({ signal }) => api.listJobs({ signal }) }),
   documentActivity: () =>
     queryOptions({
       queryKey: ["document-activity"],
-      queryFn: async () => (await widestActivity({ limit: 200 })).data ?? [],
+      queryFn: async ({ signal }) => (await widestActivity({ limit: 200 }, { signal })).data ?? [],
     }),
 
   presets: () =>
     queryOptions({
       queryKey: ["presets"],
-      queryFn: () => api.listPresets(),
+      queryFn: ({ signal }) => api.listPresets({ signal }),
       staleTime: RUNTIME_STALE,
     }),
   presetHistory: (name: string) =>
     queryOptions({
       queryKey: ["preset-history", name],
-      queryFn: () => api.listPresetHistory(name),
+      queryFn: ({ signal }) => api.listPresetHistory(name, { signal }),
     }),
 
   // One probe decides the usage scope for the whole session. A credential
@@ -186,9 +192,9 @@ export const queries = {
   activityScope: () =>
     queryOptions({
       queryKey: ["activity-scope"],
-      queryFn: async (): Promise<ActivityScope> => {
+      queryFn: async ({ signal }): Promise<ActivityScope> => {
         try {
-          await api.listAdminActivity({ limit: 1 });
+          await api.listAdminActivity({ limit: 1 }, { signal });
           return "admin";
         } catch (error) {
           if (error instanceof api.ApiError && error.status === 503) return "unconfigured";
@@ -202,29 +208,29 @@ export const queries = {
     infiniteQueryOptions({
       queryKey: ["activity", { scope, ...filters, since: sinceISO }],
       initialPageParam: "",
-      queryFn: ({ pageParam }) => {
+      queryFn: ({ pageParam, signal }) => {
         const page = { ...filters, since: sinceISO, cursor: pageParam || undefined };
         return scope === "admin"
-          ? api.listAdminActivity(page)
-          : api.listActivity({ ...page, key_id: undefined });
+          ? api.listAdminActivity(page, { signal })
+          : api.listActivity({ ...page, key_id: undefined }, { signal });
       },
       getNextPageParam: (last) => last.next_cursor || undefined,
     }),
   adminActivity24h: () =>
     queryOptions({
       queryKey: ["admin-activity-24h"],
-      queryFn: () =>
-        api.listAdminActivity({
-          since: new Date(Date.now() - 24 * 3_600_000).toISOString(),
-          limit: 500,
-        }),
+      queryFn: ({ signal }) =>
+        api.listAdminActivity(
+          { since: new Date(Date.now() - 24 * 3_600_000).toISOString(), limit: 500 },
+          { signal },
+        ),
     }),
   audit: (pageLimit: number) =>
     infiniteQueryOptions({
       queryKey: ["audit"],
       initialPageParam: "",
-      queryFn: ({ pageParam }) =>
-        api.listAuditLog({ limit: pageLimit, cursor: pageParam || undefined }),
+      queryFn: ({ pageParam, signal }) =>
+        api.listAuditLog({ limit: pageLimit, cursor: pageParam || undefined }, { signal }),
       getNextPageParam: (last) => last.next_cursor || undefined,
     }),
 };
@@ -236,4 +242,13 @@ export const queries = {
 export function retryPolicy(failureCount: number, error: unknown): boolean {
   if (error instanceof api.ApiError) return false;
   return failureCount < 1;
+}
+
+// settle awaits the reads a route loader starts and keeps every outcome with
+// the page. The loader exists so a request and the route's code load
+// together, not so the router owns failure: a refused read is a state the
+// page names, such as a lock behind an admin key, so a rejection resolves
+// here and the page reads it from the cache.
+export async function settle(...reads: Promise<unknown>[]): Promise<void> {
+  await Promise.all(reads.map((read) => read.catch(() => undefined)));
 }

@@ -35,12 +35,14 @@ function memoryStorage(): Storage {
 // holds is about every route, and a hand-built tree would only hold it for the
 // routes the test remembered to add.
 async function open(path: string) {
+  const queryClient = new QueryClient();
   const router = createRouter({
     routeTree,
+    context: { queryClient },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={queryClient}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <RouterProvider router={router as any} />
     </QueryClientProvider>,

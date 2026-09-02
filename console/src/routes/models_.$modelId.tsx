@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeft, Check, Copy } from "lucide-react";
 import { useState } from "react";
 
@@ -10,11 +10,22 @@ import {
   ModelActions,
   OfferingTable,
 } from "@/components/models/ModelDetail";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { formatContext } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/models_/$modelId")({
+  // The router carries the id as one encoded segment, so an id with a slash
+  // survives the address bar; params.modelId arrives decoded. The catalog
+  // snapshot is the whole answer: a model it does not hold is a not-found
+  // page rather than a page with an empty body.
+  loader: async ({ context, params }) => {
+    const [models] = await Promise.all([
+      context.queryClient.ensureQueryData(queries.models()).catch(() => undefined),
+      settle(context.queryClient.ensureQueryData(queries.providerStatus())),
+    ]);
+    if (models && !models.some((model) => model.id === params.modelId)) throw notFound();
+  },
   component: ModelDetailPage,
 });
 

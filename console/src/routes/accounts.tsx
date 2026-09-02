@@ -22,7 +22,7 @@ import {
   type Account,
   type AccountLimits,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import {
   formatCount,
   formatNanoUSD,
@@ -43,6 +43,11 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/accounts")({
   component: AccountsPage,
+  loader: ({ context }) =>
+    settle(
+      context.queryClient.ensureQueryData(queries.accounts()),
+      context.queryClient.ensureQueryData(queries.keys()),
+    ),
 });
 
 const STRATEGIES = Object.keys(CREDENTIAL_STRATEGY_LABELS) as CredentialStrategy[];

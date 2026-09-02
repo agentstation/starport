@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { FilesPanel } from "@/components/files/FilesPanel";
+import { queries, settle } from "@/lib/queries";
 
 // Files are the documents this gateway holds for an account. A chat request
 // names one by its identifier instead of carrying its bytes, so the same
@@ -13,6 +14,7 @@ import { FilesPanel } from "@/components/files/FilesPanel";
 
 export const Route = createFileRoute("/files")({
   component: FilesPage,
+  loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.files())),
 });
 
 function FilesPage() {

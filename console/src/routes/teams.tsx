@@ -11,7 +11,7 @@ import {
   createTeam,
   deleteTeam,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { formatNanoUSD, formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -20,6 +20,7 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/teams")({
   component: TeamsPage,
+  loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.teams())),
 });
 
 function TeamsPage() {

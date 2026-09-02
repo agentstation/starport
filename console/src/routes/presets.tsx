@@ -25,12 +25,13 @@ import {
   type PresetConfig,
   type PresetProviderPreferences,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/presets")({
   component: PresetsPage,
+  loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.presets())),
 });
 
 // Provider sort orders mirror the OpenRouter wire values the preset

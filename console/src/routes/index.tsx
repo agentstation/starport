@@ -6,9 +6,15 @@ import { ProvidersCard } from "@/components/overview/ProvidersCard";
 import { QuickstartCard } from "@/components/overview/QuickstartCard";
 import { StatsRow } from "@/components/overview/StatsRow";
 import { StatusHero } from "@/components/overview/StatusHero";
+import { queries, settle } from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage,
+  loader: ({ context }) =>
+    settle(
+      context.queryClient.ensureQueryData(queries.health()),
+      context.queryClient.ensureQueryData(queries.providerStatus()),
+    ),
 });
 
 // Overview is mission control for the local gateway: identity, endpoints,

@@ -1,11 +1,23 @@
-import { createRootRoute, Navigate, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
+import {
+  createRootRouteWithContext,
+  Navigate,
+  Outlet,
+  redirect,
+  useRouterState,
+} from "@tanstack/react-router";
 
 import { AUTH_PATH } from "@/components/auth/destination";
 import { Shell } from "@/components/shell/Shell";
 import { hasCredential } from "@/lib/api";
 import { useGatewayAccessRejected } from "@/lib/useGatewayAccess";
 
-export const Route = createRootRoute({
+// RouterContext is what every route loader receives: the query client, so a
+// loader warms the reads its page makes through the same cache the page
+// reads from.
+export type RouterContext = { queryClient: QueryClient };
+
+export const Route = createRootRouteWithContext<RouterContext>()({
   // The guard is here rather than in each route so a route cannot be added
   // without it, and it runs before loading rather than during rendering so a
   // credentialless browser never mounts a component that fetches. A redirect

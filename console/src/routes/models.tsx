@@ -7,7 +7,7 @@ import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
 import { FacetFilter } from "@/components/ui/FacetFilter";
 import { accessMessage, ApiError } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { formatCount, providerLabel } from "@/lib/format";
 import { operationLabel } from "@/components/models/ModelsTable";
 import {
@@ -32,6 +32,11 @@ const CAPABILITIES = ["tools", "reasoning", "structured_outputs"] as const;
 
 export const Route = createFileRoute("/models")({
   component: ModelsPage,
+  loader: ({ context }) =>
+    settle(
+      context.queryClient.ensureQueryData(queries.models()),
+      context.queryClient.ensureQueryData(queries.providerCatalog()),
+    ),
   validateSearch: (search: Record<string, unknown>): ModelsSearch => {
     const str = (value: unknown) =>
       typeof value === "string" && value !== "" ? value : undefined;

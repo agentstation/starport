@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { JobsPanel } from "@/components/jobs/JobsPanel";
+import { queries, settle } from "@/lib/queries";
 
 // A video job is work this gateway holds open across many requests. Every other
 // page on this console reads something that finished inside one call, so this
@@ -12,6 +13,7 @@ import { JobsPanel } from "@/components/jobs/JobsPanel";
 
 export const Route = createFileRoute("/jobs")({
   component: JobsPage,
+  loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.videoJobs())),
 });
 
 function JobsPage() {

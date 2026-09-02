@@ -196,6 +196,10 @@ async function parseError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, message, body);
 }
 
+// ReadOptions is what a read accepts from the caller that owns its lifetime:
+// the abort signal a query passes so a route change ends the request.
+export type ReadOptions = { signal?: AbortSignal };
+
 export async function request<T>(
   path: string,
   {
@@ -656,48 +660,51 @@ export type ActivityFilters = {
 
 // --- Endpoints ---
 
-export function healthReady(): Promise<Health> {
-  return request<Health>("/health/ready");
+export function healthReady({ signal }: ReadOptions = {}): Promise<Health> {
+  return request<Health>("/health/ready", { signal });
 }
 
-export async function listModels(): Promise<Model[]> {
-  const body = await request<{ data?: Model[] }>("/api/v1/models");
+export async function listModels({ signal }: ReadOptions = {}): Promise<Model[]> {
+  const body = await request<{ data?: Model[] }>("/api/v1/models", { signal });
   return body?.data ?? [];
 }
 
-export function systemInfo(): Promise<SystemInfo> {
-  return request<SystemInfo>("/api/v1/admin/info");
+export function systemInfo({ signal }: ReadOptions = {}): Promise<SystemInfo> {
+  return request<SystemInfo>("/api/v1/admin/info", { signal });
 }
 
-export function systemMetrics(): Promise<SystemMetrics> {
-  return request<SystemMetrics>("/api/v1/admin/metrics");
+export function systemMetrics({ signal }: ReadOptions = {}): Promise<SystemMetrics> {
+  return request<SystemMetrics>("/api/v1/admin/metrics", { signal });
 }
 
-export async function listAuthors(): Promise<CatalogAuthor[]> {
-  const body = await request<{ authors?: CatalogAuthor[] }>("/api/v1/authors");
+export async function listAuthors({ signal }: ReadOptions = {}): Promise<CatalogAuthor[]> {
+  const body = await request<{ authors?: CatalogAuthor[] }>("/api/v1/authors", { signal });
   return body?.authors ?? [];
 }
 
-export function getAuthor(id: string): Promise<CatalogAuthor> {
-  return request<CatalogAuthor>(`/api/v1/authors/${encodeURIComponent(id)}`);
+export function getAuthor(id: string, { signal }: ReadOptions = {}): Promise<CatalogAuthor> {
+  return request<CatalogAuthor>(`/api/v1/authors/${encodeURIComponent(id)}`, { signal });
 }
 
-export function providerStatus(): Promise<ProviderStatus> {
-  return request<ProviderStatus>("/api/v1/admin/providers");
+export function providerStatus({ signal }: ReadOptions = {}): Promise<ProviderStatus> {
+  return request<ProviderStatus>("/api/v1/admin/providers", { signal });
 }
 
-export async function listProviderCatalog(): Promise<ProviderCatalogEntry[]> {
+export async function listProviderCatalog({ signal }: ReadOptions = {}): Promise<ProviderCatalogEntry[]> {
   const body = await request<{ providers?: ProviderCatalogEntry[] }>(
     "/api/v1/providers",
+    { signal },
   );
   return body?.providers ?? [];
 }
 
 export function providerIncidentLog(
   providerId: string,
+  { signal }: ReadOptions = {},
 ): Promise<ProviderIncidentLog> {
   return request<ProviderIncidentLog>(
     `/api/v1/admin/providers/${encodeURIComponent(providerId)}/incidents`,
+    { signal },
   );
 }
 
@@ -707,12 +714,12 @@ export function refreshProviders(): Promise<ProviderRefreshReport> {
   });
 }
 
-export function catalogMetadata(): Promise<CatalogMetadata> {
-  return request<CatalogMetadata>("/api/v1/catalog");
+export function catalogMetadata({ signal }: ReadOptions = {}): Promise<CatalogMetadata> {
+  return request<CatalogMetadata>("/api/v1/catalog", { signal });
 }
 
-export function catalogChanges(): Promise<CatalogChanges> {
-  return request<CatalogChanges>("/api/v1/catalog/changes");
+export function catalogChanges({ signal }: ReadOptions = {}): Promise<CatalogChanges> {
+  return request<CatalogChanges>("/api/v1/catalog/changes", { signal });
 }
 
 export function refreshCatalog(): Promise<CatalogRefreshReport> {
@@ -737,8 +744,8 @@ export type AuthMode = {
 // readAuthMode is deliberately unauthenticated. A console with no key needs to
 // know whether it has to go get one, and asking that question with a key it
 // does not have would answer 401.
-export function readAuthMode(): Promise<AuthMode> {
-  return request<AuthMode>("/api/v1/auth/mode");
+export function readAuthMode({ signal }: ReadOptions = {}): Promise<AuthMode> {
+  return request<AuthMode>("/api/v1/auth/mode", { signal });
 }
 
 export function setAuthMode(mode: AuthMode["mode"]): Promise<AuthMode> {
@@ -748,13 +755,13 @@ export function setAuthMode(mode: AuthMode["mode"]): Promise<AuthMode> {
   });
 }
 
-export async function listKeys(): Promise<GatewayKey[]> {
-  const body = await request<{ keys?: GatewayKey[] }>("/api/v1/admin/keys");
+export async function listKeys({ signal }: ReadOptions = {}): Promise<GatewayKey[]> {
+  const body = await request<{ keys?: GatewayKey[] }>("/api/v1/admin/keys", { signal });
   return body?.keys ?? [];
 }
 
-export function getKeyDetail(keyId: string): Promise<KeyDetail> {
-  return request<KeyDetail>(`/api/v1/admin/keys/${encodeURIComponent(keyId)}`);
+export function getKeyDetail(keyId: string, { signal }: ReadOptions = {}): Promise<KeyDetail> {
+  return request<KeyDetail>(`/api/v1/admin/keys/${encodeURIComponent(keyId)}`, { signal });
 }
 
 export function createKey(body: CreateKeyRequest): Promise<CreatedKey> {
@@ -804,9 +811,11 @@ function sharedCredentialItemPath(
 // to render.
 export async function listSharedCredentials(
   provider: string,
+  { signal }: ReadOptions = {},
 ): Promise<SharedCredentialSummary[]> {
   const body = await request<{ credentials?: SharedCredentialSummary[] }>(
     sharedCredentialPath(provider),
+    { signal },
   );
   return body?.credentials ?? [];
 }
@@ -887,9 +896,11 @@ function byokPath(accountId: string, provider?: string): string {
 
 export async function listBYOKCredentials(
   accountId: string,
+  { signal }: ReadOptions = {},
 ): Promise<ProviderCredentialSummary[]> {
   const body = await request<{ credentials?: ProviderCredentialSummary[] }>(
     byokPath(accountId),
+    { signal },
   );
   return body?.credentials ?? [];
 }
@@ -989,8 +1000,8 @@ export type Account = {
   updated_at?: string;
 };
 
-export async function listAccounts(): Promise<Account[]> {
-  const body = await request<{ accounts?: Account[] }>("/api/v1/admin/accounts");
+export async function listAccounts({ signal }: ReadOptions = {}): Promise<Account[]> {
+  const body = await request<{ accounts?: Account[] }>("/api/v1/admin/accounts", { signal });
   return body?.accounts ?? [];
 }
 
@@ -1064,9 +1075,10 @@ export type AccountTemplateBody = {
   access?: AccountProviderAccess[];
 };
 
-export async function listAccountTemplates(): Promise<AccountTemplate[]> {
+export async function listAccountTemplates({ signal }: ReadOptions = {}): Promise<AccountTemplate[]> {
   const body = await request<{ templates?: AccountTemplate[] }>(
     "/api/v1/admin/account-templates",
+    { signal },
   );
   return body?.templates ?? [];
 }
@@ -1146,13 +1158,13 @@ export type AccountGrant = {
   created_at?: string;
 };
 
-export async function listMembers(): Promise<Member[]> {
-  const body = await request<{ users?: Member[] }>("/api/v1/admin/users");
+export async function listMembers({ signal }: ReadOptions = {}): Promise<Member[]> {
+  const body = await request<{ users?: Member[] }>("/api/v1/admin/users", { signal });
   return body?.users ?? [];
 }
 
-export async function listTeams(): Promise<Team[]> {
-  const body = await request<{ teams?: Team[] }>("/api/v1/admin/teams");
+export async function listTeams({ signal }: ReadOptions = {}): Promise<Team[]> {
+  const body = await request<{ teams?: Team[] }>("/api/v1/admin/teams", { signal });
   return body?.teams ?? [];
 }
 
@@ -1185,9 +1197,11 @@ export function deleteTeam(teamId: string): Promise<unknown> {
 
 export async function listTeamMembers(
   teamId: string,
+  { signal }: ReadOptions = {},
 ): Promise<TeamMembership[]> {
   const body = await request<{ members?: TeamMembership[] }>(
     `/api/v1/admin/teams/${encodeURIComponent(teamId)}/members`,
+    { signal },
   );
   return body?.members ?? [];
 }
@@ -1214,16 +1228,19 @@ export function removeTeamMember(
 
 export async function listMemberGrants(
   userId: string,
+  { signal }: ReadOptions = {},
 ): Promise<AccountGrant[]> {
   const body = await request<{ grants?: AccountGrant[] }>(
     `/api/v1/admin/users/${encodeURIComponent(userId)}/grants`,
+    { signal },
   );
   return body?.grants ?? [];
 }
 
-export async function listTeamGrants(teamId: string): Promise<AccountGrant[]> {
+export async function listTeamGrants(teamId: string, { signal }: ReadOptions = {}): Promise<AccountGrant[]> {
   const body = await request<{ grants?: AccountGrant[] }>(
     `/api/v1/admin/teams/${encodeURIComponent(teamId)}/grants`,
+    { signal },
   );
   return body?.grants ?? [];
 }
@@ -1233,9 +1250,11 @@ export async function listTeamGrants(teamId: string): Promise<AccountGrant[]> {
 // that member's session asks for an account.
 export async function listReachableAccounts(
   userId: string,
+  { signal }: ReadOptions = {},
 ): Promise<string[]> {
   const body = await request<{ accounts?: string[] }>(
     `/api/v1/admin/users/${encodeURIComponent(userId)}/accounts`,
+    { signal },
   );
   return body?.accounts ?? [];
 }
@@ -1299,9 +1318,10 @@ const FILE_PAGE_LIMIT = 1000;
 // listFiles reads the files the credential's own account stores. It takes no
 // account argument: the routes scope every answer to the caller, so one account
 // never learns what another holds.
-export async function listFiles(): Promise<FileList> {
+export async function listFiles({ signal }: ReadOptions = {}): Promise<FileList> {
   const body = await request<{ data?: StoredFile[]; has_more?: boolean }>(
     `/v1/files?limit=${FILE_PAGE_LIMIT}`,
+    { signal },
   );
   return { files: body?.data ?? [], hasMore: body?.has_more === true };
 }
@@ -1400,8 +1420,8 @@ export type PresetWriteRequest = {
   revision?: number;
 };
 
-export async function listPresets(): Promise<Preset[]> {
-  const body = await request<{ data?: Preset[] }>("/api/v1/presets");
+export async function listPresets({ signal }: ReadOptions = {}): Promise<Preset[]> {
+  const body = await request<{ data?: Preset[] }>("/api/v1/presets", { signal });
   return body?.data ?? [];
 }
 
@@ -1427,9 +1447,10 @@ export function deletePreset(name: string): Promise<unknown> {
 
 // listPresetHistory answers the stored revisions of one preset, newest
 // first. Pin one from a request with @preset/name@N.
-export async function listPresetHistory(name: string): Promise<Preset[]> {
+export async function listPresetHistory(name: string, { signal }: ReadOptions = {}): Promise<Preset[]> {
   const body = await request<{ data?: Preset[] }>(
     `/api/v1/presets/${encodeURIComponent(name)}/history`,
+    { signal },
   );
   return body?.data ?? [];
 }
@@ -1658,9 +1679,10 @@ const VIDEO_PAGE_LIMIT = 100;
 
 export type VideoJobList = { jobs: VideoJob[]; capped: boolean };
 
-export async function listJobs(): Promise<VideoJobList> {
+export async function listJobs({ signal }: ReadOptions = {}): Promise<VideoJobList> {
   const body = await request<{ data?: VideoJob[] }>(
     `/v1/videos?limit=${VIDEO_PAGE_LIMIT}`,
+    { signal },
   );
   const jobs = body?.data ?? [];
   return { jobs, capped: jobs.length >= VIDEO_PAGE_LIMIT };
@@ -1703,12 +1725,12 @@ export async function fetchJobAsset(jobID: string): Promise<Blob> {
 
 // listActivity reads the authenticated key's own request log; key_id is
 // ignored there — only the admin listing can widen the scope.
-export function listActivity(filters: ActivityFilters): Promise<ActivityPage> {
-  return request<ActivityPage>(`/api/v1/activity${activityQuery(filters)}`);
+export function listActivity(filters: ActivityFilters, { signal }: ReadOptions = {}): Promise<ActivityPage> {
+  return request<ActivityPage>(`/api/v1/activity${activityQuery(filters)}`, { signal });
 }
 
-export function listAdminActivity(filters: ActivityFilters): Promise<ActivityPage> {
-  return request<ActivityPage>(`/api/v1/admin/activity${activityQuery(filters)}`);
+export function listAdminActivity(filters: ActivityFilters, { signal }: ReadOptions = {}): Promise<ActivityPage> {
+  return request<ActivityPage>(`/api/v1/admin/activity${activityQuery(filters)}`, { signal });
 }
 
 // --- Audit log ---
@@ -1738,7 +1760,7 @@ export type AuditFilters = {
   cursor?: string;
 };
 
-export function listAuditLog(filters: AuditFilters): Promise<AuditPage> {
+export function listAuditLog(filters: AuditFilters, { signal }: ReadOptions = {}): Promise<AuditPage> {
   const params = new URLSearchParams();
   if (filters.action) params.set("action", filters.action);
   if (filters.actor) params.set("actor", filters.actor);
@@ -1746,5 +1768,5 @@ export function listAuditLog(filters: AuditFilters): Promise<AuditPage> {
   if (filters.limit) params.set("limit", String(filters.limit));
   if (filters.cursor) params.set("cursor", filters.cursor);
   const query = params.toString();
-  return request<AuditPage>(`/api/v1/admin/audit${query ? `?${query}` : ""}`);
+  return request<AuditPage>(`/api/v1/admin/audit${query ? `?${query}` : ""}`, { signal });
 }

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Activity, ArrowLeft, BookOpen, Globe } from "lucide-react";
 import { useMemo } from "react";
 
@@ -18,11 +18,26 @@ import {
   OfferingsTable,
   PolicySummary,
 } from "@/components/providers/ProviderDetail";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/providers_/$providerId")({
+  // A provider is known to the catalog or to the runtime. Only when both
+  // answered and neither names it is the address a not-found page.
+  loader: async ({ context, params }) => {
+    const [catalog, status] = await Promise.all([
+      context.queryClient.ensureQueryData(queries.providerCatalog()).catch(() => undefined),
+      context.queryClient.ensureQueryData(queries.providerStatus()).catch(() => undefined),
+    ]);
+    await settle(
+      context.queryClient.ensureQueryData(queries.providerIncidents(params.providerId)),
+    );
+    const known =
+      catalog?.some((entry) => entry.id === params.providerId) ||
+      status?.providers?.some((entry) => entry.provider_id === params.providerId);
+    if (catalog && status && !known) throw notFound();
+  },
   component: ProviderDetailPage,
 });
 

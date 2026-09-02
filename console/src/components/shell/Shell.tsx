@@ -266,27 +266,33 @@ export function Shell({ children }: { children: ReactNode }) {
                   <div aria-hidden="true" className="mx-1 my-2 border-t border-border-1" />
                 ))}
               {section.items.map((item) => {
-                const active = pathname === item.to;
                 const Icon = item.icon;
+                // The link owns its active state. Every page except the
+                // overview matches by prefix, so a detail route keeps its
+                // list highlighted.
                 return (
                   <Link
                     key={item.to}
                     to={item.to}
-                    aria-current={active ? "page" : undefined}
-                    className={`relative flex h-9 items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""} ${
-                      active
-                        ? "bg-bg-hover text-text-1"
-                        : "text-text-3 hover:bg-bg-hover hover:text-text-2"
-                    }`}
+                    activeOptions={{ exact: item.to === "/" }}
+                    activeProps={{ "aria-current": "page" }}
+                    className={`relative flex h-9 items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""}`}
+                    inactiveProps={{
+                      className: "text-text-3 hover:bg-bg-hover hover:text-text-2",
+                    }}
                   >
-                    {active && (
-                      <span
-                        aria-hidden="true"
-                        className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
-                      />
+                    {({ isActive }) => (
+                      <>
+                        {isActive && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+                          />
+                        )}
+                        <Icon className="size-4 shrink-0" />
+                        {!collapsed && <span>{item.label}</span>}
+                      </>
                     )}
-                    <Icon className="size-4 shrink-0" />
-                    {!collapsed && <span>{item.label}</span>}
                   </Link>
                 );
               })}

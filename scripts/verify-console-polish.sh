@@ -113,13 +113,14 @@ zero_matches() {
 }
 
 # every_query_signals reports that lib/queries.ts passes a signal from
-# every query function it defines: the two counts match and are not zero.
+# every query function it defines: every line that declares a queryFn
+# takes the signal on that line, and there is at least one.
 every_query_signals() {
   local f=$C/lib/queries.ts
   [ -f "$f" ] || return 1
   local fns sigs
   fns=$(grep -c 'queryFn' "$f")
-  sigs=$(grep -c 'signal' "$f")
+  sigs=$(grep -c 'queryFn.*signal' "$f")
   [ "$fns" -gt 0 ] && [ "$fns" -eq "$sigs" ]
 }
 
@@ -140,10 +141,10 @@ check CPL-V02 "main.tsx sets the query client defaults" \
   all_present 'defaultOptions' -- $C/main.tsx
 
 check CPL-V03 "the router preloads on intent" \
-  all_present 'defaultPreload' -- $C/main.tsx $C/routes/__root.tsx
+  all_present 'defaultPreload' -- $C/main.tsx $C/router.tsx $C/routes/__root.tsx
 
 check CPL-V04 "the router owns a not-found component" \
-  all_present 'defaultNotFoundComponent' -- $C/main.tsx $C/routes/__root.tsx
+  all_present 'defaultNotFoundComponent' -- $C/main.tsx $C/router.tsx $C/routes/__root.tsx
 
 check CPL-V05 "every factory in lib/queries.ts passes the query signal" \
   every_query_signals
