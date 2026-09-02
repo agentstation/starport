@@ -45,21 +45,51 @@ const ROUTING_TONES: Record<string, string> = {
   unknown: "bg-bg-raised text-text-3",
 };
 
+// ROUTING_EXPLANATIONS say in words why the planner dropped an offering.
+// The keys are the reason codes internal/app maps from the planner's
+// exclusions onto the provider state vocabulary. A code this console
+// predates falls back to the code itself with its underscores replaced,
+// so a new filter still reads as a reason and never as a blank.
+const ROUTING_EXPLANATIONS: Record<string, string> = {
+  adapter_not_ready: "The provider adapter is not ready, so no request can reach it.",
+  catalog_retired: "The catalog retired this offering.",
+  catalog_unavailable: "The catalog marks this offering unavailable.",
+  offering_unavailable: "The availability owner marks this offering unavailable.",
+  operation_unsupported:
+    "The offering serves no operation this gateway routes.",
+};
+
+export function routingExplanation(reason: string | undefined): string {
+  if (!reason) return "The planner produced no route for this offering.";
+  return (
+    ROUTING_EXPLANATIONS[reason] ??
+    `The planner dropped this offering: ${reason.replaceAll("_", " ")}.`
+  );
+}
+
 function RoutingChip({ routing }: { routing: ProviderOfferingStatus["routing"] }) {
   const state = routing?.state ?? "unknown";
-  const label =
-    state === "unroutable" && routing?.reason
-      ? `unroutable · ${routing.reason.replaceAll("_", " ")}`
-      : state;
   return (
     <span
       className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
         ROUTING_TONES[state] ?? "bg-bg-raised text-text-3"
       }`}
     >
-      {label}
+      {state.replaceAll("_", " ")}
     </span>
   );
+}
+
+// offeringReason is the one sentence the Reason column shows: the circuit
+// reason when a circuit tripped, else why the planner dropped the offering.
+// A chip that read "unroutable · operation unsupported" gave the reader a
+// code to decode; the Reason column says what the code means.
+export function offeringReason(offering: ProviderOfferingStatus): string {
+  if (offering.reason) return offering.reason.replaceAll("_", " ");
+  if (offering.routing?.state === "unroutable") {
+    return routingExplanation(offering.routing.reason);
+  }
+  return "";
 }
 
 // reachableSummary counts the offerings a request can actually reach. An
@@ -439,19 +469,26 @@ function offeringColumnsFor(providerId: string) {
       id: "routing",
       header: "Routing",
       sortFn: "alphanumeric",
-      size: 220,
-      minSize: 120,
+      size: 120,
+      minSize: 100,
       cell: ({ row }) => <RoutingChip routing={row.original.routing} />,
     }),
-    offeringColumns.accessor((row) => row.reason ?? "", {
+    offeringColumns.accessor(offeringReason, {
       id: "reason",
       header: "Reason",
       sortFn: "alphanumeric",
-      size: 200,
-      minSize: 120,
+      size: 320,
+      minSize: 160,
+      meta: { flex: true },
       cell: ({ getValue }) => (
-        <span className={cn("text-xs", getValue() ? "text-text-3" : "text-text-4")}>
-          {getValue() ? getValue().replaceAll("_", " ") : "\u2014"}
+        <span
+          title={getValue() || undefined}
+          className={cn(
+            "block min-w-0 truncate text-xs",
+            getValue() ? "text-text-3" : "text-text-4",
+          )}
+        >
+          {getValue() || "\u2014"}
         </span>
       ),
     }),

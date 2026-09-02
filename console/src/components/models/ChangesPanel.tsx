@@ -22,6 +22,31 @@ function formatPerM(perM: number | undefined): string {
   return formatUSD(perM) ?? "—";
 }
 
+// sentence turns a server reason into a sentence for the reader: an
+// initial capital and a closing period. An absent reason stays absent so
+// the caller's fallback copy renders instead of an empty line.
+function sentence(reason: string | undefined): string | undefined {
+  if (!reason) return undefined;
+  const trimmed = reason.trim();
+  if (trimmed === "") return undefined;
+  const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  return capitalized.endsWith(".") ? capitalized : `${capitalized}.`;
+}
+
+// NoChanges is the one empty state for a diff with nothing in it. The
+// reader opened "What changed" to learn whether the catalog moved, so the
+// answer leads and the detail explains what the comparison covered.
+function NoChanges({ detail }: { detail: string }) {
+  return (
+    <div data-testid="no-changes" className="mt-3 flex flex-col gap-1">
+      <p className="text-base text-text-1">
+        No changes since the previous generation.
+      </p>
+      <p className="text-sm text-text-3">{detail}</p>
+    </div>
+  );
+}
+
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-2 mt-5 text-sm font-medium text-text-2">{children}</div>
@@ -72,10 +97,13 @@ function ChangesBody() {
   const diff = changes.data;
   if (!diff?.available) {
     return (
-      <p className="text-base text-text-3">
-        {diff?.reason ??
-          "No generation history to compare yet. Refresh the catalog twice to build one."}
-      </p>
+      <div data-testid="no-history" className="flex flex-col gap-1">
+        <p className="text-base text-text-1">Nothing to compare yet.</p>
+        <p className="text-sm text-text-3">
+          {sentence(diff?.reason) ??
+            "The diff needs two accepted generations. Refresh the catalog after the next Starmap release to record a second one."}
+        </p>
+      </div>
     );
   }
 
@@ -98,10 +126,7 @@ function ChangesBody() {
     return (
       <>
         {header}
-        <p className="mt-3 text-base text-text-2">
-          The last two generations are semantically equal: no models, offerings,
-          or prices changed. Only acquisition metadata differs.
-        </p>
+        <NoChanges detail="Models, offerings, and prices match. Only acquisition metadata differs between the two generations." />
       </>
     );
   }
@@ -212,9 +237,7 @@ function ChangesBody() {
         </>
       )}
       {!hasContent && (
-        <p className="mt-3 text-base text-text-3">
-          No model, offering, or price differences.
-        </p>
+        <NoChanges detail="The two generations list the same models, offerings, and prices." />
       )}
     </>
   );

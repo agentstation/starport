@@ -9,6 +9,7 @@ import type {
 import {
   formatContext,
   formatCount,
+  formatPricePair,
   formatPricePerM,
   formatUnitPrice,
   providerLabel,
@@ -180,6 +181,10 @@ const CIRCUIT_TONES: Record<string, string> = {
   unavailable: "bg-bg-raised text-text-3",
 };
 
+// The prompt and completion prices render as the console-wide pair (the
+// same string the models table shows), so a reader compares one cell here
+// with one cell there. The cache-read price keeps its own column because
+// only some offerings publish one.
 function price(value: string | undefined): string {
   return formatPricePerM(value) ?? "—";
 }
@@ -223,8 +228,7 @@ export function OfferingTable({
             <th scope="col" className="px-4 py-2.5">Provider model ID</th>
             <th scope="col" className="px-4 py-2.5 text-right">Context</th>
             <th scope="col" className="px-4 py-2.5 text-right">Max out</th>
-            <th scope="col" className="px-4 py-2.5 text-right">Prompt / M</th>
-            <th scope="col" className="px-4 py-2.5 text-right">Completion / M</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Price / M</th>
             <th scope="col" className="px-4 py-2.5 text-right">Cache read / M</th>
             <th scope="col" className="px-4 py-2.5 text-right">Unit price</th>
             <th scope="col" className="px-4 py-2.5 text-right">Max docs</th>
@@ -260,11 +264,11 @@ export function OfferingTable({
                     ? formatCount(offering.max_completion_tokens)
                     : "—"}
                 </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
-                  {price(offering.pricing?.prompt)}
-                </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
-                  {price(offering.pricing?.completion)}
+                <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-text-2">
+                  {formatPricePair(
+                    offering.pricing?.prompt,
+                    offering.pricing?.completion,
+                  ) ?? "—"}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {price(offering.pricing?.cache_read)}

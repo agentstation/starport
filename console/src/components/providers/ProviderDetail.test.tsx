@@ -381,5 +381,8 @@ test("names the filter that dropped an unroutable offering", () => {
     />,
   );
 
-  expect(screen.getByText("unroutable \u00b7 operation unsupported")).toBeDefined();
+  expect(screen.getByText("unroutable")).toBeDefined();
+  expect(
+    screen.getByText("The offering serves no operation this gateway routes."),
+  ).toBeDefined();
 });
