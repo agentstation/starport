@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { authorLabel, AuthorLinks } from "@/components/authors/AuthorCard";
 import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { offeringAvailability } from "@/components/models/ModelDetail";
+import { DetailSkeleton } from "@/components/ui/skeleton";
 import {
   ApiError,
   type Model,
@@ -97,7 +98,7 @@ function AuthorDetailPage() {
   });
 
   if (author.isPending) {
-    return <p className="text-base text-text-3">Loading author…</p>;
+    return <DetailSkeleton />;
   }
   if (author.error) {
     const missing =

@@ -5,6 +5,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { DestructiveButton, GhostButton, PrimaryButton } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -161,7 +162,7 @@ export function FilesPanel() {
       </p>
     );
   } else if (files.isPending) {
-    body = <p className="text-base text-text-3">Loading files…</p>;
+    body = <TableSkeleton columns={6} />;
   } else if (rows.length === 0) {
     body = (
       <p className="text-base text-text-3">

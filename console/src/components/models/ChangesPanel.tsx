@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -57,7 +58,7 @@ function ChangesBody() {
   });
 
   if (changes.isPending) {
-    return <p className="text-base text-text-3">Loading catalog changes…</p>;
+    return <TableSkeleton columns={3} rows={4} />;
   }
   if (changes.error) {
     const error = changes.error;

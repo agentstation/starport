@@ -6,6 +6,7 @@ import { CredentialApplyModal } from "@/components/credentials/CredentialApplyMo
 import { SourcePill } from "@/components/credentials/SourcePill";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LoadingStatus, Skeleton } from "@/components/ui/skeleton";
 import {
   ApiError,
   createSharedCredential,
@@ -256,7 +257,10 @@ export function SharedCredentialPanel({
 
 
       {credentials.isPending ? (
-        <p className="text-sm text-text-3">Loading credentials…</p>
+        <LoadingStatus className="flex flex-col gap-2">
+          <Skeleton className="h-9" />
+          <Skeleton className="h-9" />
+        </LoadingStatus>
       ) : locked ? (
         <p className="text-sm text-text-3">
           Applied by an operator for the whole deployment. Only an operator key

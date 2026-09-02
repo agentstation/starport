@@ -57,7 +57,7 @@ test("the previous usage rows stay visible while a filter change loads", async (
   });
   await waitFor(() => expect(release).toBeDefined());
   expect(screen.getByText("acme/test-model-one", { selector: ".truncate" })).toBeTruthy();
-  expect(screen.queryByText("Loading requests…")).toBeNull();
+  expect(document.querySelector('[aria-busy="true"]')).toBeNull();
 
   release?.();
   await waitFor(() =>

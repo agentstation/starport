@@ -19,6 +19,7 @@ import {
 import { AXIS_TICK, CHART, ChartCard, ChartTip } from "@/components/ui/Chart";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   ApiError,
   type ActivityRecord,
@@ -720,7 +721,7 @@ function UsagePage() {
           Failed to load usage: {(activity.error as Error).message}
         </p>
       ) : loading ? (
-        <p className="text-base text-text-3">Loading requests…</p>
+        <TableSkeleton columns={6} rows={8} />
       ) : records.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-md border border-border-1 bg-bg-panel px-6 py-14 text-center">
           <BarChart3 className="size-6 text-text-4" aria-hidden="true" />

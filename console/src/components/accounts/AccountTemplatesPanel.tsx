@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { LoadingStatus, Skeleton } from "@/components/ui/skeleton";
 import {
   createAccountTemplate,
   CREDENTIAL_STRATEGY_LABELS,
@@ -233,7 +234,10 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
                   : String(templates.error)}
               </p>
             ) : templates.isPending ? (
-              <p className="text-sm text-text-3">Loading templates…</p>
+              <LoadingStatus className="flex flex-col gap-2">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+              </LoadingStatus>
             ) : rows.length === 0 ? (
               <p className="text-sm text-text-3">No templates yet.</p>
             ) : (

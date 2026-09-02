@@ -17,6 +17,8 @@ import {
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
+import { TableSkeleton } from "@/components/ui/skeleton";
+
 // Reading a document is the one provider call this gateway makes that the
 // request never named. It runs before the model the caller asked for, it bills
 // by the page rather than by the token, and the request cost alone reports the
@@ -258,7 +260,7 @@ export function DocumentsPanel() {
       </p>
     );
   } else if (activity.isPending) {
-    body = <p className="text-base text-text-3">Loading document activity…</p>;
+    body = <TableSkeleton columns={6} />;
   } else if (rows.length === 0) {
     body = (
       <p className="text-base text-text-3">

@@ -10,6 +10,7 @@ import { ByokPanel } from "@/components/credentials/ByokPanel";
 import { Field, GhostButton, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -278,7 +279,7 @@ function AccountsPage() {
       </p>
     );
   } else if (accounts.isPending) {
-    body = <p className="text-base text-text-3">Loading accounts…</p>;
+    body = <TableSkeleton columns={6} />;
   } else {
     body = (
       <div className="overflow-x-auto rounded-md border border-border-1 bg-bg-panel">

@@ -322,9 +322,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function HealthPanel({
   offerings,
   records,
+  activityFailed = false,
 }: {
   offerings: ProviderOfferingStatus[];
   records: ActivityRecord[] | undefined;
+  // The activity read failed, so the missing stats are not an empty hour.
+  activityFailed?: boolean;
 }) {
   const stats = records ? activityStats(records) : undefined;
   return (
@@ -374,6 +377,10 @@ export function HealthPanel({
           <Stat label="p50 latency" value={formatMs(stats.p50LatencyMs)} />
           <Stat label="p95 latency" value={formatMs(stats.p95LatencyMs)} />
         </div>
+      ) : activityFailed ? (
+        <p className="text-sm text-text-3">
+          Activity unavailable. The last hour of requests could not be read.
+        </p>
       ) : (
         <p className="text-sm text-text-3">
           No requests through this provider in the last hour.

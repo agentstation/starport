@@ -129,6 +129,19 @@
 /* ---- Tailwind theme: utilities read the role tokens ---- */
 
 @theme inline {
+  /* Skeleton shimmer (DESIGN.md motion): a faint band that crosses the
+   * raised ground once every 1.8 s. The reduced-motion block below
+   * collapses it with every other animation. */
+  --animate-shimmer: shimmer 1.8s linear infinite;
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
   --color-*: initial;
   --color-bg-canvas: var(--bg-canvas);
   --color-bg-panel: var(--bg-panel);

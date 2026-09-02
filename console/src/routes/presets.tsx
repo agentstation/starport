@@ -7,6 +7,7 @@ import { ModelPicker } from "@/components/models/ModelPicker";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction, TEXTAREA_CLASS } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
   ApiError,
@@ -522,7 +523,7 @@ function HistoryModal({
       </p>
     );
   } else if (history.isPending) {
-    body = <p className="text-sm text-text-3">Loading history…</p>;
+    body = <TableSkeleton columns={5} rows={3} />;
   } else {
     const revisions = history.data ?? [];
     body = (
@@ -775,7 +776,7 @@ function PresetsPage() {
       );
     }
   } else if (presets.isPending) {
-    body = <p className="text-base text-text-3">Loading presets…</p>;
+    body = <TableSkeleton columns={5} />;
   } else if ((presets.data ?? []).length === 0) {
     body = <EmptyState onCreate={() => setModal({ kind: "create" })} />;
   } else {

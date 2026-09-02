@@ -7,6 +7,8 @@ import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
+import { TableSkeleton } from "@/components/ui/skeleton";
+
 // The audit log is the durable answer to "who changed what": every admin
 // mutation leaves one record naming its actor, its action, its subject, and
 // whether the store accepted it. The trail never holds a credential value.
@@ -37,7 +39,7 @@ function AuditLog() {
       </p>
     );
   } else if (trail.isPending) {
-    body = <p className="text-base text-text-3">Loading the audit log…</p>;
+    body = <TableSkeleton columns={5} rows={8} />;
   } else if (rows.length === 0) {
     body = (
       <p className="text-base text-text-3">

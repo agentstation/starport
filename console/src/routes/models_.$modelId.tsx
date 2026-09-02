@@ -4,6 +4,7 @@ import { ArrowLeft, Check, Copy } from "lucide-react";
 import { useState } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
+import { DetailSkeleton } from "@/components/ui/skeleton";
 import {
   CapabilityChips,
   LineageLinks,
@@ -72,7 +73,7 @@ function ModelDetailPage() {
   const model = models.data ?? undefined;
 
   if (models.isPending) {
-    return <p className="text-base text-text-3">Loading model…</p>;
+    return <DetailSkeleton />;
   }
   if (!model) {
     return (

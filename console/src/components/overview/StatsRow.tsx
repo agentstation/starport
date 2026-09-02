@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { Sparkline } from "@/components/overview/Sparkline";
 import { Card } from "@/components/ui/Card";
+import { LoadFailed } from "@/components/ui/LoadFailed";
+import { StatSkeleton } from "@/components/ui/skeleton";
 import {
   ApiError,
   type ActivityRecord,
@@ -69,12 +71,18 @@ export function StatsRow() {
   });
   const activity = useQuery(queries.adminActivity24h());
 
-  if (metrics.isPending) return null;
+  if (metrics.isPending) return <StatSkeleton />;
   if (metrics.error) {
     if (metrics.error instanceof ApiError && metrics.error.needsKey) {
       return <LockedCard>Gateway metrics need an admin-scoped key.</LockedCard>;
     }
-    return <LockedCard>Failed to load metrics: {metrics.error.message}</LockedCard>;
+    return (
+      <LoadFailed
+        what="gateway metrics"
+        error={metrics.error}
+        onRetry={() => void metrics.refetch()}
+      />
+    );
   }
 
   const requests = metrics.data?.requests ?? {};

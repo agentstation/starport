@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { MemberDetailPanel } from "@/components/members/MemberDetailPanel";
 import { RowAction } from "@/components/ui/Form";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { accessMessage, ApiError } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
 import { optionalString } from "@/lib/search";
@@ -51,7 +52,7 @@ function MembersPage() {
       </p>
     );
   } else if (members.isPending) {
-    body = <p className="text-base text-text-3">Loading members…</p>;
+    body = <TableSkeleton columns={5} />;
   } else if (rows.length === 0) {
     body = (
       <p className="text-base text-text-3">
