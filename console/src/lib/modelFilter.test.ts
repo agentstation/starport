@@ -4,6 +4,8 @@ import type { Model } from "@/lib/api";
 
 import {
   authorIdsOf,
+  chattableModels,
+  defaultChatModel,
   facetValues,
   fuzzyIncludes,
   hasCapability,
@@ -146,4 +148,66 @@ test("operation facet selects a model by what it serves", () => {
   // A model whose offerings name no operation is one the catalog did not
   // describe, and it answers to no operation rather than to all of them.
   expect(matches(model, { operation: "chat-completions" })).toBe(false);
+});
+
+// CPL-F4. The chat picker and the default model rule both read this seam.
+function served(id: string, provider: string, operations: string[]): Model {
+  return {
+    id,
+    offerings: [{ provider, provider_model_id: id.split("/")[1] ?? id, operations }],
+  };
+}
+
+const embedding = served("openai/text-embedding-3-small", "openai", ["embeddings"]);
+const speech = served("openai/tts-1", "openai", ["audio-speech"]);
+const claude = served("anthropic/claude-fable-5", "anthropic", ["chat-completions"]);
+const gpt = served("openai/gpt-x", "openai", ["chat-completions"]);
+const both = served("cohere/command-a", "cohere", ["chat-completions", "embeddings"]);
+
+test("chattable models are the ones an offering serves through chat", () => {
+  const kept = chattableModels([embedding, speech, claude, gpt, both]).map(
+    (candidate) => candidate.id,
+  );
+  expect(kept).toEqual(["anthropic/claude-fable-5", "openai/gpt-x", "cohere/command-a"]);
+});
+
+test("an undescribed model stays chattable", () => {
+  const bare: Model = { id: "legacy/model" };
+  const silent: Model = {
+    id: "legacy/served",
+    offerings: [{ provider: "legacy", provider_model_id: "served" }],
+  };
+  expect(chattableModels([bare, silent])).toEqual([bare, silent]);
+});
+
+test("the default model is the remembered one while it still routes chat", () => {
+  const usable = new Set(["openai"]);
+  expect(defaultChatModel("anthropic/claude-fable-5", [embedding, claude, gpt], usable)).toBe(
+    "anthropic/claude-fable-5",
+  );
+  expect(defaultChatModel("@preset/draft", [embedding, claude, gpt], usable)).toBe(
+    "@preset/draft",
+  );
+});
+
+test("a stale or empty remembered model yields to the first credentialed chat model", () => {
+  const usable = new Set(["openai"]);
+  // The embedding model is first in catalog order and openai serves it, but
+  // it answers no chat turn. Claude answers, but anthropic holds no usable
+  // credential. The first credentialed chat model is gpt.
+  expect(defaultChatModel("", [embedding, claude, gpt], usable)).toBe("openai/gpt-x");
+  expect(defaultChatModel("openai/text-embedding-3-small", [embedding, claude, gpt], usable)).toBe(
+    "openai/gpt-x",
+  );
+  expect(defaultChatModel("gone/model", [embedding, claude, gpt], usable)).toBe("openai/gpt-x");
+});
+
+test("without a usable provider the first chat model stands in", () => {
+  expect(defaultChatModel("", [embedding, claude, gpt], new Set())).toBe(
+    "anthropic/claude-fable-5",
+  );
+  expect(defaultChatModel("", [embedding, speech], new Set())).toBe(
+    "openai/text-embedding-3-small",
+  );
+  expect(defaultChatModel("", [], new Set())).toBe("");
 });

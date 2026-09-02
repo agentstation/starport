@@ -95,3 +95,28 @@ test("a text answer renders no media element", () => {
   expect(document.querySelector("img")).toBeNull();
   expect(document.querySelector("audio")).toBeNull();
 });
+
+// CPL-F4. A reader scanning a transcript tells the makers apart by their
+// marks before reading an id. The mark names the catalog author, and a
+// catalog with no bundled mark falls back to initials.
+test("an assistant turn carries the maker mark beside the model name", async () => {
+  vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))));
+  try {
+    render(
+      <AssistantMessage
+        message={{ role: "assistant", content: "The answer.", model: "openai/gpt-oss-120b" }}
+        streaming={false}
+        retryModels={[]}
+        modelRecord={{
+          id: "openai/gpt-oss-120b",
+          authors: [{ id: "openai", name: "OpenAI" }],
+        }}
+      />,
+    );
+    const mark = await screen.findByTestId("entity-initials");
+    expect(mark.textContent).toBe("OP");
+    expect(screen.getByText("openai/gpt-oss-120b")).toBeTruthy();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

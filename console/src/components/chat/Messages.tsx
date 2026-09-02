@@ -21,6 +21,7 @@ import {
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Streamdown, type ControlsConfig } from "streamdown";
 
+import { EntityLogo } from "@/components/catalog/EntityLogo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,9 +96,9 @@ function CopyAction({ text }: { text: string }) {
       }}
     >
       {copied ? (
-        <Check className="size-3.5 text-success" />
+        <Check aria-hidden="true" className="size-3.5 text-success" />
       ) : (
-        <Copy className="size-3.5" />
+        <Copy aria-hidden="true" className="size-3.5" />
       )}
     </ActionIcon>
   );
@@ -116,7 +117,7 @@ function RetryMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<ActionIcon label="Retry" />}>
-        <RefreshCcw className="size-3.5" />
+        <RefreshCcw aria-hidden="true" className="size-3.5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-64">
         <DropdownMenuItem onClick={() => onRetry()}>Retry</DropdownMenuItem>
@@ -175,10 +176,10 @@ export function ReasoningFold({
         }}
         className="flex items-center gap-1 text-sm text-text-3 transition-colors duration-150 ease-standard hover:text-text-2"
       >
-        <ChevronRight
+        <ChevronRight aria-hidden="true"
           className={`size-3.5 transition-transform duration-150 ${open ? "rotate-90" : ""}`}
         />
-        {active && <Loader2 className="size-3 animate-spin" />}
+        {active && <Loader2 aria-hidden="true" className="size-3 animate-spin" />}
         {label}
       </button>
       {open && (
@@ -311,6 +312,21 @@ export function GeneratedMediaList({ media }: { media: GeneratedMedia[] }) {
   );
 }
 
+// makerOf names the model's maker for the mark beside the model name. The
+// catalog record carries the declared author; a turn whose model the catalog
+// no longer lists falls back to the id prefix, which is the same author on
+// every model this gateway routes.
+function makerOf(
+  model: string,
+  record: Model | undefined,
+): { id: string; name: string } {
+  const author = record?.authors?.[0];
+  if (author?.id) return { id: author.id, name: author.name ?? author.id };
+  const slash = model.indexOf("/");
+  const prefix = slash > 0 ? model.slice(0, slash) : model;
+  return { id: prefix, name: prefix };
+}
+
 export function AssistantMessage({
   message,
   streaming,
@@ -336,6 +352,7 @@ export function AssistantMessage({
       liveTps = Math.round(message.content.length / 4 / seconds);
     }
   }
+  const maker = makerOf(message.model ?? "", modelRecord);
   const reasoningActive = streaming && !message.content && !message.error;
   // The live region is empty while the turn streams and names the model
   // once the turn ends, so a screen reader hears one sentence per answer
@@ -350,7 +367,17 @@ export function AssistantMessage({
       </p>
       {(message.model || liveTps !== null) && (
         <p className="mb-1 flex items-center gap-2 font-mono text-xs text-text-3">
-          {message.model && <span>{message.model}</span>}
+          {message.model && (
+            <span className="flex items-center gap-1.5">
+              <EntityLogo
+                kind="authors"
+                id={maker.id}
+                name={maker.name}
+                size={14}
+              />
+              <span>{message.model}</span>
+            </span>
+          )}
           {liveTps !== null && <span>~{liveTps} tok/s</span>}
         </p>
       )}
@@ -479,9 +506,9 @@ export function UserMessage({
                 className="flex items-center gap-1.5 rounded-lg border border-border-1 bg-bg-raised px-2.5 py-1.5 text-xs text-text-2"
               >
                 {attachment.kind === "audio" ? (
-                  <AudioLines className="size-3.5 shrink-0 text-text-3" />
+                  <AudioLines aria-hidden="true" className="size-3.5 shrink-0 text-text-3" />
                 ) : (
-                  <FileText className="size-3.5 shrink-0 text-text-3" />
+                  <FileText aria-hidden="true" className="size-3.5 shrink-0 text-text-3" />
                 )}
                 <span className="max-w-48 truncate">{attachment.name}</span>
               </span>
@@ -502,7 +529,7 @@ export function UserMessage({
               setEditing(true);
             }}
           >
-            <Pencil className="size-3.5" />
+            <Pencil aria-hidden="true" className="size-3.5" />
           </ActionIcon>
         )}
       </div>

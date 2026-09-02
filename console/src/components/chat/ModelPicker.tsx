@@ -50,10 +50,10 @@ function CapabilityBadges({ model }: { model: Model }) {
   if (!caps.vision && !caps.reasoning && !caps.tools && !caps.webSearch) return null;
   return (
     <span className="flex items-center gap-1 text-text-3">
-      {caps.vision && <Eye className="size-3" aria-label="Vision" />}
-      {caps.reasoning && <Brain className="size-3" aria-label="Reasoning" />}
-      {caps.tools && <Wrench className="size-3" aria-label="Tools" />}
-      {caps.webSearch && <Globe className="size-3" aria-label="Web search" />}
+      {caps.vision && <Eye role="img" className="size-3" aria-label="Vision" />}
+      {caps.reasoning && <Brain role="img" className="size-3" aria-label="Reasoning" />}
+      {caps.tools && <Wrench role="img" className="size-3" aria-label="Tools" />}
+      {caps.webSearch && <Globe role="img" className="size-3" aria-label="Web search" />}
     </span>
   );
 }
@@ -237,7 +237,7 @@ export function ModelPicker({
           >
             <p
               id={`${id}-group-${sectionIndex}`}
-              className="px-3 pb-1 pt-2 text-xs uppercase tracking-wide text-text-3"
+              className="px-3 pb-1 pt-2 text-xs font-medium text-text-3"
             >
               {section.label}
             </p>
@@ -271,7 +271,7 @@ export function ModelPicker({
                         <CapabilityBadges model={item.model} />
                       )}
                       {selected && (
-                        <Check className="size-3.5 shrink-0 text-accent" />
+                        <Check aria-hidden="true" className="size-3.5 shrink-0 text-accent" />
                       )}
                     </div>
                     <p className="truncate font-mono text-xs text-text-3">
@@ -302,7 +302,7 @@ export function ModelPicker({
                             : "text-text-3 opacity-0 hover:text-text-2 group-hover:opacity-100"
                         }`}
                       >
-                        <Star
+                        <Star aria-hidden="true"
                           className="size-3.5"
                           fill={favorites.has(item.id) ? "currentColor" : "none"}
                         />

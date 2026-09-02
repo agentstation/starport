@@ -21,7 +21,7 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import type { Attachment, ContentPart } from "@/lib/attachments";
-import { chattableModels } from "@/lib/modelFilter";
+import { defaultChatModel } from "@/lib/modelFilter";
 import {
   DEFAULT_PARAMS,
   lastModel,
@@ -150,33 +150,25 @@ function ChatPage() {
     }
   }, [seedModel, navigate]);
 
-  // A default the reader never chose must be one that can answer, so the
-  // fallback prefers the first chattable model served by a provider whose
-  // operator credential is usable. Without provider status (a locked
-  // endpoint, an early error) the first catalog model stands in.
+  // A new conversation opens on the model the reader chose last while the
+  // catalog still routes it as a chat model, and otherwise on the first chat
+  // model served by a provider whose operator credential is usable. Without
+  // provider status (a locked endpoint, an early error) the plain catalog
+  // order decides. The rule lives in modelFilter.
   const status = useQuery({
     ...queries.providerStatus(),
   });
   useEffect(() => {
-    if (newModel || !models.data?.length) return;
-    // Wait for the credential picture; a status error ends the wait and
-    // the plain catalog order decides.
+    if (!models.data?.length) return;
+    // Wait for the credential picture; a status error ends the wait.
     if (status.isPending) return;
-    const candidates = chattableModels(models.data);
     const usable = new Set(
       (status.data?.providers ?? [])
         .filter((provider) => provider.operator_credential?.usable === true)
         .map((provider) => provider.provider_id),
     );
-    const credentialed = usable.size
-      ? candidates.find((model) =>
-          (model.offerings ?? []).some((offering) =>
-            usable.has(offering.provider),
-          ),
-        )
-      : undefined;
-    const chosen = credentialed ?? candidates[0] ?? models.data[0];
-    if (chosen) setNewModel(chosen.id);
+    const chosen = defaultChatModel(newModel, models.data, usable);
+    if (chosen && chosen !== newModel) setNewModel(chosen);
   }, [newModel, models.data, status.isPending, status.data]);
 
   const active = useMemo(
@@ -633,9 +625,9 @@ function ChatPage() {
             className="rounded-sm p-1.5 text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
           >
             {sidebarOpen ? (
-              <PanelLeftClose className="size-4" />
+              <PanelLeftClose aria-hidden="true" className="size-4" />
             ) : (
-              <PanelLeftOpen className="size-4" />
+              <PanelLeftOpen aria-hidden="true" className="size-4" />
             )}
           </button>
           {compare.active ? (
@@ -712,7 +704,7 @@ function ChatPage() {
                   aria-label="Scroll to latest message"
                   className="absolute -top-10 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border-2 bg-bg-panel px-3 py-1.5 text-xs text-text-2 shadow-md transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
                 >
-                  <ArrowDown className="size-3.5" />
+                  <ArrowDown aria-hidden="true" className="size-3.5" />
                   Latest
                 </button>
               )}
@@ -723,14 +715,14 @@ function ChatPage() {
           <div className="flex min-h-0 flex-1 items-center justify-center px-4">
             <div className="w-full max-w-[768px] pb-24">
               <h1 className="mb-6 text-center text-2xl font-semibold tracking-[-0.01em]">
-                What can I help with?
+                Try a model through this gateway
               </h1>
               {composer}
               {!startersDismissed && (
                 <div className="mt-4">
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs uppercase tracking-wide text-text-4">
-                      Try one of these
+                    <p className="text-xs font-medium text-text-4">
+                      Starter prompts
                     </p>
                     <button
                       type="button"
@@ -738,7 +730,7 @@ function ChatPage() {
                       aria-label="Dismiss starter prompts"
                       className="rounded-xs p-1 text-text-4 hover:text-text-2"
                     >
-                      <X className="size-3.5" />
+                      <X aria-hidden="true" className="size-3.5" />
                     </button>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

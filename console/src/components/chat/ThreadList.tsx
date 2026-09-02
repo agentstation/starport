@@ -120,9 +120,9 @@ function ThreadRow({
           className="rounded-xs p-1 text-text-4 hover:text-text-2"
         >
           {conversation.pinned ? (
-            <PinOff className="size-3.5" />
+            <PinOff aria-hidden="true" className="size-3.5" />
           ) : (
-            <Pin className="size-3.5" />
+            <Pin aria-hidden="true" className="size-3.5" />
           )}
         </IconButton>
         <IconButton
@@ -133,14 +133,14 @@ function ThreadRow({
           }}
           className="rounded-xs p-1 text-text-4 hover:text-text-2"
         >
-          <Pencil className="size-3.5" />
+          <Pencil aria-hidden="true" className="size-3.5" />
         </IconButton>
         <IconButton
           label="Delete conversation"
           onClick={onDelete}
           className="rounded-xs p-1 text-text-4 hover:text-error"
         >
-          <Trash2 className="size-3.5" />
+          <Trash2 aria-hidden="true" className="size-3.5" />
         </IconButton>
       </div>
     </div>
@@ -185,11 +185,11 @@ export function ThreadList({
           onClick={onNew}
           className="flex h-9 items-center gap-2 rounded-sm border border-border-2 px-3 text-sm font-medium text-text-1 transition-colors duration-150 ease-standard hover:bg-bg-hover"
         >
-          <Plus className="size-4" />
+          <Plus aria-hidden="true" className="size-4" />
           New chat
         </button>
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-4" />
+          <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-4" />
           <input
             type="search"
             value={query}
@@ -208,7 +208,7 @@ export function ThreadList({
         )}
         {groups.map((group) => (
           <div key={group.label} className="mb-2">
-            <p className="px-2 pb-1 pt-2 text-xs uppercase tracking-wide text-text-4">
+            <p className="px-2 pb-1 pt-2 text-xs font-medium text-text-4">
               {group.label}
             </p>
             <div className="flex flex-col gap-0.5">
