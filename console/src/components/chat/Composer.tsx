@@ -11,10 +11,12 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { ModelPicker, supportsReasoning } from "@/components/chat/ModelPicker";
 import { INPUT_CLASS, TEXTAREA_CLASS } from "@/components/ui/Form";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select } from "@/components/ui/Select";
 import { queries } from "@/lib/queries";
 import {
@@ -83,34 +85,40 @@ function shortModelName(model: string): string {
   return slash >= 0 ? model.slice(slash + 1) : model;
 }
 
+// BarButton is one control in the composer bar. The label is the
+// accessible name and the tooltip; the trigger variants of the popover
+// primitives render through it, so it forwards every button prop.
 function BarButton({
-  onClick,
   label,
   active,
-  disabled,
+  className,
   children,
+  ...props
 }: {
-  onClick: () => void;
   label: string;
   active?: boolean;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
+  children?: ReactNode;
+} & Omit<ComponentProps<"button">, "aria-label" | "title">) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      className={`flex h-8 items-center gap-1 rounded-sm px-2 text-sm transition-colors duration-150 ease-standard ${
-        active
-          ? "bg-bg-hover text-text-1"
-          : "text-text-3 hover:bg-bg-hover hover:text-text-2"
-      } disabled:cursor-not-allowed disabled:text-text-4 disabled:hover:bg-transparent`}
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className={`flex h-8 items-center gap-1 rounded-sm px-2 text-sm transition-colors duration-150 ease-standard ${
+              active
+                ? "bg-bg-hover text-text-1"
+                : "text-text-3 hover:bg-bg-hover hover:text-text-2"
+            } disabled:cursor-not-allowed disabled:text-text-4 disabled:hover:bg-transparent ${className ?? ""}`}
+            {...props}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -164,54 +172,14 @@ function AttachControl({
 
 // Popover anchors a panel above the control bar (the composer sits at
 // the bottom of the page, so everything opens upward).
-function Popover({
-  onClose,
-  label,
-  children,
-  wide,
-}: {
-  onClose: () => void;
-  label: string;
-  children: ReactNode;
-  wide?: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!ref.current?.contains(event.target as Node)) onClose();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [onClose]);
-  return (
-    <div
-      ref={ref}
-      role="dialog"
-      aria-label={label}
-      className={`absolute bottom-full right-0 z-20 mb-2 rounded-md border border-border-2 bg-bg-raised p-3 shadow-[0_12px_32px_rgba(0,0,0,0.45)] ${
-        wide ? "w-80" : "w-56"
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
-
+// ParamsPopover is the request-parameter form. It renders as popover
+// content, so the caller owns the trigger and the open state.
 function ParamsPopover({
   params,
   onChange,
-  onClose,
 }: {
   params: ChatParams;
   onChange: (next: ChatParams) => void;
-  onClose: () => void;
 }) {
   const field = (label: string, control: ReactNode) => (
     <label className="block">
@@ -220,7 +188,7 @@ function ParamsPopover({
     </label>
   );
   return (
-    <Popover onClose={onClose} label="Request parameters" wide>
+    <PopoverContent side="top" align="end" aria-label="Request parameters" className="w-80">
       <div className="flex flex-col gap-3">
         {field(
           "System prompt",
@@ -321,7 +289,7 @@ function ParamsPopover({
           )}
         </div>
       </div>
-    </Popover>
+    </PopoverContent>
   );
 }
 
@@ -538,11 +506,20 @@ export function Composer({
                 </button>
               </span>
             ))}
-          <div className="relative">
-            <BarButton
-              onClick={() => onPickerOpenChange(!pickerOpen)}
-              label={compareActive ? "Add model to comparison" : "Choose model"}
-              active={pickerOpen}
+          <Popover
+            open={pickerOpen}
+            onOpenChange={(open) => {
+              onPickerOpenChange(open);
+              if (!open) textareaRef.current?.focus();
+            }}
+          >
+            <PopoverTrigger
+              render={
+                <BarButton
+                  label={compareActive ? "Add model to comparison" : "Choose model"}
+                  active={pickerOpen}
+                />
+              }
             >
               <span className="max-w-48 truncate">
                 {compareActive
@@ -550,8 +527,14 @@ export function Composer({
                   : shortModelName(model)}
               </span>
               <ChevronDown className="size-3.5" />
-            </BarButton>
-            {pickerOpen && (
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="end"
+              aria-label="Choose model"
+              initialFocus={false}
+              className="w-[400px] max-w-[calc(100vw-2rem)] gap-0 p-0"
+            >
               <ModelPicker
                 value={compareActive ? "" : model}
                 favorites={favorites}
@@ -572,62 +555,56 @@ export function Composer({
                   textareaRef.current?.focus();
                 }}
               />
-            )}
-          </div>
+            </PopoverContent>
+          </Popover>
 
           {reasoning && !compareActive && (
-            <div className="relative">
-              <BarButton
-                onClick={() => setMenu(menu === "effort" ? "none" : "effort")}
-                label="Reasoning effort"
-                active={menu === "effort"}
+            <Popover
+              open={menu === "effort"}
+              onOpenChange={(open) => setMenu(open ? "effort" : "none")}
+            >
+              <PopoverTrigger
+                render={<BarButton label="Reasoning effort" active={menu === "effort"} />}
               >
                 <Brain className="size-4" />
                 {effort && <span className="capitalize">{effort}</span>}
-              </BarButton>
-              {menu === "effort" && (
-                <Popover
-                  onClose={() => setMenu("none")}
-                  label="Reasoning effort"
-                >
-                  <div className="flex flex-col">
-                    {EFFORT_CHOICES.map((choice) => (
-                      <button
-                        key={choice.value}
-                        type="button"
-                        onClick={() => {
-                          onParamsChange({ ...params, effort: choice.value });
-                          setMenu("none");
-                        }}
-                        className={`rounded-sm px-2 py-1.5 text-left text-sm transition-colors duration-150 ease-standard hover:bg-bg-hover ${
-                          effort === choice.value ? "text-text-1" : "text-text-3"
-                        }`}
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
-                  </div>
-                </Popover>
-              )}
-            </div>
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="end"
+                aria-label="Reasoning effort"
+                className="w-56 gap-0 p-1.5"
+              >
+                {EFFORT_CHOICES.map((choice) => (
+                  <button
+                    key={choice.value}
+                    type="button"
+                    onClick={() => {
+                      onParamsChange({ ...params, effort: choice.value });
+                      setMenu("none");
+                    }}
+                    className={`rounded-sm px-2 py-1.5 text-left text-sm transition-colors duration-150 ease-standard hover:bg-bg-hover ${
+                      effort === choice.value ? "text-text-1" : "text-text-3"
+                    }`}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           )}
 
-          <div className="relative">
-            <BarButton
-              onClick={() => setMenu(menu === "params" ? "none" : "params")}
-              label="Request parameters"
-              active={menu === "params"}
+          <Popover
+            open={menu === "params"}
+            onOpenChange={(open) => setMenu(open ? "params" : "none")}
+          >
+            <PopoverTrigger
+              render={<BarButton label="Request parameters" active={menu === "params"} />}
             >
               <SlidersHorizontal className="size-4" />
-            </BarButton>
-            {menu === "params" && (
-              <ParamsPopover
-                params={params}
-                onChange={onParamsChange}
-                onClose={() => setMenu("none")}
-              />
-            )}
-          </div>
+            </PopoverTrigger>
+            <ParamsPopover params={params} onChange={onParamsChange} />
+          </Popover>
 
           {streaming ? (
             <button

@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Brain, Check, Eye, Globe, Star, Wrench } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { type Model } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatContext, formatPricePerM, providerLabel } from "@/lib/format";
 import { chattableModels } from "@/lib/modelFilter";
 
-// ModelPicker is the chat model popover (DESIGN.md): search, pinned
+// ModelPicker is the chat model combobox (DESIGN.md): search, pinned
 // models first, presets, then provider groups. Rows show capability
 // badges and catalog facts from the live /models response — the picker
-// never carries model data of its own. Opens upward from the composer.
+// never carries model data of its own. The composer places it in a
+// popover; this component owns the search, the cursor, and what the
+// screen reader hears about the highlighted row.
 
 export type PickerItem =
   | { kind: "model"; id: string; model: Model }
@@ -79,7 +81,9 @@ export function ModelPicker({
 }) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const listId = `${id}-list`;
+  const optionId = (index: number) => `${id}-option-${index}`;
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -151,16 +155,6 @@ export function ModelPicker({
     inputRef.current?.focus();
   }, []);
 
-  // Close on outside pointer-down; the composer trigger stops its own
-  // event so reopening toggles cleanly.
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [onClose]);
-
   useEffect(() => {
     listRef.current
       ?.querySelector(`[data-index="${cursor}"]`)
@@ -192,13 +186,7 @@ export function ModelPicker({
 
   let index = -1;
   return (
-    <div
-      ref={rootRef}
-      role="dialog"
-      aria-label="Choose model"
-      onKeyDown={onKeyDown}
-      className="absolute bottom-full right-0 z-20 mb-2 flex w-[400px] max-w-[calc(100vw-2rem)] flex-col rounded-md border border-border-2 bg-bg-raised shadow-[0_12px_32px_rgba(0,0,0,0.45)]"
-    >
+    <div onKeyDown={onKeyDown} className="flex flex-col">
       <div className="border-b border-border-1 p-2">
         <input
           ref={inputRef}
@@ -206,6 +194,9 @@ export function ModelPicker({
           role="combobox"
           aria-expanded="true"
           aria-autocomplete="list"
+          aria-controls={listId}
+          aria-activedescendant={flat.length > 0 ? optionId(cursor) : undefined}
+          aria-label="Search models and presets"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search models and presets…"
@@ -216,6 +207,7 @@ export function ModelPicker({
       </div>
       <div
         ref={listRef}
+        id={listId}
         role="listbox"
         aria-label="Models"
         className="max-h-[min(60vh,26rem)] overflow-y-auto py-1"
@@ -231,9 +223,16 @@ export function ModelPicker({
         {!models.isPending && !models.isError && flat.length === 0 && (
           <p className="px-3 py-2 text-sm text-text-3">No matches.</p>
         )}
-        {sections.map((section) => (
-          <div key={section.label}>
-            <p className="px-3 pb-1 pt-2 text-xs uppercase tracking-wide text-text-4">
+        {sections.map((section, sectionIndex) => (
+          <div
+            key={section.label}
+            role="group"
+            aria-labelledby={`${id}-group-${sectionIndex}`}
+          >
+            <p
+              id={`${id}-group-${sectionIndex}`}
+              className="px-3 pb-1 pt-2 text-xs uppercase tracking-wide text-text-4"
+            >
               {section.label}
             </p>
             {section.items.map((item) => {
@@ -245,6 +244,7 @@ export function ModelPicker({
               return (
                 <div
                   key={`${section.label}:${item.id}`}
+                  id={optionId(rowIndex)}
                   data-index={rowIndex}
                   role="option"
                   aria-selected={selected}

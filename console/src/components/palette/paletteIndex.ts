@@ -1,14 +1,15 @@
 import { fuzzyIncludes } from "@/lib/modelFilter";
 
-// The palette indexes five kinds. Kind order is display order: pages
+// The palette indexes six kinds. Kind order is display order: pages
 // and actions lead because they are the cheap, always-known entries;
-// catalog entities follow.
+// catalog entities follow, then the account's keys.
 export type PaletteItemKind =
   | "page"
   | "action"
   | "model"
   | "provider"
-  | "author";
+  | "author"
+  | "key";
 
 export type PaletteItem = {
   kind: PaletteItemKind;
@@ -26,6 +27,7 @@ export const KIND_ORDER: PaletteItemKind[] = [
   "model",
   "provider",
   "author",
+  "key",
 ];
 
 export const KIND_LABELS: Record<PaletteItemKind, string> = {
@@ -34,6 +36,7 @@ export const KIND_LABELS: Record<PaletteItemKind, string> = {
   model: "Models",
   provider: "Providers",
   author: "Authors",
+  key: "Keys",
 };
 
 // matchesPaletteQuery reuses the models-list fuzzy matcher, so the

@@ -3,6 +3,8 @@ import { RefreshCw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { ChangesPanel } from "@/components/models/ChangesPanel";
+import { IconButton } from "@/components/ui/IconButton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { accessMessage, ApiError, refreshCatalog } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import { formatRelativeTime, shortGenerationID } from "@/lib/format";
@@ -68,7 +70,7 @@ export function FreshnessBar() {
 
   const data = metadata.data;
   return (
-    <div className="relative flex items-center justify-between gap-x-4 overflow-visible rounded-md border border-border-1 bg-bg-panel px-4 py-2">
+    <div className="flex items-center justify-between gap-x-4 rounded-md border border-border-1 bg-bg-panel px-4 py-2">
       <div className="flex min-w-0 items-center gap-2">
         <span
           className="rounded-xs border border-border-1 bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-2"
@@ -111,14 +113,56 @@ export function FreshnessBar() {
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         {data && (
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((open) => !open)}
-            aria-expanded={detailsOpen}
-            className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1"
-          >
-            Details
-          </button>
+          <Popover open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <PopoverTrigger className="h-7 rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 data-popup-open:bg-bg-hover data-popup-open:text-text-1">
+              Details
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              aria-label="Catalog details"
+              data-testid="freshness-details"
+              className="w-80 text-xs"
+            >
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+                <dt className="text-text-4">generation</dt>
+                <dd className="break-all font-mono text-text-2">
+                  {data.generation_id ?? "—"}
+                </dd>
+                <dt className="text-text-4">generated at</dt>
+                <dd className="text-text-2">{data.generated_at ?? "—"}</dd>
+                <dt className="text-text-4">catalog sequence</dt>
+                <dd className="tabular-nums text-text-2">
+                  {data.catalog_sequence ?? "—"}
+                </dd>
+                <dt className="text-text-4">availability revision</dt>
+                <dd className="tabular-nums text-text-2">
+                  {data.availability_revision ?? "—"}
+                </dd>
+                {data.completeness && (
+                  <>
+                    <dt className="text-text-4">completeness</dt>
+                    <dd className="text-text-2">{data.completeness}</dd>
+                  </>
+                )}
+                {data.degraded && (
+                  <>
+                    <dt className="text-text-4">degraded</dt>
+                    <dd className="text-error">
+                      {data.degradation_reasons?.join("; ") || "no reason recorded"}
+                    </dd>
+                  </>
+                )}
+                {!data.manifest_available && (
+                  <>
+                    <dt className="text-text-4">manifest</dt>
+                    <dd className="text-text-2">
+                      {data.manifest_unavailable_reason ?? "unavailable"}
+                    </dd>
+                  </>
+                )}
+              </dl>
+            </PopoverContent>
+          </Popover>
         )}
         {data?.generation_id && (
           <button
@@ -129,62 +173,15 @@ export function FreshnessBar() {
             What changed
           </button>
         )}
-        <button
-          type="button"
+        <IconButton
+          label="Refresh catalog"
           onClick={() => refresh.mutate()}
           disabled={refresh.isPending}
-          aria-label="Refresh catalog"
-          title="Refresh catalog"
-          className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-1 disabled:opacity-50"
+          className="size-7 rounded-xs text-text-3 hover:bg-bg-hover hover:text-text-1 disabled:opacity-50"
         >
           <RefreshCw className={`size-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
-        </button>
+        </IconButton>
       </div>
-      {detailsOpen && data && (
-        <div
-          data-testid="freshness-details"
-          className="absolute right-3 top-full z-20 mt-1 w-80 rounded-md border border-border-1 bg-bg-panel p-3 text-xs shadow-lg"
-        >
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-            <dt className="text-text-4">generation</dt>
-            <dd className="break-all font-mono text-text-2">
-              {data.generation_id ?? "—"}
-            </dd>
-            <dt className="text-text-4">generated at</dt>
-            <dd className="text-text-2">{data.generated_at ?? "—"}</dd>
-            <dt className="text-text-4">catalog sequence</dt>
-            <dd className="tabular-nums text-text-2">
-              {data.catalog_sequence ?? "—"}
-            </dd>
-            <dt className="text-text-4">availability revision</dt>
-            <dd className="tabular-nums text-text-2">
-              {data.availability_revision ?? "—"}
-            </dd>
-            {data.completeness && (
-              <>
-                <dt className="text-text-4">completeness</dt>
-                <dd className="text-text-2">{data.completeness}</dd>
-              </>
-            )}
-            {data.degraded && (
-              <>
-                <dt className="text-text-4">degraded</dt>
-                <dd className="text-error">
-                  {data.degradation_reasons?.join("; ") || "no reason recorded"}
-                </dd>
-              </>
-            )}
-            {!data.manifest_available && (
-              <>
-                <dt className="text-text-4">manifest</dt>
-                <dd className="text-text-2">
-                  {data.manifest_unavailable_reason ?? "unavailable"}
-                </dd>
-              </>
-            )}
-          </dl>
-        </div>
-      )}
       {changesOpen && <ChangesPanel onClose={() => setChangesOpen(false)} />}
     </div>
   );

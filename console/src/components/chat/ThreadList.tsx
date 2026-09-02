@@ -1,6 +1,7 @@
 import { Pencil, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { IconButton } from "@/components/ui/IconButton";
 import { DestructiveButton, GhostButton } from "@/components/ui/Form";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Conversation } from "@/lib/chatStore";
@@ -113,11 +114,9 @@ function ThreadRow({
         {conversation.title || "Untitled"}
       </button>
       <div className="hidden shrink-0 items-center gap-0.5 pr-1 group-focus-within:flex group-hover:flex">
-        <button
-          type="button"
+        <IconButton
+          label={conversation.pinned ? "Unpin conversation" : "Pin conversation"}
           onClick={onTogglePin}
-          aria-label={conversation.pinned ? "Unpin conversation" : "Pin conversation"}
-          title={conversation.pinned ? "Unpin" : "Pin"}
           className="rounded-xs p-1 text-text-4 hover:text-text-2"
         >
           {conversation.pinned ? (
@@ -125,28 +124,24 @@ function ThreadRow({
           ) : (
             <Pin className="size-3.5" />
           )}
-        </button>
-        <button
-          type="button"
+        </IconButton>
+        <IconButton
+          label="Rename conversation"
           onClick={() => {
             setDraft(conversation.title);
             setEditing(true);
           }}
-          aria-label="Rename conversation"
-          title="Rename"
           className="rounded-xs p-1 text-text-4 hover:text-text-2"
         >
           <Pencil className="size-3.5" />
-        </button>
-        <button
-          type="button"
+        </IconButton>
+        <IconButton
+          label="Delete conversation"
           onClick={onDelete}
-          aria-label="Delete conversation"
-          title="Delete"
           className="rounded-xs p-1 text-text-4 hover:text-error"
         >
           <Trash2 className="size-3.5" />
-        </button>
+        </IconButton>
       </div>
     </div>
   );

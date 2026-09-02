@@ -23,6 +23,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ],
     listProviderCatalog: async () => [{ id: "groq", name: "Groq" }],
     listAuthors: async () => [{ id: "anthropic", name: "Anthropic" }],
+    listKeys: async () => [],
   };
 });
 
@@ -136,4 +137,23 @@ test("escape closes without navigating", async () => {
   fireEvent.keyDown(input, { key: "Escape" });
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(navigate).not.toHaveBeenCalled();
+});
+
+test("finds a model by its exact id and announces the active option", async () => {
+  mount();
+  fireEvent.keyDown(document, { key: "k", metaKey: true });
+  const input = await screen.findByRole("combobox", { name: "Search everything" });
+
+  fireEvent.change(input, { target: { value: "openai/gpt-oss-120b" } });
+  const group = await screen.findByRole("group", { name: "Models" });
+  const option = await waitFor(() => {
+    const found = group.querySelector("[role='option']");
+    if (!found) throw new Error("no option yet");
+    return found as HTMLElement;
+  });
+  expect(option.textContent).toContain("openai/gpt-oss-120b");
+  expect(option.id).toBeTruthy();
+  await waitFor(() => {
+    expect(input.getAttribute("aria-activedescendant")).toBe(option.id);
+  });
 });

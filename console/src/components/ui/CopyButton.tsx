@@ -1,6 +1,7 @@
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { report } from "@/lib/mutations";
 
 // CopyButton copies text, says "Copied" for two seconds where a screen
@@ -29,18 +30,25 @@ export function CopyButton({
   };
 
   const Icon = copied ? Check : Copy;
+  const name = label ? `Copy ${label}` : "Copy";
   return (
-    <button
-      type="button"
-      onClick={copy}
-      title="Copy"
-      aria-label={label ? `Copy ${label}` : "Copy"}
-      className={`flex h-7 shrink-0 items-center gap-1.5 rounded-xs px-1.5 text-xs transition-colors duration-150 ease-standard hover:bg-bg-hover ${
-        copied ? "text-success" : "text-text-3 hover:text-text-2"
-      }`}
-    >
-      <Icon className="size-3.5" />
-      <span role="status">{copied ? "Copied" : label}</span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            onClick={copy}
+            aria-label={name}
+            className={`flex h-7 shrink-0 items-center gap-1.5 rounded-xs px-1.5 text-xs transition-colors duration-150 ease-standard hover:bg-bg-hover ${
+              copied ? "text-success" : "text-text-3 hover:text-text-2"
+            }`}
+          />
+        }
+      >
+        <Icon className="size-3.5" />
+        <span role="status">{copied ? "Copied" : label}</span>
+      </TooltipTrigger>
+      <TooltipContent>{name}</TooltipContent>
+    </Tooltip>
   );
 }

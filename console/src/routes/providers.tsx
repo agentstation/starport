@@ -8,6 +8,7 @@ import {
   ProviderCard,
   credentialRank,
 } from "@/components/providers/ProviderCard";
+import { IconButton } from "@/components/ui/IconButton";
 import { Select } from "@/components/ui/Select";
 import {
   accessMessage,
@@ -213,16 +214,14 @@ function ProvidersPage() {
       <div className="flex items-start justify-between gap-4">
         <Header />
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <IconButton
+            label="Refresh provider status"
             onClick={() => refresh.mutate()}
             disabled={refresh.isPending}
-            aria-label="Refresh provider status"
-            title="Refresh provider status"
-            className="flex size-8 items-center justify-center rounded-sm border border-border-2 bg-bg-raised text-text-2 transition-colors duration-150 ease-standard hover:bg-bg-hover disabled:opacity-50"
+            className="size-8 rounded-sm border border-border-2 bg-bg-raised text-text-2 hover:bg-bg-hover disabled:opacity-50"
           >
             <RefreshCw className={`size-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
-          </button>
+          </IconButton>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
