@@ -62,7 +62,7 @@ const NAV_SECTIONS: ReadonlyArray<{
   {
     label: "Account",
     items: [
-      { to: "/keys", label: "API Keys", icon: Key },
+      { to: "/keys", label: "API keys", icon: Key },
       { to: "/files", label: "Files", icon: FileText },
       { to: "/jobs", label: "Jobs", icon: Film },
       { to: "/documents", label: "Documents", icon: ScanText },
@@ -76,7 +76,7 @@ const NAV_SECTIONS: ReadonlyArray<{
       { to: "/accounts", label: "Accounts", icon: Building2 },
       { to: "/members", label: "Members", icon: UserRound },
       { to: "/teams", label: "Teams", icon: UsersRound },
-      { to: "/audit", label: "Audit Log", icon: ScrollText },
+      { to: "/audit", label: "Audit log", icon: ScrollText },
       { to: "/settings", label: "Settings", icon: Settings },
     ],
   },
@@ -87,6 +87,9 @@ const NAV_SECTIONS: ReadonlyArray<{
 ];
 
 const COLLAPSE_KEY = "starport.sidebar.collapsed";
+// SIDEBAR_ID is the target the collapse toggle names through aria-controls,
+// so assistive technology can tie the button to the rail it resizes.
+const SIDEBAR_ID = "console-sidebar";
 
 function useGatewayHealth() {
   return useQuery(queries.health());
@@ -235,14 +238,7 @@ export function Shell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <aside
-        onClick={(event) => {
-          // Clicking sidebar whitespace toggles the rail. Anything
-          // interactive — a nav link, the search button, the footer
-          // controls — owns its own click and is excluded.
-          const target = event.target as HTMLElement | null;
-          if (target?.closest("a,button,input,[role=dialog]")) return;
-          setCollapsed((value) => !value);
-        }}
+        id={SIDEBAR_ID}
         className={`fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-[width] duration-150 ease-standard ${
           collapsed ? "w-16" : "w-60"
         }`}
@@ -344,6 +340,8 @@ export function Shell({ children }: { children: ReactNode }) {
                   type="button"
                   onClick={() => setCollapsed((value) => !value)}
                   aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-expanded={!collapsed}
+                  aria-controls={SIDEBAR_ID}
                   className={`${FOOTER_ITEM} ${collapsed ? "justify-center px-0" : ""}`}
                 />
               }

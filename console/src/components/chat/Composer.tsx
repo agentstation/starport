@@ -638,7 +638,7 @@ export function Composer({
               aria-label="Send message"
               className={`flex size-8 items-center justify-center rounded-sm transition-colors duration-150 ease-standard ${
                 canSend
-                  ? "bg-accent text-white hover:opacity-90"
+                  ? "bg-accent text-accent-ink hover:opacity-90"
                   : "bg-bg-hover text-text-4"
               }`}
             >

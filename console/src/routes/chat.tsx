@@ -85,7 +85,7 @@ function errorText(error: unknown): string {
         : error.message;
     }
     if (error.status === 402) {
-      return `${error.message} — check budgets on the API Keys page.`;
+      return `${error.message} — check budgets on the API keys page.`;
     }
     if (error.status === 429) {
       return `${error.message} — wait a moment and try again.`;
