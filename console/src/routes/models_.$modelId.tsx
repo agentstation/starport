@@ -10,7 +10,7 @@ import {
   ModelActions,
   OfferingTable,
 } from "@/components/models/ModelDetail";
-import { listModels, providerStatus } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatContext } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -46,20 +46,19 @@ function ModelDetailPage() {
   const { modelId } = Route.useParams();
   const keyUsable = useGatewayAccess();
 
+  // Each read narrows to the one model this page is about.
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
+    ...queries.models(),
     enabled: keyUsable,
-    retry: false,
+    select: (records) => records.find((candidate) => candidate.id === modelId) ?? null,
   });
   const status = useQuery({
-    queryKey: ["provider-status"],
-    queryFn: providerStatus,
+    ...queries.providerStatus(),
     enabled: keyUsable,
-    retry: false,
+    select: (report) => report.providers,
   });
 
-  const model = models.data?.find((candidate) => candidate.id === modelId);
+  const model = models.data ?? undefined;
 
   if (models.isPending) {
     return <p className="text-base text-text-3">Loading model…</p>;
@@ -162,7 +161,7 @@ function ModelDetailPage() {
         <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
           Providers
         </h2>
-        <OfferingTable model={model} providers={status.data?.providers} />
+        <OfferingTable model={model} providers={status.data} />
       </section>
 
       <LineageLinks model={model} />

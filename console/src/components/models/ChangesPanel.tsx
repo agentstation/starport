@@ -5,10 +5,10 @@ import { SidePanel } from "@/components/ui/SidePanel";
 import {
   accessMessage,
   ApiError,
-  catalogChanges,
   type CatalogChanges,
   type OfferingChange,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import {
   formatPricePerM,
   formatRelativeTime,
@@ -53,9 +53,7 @@ function groupOfferingsByProvider(diff: CatalogChanges) {
 
 function ChangesBody() {
   const changes = useQuery({
-    queryKey: ["catalog-changes"],
-    queryFn: catalogChanges,
-    retry: false,
+    ...queries.catalogChanges(),
   });
 
   if (changes.isPending) {

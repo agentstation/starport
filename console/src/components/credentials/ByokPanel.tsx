@@ -7,11 +7,10 @@ import { Field, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import {
   deleteBYOKCredential,
-  listBYOKCredentials,
-  listProviderCatalog,
   putBYOKCredential,
   validateBYOKCredential,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime, providerLabel } from "@/lib/format";
 
 // BYOK is a provider credential one account brings for itself. It is addressed
@@ -24,10 +23,6 @@ import { formatRelativeTime, providerLabel } from "@/lib/format";
 // question both answer is whose provider account pays for the call, and a
 // screen that shows two answers at once has taught nobody the difference.
 
-export function byokQueryKey(accountId: string): string[] {
-  return ["byok", accountId];
-}
-
 export function ByokPanel({ accountId }: { accountId: string }) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
@@ -37,18 +32,24 @@ export function ByokPanel({ accountId }: { accountId: string }) {
   );
 
   const say = (text: string, error = false) => setNotice({ text, error });
+  // A stored credential changes what the provider can serve for this
+  // account, so the status read refreshes with the list.
   const reload = () =>
-    queryClient.invalidateQueries({ queryKey: byokQueryKey(accountId) });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queries.byokCredentials(accountId).queryKey,
+      }),
+      queryClient.invalidateQueries({ queryKey: queries.providerStatus().queryKey }),
+    ]);
 
   const credentials = useQuery({
-    queryKey: byokQueryKey(accountId),
-    queryFn: () => listBYOKCredentials(accountId),
-    retry: false,
+    ...queries.byokCredentials(accountId),
   });
+  // The panel reads the catalog as a map by id: the name and the field list
+  // of a stored provider, and the set a reader can still add.
   const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
-    staleTime: 5 * 60_000,
+    ...queries.providerCatalog(),
+    select: (entries) => new Map(entries.map((entry) => [entry.id, entry])),
   });
 
   // The catalog names both halves of this panel: what a provider's credential
@@ -56,9 +57,9 @@ export function ByokPanel({ accountId }: { accountId: string }) {
   // the id, so the list resolves the name the same way the add control does
   // rather than showing an id beside a display name.
   const nameOf = (id: string) =>
-    providerLabel(id, catalog.data?.find((entry) => entry.id === id)?.name);
+    providerLabel(id, catalog.data?.get(id)?.name);
   const fields =
-    catalog.data?.find((entry) => entry.id === provider)?.credential_fields ??
+    catalog.data?.get(provider)?.credential_fields ??
     [];
 
   const validate = useMutation({
@@ -88,7 +89,7 @@ export function ByokPanel({ accountId }: { accountId: string }) {
   });
 
   const stored = credentials.data ?? [];
-  const unstored = (catalog.data ?? []).filter(
+  const unstored = [...(catalog.data?.values() ?? [])].filter(
     (entry) => !stored.some((record) => record.provider === entry.id),
   );
 

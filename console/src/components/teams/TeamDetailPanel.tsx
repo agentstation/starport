@@ -9,24 +9,18 @@ import {
   addTeamMember,
   createAccountGrant,
   deleteAccountGrant,
-  listAccounts,
-  listMembers,
-  listTeamGrants,
-  listTeamMembers,
   removeTeamMember,
   updateTeam,
   type Team,
   type TeamBudget,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 
 // TeamDetailPanel governs one team: who is on the roster and which accounts
 // the team grants. Both lists are the gateway's — every edit travels before
 // it shows, so what the operator reads here is what the grant resolution
 // actually uses.
-
-const teamMembersKey = (teamId: string) => ["team-members", teamId];
-const teamGrantsKey = (teamId: string) => ["team-grants", teamId];
 
 export function TeamDetailPanel({
   team,
@@ -47,24 +41,16 @@ export function TeamDetailPanel({
   );
 
   const roster = useQuery({
-    queryKey: teamMembersKey(team.id),
-    queryFn: () => listTeamMembers(team.id),
-    retry: false,
+    ...queries.teamMembers(team.id),
   });
   const grants = useQuery({
-    queryKey: teamGrantsKey(team.id),
-    queryFn: () => listTeamGrants(team.id),
-    retry: false,
+    ...queries.teamGrants(team.id),
   });
   const members = useQuery({
-    queryKey: ["members"],
-    queryFn: listMembers,
-    retry: false,
+    ...queries.members(),
   });
   const accounts = useQuery({
-    queryKey: ["accounts"],
-    queryFn: listAccounts,
-    retry: false,
+    ...queries.accounts(),
   });
 
   const add = useMutation({
@@ -72,7 +58,7 @@ export function TeamDetailPanel({
     onSuccess: async () => {
       setDraftMember("");
       setNotice(null);
-      await queryClient.invalidateQueries({ queryKey: teamMembersKey(team.id) });
+      await queryClient.invalidateQueries({ queryKey: queries.teamMembers(team.id).queryKey });
     },
     onError: (error) =>
       setNotice(
@@ -84,7 +70,7 @@ export function TeamDetailPanel({
     mutationFn: (userId: string) => removeTeamMember(team.id, userId),
     onSuccess: async () => {
       setNotice(null);
-      await queryClient.invalidateQueries({ queryKey: teamMembersKey(team.id) });
+      await queryClient.invalidateQueries({ queryKey: queries.teamMembers(team.id).queryKey });
     },
     onError: (error) =>
       setNotice(
@@ -98,7 +84,7 @@ export function TeamDetailPanel({
     onSuccess: async () => {
       setDraftAccount("");
       setNotice(null);
-      await queryClient.invalidateQueries({ queryKey: teamGrantsKey(team.id) });
+      await queryClient.invalidateQueries({ queryKey: queries.teamGrants(team.id).queryKey });
     },
     onError: (error) =>
       setNotice(
@@ -111,7 +97,7 @@ export function TeamDetailPanel({
       deleteAccountGrant({ account_id: accountId, team_id: team.id }),
     onSuccess: async () => {
       setNotice(null);
-      await queryClient.invalidateQueries({ queryKey: teamGrantsKey(team.id) });
+      await queryClient.invalidateQueries({ queryKey: queries.teamGrants(team.id).queryKey });
     },
     onError: (error) =>
       setNotice(
@@ -124,7 +110,7 @@ export function TeamDetailPanel({
       updateTeam(team.id, { name: team.name, budget }),
     onSuccess: async () => {
       setNotice(null);
-      await queryClient.invalidateQueries({ queryKey: ["teams"] });
+      await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
     },
     onError: (error) =>
       setNotice(

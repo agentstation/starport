@@ -16,7 +16,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModelPicker, supportsReasoning } from "@/components/chat/ModelPicker";
 import { INPUT_CLASS, TEXTAREA_CLASS } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { listModels } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_KINDS,
@@ -374,10 +374,7 @@ export function Composer({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
-    staleTime: 60_000,
-    retry: false,
+    ...queries.models(),
   });
 
   const selectedModel = models.data?.find((entry) => entry.id === model);

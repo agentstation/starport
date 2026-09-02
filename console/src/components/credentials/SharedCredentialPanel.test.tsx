@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import type { CredentialField } from "@/lib/api";
+import { queries } from "@/lib/queries";
 
 import { SharedCredentialPanel } from "./SharedCredentialPanel";
 
@@ -88,7 +89,10 @@ function mount(fields: CredentialField[] = FIELDS) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  // Provider status is what a stored credential changes on the rest of the
+  // console, so the harness seeds it and the save test reads its state.
+  client.setQueryData(queries.providerStatus().queryKey, { providers: [] });
+  const view = render(
     <QueryClientProvider client={client}>
       <SharedCredentialPanel
         providerId="groq"
@@ -98,6 +102,7 @@ function mount(fields: CredentialField[] = FIELDS) {
       />
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }
 
 // The apply flow lives in a modal: the row offers one primary action, and the
@@ -126,7 +131,7 @@ test("reads a missing credential as a state, not a failure", async () => {
 // who never touches it shares with every account, which is the shared
 // plane's promise.
 test("creates with every account as the unasked default", async () => {
-  mount();
+  const { client } = mount();
   await openApplyModal();
   await waitFor(() => expect(screen.getByLabelText("api_key")).toBeTruthy());
 
@@ -166,6 +171,12 @@ test("creates with every account as the unasked default", async () => {
   expect(gateway.validated).toEqual([
     { provider: "groq", credentialId: "shared-1" },
   ]);
+
+  // The save changed what the provider can serve, so the status read the
+  // provider page and the chat fallback share is stale now.
+  expect(
+    client.getQueryState(queries.providerStatus().queryKey)?.isInvalidated,
+  ).toBe(true);
 });
 
 // Choosing "only granted accounts" narrows the credential at birth: the

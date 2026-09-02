@@ -15,11 +15,11 @@ import {
   createAccountTemplate,
   CREDENTIAL_STRATEGY_LABELS,
   deleteAccountTemplate,
-  listAccountTemplates,
   updateAccountTemplate,
   type AccountTemplate,
   type CredentialStrategy,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 
 // AccountTemplatesPanel manages the account templates this gateway holds. A
 // template names creation defaults once — limits, credential strategy, BYOK
@@ -30,8 +30,6 @@ import {
 const STRATEGIES = Object.keys(
   CREDENTIAL_STRATEGY_LABELS,
 ) as CredentialStrategy[];
-
-const TEMPLATES_KEY = ["account-templates"];
 
 // TemplateEditor edits one template: its two named fields, and the same
 // policy rules an account has, saved to the template instead of any account.
@@ -51,7 +49,7 @@ function TemplateEditor({ template }: { template: AccountTemplate }) {
       }),
     onSuccess: async () => {
       setError(null);
-      await queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
     },
     onError: (problem) =>
       setError(problem instanceof Error ? problem.message : String(problem)),
@@ -102,7 +100,7 @@ function TemplateEditor({ template }: { template: AccountTemplate }) {
         account={template}
         saveBody={async (body) => {
           const saved = await updateAccountTemplate(template.id, body);
-          await queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+          await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
           return saved;
         }}
       />
@@ -193,9 +191,7 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
   );
 
   const templates = useQuery({
-    queryKey: TEMPLATES_KEY,
-    queryFn: listAccountTemplates,
-    retry: false,
+    ...queries.accountTemplates(),
   });
 
   const remove = useMutation({
@@ -203,7 +199,7 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
     onSuccess: async (_result, templateId) => {
       setNotice({ text: `Template ${templateId} deleted` });
       setOpen((current) => (current === templateId ? null : current));
-      await queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
     },
     onError: (error) =>
       setNotice({
@@ -295,7 +291,7 @@ export function AccountTemplatesPanel({ onClose }: { onClose: () => void }) {
             onCreated={async () => {
               setCreating(false);
               setNotice({ text: "Template created" });
-              await queryClient.invalidateQueries({ queryKey: TEMPLATES_KEY });
+              await queryClient.invalidateQueries({ queryKey: queries.accountTemplates().queryKey });
             }}
           />
         ) : (

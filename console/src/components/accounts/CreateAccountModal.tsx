@@ -12,10 +12,10 @@ import { Select } from "@/components/ui/Select";
 import {
   createAccount,
   CREDENTIAL_STRATEGY_LABELS,
-  listAccountTemplates,
   type Account,
   type CredentialStrategy,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 
 // CreateAccountModal names a new account, and optionally the account
 // template it starts from. Picking a template sends only the template's id:
@@ -42,9 +42,7 @@ export function CreateAccountModal({
   const [error, setError] = useState<string | null>(null);
 
   const templates = useQuery({
-    queryKey: ["account-templates"],
-    queryFn: listAccountTemplates,
-    retry: false,
+    ...queries.accountTemplates(),
   });
 
   const create = useMutation({

@@ -8,11 +8,9 @@ import { SidePanel } from "@/components/ui/SidePanel";
 import {
   createAccountGrant,
   deleteAccountGrant,
-  listAccounts,
-  listMemberGrants,
-  listReachableAccounts,
   type Member,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 
 // MemberDetailPanel is the operator's view of one member: who the identity
@@ -20,9 +18,6 @@ import { formatRelativeTime } from "@/lib/format";
 // accounts are reachable once every team grant folds in. The direct grants
 // are editable here; the reachable list is the gateway's computed answer and
 // is read-only on purpose — the way to change it is to change a grant.
-
-const memberGrantsKey = (userId: string) => ["member-grants", userId];
-const reachableAccountsKey = (userId: string) => ["reachable-accounts", userId];
 
 export function MemberDetailPanel({
   member,
@@ -36,27 +31,21 @@ export function MemberDetailPanel({
   const [notice, setNotice] = useState<string | null>(null);
 
   const grants = useQuery({
-    queryKey: memberGrantsKey(member.id),
-    queryFn: () => listMemberGrants(member.id),
-    retry: false,
+    ...queries.memberGrants(member.id),
   });
   const reachable = useQuery({
-    queryKey: reachableAccountsKey(member.id),
-    queryFn: () => listReachableAccounts(member.id),
-    retry: false,
+    ...queries.reachableAccounts(member.id),
   });
   const accounts = useQuery({
-    queryKey: ["accounts"],
-    queryFn: listAccounts,
-    retry: false,
+    ...queries.accounts(),
   });
 
   const refresh = async () => {
     setNotice(null);
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: memberGrantsKey(member.id) }),
+      queryClient.invalidateQueries({ queryKey: queries.memberGrants(member.id).queryKey }),
       queryClient.invalidateQueries({
-        queryKey: reachableAccountsKey(member.id),
+        queryKey: queries.reachableAccounts(member.id).queryKey,
       }),
     ]);
   };

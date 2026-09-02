@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Brain, Check, Eye, Globe, Star, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { listModels, listPresets, listProviderCatalog, type Model } from "@/lib/api";
+import { type Model } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatContext, formatPricePerM, providerLabel } from "@/lib/format";
 import { chattableModels } from "@/lib/modelFilter";
 
@@ -83,23 +84,14 @@ export function ModelPicker({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
-    staleTime: 60_000,
-    retry: false,
+    ...queries.models(),
   });
   // Presets are optional context; a locked endpoint just hides the group.
   const presets = useQuery({
-    queryKey: ["presets"],
-    queryFn: listPresets,
-    staleTime: 60_000,
-    retry: false,
+    ...queries.presets(),
   });
   const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
-    staleTime: 60_000,
-    retry: false,
+    ...queries.providerCatalog(),
   });
 
   const sections = useMemo<Section[]>(() => {

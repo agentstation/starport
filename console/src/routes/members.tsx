@@ -4,7 +4,8 @@ import { useState, type ReactNode } from "react";
 
 import { MemberDetailPanel } from "@/components/members/MemberDetailPanel";
 import { RowAction } from "@/components/ui/Form";
-import { accessMessage, ApiError, listMembers } from "@/lib/api";
+import { accessMessage, ApiError } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -17,17 +18,13 @@ export const Route = createFileRoute("/members")({
   component: MembersPage,
 });
 
-const MEMBERS_KEY = ["members"];
-
 function MembersPage() {
   const access = useGatewayAccess();
   const [selected, setSelected] = useState<string | null>(null);
 
   const members = useQuery({
-    queryKey: MEMBERS_KEY,
-    queryFn: listMembers,
+    ...queries.members(),
     enabled: access,
-    retry: false,
   });
 
   const rows = members.data ?? [];

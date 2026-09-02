@@ -14,8 +14,8 @@ import {
   listModels,
   onCredentialChange,
   setApiKey,
-  systemInfo,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import {
   onLogoStyleChange,
   savedLogoStyle,
@@ -149,7 +149,7 @@ function ConnectionSection() {
         >
           {status.kind === "testing" ? "Testing…" : "Save & test"}
         </PrimaryButton>
-        {storedKey && <GhostButton onClick={clear}>Clear</GhostButton>}
+        {storedKey && <GhostButton onClick={() => void clear()}>Clear</GhostButton>}
       </form>
       <p className="mt-3 text-sm text-text-3" aria-live="polite">
         {status.kind === "valid" ? (
@@ -355,9 +355,7 @@ function AboutSection() {
   // Version and storage need admin scope; the section degrades to the
   // gateway origin alone when /admin/info is locked.
   const { data: info } = useQuery({
-    queryKey: ["system-info"],
-    queryFn: systemInfo,
-    retry: false,
+    ...queries.systemInfo(),
   });
   return (
     <Section

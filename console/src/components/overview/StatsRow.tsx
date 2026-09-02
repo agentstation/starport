@@ -5,10 +5,9 @@ import { Sparkline } from "@/components/overview/Sparkline";
 import { Card } from "@/components/ui/Card";
 import {
   ApiError,
-  listAdminActivity,
-  systemMetrics,
   type ActivityRecord,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatCount, formatMs, formatNanoUSD } from "@/lib/format";
 
 // bucketize folds activity records into hourly counts for the last day,
@@ -66,19 +65,9 @@ function LockedCard({ children }: { children: ReactNode }) {
 // could not price is surfaced as "without cost", never as zero.
 export function StatsRow() {
   const metrics = useQuery({
-    queryKey: ["system-metrics"],
-    queryFn: systemMetrics,
-    retry: false,
+    ...queries.systemMetrics(),
   });
-  const activity = useQuery({
-    queryKey: ["admin-activity-24h"],
-    queryFn: () =>
-      listAdminActivity({
-        since: new Date(Date.now() - 24 * 3_600_000).toISOString(),
-        limit: 500,
-      }),
-    retry: false,
-  });
+  const activity = useQuery(queries.adminActivity24h());
 
   if (metrics.isPending) return null;
   if (metrics.error) {

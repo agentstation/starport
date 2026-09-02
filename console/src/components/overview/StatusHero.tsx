@@ -1,39 +1,41 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { healthReady, listModels, systemInfo } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 // StatusHero is the gateway identity strip: readiness, origin, version,
 // storage, uptime, and model count.
 export function StatusHero() {
+  // Each read narrows to the one fact the strip renders, so a refetch that
+  // changes anything else leaves this component alone.
   const health = useQuery({
-    queryKey: ["health"],
-    queryFn: healthReady,
-    refetchInterval: 30_000,
-    retry: false,
+    ...queries.health(),
+    select: (report) => report.status === "ok",
   });
   const keyUsable = useGatewayAccess();
   const info = useQuery({
-    queryKey: ["system-info"],
-    queryFn: systemInfo,
+    ...queries.systemInfo(),
     enabled: keyUsable,
-    retry: false,
+    select: (report) => ({
+      version: report.version,
+      storage: report.storage?.type,
+      uptime: report.uptime,
+    }),
   });
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
+    ...queries.models(),
     enabled: keyUsable,
-    retry: false,
+    select: (records) => records.length,
   });
 
-  const ready = health.data?.status === "ok";
+  const ready = health.data === true;
   const facts: string[] = [location.origin.replace(/^https?:\/\//, "")];
   if (info.data?.version) facts.push(`v${info.data.version}`);
-  if (info.data?.storage?.type) facts.push(`${info.data.storage.type} storage`);
+  if (info.data?.storage) facts.push(`${info.data.storage} storage`);
   if (info.data?.uptime && info.data.uptime !== "unavailable") {
     facts.push(`up ${info.data.uptime}`);
   }
-  if (models.data) facts.push(`${models.data.length} models`);
+  if (models.data !== undefined) facts.push(`${models.data} models`);
 
   return (
     <div className="mb-6 flex items-center gap-3">

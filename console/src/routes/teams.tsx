@@ -10,8 +10,8 @@ import {
   ApiError,
   createTeam,
   deleteTeam,
-  listTeams,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatNanoUSD, formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -21,8 +21,6 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 export const Route = createFileRoute("/teams")({
   component: TeamsPage,
 });
-
-const TEAMS_KEY = ["teams"];
 
 function TeamsPage() {
   const access = useGatewayAccess();
@@ -34,10 +32,8 @@ function TeamsPage() {
   );
 
   const teams = useQuery({
-    queryKey: TEAMS_KEY,
-    queryFn: listTeams,
+    ...queries.teams(),
     enabled: access,
-    retry: false,
   });
 
   const create = useMutation({
@@ -45,7 +41,7 @@ function TeamsPage() {
     onSuccess: async (team) => {
       setDraftName("");
       setNotice({ text: `Team ${team.name} created` });
-      await queryClient.invalidateQueries({ queryKey: TEAMS_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
       setSelected(team.id);
     },
     onError: (error) =>
@@ -60,7 +56,7 @@ function TeamsPage() {
     onSuccess: async (_result, teamId) => {
       setNotice({ text: "Team deleted" });
       if (selected === teamId) setSelected(null);
-      await queryClient.invalidateQueries({ queryKey: TEAMS_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
     },
     onError: (error) =>
       setNotice({

@@ -13,14 +13,13 @@ import {
   ApiError,
   cancelJob,
   fetchJobAsset,
-  listJobs,
-  listModels,
   submitJob,
   TERMINAL_JOB_STATES,
   VIDEO_OPERATION,
   type Model,
   type VideoJob,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatMs, formatUnixTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -28,8 +27,6 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 // request that started it. Everything else on this console answers inside one
 // call, so this page is the only one that has to show a reader what is still
 // running, what ended badly, and what it can still play.
-
-const JOBS_KEY = ["video-jobs"];
 
 // POLL_MS is how often an unfinished job is re-read. A video takes minutes, so
 // a faster poll would spend requests to learn nothing. A page holding only
@@ -157,10 +154,8 @@ export function JobsPanel() {
   }, []);
 
   const jobs = useQuery({
-    queryKey: JOBS_KEY,
-    queryFn: listJobs,
+    ...queries.videoJobs(),
     enabled: access,
-    retry: false,
     refetchInterval: (query) => {
       const listed = query.state.data?.jobs ?? [];
       return listed.some((job) => !terminal(job)) ? POLL_MS : false;
@@ -168,10 +163,8 @@ export function JobsPanel() {
   });
 
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
+    ...queries.models(),
     enabled: access,
-    retry: false,
   });
   const servers = videoModels(models.data ?? []);
 
@@ -180,7 +173,7 @@ export function JobsPanel() {
     onSuccess: async (job) => {
       setNotice({ text: `Submitted ${job.id}` });
       setPrompt("");
-      await queryClient.invalidateQueries({ queryKey: JOBS_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.videoJobs().queryKey });
     },
     onError: (error) =>
       setNotice({ text: `Submission refused: ${refusalText(error)}`, error: true }),
@@ -190,7 +183,7 @@ export function JobsPanel() {
     mutationFn: (job: VideoJob) => cancelJob(job.id),
     onSuccess: async (_result, job) => {
       setNotice({ text: `Cancelled ${job.id}` });
-      await queryClient.invalidateQueries({ queryKey: JOBS_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.videoJobs().queryKey });
     },
     onError: (error) =>
       setNotice({ text: `Cancel failed: ${refusalText(error)}`, error: true }),

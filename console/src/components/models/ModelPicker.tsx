@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { INPUT_CLASS } from "@/components/ui/Form";
-import { listModels } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { chattableModels } from "@/lib/modelFilter";
 
 const MAX_SUGGESTIONS = 8;
@@ -26,10 +26,7 @@ export function ModelPicker({
   const rootRef = useRef<HTMLDivElement>(null);
 
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
-    staleTime: 60_000,
-    retry: false,
+    ...queries.models(),
   });
 
   const suggestions = useMemo(() => {

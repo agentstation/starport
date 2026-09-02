@@ -25,7 +25,7 @@ import {
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { EntityLogo } from "@/components/catalog/EntityLogo";
-import { listAuthors, listModels, listProviderCatalog } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import {
@@ -101,22 +101,16 @@ export function CommandPalette() {
 
   const enabled = open && keyUsable;
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
+    ...queries.models(),
     enabled,
-    retry: false,
   });
   const providers = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
+    ...queries.providerCatalog(),
     enabled,
-    retry: false,
   });
   const authors = useQuery({
-    queryKey: ["authors"],
-    queryFn: listAuthors,
+    ...queries.authors(),
     enabled,
-    retry: false,
   });
 
   const items = useMemo<PaletteItem[]>(
