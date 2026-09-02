@@ -175,6 +175,52 @@ func TestEmitAfterCloseCountsADeadLetter(t *testing.T) {
 	}
 }
 
+// Stats states what the admin surface reports: the receivers without
+// their secrets, what waits in the queue, and what will never deliver.
+// The dead-letter count is retained on the dispatcher, so it reads the
+// same with or without a metric observer.
+func TestDispatcherStatsReportQueueDepthAndDeadLetters(t *testing.T) {
+	dispatcher := NewDispatcher(
+		[]string{"https://receiver@hooks.example.com/starport?ticket=t1"},
+		"s", Options{MaxPending: 4},
+	)
+	if err := dispatcher.Close(context.Background()); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	dispatcher.Emit(TypeKeyCreated, map[string]string{"key_id": "key_3"})
+	dispatcher.Emit(TypeKeyDeleted, map[string]string{"key_id": "key_3"})
+
+	stats := dispatcher.Stats()
+	if len(stats.Endpoints) != 1 || stats.Endpoints[0] != "https://hooks.example.com/starport" {
+		t.Fatalf("endpoints = %q, want the redacted receiver", stats.Endpoints)
+	}
+	if stats.QueueDepth != 0 || stats.QueueCapacity != 4 {
+		t.Fatalf("queue = %d of %d, want 0 of 4", stats.QueueDepth, stats.QueueCapacity)
+	}
+	if stats.DeadLetters != 2 {
+		t.Fatalf("dead letters = %d, want 2", stats.DeadLetters)
+	}
+	if got := (*Dispatcher)(nil).Stats(); got.QueueCapacity != 0 || len(got.Endpoints) != 0 {
+		t.Fatalf("nil stats = %+v, want the unconfigured zero", got)
+	}
+}
+
+// RedactEndpoint keeps where a delivery goes and drops how it
+// authenticates.
+func TestRedactEndpoint(t *testing.T) {
+	cases := map[string]string{
+		"https://hooks.example.com/starport":                    "https://hooks.example.com/starport",
+		"https://receiver@hooks.example.com/starport?ticket=t1": "https://hooks.example.com/starport",
+		"http://127.0.0.1:9000/?key=abc":                        "http://127.0.0.1:9000/",
+		"not a url?ticket=t1":                                   "not a url",
+	}
+	for raw, want := range cases {
+		if got := RedactEndpoint(raw); got != want {
+			t.Errorf("RedactEndpoint(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
 // No configured endpoint means no dispatcher at all, and the nil
 // dispatcher is safe everywhere an emit site holds one.
 func TestNewDispatcherWithoutEndpointsIsOff(t *testing.T) {

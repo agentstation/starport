@@ -119,6 +119,11 @@ func TestHTTPSinkCountsDropsWhenTheTargetStaysDown(t *testing.T) {
 	if got := dropped.Load(); got != 2 {
 		t.Errorf("dropped records = %d, want 2", got)
 	}
+	// The sink retains the same count for the admin surface, which holds
+	// no observer of its own.
+	if got := sink.Dropped(); got != 2 {
+		t.Errorf("sink.Dropped() = %d, want 2", got)
+	}
 }
 
 func TestSinkDropsOldestWhenTheBufferFills(t *testing.T) {

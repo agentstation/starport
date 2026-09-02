@@ -8,9 +8,11 @@ import (
 	"net/http/httptest"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
+	"github.com/agentstation/starport/internal/events"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/agentstation/starport/internal/usage"
@@ -19,13 +21,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newAdminTestController(t *testing.T) (*AdminController, apikey.Repository) {
+func newAdminTestController(t *testing.T, options ...AdminOption) (*AdminController, apikey.Repository) {
 	t.Helper()
 	repository, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 	usageRecords, err := usage.Open(storage.NewMockStore(), usage.Options{})
 	require.NoError(t, err)
-	return NewAdminController(repository, newAdminTestAccounts(t), usageRecords), repository
+	return NewAdminController(repository, newAdminTestAccounts(t), usageRecords, options...), repository
 }
 
 // newAdminTestAccounts returns an account repository holding the canonical account,
@@ -484,3 +486,182 @@ func TestAdminCreateKeyRefusesAMalformedAccountID(t *testing.T) {
 		assert.Equalf(t, http.StatusBadRequest, recorder.Code, "account %q", accountID)
 	}
 }
+
+// TestSystemInfoReportsBuildVersion states what an operator asks first
+// when a deployment misbehaves: which binary answers, and since when. The
+// stamped values come through verbatim, and the clock supplies the rest.
+func TestSystemInfoReportsBuildVersion(t *testing.T) {
+	repository, err := apikey.Open(storage.NewMockStore())
+	require.NoError(t, err)
+	started := time.Now().Add(-90 * time.Second)
+	handler := NewAdminController(repository, newAdminTestAccounts(t), nil,
+		WithBuildInfo(BuildInfo{
+			Version: "1.2.0", Commit: "abc1234", BuildTime: "2026-09-01T00:00:00Z",
+			StartedAt: started,
+		}),
+		WithDeployment(Deployment{
+			StorageMode: "badger", RelationalMode: "sqlite", MetricsMode: "admin",
+			TracesEndpoint:  "https://collector@otel.example.com:4318/v1/traces",
+			UsageExportKind: "http", UsageExport: dropCount(3),
+			GuardrailChecks: []string{"pii"}, PIIMode: "refuse",
+			AuditRetention: 48 * time.Hour,
+		}))
+
+	response := httptest.NewRecorder()
+	handler.SystemInfo(response, httptest.NewRequest("GET", "/api/v1/admin/info", nil))
+
+	var body struct {
+		Version   string `json:"version"`
+		Commit    string `json:"commit"`
+		BuildTime string `json:"build_time"`
+		StartedAt string `json:"started_at"`
+		Uptime    string `json:"uptime"`
+		Storage   struct {
+			Type       string `json:"type"`
+			Relational string `json:"relational"`
+		} `json:"storage"`
+		Telemetry struct {
+			Metrics string `json:"metrics"`
+			Traces  struct {
+				EndpointHost string `json:"endpoint_host"`
+			} `json:"traces"`
+			UsageExport struct {
+				Kind    string `json:"kind"`
+				Dropped int64  `json:"dropped"`
+			} `json:"usage_export"`
+		} `json:"telemetry"`
+		Guardrails struct {
+			Checks  []string `json:"checks"`
+			PIIMode string   `json:"pii_mode"`
+		} `json:"guardrails"`
+		Retention struct {
+			AuditSeconds int64 `json:"audit_seconds"`
+			FilesSeconds int64 `json:"files_seconds"`
+		} `json:"retention"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	assert.Equal(t, "1.2.0", body.Version)
+	assert.Equal(t, "abc1234", body.Commit)
+	assert.Equal(t, "2026-09-01T00:00:00Z", body.BuildTime)
+	assert.Equal(t, started.UTC().Format(time.RFC3339), body.StartedAt)
+	uptime, err := time.ParseDuration(body.Uptime)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, uptime, 90*time.Second)
+	assert.Equal(t, "badger", body.Storage.Type)
+	assert.Equal(t, "sqlite", body.Storage.Relational)
+	assert.Equal(t, "admin", body.Telemetry.Metrics)
+	assert.Equal(t, "otel.example.com:4318", body.Telemetry.Traces.EndpointHost)
+	assert.Equal(t, "http", body.Telemetry.UsageExport.Kind)
+	assert.Equal(t, int64(3), body.Telemetry.UsageExport.Dropped)
+	assert.Equal(t, []string{"pii"}, body.Guardrails.Checks)
+	assert.Equal(t, "refuse", body.Guardrails.PIIMode)
+	assert.Equal(t, int64(172800), body.Retention.AuditSeconds)
+	assert.Equal(t, int64(0), body.Retention.FilesSeconds)
+}
+
+// TestSystemInfoNamesAnUnstampedBuild covers the binary a developer built
+// with go build: every provenance field reads dev, and the fields the
+// composition root never supplied read unavailable rather than empty.
+func TestSystemInfoNamesAnUnstampedBuild(t *testing.T) {
+	handler, _ := newAdminTestController(t)
+
+	response := httptest.NewRecorder()
+	handler.SystemInfo(response, httptest.NewRequest("GET", "/api/v1/admin/info", nil))
+
+	var body struct {
+		Version   string `json:"version"`
+		Commit    string `json:"commit"`
+		StartedAt string `json:"started_at"`
+		Uptime    string `json:"uptime"`
+		Storage   struct {
+			Type string `json:"type"`
+		} `json:"storage"`
+		Telemetry struct {
+			Traces      *json.RawMessage `json:"traces"`
+			UsageExport struct {
+				Kind string `json:"kind"`
+			} `json:"usage_export"`
+		} `json:"telemetry"`
+		Guardrails struct {
+			Checks  []string `json:"checks"`
+			PIIMode string   `json:"pii_mode"`
+		} `json:"guardrails"`
+		Webhooks struct {
+			Configured bool `json:"configured"`
+		} `json:"webhooks"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	assert.Equal(t, "dev", body.Version)
+	assert.Equal(t, "dev", body.Commit)
+	assert.Equal(t, "unavailable", body.StartedAt)
+	assert.Equal(t, "unavailable", body.Uptime)
+	assert.Equal(t, "unavailable", body.Storage.Type)
+	assert.Nil(t, body.Telemetry.Traces)
+	assert.Equal(t, "off", body.Telemetry.UsageExport.Kind)
+	assert.Equal(t, []string{}, body.Guardrails.Checks)
+	assert.Equal(t, "redact", body.Guardrails.PIIMode)
+	assert.False(t, body.Webhooks.Configured)
+}
+
+// TestAdminWebhooksSummaryRedactsURL reads the webhook summary through a
+// real dispatcher. The receiver comes back without its credential or
+// query, the event list matches the guide, and the two events that
+// never delivered count as dead letters.
+func TestAdminWebhooksSummaryRedactsURL(t *testing.T) {
+	dispatcher := events.NewDispatcher(
+		[]string{"https://receiver@hooks.example.com/starport?ticket=t1"},
+		"s", events.Options{MaxPending: 4},
+	)
+	require.NoError(t, dispatcher.Close(context.Background()))
+	dispatcher.Emit(events.TypeKeyCreated, map[string]string{"key_id": "key_1"})
+	dispatcher.Emit(events.TypeKeyDeleted, map[string]string{"key_id": "key_1"})
+
+	handler, _ := newAdminTestController(t, WithWebhooks(dispatcher))
+	response := httptest.NewRecorder()
+	handler.Webhooks(response, httptest.NewRequest("GET", "/api/v1/admin/webhooks", nil))
+
+	require.Equal(t, http.StatusOK, response.Code)
+	var body struct {
+		Configured bool     `json:"configured"`
+		Endpoints  []string `json:"endpoints"`
+		Events     []string `json:"events"`
+		Queue      struct {
+			Depth    int `json:"depth"`
+			Capacity int `json:"capacity"`
+		} `json:"queue"`
+		DeadLetters int64 `json:"dead_letters"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	assert.True(t, body.Configured)
+	assert.Equal(t, []string{"https://hooks.example.com/starport"}, body.Endpoints)
+	assert.NotContains(t, response.Body.String(), "ticket")
+	assert.NotContains(t, response.Body.String(), "receiver@")
+	assert.Equal(t, events.Types(), body.Events)
+	assert.Equal(t, 0, body.Queue.Depth)
+	assert.Equal(t, 4, body.Queue.Capacity)
+	assert.Equal(t, int64(2), body.DeadLetters)
+}
+
+// TestAdminWebhooksSummaryWithoutAReceiver is the deployment that
+// configured nothing: the summary says so and still lists the events a
+// receiver would get, so an operator learns what a receiver is for.
+func TestAdminWebhooksSummaryWithoutAReceiver(t *testing.T) {
+	handler, _ := newAdminTestController(t)
+	response := httptest.NewRecorder()
+	handler.Webhooks(response, httptest.NewRequest("GET", "/api/v1/admin/webhooks", nil))
+
+	var body struct {
+		Configured bool     `json:"configured"`
+		Endpoints  []string `json:"endpoints"`
+		Events     []string `json:"events"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	assert.False(t, body.Configured)
+	assert.Equal(t, []string{}, body.Endpoints)
+	assert.Equal(t, events.Types(), body.Events)
+}
+
+// dropCount is the usage sink drop counter a test states directly.
+type dropCount int64
+
+func (d dropCount) Dropped() int64 { return int64(d) }

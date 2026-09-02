@@ -344,6 +344,38 @@ Badger does not support read-only mode on Windows. On Windows, the probe marks
 the storage and identity checks as skipped. Use `starport serve` to verify the
 normal writable startup.
 
+### Read the Running Gateway
+
+A running gateway states what it is and how it runs at one admin route:
+
+```bash
+curl -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/info
+```
+
+The route needs the `admin` scope. Every value comes from the linker, the
+clock, or the loaded configuration. The gateway never guesses a fact it
+cannot know. Such a field reads `unavailable`.
+
+| Field | Meaning |
+| --- | --- |
+| `version`, `commit`, `build_time` | The release build stamp. A binary from a plain `go build` reads `dev` in all three. |
+| `started_at`, `uptime` | When this process started, and how long it has answered, to the second. |
+| `go_version`, `os`, `arch` | The toolchain and platform of the binary. |
+| `storage.type`, `storage.relational` | The key-value store and the relational store the process opened. |
+| `files.backend` | Where stored file bytes land, or `none` when the deployment stores no files. |
+| `telemetry.metrics` | Who can scrape `/metrics`: `on`, `admin`, or `off`. |
+| `telemetry.traces` | The collector host, or `null` when traces stay off. The path and any credential never appear. |
+| `telemetry.usage_export` | The export `kind` (`off`, `file`, or `http`) and the records the sink `dropped`. |
+| `guardrails.checks` | The guardrail names configuration turned on. |
+| `guardrails.pii_mode` | What a PII finding does: `redact` or `refuse`. |
+| `guardrails.moderation_model` | The catalog model the moderation route calls, or empty. |
+| `retention.*_seconds` | The audit, file, and job asset retention windows. Zero means no expiry. |
+| `webhooks` | The webhook summary this guide describes under Webhooks. |
+
+The route never returns a configured secret, a provider credential, or a
+receiver URL with its query string.
+
 Each command accepts `--json` for stable machine-readable output. A failed
 validation or diagnostic check returns a nonzero exit status.
 
@@ -1377,7 +1409,7 @@ Set two environment variables:
 - `STARPORT_EVENTS_WEBHOOK_URLS` holds the receiver URLs, comma separated.
 - `STARPORT_EVENTS_WEBHOOK_SECRET` holds the signing secret.
 
-The gateway emits six event types:
+The gateway emits seven event types:
 
 - `budget.exhausted` when a budget refusal writes a 402 answer.
 - `job.completed`, `job.failed`, and `job.cancelled` when an asynchronous
@@ -1421,6 +1453,32 @@ undelivered events. An event that spends every attempt, or arrives at a
 full queue, drops and counts on the scrape as
 `starport_webhook_dead_letters_total`. At shutdown the dispatcher delivers
 what is already queued before it stops.
+
+Read the same state without a scrape:
+
+```bash
+curl -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/webhooks
+```
+
+The answer names each receiver with its credential and query string
+removed. It lists the event types the gateway emits. It states the
+undelivered queue depth against its capacity, and the dead letter count
+since the process started:
+
+```json
+{
+  "configured": true,
+  "endpoints": ["https://hooks.example.com/starport"],
+  "events": ["budget.exhausted", "job.completed", "job.failed", "job.cancelled", "provider.health.changed", "key.created", "key.deleted"],
+  "queue": {"depth": 0, "capacity": 1000},
+  "dead_letters": 0
+}
+```
+
+A deployment with no receiver answers `configured: false` with an empty
+endpoint list and the same event list. The console Settings page reads
+this route.
 
 ## Failure Diagnosis
 

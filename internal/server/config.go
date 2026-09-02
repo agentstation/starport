@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/authmode"
+	"github.com/agentstation/starport/internal/server/controllers"
 )
 
 // Metrics modes name who may read the Prometheus scrape.
@@ -91,6 +92,11 @@ type Config struct {
 	// so a hand-built server serves the scrape the way a deployment does by
 	// default.
 	MetricsMode string
+
+	// Build is the provenance of the running binary, which the health and
+	// admin surfaces report. Application composition supplies it from the
+	// linker-stamped values; a hand-built server reports an unstamped build.
+	Build controllers.BuildInfo
 
 	// CORS configuration
 	CORS CORSConfig

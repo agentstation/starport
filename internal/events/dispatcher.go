@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,6 +55,71 @@ type Dispatcher struct {
 	queue chan Event
 	stop  chan struct{}
 	done  chan struct{}
+
+	// deadLetters retains what OnDeadLetter only observes, so the admin
+	// surface can state the count without a scrape.
+	deadLetters atomic.Int64
+}
+
+// Stats is the delivery state the admin surface reports. Endpoints carries
+// each receiver with its credentials and query removed, so the summary
+// never repeats a secret a receiver URL embeds.
+type Stats struct {
+	// Endpoints lists the configured receivers, redacted.
+	Endpoints []string
+	// QueueDepth counts the events waiting for delivery.
+	QueueDepth int
+	// QueueCapacity is the pending bound the queue drops at.
+	QueueCapacity int
+	// DeadLetters counts every event that will never deliver since start.
+	DeadLetters int64
+}
+
+// Types lists every event name the gateway emits, in the order the
+// operator guide documents them.
+func Types() []string {
+	return []string{
+		TypeBudgetExhausted,
+		TypeJobCompleted,
+		TypeJobFailed,
+		TypeJobCancelled,
+		TypeProviderHealthChanged,
+		TypeKeyCreated,
+		TypeKeyDeleted,
+	}
+}
+
+// RedactEndpoint strips the userinfo and the query from a receiver URL. A
+// receiver often authenticates through a token in either place, and the
+// admin surface shows where deliveries go, not how they authenticate. A
+// value that does not parse as a URL redacts to its scheme and host
+// portion only.
+func RedactEndpoint(endpoint string) string {
+	parsed, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil || parsed.Host == "" {
+		before, _, _ := strings.Cut(endpoint, "?")
+		return before
+	}
+	redacted := &url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Path: parsed.Path}
+	return redacted.String()
+}
+
+// Stats reports the delivery state. A nil dispatcher is the unconfigured
+// deployment and reports no endpoints and nothing queued.
+func (d *Dispatcher) Stats() Stats {
+	if d == nil {
+		return Stats{}
+	}
+	endpoints := make([]string, 0, len(d.endpoints))
+	for _, endpoint := range d.endpoints {
+		endpoints = append(endpoints, RedactEndpoint(endpoint))
+	}
+	return Stats{
+		Endpoints:     endpoints,
+		QueueDepth:    len(d.queue),
+		QueueCapacity: cap(d.queue),
+		DeadLetters:   d.deadLetters.Load(),
+	}
 }
 
 // NewDispatcher builds a dispatcher for the configured endpoints. It
@@ -197,7 +264,11 @@ func (d *Dispatcher) attempt(endpoint string, body []byte, signature string) err
 }
 
 func (d *Dispatcher) deadLetter(count int) {
-	if d.options.OnDeadLetter != nil && count > 0 {
+	if count <= 0 {
+		return
+	}
+	d.deadLetters.Add(int64(count))
+	if d.options.OnDeadLetter != nil {
 		d.options.OnDeadLetter(count)
 	}
 }

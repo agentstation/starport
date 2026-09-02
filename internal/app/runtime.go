@@ -13,6 +13,7 @@ import (
 	"github.com/agentstation/starport/internal/config"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/server"
+	"github.com/agentstation/starport/internal/server/controllers"
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -47,7 +48,20 @@ type runtimeFactories struct {
 
 type buildOptions struct {
 	factories runtimeFactories
+	build     controllers.BuildInfo
 }
 
 // Option changes runtime factories for explicit test composition.
 type Option func(*buildOptions)
+
+// WithBuildInfo states the version, commit, and build time the linker
+// stamped into this binary, so the health and admin surfaces report the
+// binary that answers. A runtime composed without it reports an unstamped
+// build; the start time comes from the clock either way.
+func WithBuildInfo(version, commit, buildTime string) Option {
+	return func(options *buildOptions) {
+		options.build.Version = version
+		options.build.Commit = commit
+		options.build.BuildTime = buildTime
+	}
+}

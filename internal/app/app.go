@@ -2,6 +2,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -109,6 +110,9 @@ type App struct {
 	incidentHistory     *statuspage.HistoryReader
 	incidentTransitions providerstate.TransitionRepository
 	availability        *availability.Tracker
+	// build is the provenance the admin and health surfaces report, with
+	// the start time New recorded.
+	build controllers.BuildInfo
 	// localGate mints and redeems console launch tickets against this
 	// machine's local admin token. The runtime keeps it so a caller that owns
 	// the process — `starport dev` — can sign a browser in without reading the
@@ -136,10 +140,12 @@ func New(cfg *config.Config, options ...Option) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open provider authentication registry: %w", err)
 	}
+	build.build.StartedAt = time.Now()
 	application := &App{
 		config: cfg, transports: transportRegistry, authentication: authenticationRegistry,
 		providerSettings: config.CloneProvidersConfig(cfg.Providers),
 		newConnector:     build.factories.newConnector,
+		build:            build.build,
 		lifecycle:        make([]lifecycleEntry, 0, 5),
 	}
 	builder := runtimeBuilder{application: application, config: cfg, factories: build.factories}
@@ -183,6 +189,7 @@ type runtimeBuilder struct {
 	providerKeys keyring.ProviderKeys
 	rateLimits   ratelimit.Repository
 	usageRecords usage.Repository
+	usageSink    usage.Sink
 	presets      presets.Repository
 	sqlDB        *sqlstore.DB
 	templates    account.TemplateRepository
@@ -739,6 +746,7 @@ func (b *runtimeBuilder) buildGateway() error {
 		if err != nil {
 			return err
 		}
+		b.usageSink = sink
 		b.application.own("usage export sink", sink.Close)
 		observers = append(observers, usageSinkObserver{sink: sink})
 	}
@@ -756,7 +764,7 @@ func (b *runtimeBuilder) buildGateway() error {
 // Dropped records count on the metric surface either way.
 func openUsageSink(target string, metrics *telemetry.Metrics) (usage.Sink, error) {
 	options := usage.SinkOptions{OnDrop: metrics.ObserveUsageExportDrops}
-	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+	if usageExportKind(target) == usageExportHTTP {
 		return usage.NewHTTPSink(target, options), nil
 	}
 	sink, err := usage.NewFileSink(target, options)
@@ -764,6 +772,25 @@ func openUsageSink(target string, metrics *telemetry.Metrics) (usage.Sink, error
 		return nil, fmt.Errorf("open usage export sink: %w", err)
 	}
 	return sink, nil
+}
+
+// Usage export sink kinds, as the admin surface names them.
+const (
+	usageExportHTTP = "http"
+	usageExportFile = "file"
+)
+
+// usageExportKind names the sink a target selects, or nothing when no
+// target is configured.
+func usageExportKind(target string) string {
+	switch {
+	case target == "":
+		return ""
+	case strings.HasPrefix(target, "http://"), strings.HasPrefix(target, "https://"):
+		return usageExportHTTP
+	default:
+		return usageExportFile
+	}
 }
 
 // usageSinkObserver adapts the sink onto the capture observer seam. Receive
@@ -857,8 +884,43 @@ func (b *runtimeBuilder) eventEmitter() controllers.EventEmitter {
 	return b.application.events
 }
 
+// webhookReporter hands the dispatcher to the admin summary under the same
+// nil rule eventEmitter keeps: no dispatcher, no reporter.
+func (b *runtimeBuilder) webhookReporter() controllers.WebhookReporter {
+	if b.application.events == nil {
+		return nil
+	}
+	return b.application.events
+}
+
+// deployment projects the loaded configuration onto what the admin surface
+// states. It carries values and live readers only, so the controller never
+// reads the environment and never holds the configuration itself.
+func (b *runtimeBuilder) deployment() controllers.Deployment {
+	cfg := b.config
+	deployment := controllers.Deployment{
+		StorageMode:       cmp.Or(cfg.Storage.Mode, storage.StorageTypeBadger),
+		RelationalMode:    cmp.Or(cfg.Storage.SQL.Mode, sqlstore.TypeSQLite),
+		MetricsMode:       cmp.Or(cfg.Telemetry.Metrics, config.TelemetryMetricsOn),
+		TracesEndpoint:    cfg.Telemetry.TracesEndpoint,
+		UsageExportKind:   usageExportKind(cfg.Telemetry.UsageExport),
+		GuardrailChecks:   cfg.Guardrails.Names(),
+		PIIMode:           cfg.Guardrails.PIIMode,
+		ModerationModel:   strings.TrimSpace(cfg.Guardrails.ModerationModel),
+		AuditRetention:    cfg.Audit.RetentionWindow(),
+		FileRetention:     cfg.Files.RetentionWindow(),
+		JobAssetRetention: cfg.Jobs.AssetRetentionWindow(),
+	}
+	if b.usageSink != nil {
+		deployment.UsageExport = b.usageSink
+	}
+	return deployment
+}
+
 func (b *runtimeBuilder) openHTTPServer() error {
-	httpServer, err := b.factories.newServer(serverConfig(b.config, b.auth), server.Dependencies{
+	serverCfg := serverConfig(b.config, b.auth)
+	serverCfg.Build = b.application.build
+	httpServer, err := b.factories.newServer(serverCfg, server.Dependencies{
 		Service: b.gateway, APIKeys: b.apiKeys, Accounts: b.accounts,
 		ProviderKeys: b.providerKeys,
 		RateLimits:   b.rateLimits, ProviderOperations: b.application, Console: b.console,
@@ -875,6 +937,8 @@ func (b *runtimeBuilder) openHTTPServer() error {
 		Tracing:      b.tracing,
 		Audit:        b.audit,
 		Events:       b.eventEmitter(),
+		Webhooks:     b.webhookReporter(),
+		Deployment:   b.deployment(),
 	})
 	if err != nil {
 		if httpServer != nil {

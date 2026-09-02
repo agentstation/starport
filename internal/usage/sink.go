@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,6 +23,9 @@ const NDJSONContentType = "application/x-ndjson"
 type Sink interface {
 	Receive(record Record)
 	Close(ctx context.Context) error
+	// Dropped counts the records this sink could not deliver since it
+	// opened. The admin surface reports it beside the target kind.
+	Dropped() int64
 }
 
 // Sink defaults. An operator tunes neither: the interval keeps an export
@@ -66,6 +70,7 @@ type batchingSink struct {
 
 	mu      sync.Mutex
 	pending []Record
+	dropped atomic.Int64
 
 	stop     chan struct{}
 	done     chan struct{}
@@ -126,9 +131,18 @@ func (s *batchingSink) flush() {
 }
 
 func (s *batchingSink) drop(count int) {
-	if s.options.OnDrop != nil && count > 0 {
+	if count <= 0 {
+		return
+	}
+	s.dropped.Add(int64(count))
+	if s.options.OnDrop != nil {
 		s.options.OnDrop(count)
 	}
+}
+
+// Dropped reports the retained drop count.
+func (s *batchingSink) Dropped() int64 {
+	return s.dropped.Load()
 }
 
 // Close flushes the buffer and stops the flusher. The context bounds the
