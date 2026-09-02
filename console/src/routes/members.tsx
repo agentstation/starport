@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
 import { MemberDetailPanel } from "@/components/members/MemberDetailPanel";
 import { RowAction } from "@/components/ui/Form";
 import { accessMessage, ApiError } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
+import { optionalString } from "@/lib/search";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -14,14 +15,24 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 // this page reads and governs: who is here, and which accounts each member
 // reaches, directly or through a team.
 
+// The open member lives in the address, so a reload or a shared link lands
+// on the same panel.
+type MembersSearch = { selected?: string };
+
 export const Route = createFileRoute("/members")({
   component: MembersPage,
   loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.members())),
+  validateSearch: (search: Record<string, unknown>): MembersSearch => ({
+    selected: optionalString(search.selected),
+  }),
 });
 
 function MembersPage() {
   const access = useGatewayAccess();
-  const [selected, setSelected] = useState<string | null>(null);
+  const { selected } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const setSelected = (memberId: string | null) =>
+    void navigate({ search: { selected: memberId ?? undefined }, replace: true });
 
   const members = useQuery({
     ...queries.members(),

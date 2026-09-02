@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import {
   AuthorCard,
@@ -10,7 +10,11 @@ import {
   sortAuthors,
 } from "@/components/authors/AuthorCard";
 import { queries, settle } from "@/lib/queries";
+import { optionalString } from "@/lib/search";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+
+// The search text lives in the address, so Back and a reload keep it.
+type AuthorsSearch = { q?: string };
 
 export const Route = createFileRoute("/authors")({
   component: AuthorsPage,
@@ -19,11 +23,18 @@ export const Route = createFileRoute("/authors")({
       context.queryClient.ensureQueryData(queries.authors()),
       context.queryClient.ensureQueryData(queries.models()),
     ),
+  validateSearch: (search: Record<string, unknown>): AuthorsSearch => ({
+    q: optionalString(search.q),
+  }),
 });
 
 function AuthorsPage() {
   const keyUsable = useGatewayAccess();
-  const [query, setQuery] = useState("");
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const query = search.q ?? "";
+  const setQuery = (value: string) =>
+    void navigate({ search: { q: value || undefined }, replace: true });
 
   const authors = useQuery({
     ...queries.authors(),

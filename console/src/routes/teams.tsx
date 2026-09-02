@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -12,21 +12,32 @@ import {
   deleteTeam,
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
+import { optionalString } from "@/lib/search";
 import { formatNanoUSD, formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 // A team is the operator's grouping lever: grant an account to a team once
 // and everyone on the roster reaches it, including whoever joins later.
 
+// The open team lives in the address, so a reload or a shared link lands
+// on the same panel.
+type TeamsSearch = { selected?: string };
+
 export const Route = createFileRoute("/teams")({
   component: TeamsPage,
   loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.teams())),
+  validateSearch: (search: Record<string, unknown>): TeamsSearch => ({
+    selected: optionalString(search.selected),
+  }),
 });
 
 function TeamsPage() {
   const access = useGatewayAccess();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
+  const { selected } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const setSelected = (teamId: string | null) =>
+    void navigate({ search: { selected: teamId ?? undefined }, replace: true });
   const [draftName, setDraftName] = useState("");
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,

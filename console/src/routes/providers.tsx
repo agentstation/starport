@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -17,8 +17,16 @@ import {
   type ProviderRuntimeStatus,
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
+import { oneOf, optionalString } from "@/lib/search";
 import { providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+
+const SORT_KEYS = ["status", "name", "models"] as const;
+type SortKey = (typeof SORT_KEYS)[number];
+
+// The search text and the sort order live in the address, so Back and a
+// reload keep them. The default sort stays out of the address.
+type ProvidersSearch = { q?: string; sort?: SortKey };
 
 export const Route = createFileRoute("/providers")({
   component: ProvidersPage,
@@ -27,9 +35,11 @@ export const Route = createFileRoute("/providers")({
       context.queryClient.ensureQueryData(queries.providerCatalog()),
       context.queryClient.ensureQueryData(queries.providerStatus()),
     ),
+  validateSearch: (search: Record<string, unknown>): ProvidersSearch => ({
+    q: optionalString(search.q),
+    sort: oneOf(SORT_KEYS, search.sort),
+  }),
 });
-
-type SortKey = "status" | "name" | "models";
 
 function matchesQuery(
   query: string,
@@ -99,8 +109,17 @@ function ProvidersPage() {
   const keyUsable = useGatewayAccess();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("status");
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const setSearch = (patch: Partial<ProvidersSearch>) =>
+    void navigate({
+      search: (previous: ProvidersSearch) => ({ ...previous, ...patch }),
+      replace: true,
+    });
+  const query = search.q ?? "";
+  const sort = search.sort ?? "status";
+  const setQuery = (value: string) => setSearch({ q: value || undefined });
+  const setSort = (value: SortKey) => setSearch({ sort: value === "status" ? undefined : value });
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
