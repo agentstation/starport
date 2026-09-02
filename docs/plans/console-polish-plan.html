@@ -120,7 +120,7 @@
     Created: 2026-09-01 ·
     Baseline: main @ 6db57d8 ·
     Proof root: <code>docs/proof/console-polish/</code> ·
-    Next action: finish CPL-E1 on codex/cpl-e1, then start CPL-E2
+    Next action: finish CPL-E2 on codex/cpl-e2, then start CPL-E3
   </p>
 
   <section id="outcome">
@@ -521,8 +521,8 @@
         <tr id="CPL-D2" data-status="done"><td>CPL-D2</td><td>Shared data table and four conversions.</td><td><code>done</code></td><td>PR #342. Verifier 26 passed, 22 failed. Proof <code>docs/proof/console-polish/CPL-D2.md</code>.</td></tr>
         <tr id="CPL-D3" data-status="done"><td>CPL-D3</td><td>Plain table and label pass.</td><td><code>done</code></td><td>PR #343. Verifier 27 passed, 21 failed. Proof <code>docs/proof/console-polish/CPL-D3.md</code>.</td></tr>
         <tr id="CPL-D4" data-status="done"><td>CPL-D4</td><td>Charts: series descriptor, interval, legend, honesty.</td><td><code>done</code></td><td>PR #344. Verifier 29 passed, 19 failed. Proof <code>docs/proof/console-polish/CPL-D4.md</code>.</td></tr>
-        <tr id="CPL-E1" data-status="in_progress"><td>CPL-E1</td><td>Honest system info and a webhook summary route.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e1</code>.</td></tr>
-        <tr id="CPL-E2" data-status="todo"><td>CPL-E2</td><td>Settings sections for system, observability, guardrails, webhooks, and retention.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E1" data-status="done"><td>CPL-E1</td><td>Honest system info and a webhook summary route.</td><td><code>done</code></td><td>PR #345. Verifier 31 passed, 17 failed. Proof <code>docs/proof/console-polish/CPL-E1.md</code>.</td></tr>
+        <tr id="CPL-E2" data-status="in_progress"><td>CPL-E2</td><td>Settings sections for system, observability, guardrails, webhooks, and retention.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e2</code>.</td></tr>
         <tr id="CPL-E3" data-status="todo"><td>CPL-E3</td><td>Budgets as meters on teams and accounts.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-E4" data-status="todo"><td>CPL-E4</td><td>Confirmations for every cascading write.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-E5" data-status="todo"><td>CPL-E5</td><td>Audit log as an investigation tool.</td><td><code>todo</code></td><td></td></tr>
@@ -1843,6 +1843,14 @@ deleted this plan.</code></pre>
           URL redaction, the usage sink retains its drop count, and the
           composition root hands the admin surface the build stamp and the
           deployment facts.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E1</td><td>done</td><td>PR #345 merged.
+          Verifier 31 passed, 17 failed. Controller tests 120 and events
+          tests 10.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E2</td><td>started</td><td>Branch
+          codex/cpl-e2. Five read-only settings sections name each value
+          and the variable that sets it, the shell names an unstamped
+          build in words, and a route test covers the stamped, unstamped,
+          and locked states.</td></tr>
       </tbody>
     </table>
   </section>
