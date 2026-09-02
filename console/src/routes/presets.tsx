@@ -490,6 +490,10 @@ function HistoryModal({
   onRolledBack: (revision: number) => void;
 }) {
   const [error, setError] = useState("");
+  // A restore names both revisions before it travels: the head the operator
+  // read and the one it copies. The write lands as a new head, so the row
+  // action only stages it here.
+  const [restoring, setRestoring] = useState<Preset | null>(null);
   const history = useQuery({
     ...queries.presetHistory(preset.name),
   });
@@ -568,8 +572,9 @@ function HistoryModal({
                   <td className="px-3 py-2 text-right">
                     {!isHead && (
                       <RowAction
-                        onClick={() => rollback.mutate(revision.revision ?? 0)}
-                        disabled={rollback.isPending}
+                        onClick={() => setRestoring(revision)}
+                        disabled={rollback.isPending || restoring !== null}
+                        aria-label={`Restore revision ${revision.revision}`}
                       >
                         restore
                       </RowAction>
@@ -605,6 +610,32 @@ function HistoryModal({
               . Restoring copies an old revision into a new one.
             </p>
             {body}
+            {restoring && (
+              <div
+                role="group"
+                aria-label="Restore confirmation"
+                className="flex flex-col gap-2 rounded-sm border border-border-2 bg-bg-raised p-3 text-sm text-text-2"
+              >
+                <p>
+                  Restore <strong className="text-text-1">@preset/{preset.name}</strong>{" "}
+                  from revision{" "}
+                  <strong className="text-text-1">{preset.revision ?? 0}</strong> to
+                  revision{" "}
+                  <strong className="text-text-1">{restoring.revision ?? 0}</strong>?
+                  The restore lands as revision {(preset.revision ?? 0) + 1}, and
+                  revision {preset.revision ?? 0} stays in the history.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <GhostButton onClick={() => setRestoring(null)}>Keep current</GhostButton>
+                  <PrimaryButton
+                    onClick={() => rollback.mutate(restoring.revision ?? 0)}
+                    disabled={rollback.isPending}
+                  >
+                    Restore to revision {restoring.revision ?? 0}
+                  </PrimaryButton>
+                </div>
+              </div>
+            )}
           </div>
         </DialogBody>
         <DialogError>{error}</DialogError>
@@ -774,7 +805,7 @@ const PRESET_COLUMNS = presetColumns.columns([
             {getValue()}
           </span>
         ) : (
-          <span className="text-text-4">\u2014</span>
+          <span className="text-text-4">{"\u2014"}</span>
         ),
     },
   ),
@@ -793,7 +824,7 @@ const PRESET_COLUMNS = presetColumns.columns([
     cell: ({ row }) => (
       <span className="text-xs text-text-3">
         {samplingSummary(row.original.config) || (
-          <span className="text-text-4">\u2014</span>
+          <span className="text-text-4">{"\u2014"}</span>
         )}
       </span>
     ),

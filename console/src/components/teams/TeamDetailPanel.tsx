@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import { BudgetLine } from "@/components/ui/BudgetLine";
+import { ConfirmDialog, reasonOf } from "@/components/ui/ConfirmDialog";
 import {
   Dialog,
   DialogBody,
@@ -81,13 +82,15 @@ export function TeamDetailPanel({
       report(`Add failed: ${error instanceof Error ? error.message : error}`),
   });
 
+  // A removal opens a dialog first. The write travels only from there, and
+  // a refusal stays in the dialog's error slot until the operator closes it.
+  const [dropping, setDropping] = useState<string | null>(null);
   const drop = useMutation({
     mutationFn: (userId: string) => removeTeamMember(team.id, userId),
     onSuccess: async () => {
+      setDropping(null);
       await queryClient.invalidateQueries({ queryKey: queries.teamMembers(team.id).queryKey });
     },
-    onError: (error) =>
-      report(`Remove failed: ${error instanceof Error ? error.message : error}`),
   });
 
   const grant = useMutation({
@@ -101,14 +104,14 @@ export function TeamDetailPanel({
       report(`Grant failed: ${error instanceof Error ? error.message : error}`),
   });
 
+  const [revoking, setRevoking] = useState<string | null>(null);
   const revoke = useMutation({
     mutationFn: (accountId: string) =>
       deleteAccountGrant({ account_id: accountId, team_id: team.id }),
     onSuccess: async () => {
+      setRevoking(null);
       await queryClient.invalidateQueries({ queryKey: queries.teamGrants(team.id).queryKey });
     },
-    onError: (error) =>
-      report(`Remove failed: ${error instanceof Error ? error.message : error}`),
   });
 
   // Every budget write names the revision this panel read, when the
@@ -259,8 +262,7 @@ export function TeamDetailPanel({
                         {member?.display_name || member?.email || row.user_id}
                       </span>
                       <RowAction
-                        onClick={() => drop.mutate(row.user_id)}
-                        disabled={drop.isPending}
+                        onClick={() => setDropping(row.user_id)}
                         aria-label={`Remove ${row.user_id} from the team`}
                       >
                         remove
@@ -314,8 +316,7 @@ export function TeamDetailPanel({
                       {row.account_id}
                     </span>
                     <RowAction
-                      onClick={() => revoke.mutate(row.account_id)}
-                      disabled={revoke.isPending}
+                      onClick={() => setRevoking(row.account_id)}
                       aria-label={`Remove the ${row.account_id} grant`}
                     >
                       remove
@@ -353,6 +354,51 @@ export function TeamDetailPanel({
           </div>
         </SheetBody>
       </SheetContent>
+      {dropping !== null && (
+        <ConfirmDialog
+          title="Remove member"
+          action="Remove member"
+          error={drop.error ? `Remove failed: ${reasonOf(drop.error)}` : ""}
+          pending={drop.isPending}
+          onConfirm={() => drop.mutate(dropping)}
+          onClose={() => {
+            drop.reset();
+            setDropping(null);
+          }}
+        >
+          <p>
+            Remove{" "}
+            <strong className="text-text-1">
+              {memberById.get(dropping)?.display_name ||
+                memberById.get(dropping)?.email ||
+                dropping}
+            </strong>{" "}
+            from <strong className="text-text-1">{team.name}</strong>? They lose
+            every account the team grants from the next request on. A grant
+            made to them directly stays.
+          </p>
+        </ConfirmDialog>
+      )}
+      {revoking !== null && (
+        <ConfirmDialog
+          title="Remove grant"
+          action="Remove grant"
+          error={revoke.error ? `Remove failed: ${reasonOf(revoke.error)}` : ""}
+          pending={revoke.isPending}
+          onConfirm={() => revoke.mutate(revoking)}
+          onClose={() => {
+            revoke.reset();
+            setRevoking(null);
+          }}
+        >
+          <p>
+            Remove the <strong className="text-text-1">{revoking}</strong> grant
+            from <strong className="text-text-1">{team.name}</strong>? Members
+            reach {revoking} only through another grant from the next request
+            on.
+          </p>
+        </ConfirmDialog>
+      )}
       {removingBudget && (
         <RemoveBudgetModal
           team={team}

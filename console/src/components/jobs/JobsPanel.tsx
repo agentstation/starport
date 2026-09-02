@@ -7,6 +7,7 @@ import {
   GhostButton,
   PrimaryButton,
 } from "@/components/ui/Form";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select } from "@/components/ui/Select";
 import { Pill, type PillTone } from "@/components/ui/Pill";
 import { LoadingStatus, Skeleton, TableSkeleton } from "@/components/ui/skeleton";
@@ -187,14 +188,16 @@ export function JobsPanel() {
       report(`Submission refused: ${refusalText(error)}`),
   });
 
+  // A cancel opens a dialog first. The write travels only from there, and
+  // a refusal stays in the dialog's error slot until the operator closes it.
+  const [cancelling, setCancelling] = useState<VideoJob | null>(null);
   const stop = useMutation({
     mutationFn: (job: VideoJob) => cancelJob(job.id),
     onSuccess: async (_result, job) => {
+      setCancelling(null);
       announce(`Cancelled ${job.id}`);
       await queryClient.invalidateQueries({ queryKey: queries.videoJobs().queryKey });
     },
-    onError: (error) =>
-      report(`Cancel failed: ${refusalText(error)}`),
   });
 
   const rows = jobs.data?.jobs ?? [];
@@ -281,10 +284,7 @@ export function JobsPanel() {
                       </GhostButton>
                     )}
                     {!terminal(job) && (
-                      <GhostButton
-                        onClick={() => stop.mutate(job)}
-                        disabled={stop.isPending}
-                      >
+                      <GhostButton onClick={() => setCancelling(job)}>
                         <X className="size-3.5" />
                         Cancel
                       </GhostButton>
@@ -347,6 +347,26 @@ export function JobsPanel() {
         <p className="text-xs text-text-4">
           The listing is capped, so this shows the newest jobs only.
         </p>
+      )}
+      {cancelling && (
+        <ConfirmDialog
+          title="Cancel job"
+          action="Cancel job"
+          dismiss="Keep running"
+          error={stop.error ? `Cancel failed: ${refusalText(stop.error)}` : ""}
+          pending={stop.isPending}
+          onConfirm={() => stop.mutate(cancelling)}
+          onClose={() => {
+            stop.reset();
+            setCancelling(null);
+          }}
+        >
+          <p>
+            Cancel <strong className="text-text-1">{cancelling.id}</strong> on{" "}
+            {cancelling.model}? The job stays in the list as cancelled and never
+            produces an asset.
+          </p>
+        </ConfirmDialog>
       )}
     </div>
   );

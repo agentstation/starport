@@ -105,12 +105,16 @@ test("adds a member to the roster", async () => {
 });
 
 // Removing names the member and this team, nothing else.
-test("removes a member from the roster", async () => {
+test("removes a member from the roster only after the operator confirms", async () => {
   mount();
 
   fireEvent.click(
     await screen.findByRole("button", { name: "Remove u-1 from the team" }),
   );
+  const dialog = await screen.findByRole("dialog", { name: "Remove member" });
+  expect(gateway.dropped).toEqual([]);
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Remove member" }));
 
   await waitFor(() =>
     expect(gateway.dropped).toEqual([{ teamId: "t-1", userId: "u-1" }]),
@@ -295,12 +299,17 @@ test("refuses a non-positive budget amount", async () => {
 });
 
 // Removing a grant names the whole row: the account and this team.
-test("removes a team grant", async () => {
+test("removes a team grant only after the operator confirms", async () => {
   mount();
 
   fireEvent.click(
     await screen.findByRole("button", { name: "Remove the acct-team grant" }),
   );
+  const dialog = await screen.findByRole("dialog", { name: "Remove grant" });
+  expect(within(dialog).getByText("acct-team")).toBeTruthy();
+  expect(gateway.removed).toEqual([]);
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Remove grant" }));
 
   await waitFor(() =>
     expect(gateway.removed).toEqual([
