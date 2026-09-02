@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog/log"
 
 	"github.com/agentstation/starport/internal/audit"
@@ -65,10 +66,11 @@ func writeAudit(ctx context.Context, recorder AuditRecorder, action, subject str
 		outcome = audit.OutcomeError
 	}
 	record := audit.Record{
-		Actor:   auditActor(ctx),
-		Action:  action,
-		Subject: subject,
-		Outcome: outcome,
+		Actor:     auditActor(ctx),
+		Action:    action,
+		Subject:   subject,
+		Outcome:   outcome,
+		RequestID: middleware.GetReqID(ctx),
 	}
 	if err := recorder.Record(ctx, record); err != nil {
 		log.Error().Err(err).Str("action", action).Msg("Failed to write the audit record")

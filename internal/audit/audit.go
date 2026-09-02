@@ -55,4 +55,8 @@ type Record struct {
 	Subject string `json:"subject"`
 	// Outcome is OutcomeOK or OutcomeError.
 	Outcome string `json:"outcome"`
+	// RequestID is the gateway request that carried the mutation, so the
+	// trail joins the usage listing and the request log. It is empty for a
+	// write that reached the store without a request context.
+	RequestID string `json:"request_id"`
 }

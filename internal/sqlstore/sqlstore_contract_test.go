@@ -326,12 +326,15 @@ func TestAuditLogMigrationShips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlite names: %v", err)
 	}
+	shipped := make(map[string]bool, len(names))
 	for _, name := range names {
-		if name == "0006_audit_log.sql" {
-			return
+		shipped[name] = true
+	}
+	for _, want := range []string{"0006_audit_log.sql", "0007_audit_request_id.sql"} {
+		if !shipped[want] {
+			t.Fatalf("%s missing from embedded migrations: %v", want, names)
 		}
 	}
-	t.Fatalf("0006_audit_log missing from embedded migrations: %v", names)
 }
 
 // bind is what lets the runner write one query for three engines.

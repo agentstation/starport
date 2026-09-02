@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import * as api from "./api";
-import type { ActivityFilters, ActivityPage } from "./api";
+import type { ActivityFilters, ActivityPage, AuditFilters } from "./api";
 
 // queries owns every query key and fetcher the console reads. A route or a
 // component spreads one factory into useQuery and adds only what the call
@@ -257,12 +257,14 @@ export const queries = {
           { signal },
         ),
     }),
-  audit: (pageLimit: number) =>
+  // The filters sit in the key, so a changed actor, action, or window is a
+  // different listing and never shares a page with the last one.
+  audit: (filters: AuditFilters) =>
     infiniteQueryOptions({
-      queryKey: ["audit"],
+      queryKey: ["audit", filters],
       initialPageParam: "",
       queryFn: ({ pageParam, signal }) =>
-        api.listAuditLog({ limit: pageLimit, cursor: pageParam || undefined }, { signal }),
+        api.listAuditLog({ ...filters, cursor: pageParam || undefined }, { signal }),
       getNextPageParam: (last) => last.next_cursor || undefined,
     }),
 };

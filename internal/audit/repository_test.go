@@ -55,6 +55,28 @@ func TestRepositoryRoundTripsNewestFirst(t *testing.T) {
 	require.Equal(t, base, page.Records[0].Time)
 }
 
+// TestAuditRecordCarriesRequestID pins the join to the usage listing: the
+// request that carried a mutation comes back with its record, and a write
+// without one stays empty rather than inventing an identifier.
+func TestAuditRecordCarriesRequestID(t *testing.T) {
+	repository := openAuditRepository(t, 0)
+	ctx := context.Background()
+
+	require.NoError(t, repository.Record(ctx, Record{
+		Actor: "key:ci", Action: "key.create", Subject: "a", Outcome: OutcomeOK,
+		RequestID: "req-42",
+	}))
+	require.NoError(t, repository.Record(ctx, Record{
+		Actor: "key:ci", Action: "key.delete", Subject: "a", Outcome: OutcomeOK,
+	}))
+
+	page, err := repository.List(ctx, Query{})
+	require.NoError(t, err)
+	require.Len(t, page.Records, 2)
+	require.Equal(t, "", page.Records[0].RequestID)
+	require.Equal(t, "req-42", page.Records[1].RequestID)
+}
+
 func TestRepositoryFiltersByActionActorAndWindow(t *testing.T) {
 	repository := openAuditRepository(t, 0)
 	ctx := context.Background()

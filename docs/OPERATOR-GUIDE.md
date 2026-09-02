@@ -1355,7 +1355,8 @@ the streamed copy.
 `GET /api/v1/activity/export` streams the stored records for the
 authenticated key under the `activity:read` scope. It takes the same
 filters the activity listing takes (`model`, `provider`, `status`,
-`since`, `until`) and serves NDJSON by default or CSV with `format=csv`:
+`request_id`, `since`, `until`) and serves NDJSON by default or CSV with
+`format=csv`:
 
 ```bash
 curl -H "Authorization: Bearer $STARPORT_API_KEY" \
@@ -1382,6 +1383,11 @@ Each record names its actor with one prefixed string:
 The outcome is `ok` when the store accepted the mutation and `error` when the
 store refused it. A request refused before the store, such as a validation
 failure, records nothing.
+
+Each record carries the `request_id` of the gateway request that made the
+mutation. Pass it to the activity listing as `request_id` to reach the usage
+row for the same request. A write without a request context leaves the field
+empty.
 
 Read the trail with `GET /api/v1/admin/audit` under the admin scope. The
 listing serves the newest records first and takes `action`, `actor`, `since`,

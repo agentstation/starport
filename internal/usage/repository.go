@@ -136,6 +136,9 @@ type Query struct {
 	Model     string
 	Provider  string
 	Status    string
+	// RequestID selects the one record a request left, so an audit record
+	// or a log line reaches its usage row.
+	RequestID string
 	Since     time.Time
 	Until     time.Time
 	Limit     int
@@ -423,6 +426,9 @@ func matches(record Record, query Query) bool {
 		return false
 	}
 	if query.Status != "" && record.Status != query.Status {
+		return false
+	}
+	if query.RequestID != "" && record.RequestID != query.RequestID {
 		return false
 	}
 	return true

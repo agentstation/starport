@@ -100,6 +100,7 @@ func activityQueryFromRequest(r *http.Request) (usage.Query, error) {
 		Status:   values.Get(fieldStatus),
 		Cursor:   values.Get("cursor"),
 	}
+	query.RequestID = values.Get("request_id")
 
 	since, err := activityTimeParameter(values.Get("since"), "since")
 	if err != nil {
