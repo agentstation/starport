@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { IdentityRequired } from "@/components/members/IdentityRequired";
 import { DeleteTeamModal } from "@/components/teams/DeleteTeamModal";
 import { TeamDetailPanel } from "@/components/teams/TeamDetailPanel";
 import { INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
@@ -44,9 +45,14 @@ function TeamsPage() {
     void navigate({ search: { selected: teamId ?? undefined }, replace: true });
   const [draftName, setDraftName] = useState("");
 
+  const providers = useQuery({ ...queries.identityProviders(), enabled: access });
+  // With no identity provider nobody can join a team and the gateway refuses
+  // the roster outright, so the page reads as the setup it needs and asks
+  // for the roster only once a provider answers.
+  const identityOff = providers.data?.length === 0;
   const teams = useQuery({
     ...queries.teams(),
-    enabled: access,
+    enabled: access && providers.data !== undefined && !identityOff,
   });
 
   const create = useMutation({
@@ -67,7 +73,9 @@ function TeamsPage() {
   const rows = teams.data ?? [];
 
   let body: ReactNode;
-  if (teams.error) {
+  if (identityOff) {
+    body = <IdentityRequired noun="teams" />;
+  } else if (teams.error) {
     body = (
       <p className="text-base text-text-3">
         {teams.error instanceof ApiError && teams.error.needsKey
@@ -155,6 +163,7 @@ function TeamsPage() {
             it, including whoever joins later.
           </p>
         </div>
+        {!identityOff && (
         <div className="flex items-center gap-2">
           <input
             value={draftName}
@@ -171,6 +180,7 @@ function TeamsPage() {
             New team
           </PrimaryButton>
         </div>
+        )}
       </div>
       {body}
       {open && <TeamDetailPanel team={open} onClose={() => setSelected(null)} />}

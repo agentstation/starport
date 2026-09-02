@@ -3,7 +3,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { History, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { ModelPicker } from "@/components/models/ModelPicker";
+import { ModelMultiPicker, ModelPicker } from "@/components/models/ModelPicker";
+import { TokenInput } from "@/components/ui/TokenInput";
 import { DataTable, dataColumns } from "@/components/ui/DataTable";
 import type { RowData, TableFeatures } from "@tanstack/react-table";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction, TEXTAREA_CLASS } from "@/components/ui/Form";
@@ -98,7 +99,7 @@ type EditorDraft = {
   name: string;
   description: string;
   model: string;
-  models: string;
+  models: string[];
   system: string;
   temperature: string;
   topP: string;
@@ -106,10 +107,10 @@ type EditorDraft = {
   seed: string;
   presencePenalty: string;
   frequencyPenalty: string;
-  stop: string;
-  order: string;
-  only: string;
-  ignore: string;
+  stop: string[];
+  order: string[];
+  only: string[];
+  ignore: string[];
   sort: string;
   maxPromptPrice: string;
   maxCompletionPrice: string;
@@ -125,7 +126,7 @@ function draftFromPreset(preset: Preset | null): EditorDraft {
     name: preset?.name ?? "",
     description: preset?.description ?? "",
     model: config.model ?? "",
-    models: (config.models ?? []).join(", "),
+    models: config.models ?? [],
     system: config.system ?? "",
     temperature: str(config.temperature),
     topP: str(config.top_p),
@@ -133,10 +134,10 @@ function draftFromPreset(preset: Preset | null): EditorDraft {
     seed: str(config.seed),
     presencePenalty: str(config.presence_penalty),
     frequencyPenalty: str(config.frequency_penalty),
-    stop: (config.stop ?? []).join(", "),
-    order: (provider.order ?? []).join(", "),
-    only: (provider.only ?? []).join(", "),
-    ignore: (provider.ignore ?? []).join(", "),
+    stop: config.stop ?? [],
+    order: provider.order ?? [],
+    only: provider.only ?? [],
+    ignore: provider.ignore ?? [],
     sort: SORTS.includes(provider.sort as (typeof SORTS)[number])
       ? (provider.sort ?? "")
       : "",
@@ -154,11 +155,6 @@ function draftFromPreset(preset: Preset | null): EditorDraft {
 // the stored preset carries only deliberate settings. Returns null
 // when nothing is set — the backend rejects an empty config.
 function configFromDraft(draft: EditorDraft): PresetConfig | null {
-  const list = (value: string) =>
-    value
-      .split(",")
-      .map((part) => part.trim())
-      .filter(Boolean);
   const num = (value: string, integer = false) => {
     if (!value.trim()) return undefined;
     const parsed = integer ? Number.parseInt(value, 10) : Number.parseFloat(value);
@@ -167,8 +163,7 @@ function configFromDraft(draft: EditorDraft): PresetConfig | null {
 
   const config: PresetConfig = {};
   if (draft.model.trim()) config.model = draft.model.trim();
-  const models = list(draft.models);
-  if (models.length) config.models = models;
+  if (draft.models.length) config.models = draft.models;
   if (draft.system.trim()) config.system = draft.system.trim();
   const sampling: Partial<PresetConfig> = {
     temperature: num(draft.temperature),
@@ -183,16 +178,12 @@ function configFromDraft(draft: EditorDraft): PresetConfig | null {
       (config as Record<string, unknown>)[key] = value;
     }
   }
-  const stop = list(draft.stop);
-  if (stop.length) config.stop = stop;
+  if (draft.stop.length) config.stop = draft.stop;
 
   const routing: PresetProviderPreferences = {};
-  const order = list(draft.order);
-  const only = list(draft.only);
-  const ignore = list(draft.ignore);
-  if (order.length) routing.order = order;
-  if (only.length) routing.only = only;
-  if (ignore.length) routing.ignore = ignore;
+  if (draft.order.length) routing.order = draft.order;
+  if (draft.only.length) routing.only = draft.only;
+  if (draft.ignore.length) routing.ignore = draft.ignore;
   if (draft.sort) routing.sort = draft.sort;
   const maxPrompt = num(draft.maxPromptPrice);
   const maxCompletion = num(draft.maxCompletionPrice);
@@ -325,14 +316,11 @@ function EditorModal({
                   placeholder="search the catalog"
                 />
               </Field>
-              <Field label="Fallback models" hint="comma-separated, tried in order">
-                <input
-                  type="text"
-                  value={draft.models}
-                  onChange={(event) => patch({ models: event.target.value })}
-                  placeholder="fallbacks, comma-separated"
-                  autoComplete="off"
-                  className={`${INPUT_CLASS} font-mono`}
+              <Field label="Fallback models" hint="tried in order when the model fails">
+                <ModelMultiPicker
+                  values={draft.models}
+                  onChange={(models) => patch({ models })}
+                  placeholder="search the catalog"
                 />
               </Field>
             </div>
@@ -385,26 +373,21 @@ function EditorModal({
                 )}
               </Field>
             </div>
-            <Field label="Stop sequences" hint="comma-separated">
-              <input
-                type="text"
-                value={draft.stop}
-                onChange={(event) => patch({ stop: event.target.value })}
-                autoComplete="off"
-                className={`${INPUT_CLASS} font-mono`}
+            <Field label="Stop sequences" hint="Enter adds one">
+              <TokenInput
+                values={draft.stop}
+                onChange={(stop) => patch({ stop })}
+                placeholder="generation ends at any of these"
               />
             </Field>
 
             <SectionTitle>Provider routing</SectionTitle>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Order" hint="try providers in this order">
-                <input
-                  type="text"
-                  value={draft.order}
-                  onChange={(event) => patch({ order: event.target.value })}
-                  placeholder="e.g. groq, openai"
-                  autoComplete="off"
-                  className={`${INPUT_CLASS} font-mono`}
+                <TokenInput
+                  values={draft.order}
+                  onChange={(order) => patch({ order })}
+                  placeholder="e.g. groq"
                 />
               </Field>
               <Field label="Sort" hint="price, latency, throughput, or spread">
@@ -419,22 +402,18 @@ function EditorModal({
                   ))}
                 </Select>
               </Field>
-              <Field label="Only" hint="allowlist, comma-separated">
-                <input
-                  type="text"
-                  value={draft.only}
-                  onChange={(event) => patch({ only: event.target.value })}
-                  autoComplete="off"
-                  className={`${INPUT_CLASS} font-mono`}
+              <Field label="Only" hint="route to these providers alone">
+                <TokenInput
+                  values={draft.only}
+                  onChange={(only) => patch({ only })}
+                  placeholder="provider IDs"
                 />
               </Field>
-              <Field label="Ignore" hint="denylist, comma-separated">
-                <input
-                  type="text"
-                  value={draft.ignore}
-                  onChange={(event) => patch({ ignore: event.target.value })}
-                  autoComplete="off"
-                  className={`${INPUT_CLASS} font-mono`}
+              <Field label="Ignore" hint="never route to these providers">
+                <TokenInput
+                  values={draft.ignore}
+                  onChange={(ignore) => patch({ ignore })}
+                  placeholder="provider IDs"
                 />
               </Field>
               <Field label="Max prompt price" hint="USD per million input tokens">
@@ -479,6 +458,88 @@ function EditorModal({
 }
 
 // --- History modal ---
+
+// FIELD_LABELS names each preset field the way the editor does, so a
+// change reads in the words the operator typed it under.
+const FIELD_LABELS: Record<string, string> = {
+  description: "Description",
+  model: "Model",
+  models: "Fallback models",
+  system: "System prompt",
+  temperature: "Temperature",
+  top_p: "Top-p",
+  max_tokens: "Max tokens",
+  seed: "Seed",
+  presence_penalty: "Presence penalty",
+  frequency_penalty: "Frequency penalty",
+  stop: "Stop sequences",
+  "provider.order": "Order",
+  "provider.sort": "Sort",
+  "provider.only": "Only",
+  "provider.ignore": "Ignore",
+  "provider.max_prompt_price_per_1m": "Max prompt price",
+  "provider.max_completion_price_per_1m": "Max completion price",
+  "provider.allow_fallbacks": "Allow fallbacks",
+};
+
+// flattenPreset turns a revision into one map of dotted field to value, so
+// two revisions compare field by field.
+function flattenPreset(preset: Preset): Map<string, unknown> {
+  const fields = new Map<string, unknown>();
+  if (preset.description) fields.set("description", preset.description);
+  const { provider, ...config } = preset.config;
+  for (const [key, value] of Object.entries(config)) {
+    if (value !== undefined && value !== null) fields.set(key, value);
+  }
+  for (const [key, value] of Object.entries(provider ?? {})) {
+    if (value !== undefined && value !== null) fields.set(`provider.${key}`, value);
+  }
+  return fields;
+}
+
+function describeValue(value: unknown): string {
+  if (value === undefined) return "unset";
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "unset";
+  if (typeof value === "string") {
+    return value.length > 40 ? `${value.slice(0, 40)}\u2026` : value;
+  }
+  return String(value);
+}
+
+export type RevisionChange = { field: string; from: string; to: string };
+
+// revisionChanges lists the fields a revision changed against the one
+// before it. The oldest revision lists every field it set.
+export function revisionChanges(revision: Preset, previous?: Preset): RevisionChange[] {
+  const after = flattenPreset(revision);
+  const before = previous ? flattenPreset(previous) : new Map<string, unknown>();
+  const keys = [...new Set([...before.keys(), ...after.keys()])];
+  return keys
+    .filter((key) => JSON.stringify(before.get(key)) !== JSON.stringify(after.get(key)))
+    .map((key) => ({
+      field: FIELD_LABELS[key] ?? key,
+      from: describeValue(before.get(key)),
+      to: describeValue(after.get(key)),
+    }));
+}
+
+function RevisionChanges({ revision, previous }: { revision: Preset; previous?: Preset }) {
+  const changes = revisionChanges(revision, previous);
+  if (changes.length === 0) return <span className="text-text-4">no field changed</span>;
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {changes.map((change) => (
+        <li key={change.field} className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+          <span className="text-text-2">{change.field}</span>
+          {previous && (
+            <span className="font-mono text-text-4 line-through">{change.from}</span>
+          )}
+          <span className="font-mono text-text-1">{change.to}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function HistoryModal({
   preset,
@@ -533,15 +594,17 @@ function HistoryModal({
           <thead>
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
               <th className="px-3 py-2">Revision</th>
-              <th className="px-3 py-2">Model</th>
-              <th className="px-3 py-2">Overrides</th>
+              <th className="px-3 py-2">Changes</th>
               <th className="px-3 py-2">Saved</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
-            {revisions.map((revision) => {
+            {revisions.map((revision, index) => {
               const isHead = revision.revision === preset.revision;
+              // The list arrives newest first, so the previous revision
+              // is the next row down; the oldest row diffs against nothing.
+              const previous = revisions[index + 1];
               return (
                 <tr
                   key={revision.revision}
@@ -555,16 +618,8 @@ function HistoryModal({
                       </span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-text-2">
-                    {revision.config.model ??
-                      revision.config.models?.[0] ?? (
-                        <span className="text-text-4">—</span>
-                      )}
-                  </td>
                   <td className="px-3 py-2 text-xs text-text-3">
-                    {samplingSummary(revision.config) || (
-                      <span className="text-text-4">—</span>
-                    )}
+                    <RevisionChanges revision={revision} previous={previous} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-xs text-text-3">
                     <RelativeTime iso={revision.updated_at} />

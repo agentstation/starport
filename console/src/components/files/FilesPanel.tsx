@@ -33,6 +33,14 @@ import { announce, report } from "@/lib/mutations";
 // refusal is what the reader sees rather than a message this file invents.
 const PURPOSES = ["user_data", "vision"] as const;
 
+// PURPOSE_LABELS reads each purpose in words. The wire value stays the
+// gateway's, and a purpose this list predates reads as its raw value.
+const PURPOSE_LABELS: Record<string, string> = {
+  user_data: "User data",
+  vision: "Vision",
+};
+export const purposeLabel = (purpose: string) => PURPOSE_LABELS[purpose] ?? purpose;
+
 type Purpose = (typeof PURPOSES)[number];
 
 // storedBytes sums what the listed files hold.
@@ -211,7 +219,7 @@ export function FilesPanel() {
                 <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {formatBytes(file.bytes)}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-text-3">{file.purpose}</td>
+                <td className="px-4 py-2.5 text-xs text-text-3">{purposeLabel(file.purpose)}</td>
                 <td className="px-4 py-2.5">
                   <Pill tone={fileTone(file.status)}>{file.status}</Pill>
                 </td>
@@ -267,7 +275,7 @@ export function FilesPanel() {
           >
             {PURPOSES.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {purposeLabel(option)}
               </option>
             ))}
           </Select>

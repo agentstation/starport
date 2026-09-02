@@ -118,8 +118,8 @@ const IDENTITY_PATH = "/console/identity";
 // configured. An unconfigured deployment answers with an empty list. A
 // request that fails throws, so first contact can tell a gateway with no
 // providers from a gateway it could not reach.
-export async function identityProviders(): Promise<string[]> {
-  const response = await fetch(`${IDENTITY_PATH}/providers`);
+export async function identityProviders(init?: { signal?: AbortSignal }): Promise<string[]> {
+  const response = await fetch(`${IDENTITY_PATH}/providers`, { signal: init?.signal });
   if (!response.ok) {
     throw new Error(`Identity providers request failed with status ${response.status}`);
   }

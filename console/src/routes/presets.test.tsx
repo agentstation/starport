@@ -38,6 +38,26 @@ describe("presets", () => {
     expect(screen.getAllByText("\u2014").length).toBeGreaterThan(0);
   });
 
+  // History reads as what each save changed, so the model swap shows the
+  // old value struck through beside the new one, and the oldest revision
+  // lists what it set.
+  it("reads each revision as the fields it changed", async () => {
+    stubGateway({
+      "/api/v1/presets": { data: [HEAD] },
+      "/api/v1/presets/draft/history": { data: [HEAD, OLD] },
+    });
+    openConsole("/presets");
+
+    fireEvent.click(await screen.findByRole("button", { name: "History of draft" }));
+    const dialog = await screen.findByRole("dialog", { name: "History of @preset/draft" });
+    const rows = (await within(dialog).findAllByRole("row")).slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Modelopenai/gpt-wopenai/gpt-x"),
+      expect.stringContaining("Modelopenai/gpt-w"),
+    ]);
+    expect(rows[1]?.textContent).not.toContain("gpt-x");
+  });
+
   // A restore lands as a new head, so the confirmation names the head the
   // operator read and the revision it copies before anything travels.
   it("names both revisions before a restore travels", async () => {

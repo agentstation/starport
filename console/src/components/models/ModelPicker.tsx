@@ -1,11 +1,55 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { INPUT_CLASS } from "@/components/ui/Form";
+import { TokenInput } from "@/components/ui/TokenInput";
 import { queries } from "@/lib/queries";
 import { chattableModels } from "@/lib/modelFilter";
 
 const MAX_SUGGESTIONS = 8;
+
+// matchModelIds filters the chattable catalog IDs by a substring of the
+// query, keeping the first few so the list stays short enough to scan.
+function matchModelIds(ids: string[], query: string): string[] {
+  const needle = query.trim().toLowerCase();
+  const matches = needle ? ids.filter((modelId) => modelId.toLowerCase().includes(needle)) : ids;
+  return matches.slice(0, MAX_SUGGESTIONS);
+}
+
+// ModelMultiPicker selects several model IDs as chips over the same
+// catalog: an allowlist on a key, or the fallback list on a preset. An ID
+// outside the catalog still commits, so a key can name a model before the
+// catalog lists it.
+export function ModelMultiPicker({
+  values,
+  onChange,
+  placeholder,
+  id,
+  "aria-label": ariaLabel,
+}: {
+  values: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+  id?: string;
+  "aria-label"?: string;
+}) {
+  const models = useQuery({ ...queries.models() });
+  const ids = useMemo(
+    () => chattableModels(models.data ?? []).map((model) => model.id),
+    [models.data],
+  );
+  const suggest = useCallback((draft: string) => matchModelIds(ids, draft), [ids]);
+  return (
+    <TokenInput
+      id={id}
+      values={values}
+      onChange={onChange}
+      placeholder={placeholder}
+      suggest={suggest}
+      aria-label={ariaLabel}
+    />
+  );
+}
 
 // ModelPicker is a combobox over the live model catalog: a mono text
 // input with substring-filtered ID suggestions. It never carries model
@@ -29,14 +73,10 @@ export function ModelPicker({
     ...queries.models(),
   });
 
-  const suggestions = useMemo(() => {
-    const ids = chattableModels(models.data ?? []).map((model) => model.id);
-    const query = value.trim().toLowerCase();
-    const matches = query
-      ? ids.filter((modelId) => modelId.toLowerCase().includes(query))
-      : ids;
-    return matches.slice(0, MAX_SUGGESTIONS);
-  }, [models.data, value]);
+  const suggestions = useMemo(
+    () => matchModelIds(chattableModels(models.data ?? []).map((model) => model.id), value),
+    [models.data, value],
+  );
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
