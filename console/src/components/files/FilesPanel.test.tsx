@@ -196,3 +196,24 @@ test("deleting asks first and sends the identifier only after the confirmation",
   fireEvent.click(screen.getByText("Delete"));
   await waitFor(() => expect(gateway.deleted).toEqual(["file-abc123"]));
 });
+
+// The status column is the file's lifecycle, so it renders as a pill, and the
+// size column is the one number in the row, so it lines up on the right.
+test("status renders as a lifecycle pill and size lines up on the right", async () => {
+  gateway.files = [REPORT];
+  mount();
+
+  const row = await waitFor(() => screen.getByTestId("file-row"));
+  const pill = screen.getByText("processed");
+  expect(pill.getAttribute("class") ?? "").toContain("rounded-full");
+  expect(pill.getAttribute("class") ?? "").toContain("bg-success-tint");
+
+  const headers = Array.from(document.querySelectorAll("th"));
+  expect(headers.length).toBe(7);
+  expect(headers.every((th) => th.getAttribute("scope") === "col")).toBe(true);
+  const size = headers.find((th) => th.textContent === "Size");
+  expect(size?.getAttribute("class") ?? "").toContain("text-right");
+  expect(row.querySelectorAll("td")[2]?.getAttribute("class") ?? "").toContain(
+    "text-right",
+  );
+});

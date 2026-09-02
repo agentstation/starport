@@ -9,6 +9,7 @@ import type { RowData, TableFeatures } from "@tanstack/react-table";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Pill, type PillTone } from "@/components/ui/Pill";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
@@ -60,18 +61,12 @@ function StatusPill({ apiKey }: { apiKey: GatewayKey }) {
   const active = apiKey.active !== false;
   const expired =
     !!apiKey.expires_at && new Date(apiKey.expires_at).getTime() < Date.now();
-  const [label, tone] = !active
-    ? ["disabled", "bg-bg-raised text-text-3"]
+  const [label, tone]: [string, PillTone] = !active
+    ? ["disabled", "neutral"]
     : expired
-      ? ["expired", "bg-error-tint text-error"]
-      : ["active", "bg-success-tint text-success"];
-  return (
-    <span
-      className={`inline-flex h-5 items-center rounded-xs px-1.5 text-xs font-medium ${tone}`}
-    >
-      {label}
-    </span>
-  );
+      ? ["expired", "error"]
+      : ["active", "success"];
+  return <Pill tone={tone}>{label}</Pill>;
 }
 
 function ScopePills({ scopes }: { scopes: string[] }) {

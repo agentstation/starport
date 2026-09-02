@@ -122,7 +122,7 @@ function ObservedTransitions({
 }) {
   return (
     <div data-testid="observed-transitions" className="flex flex-col gap-2">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-text-4">
+      <h3 className="text-xs font-medium text-text-3">
         Observed by this gateway
       </h3>
       <ul className="flex flex-col gap-1.5">
@@ -183,7 +183,7 @@ export function IncidentLog({
       data-testid="incident-log"
       className="flex flex-col gap-3 rounded-md border border-border-1 bg-bg-panel p-4"
     >
-      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+      <h2 className="text-sm font-medium text-text-2">
         Incidents
       </h2>
 

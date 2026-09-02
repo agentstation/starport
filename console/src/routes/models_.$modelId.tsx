@@ -157,7 +157,12 @@ function ModelDetailPage() {
       <CapabilityChips model={model} />
 
       {(model.tags ?? []).length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div
+          role="group"
+          aria-label="Tags"
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          <span className="w-24 shrink-0 text-xs text-text-3">Tags</span>
           {(model.tags ?? []).map((tag) => (
             <span
               key={tag}
@@ -170,7 +175,7 @@ function ModelDetailPage() {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+        <h2 className="text-sm font-medium text-text-2">
           Providers
         </h2>
         <OfferingTable model={model} providers={status.data} />

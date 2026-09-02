@@ -6,6 +6,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import type { Model, ProviderRuntimeStatus } from "@/lib/api";
 
 import {
+  CapabilityChips,
   capabilityTiers,
   lineageLinks,
   ModelActions,
@@ -205,4 +206,43 @@ test("a chat offering claims no unit price and no document limit", () => {
   const row = screen.getByText("llama-3.1-8b-instant").closest("tr");
   expect(row?.textContent).not.toContain("/ search");
   expect(row?.textContent).not.toContain("/ page");
+});
+
+// --- Table and chip semantics
+
+// A screen reader announces a column header for a cell only when the header
+// declares its scope, and a numeric column reads as a column only when its
+// digits share a right edge.
+test("the offering table declares every column and right-aligns the numbers", () => {
+  render(<OfferingTable model={model} providers={providers} />);
+
+  const headers = Array.from(document.querySelectorAll("th"));
+  expect(headers.length).toBe(11);
+  expect(headers.every((th) => th.getAttribute("scope") === "col")).toBe(true);
+  const aligned = headers
+    .filter((th) => (th.getAttribute("class") ?? "").includes("text-right"))
+    .map((th) => th.textContent);
+  expect(aligned).toEqual([
+    "Context",
+    "Max out",
+    "Prompt / M",
+    "Completion / M",
+    "Cache read / M",
+    "Unit price",
+    "Max docs",
+  ]);
+});
+
+// A row of bare chips leaves a reader to guess what kind of fact it lists.
+test("each capability tier is a labeled group", () => {
+  render(<CapabilityChips model={model} />);
+
+  const groups = screen.getAllByRole("group");
+  expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual([
+    "Modalities",
+    "Capabilities",
+    "Parameters",
+  ]);
+  expect(groups[0]?.textContent).toContain("Modalities");
+  expect(groups[0]?.textContent).toContain("image in");
 });

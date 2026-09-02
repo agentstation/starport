@@ -185,9 +185,9 @@ function ChangesBody() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-border-1 text-xs font-medium text-text-3">
-                  <th className="py-1.5 pr-3 font-medium">offering</th>
-                  <th className="py-1.5 pr-3 font-medium">field</th>
-                  <th className="py-1.5 text-right font-medium">/ M</th>
+                  <th scope="col" className="py-2.5 pr-3">Offering</th>
+                  <th scope="col" className="py-2.5 pr-3">Field</th>
+                  <th scope="col" className="py-2.5 text-right">/ M</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,11 +196,11 @@ function ChangesBody() {
                     key={`${change.provider}/${change.provider_model_id}/${change.field}`}
                     className="border-b border-border-1"
                   >
-                    <td className="py-1.5 pr-3 font-mono text-xs text-text-2">
+                    <td className="py-2.5 pr-3 font-mono text-xs text-text-2">
                       {change.provider}/{change.provider_model_id}
                     </td>
-                    <td className="py-1.5 pr-3 text-xs text-text-3">{change.field}</td>
-                    <td className="py-1.5 text-right font-mono text-xs tabular-nums text-text-2">
+                    <td className="py-2.5 pr-3 text-xs text-text-3">{change.field}</td>
+                    <td className="py-2.5 text-right font-mono text-xs tabular-nums text-text-2">
                       {formatPerM(change.previous_per_1m)} →{" "}
                       {formatPerM(change.current_per_1m)}
                     </td>

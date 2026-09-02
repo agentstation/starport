@@ -49,7 +49,7 @@ function CapabilityBadges({ model }: { model: Model }) {
   const caps = modelCapabilities(model);
   if (!caps.vision && !caps.reasoning && !caps.tools && !caps.webSearch) return null;
   return (
-    <span className="flex items-center gap-1 text-text-4">
+    <span className="flex items-center gap-1 text-text-3">
       {caps.vision && <Eye className="size-3" aria-label="Vision" />}
       {caps.reasoning && <Brain className="size-3" aria-label="Reasoning" />}
       {caps.tools && <Wrench className="size-3" aria-label="Tools" />}
@@ -203,7 +203,7 @@ export function ModelPicker({
           placeholder="Search models and presets…"
           autoComplete="off"
           spellCheck={false}
-          className="h-8 w-full rounded-sm bg-bg-canvas px-2.5 text-sm text-text-1 outline-none placeholder:text-text-4"
+          className="h-8 w-full rounded-sm bg-bg-canvas px-2.5 text-sm text-text-1 outline-none placeholder:text-text-3"
         />
       </div>
       <div
@@ -237,7 +237,7 @@ export function ModelPicker({
           >
             <p
               id={`${id}-group-${sectionIndex}`}
-              className="px-3 pb-1 pt-2 text-xs uppercase tracking-wide text-text-4"
+              className="px-3 pb-1 pt-2 text-xs uppercase tracking-wide text-text-3"
             >
               {section.label}
             </p>
@@ -274,7 +274,7 @@ export function ModelPicker({
                         <Check className="size-3.5 shrink-0 text-accent" />
                       )}
                     </div>
-                    <p className="truncate font-mono text-xs text-text-4">
+                    <p className="truncate font-mono text-xs text-text-3">
                       {item.kind === "model"
                         ? item.id
                         : (item.description ?? "Preset")}
@@ -299,7 +299,7 @@ export function ModelPicker({
                         className={`rounded-xs p-0.5 transition-colors duration-150 ease-standard ${
                           favorites.has(item.id)
                             ? "text-accent"
-                            : "text-text-4 opacity-0 hover:text-text-2 group-hover:opacity-100"
+                            : "text-text-3 opacity-0 hover:text-text-2 group-hover:opacity-100"
                         }`}
                       >
                         <Star

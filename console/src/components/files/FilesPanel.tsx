@@ -6,6 +6,7 @@ import { DestructiveButton, GhostButton, PrimaryButton } from "@/components/ui/F
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DataTableFooter } from "@/components/ui/DataTable";
+import { Pill, type PillTone } from "@/components/ui/Pill";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
@@ -81,7 +82,7 @@ export function StoredTotal({
           aria-valuenow={used}
         >
           <div
-            className={`h-full ${share >= 1 ? "bg-error" : "bg-accent-link"}`}
+            className={`h-full ${share >= 1 ? "bg-error" : "bg-text-3"}`}
             style={{ width: `${Math.round(share * 100)}%` }}
           />
         </div>
@@ -107,6 +108,14 @@ function refusalText(error: unknown): string {
     return error.message;
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+// fileTone maps the write state to a lifecycle tone. A file reads processed
+// once its bytes landed and processing while they are still landing.
+function fileTone(status: string): PillTone {
+  if (status === "processed") return "success";
+  if (status === "processing") return "info";
+  return "neutral";
 }
 
 export function FilesPanel() {
@@ -179,13 +188,13 @@ export function FilesPanel() {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-              <th className="px-4 py-2.5">File</th>
-              <th className="px-4 py-2.5">Filename</th>
-              <th className="px-4 py-2.5">Size</th>
-              <th className="px-4 py-2.5">Purpose</th>
-              <th className="px-4 py-2.5">Status</th>
-              <th className="px-4 py-2.5">Expires</th>
-              <th className="px-4 py-2.5" />
+              <th scope="col" className="px-4 py-2.5">File</th>
+              <th scope="col" className="px-4 py-2.5">Filename</th>
+              <th scope="col" className="px-4 py-2.5 text-right">Size</th>
+              <th scope="col" className="px-4 py-2.5">Purpose</th>
+              <th scope="col" className="px-4 py-2.5">Status</th>
+              <th scope="col" className="px-4 py-2.5">Expires</th>
+              <th scope="col" className="px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
@@ -195,19 +204,21 @@ export function FilesPanel() {
                 data-testid="file-row"
                 className="border-b border-border-1 last:border-0"
               >
-                <td className="px-4 py-2 font-mono text-xs text-text-2">
+                <td className="px-4 py-2.5 font-mono text-xs text-text-2">
                   {file.id}
                 </td>
-                <td className="px-4 py-2 text-text-2">{file.filename}</td>
-                <td className="px-4 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-text-2">{file.filename}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {formatBytes(file.bytes)}
                 </td>
-                <td className="px-4 py-2 text-xs text-text-3">{file.purpose}</td>
-                <td className="px-4 py-2 text-xs text-text-3">{file.status}</td>
-                <td className="px-4 py-2 text-xs text-text-3">
+                <td className="px-4 py-2.5 text-xs text-text-3">{file.purpose}</td>
+                <td className="px-4 py-2.5">
+                  <Pill tone={fileTone(file.status)}>{file.status}</Pill>
+                </td>
+                <td className="px-4 py-2.5 text-xs text-text-3">
                   {file.expires_at ? formatUnixTime(file.expires_at) : "never"}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <div className="flex items-center justify-end">
                     <button
                       type="button"

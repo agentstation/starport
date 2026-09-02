@@ -190,7 +190,7 @@ function ModelCell({ model }: { model: Model }) {
 function IdCell({ model }: { model: Model }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      <span className="min-w-0 truncate font-mono text-xs text-text-4">
+      <span className="min-w-0 truncate font-mono text-xs text-text-3">
         {model.id}
       </span>
       <span className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
@@ -203,7 +203,7 @@ function IdCell({ model }: { model: Model }) {
 function PriceCell({ model }: { model: Model }) {
   const pair = formatPricePair(model.pricing?.prompt, model.pricing?.completion);
   if (pair === null) {
-    return <span className="text-text-4">—</span>;
+    return <span className="text-text-3">—</span>;
   }
   return (
     <span className="whitespace-nowrap font-mono text-xs tabular-nums text-text-2">

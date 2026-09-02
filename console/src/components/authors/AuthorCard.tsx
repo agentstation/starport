@@ -131,7 +131,7 @@ export function AuthorCard({
           >
             <span className="block truncate">{authorLabel(author)}</span>
           </Link>
-          <span className="shrink-0 font-mono text-xs text-text-4">
+          <span className="shrink-0 font-mono text-xs text-text-3">
             {author.id}
           </span>
         </div>

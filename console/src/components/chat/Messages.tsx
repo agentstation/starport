@@ -72,7 +72,7 @@ function ActionIcon({
   return (
     <IconButton
       label={label}
-      className={`rounded-sm p-1.5 text-text-4 hover:bg-bg-hover hover:text-text-2 ${className ?? ""}`}
+      className={`rounded-sm p-1.5 text-text-3 hover:bg-bg-hover hover:text-text-2 ${className ?? ""}`}
       {...props}
     >
       {children}
@@ -265,7 +265,7 @@ export function MetadataLine({
   }
   if (!items.length) return null;
   return (
-    <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-text-4">
+    <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs text-text-3">
       {items.map((item) => (
         <span key={item.key} className={item.tone}>
           {item.text}
@@ -349,7 +349,7 @@ export function AssistantMessage({
         {finished && `Response finished${message.model ? ` from ${message.model}` : ""}.`}
       </p>
       {(message.model || liveTps !== null) && (
-        <p className="mb-1 flex items-center gap-2 font-mono text-xs text-text-4">
+        <p className="mb-1 flex items-center gap-2 font-mono text-xs text-text-3">
           {message.model && <span>{message.model}</span>}
           {liveTps !== null && <span>~{liveTps} tok/s</span>}
         </p>
@@ -435,7 +435,7 @@ export function UserMessage({
               }
             }}
             rows={Math.min(8, Math.max(2, text.split("\n").length))}
-            className="w-full resize-y rounded-xl border border-border-2 bg-bg-raised px-4 py-2.5 text-base text-text-1 placeholder:text-text-4"
+            className="w-full resize-y rounded-xl border border-border-2 bg-bg-raised px-4 py-2.5 text-base text-text-1 placeholder:text-text-3"
           />
           <div className="mt-1 flex justify-end gap-2">
             <button
@@ -479,9 +479,9 @@ export function UserMessage({
                 className="flex items-center gap-1.5 rounded-lg border border-border-1 bg-bg-raised px-2.5 py-1.5 text-xs text-text-2"
               >
                 {attachment.kind === "audio" ? (
-                  <AudioLines className="size-3.5 shrink-0 text-text-4" />
+                  <AudioLines className="size-3.5 shrink-0 text-text-3" />
                 ) : (
-                  <FileText className="size-3.5 shrink-0 text-text-4" />
+                  <FileText className="size-3.5 shrink-0 text-text-3" />
                 )}
                 <span className="max-w-48 truncate">{attachment.name}</span>
               </span>
