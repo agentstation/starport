@@ -38,6 +38,11 @@ export type ActivityQuery = {
 // not as the whole history.
 export const DOCUMENT_ACTIVITY_LIMIT = 200;
 
+// ACTIVITY_24H_LIMIT bounds the sample the overview folds into its
+// sparklines and deltas. A sample that fills the bound is the newest part
+// of the day, not the day, and the card hides what the sample cannot show.
+export const ACTIVITY_24H_LIMIT = 500;
+
 // widestActivity reads the widest activity listing this credential reaches.
 // An admin credential sees the deployment. Every other credential sees the
 // account it belongs to.
@@ -226,7 +231,22 @@ export const queries = {
       queryKey: ["admin-activity-24h"],
       queryFn: ({ signal }) =>
         api.listAdminActivity(
-          { since: new Date(Date.now() - 24 * 3_600_000).toISOString(), limit: 500 },
+          { since: new Date(Date.now() - 24 * 3_600_000).toISOString(), limit: ACTIVITY_24H_LIMIT },
+          { signal },
+        ),
+    }),
+  // The day before the last one, read the same way, so a stat can say how
+  // the day compares.
+  adminActivityPrior24h: () =>
+    queryOptions({
+      queryKey: ["admin-activity-prior-24h"],
+      queryFn: ({ signal }) =>
+        api.listAdminActivity(
+          {
+            since: new Date(Date.now() - 48 * 3_600_000).toISOString(),
+            until: new Date(Date.now() - 24 * 3_600_000).toISOString(),
+            limit: ACTIVITY_24H_LIMIT,
+          },
           { signal },
         ),
     }),

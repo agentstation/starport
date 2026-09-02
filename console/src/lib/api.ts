@@ -667,6 +667,7 @@ export type ActivityFilters = {
   status?: string;
   key_id?: string;
   since?: string;
+  until?: string;
   limit?: number;
   cursor?: string;
 };
@@ -1379,6 +1380,7 @@ function activityQuery(filters: ActivityFilters): string {
   if (filters.status) params.set("status", filters.status);
   if (filters.key_id) params.set("key_id", filters.key_id);
   if (filters.since) params.set("since", filters.since);
+  if (filters.until) params.set("until", filters.until);
   if (filters.limit) params.set("limit", String(filters.limit));
   if (filters.cursor) params.set("cursor", filters.cursor);
   const query = params.toString();
