@@ -82,8 +82,8 @@ check CPV15 "chat metadata capitalizes TTFT" \
 # Phase E: brand
 check CPV16 "sidebar wordmark reads STARPORT" \
   grep_q 'STARPORT' console/src/components/shell/Shell.tsx
-check CPV17 "navigation labels the keys page API Keys" \
-  grep_q 'API Keys' console/src/components/shell/Shell.tsx
+check CPV17 "navigation labels the keys page API keys" \
+  grep_q 'API keys' console/src/components/shell/Shell.tsx
 check CPV18 "Starmap pin is v0.7.0 or later" \
   bash -c 'v=$(grep -o "starmap v[0-9.]*" go.mod | head -1 | cut -d" " -f2);
     test -n "$v" && printf "0.7.0\n%s\n" "${v#v}" | sort -V -C'

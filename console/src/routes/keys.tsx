@@ -946,7 +946,7 @@ function KeysPage() {
 function Header() {
   return (
     <div>
-      <h1 className="text-xl font-semibold tracking-[-0.01em]">API Keys</h1>
+      <h1 className="text-xl font-semibold tracking-[-0.01em]">API keys</h1>
       <p className="mt-1 text-sm text-text-3">
         Gateway keys for your apps. A key authenticates a caller and carries
         its scopes and limits; it never holds a provider credential.
