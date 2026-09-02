@@ -713,10 +713,11 @@ function UsagePage() {
   // Twelve fixed columns beside one that grows. Their minimum sum stays
   // under the 1136px content width of a 1440px viewport, so the guardrail
   // column at the end never clips: the table has no scroll axis of its own
-  // because the header sticks to the window.
+  // because the header sticks to the window. Below the breakpoint the sum
+  // is the minimum width and the table scrolls inside its box instead.
   const grid = admin
-    ? "grid grid-cols-[100px_minmax(150px,1fr)_130px_100px_120px_70px_75px_65px_75px_85px_80px_80px] items-center"
-    : "grid grid-cols-[100px_minmax(150px,1fr)_100px_120px_70px_75px_65px_75px_85px_80px_80px] items-center";
+    ? "grid min-w-[1130px] grid-cols-[100px_minmax(150px,1fr)_130px_100px_120px_70px_75px_65px_75px_85px_80px_80px] items-center"
+    : "grid min-w-[1000px] grid-cols-[100px_minmax(150px,1fr)_100px_120px_70px_75px_65px_75px_85px_80px_80px] items-center";
   const hasFilters = Boolean(
     search.model ||
       search.provider ||
@@ -866,7 +867,7 @@ function UsagePage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <ChartCard
               title="Requests"
               value={
@@ -1122,7 +1123,13 @@ function UsagePage() {
             </ChartCard>
           </div>
 
-          <div role="table" aria-rowcount={records.length} className="text-sm">
+          {/* Below the breakpoint the table scrolls inside its own box; the
+              sticky header keeps the page scroll above it. */}
+          <div
+            role="table"
+            aria-rowcount={records.length}
+            className="text-sm max-sm:overflow-x-auto"
+          >
             <div role="rowgroup" className="sticky top-0 z-10 bg-bg-canvas">
               <div role="row" className={`${grid} h-8 border-b border-border-1`}>
                 <div role="columnheader" className="px-2.5 text-xs font-medium text-text-3">Time</div>

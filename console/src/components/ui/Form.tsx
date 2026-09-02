@@ -136,7 +136,7 @@ export function RowAction({
     <button
       type="button"
       {...props}
-      className="flex h-7 items-center rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2 disabled:opacity-50"
+      className="flex h-11 items-center rounded-xs px-2 text-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2 disabled:opacity-50 sm:h-7"
     >
       {children}
     </button>

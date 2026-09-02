@@ -99,7 +99,7 @@ export function CardSkeleton({ lines = 3, className }: { lines?: number; classNa
 // provider lists: a logo, a name, and two lines per card.
 export function CardGridSkeleton({ count = 4, className }: { count?: number; className?: string }) {
   return (
-    <LoadingStatus className={cn("grid gap-3 md:grid-cols-2", className)}>
+    <LoadingStatus className={cn("grid grid-cols-1 gap-3 md:grid-cols-2", className)}>
       {Array.from({ length: count }, (_, card) => (
         <div
           key={card}

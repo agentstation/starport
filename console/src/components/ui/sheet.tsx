@@ -38,19 +38,32 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   );
 }
 
+// A sheet enters from one edge. The right edge is the detail panel every
+// list page uses; the left edge carries navigation on a small screen; the
+// bottom edge carries a picker a thumb reaches.
+const SIDE = {
+  right:
+    "inset-y-0 right-0 w-[480px] max-w-full border-l data-starting-style:translate-x-10 data-ending-style:translate-x-10",
+  left: "inset-y-0 left-0 w-[480px] max-w-full border-r data-starting-style:-translate-x-10 data-ending-style:-translate-x-10",
+  bottom:
+    "inset-x-0 bottom-0 max-h-[85vh] w-full rounded-t-md border-t data-starting-style:translate-y-10 data-ending-style:translate-y-10",
+} as const;
+
 function SheetContent({
   className,
   children,
   showCloseButton = true,
+  side = "right",
   ...props
-}: SheetPrimitive.Popup.Props & { showCloseButton?: boolean }) {
+}: SheetPrimitive.Popup.Props & { showCloseButton?: boolean; side?: keyof typeof SIDE }) {
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-[480px] max-w-full flex-col border-l border-border-2 bg-bg-raised text-sm text-text-1 shadow-overlay outline-none transition duration-200 ease-standard data-starting-style:translate-x-10 data-starting-style:opacity-0 data-ending-style:translate-x-10 data-ending-style:opacity-0 motion-reduce:transition-none",
+          "fixed z-50 flex flex-col border-border-2 bg-bg-raised text-sm text-text-1 shadow-overlay outline-none transition duration-200 ease-standard data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none",
+          SIDE[side],
           className,
         )}
         {...props}

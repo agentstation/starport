@@ -20,7 +20,7 @@ export function IconButton({
             type="button"
             aria-label={label}
             className={cn(
-              "inline-flex items-center justify-center transition-colors duration-150 ease-standard",
+              "inline-flex items-center justify-center transition-colors duration-150 ease-standard max-sm:min-h-11 max-sm:min-w-11",
               className,
             )}
             {...props}

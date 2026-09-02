@@ -16,9 +16,11 @@ import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from
 import { ModelPicker, supportsReasoning } from "@/components/chat/ModelPicker";
 import { INPUT_CLASS, TEXTAREA_CLASS } from "@/components/ui/Form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select } from "@/components/ui/Select";
 import { queries } from "@/lib/queries";
+import { SMALL_SCREEN, useMediaQuery } from "@/lib/useMediaQuery";
 import {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_KINDS,
@@ -106,7 +108,7 @@ function BarButton({
           <button
             type="button"
             aria-label={label}
-            className={`flex h-8 items-center gap-1 rounded-sm px-2 text-sm transition-colors duration-150 ease-standard ${
+            className={`flex h-11 items-center gap-1 rounded-sm px-2 text-sm transition-colors duration-150 ease-standard sm:h-8 ${
               active
                 ? "bg-bg-hover text-text-1"
                 : "text-text-3 hover:bg-bg-hover hover:text-text-2"
@@ -352,6 +354,7 @@ export function Composer({
   onCompareRemove?: (id: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const small = useMediaQuery(SMALL_SCREEN);
   const [menu, setMenu] = useState<"none" | "effort" | "params">("none");
   // Attached media; it ships with the next send.
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -521,35 +524,30 @@ export function Composer({
                 </button>
               </span>
             ))}
-          <Popover
-            open={pickerOpen}
-            onOpenChange={(open) => {
+          {/* Below the breakpoint the picker is a bottom sheet a thumb
+              reaches; above it, a popover anchored to the bar. */}
+          {small ? (
+            <Sheet
+              open={pickerOpen}
+              onOpenChange={(open) => {
               onPickerOpenChange(open);
               if (!open) textareaRef.current?.focus();
             }}
-          >
-            <PopoverTrigger
-              render={
-                <BarButton
-                  label={compareActive ? "Add model to comparison" : "Choose model"}
-                  active={pickerOpen}
-                />
-              }
             >
+              <SheetTrigger render={<BarButton label={compareActive ? "Add model to comparison" : "Choose model"} active={pickerOpen} />}>
               <span className="max-w-48 truncate">
                 {compareActive
                   ? `Add model (${compareCount}/4)`
                   : shortModelName(model)}
               </span>
               <ChevronDown aria-hidden="true" className="size-3.5" />
-            </PopoverTrigger>
-            <PopoverContent
-              side="top"
-              align="end"
-              aria-label="Choose model"
-              initialFocus={false}
-              className="w-[400px] max-w-[calc(100vw-2rem)] gap-0 p-0"
-            >
+              </SheetTrigger>
+              <SheetContent
+                side="bottom"
+                aria-label="Choose model"
+                showCloseButton={false}
+                className="gap-0 p-0"
+              >
               <ModelPicker
                 value={compareActive ? "" : model}
                 favorites={favorites}
@@ -570,8 +568,61 @@ export function Composer({
                   textareaRef.current?.focus();
                 }}
               />
-            </PopoverContent>
-          </Popover>
+              </SheetContent>
+            </Sheet>
+          ) : (
+          <Popover
+              open={pickerOpen}
+              onOpenChange={(open) => {
+                onPickerOpenChange(open);
+                if (!open) textareaRef.current?.focus();
+              }}
+            >
+              <PopoverTrigger
+                render={
+                  <BarButton
+                    label={compareActive ? "Add model to comparison" : "Choose model"}
+                    active={pickerOpen}
+                  />
+                }
+              >
+                <span className="max-w-48 truncate">
+                  {compareActive
+                    ? `Add model (${compareCount}/4)`
+                    : shortModelName(model)}
+                </span>
+                <ChevronDown aria-hidden="true" className="size-3.5" />
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="end"
+                aria-label="Choose model"
+                initialFocus={false}
+                className="w-[400px] max-w-[calc(100vw-2rem)] gap-0 p-0"
+              >
+                <ModelPicker
+                  value={compareActive ? "" : model}
+                  favorites={favorites}
+                  onToggleFavorite={onToggleFavorite}
+                  onSelect={(id) => {
+                    if (compareActive) {
+                      // Stay open so a set of models can be attached in
+                      // one visit; chips give immediate feedback.
+                      onCompareAdd?.(id);
+                      return;
+                    }
+                    onModelChange(id);
+                    onPickerOpenChange(false);
+                    textareaRef.current?.focus();
+                  }}
+                  onClose={() => {
+                    onPickerOpenChange(false);
+                    textareaRef.current?.focus();
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
 
           {reasoning && !compareActive && (
             <Popover
