@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { IdentityRequired } from "@/components/members/IdentityRequired";
 import { MemberDetailPanel } from "@/components/members/MemberDetailPanel";
 import { RowAction } from "@/components/ui/Form";
 import { TableSkeleton } from "@/components/ui/skeleton";
@@ -35,15 +36,22 @@ function MembersPage() {
   const setSelected = (memberId: string | null) =>
     void navigate({ search: { selected: memberId ?? undefined }, replace: true });
 
+  const providers = useQuery({ ...queries.identityProviders(), enabled: access });
+  // With no identity provider the gateway refuses the roster outright, so
+  // the page reads as the setup it needs and asks for the roster only once
+  // a provider answers.
+  const identityOff = providers.data?.length === 0;
   const members = useQuery({
     ...queries.members(),
-    enabled: access,
+    enabled: access && providers.data !== undefined && !identityOff,
   });
 
   const rows = members.data ?? [];
 
   let body: ReactNode;
-  if (members.error) {
+  if (identityOff) {
+    body = <IdentityRequired noun="members" />;
+  } else if (members.error) {
     body = (
       <p className="text-base text-text-3">
         {members.error instanceof ApiError && members.error.needsKey

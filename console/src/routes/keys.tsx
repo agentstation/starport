@@ -3,7 +3,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { ModelMultiPicker } from "@/components/models/ModelPicker";
 import { BudgetLine } from "@/components/ui/BudgetLine";
+import { DateField } from "@/components/ui/DateField";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { DataTable, dataColumns } from "@/components/ui/DataTable";
 import type { RowData, TableFeatures } from "@tanstack/react-table";
@@ -69,22 +72,55 @@ function StatusPill({ apiKey }: { apiKey: GatewayKey }) {
   return <Pill tone={tone}>{label}</Pill>;
 }
 
-function ScopePills({ scopes }: { scopes: string[] }) {
+// VISIBLE_SCOPES is how many scope pills a row shows before the rest
+// collapse into a count, so a full inference key stays one line tall.
+const VISIBLE_SCOPES = 4;
+
+function ScopePill({ scope }: { scope: string }) {
+  return (
+    <span className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 font-mono text-xs text-text-3">
+      {scope}
+    </span>
+  );
+}
+
+// ScopePills reads a key's scopes. The admin scope and the wildcard the
+// local operator key carries each stand for every scope, so they read as
+// that in words. Past four scopes, the rest fold into a count whose
+// tooltip lists them.
+export function ScopePills({ scopes }: { scopes: string[] }) {
   if (scopes.length === 0) return <span className="text-text-4">—</span>;
+  const everyScope = scopes.find((scope) => scope === "admin" || scope === "*");
+  if (everyScope) {
+    return (
+      <span
+        title={everyScope}
+        className="inline-flex h-5 items-center rounded-xs bg-accent-tint px-1.5 text-xs text-accent-link"
+      >
+        all scopes
+      </span>
+    );
+  }
+  const shown = scopes.slice(0, VISIBLE_SCOPES);
+  const rest = scopes.slice(VISIBLE_SCOPES);
   return (
     <div className="flex flex-wrap gap-1">
-      {scopes.map((scope) => (
-        <span
-          key={scope}
-          className={`inline-flex h-5 items-center rounded-xs px-1.5 font-mono text-xs ${
-            scope === "admin"
-              ? "bg-accent-tint text-accent-link"
-              : "bg-bg-raised text-text-3"
-          }`}
-        >
-          {scope}
-        </span>
+      {shown.map((scope) => (
+        <ScopePill key={scope} scope={scope} />
       ))}
+      {rest.length > 0 && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger
+              aria-label={`${rest.length} more scopes: ${rest.join(", ")}`}
+              className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 font-mono text-xs text-text-2"
+            >
+              +{rest.length}
+            </TooltipTrigger>
+            <TooltipContent className="max-w-sm font-mono">{rest.join(", ")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   );
 }
@@ -175,7 +211,7 @@ function LimitsCell({ apiKey, budgets }: { apiKey: GatewayKey; budgets?: Budgets
 // --- Limits form (shared by create and edit) ---
 
 type LimitsDraft = {
-  models: string;
+  models: string[];
   expiry: string;
   reqLimit: string;
   reqWindow: string;
@@ -188,7 +224,7 @@ type LimitsDraft = {
 function draftFromKey(apiKey: GatewayKey | null): LimitsDraft {
   const limits = apiKey?.limits ?? {};
   return {
-    models: (apiKey?.allowed_models ?? []).join(", "),
+    models: apiKey?.allowed_models ?? [],
     expiry: apiKey?.expires_at ? apiKey.expires_at.slice(0, 10) : "",
     reqLimit: limits.requests ? String(limits.requests.limit) : "",
     reqWindow: limits.requests ? String(limits.requests.window_seconds) : "60",
@@ -206,10 +242,7 @@ function readDraft(draft: LimitsDraft): {
   expiresAt: string | null;
   limits: KeyLimits | null;
 } {
-  const allowedModels = draft.models
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const allowedModels = draft.models;
   // The chosen day is inclusive: the key expires at the end of it.
   const expiresAt = draft.expiry ? `${draft.expiry}T23:59:59Z` : null;
   const limits: KeyLimits = {};
@@ -260,28 +293,23 @@ function LimitsFields({
   );
   return (
     <>
-      <Field label="Allowed models">
-        <input
-          type="text"
-          value={draft.models}
-          onChange={(event) => set({ models: event.target.value })}
-          placeholder="empty = all models (comma-separated IDs)"
-          autoComplete="off"
-          className={`${INPUT_CLASS} font-mono`}
+      <Field label="Allowed models" hint="empty allows every model">
+        <ModelMultiPicker
+          values={draft.models}
+          onChange={(models) => set({ models })}
+          placeholder="search the catalog"
         />
       </Field>
-      <Field label="Expires">
-        <input
-          type="date"
+      <Field
+        label="Expires"
+        hint={expiryLocked ? "Expiry cannot be removed once set." : "at the end of the chosen day"}
+      >
+        <DateField
           value={draft.expiry}
-          onChange={(event) => set({ expiry: event.target.value })}
-          className={INPUT_CLASS}
+          onChange={(expiry) => set({ expiry })}
+          placeholder="Never"
+          clearable={!expiryLocked}
         />
-        {expiryLocked && (
-          <span className="text-xs text-text-4">
-            Expiry cannot be removed once set.
-          </span>
-        )}
       </Field>
       <Field label="Request limit">
         <div className="flex gap-2">

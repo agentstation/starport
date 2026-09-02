@@ -27,6 +27,7 @@ export default defineConfig({
       "/api": "http://localhost:8080",
       "/health": "http://localhost:8080",
       "/console/session": "http://localhost:8080",
+      "/console/identity": "http://localhost:8080",
     },
   },
 });

@@ -97,7 +97,8 @@ test("the list renders every field the gateway records", async () => {
   expect(text).toContain("file-abc123");
   expect(text).toContain("report.pdf");
   expect(text).toContain("2.0 KB");
-  expect(text).toContain("user_data");
+  expect(text).toContain("User data");
+  expect(text).not.toContain("user_data");
   expect(text).toContain("processed");
   expect(text).toContain(new Date(1_756_086_400 * 1000).toLocaleString());
 });

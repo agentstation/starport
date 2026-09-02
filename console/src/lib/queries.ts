@@ -172,6 +172,15 @@ export const queries = {
       queryFn: ({ signal }) => api.listReachableAccounts(userId, { signal }),
     }),
   teams: () => queryOptions({ queryKey: ["teams"], queryFn: ({ signal }) => api.listTeams({ signal }) }),
+  // The identity provider list changes only with a restart, so it keeps
+  // for the session. A page that needs people reads it to tell an empty
+  // roster from a gateway that cannot fill one.
+  identityProviders: () =>
+    queryOptions({
+      queryKey: ["identity-providers"],
+      queryFn: ({ signal }) => api.identityProviders({ signal }),
+      staleTime: Infinity,
+    }),
   teamMembers: (teamId: string) =>
     queryOptions({
       queryKey: ["team-members", teamId],
