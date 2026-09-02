@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 	"github.com/agentstation/starport/internal/identity"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 // Member listing bounds. They match the account listing so an operator paging
@@ -36,15 +38,41 @@ const (
 // shared credential's grant list names accounts without owning them.
 type MembersController struct {
 	identity identity.Repositories
-	audit    AuditRecorder
+	// usage meters each team budget against the counters the team's keys
+	// advanced. Nil reports every budget as unavailable rather than unspent.
+	usage usage.Repository
+	audit AuditRecorder
 }
 
 // NewMembersController creates the members controller. Zero repositories —
 // a deployment with no identity configured — degrade every route to 503
 // rather than to an empty list, which would read as "nobody is here" on a
 // gateway that never looked.
-func NewMembersController(repositories identity.Repositories) *MembersController {
-	return &MembersController{identity: repositories}
+func NewMembersController(repositories identity.Repositories, records usage.Repository) *MembersController {
+	return &MembersController{identity: repositories, usage: records}
+}
+
+// teamView is a team as the admin surface reports it: the stored row, the
+// revision a later update may name to refuse a stale write, and the budget
+// meter read for the current window. The budget block appears only on a
+// team that sets one, so an unmetered team reads as unmetered, not as empty.
+type teamView struct {
+	identity.Team
+	Revision uint64         `json:"revision"`
+	Budgets  map[string]any `json:"budgets,omitempty"`
+}
+
+// teamView reads the team's spend budget against every key attributed to
+// the team, the same counter set the enforcement path meters.
+func (h *MembersController) teamView(ctx context.Context, record identity.TeamRecord) teamView {
+	view := teamView{Team: record.Team, Revision: record.Revision}
+	if record.Team.Budget != nil {
+		view.Budgets = map[string]any{
+			fieldSpend: budgetMeter(ctx, h.usage, usage.TeamScope(record.Team.ID),
+				limits.Budget(*record.Team.Budget), spendOf, time.Now().UTC()),
+		}
+	}
+	return view
 }
 
 // ready reports whether identity storage is configured, writing the refusal
@@ -73,7 +101,7 @@ func (h *MembersController) ListTeams(w http.ResponseWriter, r *http.Request) {
 		func(ctx context.Context, limit, offset int) ([]identity.TeamRecord, error) {
 			return h.identity.Teams.List(ctx, limit, offset)
 		},
-		func(record identity.TeamRecord) identity.Team { return record.Team })
+		func(record identity.TeamRecord) teamView { return h.teamView(r.Context(), record) })
 }
 
 // listPeople serves one paged listing over either people collection: the
@@ -148,12 +176,18 @@ func (h *MembersController) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		dto.WriteError(w, http.StatusInternalServerError, dto.ErrorTypeServerError, "Failed to create team")
 		return
 	}
-	writeMembersJSON(w, http.StatusCreated, record.Team)
+	writeMembersJSON(w, http.StatusCreated, h.teamView(r.Context(), record))
 }
 
 // UpdateTeam handles PUT /api/v1/admin/teams/{team_id}. The body states the
 // team's whole mutable surface — the name and the budget — so an omitted
 // budget clears it: PUT states the team as it should now be, not a delta.
+//
+// A body that names a revision states which team it read. A mismatch
+// answers 409 before anything is written, so one operator's budget save
+// cannot overwrite another's rename. A body with no revision keeps the
+// unconditional update: a script that never read the team may still state
+// it whole.
 func (h *MembersController) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 	if !h.ready(w) {
 		return
@@ -165,11 +199,17 @@ func (h *MembersController) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		Name   string             `json:"name"`
-		Budget *limits.TeamBudget `json:"budget,omitempty"`
+		Name     string             `json:"name"`
+		Budget   *limits.TeamBudget `json:"budget,omitempty"`
+		Revision *uint64            `json:"revision,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		dto.WriteError(w, http.StatusBadRequest, dto.ErrorTypeInvalidRequest, "Invalid request body")
+		return
+	}
+	if request.Revision != nil && *request.Revision != record.Revision {
+		dto.WriteError(w, http.StatusConflict, dto.ErrorTypeInvalidRequest,
+			"Team changed since it was read")
 		return
 	}
 
@@ -196,7 +236,7 @@ func (h *MembersController) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeMembersJSON(w, http.StatusOK, updated.Team)
+	writeMembersJSON(w, http.StatusOK, h.teamView(r.Context(), updated))
 }
 
 // DeleteTeam handles DELETE /api/v1/admin/teams/{team_id}. Deleting a team

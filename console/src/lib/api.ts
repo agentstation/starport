@@ -554,17 +554,27 @@ export type GatewayKey = {
   expires_at?: string | null;
 };
 
+// BudgetUsage is one budget meter as every holder reports it: the ceiling,
+// the interval, what the current fixed UTC window consumed and has left, and
+// the window's two edges. A meter the gateway could not read carries the
+// ceiling and an error, never a zero that would read as "nothing spent".
 export type BudgetUsage = {
   limit?: number;
   interval?: string;
   used?: number;
   remaining?: number;
+  window_start?: string;
+  window_end?: string;
+  error?: string;
 };
+
+// AccountBudgets and TeamBudgets are the meters a holder's budgets read.
+export type BudgetMeters = { spend?: BudgetUsage; tokens?: BudgetUsage };
 
 // KeyDetail adds current-window consumption; budgets appear only for
 // keys that configure them.
 export type KeyDetail = GatewayKey & {
-  usage?: { budgets?: { spend?: BudgetUsage; tokens?: BudgetUsage } };
+  usage?: { budgets?: BudgetMeters };
 };
 
 export type CreateKeyRequest = {
@@ -1042,9 +1052,42 @@ export type Account = {
   access?: AccountProviderAccess[] | null;
   metadata?: Record<string, unknown> | null;
   active?: boolean;
+  // budgets meters the spend and token limits above for the current window,
+  // summed over every key the account holds. Absent on an unbudgeted account.
+  budgets?: BudgetMeters;
   created_at?: string;
   updated_at?: string;
 };
+
+// ProviderUsage is one account's recorded traffic through one provider in
+// the gateway's rollup window. Spend the gateway could not price is counted
+// in requests_without_cost, never folded into the spend as zero.
+export type ProviderUsage = {
+  provider: string;
+  requests: number;
+  errors: number;
+  tokens?: { input?: number; output?: number; total?: number };
+  spend_nano_usd: number;
+  requests_without_cost: number;
+};
+
+export type ProviderUsagePage = {
+  data?: ProviderUsage[];
+  window?: { since?: string; until?: string };
+  // truncated reports that the rollup hit its record walk bound, so the
+  // rows below understate the window.
+  truncated?: boolean;
+};
+
+export function accountProviderUsage(
+  accountId: string,
+  { signal }: ReadOptions = {},
+): Promise<ProviderUsagePage> {
+  return request<ProviderUsagePage>(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/usage/providers`,
+    { signal },
+  );
+}
 
 export async function listAccounts({ signal }: ReadOptions = {}): Promise<Account[]> {
   const body = await request<{ accounts?: Account[] }>("/api/v1/admin/accounts", { signal });
@@ -1184,6 +1227,12 @@ export type Team = {
   id: string;
   name: string;
   budget?: TeamBudget | null;
+  // budgets meters the budget above for the current window, summed over
+  // every key attributed to the team. Absent on an unmetered team.
+  budgets?: BudgetMeters;
+  // revision names the team as read. An update that carries it is refused
+  // when another operator wrote the team in between.
+  revision?: number;
   created_at?: string;
   updated_at?: string;
 };
@@ -1223,10 +1272,11 @@ export function createTeam(name: string): Promise<Team> {
 
 // updateTeam states the team's whole mutable surface: the name and the
 // budget. Omitting the budget clears it — the PUT is the team as it should
-// now be, not a delta.
+// now be, not a delta. A revision, when the caller read one, makes the
+// gateway refuse the write with 409 if the team changed since that read.
 export function updateTeam(
   teamId: string,
-  body: { name: string; budget?: TeamBudget },
+  body: { name: string; budget?: TeamBudget; revision?: number },
 ): Promise<Team> {
   return request<Team>(`/api/v1/admin/teams/${encodeURIComponent(teamId)}`, {
     method: "PUT",

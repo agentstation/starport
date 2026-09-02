@@ -149,6 +149,11 @@ export const queries = {
 
   accounts: () =>
     queryOptions({ queryKey: ["accounts"], queryFn: ({ signal }) => api.listAccounts({ signal }) }),
+  accountProviderUsage: (accountId: string) =>
+    queryOptions({
+      queryKey: ["account-provider-usage", accountId],
+      queryFn: ({ signal }) => api.accountProviderUsage(accountId, { signal }),
+    }),
   accountTemplates: () =>
     queryOptions({
       queryKey: ["account-templates"],

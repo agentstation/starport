@@ -29,7 +29,7 @@ func newMembersTestController(t *testing.T) (*MembersController, identity.Reposi
 	require.NoError(t, db.Migrate(context.Background()))
 	repositories, err := identity.Open(db)
 	require.NoError(t, err)
-	return NewMembersController(repositories), repositories
+	return NewMembersController(repositories, nil), repositories
 }
 
 // membersTestRouter mounts the controller at the same paths routes.go mounts
@@ -44,6 +44,7 @@ func membersTestRouter(controller *MembersController) chi.Router {
 	router.Route("/teams", func(r chi.Router) {
 		r.Get("/", controller.ListTeams)
 		r.Post("/", controller.CreateTeam)
+		r.Put("/{team_id}", controller.UpdateTeam)
 		r.Delete("/{team_id}", controller.DeleteTeam)
 		r.Get("/{team_id}/members", controller.ListTeamMembers)
 		r.Put("/{team_id}/members/{user_id}", controller.AddTeamMember)
@@ -67,7 +68,7 @@ func membersTestCall(router chi.Router, method, path, body string) *httptest.Res
 // with no identity configured answers: 503 with the operator's lever named,
 // never an empty list that would read as "nobody is here".
 func TestMembersSurfaceDegradesLoudlyWithoutIdentity(t *testing.T) {
-	router := membersTestRouter(NewMembersController(identity.Repositories{}))
+	router := membersTestRouter(NewMembersController(identity.Repositories{}, nil))
 
 	for _, path := range []string{"/users", "/teams"} {
 		recorder := membersTestCall(router, http.MethodGet, path, "")

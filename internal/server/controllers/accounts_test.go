@@ -30,7 +30,7 @@ func newAccountsTestController(t *testing.T) (*AccountsController, account.Repos
 	keys, err := apikey.Open(storage.NewMockStore())
 	require.NoError(t, err)
 
-	return NewAccountsController(accounts, keys, nil), accounts, keys
+	return NewAccountsController(accounts, keys, nil, nil), accounts, keys
 }
 
 func accountsTestRouter(controller *AccountsController) chi.Router {
@@ -111,7 +111,7 @@ func TestAccountUpdateIsRevisionChecked(t *testing.T) {
 
 	// A concurrent operator writes between this request's read and its write.
 	racing := &racingAccountRepository{Repository: accounts}
-	router := accountsTestRouter(NewAccountsController(racing, nil, nil))
+	router := accountsTestRouter(NewAccountsController(racing, nil, nil, nil))
 
 	recorder := accountsTestCall(router, http.MethodPut, "/accounts/acme", `{"name":"Acme Corp"}`)
 	require.Equal(t, http.StatusConflict, recorder.Code)
@@ -171,7 +171,7 @@ func TestCreatedAccountReportsTheStrategyItRunsUnder(t *testing.T) {
 // deployment with no account storage. An empty list would read as "this
 // deployment has no accounts", which is a different and wrong answer.
 func TestAccountPlaneWithoutStorageRefusesRatherThanReportingNoAccounts(t *testing.T) {
-	router := accountsTestRouter(NewAccountsController(nil, nil, nil))
+	router := accountsTestRouter(NewAccountsController(nil, nil, nil, nil))
 
 	recorder := accountsTestCall(router, http.MethodGet, "/accounts", "")
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)

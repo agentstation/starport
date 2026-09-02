@@ -182,17 +182,22 @@ function instant(iso: string | null | undefined): number | undefined {
   return Number.isFinite(then) && then > 0 ? then : undefined;
 }
 
+// A future instant reads "in 3h". A budget window resets ahead of now, and
+// an elapsed phrase there would read backwards.
 export function formatRelativeTime(iso: string | null | undefined): string {
   const then = instant(iso);
   if (then === undefined) return DASH;
   const seconds = Math.round((Date.now() - then) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  const distance = Math.abs(seconds);
+  if (distance < 60) return "just now";
+  const phrase = (count: number, unit: string) =>
+    seconds < 0 ? `in ${count}${unit}` : `${count}${unit} ago`;
+  const minutes = Math.round(distance / 60);
+  if (minutes < 60) return phrase(minutes, "m");
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return phrase(hours, "h");
   const days = Math.round(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return phrase(days, "d");
   return new Date(then).toLocaleDateString();
 }
 

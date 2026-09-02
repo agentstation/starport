@@ -120,7 +120,7 @@
     Created: 2026-09-01 ·
     Baseline: main @ 6db57d8 ·
     Proof root: <code>docs/proof/console-polish/</code> ·
-    Next action: finish CPL-E2 on codex/cpl-e2, then start CPL-E3
+    Next action: finish CPL-E3 on codex/cpl-e3, then start CPL-E4
   </p>
 
   <section id="outcome">
@@ -522,8 +522,8 @@
         <tr id="CPL-D3" data-status="done"><td>CPL-D3</td><td>Plain table and label pass.</td><td><code>done</code></td><td>PR #343. Verifier 27 passed, 21 failed. Proof <code>docs/proof/console-polish/CPL-D3.md</code>.</td></tr>
         <tr id="CPL-D4" data-status="done"><td>CPL-D4</td><td>Charts: series descriptor, interval, legend, honesty.</td><td><code>done</code></td><td>PR #344. Verifier 29 passed, 19 failed. Proof <code>docs/proof/console-polish/CPL-D4.md</code>.</td></tr>
         <tr id="CPL-E1" data-status="done"><td>CPL-E1</td><td>Honest system info and a webhook summary route.</td><td><code>done</code></td><td>PR #345. Verifier 31 passed, 17 failed. Proof <code>docs/proof/console-polish/CPL-E1.md</code>.</td></tr>
-        <tr id="CPL-E2" data-status="in_progress"><td>CPL-E2</td><td>Settings sections for system, observability, guardrails, webhooks, and retention.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e2</code>.</td></tr>
-        <tr id="CPL-E3" data-status="todo"><td>CPL-E3</td><td>Budgets as meters on teams and accounts.</td><td><code>todo</code></td><td></td></tr>
+        <tr id="CPL-E2" data-status="done"><td>CPL-E2</td><td>Settings sections for system, observability, guardrails, webhooks, and retention.</td><td><code>done</code></td><td>PR #346. Verifier 32 passed, 16 failed. Proof <code>docs/proof/console-polish/CPL-E2.md</code>.</td></tr>
+        <tr id="CPL-E3" data-status="in_progress"><td>CPL-E3</td><td>Budgets as meters on teams and accounts.</td><td><code>in_progress</code></td><td>Branch <code>codex/cpl-e3</code>.</td></tr>
         <tr id="CPL-E4" data-status="todo"><td>CPL-E4</td><td>Confirmations for every cascading write.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-E5" data-status="todo"><td>CPL-E5</td><td>Audit log as an investigation tool.</td><td><code>todo</code></td><td></td></tr>
         <tr id="CPL-E6" data-status="todo"><td>CPL-E6</td><td>Usage: guardrail fields, export, semantic cache.</td><td><code>todo</code></td><td></td></tr>
@@ -1261,6 +1261,16 @@
         note.</li>
     </ol>
 
+    <p><strong>Amendment (2026-09-02):</strong> the meter keeps the gateway
+      unit. Every value is integer nano-USD, or tokens for a token budget,
+      and the entry carries six keys: <code>limit</code>,
+      <code>interval</code>, <code>used</code>, <code>remaining</code>,
+      <code>window_start</code>, and <code>window_end</code>. The key detail
+      budget block moved to the same six keys, so one shape serves keys,
+      teams, and accounts. Account reads carry the block too, because the
+      account limits hold the spend and token budgets. The proof records the
+      shape.</p>
+
     <p><strong>Acceptance:</strong>
       <code>TestTeamReadIncludesBudgetUsage</code> asserts the five entry
       keys, and <code>TestTeamUpdateRejectsStaleRevision</code> passes. A console test
@@ -1851,6 +1861,14 @@ deleted this plan.</code></pre>
           and the variable that sets it, the shell names an unstamped
           build in words, and a route test covers the stamped, unstamped,
           and locked states.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E2</td><td>done</td><td>PR #346 merged.
+          Verifier 32 passed, 16 failed. Console tests 342.</td></tr>
+        <tr><td>2026-09-02</td><td>CPL-E3</td><td>started</td><td>Branch
+          codex/cpl-e3. Team and account reads carry budget meters in
+          nano-USD, a team update checks the revision it read, the shared
+          BudgetLine draws the meter in three scopes, a confirmed dialog
+          removes a team budget, and the account detail lists provider
+          spend.</td></tr>
       </tbody>
     </table>
   </section>

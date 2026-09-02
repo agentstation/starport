@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -163,9 +164,9 @@ test("saves a team spend budget", async () => {
   );
 });
 
-// An emptied amount clears the budget: the PUT omits it, and the gateway
-// reads the omission as "unmetered".
-test("clears the budget when the amount is emptied", async () => {
+// An emptied amount never clears the budget on its own: the panel refuses
+// the save and points at the one action that does.
+test("refuses an emptied amount instead of clearing the budget", async () => {
   mount({
     id: "t-1",
     name: "Platform",
@@ -179,11 +180,102 @@ test("clears the budget when the amount is emptied", async () => {
   fireEvent.change(amount, { target: { value: "" } });
   fireEvent.click(screen.getByText("Save budget"));
 
+  expect(
+    await screen.findByText("Enter an amount, or remove the budget below."),
+  ).toBeTruthy();
+  expect(gateway.updated).toEqual([]);
+});
+
+// Removing the budget restates the team and the ceiling, waits for the
+// confirmation, then PUTs the team whole without a budget at the revision
+// the panel read.
+test("removes the budget only after the operator confirms", async () => {
+  mount({
+    id: "t-1",
+    name: "Platform",
+    budget: { limit: 2_000_000_000, interval: "day" },
+    revision: 7,
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "Remove budget" }));
+  const dialog = await screen.findByRole("dialog", { name: "Remove budget" });
+  expect(dialog.textContent).toContain("$2 per day");
+  expect(gateway.updated).toEqual([]);
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Remove budget" }));
+
   await waitFor(() =>
     expect(gateway.updated).toEqual([
-      { teamId: "t-1", body: { name: "Platform" } },
+      { teamId: "t-1", body: { name: "Platform", revision: 7 } },
     ]),
   );
+});
+
+// A budget save names the revision the panel read, so the gateway can
+// refuse a write over a rename that landed in between.
+test("sends the revision it read with a budget save", async () => {
+  mount({ id: "t-1", name: "Platform", revision: 3 });
+
+  fireEvent.change(
+    screen.getByRole("spinbutton", { name: "Team spend budget (USD)" }),
+    { target: { value: "1" } },
+  );
+  fireEvent.click(screen.getByText("Save budget"));
+
+  await waitFor(() =>
+    expect(gateway.updated).toEqual([
+      {
+        teamId: "t-1",
+        body: {
+          name: "Platform",
+          budget: { limit: 1_000_000_000, interval: "month" },
+          revision: 3,
+        },
+      },
+    ]),
+  );
+});
+
+// A team four fifths through its window shows the meter at that point with
+// what is left and when the window resets.
+test("draws the budget meter at 80 percent", () => {
+  mount({
+    id: "t-1",
+    name: "Platform",
+    budget: { limit: 10_000_000_000, interval: "month" },
+    budgets: {
+      spend: {
+        limit: 10_000_000_000,
+        interval: "month",
+        used: 8_000_000_000,
+        remaining: 2_000_000_000,
+        window_start: "2026-09-01T00:00:00Z",
+        window_end: "2026-10-01T00:00:00Z",
+      },
+    },
+  });
+
+  const meter = screen.getByRole("meter", { name: "spend budget" });
+  expect(meter.getAttribute("aria-valuenow")).toBe("8000000000");
+  expect(meter.getAttribute("aria-valuemax")).toBe("10000000000");
+  expect(meter.getAttribute("aria-valuetext")).toBe("$8 of $10, 80%");
+  expect((meter.firstElementChild as HTMLElement).style.width).toBe("80%");
+  expect(screen.getByText("$2 left")).toBeTruthy();
+  expect(screen.getByText(/resets/)).toBeTruthy();
+});
+
+// A meter the gateway could not read says so instead of drawing an empty
+// bar.
+test("names an unreadable budget meter", () => {
+  mount({
+    id: "t-1",
+    name: "Platform",
+    budget: { limit: 10_000_000_000, interval: "month" },
+    budgets: { spend: { limit: 10_000_000_000, interval: "month", error: "unavailable" } },
+  });
+
+  expect(screen.queryByRole("meter")).toBeNull();
+  expect(screen.getByText("· usage unavailable")).toBeTruthy();
 });
 
 // A negative amount never travels: the panel refuses it locally.

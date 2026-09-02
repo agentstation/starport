@@ -381,10 +381,10 @@ func (h *AdminController) keyUsage(ctx context.Context, apiKey apikey.APIKey) ma
 	}
 	budgets := map[string]any{}
 	if budget := apiKey.Limits.Spend; budget != nil {
-		budgets["spend"] = budgetUsage(budget, totalsByInterval, func(t usage.Totals) int64 { return t.SpendNanoUSD })
+		budgets[fieldSpend] = budgetUsage(budget, totalsByInterval, spendOf, now)
 	}
 	if budget := apiKey.Limits.Tokens; budget != nil {
-		budgets[fieldTokens] = budgetUsage(budget, totalsByInterval, func(t usage.Totals) int64 { return t.Tokens })
+		budgets[fieldTokens] = budgetUsage(budget, totalsByInterval, tokensOf, now)
 	}
 	if len(budgets) > 0 {
 		result["budgets"] = budgets
@@ -392,27 +392,20 @@ func (h *AdminController) keyUsage(ctx context.Context, apiKey apikey.APIKey) ma
 	return result
 }
 
-// budgetUsage shapes one budget's current-window consumption.
+// budgetUsage shapes one budget's current-window consumption from the
+// totals the window read above already holds, in the one entry shape every
+// budget holder reports.
 func budgetUsage(
 	budget *limits.Budget,
 	totalsByInterval map[string]usage.Totals,
 	used func(usage.Totals) int64,
+	now time.Time,
 ) map[string]any {
 	totals, ok := totalsByInterval[budget.Interval]
 	if !ok {
-		return map[string]any{fieldLimit: budget.Limit, "interval": budget.Interval, fieldError: systemInfoUnavailable}
+		return budgetUnavailable(*budget, now)
 	}
-	consumed := used(totals)
-	remaining := budget.Limit - consumed
-	if remaining < 0 {
-		remaining = 0
-	}
-	return map[string]any{
-		fieldLimit:  budget.Limit,
-		"interval":  budget.Interval,
-		"used":      consumed,
-		"remaining": remaining,
-	}
+	return budgetEntry(*budget, used(totals), now)
 }
 
 // isKeyValidationError reports whether err is a caller-shaped API key error.

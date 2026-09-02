@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -14,6 +15,7 @@ import (
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/server/dto"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 // Account listing bounds. They match the key listing so an operator paging
@@ -41,7 +43,11 @@ type AccountsController struct {
 	accounts  account.Repository
 	keys      KeyLister
 	templates account.TemplateRepository
-	audit     AuditRecorder
+	// usage meters each account budget against the counters every key the
+	// account holds advanced. Nil reports a budget as unavailable, never as
+	// unspent.
+	usage usage.Repository
+	audit AuditRecorder
 }
 
 // NewAccountsController creates the account controller. A nil repository
@@ -53,8 +59,25 @@ func NewAccountsController(
 	accounts account.Repository,
 	keys KeyLister,
 	templates account.TemplateRepository,
+	records usage.Repository,
 ) *AccountsController {
-	return &AccountsController{accounts: accounts, keys: keys, templates: templates}
+	return &AccountsController{accounts: accounts, keys: keys, templates: templates, usage: records}
+}
+
+// accountView is an account as the admin surface reports it: the effective
+// policy and, for an account that sets a spend or token budget, the meter
+// read for the current window over every key the account holds.
+type accountView struct {
+	account.Account
+	Budgets map[string]any `json:"budgets,omitempty"`
+}
+
+func (h *AccountsController) accountView(ctx context.Context, record account.Account) accountView {
+	effective := effectiveAccount(record)
+	return accountView{
+		Account: effective,
+		Budgets: limitBudgets(ctx, h.usage, usage.AccountScope(effective.ID), effective.Limits, time.Now().UTC()),
+	}
 }
 
 // ready reports whether account storage is configured, writing the refusal
@@ -120,9 +143,9 @@ func (h *AccountsController) List(w http.ResponseWriter, r *http.Request) {
 		records = records[:limit]
 	}
 
-	accounts := make([]account.Account, 0, len(records))
+	accounts := make([]accountView, 0, len(records))
 	for _, record := range records {
-		accounts = append(accounts, effectiveAccount(record.Account))
+		accounts = append(accounts, h.accountView(r.Context(), record.Account))
 	}
 
 	response := map[string]any{
@@ -180,7 +203,7 @@ func (h *AccountsController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeAccountJSON(w, http.StatusCreated, effectiveAccount(record.Account))
+	writeAccountJSON(w, http.StatusCreated, h.accountView(r.Context(), record.Account))
 }
 
 // Get handles GET /api/v1/admin/accounts/{account_id}.
@@ -193,7 +216,7 @@ func (h *AccountsController) Get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeAccountJSON(w, http.StatusOK, effectiveAccount(record.Account))
+	writeAccountJSON(w, http.StatusOK, h.accountView(r.Context(), record.Account))
 }
 
 // Update handles PUT /api/v1/admin/accounts/{account_id}. It reads, applies the
@@ -235,7 +258,7 @@ func (h *AccountsController) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeAccountJSON(w, http.StatusOK, effectiveAccount(updated.Account))
+	writeAccountJSON(w, http.StatusOK, h.accountView(r.Context(), updated.Account))
 }
 
 // Delete handles DELETE /api/v1/admin/accounts/{account_id}. It refuses the

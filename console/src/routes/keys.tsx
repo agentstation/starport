@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { BudgetLine } from "@/components/ui/BudgetLine";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { DataTable, dataColumns } from "@/components/ui/DataTable";
 import type { RowData, TableFeatures } from "@tanstack/react-table";
@@ -19,7 +20,6 @@ import {
   DEFAULT_ACCOUNT_ID,
   deleteKey,
   updateKey,
-  type BudgetUsage,
   type GatewayKey,
   type KeyDetail,
   type KeyLimits,
@@ -85,42 +85,6 @@ function ScopePills({ scopes }: { scopes: string[] }) {
           {scope}
         </span>
       ))}
-    </div>
-  );
-}
-
-// BudgetLine shows one budget's remaining allowance with a thin consumption
-// bar; an exhausted window reads in error red.
-function BudgetLine({
-  usage,
-  render,
-  unit,
-}: {
-  usage: BudgetUsage;
-  render: (value: number) => string;
-  unit: string;
-}) {
-  const limit = usage.limit ?? 0;
-  const used = usage.used ?? 0;
-  const remaining = usage.remaining ?? Math.max(0, limit - used);
-  const exhausted = limit > 0 && remaining === 0;
-  const fraction = limit > 0 ? Math.min(1, used / limit) : 0;
-  return (
-    <div className="flex items-center gap-2">
-      <span
-        aria-hidden="true"
-        className="h-1 w-12 shrink-0 overflow-hidden rounded-full bg-bg-raised"
-      >
-        <span
-          className={`block h-full ${exhausted ? "bg-error" : fraction > 0.8 ? "bg-warning" : "bg-success"}`}
-          style={{ width: `${Math.round(fraction * 100)}%` }}
-        />
-      </span>
-      <span
-        className={`text-xs tabular-nums ${exhausted ? "text-error" : "text-text-3"}`}
-      >
-        {exhausted ? `${unit} exhausted` : `${render(remaining)} left`}
-      </span>
     </div>
   );
 }

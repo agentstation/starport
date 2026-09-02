@@ -6,7 +6,9 @@ import { useState, type ReactNode } from "react";
 import { AccountPolicyPanel } from "@/components/accounts/AccountPolicyPanel";
 import { AccountTemplatesPanel } from "@/components/accounts/AccountTemplatesPanel";
 import { CreateAccountModal } from "@/components/accounts/CreateAccountModal";
+import { ProviderSpendPanel } from "@/components/accounts/ProviderSpendPanel";
 import { ByokPanel } from "@/components/credentials/ByokPanel";
+import { BudgetLine } from "@/components/ui/BudgetLine";
 import { Field, GhostButton, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -97,6 +99,27 @@ function LimitChips({ limits }: { limits: AccountLimits | null | undefined }) {
   );
 }
 
+// BudgetMeters draws the current-window meter under each budget chip. The
+// listing carries the readings, so the table shows them without a detail
+// read per row.
+function BudgetMeters({ budgets }: { budgets: Account["budgets"] }) {
+  if (!budgets?.spend && !budgets?.tokens) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      {budgets.spend && (
+        <BudgetLine usage={budgets.spend} render={formatNanoUSD} unit="spend" />
+      )}
+      {budgets.tokens && (
+        <BudgetLine
+          usage={budgets.tokens}
+          render={(value) => `${formatCount(value)} tok`}
+          unit="tokens"
+        />
+      )}
+    </div>
+  );
+}
+
 // --- Account detail ---
 
 function AccountDetail({
@@ -169,11 +192,14 @@ function AccountDetail({
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-text-2">Account limits</span>
               <LimitChips limits={account.limits} />
+              <BudgetMeters budgets={account.budgets} />
               <span className="text-xs text-text-4">
                 Metered across every key in the account. A key with its own limit
                 satisfies both.
               </span>
             </div>
+
+            <ProviderSpendPanel accountId={account.id} />
 
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-text-2">
@@ -325,6 +351,7 @@ function AccountsPage() {
                 </td>
                 <td className="px-4 py-2.5">
                   <LimitChips limits={account.limits} />
+                  <BudgetMeters budgets={account.budgets} />
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {formatCount(keysFor(account.id).length)}
