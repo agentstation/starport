@@ -101,7 +101,7 @@ one_contract_two_backends() {
 # purpose: a page that listed files and offered no upload would satisfy a
 # single-term grep and still leave an operator unable to put a document in.
 console_files() {
-  all_present listFiles uploadFile deleteFile \
+  all_present queries.files uploadFile deleteFile \
     -- console/src/components/files/FilesPanel.tsx || return 1
   all_present file-row file-notice stored-total \
     -- console/src/components/files/FilesPanel.test.tsx || return 1

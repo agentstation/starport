@@ -98,7 +98,7 @@ video_routes_registered() {
 # reason would satisfy a single-term grep and still leave an operator unable to
 # tell a running job from a dead one.
 console_jobs() {
-  all_present listJobs submitJob \
+  all_present queries.videoJobs submitJob \
     -- console/src/components/jobs/JobsPanel.tsx || return 1
   all_present job-row job-failure job-expired \
     -- console/src/components/jobs/JobsPanel.test.tsx || return 1
