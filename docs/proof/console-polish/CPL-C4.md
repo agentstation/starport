@@ -56,12 +56,15 @@ reading below dates from 2026-09-01 on branch `codex/cpl-c4` from
 | Buttons with a `title` attribute | 8 | 0 |
 | Palette entity kinds | 5 | 6 |
 | Console tests | 233 in 38 files | 236 in 39 files |
-| Entry chunk gzip | 115.81 kB | 138.39 kB |
+| Entry chunk gzip | 115.81 kB | 117.67 kB |
+| Palette chunk gzip | none | 19.49 kB |
 | Verifier | 18 passed, 30 failed | 19 passed, 29 failed |
 
-The entry chunk grows by cmdk and the Base UI popover, tooltip, menu,
-and tabs runtimes. The four overlay implementations and their outside
-click handlers leave at the same time.
+The entry chunk grows by the Base UI popover, tooltip, menu, and tabs
+runtimes. The palette dialog and cmdk load in their own chunk on the
+first open, so the entry stays under the I8 limit of 130 kB gzip.
+The four overlay implementations and their outside click handlers leave
+at the same time.
 
 ## Fail-before
 
