@@ -13,7 +13,7 @@ import {
 } from "@/components/providers/ProviderDetail";
 import { Field, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { SidePanel } from "@/components/ui/SidePanel";
+import { Sheet, SheetBody, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   ApiError,
   createSharedCredential,
@@ -190,79 +190,88 @@ export function ProviderCredentialCard({
       )}
 
       {managing && (
-        <SidePanel
-          title={`${name} credentials`}
-          onClose={() => setManaging(false)}
-          footer={
-            <p className="text-xs text-text-4">
-              Each request uses the first usable source: shared environment,
-              then shared stored, then the account&rsquo;s own. An
-              account&rsquo;s strategy can prefer its own credential or refuse
-              the operator&rsquo;s.
-            </p>
-          }
+        <Sheet
+          open
+          onOpenChange={(open) => {
+            if (!open) setManaging(false);
+          }}
         >
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3">
-              <div>
-                <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
-                  Shared
-                </h3>
-                <p className="mt-1 text-xs text-text-4">
-                  The operator&rsquo;s credentials. Every account&rsquo;s
-                  requests can use them.
-                </p>
-              </div>
-              <div className="flex flex-col gap-2 rounded-sm border border-border-1 bg-bg-panel p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="text-sm font-medium text-text-1">
-                    Environment
-                  </h4>
-                  {envUsable && (
-                    <SourcePill
-                      label="Active"
-                      tone="success"
-                      title="Requests use this credential"
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>{`${name} credentials`}</SheetTitle>
+            </SheetHeader>
+            <SheetBody>
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
+                      Shared
+                    </h3>
+                    <p className="mt-1 text-xs text-text-4">
+                      The operator&rsquo;s credentials. Every account&rsquo;s
+                      requests can use them.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 rounded-sm border border-border-1 bg-bg-panel p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-medium text-text-1">
+                        Environment
+                      </h4>
+                      {envUsable && (
+                        <SourcePill
+                          label="Active"
+                          tone="success"
+                          title="Requests use this credential"
+                        />
+                      )}
+                      {!envUsable && <SourcePill label="Not set" tone="neutral" />}
+                      <span className="ml-auto text-xs text-text-4">
+                        read-only · set where the gateway runs
+                      </span>
+                    </div>
+                    <EnvironmentCredentialPanel
+                      providerId={providerId}
+                      credential={credential}
                     />
-                  )}
-                  {!envUsable && <SourcePill label="Not set" tone="neutral" />}
-                  <span className="ml-auto text-xs text-text-4">
-                    read-only · set where the gateway runs
-                  </span>
+                  </div>
+                  <div className="rounded-sm border border-border-1 bg-bg-panel p-3">
+                    <SharedCredentialPanel
+                      providerId={providerId}
+                      name={name}
+                      fields={fields}
+                      active={!envUsable}
+                    />
+                  </div>
                 </div>
-                <EnvironmentCredentialPanel
-                  providerId={providerId}
-                  credential={credential}
-                />
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
+                      Accounts
+                    </h3>
+                    <p className="mt-1 text-xs text-text-4">
+                      A credential an account brings for itself. It pays that
+                      account&rsquo;s requests only, billed to the account
+                      directly.
+                    </p>
+                  </div>
+                  <AccountCredentialRow
+                    providerId={providerId}
+                    name={name}
+                    fields={fields}
+                  />
+                </div>
               </div>
-              <div className="rounded-sm border border-border-1 bg-bg-panel p-3">
-                <SharedCredentialPanel
-                  providerId={providerId}
-                  name={name}
-                  fields={fields}
-                  active={!envUsable}
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <div>
-                <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
-                  Accounts
-                </h3>
-                <p className="mt-1 text-xs text-text-4">
-                  A credential an account brings for itself. It pays that
-                  account&rsquo;s requests only, billed to the account
-                  directly.
-                </p>
-              </div>
-              <AccountCredentialRow
-                providerId={providerId}
-                name={name}
-                fields={fields}
-              />
-            </div>
-          </div>
-        </SidePanel>
+            </SheetBody>
+            <SheetFooter>
+              <p className="text-xs text-text-4">
+                            Each request uses the first usable source: shared environment,
+                            then shared stored, then the account&rsquo;s own. An
+                            account&rsquo;s strategy can prefer its own credential or refuse
+                            the operator&rsquo;s.
+                          </p>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       )}
     </section>
   );

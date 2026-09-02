@@ -4,15 +4,9 @@ import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { CopyButton } from "@/components/ui/CopyButton";
-import {
-  Field,
-  GhostButton,
-  INPUT_CLASS,
-  PrimaryButton,
-  RowAction,
-} from "@/components/ui/Form";
+import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { Modal } from "@/components/ui/Modal";
+import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   accessMessage,
   ApiError,
@@ -402,11 +396,9 @@ function LimitsFields({
 function CreateKeyModal({
   onClose,
   onCreated,
-  onError,
 }: {
   onClose: () => void;
   onCreated: (secret: string) => void;
-  onError: (message: string) => void;
 }) {
   const [name, setName] = useState("");
   const [admin, setAdmin] = useState(false);
@@ -420,7 +412,7 @@ function CreateKeyModal({
       onCreated(record?.key ?? "");
     },
     onError: (error) =>
-      onError(
+      setFormError(
         `Create failed: ${error instanceof Error ? error.message : error}`,
       ),
   });
@@ -472,44 +464,51 @@ function CreateKeyModal({
   };
 
   return (
-    <Modal
-      title="New API key"
-      onClose={onClose}
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New API key</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-4">
+            <Field label="Name">
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="e.g. local-dev"
+                autoComplete="off"
+                className={INPUT_CLASS}
+              />
+            </Field>
+            <label className="flex items-start gap-2 text-sm text-text-2">
+              <input
+                type="checkbox"
+                checked={admin}
+                onChange={(event) => setAdmin(event.target.checked)}
+                className="mt-0.5 accent-(--accent)"
+              />
+              <span>
+                Admin scope — can manage keys, providers, and the catalog
+              </span>
+            </label>
+            <LimitsFields draft={draft} onChange={setDraft} expiryLocked={false} />
+          </div>
+        </DialogBody>
+        <DialogError>{formError}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
           <PrimaryButton onClick={submit} disabled={create.isPending}>
             Create key
           </PrimaryButton>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <Field label="Name">
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. local-dev"
-            autoComplete="off"
-            className={INPUT_CLASS}
-          />
-        </Field>
-        <label className="flex items-start gap-2 text-sm text-text-2">
-          <input
-            type="checkbox"
-            checked={admin}
-            onChange={(event) => setAdmin(event.target.checked)}
-            className="mt-0.5 accent-(--accent)"
-          />
-          <span>
-            Admin scope — can manage keys, providers, and the catalog
-          </span>
-        </label>
-        <LimitsFields draft={draft} onChange={setDraft} expiryLocked={false} />
-        {formError && <p className="text-xs text-error">{formError}</p>}
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -517,12 +516,10 @@ function EditKeyModal({
   apiKey,
   onClose,
   onSaved,
-  onError,
 }: {
   apiKey: GatewayKey;
   onClose: () => void;
   onSaved: () => void;
-  onError: (message: string) => void;
 }) {
   const [name, setName] = useState(apiKey.name ?? "");
   const [draft, setDraft] = useState(() => draftFromKey(apiKey));
@@ -533,7 +530,7 @@ function EditKeyModal({
       updateKey(apiKey.id, body),
     onSuccess: onSaved,
     onError: (error) =>
-      onError(
+      setFormError(
         `Update failed: ${error instanceof Error ? error.message : error}`,
       ),
   });
@@ -562,36 +559,43 @@ function EditKeyModal({
   };
 
   return (
-    <Modal
-      title={`Edit key · ${apiKey.name || truncateKeyId(apiKey.id)}`}
-      onClose={onClose}
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{`Edit key · ${apiKey.name || truncateKeyId(apiKey.id)}`}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-4">
+            <Field label="Name">
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                autoComplete="off"
+                className={INPUT_CLASS}
+              />
+            </Field>
+            <LimitsFields
+              draft={draft}
+              onChange={setDraft}
+              expiryLocked={!!apiKey.expires_at}
+            />
+          </div>
+        </DialogBody>
+        <DialogError>{formError}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
           <PrimaryButton onClick={submit} disabled={save.isPending}>
             Save
           </PrimaryButton>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <Field label="Name">
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            autoComplete="off"
-            className={INPUT_CLASS}
-          />
-        </Field>
-        <LimitsFields
-          draft={draft}
-          onChange={setDraft}
-          expiryLocked={!!apiKey.expires_at}
-        />
-        {formError && <p className="text-xs text-error">{formError}</p>}
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -599,24 +603,35 @@ function EditKeyModal({
 // in plaintext (DESIGN.md: full value exactly once, with a copy button).
 function SecretModal({ secret, onClose }: { secret: string; onClose: () => void }) {
   return (
-    <Modal
-      title="Copy your key now"
-      onClose={onClose}
-      footer={<PrimaryButton onClick={onClose}>Done</PrimaryButton>}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-text-2">
-          This key is shown once. Store it somewhere safe — the gateway keeps
-          only a hash.
-        </p>
-        <div className="flex items-center gap-2 rounded-sm border border-border-1 bg-bg-canvas p-3">
-          <code className="min-w-0 flex-1 break-all font-mono text-xs text-text-1">
-            {secret || "(secret unavailable)"}
-          </code>
-          {secret && <CopyButton text={secret} label="key" />}
-        </div>
-      </div>
-    </Modal>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Copy your key now</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-text-2">
+              This key is shown once. Store it somewhere safe — the gateway keeps
+              only a hash.
+            </p>
+            <div className="flex items-center gap-2 rounded-sm border border-border-1 bg-bg-canvas p-3">
+              <code className="min-w-0 flex-1 break-all font-mono text-xs text-text-1">
+                {secret || "(secret unavailable)"}
+              </code>
+              {secret && <CopyButton text={secret} label="key" />}
+            </div>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <PrimaryButton onClick={onClose}>Done</PrimaryButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -626,47 +641,52 @@ function DeleteKeyModal({
   apiKey,
   onClose,
   onDeleted,
-  onError,
 }: {
   apiKey: GatewayKey;
   onClose: () => void;
   onDeleted: () => void;
-  onError: (message: string) => void;
 }) {
+  const [error, setError] = useState("");
   const remove = useMutation({
     mutationFn: () => deleteKey(apiKey.id),
     onSuccess: onDeleted,
-    onError: (error) =>
-      onError(
-        `Delete failed: ${error instanceof Error ? error.message : error}`,
+    onError: (problem) =>
+      setError(
+        `Delete failed: ${problem instanceof Error ? problem.message : problem}`,
       ),
   });
   return (
-    <Modal
-      title="Delete key"
-      onClose={onClose}
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete key</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <p className="text-sm text-text-2">
+            Delete{" "}
+            <strong className="text-text-1">
+              {apiKey.name || truncateKeyId(apiKey.id)}
+            </strong>
+            ? Apps using it lose access immediately. This cannot be undone.
+          </p>
+        </DialogBody>
+        <DialogError>{error}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
-          <button
-            type="button"
+          <DestructiveButton
             onClick={() => remove.mutate()}
             disabled={remove.isPending}
-            className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-colors duration-150 ease-standard hover:opacity-90 disabled:opacity-50"
           >
             Delete key
-          </button>
-        </>
-      }
-    >
-      <p className="text-sm text-text-2">
-        Delete{" "}
-        <strong className="text-text-1">
-          {apiKey.name || truncateKeyId(apiKey.id)}
-        </strong>
-        ? Apps using it lose access immediately. This cannot be undone.
-      </p>
-    </Modal>
+          </DestructiveButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -891,7 +911,6 @@ function KeysPage() {
             setModal({ kind: "secret", secret });
             await reload();
           }}
-          onError={(message) => say(message, true)}
         />
       )}
       {modal?.kind === "secret" && (
@@ -906,7 +925,6 @@ function KeysPage() {
             say("Key updated");
             await reload();
           }}
-          onError={(message) => say(message, true)}
         />
       )}
       {modal?.kind === "delete" && (
@@ -918,7 +936,6 @@ function KeysPage() {
             say("Key deleted");
             await reload();
           }}
-          onError={(message) => say(message, true)}
         />
       )}
     </div>

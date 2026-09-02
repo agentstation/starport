@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
 import { SourcePill } from "@/components/credentials/SourcePill";
-import { Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
+import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
+import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ApiError,
   createSharedCredential,
@@ -178,6 +178,7 @@ export function SharedCredentialPanel({
   const [removing, setRemoving] = useState<SharedCredentialSummary | null>(
     null,
   );
+  const [removeError, setRemoveError] = useState("");
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -224,10 +225,10 @@ export function SharedCredentialPanel({
       say("Shared credential removed");
       await refresh();
     },
-    onError: (error) => {
-      setRemoving(null);
-      say(`Remove failed: ${error instanceof Error ? error.message : error}`, true);
-    },
+    onError: (error) =>
+      setRemoveError(
+        `Remove failed: ${error instanceof Error ? error.message : error}`,
+      ),
   });
 
   const locked =
@@ -317,7 +318,10 @@ export function SharedCredentialPanel({
                   </RowAction>
                   <button
                     type="button"
-                    onClick={() => setRemoving(credential)}
+                    onClick={() => {
+                      setRemoveError("");
+                      setRemoving(credential);
+                    }}
                     aria-label={`Remove the ${credential.label || providerId} shared credential`}
                     className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error disabled:opacity-50"
                   >
@@ -422,46 +426,46 @@ export function SharedCredentialPanel({
             say("Access updated");
             await refresh();
           }}
-          onError={(error) =>
-            say(
-              `Access update failed: ${error instanceof Error ? error.message : error}`,
-              true,
-            )
-          }
           onClose={() => setEditingAccess(null)}
         />
       )}
 
       {removing && (
-        <Modal
-          title="Remove shared credential"
-          onClose={() => setRemoving(null)}
-          footer={
-            <>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setRemoving(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remove shared credential</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <p className="text-sm text-text-2">
+                This removes{" "}
+                <strong className="font-semibold text-text-1">
+                  {removing.label || "the shared credential"}
+                </strong>{" "}
+                for {name}. Requests stop using it immediately; accounts fall back
+                to the remaining shared credentials, the environment credential,
+                or their own. The stored value cannot be recovered.
+              </p>
+            </DialogBody>
+            <DialogError>{removeError}</DialogError>
+            <DialogFooter>
               <GhostButton onClick={() => setRemoving(null)}>
                 Cancel
               </GhostButton>
-              <button
-                type="button"
+              <DestructiveButton
                 onClick={() => remove.mutate(removing)}
                 disabled={remove.isPending}
-                className="flex h-9 items-center rounded-sm bg-error px-4 text-sm font-medium text-white transition-opacity duration-150 ease-standard hover:opacity-90 disabled:opacity-50"
               >
                 Remove
-              </button>
-            </>
-          }
-        >
-          <p className="text-sm text-text-2">
-            This removes{" "}
-            <strong className="font-semibold text-text-1">
-              {removing.label || "the shared credential"}
-            </strong>{" "}
-            for {name}. Requests stop using it immediately; accounts fall back
-            to the remaining shared credentials, the environment credential,
-            or their own. The stored value cannot be recovered.
-          </p>
-        </Modal>
+              </DestructiveButton>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </section>
   );
@@ -475,15 +479,14 @@ function AccessEditModal({
   providerId,
   credential,
   onSaved,
-  onError,
   onClose,
 }: {
   providerId: string;
   credential: SharedCredentialSummary;
   onSaved: () => Promise<void>;
-  onError: (error: unknown) => void;
   onClose: () => void;
 }) {
+  const [error, setError] = useState("");
   const [access, setAccess] = useState<Access>(
     credential.access === "granted" ? "granted" : "open",
   );
@@ -497,9 +500,11 @@ function AccessEditModal({
         access,
         grants: access === "granted" ? grants : [],
       });
-    } catch (error) {
+    } catch (problem) {
       setBusy(false);
-      onError(error);
+      setError(
+        `Access update failed: ${problem instanceof Error ? problem.message : problem}`,
+      );
       return;
     }
     setBusy(false);
@@ -507,28 +512,36 @@ function AccessEditModal({
   };
 
   return (
-    <Modal
-      title={`Access for ${credential.label || "the shared credential"}`}
-      onClose={onClose}
-      footer={
-        <>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{`Access for ${credential.label || "the shared credential"}`}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <AccessChoice
+            access={access}
+            grants={grants}
+            onChange={(nextAccess, nextGrants) => {
+              setAccess(nextAccess);
+              setGrants(nextGrants);
+            }}
+          />
+        </DialogBody>
+        <DialogError>{error}</DialogError>
+        <DialogFooter>
           <GhostButton onClick={onClose} disabled={busy}>
             Cancel
           </GhostButton>
           <PrimaryButton onClick={() => void save()} disabled={busy}>
             {busy ? "Saving…" : "Save access"}
           </PrimaryButton>
-        </>
-      }
-    >
-      <AccessChoice
-        access={access}
-        grants={grants}
-        onChange={(nextAccess, nextGrants) => {
-          setAccess(nextAccess);
-          setGrants(nextGrants);
-        }}
-      />
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

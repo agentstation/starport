@@ -9,7 +9,7 @@ import { CreateAccountModal } from "@/components/accounts/CreateAccountModal";
 import { ByokPanel } from "@/components/credentials/ByokPanel";
 import { Field, GhostButton, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
-import { SidePanel } from "@/components/ui/SidePanel";
+import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   accessMessage,
   ApiError,
@@ -121,90 +121,102 @@ function AccountDetail({
   });
 
   return (
-    <SidePanel title={account.name || account.id} onClose={onClose}>
-      <div className="flex flex-col gap-5">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-text-2">Account ID</span>
-          <span className="font-mono text-sm text-text-1">{account.id}</span>
-          <span className="text-xs text-text-4">
-            created {formatRelativeTime(account.created_at)}
-          </span>
-        </div>
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>{account.name || account.id}</SheetTitle>
+        </SheetHeader>
+        <SheetBody>
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-text-2">Account ID</span>
+              <span className="font-mono text-sm text-text-1">{account.id}</span>
+              <span className="text-xs text-text-4">
+                created {formatRelativeTime(account.created_at)}
+              </span>
+            </div>
 
-        <Field
-          label="Credential strategy"
-          hint="Which credentials serve this account, and in which order."
-        >
-          <Select
-            value={account.credential_strategy ?? "operator_first"}
-            onChange={(event) =>
-              strategy.mutate(event.target.value as CredentialStrategy)
-            }
-            disabled={strategy.isPending}
-            aria-label="Credential strategy"
-          >
-            {STRATEGIES.map((option) => (
-              <option key={option} value={option}>
-                {CREDENTIAL_STRATEGY_LABELS[option]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        {strategyError && (
-          <p className="text-xs text-error">Update failed: {strategyError}</p>
-        )}
+            <Field
+              label="Credential strategy"
+              hint="Which credentials serve this account, and in which order."
+            >
+              <Select
+                value={account.credential_strategy ?? "operator_first"}
+                onChange={(event) =>
+                  strategy.mutate(event.target.value as CredentialStrategy)
+                }
+                disabled={strategy.isPending}
+                aria-label="Credential strategy"
+              >
+                {STRATEGIES.map((option) => (
+                  <option key={option} value={option}>
+                    {CREDENTIAL_STRATEGY_LABELS[option]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {strategyError && (
+              <p className="text-xs text-error">Update failed: {strategyError}</p>
+            )}
 
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-text-2">Account limits</span>
-          <LimitChips limits={account.limits} />
-          <span className="text-xs text-text-4">
-            Metered across every key in the account. A key with its own limit
-            satisfies both.
-          </span>
-        </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-text-2">Account limits</span>
+              <LimitChips limits={account.limits} />
+              <span className="text-xs text-text-4">
+                Metered across every key in the account. A key with its own limit
+                satisfies both.
+              </span>
+            </div>
 
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-text-2">
-            Gateway API keys ({formatCount(keys.length)})
-          </span>
-          {keys.length === 0 ? (
-            <span className="text-sm text-text-3">
-              No key names this account yet.
-            </span>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {keys.map((apiKey) => (
-                <li
-                  key={apiKey.id}
-                  className="flex items-center gap-2 rounded-sm border border-border-1 bg-bg-panel px-3 py-2 text-sm"
-                >
-                  <span className="truncate text-text-1">
-                    {apiKey.name || apiKey.id}
-                  </span>
-                  {apiKey.active === false && (
-                    <span className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 text-xs text-text-3">
-                      disabled
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link
-            to="/keys"
-            className="text-xs text-accent-link transition-colors duration-150 ease-standard hover:underline"
-          >
-            Manage keys →
-          </Link>
-        </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-text-2">
+                Gateway API keys ({formatCount(keys.length)})
+              </span>
+              {keys.length === 0 ? (
+                <span className="text-sm text-text-3">
+                  No key names this account yet.
+                </span>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {keys.map((apiKey) => (
+                    <li
+                      key={apiKey.id}
+                      className="flex items-center gap-2 rounded-sm border border-border-1 bg-bg-panel px-3 py-2 text-sm"
+                    >
+                      <span className="truncate text-text-1">
+                        {apiKey.name || apiKey.id}
+                      </span>
+                      {apiKey.active === false && (
+                        <span className="inline-flex h-5 items-center rounded-xs bg-bg-raised px-1.5 text-xs text-text-3">
+                          disabled
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link
+                to="/keys"
+                className="text-xs text-accent-link transition-colors duration-150 ease-standard hover:underline"
+              >
+                Manage keys →
+              </Link>
+            </div>
 
-        {/* The key remounts the policy drafts when the operator opens a
-            different account in the same panel position. */}
-        <AccountPolicyPanel key={account.id} account={account} />
+            {/* The key remounts the policy drafts when the operator opens a
+                different account in the same panel position. */}
+            <AccountPolicyPanel key={account.id} account={account} />
 
-        <ByokPanel accountId={account.id} />
-      </div>
-    </SidePanel>
+            <ByokPanel accountId={account.id} />
+          </div>
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
 

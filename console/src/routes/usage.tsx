@@ -18,7 +18,7 @@ import {
 
 import { AXIS_TICK, CHART, ChartCard, ChartTip } from "@/components/ui/Chart";
 import { Select } from "@/components/ui/Select";
-import { SidePanel } from "@/components/ui/SidePanel";
+import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   ApiError,
   type ActivityRecord,
@@ -325,102 +325,114 @@ function RequestDetail({
   ).filter(([, count]) => count);
   const at = record.timestamp ? new Date(record.timestamp) : null;
   return (
-    <SidePanel title={record.model_requested ?? "Request"} onClose={onClose}>
-      <dl>
-        <DetailRow label="Request">
-          <code className="break-all font-mono text-xs text-text-2">
-            {record.request_id ?? "—"}
-          </code>
-        </DetailRow>
-        {admin && (
-          <DetailRow label="Key">
-            <code className="font-mono text-xs text-text-2" title={record.key_id}>
-              {truncateKeyId(record.key_id)}
-            </code>
-          </DetailRow>
-        )}
-        <DetailRow label="Time">
-          <span title={record.timestamp}>
-            {at && !Number.isNaN(at.getTime()) ? at.toLocaleString() : "—"}
-          </span>
-        </DetailRow>
-        {record.protocol && <DetailRow label="Protocol">{record.protocol}</DetailRow>}
-        {record.operation && (
-          <DetailRow label="Operation">
-            {record.operation}
-            {record.streaming ? " (streaming)" : ""}
-          </DetailRow>
-        )}
-        {record.model_requested && (
-          <DetailRow label="Model requested">
-            <code className="break-all font-mono text-xs text-text-2">
-              {record.model_requested}
-            </code>
-          </DetailRow>
-        )}
-        {resolutionDiffers(record) && (
-          <DetailRow label="Model used">
-            <code className="break-all font-mono text-xs text-text-2">{record.model_used}</code>
-          </DetailRow>
-        )}
-        <DetailRow label="Provider">
-          {record.provider ? providerLabel(record.provider, providerName) : "unrouted"}
-        </DetailRow>
-        <DetailRow label="Status">
-          <StatusPill record={record} />
-        </DetailRow>
-        {record.error_class && (
-          <DetailRow label="Error class">{record.error_class.replaceAll("_", " ")}</DetailRow>
-        )}
-        {record.attempts ? <DetailRow label="Attempts">{record.attempts}</DetailRow> : null}
-        {Number.isFinite(record.routing_ms) && record.routing_ms ? (
-          <DetailRow label="Routing">{formatMs(record.routing_ms)}</DetailRow>
-        ) : null}
-        <DetailRow label="Latency">{formatMs(record.latency_ms)}</DetailRow>
-        {record.overhead_ms !== undefined && (
-          <DetailRow label="Starport overhead">{formatMs(record.overhead_ms)}</DetailRow>
-        )}
-        {record.streaming && record.ttft_ms !== undefined && (
-          <DetailRow label="TTFT">{formatMs(record.ttft_ms)}</DetailRow>
-        )}
-        {record.cache_status && (
-          <DetailRow label="Cache">
-            <CacheCell status={record.cache_status} />
-          </DetailRow>
-        )}
-        <DetailRow label="Cost">
-          {record.cost ? (
-            <span className="tabular-nums">
-              {formatNanoUSD(record.cost.nano_usd)} {record.cost.currency ?? "USD"}
-            </span>
-          ) : (
-            <span className="text-warning">
-              unavailable —{" "}
-              {COST_REASONS[record.cost_unavailable_reason ?? ""] ??
-                record.cost_unavailable_reason ??
-                "unknown"}
-            </span>
-          )}
-        </DetailRow>
-        <DetailRow label="Tokens">
-          {tokenParts.length ? (
-            <span className="tabular-nums">
-              {tokenParts.map(([name, count]) => `${name} ${formatCount(count)}`).join(" · ")}
-              {record.tokens_estimated ? " (estimated)" : ""}
-            </span>
-          ) : (
-            "—"
-          )}
-        </DetailRow>
-        {mediaParts.length > 0 && (
-          <DetailRow label="Media">
-            <span className="tabular-nums">
-              {mediaParts.map(([name, count]) => `${name} ${formatCount(count)}`).join(" · ")}
-            </span>
-          </DetailRow>
-        )}
-      </dl>
-    </SidePanel>
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>{record.model_requested ?? "Request"}</SheetTitle>
+        </SheetHeader>
+        <SheetBody>
+          <dl>
+            <DetailRow label="Request">
+              <code className="break-all font-mono text-xs text-text-2">
+                {record.request_id ?? "—"}
+              </code>
+            </DetailRow>
+            {admin && (
+              <DetailRow label="Key">
+                <code className="font-mono text-xs text-text-2" title={record.key_id}>
+                  {truncateKeyId(record.key_id)}
+                </code>
+              </DetailRow>
+            )}
+            <DetailRow label="Time">
+              <span title={record.timestamp}>
+                {at && !Number.isNaN(at.getTime()) ? at.toLocaleString() : "—"}
+              </span>
+            </DetailRow>
+            {record.protocol && <DetailRow label="Protocol">{record.protocol}</DetailRow>}
+            {record.operation && (
+              <DetailRow label="Operation">
+                {record.operation}
+                {record.streaming ? " (streaming)" : ""}
+              </DetailRow>
+            )}
+            {record.model_requested && (
+              <DetailRow label="Model requested">
+                <code className="break-all font-mono text-xs text-text-2">
+                  {record.model_requested}
+                </code>
+              </DetailRow>
+            )}
+            {resolutionDiffers(record) && (
+              <DetailRow label="Model used">
+                <code className="break-all font-mono text-xs text-text-2">{record.model_used}</code>
+              </DetailRow>
+            )}
+            <DetailRow label="Provider">
+              {record.provider ? providerLabel(record.provider, providerName) : "unrouted"}
+            </DetailRow>
+            <DetailRow label="Status">
+              <StatusPill record={record} />
+            </DetailRow>
+            {record.error_class && (
+              <DetailRow label="Error class">{record.error_class.replaceAll("_", " ")}</DetailRow>
+            )}
+            {record.attempts ? <DetailRow label="Attempts">{record.attempts}</DetailRow> : null}
+            {Number.isFinite(record.routing_ms) && record.routing_ms ? (
+              <DetailRow label="Routing">{formatMs(record.routing_ms)}</DetailRow>
+            ) : null}
+            <DetailRow label="Latency">{formatMs(record.latency_ms)}</DetailRow>
+            {record.overhead_ms !== undefined && (
+              <DetailRow label="Starport overhead">{formatMs(record.overhead_ms)}</DetailRow>
+            )}
+            {record.streaming && record.ttft_ms !== undefined && (
+              <DetailRow label="TTFT">{formatMs(record.ttft_ms)}</DetailRow>
+            )}
+            {record.cache_status && (
+              <DetailRow label="Cache">
+                <CacheCell status={record.cache_status} />
+              </DetailRow>
+            )}
+            <DetailRow label="Cost">
+              {record.cost ? (
+                <span className="tabular-nums">
+                  {formatNanoUSD(record.cost.nano_usd)} {record.cost.currency ?? "USD"}
+                </span>
+              ) : (
+                <span className="text-warning">
+                  unavailable —{" "}
+                  {COST_REASONS[record.cost_unavailable_reason ?? ""] ??
+                    record.cost_unavailable_reason ??
+                    "unknown"}
+                </span>
+              )}
+            </DetailRow>
+            <DetailRow label="Tokens">
+              {tokenParts.length ? (
+                <span className="tabular-nums">
+                  {tokenParts.map(([name, count]) => `${name} ${formatCount(count)}`).join(" · ")}
+                  {record.tokens_estimated ? " (estimated)" : ""}
+                </span>
+              ) : (
+                "—"
+              )}
+            </DetailRow>
+            {mediaParts.length > 0 && (
+              <DetailRow label="Media">
+                <span className="tabular-nums">
+                  {mediaParts.map(([name, count]) => `${name} ${formatCount(count)}`).join(" · ")}
+                </span>
+              </DetailRow>
+            )}
+          </dl>
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
 

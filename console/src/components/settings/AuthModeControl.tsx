@@ -3,7 +3,7 @@ import { Lock, LockOpen } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 
 import { GhostButton, PrimaryButton } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ApiError,
   getApiKey,
@@ -124,15 +124,26 @@ export function AuthModeControl() {
         )}
       </p>
       {pending && (
-        <Modal
-          title={
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPending(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{
             pending === "required"
               ? "Require an API key"
               : "Serve this gateway without a key"
-          }
-          onClose={() => setPending(null)}
-          footer={
-            <>
+          }</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <p className="text-sm text-text-2">
+                {consequence(pending, storedKey !== "")}
+              </p>
+            </DialogBody>
+            <DialogFooter>
               <GhostButton onClick={() => setPending(null)}>Cancel</GhostButton>
               <PrimaryButton
                 onClick={() => change.mutate(pending)}
@@ -144,13 +155,9 @@ export function AuthModeControl() {
                     ? "Require a key"
                     : "Turn authentication off"}
               </PrimaryButton>
-            </>
-          }
-        >
-          <p className="text-sm text-text-2">
-            {consequence(pending, storedKey !== "")}
-          </p>
-        </Modal>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );

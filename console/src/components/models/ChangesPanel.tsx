@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { SidePanel } from "@/components/ui/SidePanel";
+import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   accessMessage,
   ApiError,
@@ -214,8 +214,20 @@ function ChangesBody() {
 
 export function ChangesPanel({ onClose }: { onClose: () => void }) {
   return (
-    <SidePanel title="Catalog changes" onClose={onClose}>
-      <ChangesBody />
-    </SidePanel>
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Catalog changes</SheetTitle>
+        </SheetHeader>
+        <SheetBody>
+          <ChangesBody />
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
