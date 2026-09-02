@@ -6,6 +6,9 @@ import { onLogoStyleChange, savedLogoStyle } from "@/lib/logoStyle";
 // bundled gateway SVG → tinted monochrome (currentColor marks inherit the
 // theme text color) → two-letter initials. No external URL is ever
 // fetched; the only request goes to this gateway's public logo route.
+// The "mono" logo style paints every mark through a currentColor mask,
+// so a full-color brand SVG takes the theme ink without a hard-coded
+// black or white filter.
 
 export type EntityKind = "providers" | "authors";
 
@@ -85,21 +88,50 @@ export function EntityLogo({
   // same way declared currentColor marks are.
   const bare = svg !== undefined && !svg.includes("fill");
 
+  if (svg && logoStyle === "mono") {
+    // Mono mode flattens every mark, full-color or currentColor, to the
+    // theme's ink so the set reads as one: the SVG becomes a mask over a
+    // currentColor fill, and the ink follows the theme text color.
+    const mask = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    return (
+      <span
+        aria-hidden="true"
+        data-testid="entity-mark"
+        data-logo-style={logoStyle}
+        className={`${frame} text-text-1`}
+        style={{ width: size, height: size, fontSize: size }}
+      >
+        <span
+          data-testid="entity-mask"
+          className="block h-[1em] w-[1em] bg-current opacity-85"
+          style={{
+            maskImage: mask,
+            maskSize: "contain",
+            maskRepeat: "no-repeat",
+            maskPosition: "center",
+            WebkitMaskImage: mask,
+            WebkitMaskSize: "contain",
+            WebkitMaskRepeat: "no-repeat",
+            WebkitMaskPosition: "center",
+          }}
+        />
+      </span>
+    );
+  }
+
   return (
     <span
       aria-hidden="true"
       data-testid="entity-mark"
       // The SVG comes only from this gateway's embedded, license-audited
       // bundle, so inlining is safe — and inlining is what lets
-      // fill="currentColor" marks tint with the theme.
+      // fill="currentColor" marks tint with the theme. Color mode renders
+      // each mark as shipped.
       dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}
       data-logo-style={logoStyle}
-      // Mono mode flattens full-color brand marks to the theme's ink
-      // (mono-mark, tokens.css) so they sit beside the currentColor
-      // glyphs as one set; color mode renders each mark as shipped.
       className={`${frame} text-text-1 [&_svg]:h-[1em] [&_svg]:w-[1em] ${
         bare ? "[&_svg]:fill-current" : ""
-      } ${logoStyle === "mono" ? "mono-mark" : ""}`}
+      }`}
       style={{ width: size, height: size, fontSize: size }}
     />
   );

@@ -3,8 +3,10 @@
  * its executable form. Components consume role tokens only (law 4) —
  * never raw hex values.
  *
- * Dark is the design-first default on :root. Light applies under .light,
- * set by the theme bootstrap (explicit choice or system preference).
+ * Dark is the design-first default on :root. Light applies under
+ * [data-theme="light"], set by the theme bootstrap in index.html before
+ * paint and kept current by lib/theme.ts (explicit choice or system
+ * preference).
  */
 
 /* ---- Fonts (self-hosted, air-gapped; no runtime font CDN) ---- */
@@ -89,7 +91,7 @@
 
 /* ---- Role tokens: light ---- */
 
-.light {
+:root[data-theme="light"] {
   --bg-canvas: #ffffff;
   --bg-panel: #fafafa;
   --bg-raised: #f4f4f5;
@@ -155,16 +157,43 @@
   --color-transparent: transparent;
   --color-current: currentColor;
 
-  /* shadcn-vocabulary bridge for Streamdown's components (law 4 still
-   * holds: these resolve to the role tokens above). */
+  /* shadcn-vocabulary bridge for the shadcn primitives in components/ui
+   * and for Streamdown's components (law 4 still holds: every name
+   * resolves to a role token above, and no generated palette exists).
+   * shadcn's "accent" is a hover ground, not our one amber accent, so
+   * the primitives say bg-bg-hover and text-text-1 where the registry
+   * said bg-accent and text-accent-foreground. */
   --color-background: var(--bg-canvas);
   --color-foreground: var(--text-1);
-  --color-muted: var(--bg-raised);
-  --color-muted-foreground: var(--text-3);
-  --color-border: var(--border-2);
+  --color-card: var(--bg-panel);
+  --color-card-foreground: var(--text-1);
+  --color-popover: var(--bg-raised);
+  --color-popover-foreground: var(--text-1);
   --color-primary: var(--accent);
   --color-primary-foreground: var(--accent-ink);
+  --color-secondary: var(--bg-raised);
+  --color-secondary-foreground: var(--text-1);
+  --color-muted: var(--bg-raised);
+  --color-muted-foreground: var(--text-3);
+  --color-accent-foreground: var(--text-1);
+  --color-destructive: var(--error);
+  --color-destructive-foreground: var(--error);
+  --color-border: var(--border-2);
+  --color-input: var(--border-2);
+  --color-ring: var(--accent);
   --color-sidebar: var(--bg-panel);
+  --color-sidebar-foreground: var(--text-1);
+  --color-sidebar-primary: var(--accent);
+  --color-sidebar-primary-foreground: var(--accent-ink);
+  --color-sidebar-accent: var(--bg-hover);
+  --color-sidebar-accent-foreground: var(--text-1);
+  --color-sidebar-border: var(--border-1);
+  --color-sidebar-ring: var(--accent);
+  --color-chart-1: var(--accent);
+  --color-chart-2: var(--info);
+  --color-chart-3: var(--success);
+  --color-chart-4: var(--warning);
+  --color-chart-5: var(--error);
   --color-red-50: var(--error-tint);
   --color-red-100: var(--error-tint);
   --color-red-600: var(--error);
@@ -222,34 +251,15 @@ html {
   }
 }
 
-/* Two-layer accent focus ring (DESIGN.md accent job 3). */
+/* Two-layer accent focus ring (DESIGN.md accent job 3). The ring applies
+ * under :focus-visible only, never under bare :focus. A pointer click on
+ * a button or link therefore shows no ring, and keyboard reach does. A
+ * text field is the one control that matches :focus-visible on every
+ * focus, so a field shows the ring whenever it holds focus, together
+ * with its accent border (DESIGN.md inputs). No control resets it. */
 :focus-visible {
   outline: none;
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent),
     0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-/* Text fields match :focus-visible on every focus, including mouse
- * clicks, so the ring would box every input while typing. Fields
- * signal focus with their accent border instead; the ring stays on
- * buttons and links, where it marks keyboard reach. */
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible,
-[contenteditable="true"]:focus-visible {
-  box-shadow: none;
-}
-
-/* Monochrome catalog marks (EntityLogo "mono" setting): flatten any
- * bundled brand SVG — full-color or currentColor — to the theme's ink
- * so the set reads as one. brightness(0) inks every path black;
- * invert(1) lifts it to white for the dark palette. */
-.mono-mark svg {
-  filter: brightness(0) invert(1);
-  opacity: 0.85;
-}
-.light .mono-mark svg {
-  filter: brightness(0);
-  opacity: 0.75;
 }

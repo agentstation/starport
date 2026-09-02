@@ -118,3 +118,20 @@ test("derives initials from word boundaries", () => {
   expect(entityInitials("Groq")).toBe("GR");
   expect(entityInitials("  ")).toBe("?");
 });
+
+test("the mono style paints a full-color mark through a currentColor mask", async () => {
+  stubFetch({
+    ok: true,
+    body: '<svg viewBox="0 0 24 24"><path fill="#ff0000" d="M0 0h24v24H0z"/></svg>',
+  });
+  // This jsdom has no localStorage; the saved logo style reads "mono".
+  vi.stubGlobal("localStorage", { getItem: () => "mono", setItem: () => undefined });
+  render(<EntityLogo kind="providers" id="brand" name="Brand" />);
+
+  const mask = await screen.findByTestId("entity-mask");
+  // The brand fill never reaches the page: the SVG is a mask over the
+  // theme ink, so no filter has to hard-code black or white.
+  expect(screen.getByTestId("entity-mark").querySelector("svg")).toBeNull();
+  expect(mask.style.maskImage).toContain("data:image/svg+xml");
+  expect(mask.className).toContain("bg-current");
+});

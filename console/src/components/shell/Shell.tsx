@@ -214,6 +214,12 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-bg-canvas text-text-1">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:border focus:border-border-2 focus:bg-bg-raised focus:px-3 focus:py-2 focus:text-sm focus:text-text-1"
+      >
+        Skip to content
+      </a>
       <aside
         onClick={(event) => {
           // Clicking sidebar whitespace toggles the rail. Anything
@@ -336,6 +342,8 @@ export function Shell({ children }: { children: ReactNode }) {
       </aside>
 
       <main
+        id="main"
+        tabIndex={-1}
         style={
           {
             "--app-banner": openGateway ? BANNER_HEIGHT : "0px",
