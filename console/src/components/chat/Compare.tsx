@@ -339,9 +339,9 @@ function ColumnCard({
         <span className="truncate font-mono text-xs text-text-2" title={column.model}>
           {column.model}
         </span>
-        {via && <span className="shrink-0 font-mono text-xs text-text-4">via {via}</span>}
+        {via && <span className="shrink-0 font-mono text-xs text-text-3">via {via}</span>}
         {liveTps !== null && (
-          <span className="shrink-0 font-mono text-xs text-text-4">~{liveTps} tok/s</span>
+          <span className="shrink-0 font-mono text-xs text-text-3">~{liveTps} tok/s</span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {streaming ? (
@@ -422,7 +422,7 @@ export function CompareView({
             Pick two to four models, then send one prompt to race them side
             by side. Comparisons stay on this page and are not saved.
           </p>
-          <p className="mt-3 font-mono text-xs text-text-4">
+          <p className="mt-3 font-mono text-xs text-text-3">
             {compare.models.length}/{MAX_COMPARE} models attached
             {compare.models.length < MIN_COMPARE
               ? ` — add ${MIN_COMPARE - compare.models.length} more to start`

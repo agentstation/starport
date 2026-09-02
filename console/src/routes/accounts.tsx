@@ -286,12 +286,12 @@ function AccountsPage() {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-              <th className="px-4 py-2.5">Account</th>
-              <th className="px-4 py-2.5">Name</th>
-              <th className="px-4 py-2.5">Credentials</th>
-              <th className="px-4 py-2.5">Limits</th>
-              <th className="px-4 py-2.5">Keys</th>
-              <th className="px-4 py-2.5" />
+              <th scope="col" className="px-4 py-2.5">Account</th>
+              <th scope="col" className="px-4 py-2.5">Name</th>
+              <th scope="col" className="px-4 py-2.5">Credentials</th>
+              <th scope="col" className="px-4 py-2.5">Limits</th>
+              <th scope="col" className="px-4 py-2.5 text-right">Keys</th>
+              <th scope="col" className="px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
@@ -301,7 +301,7 @@ function AccountsPage() {
                 data-testid="account-row"
                 className="border-b border-border-1 last:border-0"
               >
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <button
                     type="button"
                     onClick={() => setSelected(account.id)}
@@ -315,21 +315,21 @@ function AccountsPage() {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-text-2">{account.name || "—"}</td>
-                <td className="px-4 py-2 text-xs text-text-3">
+                <td className="px-4 py-2.5 text-text-2">{account.name || "—"}</td>
+                <td className="px-4 py-2.5 text-xs text-text-3">
                   {
                     CREDENTIAL_STRATEGY_LABELS[
                       account.credential_strategy ?? "operator_first"
                     ]
                   }
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <LimitChips limits={account.limits} />
                 </td>
-                <td className="px-4 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {formatCount(keysFor(account.id).length)}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <div className="flex items-center justify-end gap-1">
                     <RowAction onClick={() => setSelected(account.id)}>
                       open

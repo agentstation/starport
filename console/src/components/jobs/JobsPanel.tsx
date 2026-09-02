@@ -8,6 +8,7 @@ import {
   PrimaryButton,
 } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
+import { Pill, type PillTone } from "@/components/ui/Pill";
 import { LoadingStatus, Skeleton, TableSkeleton } from "@/components/ui/skeleton";
 import {
   accessMessage,
@@ -81,10 +82,14 @@ function refusalText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-const STATUS_CLASS: Record<string, string> = {
-  completed: "text-success",
-  failed: "text-error",
-  cancelled: "text-text-3",
+// STATUS_TONE maps the five job states to a lifecycle tone. A queued job has
+// not started, so it reads neutral rather than as a fault.
+const STATUS_TONE: Record<string, PillTone> = {
+  queued: "neutral",
+  in_progress: "info",
+  completed: "success",
+  failed: "error",
+  cancelled: "neutral",
 };
 
 // JobPlayer holds the bytes of one video while a reader watches it.
@@ -218,12 +223,12 @@ export function JobsPanel() {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-              <th className="px-4 py-2.5">Job</th>
-              <th className="px-4 py-2.5">Model</th>
-              <th className="px-4 py-2.5">State</th>
-              <th className="px-4 py-2.5">Elapsed</th>
-              <th className="px-4 py-2.5">Result</th>
-              <th className="px-4 py-2.5" />
+              <th scope="col" className="px-4 py-2.5">Job</th>
+              <th scope="col" className="px-4 py-2.5">Model</th>
+              <th scope="col" className="px-4 py-2.5">State</th>
+              <th scope="col" className="px-4 py-2.5 text-right">Elapsed</th>
+              <th scope="col" className="px-4 py-2.5">Result</th>
+              <th scope="col" className="px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
@@ -233,19 +238,19 @@ export function JobsPanel() {
                 data-testid="job-row"
                 className="border-b border-border-1 last:border-0 align-top"
               >
-                <td className="px-4 py-2 font-mono text-xs text-text-2">
+                <td className="px-4 py-2.5 font-mono text-xs text-text-2">
                   {job.id}
                 </td>
-                <td className="px-4 py-2 text-text-2">{job.model}</td>
-                <td
-                  className={`px-4 py-2 text-xs ${STATUS_CLASS[job.status] ?? "text-text-2"}`}
-                >
-                  {job.status}
+                <td className="px-4 py-2.5 text-text-2">{job.model}</td>
+                <td className="px-4 py-2.5">
+                  <Pill tone={STATUS_TONE[job.status] ?? "neutral"}>
+                    {job.status.replaceAll("_", " ")}
+                  </Pill>
                 </td>
-                <td className="px-4 py-2 tabular-nums text-xs text-text-3">
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs text-text-3">
                   {formatMs(elapsed(job, now))}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   {job.status === "failed" && (
                     <p data-testid="job-failure" className="text-xs text-error">
                       {job.error?.message ??
@@ -267,7 +272,7 @@ export function JobsPanel() {
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <div className="flex items-center justify-end gap-2">
                     {playable(job, now) && playing !== job.id && (
                       <GhostButton onClick={() => setPlaying(job.id)}>

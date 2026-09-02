@@ -182,7 +182,7 @@ export function ProviderCard({
             <span className="truncate text-sm font-medium text-text-1">
               {providerLabel(status.provider_id, entry?.name)}
             </span>
-            <span className="shrink-0 font-mono text-xs text-text-4">
+            <span className="shrink-0 font-mono text-xs text-text-3">
               {status.provider_id}
             </span>
           </div>
@@ -234,7 +234,7 @@ export function CatalogProviderCard({ entry }: { entry: ProviderCatalogEntry }) 
           <span className="truncate text-sm font-medium text-text-1">
             {providerLabel(entry.id, entry.name)}
           </span>
-          <span className="shrink-0 font-mono text-xs text-text-4">
+          <span className="shrink-0 font-mono text-xs text-text-3">
             {entry.id}
           </span>
         </div>

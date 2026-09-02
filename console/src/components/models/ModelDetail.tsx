@@ -104,13 +104,30 @@ const TIER_TONES: Record<CapabilityTier["tier"], string> = {
   parameters: "bg-bg-raised text-text-3",
 };
 
+// TIER_LABELS name each chip row. A row of bare chips leaves a reader to
+// guess whether "image out" is a modality or an operation.
+const TIER_LABELS: Record<CapabilityTier["tier"], string> = {
+  modalities: "Modalities",
+  operations: "Operations",
+  capabilities: "Capabilities",
+  parameters: "Parameters",
+};
+
 export function CapabilityChips({ model }: { model: Model }) {
   const tiers = capabilityTiers(model);
   if (tiers.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
       {tiers.map(({ tier, chips }) => (
-        <div key={tier} className="flex flex-wrap items-center gap-1.5">
+        <div
+          key={tier}
+          role="group"
+          aria-label={TIER_LABELS[tier]}
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          <span className="w-24 shrink-0 text-xs text-text-3">
+            {TIER_LABELS[tier]}
+          </span>
           {chips.map((chip) => (
             <span
               key={chip}
@@ -201,18 +218,18 @@ export function OfferingTable({
     <div className="overflow-x-auto rounded-md border border-border-1">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border-1 text-left text-xs text-text-4">
-            <th className="px-3 py-2 font-medium">Provider</th>
-            <th className="px-3 py-2 font-medium">Provider model ID</th>
-            <th className="px-3 py-2 font-medium">Context</th>
-            <th className="px-3 py-2 font-medium">Max out</th>
-            <th className="px-3 py-2 font-medium">Prompt / M</th>
-            <th className="px-3 py-2 font-medium">Completion / M</th>
-            <th className="px-3 py-2 font-medium">Cache read / M</th>
-            <th className="px-3 py-2 font-medium">Unit price</th>
-            <th className="px-3 py-2 font-medium">Max docs</th>
-            <th className="px-3 py-2 font-medium">Circuit</th>
-            <th className="px-3 py-2 font-medium">Lifecycle</th>
+          <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
+            <th scope="col" className="px-4 py-2.5">Provider</th>
+            <th scope="col" className="px-4 py-2.5">Provider model ID</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Context</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Max out</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Prompt / M</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Completion / M</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Cache read / M</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Unit price</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Max docs</th>
+            <th scope="col" className="px-4 py-2.5">Circuit</th>
+            <th scope="col" className="px-4 py-2.5">Lifecycle</th>
           </tr>
         </thead>
         <tbody>
@@ -223,7 +240,7 @@ export function OfferingTable({
                 key={`${offering.provider}/${offering.provider_model_id}`}
                 className="border-b border-border-1 last:border-b-0"
               >
-                <td className="px-3 py-2">
+                <td className="px-4 py-2.5">
                   <Link
                     to="/providers/$providerId"
                     params={{ providerId: offering.provider }}
@@ -232,33 +249,33 @@ export function OfferingTable({
                     {providerLabel(offering.provider, offering.provider_name)}
                   </Link>
                 </td>
-                <td className="px-3 py-2 font-mono text-xs text-text-3">
+                <td className="px-4 py-2.5 font-mono text-xs text-text-3">
                   {offering.provider_model_id}
                 </td>
-                <td className="px-3 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {formatContext(offering.context_length)}
                 </td>
-                <td className="px-3 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {offering.max_completion_tokens
                     ? formatCount(offering.max_completion_tokens)
                     : "—"}
                 </td>
-                <td className="px-3 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {price(offering.pricing?.prompt)}
                 </td>
-                <td className="px-3 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {price(offering.pricing?.completion)}
                 </td>
-                <td className="px-3 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {price(offering.pricing?.cache_read)}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 tabular-nums text-text-2">
+                <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-text-2">
                   {unitPrice(offering)}
                 </td>
-                <td className="px-3 py-2 tabular-nums text-text-2">
+                <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {offering.max_documents ? formatCount(offering.max_documents) : "—"}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-4 py-2.5">
                   {circuit ? (
                     <span
                       className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
@@ -268,12 +285,12 @@ export function OfferingTable({
                       {circuit.replaceAll("_", " ")}
                     </span>
                   ) : (
-                    <span className="text-xs text-text-4">
+                    <span className="text-xs text-text-3">
                       {offering.availability ?? "—"}
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-xs text-text-3">
+                <td className="px-4 py-2.5 text-xs text-text-3">
                   {offering.lifecycle ?? "—"}
                 </td>
               </tr>

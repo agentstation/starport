@@ -124,12 +124,12 @@ function ExtractionRows({ records }: { records: ActivityRecord[] }) {
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-            <th className="px-4 py-2.5">When</th>
-            <th className="px-4 py-2.5">Model</th>
-            <th className="px-4 py-2.5">Engine</th>
-            <th className="px-4 py-2.5">Pages</th>
-            <th className="px-4 py-2.5">Took</th>
-            <th className="px-4 py-2.5">Cost</th>
+            <th scope="col" className="px-4 py-2.5">When</th>
+            <th scope="col" className="px-4 py-2.5">Model</th>
+            <th scope="col" className="px-4 py-2.5">Engine</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Pages</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Took</th>
+            <th scope="col" className="px-4 py-2.5">Cost</th>
           </tr>
         </thead>
         <tbody>
@@ -141,21 +141,21 @@ function ExtractionRows({ records }: { records: ActivityRecord[] }) {
                 data-testid="document-row"
                 className="border-b border-border-1 last:border-0"
               >
-                <td className="px-4 py-2 text-xs text-text-3">
+                <td className="px-4 py-2.5 text-xs text-text-3">
                   <RelativeTime iso={record.timestamp} />
                 </td>
-                <td className="px-4 py-2 font-mono text-xs text-text-2">
+                <td className="px-4 py-2.5 font-mono text-xs text-text-2">
                   {record.model_used ?? record.model_requested ?? "—"}
                 </td>
                 <td
                   data-testid="document-engine"
-                  className="px-4 py-2 text-xs text-text-2"
+                  className="px-4 py-2.5 text-xs text-text-2"
                 >
                   {record.parser_engine}
                 </td>
                 <td
                   data-testid="document-pages"
-                  className="px-4 py-2 tabular-nums text-text-2"
+                  className="px-4 py-2.5 text-right tabular-nums text-text-2"
                 >
                   {reading.pages}
                   {reading.detail && (
@@ -164,10 +164,10 @@ function ExtractionRows({ records }: { records: ActivityRecord[] }) {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2 tabular-nums text-xs text-text-3">
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs text-text-3">
                   {formatMs(record.extraction_millis)}
                 </td>
-                <td data-testid="document-cost" className="px-4 py-2 text-xs">
+                <td data-testid="document-cost" className="px-4 py-2.5 text-xs">
                   <CostCell record={record} />
                 </td>
               </tr>
@@ -196,10 +196,10 @@ function RecognitionPrices({ offerings }: { offerings: recognitionOffering[] }) 
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-            <th className="px-4 py-2.5">Model</th>
-            <th className="px-4 py-2.5">Provider</th>
-            <th className="px-4 py-2.5">Provider model</th>
-            <th className="px-4 py-2.5">Per 1K pages</th>
+            <th scope="col" className="px-4 py-2.5">Model</th>
+            <th scope="col" className="px-4 py-2.5">Provider</th>
+            <th scope="col" className="px-4 py-2.5">Provider model</th>
+            <th scope="col" className="px-4 py-2.5 text-right">Per 1K pages</th>
           </tr>
         </thead>
         <tbody>
@@ -209,14 +209,14 @@ function RecognitionPrices({ offerings }: { offerings: recognitionOffering[] }) 
               data-testid="recognition-row"
               className="border-b border-border-1 last:border-0"
             >
-              <td className="px-4 py-2 font-mono text-xs text-text-2">
+              <td className="px-4 py-2.5 font-mono text-xs text-text-2">
                 {offering.model}
               </td>
-              <td className="px-4 py-2 text-text-2">{offering.provider}</td>
-              <td className="px-4 py-2 font-mono text-xs text-text-3">
+              <td className="px-4 py-2.5 text-text-2">{offering.provider}</td>
+              <td className="px-4 py-2.5 font-mono text-xs text-text-3">
                 {offering.providerModelID}
               </td>
-              <td className="px-4 py-2 font-mono tabular-nums text-xs text-text-2">
+              <td className="px-4 py-2.5 text-right font-mono tabular-nums text-xs text-text-2">
                 {formatPricePerK(offering.pagePrice) !== null ? (
                   `${formatPricePerK(offering.pagePrice)} ${offering.currency ?? "USD"}`
                 ) : (

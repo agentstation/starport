@@ -153,7 +153,7 @@ function AuthorDetailPage() {
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+          <h2 className="text-sm font-medium text-text-2">
             Models · {catalog.length}
           </h2>
           <Link

@@ -206,7 +206,7 @@ function configFromDraft(draft: EditorDraft): PresetConfig | null {
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h3 className="mt-1 border-t border-border-1 pt-4 text-xs font-semibold uppercase tracking-[0.05em] text-text-3">
+    <h3 className="mt-1 border-t border-border-1 pt-4 text-sm font-medium text-text-2">
       {children}
     </h3>
   );

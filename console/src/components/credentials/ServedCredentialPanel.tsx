@@ -59,7 +59,7 @@ export function ServedCredentialPanel({
       data-testid="served-credential-panel"
       className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
     >
-      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+      <h2 className="text-sm font-medium text-text-2">
         Paid by (1h)
       </h2>
       {total === 0 ? (
@@ -80,7 +80,7 @@ export function ServedCredentialPanel({
               </div>
               <div className="h-1 overflow-hidden rounded-xs bg-bg-raised">
                 <div
-                  className="h-full bg-accent-link"
+                  className="h-full bg-text-3"
                   style={{ width: `${(count / total) * 100}%` }}
                 />
               </div>

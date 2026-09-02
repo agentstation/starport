@@ -157,3 +157,25 @@ test("only a model that serves the operation can be submitted", async () => {
   expect(offered).toContain("mock/video-1");
   expect(offered).not.toContain("mock/chat-1");
 });
+
+// A state is a lifecycle fact, and DESIGN.md renders lifecycle as a pill. The
+// wire state keeps its underscore; the pill does not, because a reader is not
+// a parser.
+test("a running job renders its state as a lifecycle pill", async () => {
+  gateway.jobs = [
+    {
+      id: "job-running",
+      model: "mock/video-1",
+      status: "in_progress",
+      created_at: nowSeconds() - 30,
+    },
+  ];
+
+  mount();
+
+  const pill = await screen.findByText("in progress");
+  const classes = pill.getAttribute("class") ?? "";
+  expect(classes).toContain("rounded-full");
+  expect(classes).toContain("bg-info-tint");
+  expect(screen.queryByText("in_progress")).toBeNull();
+});

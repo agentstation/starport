@@ -97,10 +97,10 @@ function TeamsPage() {
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-              <th className="px-4 py-2.5">Team</th>
-              <th className="px-4 py-2.5">Spend budget</th>
-              <th className="px-4 py-2.5">Created</th>
-              <th className="px-4 py-2.5" />
+              <th scope="col" className="px-4 py-2.5">Team</th>
+              <th scope="col" className="px-4 py-2.5 text-right">Spend budget</th>
+              <th scope="col" className="px-4 py-2.5">Created</th>
+              <th scope="col" className="px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
@@ -110,7 +110,7 @@ function TeamsPage() {
                 data-testid="team-row"
                 className="border-b border-border-1 last:border-0"
               >
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <button
                     type="button"
                     onClick={() => setSelected(team.id)}
@@ -119,15 +119,15 @@ function TeamsPage() {
                     {team.name}
                   </button>
                 </td>
-                <td className="px-4 py-2 text-xs text-text-3">
+                <td className="px-4 py-2.5 text-right tabular-nums text-xs text-text-3">
                   {team.budget
                     ? `${formatNanoUSD(team.budget.limit)} / ${team.budget.interval}`
                     : "—"}
                 </td>
-                <td className="px-4 py-2 text-xs text-text-3">
+                <td className="px-4 py-2.5 text-xs text-text-3">
                   <RelativeTime iso={team.created_at} />
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2.5">
                   <div className="flex items-center justify-end gap-1">
                     <RowAction onClick={() => setSelected(team.id)}>
                       open

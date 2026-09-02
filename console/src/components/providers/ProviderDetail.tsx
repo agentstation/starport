@@ -136,7 +136,7 @@ export function PolicySummary({
   if (facts.length === 0) return null;
   return (
     <section data-testid="policy-summary" className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+      <h2 className="text-sm font-medium text-text-2">
         Data policy
       </h2>
       <dl className="flex flex-col divide-y divide-border-1 rounded-md border border-border-1 bg-bg-panel">
@@ -345,7 +345,7 @@ export function HealthPanel({
       data-testid="health-panel"
       className="flex flex-col gap-3 rounded-md border border-border-1 bg-bg-panel p-4"
     >
-      <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+      <h2 className="text-sm font-medium text-text-2">
         Health
       </h2>
       <div className="flex flex-wrap items-center gap-2">
@@ -501,7 +501,7 @@ export function OfferingsTable({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+        <h2 className="text-sm font-medium text-text-2">
           Served models
         </h2>
         <div className="ml-auto flex items-center gap-2">

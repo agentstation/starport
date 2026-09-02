@@ -82,7 +82,7 @@ export function ProviderCredentialCard({
       className="flex flex-col gap-2 rounded-md border border-border-1 bg-bg-panel p-4"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-text-3">
+        <h2 className="text-sm font-medium text-text-2">
           Credential
         </h2>
         <RowAction onClick={() => setManaging(true)}>manage…</RowAction>
@@ -204,7 +204,7 @@ export function ProviderCredentialCard({
               <div className="flex flex-col gap-5">
                 <div className="flex flex-col gap-3">
                   <div>
-                    <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
+                    <h3 className="text-xs font-medium text-text-3">
                       Shared
                     </h3>
                     <p className="mt-1 text-xs text-text-4">
@@ -245,7 +245,7 @@ export function ProviderCredentialCard({
                 </div>
                 <div className="flex flex-col gap-3">
                   <div>
-                    <h3 className="text-xs font-medium uppercase tracking-wide text-text-3">
+                    <h3 className="text-xs font-medium text-text-3">
                       Accounts
                     </h3>
                     <p className="mt-1 text-xs text-text-4">

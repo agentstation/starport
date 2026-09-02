@@ -115,7 +115,7 @@ export function FacetFilter({
         <PopoverTrigger className="flex h-full min-w-0 items-center gap-1.5 rounded-sm px-2.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
           <span className="truncate">{summary}</span>
           {selected.length === 0 && (
-            <ChevronDown className="size-3.5 shrink-0 text-text-4" />
+            <ChevronDown className="size-3.5 shrink-0 text-text-3" />
           )}
         </PopoverTrigger>
         {selected.length > 0 && (
@@ -123,7 +123,7 @@ export function FacetFilter({
             type="button"
             aria-label={`Clear ${label} filter`}
             onClick={() => onChange([])}
-            className="flex h-full shrink-0 items-center pr-2 pl-0.5 text-text-4 outline-none hover:text-text-2 focus-visible:text-text-2"
+            className="flex h-full shrink-0 items-center pr-2 pl-0.5 text-text-3 outline-none hover:text-text-2 focus-visible:text-text-2"
           >
             <X className="size-3" />
           </button>
@@ -137,7 +137,7 @@ export function FacetFilter({
       >
         {searchable && (
           <div className="flex items-center gap-2 border-b border-border-1 px-2.5">
-            <Search className="size-3.5 shrink-0 text-text-4" />
+            <Search className="size-3.5 shrink-0 text-text-3" />
             <input
               ref={inputRef}
               value={search}
@@ -153,7 +153,7 @@ export function FacetFilter({
               }}
               placeholder={`Filter ${label.toLowerCase()}…`}
               aria-label={`Search ${label}`}
-              className="h-8 w-full bg-transparent text-xs text-text-1 outline-none placeholder:text-text-4"
+              className="h-8 w-full bg-transparent text-xs text-text-1 outline-none placeholder:text-text-3"
             />
           </div>
         )}
@@ -166,7 +166,7 @@ export function FacetFilter({
           className="overflow-y-auto p-1"
         >
           {visible.length === 0 && (
-            <p className="px-2.5 py-2 text-xs text-text-4">No matches.</p>
+            <p className="px-2.5 py-2 text-xs text-text-3">No matches.</p>
           )}
           {visible.map((option, index) => {
             const checked = selected.includes(option.value);
@@ -194,7 +194,7 @@ export function FacetFilter({
                 </span>
                 <span className="min-w-0 flex-1 truncate">{option.label}</span>
                 {option.count !== undefined && (
-                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-4">
+                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-text-3">
                     {option.count}
                   </span>
                 )}
