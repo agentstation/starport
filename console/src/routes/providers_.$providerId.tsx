@@ -20,8 +20,9 @@ import {
   OfferingsTable,
   PolicySummary,
 } from "@/components/providers/ProviderDetail";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import { queries, settle } from "@/lib/queries";
-import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
+import { formatCount, providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/providers_/$providerId")({
@@ -123,8 +124,12 @@ function ProviderDetailPage() {
         <p data-testid="provider-incident" className="text-sm text-warning">
           {runtime.incident.description ||
             "The provider reports a service incident."}
-          {runtime.incident.checked_at &&
-            ` · checked ${formatRelativeTime(runtime.incident.checked_at)}`}
+          {runtime.incident.checked_at && (
+            <>
+              {" · checked "}
+              <RelativeTime iso={runtime.incident.checked_at} />
+            </>
+          )}
         </p>
       )}
 

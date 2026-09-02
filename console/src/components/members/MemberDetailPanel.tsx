@@ -5,13 +5,13 @@ import { useState } from "react";
 import { Field, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   createAccountGrant,
   deleteAccountGrant,
   type Member,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { formatRelativeTime } from "@/lib/format";
 import { report } from "@/lib/mutations";
 
 // MemberDetailPanel is the operator's view of one member: who the identity
@@ -95,10 +95,9 @@ export function MemberDetailPanel({
                 <span className="text-sm text-text-2">{member.email}</span>
               )}
               <span className="text-xs text-text-4">
-                resolved {formatRelativeTime(member.created_at)}
+                resolved <RelativeTime iso={member.created_at} />
               </span>
             </div>
-
 
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-text-2">Direct grants</span>

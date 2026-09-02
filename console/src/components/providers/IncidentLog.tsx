@@ -2,6 +2,7 @@ import { Activity } from "lucide-react";
 import { useState } from "react";
 
 import { ExternalLink } from "@/components/ui/ExternalLink";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import type { ObservedIncidentTransition, ProviderIncidentLog } from "@/lib/api";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 
@@ -143,9 +144,10 @@ function ObservedTransitions({
                   ? "The provider stopped reporting an incident."
                   : "The provider reported an incident.")}
             </span>
-            <span className="ml-auto shrink-0 text-xs tabular-nums text-text-4">
-              {formatRelativeTime(transition.observed_at)}
-            </span>
+            <RelativeTime
+              iso={transition.observed_at}
+              className="ml-auto shrink-0 text-xs tabular-nums text-text-4"
+            />
           </li>
         ))}
       </ul>

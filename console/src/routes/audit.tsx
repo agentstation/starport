@@ -4,10 +4,10 @@ import { type ReactNode } from "react";
 
 import { accessMessage, ApiError } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 
 // The audit log is the durable answer to "who changed what": every admin
 // mutation leaves one record naming its actor, its action, its subject, and
@@ -68,11 +68,8 @@ function AuditLog() {
                   data-testid="audit-row"
                   className="border-b border-border-1 last:border-0"
                 >
-                  <td
-                    className="px-4 py-2 text-xs text-text-3"
-                    title={record.time}
-                  >
-                    {formatRelativeTime(record.time)}
+                  <td className="px-4 py-2 text-xs text-text-3">
+                    <RelativeTime iso={record.time} />
                   </td>
                   <td className="px-4 py-2 font-mono text-xs text-text-2">
                     {record.actor}

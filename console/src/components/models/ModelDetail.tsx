@@ -206,9 +206,9 @@ export function OfferingTable({
             <th className="px-3 py-2 font-medium">Provider model ID</th>
             <th className="px-3 py-2 font-medium">Context</th>
             <th className="px-3 py-2 font-medium">Max out</th>
-            <th className="px-3 py-2 font-medium">Prompt /1M</th>
-            <th className="px-3 py-2 font-medium">Completion /1M</th>
-            <th className="px-3 py-2 font-medium">Cache read /1M</th>
+            <th className="px-3 py-2 font-medium">Prompt / M</th>
+            <th className="px-3 py-2 font-medium">Completion / M</th>
+            <th className="px-3 py-2 font-medium">Cache read / M</th>
             <th className="px-3 py-2 font-medium">Unit price</th>
             <th className="px-3 py-2 font-medium">Max docs</th>
             <th className="px-3 py-2 font-medium">Circuit</th>

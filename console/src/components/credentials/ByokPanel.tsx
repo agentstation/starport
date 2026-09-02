@@ -5,13 +5,14 @@ import { useState } from "react";
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
 import { Field, RowAction } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   deleteBYOKCredential,
   putBYOKCredential,
   validateBYOKCredential,
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { formatRelativeTime, providerLabel } from "@/lib/format";
+import { providerLabel } from "@/lib/format";
 import { announce, report } from "@/lib/mutations";
 
 // BYOK is a provider credential one account brings for itself. It is addressed
@@ -123,10 +124,15 @@ export function ByokPanel({ accountId }: { accountId: string }) {
                   {nameOf(record.provider)}
                 </span>
                 <span className="text-xs text-text-4">
-                  stored {formatRelativeTime(record.created_at)}
-                  {record.last_used
-                    ? ` · last used ${formatRelativeTime(record.last_used)}`
-                    : ""}
+                  stored <RelativeTime iso={record.created_at} />
+                  {record.last_used ? (
+                    <>
+                      {" · last used "}
+                      <RelativeTime iso={record.last_used} />
+                    </>
+                  ) : (
+                    ""
+                  )}
                 </span>
               </div>
               <div className="ml-auto flex items-center gap-1">

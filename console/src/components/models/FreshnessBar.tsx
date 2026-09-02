@@ -5,9 +5,10 @@ import { useState, type ReactNode } from "react";
 import { ChangesPanel } from "@/components/models/ChangesPanel";
 import { IconButton } from "@/components/ui/IconButton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import { accessMessage, ApiError, refreshCatalog } from "@/lib/api";
 import { queries } from "@/lib/queries";
-import { formatRelativeTime, shortGenerationID } from "@/lib/format";
+import { shortGenerationID } from "@/lib/format";
 import { announce, errorText, report } from "@/lib/mutations";
 
 // A catalog older than a week is worth flagging: an embedded bootstrap
@@ -83,8 +84,8 @@ export function FreshnessBar() {
               : "generation — (metadata unavailable)"}
         </span>
         {data?.generated_at && (
-          <span className="text-xs text-text-3" title={data.generated_at}>
-            generated {formatRelativeTime(data.generated_at)}
+          <span className="text-xs text-text-3">
+            generated <RelativeTime iso={data.generated_at} />
           </span>
         )}
         {data?.completeness && data.completeness !== "complete" && (

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
   accessMessage,
   ApiError,
@@ -11,15 +12,14 @@ import {
 } from "@/lib/api";
 import { queries } from "@/lib/queries";
 import {
-  formatPricePerM,
-  formatRelativeTime,
+  formatUSD,
   shortGenerationID,
 } from "@/lib/format";
 
-// Diff prices arrive as per-1M numbers already; formatPricePerM expects a
-// per-token string, so convert through it only for its formatting rules.
+// Diff prices arrive as per-million numbers already. An absent side is
+// unknown, and an unknown price renders the dash, never $0.
 function formatPerM(perM: number | undefined): string {
-  return formatPricePerM(String((perM ?? 0) / 1_000_000)) ?? "$0";
+  return formatUSD(perM) ?? "—";
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
@@ -83,7 +83,14 @@ function ChangesBody() {
     <div className="font-mono text-xs text-text-3">
       {shortGenerationID(diff.from_generation_id)} →{" "}
       {shortGenerationID(diff.to_generation_id)}
-      {diff.to_generated_at ? ` · ${formatRelativeTime(diff.to_generated_at)}` : ""}
+      {diff.to_generated_at ? (
+        <>
+          {" · "}
+          <RelativeTime iso={diff.to_generated_at} />
+        </>
+      ) : (
+        ""
+      )}
     </div>
   );
 
@@ -180,7 +187,7 @@ function ChangesBody() {
                 <tr className="border-b border-border-1 text-xs font-medium text-text-3">
                   <th className="py-1.5 pr-3 font-medium">offering</th>
                   <th className="py-1.5 pr-3 font-medium">field</th>
-                  <th className="py-1.5 text-right font-medium">per 1M</th>
+                  <th className="py-1.5 text-right font-medium">/ M</th>
                 </tr>
               </thead>
               <tbody>
