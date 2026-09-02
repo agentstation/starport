@@ -21,12 +21,9 @@ import { Select } from "@/components/ui/Select";
 import { SidePanel } from "@/components/ui/SidePanel";
 import {
   ApiError,
-  listActivity,
-  listAdminActivity,
-  listProviderCatalog,
-  type ActivityFilters,
   type ActivityRecord,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import {
   formatCount,
   formatMs,
@@ -97,33 +94,12 @@ export const Route = createFileRoute("/usage")({
 });
 
 // --- Scope: admin keys read the cross-key listing, other keys fall back
-// to their own activity, and the page reports the distinction.
-
-type Scope = "admin" | "own" | "locked" | "unconfigured";
+// to their own activity, and the page reports the distinction. One probe
+// answers for the session; a locked own listing surfaces as the activity
+// query's own error.
 
 function useActivityScope(enabled: boolean) {
-  return useQuery<Scope>({
-    queryKey: ["activity-scope"],
-    queryFn: async () => {
-      try {
-        await listAdminActivity({ limit: 1 });
-        return "admin";
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 503) return "unconfigured";
-        if (!(error instanceof ApiError) || !error.needsKey) throw error;
-      }
-      try {
-        await listActivity({ limit: 1 });
-        return "own";
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 503) return "unconfigured";
-        if (error instanceof ApiError && error.needsKey) return "locked";
-        throw error;
-      }
-    },
-    enabled,
-    retry: false,
-  });
+  return useQuery({ ...queries.activityScope(), enabled });
 }
 
 // --- Chart buckets: fixed-width time slices over the selected window,
@@ -324,9 +300,7 @@ function RequestDetail({
   // Display names come from the shared provider-catalog query; react-query
   // dedupes this against the Providers page fetch.
   const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
-    retry: false,
+    ...queries.providerCatalog(),
   });
   const providerName = catalog.data?.find(
     (entry) => entry.id === record.provider,
@@ -528,33 +502,24 @@ function UsagePage() {
   );
 
   const activity = useInfiniteQuery({
-    queryKey: [
-      "activity",
-      scope.data,
-      search.model,
-      search.provider,
-      search.status,
-      admin ? search.key : undefined,
-      range,
-    ],
-    enabled: scope.data === "admin" || scope.data === "own",
-    initialPageParam: "",
-    queryFn: ({ pageParam }) => {
-      const filters: ActivityFilters = {
+    ...queries.activity({
+      scope: scope.data ?? "own",
+      filters: {
         model: search.model,
         provider: search.provider,
         status: search.status,
-        since: sinceISO,
+        key_id: admin ? search.key : undefined,
         limit: PAGE_LIMIT,
-        cursor: pageParam || undefined,
-      };
-      return admin
-        ? listAdminActivity({ ...filters, key_id: search.key })
-        : listActivity(filters);
-    },
-    getNextPageParam: (last) => last.next_cursor || undefined,
-    retry: false,
+      },
+      sinceISO,
+    }),
+    enabled: scope.data === "admin" || scope.data === "own",
   });
+  const locked =
+    activity.error instanceof ApiError && activity.error.needsKey;
+  const unconfigured =
+    scope.data === "unconfigured" ||
+    (activity.error instanceof ApiError && activity.error.status === 503);
 
   // Eagerly page in up to AUTO_PAGES so charts cover the window.
   useEffect(() => {
@@ -617,8 +582,7 @@ function UsagePage() {
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
-
-  if (scope.data === "locked") {
+  if (locked) {
     return (
       <div className="flex flex-col gap-4">
         <Header />
@@ -629,7 +593,7 @@ function UsagePage() {
     );
   }
 
-  if (scope.data === "unconfigured") {
+  if (unconfigured) {
     return (
       <div className="flex flex-col gap-4">
         <Header />

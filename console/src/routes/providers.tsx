@@ -12,12 +12,11 @@ import { Select } from "@/components/ui/Select";
 import {
   accessMessage,
   ApiError,
-  listProviderCatalog,
-  providerStatus,
   refreshProviders,
   type ProviderCatalogEntry,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -104,16 +103,12 @@ function ProvidersPage() {
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
 
   const status = useQuery({
-    queryKey: ["provider-status"],
-    queryFn: providerStatus,
+    ...queries.providerStatus(),
     enabled: keyUsable,
-    retry: false,
   });
   const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
+    ...queries.providerCatalog(),
     enabled: keyUsable,
-    retry: false,
   });
 
   const byId = useMemo(
@@ -150,7 +145,7 @@ function ProvidersPage() {
       } else {
         say(report?.changed ? "Provider state updated" : "Provider state unchanged");
       }
-      await queryClient.invalidateQueries({ queryKey: ["provider-status"] });
+      await queryClient.invalidateQueries({ queryKey: queries.providerStatus().queryKey });
     } catch (error) {
       if (error instanceof ApiError && error.needsKey) {
         say(accessMessage(error, "admin"), true);
@@ -164,7 +159,6 @@ function ProvidersPage() {
       setRefreshing(false);
     }
   };
-
 
   let body: ReactNode;
   if (status.error) {

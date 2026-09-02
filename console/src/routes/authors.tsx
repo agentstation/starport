@@ -9,7 +9,7 @@ import {
   modelCountsByAuthor,
   sortAuthors,
 } from "@/components/authors/AuthorCard";
-import { listAuthors, listModels } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/authors")({
@@ -21,18 +21,14 @@ function AuthorsPage() {
   const [query, setQuery] = useState("");
 
   const authors = useQuery({
-    queryKey: ["authors"],
-    queryFn: listAuthors,
+    ...queries.authors(),
     enabled: keyUsable,
-    retry: false,
   });
   // The authors list endpoint leaves `models` empty, so counts come
   // from the models list — the same query the models page caches.
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
+    ...queries.models(),
     enabled: keyUsable,
-    retry: false,
   });
 
   const counts = useMemo(
@@ -51,7 +47,6 @@ function AuthorsPage() {
       ),
     [authors.data, trimmed, counts],
   );
-
 
   let body: ReactNode;
   if (authors.error) {

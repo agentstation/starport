@@ -7,12 +7,10 @@ import { EntityLogo } from "@/components/catalog/EntityLogo";
 import { offeringAvailability } from "@/components/models/ModelDetail";
 import {
   ApiError,
-  getAuthor,
-  listModels,
-  providerStatus,
   type Model,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatContext } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -73,24 +71,17 @@ function AuthorDetailPage() {
   const keyUsable = useGatewayAccess();
 
   const author = useQuery({
-    queryKey: ["author", authorId],
-    queryFn: () => getAuthor(authorId),
+    ...queries.author(authorId),
     enabled: keyUsable,
-    retry: false,
   });
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
+    ...queries.models(),
     enabled: keyUsable,
-    retry: false,
   });
   const status = useQuery({
-    queryKey: ["provider-status"],
-    queryFn: providerStatus,
+    ...queries.providerStatus(),
     enabled: keyUsable,
-    retry: false,
   });
-
 
   if (author.isPending) {
     return <p className="text-base text-text-3">Loading author…</p>;

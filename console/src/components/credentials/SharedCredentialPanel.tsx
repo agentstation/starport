@@ -10,13 +10,12 @@ import {
   ApiError,
   createSharedCredential,
   deleteSharedCredential,
-  listAccounts,
-  listSharedCredentials,
   updateSharedCredential,
   validateSharedCredential,
   type CredentialField,
   type SharedCredentialSummary,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 
 // A shared credential is a provider credential an operator shares with the
@@ -41,10 +40,6 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 // everything it stores belongs to the deployment. The section renders as a
 // row of that drawer and carries no chrome of its own.
 
-export function sharedCredentialsQueryKey(providerId: string): string[] {
-  return ["shared-credentials", providerId];
-}
-
 type Access = "open" | "granted";
 
 // AccessChoice is the access question, asked at creation and re-asked when
@@ -62,9 +57,7 @@ function AccessChoice({
   onChange: (access: Access, grants: string[]) => void;
 }) {
   const accounts = useQuery({
-    queryKey: ["accounts"],
-    queryFn: listAccounts,
-    retry: false,
+    ...queries.accounts(),
   });
 
   const toggleGrant = (accountId: string) => {
@@ -194,15 +187,18 @@ export function SharedCredentialPanel({
   const applyTarget = useRef<string | null>(null);
 
   const say = (text: string, error = false) => setNotice({ text, error });
+  // A stored credential changes what the provider can serve, so the status
+  // read refreshes with the list.
   const refresh = () =>
-    queryClient.invalidateQueries({
-      queryKey: sharedCredentialsQueryKey(providerId),
-    });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queries.sharedCredentials(providerId).queryKey,
+      }),
+      queryClient.invalidateQueries({ queryKey: queries.providerStatus().queryKey }),
+    ]);
 
   const credentials = useQuery({
-    queryKey: sharedCredentialsQueryKey(providerId),
-    queryFn: () => listSharedCredentials(providerId),
-    retry: false,
+    ...queries.sharedCredentials(providerId),
   });
 
   const validate = useMutation({

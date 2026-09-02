@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { Card, CardTitle } from "@/components/ui/Card";
-import { ApiError, providerStatus } from "@/lib/api";
+import { ApiError } from "@/lib/api";
+import { queries } from "@/lib/queries";
 
 function Count({ label, value }: { label: string; value: number }) {
   return (
@@ -16,9 +17,7 @@ function Count({ label, value }: { label: string; value: number }) {
 // page (CM5) carries the detail.
 export function ProvidersCard() {
   const status = useQuery({
-    queryKey: ["provider-status"],
-    queryFn: providerStatus,
-    retry: false,
+    ...queries.providerStatus(),
   });
 
   if (status.isPending) return null;

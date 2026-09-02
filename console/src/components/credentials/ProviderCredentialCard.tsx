@@ -5,7 +5,6 @@ import { useRef, useState } from "react";
 import { CredentialApplyModal } from "@/components/credentials/CredentialApplyModal";
 import {
   SharedCredentialPanel,
-  sharedCredentialsQueryKey,
 } from "@/components/credentials/SharedCredentialPanel";
 import { SourcePill } from "@/components/credentials/SourcePill";
 import {
@@ -18,14 +17,13 @@ import { SidePanel } from "@/components/ui/SidePanel";
 import {
   ApiError,
   createSharedCredential,
-  listAccounts,
-  listSharedCredentials,
   putBYOKCredential,
   validateBYOKCredential,
   validateSharedCredential,
   type CredentialField,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 
 // ProviderCredentialCard answers "what pays this provider" in one line: the
 // effective payer, named. Everything else — the full source list, provenance,
@@ -67,9 +65,7 @@ export function ProviderCredentialCard({
   const createdShared = useRef<string | null>(null);
 
   const stored = useQuery({
-    queryKey: sharedCredentialsQueryKey(providerId),
-    queryFn: () => listSharedCredentials(providerId),
-    retry: false,
+    ...queries.sharedCredentials(providerId),
   });
 
   const envUsable = credential?.usable === true;
@@ -173,9 +169,14 @@ export function ProviderCredentialCard({
           apply={async (body) => {
             const created = await createSharedCredential(providerId, body);
             createdShared.current = created.id;
-            await queryClient.invalidateQueries({
-              queryKey: sharedCredentialsQueryKey(providerId),
-            });
+            await Promise.all([
+              queryClient.invalidateQueries({
+                queryKey: queries.sharedCredentials(providerId).queryKey,
+              }),
+              queryClient.invalidateQueries({
+                queryKey: queries.providerStatus().queryKey,
+              }),
+            ]);
           }}
           validate={() => {
             const credentialId = createdShared.current;
@@ -296,9 +297,7 @@ function AccountCredentialRow({
   const [accountId, setAccountId] = useState("");
 
   const accounts = useQuery({
-    queryKey: ["accounts"],
-    queryFn: listAccounts,
-    retry: false,
+    ...queries.accounts(),
   });
   const locked = accounts.error instanceof ApiError && accounts.error.needsKey;
 

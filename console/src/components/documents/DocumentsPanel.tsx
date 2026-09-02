@@ -4,13 +4,11 @@ import type { ReactNode } from "react";
 import {
   accessMessage,
   ApiError,
-  listActivity,
-  listAdminActivity,
-  listModels,
   RECOGNITION_OPERATION,
   type ActivityRecord,
   type Model,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import {
   formatMs,
   formatNanoUSD,
@@ -24,22 +22,6 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 // by the page rather than by the token, and the request cost alone reports the
 // two together. An operator watching spend rise has no other place to learn
 // that documents caused it.
-
-const PAGE_LIMIT = 200;
-
-// readDocumentActivity reads the widest activity listing this credential
-// reaches. An admin credential sees the deployment, and every other credential
-// sees the account it belongs to.
-async function readDocumentActivity(): Promise<ActivityRecord[]> {
-  try {
-    const page = await listAdminActivity({ limit: PAGE_LIMIT });
-    return page.data ?? [];
-  } catch (error) {
-    if (!(error instanceof ApiError) || !error.needsKey) throw error;
-  }
-  const page = await listActivity({ limit: PAGE_LIMIT });
-  return page.data ?? [];
-}
 
 // extractions keeps the turns that attached a document. The engine name is the
 // marker: the gateway writes it only when it read something, so a record
@@ -250,17 +232,12 @@ function RecognitionPrices({ offerings }: { offerings: recognitionOffering[] }) 
 export function DocumentsPanel() {
   const enabled = useGatewayAccess();
   const activity = useQuery({
-    queryKey: ["document-activity"],
-    queryFn: readDocumentActivity,
+    ...queries.documentActivity(),
     enabled,
-    retry: false,
   });
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
-    staleTime: 60_000,
+    ...queries.models(),
     enabled,
-    retry: false,
   });
 
   const rows = extractions(activity.data ?? []);

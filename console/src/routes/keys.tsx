@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -19,13 +19,13 @@ import {
   createKey,
   DEFAULT_ACCOUNT_ID,
   deleteKey,
-  getKeyDetail,
-  listKeys,
   updateKey,
   type BudgetUsage,
   type GatewayKey,
+  type KeyDetail,
   type KeyLimits,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import {
   formatCount,
   formatNanoUSD,
@@ -126,17 +126,31 @@ function BudgetLine({
   );
 }
 
-// LimitsCell summarizes a key's restrictions; keys with budgets also load
-// the current-window consumption from the key detail endpoint.
-function LimitsCell({ apiKey }: { apiKey: GatewayKey }) {
+// hasBudget reports whether a key carries a spend or token budget, the two
+// limits whose current-window consumption only the key detail endpoint reports.
+function hasBudget(apiKey: GatewayKey): boolean {
   const limits = apiKey.limits ?? {};
-  const hasBudget = !!limits.spend || !!limits.tokens;
-  const detail = useQuery({
-    queryKey: ["key-detail", apiKey.id],
-    queryFn: () => getKeyDetail(apiKey.id),
-    enabled: hasBudget,
-    retry: false,
+  return !!limits.spend || !!limits.tokens;
+}
+
+type Budgets = NonNullable<KeyDetail["usage"]>["budgets"];
+
+// useBudgets reads the key detail for every budgeted key in one hook at the
+// page level, so the table renders no per-row query and the row count never
+// changes the number of hooks.
+function useBudgets(keys: GatewayKey[], enabled: boolean): Map<string, Budgets> {
+  const budgeted = keys.filter(hasBudget);
+  return useQueries({
+    queries: budgeted.map((apiKey) => ({ ...queries.keyDetail(apiKey.id), enabled })),
+    combine: (results) =>
+      new Map(budgeted.map((apiKey, index) => [apiKey.id, results[index]?.data?.usage?.budgets])),
   });
+}
+
+// LimitsCell summarizes a key's restrictions and, for a budgeted key, the
+// current-window consumption the page read for it.
+function LimitsCell({ apiKey, budgets }: { apiKey: GatewayKey; budgets?: Budgets }) {
+  const limits = apiKey.limits ?? {};
 
   const chips: string[] = [];
   if (apiKey.allowed_models?.length) {
@@ -161,7 +175,7 @@ function LimitsCell({ apiKey }: { apiKey: GatewayKey }) {
   }
   if (chips.length === 0) return <span className="text-text-4">—</span>;
 
-  const budgets = detail.data?.usage?.budgets;
+  const budgeted = hasBudget(apiKey);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex flex-wrap gap-1">
@@ -181,10 +195,10 @@ function LimitsCell({ apiKey }: { apiKey: GatewayKey }) {
           </span>
         ))}
       </div>
-      {hasBudget && budgets?.spend && (
+      {budgeted && budgets?.spend && (
         <BudgetLine usage={budgets.spend} render={formatNanoUSD} unit="spend" />
       )}
-      {hasBudget && budgets?.tokens && (
+      {budgeted && budgets?.tokens && (
         <BudgetLine
           usage={budgets.tokens}
           render={(value) => `${formatCount(value)} tok`}
@@ -694,11 +708,10 @@ function KeysPage() {
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
 
   const keys = useQuery({
-    queryKey: ["keys"],
-    queryFn: listKeys,
+    ...queries.keys(),
     enabled: keyUsable,
-    retry: false,
   });
+  const budgets = useBudgets(keys.data ?? [], keyUsable);
 
   const say = (text: string, error = false) => {
     setNotice({ text, error });
@@ -706,7 +719,7 @@ function KeysPage() {
     noticeTimer.current = setTimeout(() => setNotice(null), 6000);
   };
 
-  const reload = () => queryClient.invalidateQueries({ queryKey: ["keys"] });
+  const reload = () => queryClient.invalidateQueries({ queryKey: queries.keys().queryKey });
 
   const toggle = useMutation({
     mutationFn: (apiKey: GatewayKey) =>
@@ -721,7 +734,6 @@ function KeysPage() {
         true,
       ),
   });
-
 
   let body: ReactNode;
   if (keys.error) {
@@ -790,7 +802,7 @@ function KeysPage() {
                   <ScopePills scopes={apiKey.scopes ?? []} />
                 </td>
                 <td className="px-4 py-2">
-                  <LimitsCell apiKey={apiKey} />
+                  <LimitsCell apiKey={apiKey} budgets={budgets.get(apiKey.id)} />
                 </td>
                 <td className="px-4 py-2">
                   <StatusPill apiKey={apiKey} />

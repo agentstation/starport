@@ -16,14 +16,13 @@ import {
   CREDENTIAL_STRATEGY_LABELS,
   DEFAULT_ACCOUNT_ID,
   deleteAccount,
-  listKeys,
-  listAccounts,
   updateAccount,
   type CredentialStrategy,
   type GatewayKey,
   type Account,
   type AccountLimits,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import {
   formatCount,
   formatNanoUSD,
@@ -47,8 +46,6 @@ export const Route = createFileRoute("/accounts")({
 });
 
 const STRATEGIES = Object.keys(CREDENTIAL_STRATEGY_LABELS) as CredentialStrategy[];
-
-const ACCOUNTS_KEY = ["accounts"];
 
 // LimitChips states the account ceiling. It is not a key's ceiling: a request
 // from any key in the account counts against these, and a key with its own
@@ -102,7 +99,7 @@ function AccountDetail({
       updateAccount(account.id, { credential_strategy: next }),
     onSuccess: async () => {
       setStrategyError(null);
-      await queryClient.invalidateQueries({ queryKey: ACCOUNTS_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
     },
     onError: (error) =>
       setStrategyError(error instanceof Error ? error.message : String(error)),
@@ -209,16 +206,12 @@ function AccountsPage() {
   );
 
   const accounts = useQuery({
-    queryKey: ACCOUNTS_KEY,
-    queryFn: listAccounts,
+    ...queries.accounts(),
     enabled: access,
-    retry: false,
   });
   const keys = useQuery({
-    queryKey: ["keys"],
-    queryFn: listKeys,
+    ...queries.keys(),
     enabled: access,
-    retry: false,
   });
 
   const remove = useMutation({
@@ -226,7 +219,7 @@ function AccountsPage() {
     onSuccess: async (_result, accountId) => {
       setNotice({ text: `Account ${accountId} deleted` });
       setSelected(null);
-      await queryClient.invalidateQueries({ queryKey: ACCOUNTS_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
     },
     onError: (error) =>
       setNotice({
@@ -234,7 +227,6 @@ function AccountsPage() {
         error: true,
       }),
   });
-
 
   const rows = accounts.data ?? [];
   const keysFor = (accountId: string) =>
@@ -372,7 +364,7 @@ function AccountsPage() {
           onCreated={async (account) => {
             setCreating(false);
             setNotice({ text: `Account ${account.id} created` });
-            await queryClient.invalidateQueries({ queryKey: ACCOUNTS_KEY });
+            await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
             setSelected(account.id);
           }}
         />

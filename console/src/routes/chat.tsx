@@ -17,10 +17,9 @@ import { ThreadList } from "@/components/chat/ThreadList";
 import {
   ApiError,
   completeChat,
-  listModels,
-  providerStatus,
   streamChat,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import type { Attachment, ContentPart } from "@/lib/attachments";
 import { chattableModels } from "@/lib/modelFilter";
 import {
@@ -140,10 +139,7 @@ function ChatPage() {
   const streamStartRef = useRef<number | null>(null);
 
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
-    staleTime: 60_000,
-    retry: false,
+    ...queries.models(),
   });
 
   // Clear the ?model= seed from the URL once captured.
@@ -158,10 +154,7 @@ function ChatPage() {
   // operator credential is usable. Without provider status (a locked
   // endpoint, an early error) the first catalog model stands in.
   const status = useQuery({
-    queryKey: ["provider-status"],
-    queryFn: providerStatus,
-    staleTime: 60_000,
-    retry: false,
+    ...queries.providerStatus(),
   });
   useEffect(() => {
     if (newModel || !models.data?.length) return;

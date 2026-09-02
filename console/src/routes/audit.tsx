@@ -2,7 +2,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 
-import { accessMessage, ApiError, listAuditLog } from "@/lib/api";
+import { accessMessage, ApiError } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -20,13 +21,8 @@ function AuditLog() {
   const access = useGatewayAccess();
 
   const trail = useInfiniteQuery({
-    queryKey: ["audit"],
-    queryFn: ({ pageParam }) =>
-      listAuditLog({ limit: PAGE_LIMIT, cursor: pageParam || undefined }),
-    initialPageParam: "",
-    getNextPageParam: (last) => last.next_cursor || undefined,
+    ...queries.audit(PAGE_LIMIT),
     enabled: access,
-    retry: false,
   });
 
   const rows = (trail.data?.pages ?? []).flatMap((page) => page.data ?? []);

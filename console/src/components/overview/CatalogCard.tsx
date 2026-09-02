@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { Card, CardTitle } from "@/components/ui/Card";
-import { ApiError, catalogMetadata } from "@/lib/api";
+import { ApiError } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime, shortGenerationID } from "@/lib/format";
 
 // CatalogCard shows Starmap catalog freshness with its two counters named
@@ -9,9 +10,7 @@ import { formatRelativeTime, shortGenerationID } from "@/lib/format";
 // availability revision counts provider availability flips.
 export function CatalogCard() {
   const metadata = useQuery({
-    queryKey: ["catalog-metadata"],
-    queryFn: catalogMetadata,
-    retry: false,
+    ...queries.catalogMetadata(),
   });
 
   if (metadata.isPending) return null;

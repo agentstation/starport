@@ -18,14 +18,7 @@ import {
   OfferingsTable,
   PolicySummary,
 } from "@/components/providers/ProviderDetail";
-import {
-  ApiError,
-  listActivity,
-  listAdminActivity,
-  listProviderCatalog,
-  providerIncidentLog,
-  providerStatus,
-} from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatCount, formatRelativeTime, providerLabel } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -37,17 +30,17 @@ function ProviderDetailPage() {
   const { providerId } = Route.useParams();
   const keyUsable = useGatewayAccess();
 
+  // Each read narrows to the one provider this page is about.
   const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
+    ...queries.providerCatalog(),
     enabled: keyUsable,
-    retry: false,
+    select: (entries) => entries.find((candidate) => candidate.id === providerId) ?? null,
   });
   const status = useQuery({
-    queryKey: ["provider-status"],
-    queryFn: providerStatus,
+    ...queries.providerStatus(),
     enabled: keyUsable,
-    retry: false,
+    select: (report) =>
+      report.providers?.find((candidate) => candidate.provider_id === providerId) ?? null,
   });
 
   // The health window is pinned per mount so refetches keep comparable
@@ -58,31 +51,17 @@ function ProviderDetailPage() {
     [],
   );
   const activity = useQuery({
-    queryKey: ["provider-activity", providerId, sinceISO],
-    queryFn: async () => {
-      const filters = { provider: providerId, since: sinceISO, limit: 200 };
-      try {
-        return await listAdminActivity(filters);
-      } catch (error) {
-        if (!(error instanceof ApiError) || !error.needsKey) throw error;
-      }
-      return listActivity(filters);
-    },
+    ...queries.providerActivity(providerId, sinceISO),
     enabled: keyUsable,
-    retry: false,
   });
 
   const incidents = useQuery({
-    queryKey: ["provider-incidents", providerId],
-    queryFn: () => providerIncidentLog(providerId),
+    ...queries.providerIncidents(providerId),
     enabled: keyUsable,
-    retry: false,
   });
 
-  const entry = catalog.data?.find((candidate) => candidate.id === providerId);
-  const runtime = status.data?.providers?.find(
-    (candidate) => candidate.provider_id === providerId,
-  );
+  const entry = catalog.data ?? undefined;
+  const runtime = status.data ?? undefined;
   const offerings = runtime?.offerings ?? [];
   const available = availableOfferings(offerings);
   const name = providerLabel(providerId, entry?.name);

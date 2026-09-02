@@ -30,7 +30,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 
 import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
 import { GitHubMark } from "@/components/ui/icons";
-import { readAuthMode } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
 // Nav is grouped by who reaches for it (DESIGN.md information
@@ -86,21 +86,8 @@ const NAV_SECTIONS: ReadonlyArray<{
 
 const COLLAPSE_KEY = "starport.sidebar.collapsed";
 
-type Health = { status?: string; version?: string };
-
 function useGatewayHealth() {
-  return useQuery<Health>({
-    queryKey: ["health"],
-    queryFn: async () => {
-      const response = await fetch("/health/ready");
-      if (!response.ok) {
-        throw new Error(`health ${response.status}`);
-      }
-      return response.json() as Promise<Health>;
-    },
-    refetchInterval: 30_000,
-    retry: false,
-  });
+  return useQuery(queries.health());
 }
 
 function StarMark() {
@@ -182,9 +169,7 @@ function GatewayStatus({ collapsed }: { collapsed: boolean }) {
 // than living only in Settings, because the mistake is made everywhere else.
 function useOpenGateway(): boolean {
   const { data } = useQuery({
-    queryKey: ["auth-mode"],
-    queryFn: readAuthMode,
-    retry: false,
+    ...queries.authMode(),
   });
   return data?.mode === "disabled";
 }

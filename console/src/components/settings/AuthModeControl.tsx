@@ -8,10 +8,10 @@ import {
   ApiError,
   getApiKey,
   onCredentialChange,
-  readAuthMode,
   setAuthMode,
   type AuthMode,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 
 const CHOICES: {
   mode: AuthMode["mode"];
@@ -43,9 +43,7 @@ export function AuthModeControl() {
   const [failure, setFailure] = useState("");
 
   const { data, isPending } = useQuery({
-    queryKey: ["auth-mode"],
-    queryFn: readAuthMode,
-    retry: false,
+    ...queries.authMode(),
   });
 
   const change = useMutation({

@@ -3,7 +3,8 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ChangesPanel } from "@/components/models/ChangesPanel";
-import { accessMessage, ApiError, catalogMetadata, refreshCatalog } from "@/lib/api";
+import { accessMessage, ApiError, refreshCatalog } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime, shortGenerationID } from "@/lib/format";
 
 // A catalog older than a week is worth flagging: an embedded bootstrap
@@ -40,9 +41,7 @@ function Badge({
 export function FreshnessBar() {
   const queryClient = useQueryClient();
   const metadata = useQuery({
-    queryKey: ["catalog-metadata"],
-    queryFn: catalogMetadata,
-    retry: false,
+    ...queries.catalogMetadata(),
   });
   const [changesOpen, setChangesOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -68,8 +67,8 @@ export function FreshnessBar() {
       } else {
         say("Catalog is already current");
       }
-      await queryClient.invalidateQueries({ queryKey: ["models"] });
-      await queryClient.invalidateQueries({ queryKey: ["catalog-metadata"] });
+      await queryClient.invalidateQueries({ queryKey: queries.models().queryKey });
+      await queryClient.invalidateQueries({ queryKey: queries.catalogMetadata().queryKey });
     } catch (error) {
       if (error instanceof ApiError && error.needsKey) {
         say(accessMessage(error, "admin"), true);

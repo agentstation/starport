@@ -3,12 +3,12 @@ import { useState } from "react";
 
 import { PrimaryButton } from "@/components/ui/Form";
 import {
-  listProviderCatalog,
   updateAccount,
   type Account,
   type AccountBYOKPolicy,
   type AccountProviderAccess,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 
 // AccountPolicyPanel is the operator's policy for one account: whether it may
 // bring its own provider credentials, and which providers — and optionally
@@ -216,9 +216,7 @@ export function AccountPolicyPanel({
   );
 
   const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
-    retry: false,
+    ...queries.providerCatalog(),
   });
   const providers = catalog.data ?? [];
 
@@ -229,7 +227,7 @@ export function AccountPolicyPanel({
     }) => (saveBody ? saveBody(body) : updateAccount(account.id, body)),
     onSuccess: async () => {
       setNotice({ text: "Policy saved" });
-      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      await queryClient.invalidateQueries({ queryKey: queries.accounts().queryKey });
     },
     onError: (error) =>
       setNotice({

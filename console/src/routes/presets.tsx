@@ -19,14 +19,13 @@ import {
   ApiError,
   createPreset,
   deletePreset,
-  listPresetHistory,
-  listPresets,
   rollbackPreset,
   updatePreset,
   type Preset,
   type PresetConfig,
   type PresetProviderPreferences,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -486,15 +485,19 @@ function HistoryModal({
   onError: (message: string) => void;
 }) {
   const history = useQuery({
-    queryKey: ["presets", preset.name, "history"],
-    queryFn: () => listPresetHistory(preset.name),
-    retry: false,
+    ...queries.presetHistory(preset.name),
   });
 
+  const queryClient = useQueryClient();
   const rollback = useMutation({
     mutationFn: (toRevision: number) =>
       rollbackPreset(preset.name, toRevision, preset.revision ?? 0),
-    onSuccess: (record) => onRolledBack(record.revision ?? 0),
+    onSuccess: async (record) => {
+      await queryClient.invalidateQueries({
+        queryKey: queries.presetHistory(preset.name).queryKey,
+      });
+      onRolledBack(record.revision ?? 0);
+    },
     onError: (error) =>
       onError(
         error instanceof ApiError && error.status === 409
@@ -713,10 +716,8 @@ function PresetsPage() {
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
 
   const presets = useQuery({
-    queryKey: ["presets"],
-    queryFn: listPresets,
+    ...queries.presets(),
     enabled: keyUsable,
-    retry: false,
   });
 
   const say = (text: string, error = false) => {
@@ -726,8 +727,7 @@ function PresetsPage() {
   };
 
   const reload = () =>
-    queryClient.invalidateQueries({ queryKey: ["presets"] });
-
+    queryClient.invalidateQueries({ queryKey: queries.presets().queryKey });
 
   let body: ReactNode;
   let canCreate = false;

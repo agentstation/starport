@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
 import { FacetFilter } from "@/components/ui/FacetFilter";
-import { accessMessage, ApiError, listModels, listProviderCatalog } from "@/lib/api";
+import { accessMessage, ApiError } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatCount, providerLabel } from "@/lib/format";
 import { operationLabel } from "@/components/models/ModelsTable";
 import {
@@ -47,7 +48,6 @@ export const Route = createFileRoute("/models")({
   },
 });
 
-
 const SEARCH_DEBOUNCE_MS = 200;
 
 function ModelsPage() {
@@ -72,16 +72,12 @@ function ModelsPage() {
   });
 
   const models = useQuery({
-    queryKey: ["models"],
-    queryFn: listModels,
+    ...queries.models(),
     enabled: keyUsable,
-    retry: false,
   });
   const catalog = useQuery({
-    queryKey: ["provider-catalog"],
-    queryFn: listProviderCatalog,
+    ...queries.providerCatalog(),
     enabled: keyUsable,
-    retry: false,
   });
   const providerNames = useMemo(
     () => new Map((catalog.data ?? []).map((entry) => [entry.id, entry.name])),
@@ -189,7 +185,6 @@ function ModelsPage() {
     () => all.filter((model) => matches(model, search)),
     [all, search],
   );
-
 
   return (
     <div className="flex flex-col gap-4">

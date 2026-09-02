@@ -11,11 +11,10 @@ import {
   DEFAULT_ACCOUNT_ID,
   deleteFile,
   hasSession,
-  listFiles,
-  listAccounts,
   uploadFile,
   type StoredFile,
 } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { formatBytes, formatUnixTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -23,8 +22,6 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 // routes scope every answer to the caller, so this panel shows one account's
 // files and never a deployment-wide list. An operator reading another account's
 // storage reads it with that account's credential.
-
-const FILES_KEY = ["files"];
 
 // PURPOSES are the purposes this gateway serves. The gateway is the authority:
 // it refuses one it does not serve and names the set it accepts, and that
@@ -119,19 +116,15 @@ export function FilesPanel() {
   );
 
   const files = useQuery({
-    queryKey: FILES_KEY,
-    queryFn: listFiles,
+    ...queries.files(),
     enabled: access,
-    retry: false,
   });
 
   // The account limit is readable only through the admin surface, and only a
   // console session names the account it applies to.
   const accounts = useQuery({
-    queryKey: ["accounts"],
-    queryFn: listAccounts,
+    ...queries.accounts(),
     enabled: access && hasSession(),
-    retry: false,
   });
   const bound =
     (accounts.data ?? []).find((account) => account.id === DEFAULT_ACCOUNT_ID)
@@ -141,7 +134,7 @@ export function FilesPanel() {
     mutationFn: (file: File) => uploadFile(file, purpose),
     onSuccess: async (stored) => {
       setNotice({ text: `Uploaded ${stored.filename}` });
-      await queryClient.invalidateQueries({ queryKey: FILES_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.files().queryKey });
     },
     onError: (error) =>
       setNotice({ text: `Upload refused: ${refusalText(error)}`, error: true }),
@@ -152,7 +145,7 @@ export function FilesPanel() {
     onSuccess: async (_result, file) => {
       setConfirming(null);
       setNotice({ text: `Deleted ${file.filename}` });
-      await queryClient.invalidateQueries({ queryKey: FILES_KEY });
+      await queryClient.invalidateQueries({ queryKey: queries.files().queryKey });
     },
     onError: (error) => {
       setConfirming(null);
