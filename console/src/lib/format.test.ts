@@ -189,3 +189,14 @@ test("formatRelativeTime renders a real stamp relatively", () => {
   const fiveMinutes = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   expect(formatRelativeTime(fiveMinutes)).toBe("5m ago");
 });
+
+// A budget window resets ahead of now. The phrase must say so instead of
+// reading the future instant as "just now".
+test("formatRelativeTime renders a future stamp ahead", () => {
+  const inFifteenHours = new Date(Date.now() + 15 * 60 * 60 * 1000).toISOString();
+  expect(formatRelativeTime(inFifteenHours)).toBe("in 15h");
+  const inThreeDays = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+  expect(formatRelativeTime(inThreeDays)).toBe("in 3d");
+  const inTwentySeconds = new Date(Date.now() + 20 * 1000).toISOString();
+  expect(formatRelativeTime(inTwentySeconds)).toBe("just now");
+});

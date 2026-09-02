@@ -2,7 +2,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import { Field, INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
+import { BudgetLine } from "@/components/ui/BudgetLine";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogError,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DestructiveButton,
+  Field,
+  GhostButton,
+  INPUT_CLASS,
+  PrimaryButton,
+  RowAction,
+} from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { RelativeTime } from "@/components/ui/RelativeTime";
@@ -15,6 +32,7 @@ import {
   type Team,
   type TeamBudget,
 } from "@/lib/api";
+import { formatNanoUSD } from "@/lib/format";
 import { queries } from "@/lib/queries";
 import { report } from "@/lib/mutations";
 
@@ -93,9 +111,17 @@ export function TeamDetailPanel({
       report(`Remove failed: ${error instanceof Error ? error.message : error}`),
   });
 
+  // Every budget write names the revision this panel read, when the
+  // gateway gave one, so a save cannot overwrite a rename another operator
+  // landed in between: the gateway refuses it and the operator re-reads.
+  const revision = team.revision;
   const saveBudget = useMutation({
-    mutationFn: (budget: TeamBudget | undefined) =>
-      updateTeam(team.id, { name: team.name, budget }),
+    mutationFn: (budget: TeamBudget) =>
+      updateTeam(team.id, {
+        name: team.name,
+        budget,
+        ...(revision !== undefined ? { revision } : {}),
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
     },
@@ -103,13 +129,19 @@ export function TeamDetailPanel({
       report(`Budget save failed: ${error instanceof Error ? error.message : error}`),
   });
 
-  // submitBudget reads the draft: an empty amount clears the budget, and
-  // anything else must be a positive dollar amount.
+  // submitBudget reads the draft: it must be a positive dollar amount.
+  // Clearing is its own action below, so an emptied field never silently
+  // unmeters the team.
   const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [removingBudget, setRemovingBudget] = useState(false);
   const submitBudget = () => {
     setBudgetError(null);
     if (!draftBudget.trim()) {
-      saveBudget.mutate(undefined);
+      setBudgetError(
+        team.budget
+          ? "Enter an amount, or remove the budget below."
+          : "Enter an amount to set a budget.",
+      );
       return;
     }
     const usd = Number(draftBudget);
@@ -160,9 +192,11 @@ export function TeamDetailPanel({
               <span className="text-xs font-medium text-text-2">Spend budget</span>
               <span className="text-xs text-text-4">
                 Bounds what every key attributed to this team spends together,
-                across every account the team reaches. Empty leaves the team
-                unmetered.
+                across every account the team reaches.
               </span>
+              {team.budget && team.budgets?.spend && (
+                <BudgetLine usage={team.budgets.spend} render={formatNanoUSD} unit="spend" />
+              )}
               <div className="flex items-end gap-2">
                 <Field label="Budget (USD)">
                   <div className="flex gap-2">
@@ -195,6 +229,16 @@ export function TeamDetailPanel({
                 </PrimaryButton>
               </div>
               {budgetError && <p className="text-xs text-error">{budgetError}</p>}
+              {team.budget && (
+                <div>
+                  <RowAction
+                    onClick={() => setRemovingBudget(true)}
+                    disabled={saveBudget.isPending}
+                  >
+                    Remove budget
+                  </RowAction>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -309,6 +353,74 @@ export function TeamDetailPanel({
           </div>
         </SheetBody>
       </SheetContent>
+      {removingBudget && (
+        <RemoveBudgetModal
+          team={team}
+          onClose={() => setRemovingBudget(false)}
+          onRemoved={async () => {
+            setRemovingBudget(false);
+            setDraftBudget("");
+            await queryClient.invalidateQueries({ queryKey: queries.teams().queryKey });
+          }}
+        />
+      )}
     </Sheet>
+  );
+}
+
+// RemoveBudgetModal restates the team and the ceiling before the team goes
+// unmetered (DESIGN.md destructive-modal contract). The write states the
+// team whole without a budget, at the revision this panel read.
+function RemoveBudgetModal({
+  team,
+  onClose,
+  onRemoved,
+}: {
+  team: Team;
+  onClose: () => void;
+  onRemoved: () => void;
+}) {
+  const [error, setError] = useState("");
+  const remove = useMutation({
+    mutationFn: () =>
+      updateTeam(team.id, {
+        name: team.name,
+        ...(team.revision !== undefined ? { revision: team.revision } : {}),
+      }),
+    onSuccess: onRemoved,
+    onError: (problem) =>
+      setError(`Remove failed: ${problem instanceof Error ? problem.message : problem}`),
+  });
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Remove budget</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <p className="text-sm text-text-2">
+            Remove the{" "}
+            <strong className="text-text-1">
+              {team.budget ? `${formatNanoUSD(team.budget.limit)} per ${team.budget.interval}` : ""}
+            </strong>{" "}
+            budget from <strong className="text-text-1">{team.name}</strong>? Keys
+            attributed to the team spend without a team ceiling from the next
+            request on.
+          </p>
+        </DialogBody>
+        <DialogError>{error}</DialogError>
+        <DialogFooter>
+          <GhostButton onClick={onClose}>Cancel</GhostButton>
+          <DestructiveButton onClick={() => remove.mutate()} disabled={remove.isPending}>
+            Remove budget
+          </DestructiveButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

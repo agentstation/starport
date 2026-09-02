@@ -52,6 +52,8 @@ const (
 	fieldError                  = "error"
 	fieldRequests               = "requests"
 	fieldTokens                 = "tokens"
+	fieldSpend                  = "spend"
+	fieldInterval               = "interval"
 	// fieldAccountID is the one wire name for an account: the URL parameter
 	// that addresses one, the response field that reports one, and the log
 	// field that records one.
