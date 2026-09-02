@@ -135,7 +135,7 @@ func (s *FreshnessService) Metadata(ctx context.Context) (SnapshotMetadata, erro
 		var notFound *starmaperrors.NotFoundError
 		if stderrors.As(err, &notFound) {
 			metadata.ManifestUnavailableReason = fmt.Sprintf(
-				"no stored generation record for %q; the snapshot predates durable generation storage",
+				"no stored generation record for %q, so the snapshot predates durable generation storage",
 				snapshot.GenerationID(),
 			)
 			return metadata, nil
@@ -175,7 +175,7 @@ func (s *FreshnessService) Changes(ctx context.Context) (Diff, error) {
 	}
 	if len(history) < 2 {
 		return Diff{
-			Reason: "fewer than two accepted generations are recorded; nothing to compare yet",
+			Reason: "fewer than two accepted generations are recorded, so there is nothing to compare yet",
 		}, nil
 	}
 	previous := history[len(history)-2]

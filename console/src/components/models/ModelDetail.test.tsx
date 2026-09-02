@@ -132,8 +132,8 @@ test("renders one row per offering with prices and provider links", () => {
   );
   expect(screen.getByText("llama-3.1-8b-instant")).toBeDefined();
   // Per-million display of the per-token catalog price.
-  expect(screen.getByText("$0.05")).toBeDefined();
-  expect(screen.getByText("$0.08")).toBeDefined();
+  // Prompt and completion read as the console-wide price pair.
+  expect(screen.getByText("$0.05 / M in \u00b7 $0.08 / M out")).toBeDefined();
   expect(screen.getByText("healthy")).toBeDefined();
   // The offering without runtime state falls back to catalog availability.
   expect(screen.getByText("available")).toBeDefined();
@@ -217,7 +217,7 @@ test("the offering table declares every column and right-aligns the numbers", ()
   render(<OfferingTable model={model} providers={providers} />);
 
   const headers = Array.from(document.querySelectorAll("th"));
-  expect(headers.length).toBe(11);
+  expect(headers.length).toBe(10);
   expect(headers.every((th) => th.getAttribute("scope") === "col")).toBe(true);
   const aligned = headers
     .filter((th) => (th.getAttribute("class") ?? "").includes("text-right"))
@@ -225,8 +225,7 @@ test("the offering table declares every column and right-aligns the numbers", ()
   expect(aligned).toEqual([
     "Context",
     "Max out",
-    "Prompt / M",
-    "Completion / M",
+    "Price / M",
     "Cache read / M",
     "Unit price",
     "Max docs",

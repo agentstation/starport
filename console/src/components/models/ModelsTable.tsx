@@ -159,8 +159,11 @@ const columns = helper.columns([
     header: "Price / 1M",
     sortFn: "basic",
     sortUndefined: "last",
-    size: 220,
-    minSize: 120,
+    // The pair reads "$3.00 / M in · $15.00 / M out": a column narrower
+    // than the pair clips the output side, which is the number a reader
+    // compares.
+    size: 240,
+    minSize: 200,
     meta: { align: "end" },
     cell: ({ row }) => <PriceCell model={row.original} />,
   }),

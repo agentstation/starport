@@ -190,13 +190,13 @@ export function StatsRow() {
           detail={`p99 ${formatMs(overhead.p99)}`}
         />
       </div>
-      <div className="mt-4 flex justify-end border-t border-border-1 pt-3">
-        <span className="text-xs text-text-3">
-          {capped
-            ? `Trends hidden: the sample holds only the newest ${formatCount(ACTIVITY_24H_LIMIT)} requests. Usage has the full window.`
-            : "Per-request detail arrives with the usage page"}
-        </span>
-      </div>
+      {capped && (
+        <div className="mt-4 flex justify-end border-t border-border-1 pt-3">
+          <span className="text-xs text-text-3">
+            {`Trends hidden: the sample holds only the newest ${formatCount(ACTIVITY_24H_LIMIT)} requests. Usage has the full window.`}
+          </span>
+        </div>
+      )}
     </Card>
   );
 }

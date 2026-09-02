@@ -11,6 +11,16 @@ import { queries } from "@/lib/queries";
 import { shortGenerationID } from "@/lib/format";
 import { announce, errorText, report } from "@/lib/mutations";
 
+// manifestSentence says what a missing manifest means for the reader. The
+// server's reason names the cause; the sentence leads with the effect,
+// which is that the completeness and degradation facts are unknown.
+export function manifestSentence(reason: string | undefined): string {
+  const lead = "No manifest is stored for this generation, so completeness and degradation are unknown.";
+  if (!reason) return lead;
+  const cause = reason.endsWith(".") ? reason : `${reason}.`;
+  return `${lead} ${cause.charAt(0).toUpperCase()}${cause.slice(1)}`;
+}
+
 // A catalog older than a week is worth flagging: an embedded bootstrap
 // snapshot ships with the binary and can predate the install by releases.
 const STALE_AFTER_SECONDS = 7 * 24 * 3600;
@@ -107,7 +117,7 @@ export function FreshnessBar() {
           </Badge>
         )}
         {data && !data.manifest_available && (
-          <Badge tone="neutral" title={data.manifest_unavailable_reason ?? ""}>
+          <Badge tone="neutral" title={manifestSentence(data.manifest_unavailable_reason)}>
             no manifest
           </Badge>
         )}
@@ -156,8 +166,8 @@ export function FreshnessBar() {
                 {!data.manifest_available && (
                   <>
                     <dt className="text-text-4">manifest</dt>
-                    <dd className="text-text-2">
-                      {data.manifest_unavailable_reason ?? "unavailable"}
+                    <dd data-testid="manifest-sentence" className="text-text-2">
+                      {manifestSentence(data.manifest_unavailable_reason)}
                     </dd>
                   </>
                 )}

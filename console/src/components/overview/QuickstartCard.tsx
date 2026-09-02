@@ -27,12 +27,16 @@ const reply = await client.chat.completions.create({
   };
 }
 
-// QuickstartCard shows drop-in client snippets with language tabs.
+// QuickstartCard shows drop-in client snippets with language tabs. The
+// card, the tab panel, and the snippet frame all carry min-w-0: a grid
+// item keeps its content's minimum width by default, so without it the
+// widest snippet line pushed the card past its column and the shell
+// clipped the line instead of the snippet scrolling.
 export function QuickstartCard() {
   const all = snippets(location.origin);
   const [current, setCurrent] = useState("curl");
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardTitle aside={<span className="text-xs">drop-in OpenAI client</span>}>
         Quickstart
       </CardTitle>
@@ -45,8 +49,8 @@ export function QuickstartCard() {
           ))}
         </TabsList>
         {Object.entries(all).map(([name, snippet]) => (
-          <TabsContent key={name} value={name}>
-            <div className="relative rounded-sm border border-border-1 bg-bg-canvas">
+          <TabsContent key={name} value={name} className="min-w-0">
+            <div className="relative min-w-0 rounded-sm border border-border-1 bg-bg-canvas">
               <div className="absolute right-1.5 top-1.5">
                 <CopyButton text={snippet} label="snippet" />
               </div>
