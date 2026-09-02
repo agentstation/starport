@@ -81,9 +81,9 @@ func (r *Repository) Record(ctx context.Context, record Record) error {
 		occurredAt = r.now()
 	}
 	if _, err := r.db.ExecContext(ctx,
-		r.db.Bind(`INSERT INTO audit_log (occurred_at, actor, action, subject, outcome) VALUES (?, ?, ?, ?, ?)`),
+		r.db.Bind(`INSERT INTO audit_log (occurred_at, actor, action, subject, outcome, request_id) VALUES (?, ?, ?, ?, ?, ?)`),
 		occurredAt.UTC().Format(time.RFC3339Nano),
-		record.Actor, record.Action, record.Subject, record.Outcome); err != nil {
+		record.Actor, record.Action, record.Subject, record.Outcome, record.RequestID); err != nil {
 		return fmt.Errorf("record audit entry: %w", err)
 	}
 	// RFC 3339 strings in UTC order lexicographically, so the cutoff can be
@@ -136,7 +136,7 @@ func (r *Repository) List(ctx context.Context, query Query) (Page, error) {
 	// One extra row separates "page full" from "more pages exist".
 	arguments = append(arguments, limit+1)
 
-	statement := `SELECT id, occurred_at, actor, action, subject, outcome FROM audit_log WHERE ` +
+	statement := `SELECT id, occurred_at, actor, action, subject, outcome, request_id FROM audit_log WHERE ` +
 		strings.Join(conditions, " AND ") + ` ORDER BY id DESC LIMIT ?`
 	rows, err := r.db.QueryContext(ctx, r.db.Bind(statement), arguments...)
 	if err != nil {
@@ -149,7 +149,7 @@ func (r *Repository) List(ctx context.Context, query Query) (Page, error) {
 		var record Record
 		var occurred string
 		if err := rows.Scan(&record.ID, &occurred, &record.Actor,
-			&record.Action, &record.Subject, &record.Outcome); err != nil {
+			&record.Action, &record.Subject, &record.Outcome, &record.RequestID); err != nil {
 			return Page{}, fmt.Errorf("scan audit entry: %w", err)
 		}
 		occurredAt, err := time.Parse(time.RFC3339Nano, occurred)

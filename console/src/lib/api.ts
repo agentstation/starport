@@ -704,6 +704,9 @@ export type ActivityFilters = {
   provider?: string;
   status?: string;
   key_id?: string;
+  // request_id selects the one record a request left, so an audit record
+  // reaches its usage row.
+  request_id?: string;
   since?: string;
   until?: string;
   limit?: number;
@@ -1461,6 +1464,7 @@ function activityQuery(filters: ActivityFilters): string {
   if (filters.provider) params.set("provider", filters.provider);
   if (filters.status) params.set("status", filters.status);
   if (filters.key_id) params.set("key_id", filters.key_id);
+  if (filters.request_id) params.set("request_id", filters.request_id);
   if (filters.since) params.set("since", filters.since);
   if (filters.until) params.set("until", filters.until);
   if (filters.limit) params.set("limit", String(filters.limit));
@@ -1842,6 +1846,9 @@ export type AuditRecord = {
   action?: string;
   subject?: string;
   outcome?: string;
+  // request_id names the gateway request that made the mutation, or is
+  // empty for a write without a request context.
+  request_id?: string;
 };
 
 export type AuditPage = {
@@ -1853,6 +1860,7 @@ export type AuditFilters = {
   action?: string;
   actor?: string;
   since?: string;
+  until?: string;
   limit?: number;
   cursor?: string;
 };
@@ -1862,6 +1870,7 @@ export function listAuditLog(filters: AuditFilters, { signal }: ReadOptions = {}
   if (filters.action) params.set("action", filters.action);
   if (filters.actor) params.set("actor", filters.actor);
   if (filters.since) params.set("since", filters.since);
+  if (filters.until) params.set("until", filters.until);
   if (filters.limit) params.set("limit", String(filters.limit));
   if (filters.cursor) params.set("cursor", filters.cursor);
   const query = params.toString();

@@ -42,6 +42,7 @@ import {
   formatNanoUSD,
   providerLabel,
 } from "@/lib/format";
+import { RANGE_LABELS, RANGE_SECONDS, rangeOf } from "@/lib/timeRange";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 import { bucketize, describeBuckets, type Bucket } from "@/lib/usageBuckets";
 
@@ -52,19 +53,6 @@ const PAGE_LIMIT = 200;
 const AUTO_PAGES = 5;
 const ROW_HEIGHT = 40;
 
-const RANGE_SECONDS: Record<string, number> = {
-  "1h": 3600,
-  "24h": 86400,
-  "7d": 604800,
-  "30d": 2592000,
-};
-const RANGE_LABELS: Record<string, string> = {
-  "1h": "last hour",
-  "24h": "last 24 hours",
-  "7d": "last 7 days",
-  "30d": "last 30 days",
-  all: "all time",
-};
 const STATUSES = ["ok", "error", "cancelled"] as const;
 
 // The request stack: three steps a reader can tell apart. The legend under
@@ -100,6 +88,9 @@ type UsageSearch = {
   model?: string;
   provider?: string;
   key?: string;
+  // request narrows the listing to the one record a request left. The
+  // audit log links here with it.
+  request?: string;
   status?: string;
   range?: string;
   selected?: string;
@@ -111,13 +102,13 @@ export const Route = createFileRoute("/usage")({
     const str = (value: unknown) =>
       typeof value === "string" && value !== "" ? value : undefined;
     const status = str(search.status);
-    const range = str(search.range);
     return {
       model: str(search.model),
       provider: str(search.provider),
       key: str(search.key),
+      request: str(search.request),
       status: status && (STATUSES as readonly string[]).includes(status) ? status : undefined,
-      range: range && range in RANGE_LABELS ? range : undefined,
+      range: rangeOf(search.range),
       selected: str(search.selected),
     };
   },
@@ -430,6 +421,7 @@ function UsagePage() {
   const [modelDraft, setModelDraft] = useState(search.model ?? "");
   const [providerDraft, setProviderDraft] = useState(search.provider ?? "");
   const [keyDraft, setKeyDraft] = useState(search.key ?? "");
+  const [requestDraft, setRequestDraft] = useState(search.request ?? "");
   useEffect(() => {
     const timer = setTimeout(() => {
       void navigate({
@@ -438,12 +430,13 @@ function UsagePage() {
           model: modelDraft.trim() || undefined,
           provider: providerDraft.trim() || undefined,
           key: keyDraft.trim() || undefined,
+          request: requestDraft.trim() || undefined,
         }),
         replace: true,
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [modelDraft, providerDraft, keyDraft, navigate]);
+  }, [modelDraft, providerDraft, keyDraft, requestDraft, navigate]);
 
   const modelRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -471,7 +464,7 @@ function UsagePage() {
   const sinceISO = useMemo(
     () => (rangeSeconds ? new Date(Date.now() - rangeSeconds * 1000).toISOString() : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rangeSeconds, search.model, search.provider, search.status, search.key],
+    [rangeSeconds, search.model, search.provider, search.status, search.key, search.request],
   );
 
   const activity = useInfiniteQuery({
@@ -482,6 +475,7 @@ function UsagePage() {
         provider: search.provider,
         status: search.status,
         key_id: admin ? search.key : undefined,
+        request_id: search.request,
         limit: PAGE_LIMIT,
       },
       sinceISO,
@@ -608,7 +602,9 @@ function UsagePage() {
   const grid = admin
     ? "grid grid-cols-[120px_minmax(180px,1fr)_150px_110px_130px_80px_85px_70px_80px_90px_70px] items-center"
     : "grid grid-cols-[120px_minmax(180px,1fr)_110px_130px_80px_85px_70px_80px_90px_70px] items-center";
-  const hasFilters = Boolean(search.model || search.provider || search.status || search.key);
+  const hasFilters = Boolean(
+    search.model || search.provider || search.status || search.key || search.request,
+  );
   const loading = scope.isPending || activity.isPending;
 
   return (
@@ -646,6 +642,14 @@ function UsagePage() {
             className={`${INPUT_CLASS} w-40 font-mono`}
           />
         )}
+        <input
+          type="search"
+          placeholder="request ID"
+          aria-label="Filter by request ID"
+          value={requestDraft}
+          onChange={(event) => setRequestDraft(event.target.value)}
+          className={`${INPUT_CLASS} w-44 font-mono`}
+        />
         <Select
           uiSize="sm"
           aria-label="Filter by status"

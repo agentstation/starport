@@ -135,6 +135,13 @@ func TestActivityFiltersAndPagination(t *testing.T) {
 	require.Len(t, records, 1)
 	assert.Equal(t, "req-1", records[0].RequestID)
 
+	recorder = httptest.NewRecorder()
+	controller.List(recorder, authenticatedActivityRequest("/api/v1/activity?request_id=req-2", "key-a"))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	records, _ = decodeActivityPage(t, recorder.Body.Bytes())
+	require.Len(t, records, 1)
+	assert.Equal(t, "req-2", records[0].RequestID)
+
 	// Newest-first pagination walks the whole listing through cursors.
 	recorder = httptest.NewRecorder()
 	controller.List(recorder, authenticatedActivityRequest("/api/v1/activity?limit=1", "key-a"))

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -82,6 +83,7 @@ func TestKeyLifecycleRecordsTheConsoleActor(t *testing.T) {
 	create := httptest.NewRequest(http.MethodPost, "/keys",
 		bytes.NewReader([]byte(`{"name":"audit-walk-key","scopes":["admin"]}`)))
 	create = consoleContext(create, localauth.GrantLocalToken, "")
+	create = create.WithContext(context.WithValue(create.Context(), middleware.RequestIDKey, "req-create"))
 	created := httptest.NewRecorder()
 	router.ServeHTTP(created, create)
 	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
@@ -103,8 +105,10 @@ func TestKeyLifecycleRecordsTheConsoleActor(t *testing.T) {
 	require.Len(t, recorder.records, 2)
 	assert.Equal(t, "key.create", recorder.records[0].Action)
 	assert.Equal(t, body.Key.ID, recorder.records[0].Subject)
+	assert.Equal(t, "req-create", recorder.records[0].RequestID)
 	assert.Equal(t, "key.delete", recorder.records[1].Action)
 	assert.Equal(t, body.Key.ID, recorder.records[1].Subject)
+	assert.Equal(t, "", recorder.records[1].RequestID)
 	for _, record := range recorder.records {
 		assert.Equal(t, "console:local-token", record.Actor)
 		assert.Equal(t, audit.OutcomeOK, record.Outcome)
