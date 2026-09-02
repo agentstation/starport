@@ -1326,7 +1326,7 @@ export type FileList = {
 };
 
 // FILE_PAGE_LIMIT is the largest page the routes serve.
-const FILE_PAGE_LIMIT = 1000;
+export const FILE_PAGE_LIMIT = 1000;
 
 // listFiles reads the files the credential's own account stores. It takes no
 // account argument: the routes scope every answer to the caller, so one account

@@ -33,6 +33,11 @@ export type ActivityQuery = {
   sinceISO?: string;
 };
 
+// DOCUMENT_ACTIVITY_LIMIT is the widest activity window the documents panel
+// reads in one request. The panel states it so a full page reads as a bound,
+// not as the whole history.
+export const DOCUMENT_ACTIVITY_LIMIT = 200;
+
 // widestActivity reads the widest activity listing this credential reaches.
 // An admin credential sees the deployment. Every other credential sees the
 // account it belongs to.
@@ -172,7 +177,7 @@ export const queries = {
   documentActivity: () =>
     queryOptions({
       queryKey: ["document-activity"],
-      queryFn: async ({ signal }) => (await widestActivity({ limit: 200 }, { signal })).data ?? [],
+      queryFn: async ({ signal }) => (await widestActivity({ limit: DOCUMENT_ACTIVITY_LIMIT }, { signal })).data ?? [],
     }),
 
   presets: () =>

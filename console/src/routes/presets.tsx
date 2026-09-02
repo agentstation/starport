@@ -4,6 +4,8 @@ import { History, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { ModelPicker } from "@/components/models/ModelPicker";
+import { DataTable, dataColumns } from "@/components/ui/DataTable";
+import type { RowData, TableFeatures } from "@tanstack/react-table";
 import { DestructiveButton, Field, GhostButton, INPUT_CLASS, PrimaryButton, RowAction, TEXTAREA_CLASS } from "@/components/ui/Form";
 import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -713,6 +715,130 @@ function Header() {
   );
 }
 
+// PresetsTableMeta carries the row actions into the cells through
+// table.options.meta, so the columns stay module-level and a control inside
+// a cell keeps its focus across a dialog.
+type PresetsTableMeta = {
+  select: (name: string) => void;
+  history: (preset: Preset) => void;
+  remove: (preset: Preset) => void;
+};
+
+declare module "@tanstack/react-table" {
+  interface TableMeta<in out TFeatures extends TableFeatures, in out TData extends RowData> {
+    presets?: PresetsTableMeta;
+  }
+}
+
+function presetsMeta(table: {
+  options: { meta?: { presets?: PresetsTableMeta } };
+}): PresetsTableMeta {
+  const meta = table.options.meta?.presets;
+  if (!meta) throw new Error("presets table rendered without its meta");
+  return meta;
+}
+
+const presetColumns = dataColumns<Preset>();
+// Default widths sum to 1,040px so the table fits a 1,440px viewport beside
+// the sidebar; the preset column takes the slack and every column resizes.
+const PRESET_COLUMNS = presetColumns.columns([
+  presetColumns.accessor("name", {
+    id: "preset",
+    header: "Preset",
+    sortFn: "alphanumeric",
+    size: 220,
+    minSize: 160,
+    meta: { flex: true },
+    cell: ({ row }) => (
+      <div className="flex flex-col gap-0.5">
+        <code className="w-fit whitespace-nowrap rounded-xs bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-1">
+          @preset/{row.original.name}
+        </code>
+        {row.original.description && (
+          <span className="text-xs text-text-4">{row.original.description}</span>
+        )}
+      </div>
+    ),
+  }),
+  presetColumns.accessor(
+    (preset) => preset.config.model ?? preset.config.models?.[0] ?? "",
+    {
+      id: "model",
+      header: "Model",
+      sortFn: "alphanumeric",
+      size: 200,
+      minSize: 140,
+      cell: ({ getValue }) =>
+        getValue() ? (
+          <span className="whitespace-nowrap font-mono text-xs text-text-2">
+            {getValue()}
+          </span>
+        ) : (
+          <span className="text-text-4">\u2014</span>
+        ),
+    },
+  ),
+  presetColumns.display({
+    id: "routing",
+    header: "Routing",
+    size: 140,
+    minSize: 120,
+    cell: ({ row }) => <RoutingPills provider={row.original.config.provider} />,
+  }),
+  presetColumns.display({
+    id: "overrides",
+    header: "Overrides",
+    size: 180,
+    minSize: 140,
+    cell: ({ row }) => (
+      <span className="text-xs text-text-3">
+        {samplingSummary(row.original.config) || (
+          <span className="text-text-4">\u2014</span>
+        )}
+      </span>
+    ),
+  }),
+  presetColumns.accessor((preset) => preset.updated_at ?? "", {
+    id: "updated",
+    header: "Updated",
+    sortFn: "alphanumeric",
+    size: 100,
+    minSize: 100,
+    cell: ({ row }) => (
+      <RelativeTime iso={row.original.updated_at} className="text-xs text-text-3" />
+    ),
+  }),
+  presetColumns.display({
+    id: "actions",
+    size: 140,
+    minSize: 140,
+    cell: ({ row, table }) => {
+      const preset = row.original;
+      return (
+        <div className="flex items-center justify-end gap-1">
+          <RowAction onClick={() => presetsMeta(table).select(preset.name)}>edit</RowAction>
+          <button
+            type="button"
+            onClick={() => presetsMeta(table).history(preset)}
+            aria-label={`History of ${preset.name}`}
+            className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
+          >
+            <History className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => presetsMeta(table).remove(preset)}
+            aria-label={`Delete ${preset.name}`}
+            className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      );
+    },
+  }),
+]);
+
 type ModalState =
   | { kind: "create" }
   | { kind: "history"; preset: Preset }
@@ -772,82 +898,20 @@ function PresetsPage() {
   } else {
     canCreate = true;
     body = (
-      <div className="overflow-x-auto rounded-md border border-border-1 bg-bg-panel">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border-1 text-left text-xs font-medium text-text-3">
-              <th className="px-4 py-2.5">Preset</th>
-              <th className="px-4 py-2.5">Model</th>
-              <th className="px-4 py-2.5">Routing</th>
-              <th className="px-4 py-2.5">Overrides</th>
-              <th className="px-4 py-2.5">Updated</th>
-              <th className="px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {(presets.data ?? []).map((preset) => (
-              <tr
-                key={preset.name}
-                className="h-10 border-b border-border-1 transition-colors duration-150 ease-standard last:border-b-0 hover:bg-bg-hover"
-              >
-                <td className="px-4 py-2">
-                  <div className="flex flex-col gap-0.5">
-                    <code className="w-fit whitespace-nowrap rounded-xs bg-bg-raised px-1.5 py-0.5 font-mono text-xs text-text-1">
-                      @preset/{preset.name}
-                    </code>
-                    {preset.description && (
-                      <span className="text-xs text-text-4">
-                        {preset.description}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-4 py-2 font-mono text-xs text-text-2">
-                  {preset.config.model ?? preset.config.models?.[0] ?? (
-                    <span className="text-text-4">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  <RoutingPills provider={preset.config.provider} />
-                </td>
-                <td className="px-4 py-2 text-xs text-text-3">
-                  {samplingSummary(preset.config) || (
-                    <span className="text-text-4">—</span>
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-4 py-2 text-xs text-text-3">
-                  <RelativeTime iso={preset.updated_at} />
-                </td>
-                <td className="px-4 py-2">
-                  <div className="flex items-center justify-end gap-1">
-                    <RowAction
-                      onClick={() => select(preset.name)}
-                    >
-                      edit
-                    </RowAction>
-                    <button
-                      type="button"
-                      onClick={() => setModal({ kind: "history", preset })}
-                      aria-label={`History of ${preset.name}`}
-                      className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-bg-hover hover:text-text-2"
-                    >
-                      <History className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModal({ kind: "delete", preset })}
-                      aria-label={`Delete ${preset.name}`}
-                      className="flex size-7 items-center justify-center rounded-xs text-text-3 transition-colors duration-150 ease-standard hover:bg-error-tint hover:text-error"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        aria-label="Presets"
+        columns={PRESET_COLUMNS}
+        data={presets.data ?? []}
+        meta={{
+          presets: {
+            select,
+            history: (preset) => setModal({ kind: "history", preset }),
+            remove: (preset) => setModal({ kind: "delete", preset }),
+          },
+        }}
+        getRowId={(preset) => preset.name}
+        initialSorting={[{ id: "preset", desc: false }]}
+      />
     );
   }
 
