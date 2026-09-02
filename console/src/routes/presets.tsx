@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { History, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -26,12 +26,20 @@ import {
   type PresetProviderPreferences,
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
+import { optionalString } from "@/lib/search";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
+
+// The preset under edit lives in the address, so a reload or a shared link
+// opens the same editor. The create, history, and delete dialogs stay local.
+type PresetsSearch = { selected?: string };
 
 export const Route = createFileRoute("/presets")({
   component: PresetsPage,
   loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.presets())),
+  validateSearch: (search: Record<string, unknown>): PresetsSearch => ({
+    selected: optionalString(search.selected),
+  }),
 });
 
 // Provider sort orders mirror the OpenRouter wire values the preset
@@ -701,7 +709,6 @@ function Header() {
 
 type ModalState =
   | { kind: "create" }
-  | { kind: "edit"; preset: Preset }
   | { kind: "history"; preset: Preset }
   | { kind: "delete"; preset: Preset }
   | null;
@@ -715,11 +722,18 @@ function PresetsPage() {
   );
   const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const select = (name?: string) =>
+    void navigate({ search: { selected: name }, replace: true });
 
   const presets = useQuery({
     ...queries.presets(),
     enabled: keyUsable,
   });
+  const editing = search.selected
+    ? (presets.data ?? []).find((preset) => preset.name === search.selected)
+    : undefined;
 
   const say = (text: string, error = false) => {
     setNotice({ text, error });
@@ -816,7 +830,7 @@ function PresetsPage() {
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-1">
                     <RowAction
-                      onClick={() => setModal({ kind: "edit", preset })}
+                      onClick={() => select(preset.name)}
                     >
                       edit
                     </RowAction>
@@ -867,12 +881,16 @@ function PresetsPage() {
         </div>
       </div>
       {body}
-      {(modal?.kind === "create" || modal?.kind === "edit") && (
+      {(modal?.kind === "create" || editing) && (
         <EditorModal
-          preset={modal.kind === "edit" ? modal.preset : null}
-          onClose={() => setModal(null)}
+          preset={modal?.kind === "create" ? null : (editing ?? null)}
+          onClose={() => {
+            setModal(null);
+            select();
+          }}
           onSaved={async (name, created) => {
             setModal(null);
+            select();
             say(created ? `Created @preset/${name}` : "Preset saved");
             await reload();
           }}

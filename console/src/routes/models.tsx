@@ -68,13 +68,15 @@ function ModelsPage() {
     setDraftQuery(search.q ?? "");
   }, [search.q]);
   useEffect(() => {
+    if ((search.q ?? "") === draftQuery) return;
     const timer = setTimeout(() => {
-      if ((search.q ?? "") !== draftQuery) {
-        setSearch({ q: draftQuery || undefined });
-      }
+      void navigate({
+        search: (previous: ModelsSearch) => ({ ...previous, q: draftQuery || undefined }),
+        replace: true,
+      });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  });
+  }, [draftQuery, search.q, navigate]);
 
   const models = useQuery({
     ...queries.models(),

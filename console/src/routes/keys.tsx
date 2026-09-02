@@ -1,5 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -26,6 +26,7 @@ import {
   type KeyLimits,
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
+import { optionalString } from "@/lib/search";
 import {
   formatCount,
   formatNanoUSD,
@@ -34,9 +35,17 @@ import {
 } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
+// The key under edit lives in the address, so a reload or a shared link
+// opens the same panel. The create, secret, and delete dialogs stay local:
+// a secret must never reach an address, and the other two are one-shot.
+type KeysSearch = { selected?: string };
+
 export const Route = createFileRoute("/keys")({
   component: KeysPage,
   loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.keys())),
+  validateSearch: (search: Record<string, unknown>): KeysSearch => ({
+    selected: optionalString(search.selected),
+  }),
 });
 
 // Key IDs render head-and-tail (DESIGN.md): enough prefix to recognize
@@ -694,7 +703,6 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 type ModalState =
   | { kind: "create" }
   | { kind: "secret"; secret: string }
-  | { kind: "edit"; apiKey: GatewayKey }
   | { kind: "delete"; apiKey: GatewayKey }
   | null;
 
@@ -707,12 +715,19 @@ function KeysPage() {
   );
   const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(noticeTimer.current), []);
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const select = (keyId?: string) =>
+    void navigate({ search: { selected: keyId }, replace: true });
 
   const keys = useQuery({
     ...queries.keys(),
     enabled: keyUsable,
   });
   const budgets = useBudgets(keys.data ?? [], keyUsable);
+  const editing = search.selected
+    ? (keys.data ?? []).find((apiKey) => apiKey.id === search.selected)
+    : undefined;
 
   const say = (text: string, error = false) => {
     setNotice({ text, error });
@@ -817,7 +832,7 @@ function KeysPage() {
                 <td className="px-4 py-2">
                   <div className="flex items-center justify-end gap-1">
                     <RowAction
-                      onClick={() => setModal({ kind: "edit", apiKey })}
+                      onClick={() => select(apiKey.id)}
                     >
                       edit
                     </RowAction>
@@ -882,12 +897,12 @@ function KeysPage() {
       {modal?.kind === "secret" && (
         <SecretModal secret={modal.secret} onClose={() => setModal(null)} />
       )}
-      {modal?.kind === "edit" && (
+      {editing && (
         <EditKeyModal
-          apiKey={modal.apiKey}
-          onClose={() => setModal(null)}
+          apiKey={editing}
+          onClose={() => select()}
           onSaved={async () => {
-            setModal(null);
+            select();
             say("Key updated");
             await reload();
           }}

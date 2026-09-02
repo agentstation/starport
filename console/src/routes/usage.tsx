@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { BarChart3, Search } from "lucide-react";
@@ -74,6 +74,7 @@ type UsageSearch = {
   key?: string;
   status?: string;
   range?: string;
+  selected?: string;
 };
 
 export const Route = createFileRoute("/usage")({
@@ -89,6 +90,7 @@ export const Route = createFileRoute("/usage")({
       key: str(search.key),
       status: status && (STATUSES as readonly string[]).includes(status) ? status : undefined,
       range: range && range in RANGE_LABELS ? range : undefined,
+      selected: str(search.selected),
     };
   },
 });
@@ -462,15 +464,18 @@ function UsagePage() {
   const [keyDraft, setKeyDraft] = useState(search.key ?? "");
   useEffect(() => {
     const timer = setTimeout(() => {
-      setSearch({
-        model: modelDraft.trim() || undefined,
-        provider: providerDraft.trim() || undefined,
-        key: keyDraft.trim() || undefined,
+      void navigate({
+        search: (previous: UsageSearch) => ({
+          ...previous,
+          model: modelDraft.trim() || undefined,
+          provider: providerDraft.trim() || undefined,
+          key: keyDraft.trim() || undefined,
+        }),
+        replace: true,
       });
     }, 300);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelDraft, providerDraft, keyDraft]);
+  }, [modelDraft, providerDraft, keyDraft, navigate]);
 
   const modelRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -514,6 +519,8 @@ function UsagePage() {
       sinceISO,
     }),
     enabled: scope.data === "admin" || scope.data === "own",
+    // A filter change keeps the rows on screen until the new page lands.
+    placeholderData: keepPreviousData,
   });
   const locked =
     activity.error instanceof ApiError && activity.error.needsKey;
@@ -521,12 +528,22 @@ function UsagePage() {
     scope.data === "unconfigured" ||
     (activity.error instanceof ApiError && activity.error.status === 503);
 
-  // Eagerly page in up to AUTO_PAGES so charts cover the window.
+  // Eagerly page in up to AUTO_PAGES so charts cover the window. Placeholder
+  // pages belong to the previous filter, so they never page further.
+  const pageCount = activity.data?.pages.length ?? 0;
   useEffect(() => {
-    if (!activity.hasNextPage || activity.isFetchingNextPage) return;
-    if ((activity.data?.pages.length ?? 0) >= AUTO_PAGES) return;
+    if (!activity.hasNextPage || activity.isFetchingNextPage || activity.isPlaceholderData) {
+      return;
+    }
+    if (pageCount >= AUTO_PAGES) return;
     void activity.fetchNextPage();
-  }, [activity]);
+  }, [
+    activity.hasNextPage,
+    activity.isFetchingNextPage,
+    activity.isPlaceholderData,
+    activity.fetchNextPage,
+    pageCount,
+  ]);
 
   const records = useMemo(
     () => activity.data?.pages.flatMap((page) => page.data ?? []) ?? [],
@@ -535,7 +552,14 @@ function UsagePage() {
   const partial = Boolean(activity.hasNextPage);
   const suffix = partial ? "+" : "";
 
-  const [selected, setSelected] = useState<ActivityRecord | null>(null);
+  // The open request lives in the address. A record without a request id
+  // falls back to its timestamp, which every record carries.
+  const recordKey = (record: ActivityRecord) => record.request_id ?? record.timestamp;
+  const selected = search.selected
+    ? (records.find((record) => recordKey(record) === search.selected) ?? null)
+    : null;
+  const setSelected = (record: ActivityRecord | null) =>
+    setSearch({ selected: record ? recordKey(record) : undefined });
 
   const buckets = useMemo(
     () => bucketize(records, rangeSeconds),

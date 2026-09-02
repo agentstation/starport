@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { LayoutTemplate, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -23,6 +23,7 @@ import {
   type AccountLimits,
 } from "@/lib/api";
 import { queries, settle } from "@/lib/queries";
+import { oneOf, optionalString } from "@/lib/search";
 import {
   formatCount,
   formatNanoUSD,
@@ -41,6 +42,11 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 // deliberately not "tenant": a tenant connotes allocated compute, while this
 // unit carries identity, limits, and credential policy.
 
+// The open account and the open panel live in the address, so a reload
+// or a shared link lands on the same view.
+const PANELS = ["create", "templates"] as const;
+type AccountsSearch = { selected?: string; panel?: (typeof PANELS)[number] };
+
 export const Route = createFileRoute("/accounts")({
   component: AccountsPage,
   loader: ({ context }) =>
@@ -48,6 +54,10 @@ export const Route = createFileRoute("/accounts")({
       context.queryClient.ensureQueryData(queries.accounts()),
       context.queryClient.ensureQueryData(queries.keys()),
     ),
+  validateSearch: (search: Record<string, unknown>): AccountsSearch => ({
+    selected: optionalString(search.selected),
+    panel: oneOf(PANELS, search.panel),
+  }),
 });
 
 const STRATEGIES = Object.keys(CREDENTIAL_STRATEGY_LABELS) as CredentialStrategy[];
@@ -203,9 +213,21 @@ function AccountDetail({
 function AccountsPage() {
   const access = useGatewayAccess();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [managingTemplates, setManagingTemplates] = useState(false);
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const setSearch = (patch: Partial<AccountsSearch>) =>
+    void navigate({
+      search: (previous: AccountsSearch) => ({ ...previous, ...patch }),
+      replace: true,
+    });
+  const selected = search.selected ?? null;
+  const creating = search.panel === "create";
+  const managingTemplates = search.panel === "templates";
+  const setSelected = (accountId: string | null) =>
+    setSearch({ selected: accountId ?? undefined });
+  const setCreating = (open: boolean) => setSearch({ panel: open ? "create" : undefined });
+  const setManagingTemplates = (open: boolean) =>
+    setSearch({ panel: open ? "templates" : undefined });
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(
     null,
   );
@@ -333,10 +355,7 @@ function AccountsPage() {
         <Header />
         <div className="flex items-center gap-2">
           <GhostButton
-            onClick={() => {
-              setSelected(null);
-              setManagingTemplates(true);
-            }}
+            onClick={() => setSearch({ selected: undefined, panel: "templates" })}
           >
             <LayoutTemplate className="size-4" />
             Templates
