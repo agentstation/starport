@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
+import { queries, settle } from "@/lib/queries";
 
 // A document read happens inside a chat request, before the model the caller
 // asked for runs. The usage page reports one cost for the whole turn, so this
@@ -9,6 +10,7 @@ import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
 
 export const Route = createFileRoute("/documents")({
   component: DocumentsPage,
+  loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.documentActivity())),
 });
 
 function DocumentsPage() {

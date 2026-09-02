@@ -9,11 +9,16 @@ import {
   modelCountsByAuthor,
   sortAuthors,
 } from "@/components/authors/AuthorCard";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/authors")({
   component: AuthorsPage,
+  loader: ({ context }) =>
+    settle(
+      context.queryClient.ensureQueryData(queries.authors()),
+      context.queryClient.ensureQueryData(queries.models()),
+    ),
 });
 
 function AuthorsPage() {

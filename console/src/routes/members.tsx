@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import { MemberDetailPanel } from "@/components/members/MemberDetailPanel";
 import { RowAction } from "@/components/ui/Form";
 import { accessMessage, ApiError } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { formatRelativeTime } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
@@ -16,6 +16,7 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/members")({
   component: MembersPage,
+  loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.members())),
 });
 
 function MembersPage() {

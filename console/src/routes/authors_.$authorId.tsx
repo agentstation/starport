@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import { authorLabel, AuthorLinks } from "@/components/authors/AuthorCard";
@@ -10,11 +10,24 @@ import {
   type Model,
   type ProviderRuntimeStatus,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import { formatContext } from "@/lib/format";
 import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/authors_/$authorId")({
+  // The gateway answers an unknown author with a 404, which is the one
+  // failure this loader turns into a not-found page.
+  loader: async ({ context, params }) => {
+    try {
+      await context.queryClient.ensureQueryData(queries.author(params.authorId));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) throw notFound();
+    }
+    await settle(
+      context.queryClient.ensureQueryData(queries.models()),
+      context.queryClient.ensureQueryData(queries.providerStatus()),
+    );
+  },
   component: AuthorDetailPage,
 });
 

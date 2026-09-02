@@ -25,7 +25,7 @@ import {
   type KeyDetail,
   type KeyLimits,
 } from "@/lib/api";
-import { queries } from "@/lib/queries";
+import { queries, settle } from "@/lib/queries";
 import {
   formatCount,
   formatNanoUSD,
@@ -36,6 +36,7 @@ import { useGatewayAccess } from "@/lib/useGatewayAccess";
 
 export const Route = createFileRoute("/keys")({
   component: KeysPage,
+  loader: ({ context }) => settle(context.queryClient.ensureQueryData(queries.keys())),
 });
 
 // Key IDs render head-and-tail (DESIGN.md): enough prefix to recognize
