@@ -154,6 +154,11 @@ report lifecycle.**
 - Sidebar footer: gateway status dot + version, theme toggle, GitHub link.
 - Content region: max-width 1280px, 32px gutters, left-aligned within the
   remaining space.
+- Below 640px the sidebar becomes a left sheet behind a 48px top bar (menu
+  trigger, wordmark, search). The content region drops to 16px gutters. The
+  collapse state belongs to the desktop layout and never applies in the
+  sheet. Two-column grids declare `grid-cols-1` below their breakpoint, so an
+  implicit `auto` track never widens the page past the viewport.
 
 ### Page header
 
@@ -230,6 +235,9 @@ Rules that override shadcn defaults:
   the trigger as `label · n`.
 - **Popovers/dropdowns:** `--bg-raised`, `--border-2`, radius 8, shadow
   `0 8px 24px rgba(0,0,0,0.4)` + inset 1px white@0.05 ring (dark).
+- **Sheets:** one `SheetContent` with a `side`. Detail panels enter from
+  the right at 480px; navigation and the chat thread list enter from the
+  left; pickers a thumb reaches enter from the bottom at up to 85vh.
 - **Modals:** radius 12, same shadow contract, backdrop `black@0.6`;
   destructive modals restate the object name and require it or an explicit
   confirmation.

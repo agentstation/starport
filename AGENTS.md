@@ -100,6 +100,7 @@ bash scripts/verify-reranking.sh
 bash scripts/verify-catalog-performance.sh
 bash scripts/verify-credential-sharing.sh
 bash scripts/verify-enterprise-readiness.sh
+bash scripts/verify-console-polish.sh
 bash scripts/verify-action-pins.sh
 bash scripts/benchmark-overhead.sh
 bash scripts/smoke-first-run.sh
