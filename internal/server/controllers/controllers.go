@@ -88,7 +88,15 @@ type Config struct {
 	// deployment and not any one file.
 	FileBackend string
 	ServiceName string
-	Version     string
+	// Build is the provenance of the running binary. The health and admin
+	// surfaces report it, so a caller learns what is deployed from either.
+	Build BuildInfo
+	// Deployment is what the admin surface states about the configured
+	// storage, telemetry, guardrail, and retention settings.
+	Deployment Deployment
+	// Webhooks reports the delivery state of the webhook surface. A nil
+	// reporter reads as webhooks off.
+	Webhooks WebhookReporter
 	// AuthPolicy is the running authentication mode. It is a pointer to the
 	// live policy and not a copy of the mode, because the console can change
 	// the mode while the router stands.
@@ -125,7 +133,7 @@ type Config struct {
 // NewControllers creates a new controller collection
 func NewControllers(cfg Config) *Controllers {
 	collections := &Controllers{
-		Health:               NewHealthController(cfg.ServiceName, cfg.Version),
+		Health:               NewHealthController(cfg.ServiceName, orUnstamped(cfg.Build.Version)),
 		Chat:                 NewChatController(cfg.Service),
 		OpenRouterChat:       NewOpenRouterChatController(cfg.Service),
 		Responses:            NewResponsesController(cfg.Service),
@@ -145,7 +153,8 @@ func NewControllers(cfg Config) *Controllers {
 		Activity:             NewActivityController(cfg.Usage),
 		Audit:                NewAuditController(cfg.Audit),
 		Admin: NewAdminController(cfg.APIKeys, cfg.Accounts, cfg.Usage,
-			WithFileStorage(cfg.FileBackend)),
+			WithFileStorage(cfg.FileBackend), WithBuildInfo(cfg.Build),
+			WithDeployment(cfg.Deployment), WithWebhooks(cfg.Webhooks)),
 		Accounts:           NewAccountsController(cfg.Accounts, cfg.APIKeys, cfg.Templates),
 		AccountTemplates:   NewAccountTemplatesController(cfg.Templates),
 		Members:            NewMembersController(cfg.Identity),

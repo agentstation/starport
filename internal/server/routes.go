@@ -319,6 +319,9 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					// System information
 					r.Get("/info", s.controllers.Admin.SystemInfo)
 					r.Get("/metrics", s.controllers.Admin.Metrics)
+					// The webhook summary: where deliveries go, what they
+					// carry, and what never delivered.
+					r.Get("/webhooks", s.controllers.Admin.Webhooks)
 					r.Get("/activity", s.controllers.Activity.AdminList)
 					// The audit trail: who changed what on this admin
 					// surface, newest first.
@@ -515,6 +518,7 @@ func carriesOwnBodyBound(r *http.Request) bool {
 //   DELETE /api/v1/admin/account-grants                   - Remove a grant named in the query string
 //   GET    /api/v1/admin/info              - System information
 //   GET    /api/v1/admin/metrics           - System metrics
+//   GET    /api/v1/admin/webhooks          - Webhook summary
 //   GET    /api/v1/admin/activity          - List request activity across keys
 //   GET    /api/v1/admin/providers         - Provider runtime status
 //   GET    /api/v1/admin/providers/{provider}/incidents - Provider incident log and observed transitions

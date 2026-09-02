@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 
@@ -31,7 +32,7 @@ type Development struct {
 }
 
 // NewDevelopment creates an in-memory gateway bound to loopback.
-func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, error) {
+func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) (*Development, error) {
 	if ctx == nil {
 		return nil, errors.New("development context is required")
 	}
@@ -79,12 +80,12 @@ func NewDevelopment(ctx context.Context, cfg *config.Config) (*Development, erro
 	}
 
 	claimed := false
-	application, err := New(cfg, func(options *buildOptions) {
+	application, err := New(cfg, append(slices.Clone(options), func(options *buildOptions) {
 		options.factories.openStorage = func(config.StorageConfig) (storage.KVStore, error) {
 			claimed = true
 			return store, nil
 		}
-	})
+	})...)
 	if err != nil {
 		if !claimed {
 			err = errors.Join(err, store.Close())

@@ -117,7 +117,7 @@ func startDevelopment(
 	if err != nil {
 		return starportcli.DevelopmentSession{}, fmt.Errorf("load development configuration: %w", err)
 	}
-	runtime, err := app.NewDevelopment(ctx, cfg)
+	runtime, err := app.NewDevelopment(ctx, cfg, app.WithBuildInfo(version, gitCommit, buildTime))
 	if err != nil {
 		return starportcli.DevelopmentSession{}, err
 	}
@@ -220,7 +220,7 @@ func runServer(ctx context.Context, options starportcli.GatewayOptions) error {
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
-	application, err := app.New(cfg)
+	application, err := app.New(cfg, app.WithBuildInfo(version, gitCommit, buildTime))
 	if err != nil {
 		return fmt.Errorf("create application: %w", err)
 	}

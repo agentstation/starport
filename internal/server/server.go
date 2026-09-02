@@ -150,6 +150,14 @@ type Dependencies struct {
 	// webhook endpoints. A nil emitter pushes nothing, which is the
 	// deployment with no endpoint configured.
 	Events controllers.EventEmitter
+
+	// Webhooks reports the delivery state of that surface for the admin
+	// summary. A nil reporter reads as webhooks off.
+	Webhooks controllers.WebhookReporter
+
+	// Deployment is what the admin surface states about the configured
+	// storage, telemetry, guardrail, and retention settings.
+	Deployment controllers.Deployment
 }
 
 // New creates an HTTP adapter from ready application dependencies.
@@ -230,7 +238,9 @@ func New(config *Config, dependencies Dependencies) (*Server, error) {
 		FileUploadBound:    config.MaxFileUploadSize,
 		FileBackend:        dependencies.FileBackend,
 		ServiceName:        "starport",
-		Version:            "1.0.0",
+		Build:              config.Build,
+		Deployment:         dependencies.Deployment,
+		Webhooks:           dependencies.Webhooks,
 		AuthPolicy:         s.authPolicy,
 		AuthModeStore:      config.AuthModeStore,
 		AuthModeBindHost:   config.Host,

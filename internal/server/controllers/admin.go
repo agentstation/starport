@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,8 +35,69 @@ type AdminController struct {
 	issuer       *apikey.Issuer
 	usageRecords usage.Repository
 	fileBackend  string
+	build        BuildInfo
+	deployment   Deployment
+	webhooks     WebhookReporter
 	audit        AuditRecorder
 	events       EventEmitter
+}
+
+// BuildInfo is the provenance of the running binary. The linker stamps the
+// version, commit, and build time; the composition root records when the
+// process started so the surface can state an uptime instead of guessing.
+type BuildInfo struct {
+	Version   string
+	Commit    string
+	BuildTime string
+	StartedAt time.Time
+}
+
+// DropCounter reports records an export target never received. The usage
+// export sink satisfies it.
+type DropCounter interface {
+	Dropped() int64
+}
+
+// Deployment is what the admin surface states about how this gateway was
+// configured. Application composition fills it from the loaded
+// configuration, so the controller reports values and never reads the
+// environment. Every field is a plain value or a live reader, because the
+// surface describes the deployment and not any one request.
+type Deployment struct {
+	// StorageMode names the key-value store: badger or valkey.
+	StorageMode string
+	// RelationalMode names the relational twin: sqlite, postgres, or mysql.
+	RelationalMode string
+	// MetricsMode states who may read the scrape: on, admin, or off.
+	MetricsMode string
+	// TracesEndpoint is the configured OTLP endpoint, or empty when the
+	// tracer is a no-op. The surface reports its host alone.
+	TracesEndpoint string
+	// UsageExportKind names the export sink: http, file, or empty when
+	// nothing exports.
+	UsageExportKind string
+	// UsageExport reports what the sink dropped. Nil means no sink.
+	UsageExport DropCounter
+	// GuardrailChecks lists the configured checks in run order. Empty
+	// means guardrails are off.
+	GuardrailChecks []string
+	// PIIMode states what a PII finding does: redact or refuse.
+	PIIMode string
+	// ModerationModel names the moderation model the moderation check
+	// calls, or empty when no check names one.
+	ModerationModel string
+	// AuditRetention, FileRetention, and JobAssetRetention are the windows
+	// the three stores prune at.
+	AuditRetention    time.Duration
+	FileRetention     time.Duration
+	JobAssetRetention time.Duration
+}
+
+// WebhookReporter reports the delivery state of the configured webhook
+// surface. The events dispatcher satisfies it, and a nil dispatcher reports
+// the unconfigured zero.
+type WebhookReporter interface {
+	Stats() events.Stats
 }
 
 // AdminOption adjusts what the admin surface reports.
@@ -45,6 +108,25 @@ type AdminOption func(*AdminController)
 // land, which is the one fact about file storage that no route reveals.
 func WithFileStorage(backend string) AdminOption {
 	return func(c *AdminController) { c.fileBackend = backend }
+}
+
+// WithBuildInfo states which binary answers. A surface that reports a
+// version the linker never stamped tells an operator nothing about what
+// is deployed.
+func WithBuildInfo(build BuildInfo) AdminOption {
+	return func(c *AdminController) { c.build = build }
+}
+
+// WithDeployment states the configured storage, telemetry, guardrail, and
+// retention settings the surface reports.
+func WithDeployment(deployment Deployment) AdminOption {
+	return func(c *AdminController) { c.deployment = deployment }
+}
+
+// WithWebhooks supplies the webhook delivery state. A nil reporter reads as
+// webhooks off.
+func WithWebhooks(reporter WebhookReporter) AdminOption {
+	return func(c *AdminController) { c.webhooks = reporter }
 }
 
 // NewAdminController creates a new admin controller. The account repository
@@ -474,18 +556,29 @@ func (h *AdminController) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SystemInfo handles GET /api/v1/admin/info
+// unstampedBuild is what a binary built outside the release pipeline
+// carries in every provenance field.
+const unstampedBuild = "dev"
+
+// SystemInfo handles GET /api/v1/admin/info. Every value it states comes
+// from the linker, the clock, or the loaded configuration. A fact this
+// process cannot know reads "unavailable" rather than a plausible guess.
 func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
-	// TODO: Implement actual system info gathering
 	info := map[string]any{
 		"service":    "starport",
-		"version":    "1.0.0",
-		"uptime":     systemInfoUnavailable,
+		"version":    h.version(),
+		"commit":     orUnstamped(h.build.Commit),
+		"build_time": orUnstamped(h.build.BuildTime),
+		"started_at": h.startedAt(),
+		"uptime":     h.uptime(),
 		"go_version": runtime.Version(),
 		"os":         runtime.GOOS,
 		"arch":       runtime.GOARCH,
 		"storage": map[string]any{
-			"type":      "badger",
+			"type":       orUnavailable(h.deployment.StorageMode),
+			"relational": orUnavailable(h.deployment.RelationalMode),
+			// The process holds an open store or it does not run, so the
+			// one status this surface can state is that it is open.
 			fieldStatus: "healthy",
 		},
 		// Stored file bytes do not live in the record store, so the backend
@@ -495,6 +588,14 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 		"files": map[string]any{
 			"backend": h.fileStorage(),
 		},
+		"telemetry":  h.telemetry(),
+		"guardrails": h.guardrails(),
+		"retention": map[string]any{
+			"audit_seconds":      seconds(h.deployment.AuditRetention),
+			"files_seconds":      seconds(h.deployment.FileRetention),
+			"job_assets_seconds": seconds(h.deployment.JobAssetRetention),
+		},
+		"webhooks": h.webhookSummary(),
 		providersField: map[string]any{
 			responseCountField: systemInfoUnavailable,
 			fieldStatus:        systemInfoUnavailable,
@@ -504,6 +605,125 @@ func (h *AdminController) SystemInfo(w http.ResponseWriter, _ *http.Request) {
 	if err := dto.WriteJSON(w, http.StatusOK, info); err != nil {
 		log.Error().Err(err).Msg("Failed to write response")
 	}
+}
+
+// Webhooks handles GET /api/v1/admin/webhooks: the configured receivers
+// with their secrets removed, the event names, and the delivery state.
+func (h *AdminController) Webhooks(w http.ResponseWriter, _ *http.Request) {
+	if err := dto.WriteJSON(w, http.StatusOK, h.webhookSummary()); err != nil {
+		log.Error().Err(err).Msg("Failed to write response")
+	}
+}
+
+func (h *AdminController) version() string {
+	return orUnstamped(h.build.Version)
+}
+
+func (h *AdminController) startedAt() any {
+	if h.build.StartedAt.IsZero() {
+		return systemInfoUnavailable
+	}
+	return h.build.StartedAt.UTC().Format(time.RFC3339)
+}
+
+// uptime states how long this process has answered, to the second. A
+// controller built without a start time cannot know and says so.
+func (h *AdminController) uptime() any {
+	if h.build.StartedAt.IsZero() {
+		return systemInfoUnavailable
+	}
+	return time.Since(h.build.StartedAt).Truncate(time.Second).String()
+}
+
+func (h *AdminController) telemetry() map[string]any {
+	var traces any
+	if host := endpointHost(h.deployment.TracesEndpoint); host != "" {
+		traces = map[string]any{"endpoint_host": host}
+	}
+	usageExport := map[string]any{"kind": "off"}
+	if h.deployment.UsageExportKind != "" {
+		usageExport["kind"] = h.deployment.UsageExportKind
+		var dropped int64
+		if h.deployment.UsageExport != nil {
+			dropped = h.deployment.UsageExport.Dropped()
+		}
+		usageExport["dropped"] = dropped
+	}
+	return map[string]any{
+		"metrics":      orUnavailable(h.deployment.MetricsMode),
+		"traces":       traces,
+		"usage_export": usageExport,
+	}
+}
+
+func (h *AdminController) guardrails() map[string]any {
+	checks := h.deployment.GuardrailChecks
+	if checks == nil {
+		checks = []string{}
+	}
+	piiMode := h.deployment.PIIMode
+	if piiMode == "" {
+		piiMode = "redact"
+	}
+	return map[string]any{
+		"checks":           checks,
+		"pii_mode":         piiMode,
+		"moderation_model": h.deployment.ModerationModel,
+	}
+}
+
+func (h *AdminController) webhookSummary() map[string]any {
+	var stats events.Stats
+	if h.webhooks != nil {
+		stats = h.webhooks.Stats()
+	}
+	endpoints := stats.Endpoints
+	if endpoints == nil {
+		endpoints = []string{}
+	}
+	return map[string]any{
+		"configured": len(endpoints) > 0,
+		"endpoints":  endpoints,
+		"events":     events.Types(),
+		"queue": map[string]any{
+			"depth":    stats.QueueDepth,
+			"capacity": stats.QueueCapacity,
+		},
+		"dead_letters": stats.DeadLetters,
+	}
+}
+
+// endpointHost keeps the host of a collector endpoint and drops any path
+// or credential the URL carries. An endpoint given as a bare host:port,
+// which the OTLP variables allow, reads as itself.
+func endpointHost(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+	if parsed, err := url.Parse(endpoint); err == nil && parsed.Host != "" {
+		return parsed.Host
+	}
+	host, _, _ := strings.Cut(endpoint, "/")
+	return host
+}
+
+func seconds(window time.Duration) int64 {
+	return int64(window / time.Second)
+}
+
+func orUnstamped(value string) string {
+	if strings.TrimSpace(value) == "" || value == "unknown" {
+		return unstampedBuild
+	}
+	return value
+}
+
+func orUnavailable(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return systemInfoUnavailable
+	}
+	return value
 }
 
 // fileStorage names the blob backend, or says that this deployment stores no

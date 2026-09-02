@@ -707,6 +707,7 @@ PUT    /api/v1/admin/accounts/{account_id}
 DELETE /api/v1/admin/accounts/{account_id}
 GET    /api/v1/admin/info
 GET    /api/v1/admin/metrics
+GET    /api/v1/admin/webhooks
 GET    /api/v1/admin/providers
 POST   /api/v1/admin/providers/refresh
 ```
