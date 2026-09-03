@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,6 +40,13 @@ const DefaultCatalogSourceRepository = "agentstation/starmap"
 
 // DefaultCatalogSourceChannel is the publication channel of the repository.
 const DefaultCatalogSourceChannel = "catalog-latest"
+
+// catalogStateSubdirectory is where a Starport process keeps its catalog state
+// under the user state root.
+const catalogStateSubdirectory = "starport/catalog"
+
+// stateHomeEnvironment names the XDG user state root.
+const stateHomeEnvironment = "XDG_STATE_HOME"
 
 // CatalogConfig holds the canonical Starmap catalog settings. Starport uses
 // the suffixes Starmap names, with the gateway prefix. One connected runtime
@@ -93,8 +102,18 @@ type CatalogConfig struct {
 	// means one observation at startup and no repeat.
 	AcquisitionInterval time.Duration `env:"ACQUISITION_INTERVAL,default=4h"`
 
-	// WorkspacePath is an optional local catalog workspace directory.
+	// WorkspacePath is an optional local catalog workspace directory. It
+	// holds catalog files an operator supplies. It is never the state
+	// directory, because a workspace can sit on a volume many instances share.
 	WorkspacePath string `env:"WORKSPACE_PATH"`
+
+	// StateDirectory is where this process keeps the state the connected
+	// runtime retains: the layer store, the instance identity seed, and the
+	// source discovery record. It must belong to one process on one machine,
+	// because two processes that share a seed derive one instance identity and
+	// the runtime lease then fences nothing. An empty value resolves to the
+	// process-local user state directory.
+	StateDirectory string `env:"STATE_DIR"`
 
 	// StartupSpread spreads the first source read of a fleet, so many
 	// instances that start together do not ask at the same moment.
@@ -181,7 +200,37 @@ func (c *CatalogConfig) Validate() error {
 	if c.RefreshTimeout < 0 {
 		return fmt.Errorf("catalog refresh timeout cannot be negative")
 	}
+	workspace := strings.TrimSpace(c.WorkspacePath)
+	if workspace != "" && workspace == strings.TrimSpace(c.StateDirectory) {
+		return fmt.Errorf(
+			"catalog state directory cannot be the workspace path, " +
+				"because a shared workspace would give two instances one identity",
+		)
+	}
 	return nil
+}
+
+// ResolveStateDirectory returns the catalog state directory of this process.
+// An operator value wins. An empty value resolves to the user state root,
+// which is process-local: it is never the workspace path and never a storage
+// path, so two instances that share a volume still hold two identities.
+func ResolveStateDirectory(configured string) (string, error) {
+	if directory := strings.TrimSpace(configured); directory != "" {
+		return directory, nil
+	}
+	if root := strings.TrimSpace(os.Getenv(stateHomeEnvironment)); root != "" {
+		return filepath.Join(root, filepath.FromSlash(catalogStateSubdirectory)), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+	if home == "" {
+		return "", fmt.Errorf("user home directory is empty")
+	}
+	return filepath.Join(
+		home, ".local", "state", filepath.FromSlash(catalogStateSubdirectory),
+	), nil
 }
 
 // RemovedSettingError reports one environment variable this gateway no longer

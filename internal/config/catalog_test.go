@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -212,6 +213,21 @@ func TestCatalogConfigRefusesUnusableSettings(t *testing.T) {
 			name:   "zero acquisition interval means startup only",
 			mutate: func(c *CatalogConfig) { c.AcquisitionInterval = 0 },
 		},
+		{
+			name: "the state directory is the workspace path",
+			mutate: func(c *CatalogConfig) {
+				c.WorkspacePath = "/srv/shared/catalog"
+				c.StateDirectory = "/srv/shared/catalog"
+			},
+			wantErr: true,
+		},
+		{
+			name: "the state directory stands beside the workspace path",
+			mutate: func(c *CatalogConfig) {
+				c.WorkspacePath = "/srv/shared/catalog"
+				c.StateDirectory = "/var/lib/starport/catalog"
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -262,5 +278,58 @@ func TestDevelopmentRuntimeKeepsCatalogAcquisitionEnabled(t *testing.T) {
 	}
 	if disabled.Catalog.AcquisitionEnabled {
 		t.Fatal("the operator could not disable catalog acquisition")
+	}
+}
+
+// TestResolveStateDirectoryIsProcessLocal proves the catalog state directory
+// resolves to a process-local path. An operator value wins, the user state
+// root supplies the default, and no answer is empty.
+func TestResolveStateDirectoryIsProcessLocal(t *testing.T) {
+	stateRoot := t.TempDir()
+	home := t.TempDir()
+	operator := t.TempDir()
+
+	tests := []struct {
+		name       string
+		configured string
+		stateHome  string
+		home       string
+		want       string
+	}{
+		{
+			name:       "an operator value wins",
+			configured: operator,
+			stateHome:  stateRoot,
+			home:       home,
+			want:       operator,
+		},
+		{
+			name:      "the user state root supplies the default",
+			stateHome: stateRoot,
+			home:      home,
+			want:      filepath.Join(stateRoot, "starport", "catalog"),
+		},
+		{
+			name: "the home directory supplies the default",
+			home: home,
+			want: filepath.Join(home, ".local", "state", "starport", "catalog"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(stateHomeEnvironment, test.stateHome)
+			t.Setenv("HOME", test.home)
+			directory, err := ResolveStateDirectory(test.configured)
+			if err != nil {
+				t.Fatalf("resolve the state directory: %v", err)
+			}
+			if directory == "" {
+				t.Fatal("the resolved state directory is empty")
+			}
+			if directory != test.want {
+				t.Fatalf("state directory = %q, want %q", directory, test.want)
+			}
+		})
 	}
 }

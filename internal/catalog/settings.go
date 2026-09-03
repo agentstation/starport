@@ -62,9 +62,20 @@ type Settings struct {
 	// AcquisitionInterval is the period between provider observations.
 	AcquisitionInterval time.Duration
 
-	// WorkspacePath is the local catalog workspace directory. It is also the
-	// state directory the runtime keeps its retained layers in.
+	// WorkspacePath is the local catalog workspace directory. It holds the
+	// catalog files an operator supplies and nothing this process owns.
 	WorkspacePath string
+
+	// StateDirectory is where this process keeps the state the connected
+	// runtime retains: the layer store, the instance identity seed, and the
+	// source discovery record. It belongs to one process on one machine.
+	StateDirectory string
+
+	// ListenAddress is the host and port this gateway serves. It joins the
+	// identity seed and the host name in the instance identity, so two
+	// processes on one host hold two identities and the runtime lease fences
+	// one holder.
+	ListenAddress string
 
 	// StartupSpread spreads the first source read across a fleet.
 	StartupSpread time.Duration
@@ -123,11 +134,20 @@ func (s Settings) starmapOptions() []starmap.Option {
 		options = append(options, starmap.WithRefreshTimeout(s.RefreshTimeout))
 	}
 	if path := strings.TrimSpace(s.WorkspacePath); path != "" {
-		options = append(
-			options,
-			starmap.WithCatalogPath(path),
-			starmap.WithStateDirectory(path),
-		)
+		options = append(options, starmap.WithCatalogPath(path))
+	}
+
+	// The state directory is never the workspace path. A workspace can sit on
+	// a volume a fleet shares, and a shared identity seed would give two
+	// instances one lease holder, which fences nothing.
+	if directory := strings.TrimSpace(s.StateDirectory); directory != "" {
+		options = append(options, starmap.WithStateDirectory(directory))
+	}
+
+	// The listen address separates two processes that share one host and one
+	// state root, so each one derives its own instance identity.
+	if address := strings.TrimSpace(s.ListenAddress); address != "" {
+		options = append(options, starmap.WithListenAddress(address))
 	}
 	return options
 }

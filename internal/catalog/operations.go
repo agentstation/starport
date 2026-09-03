@@ -16,10 +16,6 @@ import (
 // would grow with every refresh a scheduler starts.
 const DefaultRetained = 64
 
-// DefaultOperationTimeout bounds one operation. A run that reaches it ends as
-// a timed-out operation, so a wedged source never holds the registry open.
-const DefaultOperationTimeout = 30 * time.Minute
-
 // OperationKind names the work an operation performs. The set is closed, so an
 // audit subject and a metric label read from a fixed vocabulary.
 type OperationKind string
@@ -155,7 +151,10 @@ func WithRetainedOperations(retained int) OperationOption {
 	}
 }
 
-// WithOperationTimeout bounds one operation.
+// WithOperationTimeout bounds one operation. The deployment refresh timeout
+// supplies it, and zero adds no cap: the transfer bounds end a transfer that
+// stops making progress, and the cancel route and Close end a run an operator
+// no longer wants.
 func WithOperationTimeout(timeout time.Duration) OperationOption {
 	return func(o *Operations) {
 		if timeout > 0 {
@@ -170,7 +169,6 @@ func NewOperations(options ...OperationOption) *Operations {
 		records:  map[string]*operationRecord{},
 		open:     map[OperationKind]string{},
 		retained: DefaultRetained,
-		timeout:  DefaultOperationTimeout,
 		now:      time.Now,
 		newID:    uuid.NewString,
 	}
@@ -204,7 +202,7 @@ func (o *Operations) Submit(kind OperationKind, work OperationWork) (Operation, 
 		o.mu.Unlock()
 		return record.operation, true
 	}
-	runCtx, cancel := context.WithTimeout(context.Background(), o.timeout)
+	runCtx, cancel := o.runContext()
 	operation := Operation{
 		ID:         o.newID(),
 		Kind:       kind,
@@ -219,6 +217,17 @@ func (o *Operations) Submit(kind OperationKind, work OperationWork) (Operation, 
 
 	go o.run(runCtx, cancel, operation.ID, work)
 	return operation, false
+}
+
+// runContext builds the lifetime of one operation. The work runs on a
+// background context, because the request that started it does not own it. A
+// registry with no timeout adds no deadline, and the returned cancel still
+// ends the run for the cancel route and for Close.
+func (o *Operations) runContext() (context.Context, context.CancelFunc) {
+	if o.timeout > 0 {
+		return context.WithTimeout(context.Background(), o.timeout)
+	}
+	return context.WithCancel(context.Background())
 }
 
 // run performs one unit of work and closes its operation.
@@ -315,15 +324,21 @@ func (o *Operations) Cancel(id string) (Operation, error) {
 		return operation, nil
 	}
 	cancel := record.cancel
+	last := record.operation
 	o.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
 	// The run itself writes the terminal state, so the caller reads the
-	// accepted cancellation rather than a state the registry guessed.
+	// accepted cancellation rather than a state the registry guessed. A run
+	// that closed and pruned while this call held no lock leaves no record, so
+	// the caller reads the last operation this call saw.
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return o.records[id].operation, nil
+	if current, ok := o.records[id]; ok {
+		return current.operation, nil
+	}
+	return last, nil
 }
 
 // List returns every held operation, newest first.

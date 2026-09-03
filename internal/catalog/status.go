@@ -151,7 +151,8 @@ type UpstreamProvenance struct {
 // Provenance carries both provenances of the served catalog: the generation
 // this runtime composed and the upstream publication it came from.
 type Provenance struct {
-	// Effective is the generation this runtime composed and serves.
+	// Effective is the accepted head this gateway routes on. It stays where
+	// it stands when a newer candidate fails route validation.
 	Effective GenerationRef `json:"effective,omitzero"`
 	// Upstream is the publication the source reported.
 	Upstream UpstreamProvenance `json:"upstream"`
@@ -288,11 +289,10 @@ func NewAdminStatus(
 			SourceCheckAgeSeconds: wholeSeconds(status.SourceCheckAge),
 		},
 		Provenance: Provenance{
-			Effective: GenerationRef{
-				GenerationID:    status.GenerationID,
-				PayloadChecksum: status.PayloadChecksum,
-				GeneratedAt:     validation.Accepted.GeneratedAt,
-			},
+			// The effective generation is the accepted head, not the newest
+			// candidate. A refused candidate must leave this reference where
+			// it stands, because the accepted head is what routes a request.
+			Effective: validation.Accepted,
 			Upstream: UpstreamProvenance{
 				SourceIdentity:   status.SourceIdentity,
 				SourceKind:       SafeSourceKind(status.SourceKind),

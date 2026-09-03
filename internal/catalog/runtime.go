@@ -16,14 +16,10 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// DefaultRefreshTimeout bounds one catalog refresh when the deployment sets no
-// added cap. The Starmap transfer bounds end a transfer that stops making
-// progress, so this cap only ends a run that keeps making progress forever.
-const DefaultRefreshTimeout = 2 * time.Minute
-
-// updateBuffer is the depth of the candidate channel. A slow acceptance never
-// blocks the connected runtime, and a dropped intermediate candidate costs
-// nothing, because the newest candidate carries the complete state.
+// updateBuffer is the depth of the candidate channel. It absorbs a burst of
+// candidates while acceptance works, so the connected runtime rarely waits.
+// A full buffer holds the offer until acceptance reads or the runtime closes,
+// because every candidate must reach route validation exactly once.
 const updateBuffer = 8
 
 // Runtime owns one Starmap connected runtime, Starport's accepted catalog
@@ -192,6 +188,10 @@ func (r *Runtime) Refresh(ctx context.Context) (starmap.RefreshReport, error) {
 
 // RefreshCandidate refreshes the connected runtime and returns the effective
 // state the refresh produced, with the lease epoch that fences its acceptance.
+//
+// A timeout of zero adds no cap. The transfer bounds already end a transfer
+// that stops making progress, so an added cap would cut a transfer the
+// transfer policy still allows.
 func (r *Runtime) RefreshCandidate(
 	ctx context.Context,
 	timeout time.Duration,
@@ -202,15 +202,25 @@ func (r *Runtime) RefreshCandidate(
 	if ctx == nil {
 		return Candidate{}, errors.New("catalog refresh context is required")
 	}
-	if timeout <= 0 {
-		timeout = DefaultRefreshTimeout
-	}
-	refreshCtx, cancel := context.WithTimeout(ctx, timeout)
+	refreshCtx, cancel := refreshContext(ctx, timeout)
 	defer cancel()
 	if _, err := r.runtime.Refresh(refreshCtx); err != nil {
 		return Candidate{}, err
 	}
 	return r.candidate(ctx)
+}
+
+// refreshContext bounds one refresh run. A positive timeout caps the run. A
+// timeout of zero adds no cap, and the returned cancel still ends the run when
+// the caller returns.
+func refreshContext(
+	ctx context.Context,
+	timeout time.Duration,
+) (context.Context, context.CancelFunc) {
+	if timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return context.WithCancel(ctx)
 }
 
 // CurrentCandidate returns the effective state the connected runtime serves
@@ -375,6 +385,10 @@ func (r *Runtime) offer(ctx context.Context, state starmap.CatalogState) {
 	}
 	candidate := Candidate{State: state, Epoch: epoch}
 	r.validation.observe(candidate)
+
+	// The offer waits for acceptance rather than dropping the candidate. A
+	// dropped candidate would leave route validation with no record of a head
+	// the source published, so only a closing runtime ends the wait.
 	select {
 	case r.updates <- candidate:
 	case <-ctx.Done():

@@ -59,7 +59,7 @@ func TestProductionCompositionFailsClosed(t *testing.T) {
 				factories.openCatalog = func(
 					context.Context,
 					storage.KVStore,
-					config.CatalogConfig,
+					runtimecatalog.Settings,
 					runtimecatalog.DeploymentLookup,
 				) (catalogRuntime, error) {
 					return nil, nil
@@ -124,12 +124,12 @@ func TestCompositionPassesCatalogAcquisitionThrough(t *testing.T) {
 	factories.openCatalog = func(
 		ctx context.Context,
 		store storage.KVStore,
-		catalogConfig config.CatalogConfig,
+		settings runtimecatalog.Settings,
 		lookup runtimecatalog.DeploymentLookup,
 	) (catalogRuntime, error) {
 		opened++
-		require.True(t, catalogConfig.AcquisitionEnabled)
-		return inner(ctx, store, catalogConfig, lookup)
+		require.True(t, settings.AcquisitionEnabled)
+		return inner(ctx, store, settings, lookup)
 	}
 
 	application, err := New(cfg, withRuntimeFactories(factories))
@@ -161,13 +161,13 @@ func TestDefaultCatalogFactoryComposesOneConnectedRuntime(t *testing.T) {
 	factories := defaultRuntimeFactories()
 	tests := []struct {
 		name     string
-		settings config.CatalogConfig
+		settings runtimecatalog.Settings
 	}{
-		{name: "no source address", settings: testCatalogConfig()},
+		{name: "no source address", settings: testCatalogSettings(t)},
 		{
 			name: "deployment source address",
-			settings: func() config.CatalogConfig {
-				settings := testCatalogConfig()
+			settings: func() runtimecatalog.Settings {
+				settings := testCatalogSettings(t)
 				settings.WorkspacePath = t.TempDir()
 				return settings
 			}(),
@@ -332,6 +332,18 @@ func testCatalogConfig() config.CatalogConfig {
 	settings.Source = config.CatalogSourceEmbedded
 	settings.AcquisitionEnabled = false
 	return settings
+}
+
+// testCatalogSettings returns the catalog settings a test opens a runtime
+// with. The state directory is a fresh directory per test, so no test shares
+// an instance identity with another.
+func testCatalogSettings(t *testing.T) runtimecatalog.Settings {
+	t.Helper()
+	deployment := &config.Config{Catalog: testCatalogConfig()}
+	deployment.Server.Host = "127.0.0.1"
+	deployment.Server.Port = 8080
+	deployment.Catalog.StateDirectory = t.TempDir()
+	return catalogSettings(deployment)
 }
 
 func explicitTestFactories() runtimeFactories {

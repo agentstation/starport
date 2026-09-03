@@ -31,7 +31,7 @@ func TestConfiguredProviderMissingCatalogFailsStartup(t *testing.T) {
 	runtime, err := runtimecatalog.OpenRuntime(
 		context.Background(),
 		storage.NewMockStore(),
-		catalogSettings(testCatalogConfig()),
+		testCatalogSettings(t),
 		func(string) (string, bool) { return "", false },
 	)
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func testAuthPlanesAreIsolated(t *testing.T) {
 	runtime, err := runtimecatalog.OpenRuntime(
 		context.Background(),
 		storage.NewMockStore(),
-		catalogSettings(testCatalogConfig()),
+		testCatalogSettings(t),
 		func(string) (string, bool) { return "", false },
 	)
 	require.NoError(t, err)

@@ -44,7 +44,7 @@ type runtimeFactories struct {
 	openStorage  func(config.StorageConfig) (storage.KVStore, error)
 	openSQL      func(config.StorageConfig) (*sqlstore.DB, error)
 	openBlob     func(context.Context, config.FilesConfig) (blob.Store, error)
-	openCatalog  func(context.Context, storage.KVStore, config.CatalogConfig, runtimecatalog.DeploymentLookup) (catalogRuntime, error)
+	openCatalog  func(context.Context, storage.KVStore, runtimecatalog.Settings, runtimecatalog.DeploymentLookup) (catalogRuntime, error)
 	newConnector func(string, []catalogs.EndpointType, connectors.ProviderConfig) (connectors.Connector, error)
 	newCache     func(cache.ManagerConfig, storage.KVStore) (*cache.Manager, error)
 	newServer    func(*server.Config, server.Dependencies) (httpRuntime, error)

@@ -47,9 +47,10 @@ func TestAdminStatusSeparatesEveryOperationalValue(t *testing.T) {
 	validation := RouteValidation{
 		State: RouteValidationAccepted,
 		Accepted: GenerationRef{
-			GenerationID: "gen-4",
-			GeneratedAt:  generatedAt,
-			LeaseEpoch:   7,
+			GenerationID:    "gen-4",
+			PayloadChecksum: "sha256:abc",
+			GeneratedAt:     generatedAt,
+			LeaseEpoch:      7,
 		},
 	}
 
@@ -95,6 +96,93 @@ func TestAdminStatusSeparatesEveryOperationalValue(t *testing.T) {
 	assert.Equal(t, 5, report.Catalog.Providers)
 	assert.Equal(t, "gen-4", report.Snapshot.GenerationID)
 	assert.NotNil(t, report.Operations, "an empty history is a list, not a null")
+}
+
+// TestEffectiveProvenanceStaysAtTheAcceptedHead proves the effective
+// generation the operator reads is the head this gateway routes on. A newer
+// candidate the connected runtime published, and a candidate route validation
+// refused, both leave the reference where it stands.
+func TestEffectiveProvenanceStaysAtTheAcceptedHead(t *testing.T) {
+	t.Parallel()
+
+	accepted := GenerationRef{
+		GenerationID:    "gen-4",
+		PayloadChecksum: "sha256:accepted",
+		GeneratedAt:     time.Date(2026, 9, 1, 11, 0, 0, 0, time.UTC),
+		LeaseEpoch:      7,
+	}
+	candidate := GenerationRef{
+		GenerationID:    "gen-5",
+		PayloadChecksum: "sha256:candidate",
+		GeneratedAt:     time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC),
+		LeaseEpoch:      7,
+	}
+	// The connected runtime already serves the newer candidate, so the status
+	// names it. Acceptance is the separate step this gateway owns.
+	status := starmap.RuntimeStatus{
+		Usable:          true,
+		GenerationID:    candidate.GenerationID,
+		PayloadChecksum: candidate.PayloadChecksum,
+	}
+
+	tests := []struct {
+		name       string
+		validation RouteValidation
+		want       GenerationRef
+	}{
+		{
+			name: "an accepted candidate is the head",
+			validation: RouteValidation{
+				State:     RouteValidationAccepted,
+				Candidate: accepted,
+				Accepted:  accepted,
+			},
+			want: accepted,
+		},
+		{
+			name: "a pending candidate does not move the head",
+			validation: RouteValidation{
+				State:     RouteValidationPending,
+				Candidate: candidate,
+				Accepted:  accepted,
+			},
+			want: accepted,
+		},
+		{
+			name: "a refused candidate does not move the head",
+			validation: RouteValidation{
+				State:     RouteValidationRejected,
+				Candidate: candidate,
+				Accepted:  accepted,
+				Rejected: Rejection{
+					Generation: candidate,
+					Reason:     ReasonInternalError,
+				},
+			},
+			want: accepted,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			report := NewAdminStatus(
+				status,
+				test.validation,
+				true,
+				Counts{},
+				SnapshotMetadata{},
+				time.Time{},
+				nil,
+			)
+			assert.Equal(t, test.want, report.Provenance.Effective)
+			assert.Equal(
+				t, test.validation.Candidate,
+				report.RouteValidation.Candidate,
+				"the newest candidate stays a separate value",
+			)
+		})
+	}
 }
 
 // TestAdminStatusMapsEveryVocabularyOntoTheClosedSet proves a value the

@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -336,7 +338,7 @@ func (b *runtimeBuilder) openConcepts() error {
 	catalogRuntime, err := b.factories.openCatalog(
 		context.Background(),
 		b.application.store,
-		b.config.Catalog,
+		catalogSettings(b.config),
 		runtimecatalog.DeploymentLookup(os.LookupEnv),
 	)
 	if err != nil {
@@ -352,7 +354,12 @@ func (b *runtimeBuilder) openConcepts() error {
 		return fmt.Errorf("open catalog generation store: %w", err)
 	}
 	b.application.catalogFreshness = runtimecatalog.NewFreshnessService(b.application.catalog, generations)
-	b.application.catalogOperations = runtimecatalog.NewOperations()
+	// One deployment setting bounds the whole run: the operation registry and
+	// the refresh it carries read the same cap, so the registry never cancels
+	// a transfer the transfer policy still allows.
+	b.application.catalogOperations = runtimecatalog.NewOperations(
+		runtimecatalog.WithOperationTimeout(b.config.Catalog.RefreshTimeout),
+	)
 	b.application.own("catalog operations", func(context.Context) error {
 		b.application.catalogOperations.Close()
 		return nil
@@ -1248,15 +1255,10 @@ func defaultRuntimeFactories() runtimeFactories {
 		openCatalog: func(
 			ctx context.Context,
 			store storage.KVStore,
-			catalogConfig config.CatalogConfig,
+			settings runtimecatalog.Settings,
 			lookup runtimecatalog.DeploymentLookup,
 		) (catalogRuntime, error) {
-			runtime, err := runtimecatalog.OpenRuntime(
-				ctx,
-				store,
-				catalogSettings(catalogConfig),
-				lookup,
-			)
+			runtime, err := runtimecatalog.OpenRuntime(ctx, store, settings, lookup)
 			if err != nil {
 				return nil, err
 			}
@@ -1291,8 +1293,16 @@ func defaultRuntimeFactories() runtimeFactories {
 // catalogSettings translates the deployment catalog settings into the plain
 // settings the catalog package owns. The configuration package holds no
 // Starmap option, and this is the only place composition restates the map.
-func catalogSettings(cfg config.CatalogConfig) runtimecatalog.Settings {
+//
+// The listen address comes from the server settings, because the instance
+// identity has to separate two gateway processes on one host.
+func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
+	cfg := deployment.Catalog
 	return runtimecatalog.Settings{
+		ListenAddress: net.JoinHostPort(
+			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
+		),
+		StateDirectory:       cfg.StateDirectory,
 		Source:               cfg.Source,
 		SourceURL:            cfg.SourceURL,
 		SourceAPIKey:         cfg.SourceAPIKey,
