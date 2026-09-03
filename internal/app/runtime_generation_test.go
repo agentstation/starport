@@ -166,7 +166,11 @@ func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
 	}
 }
 
+// runtimeSyncFixture serves one fixed candidate. It embeds the recording
+// runtime, so the composition reads the complete catalog runtime contract and
+// this fixture states only what the refresh test needs.
 type runtimeSyncFixture struct {
+	recordingCatalogRuntime
 	plane *runtimecatalog.ControlPlane
 	state starmap.CatalogState
 }
@@ -176,8 +180,14 @@ func (r *runtimeSyncFixture) ControlPlane() *runtimecatalog.ControlPlane { retur
 func (r *runtimeSyncFixture) RefreshCandidate(
 	context.Context,
 	time.Duration,
-) (starmap.CatalogState, error) {
-	return r.state, nil
+) (runtimecatalog.Candidate, error) {
+	return runtimecatalog.Candidate{State: r.state}, nil
+}
+
+func (r *runtimeSyncFixture) CurrentCandidate(
+	context.Context,
+) (runtimecatalog.Candidate, error) {
+	return runtimecatalog.Candidate{State: r.state}, nil
 }
 
 type runtimeRefreshConnector struct {

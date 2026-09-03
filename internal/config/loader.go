@@ -131,6 +131,15 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 		return nil, newLoadFailure("configuration sources could not be read", err)
 	}
 
+	// A removed setting fails startup before anything reads a value. A
+	// deployment that still sets one believes it still applies, so silence
+	// would hide a routing change instead of reporting it.
+	if err := checkRemovedSettings(lookuper); err != nil {
+		// The message names variables only, never a configured value, so
+		// it stays safe for the operator-facing error.
+		return nil, newLoadFailure(err.Error(), err)
+	}
+
 	cfg := defaultConfig(paths)
 	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
 		Target:   cfg,

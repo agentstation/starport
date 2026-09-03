@@ -58,8 +58,9 @@ func (c *Config) ConfigureDevelopmentRuntime() {
 	}
 	c.Server.Host = "127.0.0.1"
 	c.Server.EnableProfiling = false
-	c.Catalog.RefreshOnStart = false
-	c.Catalog.RefreshInterval = 0
+	// Catalog acquisition stays on. A development gateway that reads no
+	// catalog routes nothing, and an operator who wants a quiet gateway
+	// sets STARPORT_CATALOG_ACQUISITION_ENABLED=false.
 	c.Storage = StorageConfig{
 		Mode: storageModeBadger,
 		Badger: BadgerConfig{

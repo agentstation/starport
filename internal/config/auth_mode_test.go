@@ -100,5 +100,6 @@ func validExposureConfig() *Config {
 		RateLimiting: RateLimitingConfig{DefaultRequestsPerMinute: 60, WindowSize: 60_000_000_000},
 		Security:     SecurityConfig{AllowedOrigins: "*"},
 		Logging:      LoggingConfig{Level: "info", Format: "json", Output: "stdout", MaxSize: 100},
+		Catalog:      DefaultCatalogConfig(),
 	}
 }

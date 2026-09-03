@@ -14,6 +14,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/agentstation/starmap/pkg/catalogs/evidence"
 	protocol "github.com/agentstation/starmap/pkg/catalogs/remote"
+	"github.com/agentstation/starmap/remote"
 	"github.com/stretchr/testify/require"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -25,7 +26,13 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
+// TestConnectedCatalogRuntimeActivatesProvider proves one connected runtime
+// serves a deployment source and routes what that source publishes.
+//
+// The composition names no local-or-remote choice. The operator selects the
+// starmap source kind, and the same runtime reads it, keeps the candidate, and
+// hands Starport the candidate that route validation accepts.
+func TestConnectedCatalogRuntimeActivatesProvider(t *testing.T) {
 	inferenceServer := newSyntheticOpenAIServer(t)
 	defer inferenceServer.Close()
 	generation := remoteAppTestGeneration(
@@ -34,8 +41,8 @@ func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
 		syntheticInferenceCatalog(t, inferenceServer.URL),
 		time.Now().UTC(),
 	)
-	const remoteAPIKey = "remote-catalog-secret"
-	catalogServer := newRemoteCatalogServer(t, generation, remoteAPIKey)
+	const sourceAPIKey = "remote-catalog-secret"
+	catalogServer := newRemoteCatalogServer(t, generation, sourceAPIKey)
 	defer catalogServer.Close()
 
 	cfg, err := config.NewLoader().
@@ -46,18 +53,38 @@ func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
 		Load(t.Context())
 	require.NoError(t, err)
 	store := storage.NewMockStore()
-	remoteRuntime, err := runtimecatalog.OpenRemoteRuntime(
+	catalogRuntime, err := runtimecatalog.OpenRuntime(
 		t.Context(),
 		store,
-		runtimecatalog.RemoteConfig{
-			BaseURL:            catalogServer.URL + "/api/v1",
-			APIKey:             remoteAPIKey,
-			ActivationInterval: time.Millisecond,
-			HTTPClient:         catalogServer.Client(),
+		runtimecatalog.Settings{
+			Source:              "starmap",
+			SourceURL:           catalogServer.URL + "/api/v1",
+			SourceAPIKey:        sourceAPIKey,
+			SourceStartupPolicy: "require_source",
+			SourcePollInterval:  time.Hour,
+			SourceMaxHops:       8,
+			TransferIdleTimeout: time.Minute,
+			TransferMaxDuration: time.Minute,
 		},
+		func(string) (string, bool) { return "", false },
 	)
 	require.NoError(t, err)
-	plane := remoteRuntime.ControlPlane()
+	plane := catalogRuntime.ControlPlane()
+	candidate, err := catalogRuntime.CurrentCandidate(t.Context())
+	require.NoError(t, err)
+	// The runtime composes its own effective generation over the upstream one,
+	// so the candidate carries the effective identity and the status carries
+	// the upstream provenance beside it.
+	require.NotEmpty(t, candidate.State.GenerationID)
+	require.NotEqual(t, generation.Manifest.GenerationID, candidate.State.GenerationID)
+	status := catalogRuntime.Status()
+	require.Equal(t, starmap.SourceStarmap, status.SourceKind)
+	require.Equal(t, candidate.State.GenerationID, status.GenerationID)
+	require.False(t, status.Fallback)
+	require.Equal(t, remote.DefaultSourceIdentity, status.SourceIdentity)
+
+	// The registry opens over the accepted head, which holds nothing the source
+	// published yet. Acceptance is what adds the provider the source carries.
 	resolved, err := cfg.ResolveProviderSet(
 		t.Context(),
 		plane.Current().Catalog().Providers(),
@@ -87,24 +114,17 @@ func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
 	require.NoError(t, err)
 	application := &App{
 		config: cfg, providerSettings: config.ProvidersConfig{},
-		catalogRuntime: remoteRuntime, catalogUpdates: remoteRuntime,
-		catalog: plane, registry: runtimeRegistry,
+		catalogRuntime: catalogRuntime,
+		catalog:        plane, registry: runtimeRegistry,
 		transports: transports, authentication: authentication,
 		newConnector: newConnector,
 	}
 
 	runCtx, cancel := context.WithCancel(t.Context())
-	require.NoError(t, remoteRuntime.Start(runCtx))
-	require.NoError(t, application.activateRuntimeState(
-		t.Context(),
-		remoteRuntime.CurrentCandidate(),
-	))
-	require.Equal(t, generation.Manifest.GenerationID, plane.Current().GenerationID())
-	require.Equal(
-		t,
-		generation.Manifest.Payload.Checksum,
-		plane.Current().PayloadChecksum(),
-	)
+	require.NoError(t, catalogRuntime.Start(runCtx))
+	require.NoError(t, application.activateRuntimeState(t.Context(), candidate))
+	require.Equal(t, candidate.State.GenerationID, plane.Current().GenerationID())
+	require.Equal(t, candidate.State.PayloadChecksum, plane.Current().PayloadChecksum())
 	_, err = runtimeRegistry.Get("acme")
 	require.NoError(t, err)
 	routes := plane.Current().RoutesForProvider("acme")
@@ -122,42 +142,25 @@ func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
 	require.NoError(t, err)
 	accepted, err := acceptedStore.Current(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, generation.Manifest.GenerationID, accepted.Manifest.GenerationID)
+	require.Equal(t, candidate.State.GenerationID, accepted.Manifest.GenerationID)
 
 	cancel()
-	require.NoError(t, remoteRuntime.Close(t.Context()))
+	require.NoError(t, catalogRuntime.Close(t.Context()))
 	require.NoError(t, runtimeRegistry.Close())
-
-	restarted, err := runtimecatalog.OpenRemoteRuntime(
-		t.Context(),
-		store,
-		runtimecatalog.RemoteConfig{
-			BaseURL:            catalogServer.URL + "/api/v1",
-			ActivationInterval: time.Millisecond,
-			HTTPClient:         catalogServer.Client(),
-		},
-	)
-	require.NoError(t, err)
-	require.Equal(
-		t,
-		generation.Manifest.GenerationID,
-		restarted.ControlPlane().Current().GenerationID(),
-	)
-	_, err = restarted.ControlPlane().Current().Catalog().Provider("acme")
-	require.NoError(t, err)
-	require.NoError(t, restarted.Close(t.Context()))
 }
 
 func TestRemoteCatalogCandidateFailureRetainsRuntimeAndCacheIdentity(t *testing.T) {
 	fixture := newRuntimeRefreshFixture(t)
 	before := fixture.registry.Snapshot()
-	updates := &recordingCatalogUpdates{}
-	fixture.application.catalogUpdates = updates
+	updates := &recordingCatalogRuntime{}
+	fixture.application.catalogRuntime = updates
 
-	err := fixture.application.activateRuntimeState(t.Context(), starmap.CatalogState{
-		Catalog: nil, GenerationID: "remote-invalid",
-		PayloadChecksum: "remote-unroutable-checksum",
-		GeneratedAt:     time.Now().UTC(),
+	err := fixture.application.activateRuntimeState(t.Context(), runtimecatalog.Candidate{
+		State: starmap.CatalogState{
+			Catalog: nil, GenerationID: "remote-invalid",
+			PayloadChecksum: "remote-unroutable-checksum",
+			GeneratedAt:     time.Now().UTC(),
+		},
 	})
 	require.Error(t, err)
 	require.Same(t, before, fixture.registry.Snapshot())
@@ -168,15 +171,17 @@ func TestRemoteCatalogCandidateFailureRetainsRuntimeAndCacheIdentity(t *testing.
 func TestRemoteCatalogDuplicateAndDigestEqualIdentity(t *testing.T) {
 	fixture := newRuntimeRefreshFixture(t)
 	before := fixture.registry.Snapshot()
-	updates := &recordingCatalogUpdates{}
-	fixture.application.catalogUpdates = updates
+	updates := &recordingCatalogRuntime{}
+	fixture.application.catalogRuntime = updates
 	duplicate := starmap.CatalogState{
 		Catalog: before.Catalog(), GenerationID: before.GenerationID(),
 		PayloadChecksum: before.PayloadChecksum(),
 		GeneratedAt:     before.GeneratedAt(),
 		Sequence:        before.CatalogSequence(),
 	}
-	require.NoError(t, fixture.application.activateRuntimeState(t.Context(), duplicate))
+	require.NoError(t, fixture.application.activateRuntimeState(
+		t.Context(), runtimecatalog.Candidate{State: duplicate},
+	))
 	require.Same(t, before, fixture.registry.Snapshot())
 	require.Equal(t, int32(0), updates.accepted.Load())
 
@@ -184,7 +189,9 @@ func TestRemoteCatalogDuplicateAndDigestEqualIdentity(t *testing.T) {
 	digestEqual.GenerationID = "digest-equal-new-identity"
 	digestEqual.GeneratedAt = duplicate.GeneratedAt.Add(time.Minute)
 	digestEqual.Sequence++
-	require.NoError(t, fixture.application.activateRuntimeState(t.Context(), digestEqual))
+	require.NoError(t, fixture.application.activateRuntimeState(
+		t.Context(), runtimecatalog.Candidate{State: digestEqual},
+	))
 	after := fixture.registry.Snapshot()
 	require.Equal(t, digestEqual.GenerationID, after.GenerationID())
 	require.Equal(t, duplicate.PayloadChecksum, after.PayloadChecksum())
@@ -195,8 +202,8 @@ func TestRemoteCatalogDuplicateAndDigestEqualIdentity(t *testing.T) {
 func TestRemoteCatalogAcceptanceFailureRetainsRuntime(t *testing.T) {
 	fixture := newRuntimeRefreshFixture(t)
 	before := fixture.registry.Snapshot()
-	updates := &recordingCatalogUpdates{err: errors.New("durable store unavailable")}
-	fixture.application.catalogUpdates = updates
+	updates := &recordingCatalogRuntime{err: errors.New("durable store unavailable")}
+	fixture.application.catalogRuntime = updates
 	state := starmap.CatalogState{
 		Catalog: before.Catalog(), GenerationID: "remote-not-durable",
 		PayloadChecksum: before.PayloadChecksum(),
@@ -204,28 +211,49 @@ func TestRemoteCatalogAcceptanceFailureRetainsRuntime(t *testing.T) {
 		Sequence:        before.CatalogSequence() + 1,
 	}
 
-	err := fixture.application.activateRuntimeState(t.Context(), state)
+	err := fixture.application.activateRuntimeState(
+		t.Context(), runtimecatalog.Candidate{State: state},
+	)
 	require.ErrorContains(t, err, "durable store unavailable")
 	require.Same(t, before, fixture.registry.Snapshot())
 	require.Equal(t, int32(1), updates.accepted.Load())
 	require.Greater(t, fixture.newConnector.closed.Load(), int32(0))
 }
 
-type recordingCatalogUpdates struct {
+// recordingCatalogRuntime counts every acceptance the composition attempts.
+type recordingCatalogRuntime struct {
 	accepted atomic.Int32
 	err      error
 }
 
-func (*recordingCatalogUpdates) Start(context.Context) error { return nil }
-func (*recordingCatalogUpdates) CurrentCandidate() starmap.CatalogState {
-	return starmap.CatalogState{}
+func (*recordingCatalogRuntime) ControlPlane() *runtimecatalog.ControlPlane { return nil }
+func (*recordingCatalogRuntime) RefreshCandidate(
+	context.Context,
+	time.Duration,
+) (runtimecatalog.Candidate, error) {
+	return runtimecatalog.Candidate{}, nil
 }
-func (*recordingCatalogUpdates) Updates() <-chan starmap.CatalogState { return nil }
-func (updates *recordingCatalogUpdates) Accept(context.Context, starmap.CatalogState) error {
+func (*recordingCatalogRuntime) CurrentCandidate(
+	context.Context,
+) (runtimecatalog.Candidate, error) {
+	return runtimecatalog.Candidate{}, nil
+}
+func (*recordingCatalogRuntime) Refresh(context.Context) (starmap.RefreshReport, error) {
+	return starmap.RefreshReport{}, nil
+}
+func (*recordingCatalogRuntime) Status() starmap.RuntimeStatus {
+	return starmap.RuntimeStatus{}
+}
+func (*recordingCatalogRuntime) Start(context.Context) error              { return nil }
+func (*recordingCatalogRuntime) Updates() <-chan runtimecatalog.Candidate { return nil }
+func (updates *recordingCatalogRuntime) Accept(
+	context.Context,
+	runtimecatalog.Candidate,
+) error {
 	updates.accepted.Add(1)
 	return updates.err
 }
-func (*recordingCatalogUpdates) Close(context.Context) error { return nil }
+func (*recordingCatalogRuntime) Close(context.Context) error { return nil }
 
 func newRemoteCatalogServer(
 	t testing.TB,
@@ -239,7 +267,7 @@ func newRemoteCatalogServer(
 		writer http.ResponseWriter,
 		request *http.Request,
 	) {
-		if request.Header.Get("X-API-Key") != apiKey {
+		if request.Header.Get("Authorization") != "Bearer "+apiKey {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
 		}

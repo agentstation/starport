@@ -107,26 +107,6 @@ func (c TelemetryConfig) Validate() error {
 	}
 }
 
-// CredentialSourcesConfig defines direct inference secret-source lifecycle.
-type CredentialSourcesConfig struct {
-	RemoteRefreshInterval time.Duration `env:"REMOTE_REFRESH_INTERVAL,default=5m"`
-	ReconcileInterval     time.Duration `env:"RECONCILE_INTERVAL,default=1m"`
-	ReconcileTimeout      time.Duration `env:"RECONCILE_TIMEOUT,default=10s"`
-}
-
-// CatalogConfig selects local Starmap acquisition or one verified remote
-// Starmap publication source. Acquisition credentials remain in Starmap's
-// provider environment contract.
-type CatalogConfig struct {
-	WorkspacePath            string        `env:"WORKSPACE_PATH"`
-	RefreshOnStart           bool          `env:"REFRESH_ON_START,default=false"`
-	RefreshInterval          time.Duration `env:"REFRESH_INTERVAL,default=0s"`
-	RefreshTimeout           time.Duration `env:"REFRESH_TIMEOUT,default=2m"`
-	RemoteURL                string        `env:"REMOTE_URL" redact:"url"`
-	RemoteAPIKey             string        `env:"REMOTE_API_KEY" secret:"true"`
-	RemoteActivationInterval time.Duration `env:"REMOTE_ACTIVATION_INTERVAL,default=250ms"`
-}
-
 // DefaultMaxRequestSize is the largest request body the gateway reads, in
 // bytes. A caller attaches media as base64 inside the JSON body, and base64
 // grows a payload by a third, so the limit has to hold the grown form. The

@@ -100,55 +100,6 @@ func (c *SQLConfig) Validate() error {
 	}
 }
 
-// Validate validates Starmap catalog acquisition settings.
-func (c *CatalogConfig) Validate() error {
-	if c.RefreshInterval < 0 {
-		return fmt.Errorf("catalog refresh interval cannot be negative")
-	}
-	if c.RefreshTimeout < 0 {
-		return fmt.Errorf("catalog refresh timeout cannot be negative")
-	}
-	if c.RemoteActivationInterval < 0 {
-		return fmt.Errorf("catalog remote activation interval cannot be negative")
-	}
-	if c.RemoteURL == "" {
-		if c.RemoteAPIKey != "" {
-			return fmt.Errorf("catalog remote API key requires a remote URL")
-		}
-		return nil
-	}
-	if c.RemoteActivationInterval == 0 {
-		return fmt.Errorf("catalog remote activation interval must be positive")
-	}
-	if c.WorkspacePath != "" {
-		return fmt.Errorf("catalog remote URL and workspace path are mutually exclusive")
-	}
-	if c.RefreshOnStart {
-		return fmt.Errorf("catalog remote URL and refresh on start are mutually exclusive")
-	}
-	if c.RefreshInterval != 0 {
-		return fmt.Errorf("catalog remote URL and local refresh interval are mutually exclusive")
-	}
-	return nil
-}
-
-// Validate validates the direct inference secret-source lifecycle.
-func (c *CredentialSourcesConfig) Validate() error {
-	if c.RemoteRefreshInterval < 0 {
-		return fmt.Errorf("credential source remote refresh interval cannot be negative")
-	}
-	if c.ReconcileInterval < 0 {
-		return fmt.Errorf("credential source reconcile interval cannot be negative")
-	}
-	if c.ReconcileTimeout < 0 {
-		return fmt.Errorf("credential source reconcile timeout cannot be negative")
-	}
-	if c.ReconcileInterval > 0 && c.ReconcileTimeout == 0 {
-		return fmt.Errorf("credential source reconcile timeout must be positive when reconciliation is enabled")
-	}
-	return nil
-}
-
 // Validate validates BadgerConfig
 func (c *BadgerConfig) Validate() error {
 	if !c.inMemory && c.Path == "" {
