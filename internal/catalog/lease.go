@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentstation/starmap"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
+	"github.com/agentstation/starmap/runtime"
 
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -55,27 +55,27 @@ func (l *LeaseStore) AcquireLease(
 	ctx context.Context,
 	holder string,
 	ttl time.Duration,
-) (starmap.Lease, error) {
+) (runtime.Lease, error) {
 	if l == nil || l.store == nil {
-		return starmap.Lease{}, errors.New("catalog lease storage is required")
+		return runtime.Lease{}, errors.New("catalog lease storage is required")
 	}
 	if strings.TrimSpace(holder) == "" {
-		return starmap.Lease{}, &starmaperrors.ValidationError{
+		return runtime.Lease{}, &starmaperrors.ValidationError{
 			Field: "lease.holder", Message: "is required",
 		}
 	}
 	if ttl <= 0 {
-		return starmap.Lease{}, &starmaperrors.ValidationError{
+		return runtime.Lease{}, &starmaperrors.ValidationError{
 			Field: "lease.ttl", Value: ttl, Message: "must be positive",
 		}
 	}
 	current, raw, err := l.read(ctx)
 	if err != nil {
-		return starmap.Lease{}, err
+		return runtime.Lease{}, err
 	}
 	now := l.now().UTC()
 	if raw != nil && current.Holder != holder && current.ExpiresAt.After(now) {
-		return starmap.Lease{}, &starmaperrors.ConflictError{
+		return runtime.Lease{}, &starmaperrors.ConflictError{
 			Resource: leaseResource,
 			Expected: holder,
 			Actual:   current.Holder,
@@ -88,7 +88,7 @@ func (l *LeaseStore) AcquireLease(
 		ExpiresAt: now.Add(ttl),
 	}
 	if err := l.swap(ctx, raw, next); err != nil {
-		return starmap.Lease{}, err
+		return runtime.Lease{}, err
 	}
 	return next.lease(), nil
 }
@@ -97,23 +97,23 @@ func (l *LeaseStore) AcquireLease(
 // returns a conflict.
 func (l *LeaseStore) Renew(
 	ctx context.Context,
-	lease starmap.Lease,
+	lease runtime.Lease,
 	ttl time.Duration,
-) (starmap.Lease, error) {
+) (runtime.Lease, error) {
 	if l == nil || l.store == nil {
-		return starmap.Lease{}, errors.New("catalog lease storage is required")
+		return runtime.Lease{}, errors.New("catalog lease storage is required")
 	}
 	if ttl <= 0 {
-		return starmap.Lease{}, &starmaperrors.ValidationError{
+		return runtime.Lease{}, &starmaperrors.ValidationError{
 			Field: "lease.ttl", Value: ttl, Message: "must be positive",
 		}
 	}
 	current, raw, err := l.read(ctx)
 	if err != nil {
-		return starmap.Lease{}, err
+		return runtime.Lease{}, err
 	}
 	if raw == nil || current.Holder != lease.Holder || current.Epoch != lease.Epoch {
-		return starmap.Lease{}, &starmaperrors.ConflictError{
+		return runtime.Lease{}, &starmaperrors.ConflictError{
 			Resource: leaseResource,
 			Expected: leaseIdentity(lease.Holder, lease.Epoch),
 			Actual:   leaseIdentity(current.Holder, current.Epoch),
@@ -126,13 +126,13 @@ func (l *LeaseStore) Renew(
 		ExpiresAt: l.now().UTC().Add(ttl),
 	}
 	if err := l.swap(ctx, raw, next); err != nil {
-		return starmap.Lease{}, err
+		return runtime.Lease{}, err
 	}
 	return next.lease(), nil
 }
 
 // Release returns the lease early. A lease another holder took stays as it is.
-func (l *LeaseStore) Release(ctx context.Context, lease starmap.Lease) error {
+func (l *LeaseStore) Release(ctx context.Context, lease runtime.Lease) error {
 	if l == nil || l.store == nil {
 		return errors.New("catalog lease storage is required")
 	}
@@ -192,12 +192,12 @@ func (l *LeaseStore) swap(ctx context.Context, previous []byte, next leaseRecord
 	return nil
 }
 
-func (r leaseRecord) lease() starmap.Lease {
-	return starmap.Lease{Holder: r.Holder, Epoch: r.Epoch, ExpiresAt: r.ExpiresAt}
+func (r leaseRecord) lease() runtime.Lease {
+	return runtime.Lease{Holder: r.Holder, Epoch: r.Epoch, ExpiresAt: r.ExpiresAt}
 }
 
 func leaseIdentity(holder string, epoch uint64) string {
 	return holder + "@" + strconv.FormatUint(epoch, 10)
 }
 
-var _ starmap.LeaseStore = (*LeaseStore)(nil)
+var _ runtime.LeaseStore = (*LeaseStore)(nil)

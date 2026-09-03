@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/acquisition"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/pkg/sources"
+	"github.com/agentstation/starmap/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -47,8 +47,8 @@ func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
 		t.Context(),
 		storage.NewMockStore(),
 		Settings{
-			Source:              string(starmap.SourceEmbedded),
-			SourceStartupPolicy: string(starmap.StartupPreferLocal),
+			Source:              string(runtime.SourceEmbedded),
+			SourceStartupPolicy: string(runtime.StartupPreferLocal),
 			SourcePollInterval:  time.Hour,
 			SourceMaxHops:       8,
 			AcquisitionEnabled:  true,
@@ -151,7 +151,7 @@ func (o *recordingProviderObserver) ObserveProvider(
 		return acquisition.ProviderObservation{}, err
 	}
 	return acquisition.ProviderObservation{
-		Layer: starmap.ProviderLayer{
+		Layer: runtime.ProviderLayer{
 			ProviderID: id,
 			Payload:    payload,
 			Digest:     catalogs.DescribeCatalogPayload(payload).Checksum,

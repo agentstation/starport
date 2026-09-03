@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/remote"
+	"github.com/agentstation/starmap/runtime"
 
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -31,7 +32,7 @@ const updateBuffer = 8
 // then validates the candidate and advances its own accepted head, so a
 // candidate that fails route validation never routes a request.
 type Runtime struct {
-	runtime *starmap.Runtime
+	runtime *runtime.Runtime
 
 	// cascade is the upstream Starmap source this deployment reads, when it
 	// reads another Starmap runtime. The connected runtime does not own an
@@ -73,7 +74,7 @@ func OpenRuntime(
 	settings Settings,
 	lookup DeploymentLookup,
 ) (*Runtime, error) {
-	var acquirer starmap.Acquirer
+	var acquirer runtime.Acquirer
 	if settings.AcquisitionEnabled {
 		built, err := acquisition.NewAcquirer(
 			acquisition.WithAcquirerCredentialResolver(NewAcquisitionResolver(lookup)),
@@ -93,7 +94,7 @@ func openRuntime(
 	ctx context.Context,
 	store storage.KVStore,
 	settings Settings,
-	acquirer starmap.Acquirer,
+	acquirer runtime.Acquirer,
 ) (*Runtime, error) {
 	if ctx == nil {
 		return nil, errors.New("catalog runtime context is required")
@@ -122,21 +123,21 @@ func openRuntime(
 	options := settings.starmapOptions()
 	options = append(
 		options,
-		starmap.WithCatalogStore(candidateStore),
-		starmap.WithLeaseStore(leases),
+		runtime.WithClientOptions(starmap.WithCatalogStore(candidateStore)),
+		runtime.WithLeaseStore(leases),
 	)
 	var cascade *remote.Source
-	if settings.Source == string(starmap.SourceStarmap) {
+	if settings.Source == string(runtime.SourceStarmap) {
 		cascade, err = settings.cascadeSource(ctx)
 		if err != nil {
 			return nil, err
 		}
-		options = append(options, starmap.WithSource(cascade))
+		options = append(options, runtime.WithSource(cascade))
 	}
 	if acquirer != nil {
-		options = append(options, starmap.WithAcquirer(acquirer))
+		options = append(options, runtime.WithAcquirer(acquirer))
 	}
-	connected, err := starmap.Open(ctx, options...)
+	connected, err := runtime.Open(ctx, options...)
 	if err != nil {
 		if cascade != nil {
 			_ = cascade.Close()
@@ -147,7 +148,7 @@ func openRuntime(
 }
 
 func newRuntime(
-	connected *starmap.Runtime,
+	connected *runtime.Runtime,
 	cascade *remote.Source,
 	candidates, accepted *GenerationStore,
 	control *ControlPlane,
@@ -176,12 +177,12 @@ func (r *Runtime) ControlPlane() *ControlPlane {
 // Refresh reads the source and observes every eligible provider. Overlapping
 // callers join one run, because the connected runtime keeps refresh
 // single-flight and returns the report of the run in flight.
-func (r *Runtime) Refresh(ctx context.Context) (starmap.RefreshReport, error) {
+func (r *Runtime) Refresh(ctx context.Context) (runtime.RefreshReport, error) {
 	if r == nil || r.runtime == nil {
-		return starmap.RefreshReport{}, ErrCatalogSourceRequired
+		return runtime.RefreshReport{}, ErrCatalogSourceRequired
 	}
 	if ctx == nil {
-		return starmap.RefreshReport{}, errors.New("catalog refresh context is required")
+		return runtime.RefreshReport{}, errors.New("catalog refresh context is required")
 	}
 	return r.runtime.Refresh(ctx)
 }
@@ -267,9 +268,9 @@ func (r *Runtime) Reject(candidate Candidate, failure error) {
 // Status returns the connected runtime status. It carries both provenances:
 // the upstream generation the source published and the effective generation
 // this runtime built from it.
-func (r *Runtime) Status() starmap.RuntimeStatus {
+func (r *Runtime) Status() runtime.Status {
 	if r == nil || r.runtime == nil {
-		return starmap.RuntimeStatus{}
+		return runtime.Status{}
 	}
 	return r.runtime.Status()
 }

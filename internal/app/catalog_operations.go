@@ -6,7 +6,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/runtime"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 )
@@ -86,7 +86,7 @@ func (a *App) catalogCounts() runtimecatalog.Counts {
 // nextSourceRead states when this instance next reads its source. A deployment
 // with no poll interval reads only when an operator asks, and it reports no
 // next read at all.
-func nextSourceRead(status starmap.RuntimeStatus, interval time.Duration) time.Time {
+func nextSourceRead(status runtime.Status, interval time.Duration) time.Time {
 	if interval <= 0 || status.ObservedAt.IsZero() {
 		return time.Time{}
 	}

@@ -10,6 +10,7 @@ import (
 	catalogstorage "github.com/agentstation/starmap/pkg/catalogs/storage"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/remote"
+	"github.com/agentstation/starmap/runtime"
 )
 
 // cascadeFallbackAfterFailures is how many consecutive stream failures the
@@ -97,57 +98,57 @@ type Settings struct {
 // A private source never falls back to the public channel: the source kind
 // reaches Starmap exactly as the operator selected it, and Starmap fails Open
 // instead of reading a different source.
-func (s Settings) starmapOptions() []starmap.Option {
-	options := []starmap.Option{
-		starmap.WithCatalogSource(s.Source),
-		starmap.WithSourceStartupPolicy(s.SourceStartupPolicy),
-		starmap.WithSourcePollInterval(s.SourcePollInterval),
-		starmap.WithSourceMaxAge(s.SourceMaxAge),
-		starmap.WithSourceMaxHops(s.SourceMaxHops),
-		starmap.WithAcquisitionEnabled(s.AcquisitionEnabled),
-		starmap.WithStartupSpread(s.StartupSpread),
-		starmap.WithTransferIdleTimeout(s.TransferIdleTimeout),
-		starmap.WithTransferMaxDuration(s.TransferMaxDuration),
+func (s Settings) starmapOptions() []runtime.Option {
+	options := []runtime.Option{
+		runtime.WithCatalogSource(s.Source),
+		runtime.WithSourceStartupPolicy(s.SourceStartupPolicy),
+		runtime.WithSourcePollInterval(s.SourcePollInterval),
+		runtime.WithSourceMaxAge(s.SourceMaxAge),
+		runtime.WithSourceMaxHops(s.SourceMaxHops),
+		runtime.WithAcquisitionEnabled(s.AcquisitionEnabled),
+		runtime.WithStartupSpread(s.StartupSpread),
+		runtime.WithTransferIdleTimeout(s.TransferIdleTimeout),
+		runtime.WithTransferMaxDuration(s.TransferMaxDuration),
 	}
 	if url := strings.TrimSpace(s.SourceURL); url != "" {
-		options = append(options, starmap.WithSourceURL(url))
+		options = append(options, runtime.WithSourceURL(url))
 	}
 	if key := strings.TrimSpace(s.SourceAPIKey); key != "" {
-		options = append(options, starmap.WithSourceAPIKey(key))
+		options = append(options, runtime.WithSourceAPIKey(key))
 	}
 	if repository := strings.TrimSpace(s.SourceRepository); repository != "" {
-		options = append(options, starmap.WithSourceRepository(repository))
+		options = append(options, runtime.WithSourceRepository(repository))
 	}
 	if channel := strings.TrimSpace(s.SourceChannel); channel != "" {
-		options = append(options, starmap.WithSourceChannel(channel))
+		options = append(options, runtime.WithSourceChannel(channel))
 	}
 	if workflow := strings.TrimSpace(s.SourceSignerWorkflow); workflow != "" {
-		options = append(options, starmap.WithSourceSignerWorkflow(workflow))
+		options = append(options, runtime.WithSourceSignerWorkflow(workflow))
 	}
 	if token := strings.TrimSpace(s.SourceToken); token != "" {
-		options = append(options, starmap.WithSourceToken(token))
+		options = append(options, runtime.WithSourceToken(token))
 	}
 	if s.AcquisitionInterval > 0 {
-		options = append(options, starmap.WithAcquisitionInterval(s.AcquisitionInterval))
+		options = append(options, runtime.WithAcquisitionInterval(s.AcquisitionInterval))
 	}
 	if s.RefreshTimeout > 0 {
-		options = append(options, starmap.WithRefreshTimeout(s.RefreshTimeout))
+		options = append(options, runtime.WithRefreshTimeout(s.RefreshTimeout))
 	}
 	if path := strings.TrimSpace(s.WorkspacePath); path != "" {
-		options = append(options, starmap.WithCatalogPath(path))
+		options = append(options, runtime.WithClientOptions(starmap.WithCatalogPath(path)))
 	}
 
 	// The state directory is never the workspace path. A workspace can sit on
 	// a volume a fleet shares, and a shared identity seed would give two
 	// instances one lease holder, which fences nothing.
 	if directory := strings.TrimSpace(s.StateDirectory); directory != "" {
-		options = append(options, starmap.WithStateDirectory(directory))
+		options = append(options, runtime.WithStateDirectory(directory))
 	}
 
 	// The listen address separates two processes that share one host and one
 	// state root, so each one derives its own instance identity.
 	if address := strings.TrimSpace(s.ListenAddress); address != "" {
-		options = append(options, starmap.WithListenAddress(address))
+		options = append(options, runtime.WithListenAddress(address))
 	}
 	return options
 }

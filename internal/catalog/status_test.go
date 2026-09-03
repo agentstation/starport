@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/runtime"
 )
 
 // TestAdminStatusSeparatesEveryOperationalValue proves the operator view
@@ -18,27 +19,27 @@ import (
 func TestAdminStatusSeparatesEveryOperationalValue(t *testing.T) {
 	observedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	generatedAt := time.Date(2026, 9, 1, 11, 0, 0, 0, time.UTC)
-	status := starmap.RuntimeStatus{
+	status := runtime.Status{
 		Usable:               true,
 		GenerationID:         "gen-4",
 		PayloadChecksum:      "sha256:abc",
 		CatalogAge:           90 * time.Second,
-		Freshness:            starmap.FreshnessCurrent,
+		Freshness:            runtime.FreshnessCurrent,
 		ChannelAge:           30 * time.Minute,
-		ChannelFreshness:     starmap.FreshnessWarn,
+		ChannelFreshness:     runtime.FreshnessWarn,
 		SourceCheckAge:       2 * time.Minute,
-		SourceCheckFreshness: starmap.FreshnessCurrent,
+		SourceCheckFreshness: runtime.FreshnessCurrent,
 		AcquisitionAge:       4 * time.Hour,
-		AcquisitionFreshness: starmap.FreshnessCritical,
-		SourceHealth:         starmap.HealthOK,
-		UpstreamHealth:       starmap.HealthDegraded,
-		AcquisitionHealth:    starmap.HealthUnavailable,
+		AcquisitionFreshness: runtime.FreshnessCritical,
+		SourceHealth:         runtime.HealthOK,
+		UpstreamHealth:       runtime.HealthDegraded,
+		AcquisitionHealth:    runtime.HealthUnavailable,
 		SourceIdentity:       "starmap_cascade",
-		SourceKind:           starmap.SourceStarmap,
+		SourceKind:           runtime.SourceStarmap,
 		ChannelUpdatedAt:     generatedAt,
-		Chain: []starmap.SourceHop{
-			{Identity: "starmap_cascade", Health: starmap.HealthOK},
-			{Identity: "starmap_edge", Health: starmap.HealthDegraded},
+		Chain: []runtime.SourceHop{
+			{Identity: "starmap_cascade", Health: runtime.HealthOK},
+			{Identity: "starmap_edge", Health: runtime.HealthDegraded},
 		},
 		Lease:      "instance-1",
 		LastRunID:  "run-9",
@@ -119,7 +120,7 @@ func TestEffectiveProvenanceStaysAtTheAcceptedHead(t *testing.T) {
 	}
 	// The connected runtime already serves the newer candidate, so the status
 	// names it. Acceptance is the separate step this gateway owns.
-	status := starmap.RuntimeStatus{
+	status := runtime.Status{
 		Usable:          true,
 		GenerationID:    candidate.GenerationID,
 		PayloadChecksum: candidate.PayloadChecksum,
@@ -191,15 +192,15 @@ func TestEffectiveProvenanceStaysAtTheAcceptedHead(t *testing.T) {
 func TestAdminStatusMapsEveryVocabularyOntoTheClosedSet(t *testing.T) {
 	invented := "s3://private-bucket/catalog"
 	report := NewAdminStatus(
-		starmap.RuntimeStatus{
-			SourceKind:           starmap.SourceKind(invented),
-			SourceHealth:         starmap.Health(invented),
-			UpstreamHealth:       starmap.Health(invented),
-			AcquisitionHealth:    starmap.Health(invented),
-			Freshness:            starmap.Freshness(invented),
-			ChannelFreshness:     starmap.Freshness(invented),
-			SourceCheckFreshness: starmap.Freshness(invented),
-			AcquisitionFreshness: starmap.Freshness(invented),
+		runtime.Status{
+			SourceKind:           runtime.SourceKind(invented),
+			SourceHealth:         runtime.Health(invented),
+			UpstreamHealth:       runtime.Health(invented),
+			AcquisitionHealth:    runtime.Health(invented),
+			Freshness:            runtime.Freshness(invented),
+			ChannelFreshness:     runtime.Freshness(invented),
+			SourceCheckFreshness: runtime.Freshness(invented),
+			AcquisitionFreshness: runtime.Freshness(invented),
 			FallbackReason:       invented,
 			CatalogAge:           -time.Hour,
 		},

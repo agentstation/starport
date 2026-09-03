@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,8 +17,8 @@ import (
 // named state directory, workspace, and listen address.
 func identityTestSettings(state, workspace, address string) Settings {
 	return Settings{
-		Source:              string(starmap.SourceEmbedded),
-		SourceStartupPolicy: string(starmap.StartupPreferLocal),
+		Source:              string(runtime.SourceEmbedded),
+		SourceStartupPolicy: string(runtime.StartupPreferLocal),
 		SourcePollInterval:  time.Hour,
 		SourceMaxHops:       8,
 		TransferIdleTimeout: time.Minute,

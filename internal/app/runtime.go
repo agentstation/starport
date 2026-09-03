@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starmap/runtime"
 
 	"github.com/agentstation/starport/internal/blob"
 	"github.com/agentstation/starport/internal/cache"
@@ -30,8 +30,8 @@ type catalogRuntime interface {
 	ControlPlane() *runtimecatalog.ControlPlane
 	RefreshCandidate(context.Context, time.Duration) (runtimecatalog.Candidate, error)
 	CurrentCandidate(context.Context) (runtimecatalog.Candidate, error)
-	Refresh(context.Context) (starmap.RefreshReport, error)
-	Status() starmap.RuntimeStatus
+	Refresh(context.Context) (runtime.RefreshReport, error)
+	Status() runtime.Status
 	Start(context.Context) error
 	Updates() <-chan runtimecatalog.Candidate
 	Accept(context.Context, runtimecatalog.Candidate) error

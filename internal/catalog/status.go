@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/runtime"
 )
 
 // ErrRouteValidationFailed marks a candidate that did not become routable.
@@ -235,8 +235,8 @@ func (s AdminStatus) Summary() Summary {
 		GeneratedAt:  s.Provenance.Effective.GeneratedAt,
 		AgeSeconds:   s.Freshness.CatalogAgeSeconds,
 		Usable:       s.Runtime.Usable,
-		Freshness:    SafeFreshness(starmap.Freshness(s.Freshness.Catalog)),
-		SourceKind:   SafeSourceKind(starmap.SourceKind(s.Runtime.SourceKind)),
+		Freshness:    SafeFreshness(runtime.Freshness(s.Freshness.Catalog)),
+		SourceKind:   SafeSourceKind(runtime.SourceKind(s.Runtime.SourceKind)),
 		Fallback:     s.Runtime.Fallback,
 		Providers:    s.Catalog.Providers,
 		Models:       s.Catalog.Models,
@@ -249,7 +249,7 @@ func (s AdminStatus) Summary() Summary {
 // whether this instance acquires, how much the accepted head holds, when the
 // next source read happens, and the recent operations.
 func NewAdminStatus(
-	status starmap.RuntimeStatus,
+	status runtime.Status,
 	validation RouteValidation,
 	acquisitionEnabled bool,
 	counts Counts,
@@ -310,13 +310,13 @@ func NewAdminStatus(
 // SafeSourceKind maps one source kind onto the closed vocabulary. A kind
 // outside the set reads as "unknown", so a metric label and a reader response
 // never carry a value the deployment invented.
-func SafeSourceKind(kind starmap.SourceKind) string {
+func SafeSourceKind(kind runtime.SourceKind) string {
 	switch kind {
-	case starmap.SourcePublic,
-		starmap.SourceGitHub,
-		starmap.SourceStarmap,
-		starmap.SourceFile,
-		starmap.SourceEmbedded:
+	case runtime.SourcePublic,
+		runtime.SourceGitHub,
+		runtime.SourceStarmap,
+		runtime.SourceFile,
+		runtime.SourceEmbedded:
 		return string(kind)
 	default:
 		return "unknown"
@@ -324,37 +324,37 @@ func SafeSourceKind(kind starmap.SourceKind) string {
 }
 
 // SafeHealth maps one health value onto the closed vocabulary.
-func SafeHealth(health starmap.Health) string {
+func SafeHealth(health runtime.Health) string {
 	switch health {
-	case starmap.HealthOK,
-		starmap.HealthDegraded,
-		starmap.HealthUnavailable,
-		starmap.HealthUnknown:
+	case runtime.HealthOK,
+		runtime.HealthDegraded,
+		runtime.HealthUnavailable,
+		runtime.HealthUnknown:
 		return string(health)
 	default:
-		return string(starmap.HealthUnknown)
+		return string(runtime.HealthUnknown)
 	}
 }
 
 // SafeFreshness maps one freshness grade onto the closed vocabulary.
-func SafeFreshness(freshness starmap.Freshness) string {
+func SafeFreshness(freshness runtime.Freshness) string {
 	switch freshness {
-	case starmap.FreshnessCurrent,
-		starmap.FreshnessWarn,
-		starmap.FreshnessCritical,
-		starmap.FreshnessUnknown:
+	case runtime.FreshnessCurrent,
+		runtime.FreshnessWarn,
+		runtime.FreshnessCritical,
+		runtime.FreshnessUnknown:
 		return string(freshness)
 	default:
-		return string(starmap.FreshnessUnknown)
+		return string(runtime.FreshnessUnknown)
 	}
 }
 
 // safeFallbackReason maps one fallback reason onto the closed vocabulary.
 func safeFallbackReason(reason string) string {
 	switch reason {
-	case starmap.FallbackNone,
-		starmap.FallbackAwaitingSource,
-		starmap.FallbackSourceUnavailable:
+	case runtime.FallbackNone,
+		runtime.FallbackAwaitingSource,
+		runtime.FallbackSourceUnavailable:
 		return reason
 	default:
 		return "unknown"
@@ -363,7 +363,7 @@ func safeFallbackReason(reason string) string {
 
 // safeChain projects the publication chain. Each hop keeps its sanitized
 // identity and its own reported health.
-func safeChain(hops []starmap.SourceHop) []Hop {
+func safeChain(hops []runtime.SourceHop) []Hop {
 	if len(hops) == 0 {
 		return nil
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/agentstation/starmap/pkg/catalogs/evidence"
 	protocol "github.com/agentstation/starmap/pkg/catalogs/remote"
 	"github.com/agentstation/starmap/remote"
+	"github.com/agentstation/starmap/runtime"
 	"github.com/stretchr/testify/require"
 
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
@@ -78,7 +79,7 @@ func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
 	require.NotEmpty(t, candidate.State.GenerationID)
 	require.NotEqual(t, generation.Manifest.GenerationID, candidate.State.GenerationID)
 	status := catalogRuntime.Status()
-	require.Equal(t, starmap.SourceStarmap, status.SourceKind)
+	require.Equal(t, runtime.SourceStarmap, status.SourceKind)
 	require.Equal(t, candidate.State.GenerationID, status.GenerationID)
 	require.False(t, status.Fallback)
 	require.Equal(t, remote.DefaultSourceIdentity, status.SourceIdentity)
@@ -240,11 +241,11 @@ func (*recordingCatalogRuntime) CurrentCandidate(
 ) (runtimecatalog.Candidate, error) {
 	return runtimecatalog.Candidate{}, nil
 }
-func (*recordingCatalogRuntime) Refresh(context.Context) (starmap.RefreshReport, error) {
-	return starmap.RefreshReport{}, nil
+func (*recordingCatalogRuntime) Refresh(context.Context) (runtime.RefreshReport, error) {
+	return runtime.RefreshReport{}, nil
 }
-func (*recordingCatalogRuntime) Status() starmap.RuntimeStatus {
-	return starmap.RuntimeStatus{}
+func (*recordingCatalogRuntime) Status() runtime.Status {
+	return runtime.Status{}
 }
 func (*recordingCatalogRuntime) Start(context.Context) error              { return nil }
 func (*recordingCatalogRuntime) Updates() <-chan runtimecatalog.Candidate { return nil }
