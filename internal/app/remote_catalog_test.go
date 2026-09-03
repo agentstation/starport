@@ -220,9 +220,11 @@ func TestRemoteCatalogAcceptanceFailureRetainsRuntime(t *testing.T) {
 	require.Greater(t, fixture.newConnector.closed.Load(), int32(0))
 }
 
-// recordingCatalogRuntime counts every acceptance the composition attempts.
+// recordingCatalogRuntime counts every acceptance and every refusal the
+// composition records.
 type recordingCatalogRuntime struct {
 	accepted atomic.Int32
+	rejected atomic.Int32
 	err      error
 }
 
@@ -252,6 +254,12 @@ func (updates *recordingCatalogRuntime) Accept(
 ) error {
 	updates.accepted.Add(1)
 	return updates.err
+}
+func (updates *recordingCatalogRuntime) Reject(runtimecatalog.Candidate, error) {
+	updates.rejected.Add(1)
+}
+func (*recordingCatalogRuntime) RouteValidation() runtimecatalog.RouteValidation {
+	return runtimecatalog.RouteValidation{State: runtimecatalog.RouteValidationUnknown}
 }
 func (*recordingCatalogRuntime) Close(context.Context) error { return nil }
 

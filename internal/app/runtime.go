@@ -35,6 +35,8 @@ type catalogRuntime interface {
 	Start(context.Context) error
 	Updates() <-chan runtimecatalog.Candidate
 	Accept(context.Context, runtimecatalog.Candidate) error
+	Reject(runtimecatalog.Candidate, error)
+	RouteValidation() runtimecatalog.RouteValidation
 	Close(context.Context) error
 }
 

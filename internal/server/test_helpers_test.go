@@ -42,6 +42,9 @@ type testServerConfig struct {
 	// test cannot separate a model name no catalog holds from a gateway that
 	// has not read a catalog yet.
 	routableCatalog bool
+	// catalogOperations answers the catalog read routes and the admin catalog
+	// surface. A test that reads them supplies its own.
+	catalogOperations controllers.CatalogOperations
 }
 
 type testRegistryAdapter struct{ registry *registry.Registry }
@@ -85,6 +88,13 @@ func withTestBlobStore(store blob.Store) testServerOption {
 // because the answer differs when no generation is loaded.
 func withRoutableCatalog() testServerOption {
 	return func(config *testServerConfig) { config.routableCatalog = true }
+}
+
+// withTestCatalogOperations replaces the catalog surface the routes read. A
+// test that asserts what a reader receives, and what an operator receives,
+// needs both answers under its own control.
+func withTestCatalogOperations(operations controllers.CatalogOperations) testServerOption {
+	return func(config *testServerConfig) { config.catalogOperations = operations }
 }
 
 type staticTestProviderOperations struct{}
@@ -264,6 +274,7 @@ func newTestServer(tb testing.TB, config *Config, options ...testServerOption) *
 		Service: service, APIKeys: apiKeys, Accounts: accounts,
 		ProviderKeys: providerKeys, RateLimits: rateLimits,
 		ProviderOperations: testConfig.providerOperations, Presets: presetRepository,
+		Catalog:   testConfig.catalogOperations,
 		Templates: templates,
 		Files:     fileService, Jobs: jobService, Batches: batchService,
 		// Production composes the metric surface for every mode but "off",

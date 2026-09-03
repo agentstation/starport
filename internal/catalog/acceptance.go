@@ -78,6 +78,7 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 	case currentErr == nil:
 		expectedID = current.Manifest.GenerationID
 		if expectedID == state.GenerationID {
+			r.validation.accept(candidate)
 			return nil
 		}
 		if generation.Manifest.GeneratedAt.Before(current.Manifest.GeneratedAt) {
@@ -104,6 +105,7 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 	if err := r.accepted.Commit(ctx, generation, expectedID); err != nil {
 		return fmt.Errorf("accept catalog generation: %w", err)
 	}
+	r.validation.accept(candidate)
 	return nil
 }
 

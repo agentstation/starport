@@ -48,6 +48,11 @@ type Runtime struct {
 	leases     *LeaseStore
 	updates    chan Candidate
 
+	// validation holds what happened to the newest candidate this instance
+	// observed. The accepted head is durable; this record says how the
+	// instance reached it.
+	validation validationRecord
+
 	mu       sync.Mutex
 	started  bool
 	cancel   context.CancelFunc
@@ -207,7 +212,27 @@ func (r *Runtime) candidate(ctx context.Context) (Candidate, error) {
 	if err != nil {
 		return Candidate{}, err
 	}
-	return Candidate{State: state, Epoch: epoch}, nil
+	candidate := Candidate{State: state, Epoch: epoch}
+	r.validation.observe(candidate)
+	return candidate, nil
+}
+
+// RouteValidation reports where the newest candidate stands between the source
+// and the routable head.
+func (r *Runtime) RouteValidation() RouteValidation {
+	if r == nil {
+		return RouteValidation{State: RouteValidationUnknown}
+	}
+	return r.validation.snapshot()
+}
+
+// Reject records one candidate this instance refused, with the safe cause of
+// the refusal. The accepted head does not move.
+func (r *Runtime) Reject(candidate Candidate, failure error) {
+	if r == nil {
+		return
+	}
+	r.validation.reject(candidate, failure)
 }
 
 // Status returns the connected runtime status. It carries both provenances:
@@ -329,8 +354,10 @@ func (r *Runtime) offer(ctx context.Context, state starmap.CatalogState) {
 		// fence read here, never a wrong acceptance there.
 		epoch = 0
 	}
+	candidate := Candidate{State: state, Epoch: epoch}
+	r.validation.observe(candidate)
 	select {
-	case r.updates <- Candidate{State: state, Epoch: epoch}:
+	case r.updates <- candidate:
 	case <-ctx.Done():
 	}
 }

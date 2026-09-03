@@ -20,6 +20,10 @@ import (
 // the fence that keeps two instances from committing the same head.
 const leaseKey = "catalog:runtime:lease"
 
+// leaseResource names the lease on every refusal it draws. One name keeps a
+// conflict readable across acquisition, renewal, and the compare-and-swap.
+const leaseResource = "catalog runtime lease"
+
 // LeaseStore is the catalog runtime lease over Starport's shared storage. It
 // gives this deployment the epoch that fences an accepted head: an acceptance
 // that started under an older epoch belongs to an instance that has since lost
@@ -42,14 +46,6 @@ func NewLeaseStore(store storage.KVStore) (*LeaseStore, error) {
 		return nil, errors.New("catalog lease storage is required")
 	}
 	return &LeaseStore{store: store, now: time.Now}, nil
-}
-
-// withClock replaces the lease clock. Tests drive expiry without a real wait.
-func (l *LeaseStore) withClock(now func() time.Time) *LeaseStore {
-	if now != nil {
-		l.now = now
-	}
-	return l
 }
 
 // AcquireLease takes the lease for one holder. A live lease another holder
@@ -80,7 +76,7 @@ func (l *LeaseStore) AcquireLease(
 	now := l.now().UTC()
 	if raw != nil && current.Holder != holder && current.ExpiresAt.After(now) {
 		return starmap.Lease{}, &starmaperrors.ConflictError{
-			Resource: "catalog runtime lease",
+			Resource: leaseResource,
 			Expected: holder,
 			Actual:   current.Holder,
 			Message:  "another instance holds the catalog runtime lease",
@@ -118,7 +114,7 @@ func (l *LeaseStore) Renew(
 	}
 	if raw == nil || current.Holder != lease.Holder || current.Epoch != lease.Epoch {
 		return starmap.Lease{}, &starmaperrors.ConflictError{
-			Resource: "catalog runtime lease",
+			Resource: leaseResource,
 			Expected: leaseIdentity(lease.Holder, lease.Epoch),
 			Actual:   leaseIdentity(current.Holder, current.Epoch),
 			Message:  "the catalog runtime lease moved to another holder",
@@ -188,7 +184,7 @@ func (l *LeaseStore) swap(ctx context.Context, previous []byte, next leaseRecord
 	}
 	if err := l.store.CompareAndSwap(ctx, leaseKey, previous, encoded); err != nil {
 		return &starmaperrors.ConflictError{
-			Resource: "catalog runtime lease",
+			Resource: leaseResource,
 			Expected: leaseIdentity(next.Holder, next.Epoch),
 			Message:  "another instance changed the catalog runtime lease",
 		}

@@ -96,6 +96,7 @@ type App struct {
 	catalogRuntime      catalogRuntime
 	catalog             *runtimecatalog.ControlPlane
 	catalogFreshness    *runtimecatalog.FreshnessService
+	catalogOperations   *runtimecatalog.Operations
 	store               storage.KVStore
 	blobStore           blob.Store
 	files               *files.Service
@@ -351,6 +352,11 @@ func (b *runtimeBuilder) openConcepts() error {
 		return fmt.Errorf("open catalog generation store: %w", err)
 	}
 	b.application.catalogFreshness = runtimecatalog.NewFreshnessService(b.application.catalog, generations)
+	b.application.catalogOperations = runtimecatalog.NewOperations()
+	b.application.own("catalog operations", func(context.Context) error {
+		b.application.catalogOperations.Close()
+		return nil
+	})
 	b.application.own("catalog runtime", catalogRuntime.Close)
 	b.application.providerStates = providerstate.New()
 	incidentTransitions, err := providerstate.OpenTransitions(b.sqlDB)
@@ -1170,11 +1176,9 @@ func (a *App) Run(ctx context.Context) error {
 				"catalog runtime reports no candidate yet; waiting for the first one",
 			)
 		default:
-			if err := a.activateRuntimeState(runCtx, candidate); err != nil {
-				log.Warn().Err(err).Msg(
-					"catalog candidate failed; serving the current complete runtime",
-				)
-			}
+			// activateRuntimeState owns the sanitized log line, so the
+			// startup path only keeps serving what it already has.
+			_ = a.activateRuntimeState(runCtx, candidate)
 		}
 		a.runtimeWG.Add(1)
 		go func() {
@@ -1317,15 +1321,29 @@ func (a *App) syncCatalog(ctx context.Context) (runtimecatalog.Candidate, error)
 	return a.catalogRuntime.RefreshCandidate(ctx, a.config.Catalog.RefreshTimeout)
 }
 
-func (a *App) refreshRuntime(ctx context.Context) error {
-	candidate, err := a.syncCatalog(ctx)
-	if err != nil {
-		return err
+// activateRuntimeState validates one candidate and advances the routable head.
+// A candidate that fails leaves the accepted head where it is, and the refusal
+// is recorded with its safe cause so the admin surface separates a refused
+// candidate from the generation that still routes.
+func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog.Candidate) error {
+	err := a.applyCandidate(ctx, candidate)
+	if err == nil {
+		return nil
 	}
-	return a.activateRuntimeState(ctx, candidate)
+	if a.catalogRuntime != nil {
+		a.catalogRuntime.Reject(candidate, err)
+	}
+	// The log carries the closed-set reason and the generation, never the
+	// failure text, because a provider or source failure can hold an address.
+	log.Warn().
+		Str("reason", string(runtimecatalog.ClassifyOperationFailure(err))).
+		Str("candidate_generation_id", candidate.State.GenerationID).
+		Msg("catalog candidate refused; the accepted head still routes")
+	return err
 }
 
-func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog.Candidate) error {
+// applyCandidate performs the validation and the acceptance of one candidate.
+func (a *App) applyCandidate(ctx context.Context, candidate runtimecatalog.Candidate) error {
 	a.runtimeMu.Lock()
 	defer a.runtimeMu.Unlock()
 	state := candidate.State
@@ -1362,7 +1380,10 @@ func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog
 	}
 	availability := prepared.Availability()
 	if err := a.catalog.ValidateRuntime(state, availability); err != nil {
-		return errors.Join(err, prepared.Close())
+		return errors.Join(
+			fmt.Errorf("%w: %w", runtimecatalog.ErrRouteValidationFailed, err),
+			prepared.Close(),
+		)
 	}
 	if a.catalogRuntime != nil {
 		if err := a.catalogRuntime.Accept(ctx, candidate); err != nil {
@@ -1485,11 +1506,7 @@ func (a *App) catalogCandidateLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
-			if err := a.activateRuntimeState(ctx, candidate); err != nil {
-				log.Warn().Err(err).Msg(
-					"catalog candidate failed; serving the current complete runtime",
-				)
-			}
+			_ = a.activateRuntimeState(ctx, candidate)
 		}
 	}
 }

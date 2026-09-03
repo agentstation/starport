@@ -27,7 +27,9 @@ func TestAppRefreshPublishesCompleteRuntimeGeneration(t *testing.T) {
 	require.NoError(t, err)
 	oldGenerationID := oldLease.Snapshot().GenerationID()
 
-	require.NoError(t, fixture.application.refreshRuntime(t.Context()))
+	result, err := fixture.application.runCatalogUpdate(t.Context())
+	require.NoError(t, err)
+	require.True(t, result.Changed)
 	newLease, err := fixture.registry.AcquireRuntime()
 	require.NoError(t, err)
 	defer newLease.Release()
@@ -85,7 +87,7 @@ func TestAppRefreshFailureRetainsPriorRuntimeGeneration(t *testing.T) {
 		return nil, errors.New("connector construction failed")
 	}
 
-	err := fixture.application.refreshRuntime(t.Context())
+	_, err := fixture.application.runCatalogUpdate(t.Context())
 	require.ErrorContains(t, err, "connector construction failed")
 	require.Same(t, before, fixture.registry.Snapshot())
 	current, err := fixture.registry.Get("openai")
