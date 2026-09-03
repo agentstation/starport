@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
 import {
@@ -77,7 +76,10 @@ function groupOfferingsByProvider(diff: CatalogChanges) {
   );
 }
 
-function ChangesBody() {
+// CatalogChangesSection is the Changes section of the catalog panel. It reads
+// the generation diff, which the safe route serves to a models:read session,
+// so every reader who sees the panel sees what moved.
+export function CatalogChangesSection() {
   const changes = useQuery({
     ...queries.catalogChanges(),
   });
@@ -240,25 +242,5 @@ function ChangesBody() {
         <NoChanges detail="The two generations list the same models, offerings, and prices." />
       )}
     </>
-  );
-}
-
-export function ChangesPanel({ onClose }: { onClose: () => void }) {
-  return (
-    <Sheet
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>Catalog changes</SheetTitle>
-        </SheetHeader>
-        <SheetBody>
-          <ChangesBody />
-        </SheetBody>
-      </SheetContent>
-    </Sheet>
   );
 }

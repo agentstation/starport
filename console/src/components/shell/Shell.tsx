@@ -36,6 +36,7 @@ import {
 } from "react";
 
 import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
+import { CatalogIndicator } from "@/components/shell/CatalogPanel";
 import { GitHubMark } from "@/components/ui/icons";
 import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -381,6 +382,12 @@ function SidebarBody({
 // main column through the --app-banner variable to size its own layout.
 const TOP_BAR_HEIGHT = "3rem";
 
+// STATUS_SLOT_HEIGHT is the wide-screen header slot the catalog chip sits in.
+// The slot is stated once and consumed twice: the strip is exactly this tall,
+// and its height joins --app-banner so chat sizes its column correctly. A
+// small screen renders no slot, because the chip moves into the top bar.
+const STATUS_SLOT_HEIGHT = "2.5rem";
+
 export function Shell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === "1",
@@ -397,9 +404,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const openGateway = useOpenGateway();
 
-  const above = [small ? TOP_BAR_HEIGHT : null, openGateway ? BANNER_HEIGHT : null].filter(
-    (part): part is string => part !== null,
-  );
+  const above = [
+    small ? TOP_BAR_HEIGHT : null,
+    openGateway ? BANNER_HEIGHT : null,
+    small ? null : STATUS_SLOT_HEIGHT,
+  ].filter((part): part is string => part !== null);
   const aboveMain = above.length === 0 ? "0px" : above.length === 1 ? above[0] : `calc(${above.join(" + ")})`;
 
   return (
@@ -419,6 +428,7 @@ export function Shell({ children }: { children: ReactNode }) {
             open={navOpen}
             onOpenChange={setNavOpen}
             onSearch={openCommandPalette}
+            status={<CatalogIndicator small />}
             brand={
               <>
                 <StarMark />
@@ -463,11 +473,24 @@ export function Shell({ children }: { children: ReactNode }) {
         }`}
       >
         {openGateway && <OpenGatewayBanner />}
+        {!small && (
+          <div
+            data-testid="catalog-slot"
+            className="mx-auto flex h-10 max-w-[1280px] items-center justify-end px-4 sm:px-8"
+          >
+            <CatalogIndicator />
+          </div>
+        )}
         {pathname === "/chat" ? (
           // Chat owns its full-height layout (thread sidebar + column).
           children
         ) : (
-          <div className="mx-auto max-w-[1280px] px-4 py-6 sm:px-8 sm:py-8">{children}</div>
+          // The status slot already holds the space above the page, so the
+          // wide-screen container starts just below it instead of opening a
+          // second gap.
+          <div className="mx-auto max-w-[1280px] px-4 pt-6 pb-6 sm:px-8 sm:pt-2 sm:pb-8">
+            {children}
+          </div>
         )}
       </main>
       <CommandPalette />

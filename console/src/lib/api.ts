@@ -58,6 +58,17 @@ export function hasCredential(): boolean {
   return credential().kind !== "none";
 }
 
+// sessionIdentity names the credential this browser presents now. A read that
+// the gateway refused must not repeat until the session behind it changes, and
+// this string is what changes: a new console session, a released session, a
+// pasted key, and a rotated key each produce a different one. It is an
+// identity, not a secret to display: keep it inside a query key, never on the
+// screen.
+export function sessionIdentity(): string {
+  const held = credential();
+  return held.kind === "key" ? `key:${held.value}` : held.kind;
+}
+
 // credentialRejected records that the gateway refused what this browser
 // presented. Both kinds go stale on their own: a session ends when it expires
 // or when `starport auth rotate` runs, and a key minted by one gateway process
@@ -141,15 +152,35 @@ function authorization(held: Credential): Record<string, string> {
   return held.kind === "key" ? { Authorization: `Bearer ${held.value}` } : {};
 }
 
+// retryAfterSeconds reads one Retry-After header. The header carries either a
+// delay in whole seconds or an HTTP date, and a caller that waits must accept
+// both. A header the response does not carry, and a value neither form
+// matches, read as undefined, so the caller applies its own wait.
+export function retryAfterSeconds(
+  header: string | null | undefined,
+  now: number = Date.now(),
+): number | undefined {
+  if (!header) return undefined;
+  const value = header.trim();
+  if (/^\d+$/.test(value)) return Number(value);
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return undefined;
+  return Math.max(0, Math.round((at - now) / 1000));
+}
+
 // ApiError carries the HTTP status and the gateway's error message.
 export class ApiError extends Error {
   status: number;
   body: unknown;
+  // retryAfter is the wait the gateway asked for, in whole seconds. Only a
+  // response that carried a Retry-After header sets it.
+  retryAfter?: number;
 
-  constructor(status: number, message: string, body: unknown) {
+  constructor(status: number, message: string, body: unknown, retryAfter?: number) {
     super(message);
     this.status = status;
     this.body = body;
+    this.retryAfter = retryAfter;
   }
 
   get unauthorized(): boolean {
@@ -206,7 +237,12 @@ async function parseError(response: Response): Promise<ApiError> {
   } catch {
     // non-JSON error body
   }
-  return new ApiError(response.status, message, body);
+  return new ApiError(
+    response.status,
+    message,
+    body,
+    retryAfterSeconds(response.headers.get("Retry-After")),
+  );
 }
 
 // ReadOptions is what a read accepts from the caller that owns its lifetime:
@@ -404,17 +440,145 @@ export type ProviderRefreshReport = {
   provider_state_revision?: number;
 };
 
-export type CatalogMetadata = {
+// CatalogSummary is the whole answer GET /api/v1/catalog gives a reader with
+// the models:read scope. The gateway builds it as an allowlist, so a value
+// that is not named here does not reach this browser at all. Source identity,
+// the publication chain, the schedule, the provider outcomes, and the
+// operations belong to the admin status document instead.
+export type CatalogSummary = {
   generation_id?: string;
   generated_at?: string;
-  catalog_sequence?: number;
-  availability_revision?: number;
-  completeness?: string;
-  degraded?: boolean;
-  degradation_reasons?: string[];
+  // age_seconds is the age of the served generation, graded by the server.
   age_seconds?: number;
-  manifest_available?: boolean;
-  manifest_unavailable_reason?: string;
+  // usable reports that the gateway routes on a catalog now.
+  usable?: boolean;
+  // freshness is the server's grade: current, warn, critical, or unknown.
+  // The console never grades an age itself.
+  freshness?: string;
+  source_kind?: string;
+  fallback?: boolean;
+  providers?: number;
+  models?: number;
+  next_update_at?: string;
+};
+
+// CatalogGenerationRef names one generation without disclosing its content.
+export type CatalogGenerationRef = {
+  generation_id?: string;
+  payload_checksum?: string;
+  generated_at?: string;
+  lease_epoch?: number;
+};
+
+// CatalogRouteValidation says where the newest candidate stands between the
+// source and the head this gateway routes on. The four states are distinct: a
+// refused candidate never moves the accepted head.
+export type CatalogRouteValidation = {
+  state?: string;
+  candidate?: CatalogGenerationRef;
+  accepted?: CatalogGenerationRef;
+  rejected?: { generation?: CatalogGenerationRef; reason?: string; at?: string };
+};
+
+// CatalogHop is one publication step the upstream reported. Only the first hop
+// above this gateway is one this gateway observed itself.
+export type CatalogHop = {
+  identity?: string;
+  health?: string;
+  published_at?: string;
+  observed_at?: string;
+};
+
+// CatalogSourceObservation is one acquisition source that fed the accepted
+// generation, with the outcome the run recorded for it.
+export type CatalogSourceObservation = {
+  source: string;
+  observed_at?: string;
+  completeness?: string;
+  status?: string;
+};
+
+// CatalogOperation is one unit of catalog work. The reason of a closed
+// operation comes from a closed set, so it names a cause and never a provider
+// address or a failure text.
+export type CatalogOperation = {
+  id: string;
+  kind?: string;
+  state?: string;
+  reason?: string;
+  accepted_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  generation_id?: string;
+  changed?: boolean;
+  // joined reports that a refresh request joined the run already in flight.
+  joined?: boolean;
+};
+
+// CatalogAdminStatus is the operator view from GET
+// /api/v1/admin/catalog/status. Every concept is a separate value: a degraded
+// upstream never hides a healthy transfer, and a refused candidate never hides
+// the accepted head that still serves every request.
+export type CatalogAdminStatus = {
+  runtime?: {
+    usable?: boolean;
+    source_kind?: string;
+    fallback?: boolean;
+    fallback_reason?: string;
+    lease?: string;
+    last_run_id?: string;
+    started_at?: string;
+    observed_at?: string;
+  };
+  route_validation?: CatalogRouteValidation;
+  // source_health is what this gateway observed while it read its own source.
+  source_health?: string;
+  // upstream_health is what the upstream reported about itself.
+  upstream_health?: string;
+  acquisition?: {
+    enabled?: boolean;
+    health?: string;
+    age_seconds?: number;
+    freshness?: string;
+  };
+  freshness?: {
+    catalog?: string;
+    catalog_age_seconds?: number;
+    channel?: string;
+    channel_age_seconds?: number;
+    source_check?: string;
+    source_check_age_seconds?: number;
+  };
+  provenance?: {
+    effective?: CatalogGenerationRef;
+    upstream?: {
+      source_identity?: string;
+      source_kind?: string;
+      channel_updated_at?: string;
+      chain?: CatalogHop[];
+    };
+  };
+  catalog?: { providers?: number; models?: number };
+  snapshot?: {
+    generation_id?: string;
+    payload_checksum?: string;
+    catalog_sequence?: number;
+    availability_revision?: number;
+    completeness?: string;
+    degraded?: boolean;
+    degradation_reasons?: string[];
+    validation?: {
+      status?: string;
+      error_count?: number;
+      warning_count?: number;
+      validated_at?: string;
+    };
+    source_observations?: CatalogSourceObservation[];
+    manifest_available?: boolean;
+    manifest_unavailable_reason?: string;
+  };
+  next_update_at?: string;
+  operations?: CatalogOperation[];
 };
 
 export type ModelAuthor = { id: string; name?: string };
@@ -520,11 +684,6 @@ export type CatalogChanges = {
   offerings_added?: OfferingChange[];
   offerings_removed?: OfferingChange[];
   price_changes?: PriceChange[];
-};
-
-export type CatalogRefreshReport = {
-  changed?: boolean;
-  generation_id?: string;
 };
 
 // --- Gateway API keys (admin) ---
@@ -827,18 +986,34 @@ export function refreshProviders(): Promise<ProviderRefreshReport> {
   });
 }
 
-export function catalogMetadata({ signal }: ReadOptions = {}): Promise<CatalogMetadata> {
-  return request<CatalogMetadata>("/api/v1/catalog", { signal });
+export function catalogSummary({ signal }: ReadOptions = {}): Promise<CatalogSummary> {
+  return request<CatalogSummary>("/api/v1/catalog", { signal });
 }
 
 export function catalogChanges({ signal }: ReadOptions = {}): Promise<CatalogChanges> {
   return request<CatalogChanges>("/api/v1/catalog/changes", { signal });
 }
 
-export function refreshCatalog(): Promise<CatalogRefreshReport> {
-  return request<CatalogRefreshReport>("/api/v1/admin/catalog/refresh", {
+export function catalogStatus({ signal }: ReadOptions = {}): Promise<CatalogAdminStatus> {
+  return request<CatalogAdminStatus>("/api/v1/admin/catalog/status", { signal });
+}
+
+// startCatalogRefresh accepts one refresh run. The gateway answers 202 with
+// the operation that carries it, and a second request joins the run in flight
+// instead of starting another one.
+export function startCatalogRefresh(): Promise<CatalogOperation> {
+  return request<CatalogOperation>("/api/v1/admin/catalog/refresh", {
     method: "POST",
   });
+}
+
+// cancelCatalogRefresh ends one open run. A run that already closed answers
+// with its own terminal state, so a repeated cancel changes nothing.
+export function cancelCatalogRefresh(runID: string): Promise<CatalogOperation> {
+  return request<CatalogOperation>(
+    `/api/v1/admin/catalog/refreshes/${encodeURIComponent(runID)}`,
+    { method: "DELETE" },
+  );
 }
 
 // AuthMode is what the gateway does with a missing key: "required" refuses the
