@@ -283,17 +283,38 @@ export STARPORT_OPENAI_API_KEY_REFERENCE='aws-secrets-manager:starport/openai#ap
 The [operator guide](docs/OPERATOR-GUIDE.md#direct-secret-sources) defines the
 resource syntax, source authentication, version selection, and fallback rule.
 
-To consume verified catalog publications from a Starmap server, set its
-versioned API base URL:
+### Catalog topology
 
-```bash
-export STARPORT_CATALOG_REMOTE_URL="https://catalog.example.com/api/v1"
-export STARPORT_CATALOG_REMOTE_API_KEY="replace-if-the-server-requires-one"
+Starport reads one connected Starmap runtime. `STARPORT_CATALOG_SOURCE` names
+the kind, and the kind decides the egress, the freshness age, and the request
+budget. The default `public` kind follows the published GitHub channel, which
+suits one gateway and a small fleet. A larger fleet, or a fleet that reaches no
+GitHub address, uses a central Starmap server instead. The central server holds
+the single egress to GitHub and pushes each publication to the replicas.
+
+```mermaid
+flowchart LR
+  GH[(GitHub catalog-latest)]
+  SM[Central Starmap server]
+  subgraph FLEET[Starport fleet]
+    S1[Starport 1]
+    S2[Starport N]
+  end
+  GH -->|hourly conditional poll| SM
+  SM -->|server-sent events| FLEET
 ```
 
-Remote mode keeps the last accepted generation for restart and recovery. It is
-mutually exclusive with a local catalog workspace and local acquisition. See
-the [remote catalog guide](docs/OPERATOR-GUIDE.md#remote-starmap-catalogs).
+```bash
+export STARPORT_CATALOG_SOURCE="starmap"
+export STARPORT_CATALOG_SOURCE_URL="https://catalog.example.com/api/v1"
+export STARPORT_CATALOG_SOURCE_API_KEY="replace-if-the-server-requires-one"
+```
+
+`STARPORT_CATALOG_SOURCE_API_KEY` is a catalog-acquisition credential. It never
+pays a provider. Each gateway keeps its last accepted generation for restart
+and recovery. [Deployment topologies](docs/DEPLOYMENT-TOPOLOGIES.md) gives the
+five topologies, their request budgets, and the thresholds that move a fleet to
+a central Starmap server.
 
 See the [configuration reference](.env.example) and
 [operator guide](docs/OPERATOR-GUIDE.md) for production settings.
@@ -369,6 +390,7 @@ See the [development guide](DEVELOPMENT.md) and
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Operator guide](docs/OPERATOR-GUIDE.md)
+- [Deployment topologies](docs/DEPLOYMENT-TOPOLOGIES.md)
 - [Security posture](docs/SECURITY-POSTURE.md)
 - [Performance methodology](docs/PERFORMANCE.md)
 - [Vertex AI configuration](docs/VERTEX_AI_CONFIG.md)
