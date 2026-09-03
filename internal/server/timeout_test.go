@@ -11,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/agentstation/starport/internal/server/requestctx"
 )
 
 func TestRequestTimeout(t *testing.T) {
@@ -180,5 +182,41 @@ func TestContextPropagation(t *testing.T) {
 		assert.True(t, cancelled, "context cancellation should propagate to handler")
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("timeout waiting for context cancellation")
+	}
+}
+
+// TestReleasedRouteTimeoutOutlivesTheBound proves route timing is
+// route-specific at the HTTP seam. A handler that commits to a long response
+// releases the bound the middleware owns, and its context then carries no
+// cancellation of its own.
+func TestReleasedRouteTimeoutOutlivesTheBound(t *testing.T) {
+	tests := []struct {
+		name     string
+		release  bool
+		wantCode int
+	}{
+		{name: "a bounded route keeps the bound", release: false, wantCode: http.StatusGatewayTimeout},
+		{name: "a released route outlives the bound", release: true, wantCode: http.StatusOK},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router := chi.NewRouter()
+			router.Use(Timeout(50 * time.Millisecond))
+			router.Get("/stream", func(w http.ResponseWriter, r *http.Request) {
+				if test.release {
+					requestctx.ReleaseTimeout(r.Context())
+				}
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(250 * time.Millisecond):
+					w.WriteHeader(http.StatusOK)
+				}
+			})
+
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/stream", nil))
+			require.Equal(t, test.wantCode, recorder.Code)
+		})
 	}
 }

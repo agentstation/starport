@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
@@ -13,6 +14,12 @@ import (
 
 // StartChatStream starts an execution-owned stream. It can retry or fall back
 // only before it returns the first canonical event to its caller.
+//
+// Route timing here is route-specific. The elapsed budget bounds route
+// selection alone: it ends a stream that never delivers a first byte, and it
+// releases as soon as one arrives. A stream that a caller reads is a stream
+// the gateway must not cut in half, so the committed stream carries a
+// cancelable lifetime and no deadline.
 func (e *Executor) StartChatStream(
 	ctx context.Context,
 	plan *routing.Plan,
@@ -24,19 +31,54 @@ func (e *Executor) StartChatStream(
 	if attempt == nil {
 		return nil, ErrAttemptRequired
 	}
-	streamCtx, cancel := context.WithTimeout(ctx, e.config.MaxElapsed)
+	lifetime, cancel := context.WithCancel(ctx)
+	selection, stopSelection := context.WithCancel(lifetime)
 	managed := &managedStream{
-		ctx:           streamCtx,
+		ctx:           lifetime,
 		cancel:        cancel,
+		stopSelection: stopSelection,
 		session:       newSession(e, plan),
 		start:         attempt,
 		evidenceIndex: -1,
 	}
+	managed.watchSelection(selection, e.config.MaxElapsed)
 	if err := managed.startNext(); err != nil {
+		managed.releaseSelection()
 		cancel()
 		return nil, err
 	}
 	return managed, nil
+}
+
+// watchSelection ends a stream that spends the elapsed budget without a first
+// byte. The watch stops at the first byte and at every terminal state, so a
+// committed stream runs as long as the provider sends events.
+//
+// The watch reads wall time rather than the injected clock. It bounds a
+// provider that answers nothing, which no test clock advances past.
+func (s *managedStream) watchSelection(selection context.Context, budget time.Duration) {
+	if budget <= 0 {
+		return
+	}
+	timer := time.AfterFunc(budget, func() {
+		s.mu.Lock()
+		committed := s.committed
+		s.mu.Unlock()
+		if !committed {
+			s.cancel()
+		}
+	})
+	context.AfterFunc(selection, func() { timer.Stop() })
+}
+
+// releaseSelection stops the selection watch. It is idempotent, so the first
+// byte and a terminal state can both release it.
+func (s *managedStream) releaseSelection() {
+	s.selectionOnce.Do(func() {
+		if s.stopSelection != nil {
+			s.stopSelection()
+		}
+	})
 }
 
 type managedStream struct {
@@ -45,6 +87,10 @@ type managedStream struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// stopSelection ends the elapsed-budget watch of the selection phase.
+	stopSelection context.CancelFunc
+	selectionOnce sync.Once
 
 	session       *session
 	start         StreamAttempt
@@ -90,6 +136,9 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 				s.pendingError = err
 			}
 			s.mu.Unlock()
+			// The first byte ends route selection. The stream now carries no
+			// elapsed deadline, so a long completion runs to its own end.
+			s.releaseSelection()
 			return event, nil
 		}
 		if err == nil {
@@ -103,6 +152,7 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 			}
 			s.session.succeed(s.evidenceIndex, s.credential)
 			s.terminal = true
+			s.releaseSelection()
 			s.cancel()
 			s.mu.Unlock()
 			_ = current.Close()
@@ -118,6 +168,7 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 		decision := s.session.fail(s.evidenceIndex, providerFailure, action, s.credential)
 		if s.committed || decision == decisionStop {
 			s.terminal = true
+			s.releaseSelection()
 			s.cancel()
 			terminalError := s.session.terminalError(ErrAllAttemptsFailed)
 			s.mu.Unlock()
@@ -129,6 +180,7 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 		if err := s.session.wait(s.ctx, decision); err != nil {
 			s.mu.Lock()
 			s.terminal = true
+			s.releaseSelection()
 			s.cancel()
 			terminalError := s.session.cancelError(err)
 			s.mu.Unlock()
@@ -137,6 +189,7 @@ func (s *managedStream) Read() (*inference.StreamEvent, error) {
 		if err := s.startNext(); err != nil {
 			s.mu.Lock()
 			s.terminal = true
+			s.releaseSelection()
 			s.cancel()
 			s.mu.Unlock()
 			return nil, err
@@ -151,6 +204,7 @@ func (s *managedStream) Close() error {
 		return nil
 	}
 	s.terminal = true
+	s.releaseSelection()
 	s.cancel()
 	if s.evidenceIndex >= 0 && s.evidenceIndex < len(s.session.evidence) {
 		evidence := &s.session.evidence[s.evidenceIndex]
