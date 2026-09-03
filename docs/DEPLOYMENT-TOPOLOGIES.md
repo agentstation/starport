@@ -60,8 +60,9 @@ uses about two percent of the unauthenticated budget.
 
 **Freshness age.** Starmap publishes every four hours. The gateway polls every
 hour, so the age objective is six hours. The runtime grades the served
-catalog with fixed thresholds: `warn` above six hours and `critical` above ten
-hours.
+catalog `warn` above `SOURCE_MAX_AGE` and `critical` above five thirds of it.
+The default of six hours gives `warn` above six hours and `critical` above
+ten hours.
 
 **Egress.** The gateway reaches GitHub for the catalog and reaches each
 provider API for acquisition.
@@ -239,15 +240,16 @@ flowchart LR
 
 **Settings.** Set `SOURCE=file` and set `SOURCE_URL` to the path of the
 transferred catalog file. Set `ACQUISITION_ENABLED=false` on every host. Leave
-`SOURCE_MAX_AGE` at its default. The runtime grades freshness with fixed
-thresholds, so this value does not move them.
+`SOURCE_MAX_AGE` at the transfer cadence, so the grade follows the schedule
+that the operator controls.
 
 **Request budget.** No host inside the boundary sends a catalog request. The
 external puller alone counts against the GitHub budget.
 
-**Freshness age.** The age follows the transfer cadence. A cadence above six
-hours reads `warn` on every replica, and a cadence above ten hours reads
-`critical`. The accepted head keeps routing at either grade. Pair the freshness
+**Freshness age.** The age follows the transfer cadence. A transfer later
+than `SOURCE_MAX_AGE` reads `warn` on every replica, and one later than five
+thirds of it reads `critical`. The accepted head keeps routing at either
+grade. Pair the freshness
 alert with the transfer schedule, so an operator reads a late transfer and not
 a broken gateway.
 
