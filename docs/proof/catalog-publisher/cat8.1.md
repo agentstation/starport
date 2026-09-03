@@ -195,3 +195,7 @@ worktree can move either condition.
 identity grant. Two comments this task wrote used the phrase for the general
 idea of a session, so `CSG-V16` failed. Both now name a console session
 directly, which reads better and leaves the reserved words where they belong.
+
+`scripts/verify-console-polish.sh` named `ChangesPanel.tsx` in `CPL-V27`. The
+owner review found the stale path after the rename, and the gate now names
+`CatalogChanges.tsx`. The count and the meaning of the gate do not change.
