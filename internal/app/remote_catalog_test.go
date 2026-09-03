@@ -26,13 +26,13 @@ import (
 	"github.com/agentstation/starport/internal/storage"
 )
 
-// TestConnectedCatalogRuntimeActivatesProvider proves one connected runtime
+// TestVerifiedRemoteCatalogActivatesProvider proves one connected runtime
 // serves a deployment source and routes what that source publishes.
 //
 // The composition names no local-or-remote choice. The operator selects the
 // starmap source kind, and the same runtime reads it, keeps the candidate, and
 // hands Starport the candidate that route validation accepts.
-func TestConnectedCatalogRuntimeActivatesProvider(t *testing.T) {
+func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
 	inferenceServer := newSyntheticOpenAIServer(t)
 	defer inferenceServer.Close()
 	generation := remoteAppTestGeneration(

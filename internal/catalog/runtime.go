@@ -68,11 +68,36 @@ type catalogStateIdentity struct {
 
 // OpenRuntime composes one connected Starmap runtime over Starport's durable
 // storage. It starts the source and acquisition schedules and returns.
+//
+// The deployment lookup is the only credential plane catalog acquisition
+// reads, so an inference credential can reach no provider observation.
 func OpenRuntime(
 	ctx context.Context,
 	store storage.KVStore,
 	settings Settings,
 	lookup DeploymentLookup,
+) (*Runtime, error) {
+	var acquirer starmap.Acquirer
+	if settings.AcquisitionEnabled {
+		built, err := acquisition.NewAcquirer(
+			acquisition.WithAcquirerCredentialResolver(NewAcquisitionResolver(lookup)),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("open Starmap acquisition: %w", err)
+		}
+		acquirer = built
+	}
+	return openRuntime(ctx, store, settings, acquirer)
+}
+
+// openRuntime composes the connected runtime over one acquirer. It holds the
+// whole composition, so the exported entry point states the credential plane
+// alone and no caller repeats the wiring.
+func openRuntime(
+	ctx context.Context,
+	store storage.KVStore,
+	settings Settings,
+	acquirer starmap.Acquirer,
 ) (*Runtime, error) {
 	if ctx == nil {
 		return nil, errors.New("catalog runtime context is required")
@@ -112,13 +137,7 @@ func OpenRuntime(
 		}
 		options = append(options, starmap.WithSource(cascade))
 	}
-	if settings.AcquisitionEnabled {
-		acquirer, err := acquisition.NewAcquirer(
-			acquisition.WithAcquirerCredentialResolver(NewAcquisitionResolver(lookup)),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("open Starmap acquisition: %w", err)
-		}
+	if acquirer != nil {
 		options = append(options, starmap.WithAcquirer(acquirer))
 	}
 	connected, err := starmap.Open(ctx, options...)
