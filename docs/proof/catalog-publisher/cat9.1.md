@@ -142,10 +142,12 @@ Starmap central server runbook holds the artifact verification procedure. The
 Starmap command-line interface publishes no offline verification subcommand
 today, so the section names no command.
 
-**`STARPORT_CATALOG_SOURCE_MAX_AGE`.** The setting grades the propagated
-channel age. A value above the objective does not refuse a payload. The
-documentation states the grade behavior, which matches the Starmap source
-implementation.
+**`STARPORT_CATALOG_SOURCE_MAX_AGE` reaches no grade today.** Starport passes
+the value to `starmap.WithSourceMaxAge`. Starmap validates it and refuses a
+negative value. Nothing reads it after that. Freshness grading uses the fixed
+`DefaultFreshnessPolicy` thresholds of six hours for `warn` and ten hours for
+`critical`. The documentation states that behavior and never tells an operator
+to raise the value as a cure. A Starmap follow-up task owns the wiring.
 
 ## Untouched by this task
 

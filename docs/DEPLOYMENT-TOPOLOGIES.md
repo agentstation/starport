@@ -59,16 +59,18 @@ address, and a `304` answer counts against that ceiling. One gateway therefore
 uses about two percent of the unauthenticated budget.
 
 **Freshness age.** Starmap publishes every four hours. The gateway polls every
-hour, so the age objective is six hours. `SOURCE_MAX_AGE` grades that age at
-its `6h` default.
+hour, so the age objective is six hours. The runtime grades the served
+catalog with fixed thresholds: `warn` above six hours and `critical` above ten
+hours.
 
 **Egress.** The gateway reaches GitHub for the catalog and reaches each
 provider API for acquisition.
 
 **Failure behavior.** A source that does not answer leaves the accepted head in
 place. The default `prefer_source` policy starts the gateway on the embedded
-baseline and adopts the source at the first answer. `require_source` refuses
-to start until the source answers.
+baseline and adopts the source at the first successful read. The
+`require_source` policy reads the source once at open. It fails startup when
+that read fails.
 
 ## Starport fleet with direct GitHub
 
@@ -236,15 +238,18 @@ flowchart LR
 ```
 
 **Settings.** Set `SOURCE=file` and set `SOURCE_URL` to the path of the
-transferred catalog file. Set `ACQUISITION_ENABLED=false` on every host. Set
-`SOURCE_MAX_AGE` to the transfer cadence plus a headroom, because the default
-`6h` grades a slower cadence as critical.
+transferred catalog file. Set `ACQUISITION_ENABLED=false` on every host. Leave
+`SOURCE_MAX_AGE` at its default. The runtime grades freshness with fixed
+thresholds, so this value does not move them.
 
 **Request budget.** No host inside the boundary sends a catalog request. The
 external puller alone counts against the GitHub budget.
 
-**Freshness age.** The age follows the transfer cadence. A weekly transfer
-gives a seven-day age, so raise `SOURCE_MAX_AGE` to that value.
+**Freshness age.** The age follows the transfer cadence. A cadence above six
+hours reads `warn` on every replica, and a cadence above ten hours reads
+`critical`. The accepted head keeps routing at either grade. Pair the freshness
+alert with the transfer schedule, so an operator reads a late transfer and not
+a broken gateway.
 
 **Egress.** No host inside the boundary reaches the internet. The runtime has
 no OCI source, so the `file` source is the supported entry point.

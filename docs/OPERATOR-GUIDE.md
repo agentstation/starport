@@ -726,15 +726,15 @@ provider. Configuration inspection redacts both values and the source URL.
 | Name | Default | Valid values | Interactions |
 | --- | --- | --- | --- |
 | `STARPORT_CATALOG_SOURCE` | `public` | `public`, `github`, `starmap`, `file`, `embedded` | `starmap` and `file` each need a source URL. Another value fails startup. |
-| `STARPORT_CATALOG_SOURCE_URL` | empty | Safe source endpoint, or the file identity for the `file` kind | Required for `starmap` and for `file`. A non-loopback endpoint uses HTTPS with a valid certificate chain, and it holds the versioned path, normally `/api/v1`. |
+| `STARPORT_CATALOG_SOURCE_URL` | empty | Safe source endpoint, or the file identity for the `file` kind | Required for `starmap` and for `file`. A `github` source treats it as an optional API base override, and the `public` and `embedded` kinds ignore it. A non-loopback endpoint uses HTTPS with a valid certificate chain, and it holds the versioned path, normally `/api/v1`. |
 | `STARPORT_CATALOG_SOURCE_API_KEY` | empty | Starmap protocol credential | Starport sends it as `X-API-Key` to a `starmap` source. It is not a provider inference credential. |
 | `STARPORT_CATALOG_SOURCE_REPOSITORY` | `agentstation/starmap` | GitHub repository | Read by the `public` and `github` kinds. |
 | `STARPORT_CATALOG_SOURCE_CHANNEL` | `catalog-latest` | Attested channel name | Read by the `public` and `github` kinds. |
 | `STARPORT_CATALOG_SOURCE_SIGNER_WORKFLOW` | empty | Expected GitHub workflow identity | An empty value selects the publisher preset. |
 | `STARPORT_CATALOG_SOURCE_TOKEN` | empty | GitHub API token | Raises the hourly ceiling from 60 for each egress address to 5,000 for each token. It also reads a private repository. |
 | `STARPORT_CATALOG_SOURCE_POLL_INTERVAL` | `1h` | Nonnegative duration | Each polling hop adds one interval to the freshness age. A push hop adds none. |
-| `STARPORT_CATALOG_SOURCE_STARTUP_POLICY` | `prefer_source` | `prefer_source`, `require_source` | `prefer_source` starts on the embedded baseline and adopts the source at the first answer. `require_source` refuses to start until the source answers. |
-| `STARPORT_CATALOG_SOURCE_MAX_AGE` | `6h` | Nonnegative duration | The propagated channel age at which the source reports a degraded upstream. `0s` turns the age grade off. Raise it for an air-gapped transfer cadence. |
+| `STARPORT_CATALOG_SOURCE_STARTUP_POLICY` | `prefer_source` | `prefer_source`, `require_source` | `prefer_source` starts on the embedded baseline and adopts the source at the first successful read. `require_source` reads the source once at open and fails startup when that read fails. |
+| `STARPORT_CATALOG_SOURCE_MAX_AGE` | `6h` | Nonnegative duration | The served-catalog age at which this instance counts its catalog as stale. A negative value fails startup. The runtime grades freshness with fixed thresholds today, `6h` warn and `10h` critical, and this value does not move them. |
 | `STARPORT_CATALOG_SOURCE_MAX_HOPS` | `8` | Positive integer | Bounds the publication chain of a `starmap` source. Zero fails startup. |
 | `STARPORT_CATALOG_ACQUISITION_ENABLED` | `true` | `true`, `false` | A false value stops every automatic observation, and only an admin refresh then moves the catalog. |
 | `STARPORT_CATALOG_ACQUISITION_INTERVAL` | `4h` | Nonnegative duration | `0s` means one observation at startup and no repeat. It has no effect while acquisition is off. |
