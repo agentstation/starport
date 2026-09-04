@@ -294,7 +294,7 @@ the single egress to GitHub and pushes each publication to the replicas.
 
 ```mermaid
 flowchart LR
-  GH[(GitHub catalog-latest)]
+  GH[("GitHub catalog/v1")]
   SM[Central Starmap server]
   subgraph FLEET[Starport fleet]
     S1[Starport 1]

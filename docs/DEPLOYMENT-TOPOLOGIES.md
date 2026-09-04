@@ -9,7 +9,7 @@ Every setting name below carries the `STARPORT_CATALOG_` prefix. The
 default, its valid values, and its interactions. The
 [configuration reference](../.env.example) lists every name with its default.
 
-Starmap publishes to the `catalog-latest` channel every four hours at minute
+Starmap publishes to the `catalog/v1` channel every four hours at minute
 17. A gateway asks its source for a newer publication every hour. The
 end-to-end freshness objective is six hours. A polling hop adds one poll
 interval to that age. A push hop adds no interval.
@@ -42,7 +42,7 @@ on its own schedule.
 
 ```mermaid
 flowchart LR
-  GH[(GitHub catalog-latest)]
+  GH[("GitHub catalog/v1")]
   SP[Starport gateway]
   PR[Provider APIs]
   GH -->|hourly conditional poll| SP
@@ -79,7 +79,7 @@ Two or more gateways follow the same public channel behind one egress address.
 
 ```mermaid
 flowchart LR
-  GH[(GitHub catalog-latest)]
+  GH[("GitHub catalog/v1")]
   subgraph NAT[One egress address]
     S1[Starport 1]
     S2[Starport 2]
@@ -137,7 +137,7 @@ server and keeps its own provider acquisition.
 
 ```mermaid
 flowchart LR
-  GH[(GitHub catalog-latest)]
+  GH[("GitHub catalog/v1")]
   SM[Central Starmap server]
   subgraph FLEET[Starport fleet]
     S1[Starport 1]
@@ -180,7 +180,7 @@ replica reaches the central server alone.
 
 ```mermaid
 flowchart LR
-  GH[(GitHub catalog-latest)]
+  GH[("GitHub catalog/v1")]
   PR[Provider APIs]
   SM[Central Starmap server]
   subgraph BOUND[Restricted network]
@@ -223,7 +223,7 @@ operator moves both files across the boundary on a schedule.
 
 ```mermaid
 flowchart LR
-  GH[(GitHub catalog-latest)]
+  GH[("GitHub catalog/v1")]
   EX[External puller]
   MV{{Manual transfer}}
   subgraph AIR[Air-gapped boundary]
@@ -273,7 +273,7 @@ a lease-capable shared store.
 
 ```mermaid
 flowchart LR
-  GH[(GitHub catalog-latest)]
+  GH[("GitHub catalog/v1")]
   subgraph CENTRAL[Central tier]
     A[Starmap server A]
     B[Starmap server B]

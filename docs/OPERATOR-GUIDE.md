@@ -730,7 +730,7 @@ provider. Configuration inspection redacts both values and the source URL.
 | `STARPORT_CATALOG_SOURCE_URL` | empty | Safe source endpoint, or the file identity for the `file` kind | Required for `starmap` and for `file`. A `github` source treats it as an optional API base override, and the `public` and `embedded` kinds ignore it. A non-loopback endpoint uses HTTPS with a valid certificate chain, and it holds the versioned path, normally `/api/v1`. |
 | `STARPORT_CATALOG_SOURCE_API_KEY` | empty | Starmap protocol credential | Starport sends it as `X-API-Key` to a `starmap` source. It is not a provider inference credential. |
 | `STARPORT_CATALOG_SOURCE_REPOSITORY` | `agentstation/starmap` | GitHub repository | Read by the `public` and `github` kinds. |
-| `STARPORT_CATALOG_SOURCE_CHANNEL` | `catalog-latest` | Attested channel name | Read by the `public` and `github` kinds. |
+| `STARPORT_CATALOG_SOURCE_CHANNEL` | `catalog/v1` | Attested channel name | Read by the `public` and `github` kinds. |
 | `STARPORT_CATALOG_SOURCE_SIGNER_WORKFLOW` | empty | Expected GitHub workflow identity | An empty value selects the publisher preset. |
 | `STARPORT_CATALOG_SOURCE_TOKEN` | empty | GitHub API token | Raises the hourly ceiling from 60 for each egress address to 5,000 for each token. It also reads a private repository. |
 | `STARPORT_CATALOG_SOURCE_POLL_INTERVAL` | `1h` | Nonnegative duration | Each polling hop adds one interval to the freshness age. A push hop adds none. |
