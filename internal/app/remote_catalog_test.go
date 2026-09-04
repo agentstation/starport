@@ -73,11 +73,10 @@ func TestVerifiedRemoteCatalogActivatesProvider(t *testing.T) {
 	plane := catalogRuntime.ControlPlane()
 	candidate, err := catalogRuntime.CurrentCandidate(t.Context())
 	require.NoError(t, err)
-	// The runtime composes its own effective generation over the upstream one,
-	// so the candidate carries the effective identity and the status carries
-	// the upstream provenance beside it.
-	require.NotEmpty(t, candidate.State.GenerationID)
-	require.NotEqual(t, generation.Manifest.GenerationID, candidate.State.GenerationID)
+	// The runtime composes its effective generation over the upstream one.
+	// This instance observes no provider, so the effective generation is the
+	// upstream generation, and the candidate carries the upstream identity.
+	require.Equal(t, generation.Manifest.GenerationID, candidate.State.GenerationID)
 	status := catalogRuntime.Status()
 	require.Equal(t, runtime.SourceStarmap, status.SourceKind)
 	require.Equal(t, candidate.State.GenerationID, status.GenerationID)

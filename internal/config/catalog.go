@@ -39,7 +39,7 @@ const (
 const DefaultCatalogSourceRepository = "agentstation/starmap"
 
 // DefaultCatalogSourceChannel is the publication channel of the repository.
-const DefaultCatalogSourceChannel = "catalog-latest"
+const DefaultCatalogSourceChannel = "catalog/v1"
 
 // catalogStateSubdirectory is where a Starport process keeps its catalog state
 // under the user state root.
@@ -76,7 +76,7 @@ type CatalogConfig struct {
 	SourceRepository string `env:"SOURCE_REPOSITORY,default=agentstation/starmap"`
 
 	// SourceChannel names the publication channel of that repository.
-	SourceChannel string `env:"SOURCE_CHANNEL,default=catalog-latest"`
+	SourceChannel string `env:"SOURCE_CHANNEL,default=catalog/v1"`
 
 	// SourceSignerWorkflow names the workflow that must have signed a
 	// publication. Empty selects the publisher preset.
