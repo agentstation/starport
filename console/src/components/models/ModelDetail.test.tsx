@@ -217,7 +217,7 @@ test("the offering table declares every column and right-aligns the numbers", ()
   render(<OfferingTable model={model} providers={providers} />);
 
   const headers = Array.from(document.querySelectorAll("th"));
-  expect(headers.length).toBe(10);
+  expect(headers.length).toBe(13);
   expect(headers.every((th) => th.getAttribute("scope") === "col")).toBe(true);
   const aligned = headers
     .filter((th) => (th.getAttribute("class") ?? "").includes("text-right"))

@@ -34,8 +34,8 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 			BaseURL: "https://example.com/v1?api_key=query-token-value",
 		}},
 		Catalog: CatalogConfig{
-			RemoteURL:    "https://catalog.example/api/v1?token=query-token-value",
-			RemoteAPIKey: secrets[7],
+			SourceURL:    "https://catalog.example/api/v1?token=query-token-value",
+			SourceAPIKey: secrets[7],
 		},
 		Security: SecurityConfig{MasterKey: secrets[2], JWTSecret: secrets[3]},
 	}
@@ -63,7 +63,7 @@ func TestRedactedNeverReturnsSecrets(t *testing.T) {
 	catalog := view["catalog"].(map[string]any)
 	if openAI["base_url"] != redactedValue ||
 		valkey["url"] != redactedValue ||
-		catalog["remote_url"] != redactedValue {
+		catalog["source_url"] != redactedValue {
 		t.Errorf(
 			"redacted URLs = %#v, %#v, %#v",
 			openAI["base_url"],

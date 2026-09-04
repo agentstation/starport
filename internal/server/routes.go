@@ -177,8 +177,11 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 			r.With(s.requireAnyScope("models:read")).Get("/authors", s.controllers.Authors.List)
 			r.With(s.requireAnyScope("models:read")).Get("/authors/{author}", s.controllers.Authors.Get)
 
-			// Catalog freshness and changes
-			r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Metadata)
+			// The safe catalog surface. It serves the allowlisted summary
+			// alone: no source address, no publication chain, no lease, and
+			// no failure reason. The operational view sits behind the admin
+			// scope at /api/v1/admin/catalog/status.
+			r.With(s.requireAnyScope("models:read")).Get("/catalog", s.controllers.Catalog.Summary)
 			r.With(s.requireAnyScope("models:read")).Get("/catalog/changes", s.controllers.Catalog.Changes)
 
 			// Shared credentials: the operator shares provider credentials
@@ -330,7 +333,13 @@ func (s *Server) registerRoutes(mux *chi.Mux) {
 					r.Get("/providers", s.controllers.ProviderOperations.Status)
 					r.Get("/providers/{provider}/incidents", s.controllers.ProviderOperations.Incidents)
 					r.Post("/providers/refresh", s.controllers.ProviderOperations.Refresh)
+					// The catalog operations surface. The refresh accepts
+					// work and answers with the run that carries it, so a
+					// long acquisition never rides one request.
+					r.Get("/catalog/status", s.controllers.Catalog.Status)
 					r.Post("/catalog/refresh", s.controllers.Catalog.Refresh)
+					r.Get("/catalog/refreshes/{run_id}", s.controllers.Catalog.RefreshStatus)
+					r.Delete("/catalog/refreshes/{run_id}", s.controllers.Catalog.CancelRefresh)
 				})
 			})
 		})

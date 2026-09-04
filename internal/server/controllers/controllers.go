@@ -183,6 +183,7 @@ func NewControllers(cfg Config) *Controllers {
 	collections.ProviderCredentials.audit = cfg.Audit
 	collections.Presets.audit = cfg.Audit
 	collections.Auth.audit = cfg.Audit
+	collections.Catalog.audit = cfg.Audit
 
 	return collections
 }

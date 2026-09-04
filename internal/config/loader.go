@@ -131,6 +131,15 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 		return nil, newLoadFailure("configuration sources could not be read", err)
 	}
 
+	// A removed setting fails startup before anything reads a value. A
+	// deployment that still sets one believes it still applies, so silence
+	// would hide a routing change instead of reporting it.
+	if err := checkRemovedSettings(lookuper); err != nil {
+		// The message names variables only, never a configured value, so
+		// it stays safe for the operator-facing error.
+		return nil, newLoadFailure(err.Error(), err)
+	}
+
 	cfg := defaultConfig(paths)
 	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
 		Target:   cfg,
@@ -231,6 +240,16 @@ func resolveConfiguredPaths(cfg *Config, paths Paths) error {
 	cfg.Catalog.WorkspacePath, err = resolvePath(paths.ConfigDir, cfg.Catalog.WorkspacePath)
 	if err != nil {
 		return fmt.Errorf("catalog workspace path: %w", err)
+	}
+	// The state directory is process-local by contract, so it resolves against
+	// the user state root and never against the configuration directory, which
+	// a fleet can share. A development gateway owns scratch instead, so it
+	// never reaches the user state root.
+	if !cfg.Catalog.StateDirectoryIsScratch() {
+		cfg.Catalog.StateDirectory, err = ResolveStateDirectory(cfg.Catalog.StateDirectory)
+		if err != nil {
+			return fmt.Errorf("catalog state directory: %w", err)
+		}
 	}
 	cfg.Security.TLSCertPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSCertPath)
 	if err != nil {

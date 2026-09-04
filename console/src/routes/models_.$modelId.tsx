@@ -67,7 +67,6 @@ function ModelDetailPage() {
   const status = useQuery({
     ...queries.providerStatus(),
     enabled: keyUsable,
-    select: (report) => report.providers,
   });
 
   const model = models.data ?? undefined;
@@ -178,7 +177,11 @@ function ModelDetailPage() {
         <h2 className="text-sm font-medium text-text-2">
           Providers
         </h2>
-        <OfferingTable model={model} providers={status.data} />
+        <OfferingTable
+          model={model}
+          providers={status.data?.providers}
+          generation={status.data?.catalog_generation_id}
+        />
       </section>
 
       <LineageLinks model={model} />

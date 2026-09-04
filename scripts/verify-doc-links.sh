@@ -12,6 +12,7 @@ files=(
   docs/ARCHITECTURE.md
   docs/CACHE_CONTROL.md
   docs/CONTRIBUTING.md
+  docs/DEPLOYMENT-TOPOLOGIES.md
   docs/OPERATOR-GUIDE.md
   docs/SECURITY-POSTURE.md
   docs/README.md

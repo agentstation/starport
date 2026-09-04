@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -231,33 +232,6 @@ func TestLoaderAppliesProviderReconcileLifecycle(t *testing.T) {
 	}
 }
 
-func TestLoaderAppliesRemoteCatalogConfiguration(t *testing.T) {
-	cfg, err := NewLoader().
-		WithPaths(PathsForConfigDir(t.TempDir())).
-		WithEnvironment(map[string]string{
-			"STARPORT_CATALOG_REMOTE_URL":                 "https://catalog.example/api/v1",
-			"STARPORT_CATALOG_REMOTE_API_KEY":             "catalog-secret",
-			"STARPORT_CATALOG_REMOTE_ACTIVATION_INTERVAL": "750ms",
-		}).
-		WithEnvFiles().
-		Load(t.Context())
-	if err != nil {
-		t.Fatalf("load remote catalog configuration: %v", err)
-	}
-	if cfg.Catalog.RemoteURL != "https://catalog.example/api/v1" {
-		t.Fatalf("remote catalog URL = %q", cfg.Catalog.RemoteURL)
-	}
-	if cfg.Catalog.RemoteAPIKey != "catalog-secret" {
-		t.Fatal("remote catalog API key was not loaded")
-	}
-	if cfg.Catalog.RemoteActivationInterval != 750*time.Millisecond {
-		t.Fatalf(
-			"remote catalog activation interval = %s, want 750ms",
-			cfg.Catalog.RemoteActivationInterval,
-		)
-	}
-}
-
 func TestLoaderErrorsDoNotExposeConfigurationValues(t *testing.T) {
 	dir := t.TempDir()
 	secret := "loader-secret-that-must-not-appear"
@@ -402,8 +376,6 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 		WithPaths(paths).
 		WithEnvironment(map[string]string{
 			"OPENAI_API_KEY":                           "process-secret",
-			"STARPORT_CATALOG_REFRESH_INTERVAL":        "1m",
-			"STARPORT_CATALOG_REFRESH_ON_START":        "true",
 			"STARPORT_SERVER_HOST":                     "0.0.0.0",
 			"STARPORT_SERVER_PORT":                     "18994",
 			"STARPORT_STORAGE_MODE":                    "valkey",
@@ -421,9 +393,6 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 18994 {
 		t.Fatalf("development server = %s:%d", cfg.Server.Host, cfg.Server.Port)
 	}
-	if cfg.Catalog.RefreshOnStart || cfg.Catalog.RefreshInterval != 0 {
-		t.Fatalf("development catalog refresh = %#v", cfg.Catalog)
-	}
 	storageConfig := cfg.Storage.RuntimeStorage()
 	if storageConfig.Type != "badger" || !storageConfig.Badger.InMemory || storageConfig.Badger.Path != "" {
 		t.Fatalf("development storage = %#v", storageConfig)
@@ -437,6 +406,62 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 	credential, found := cfg.providerEnvironment.Lookup("OPENAI_API_KEY")
 	if !found || credential != "process-secret" {
 		t.Fatalf("development provider environment = %q, %t", credential, found)
+	}
+	if cfg.Catalog.StateDirectory != "" || !cfg.Catalog.StateDirectoryIsScratch() {
+		t.Fatalf("development catalog state directory = %q, want scratch", cfg.Catalog.StateDirectory)
+	}
+}
+
+// TestDevelopmentLoaderNeedsNoHomeDirectory proves that a development gateway
+// loads with no home directory and no state root, because its catalog state
+// is session scratch and never resolves against the user state root. A
+// serving gateway in the same process refuses to load and names the settings.
+func TestDevelopmentLoaderNeedsNoHomeDirectory(t *testing.T) {
+	t.Setenv(stateHomeEnvironment, "")
+	setHomeDirectory(t, "")
+	loader := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{}).
+		WithEnvFiles()
+
+	cfg, err := loader.LoadDevelopment(t.Context())
+	if err != nil {
+		t.Fatalf("load development config without a home directory: %v", err)
+	}
+	if cfg.Catalog.StateDirectory != "" || !cfg.Catalog.StateDirectoryIsScratch() {
+		t.Fatalf("development catalog state directory = %q, want scratch", cfg.Catalog.StateDirectory)
+	}
+
+	_, err = loader.Load(t.Context())
+	if err == nil {
+		t.Fatal("a serving gateway loaded without a home directory or a state root")
+	}
+	// The operator-facing message carries no value, so the cause names the
+	// settings.
+	cause := errors.Unwrap(err)
+	if cause == nil || !strings.Contains(cause.Error(), stateDirectoryEnvironment) {
+		t.Fatalf("serving load cause %v does not name %s", cause, stateDirectoryEnvironment)
+	}
+}
+
+// TestDevelopmentLoaderKeepsAnOperatorStateDirectory proves that an operator
+// value survives the development contract, so a session that names a
+// directory retains its catalog state there.
+func TestDevelopmentLoaderKeepsAnOperatorStateDirectory(t *testing.T) {
+	stateDirectory := t.TempDir()
+	loader := NewLoader().
+		WithPaths(PathsForConfigDir(t.TempDir())).
+		WithEnvironment(map[string]string{
+			"STARPORT_CATALOG_STATE_DIR": stateDirectory,
+		}).
+		WithEnvFiles()
+
+	cfg, err := loader.LoadDevelopment(t.Context())
+	if err != nil {
+		t.Fatalf("load development config: %v", err)
+	}
+	if cfg.Catalog.StateDirectory != stateDirectory || cfg.Catalog.StateDirectoryIsScratch() {
+		t.Fatalf("development catalog state directory = %q, scratch %t", cfg.Catalog.StateDirectory, cfg.Catalog.StateDirectoryIsScratch())
 	}
 }
 

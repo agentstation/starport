@@ -255,12 +255,26 @@ func TestProductionConnectorCallsUseExecutionDeadline(t *testing.T) {
 			"connector %s must use its caller's execution deadline", path)
 	}
 
+	// An ordinary call keeps its elapsed bound, so the executor owns one
+	// deadline for the whole call.
 	executorSource, err := os.ReadFile(filepath.Join(root, "internal", "execution", "executor.go"))
 	require.NoError(t, err)
 	require.Contains(t, string(executorSource), "context.WithTimeout(")
+
+	// A stream is route-specific: the elapsed budget bounds route selection
+	// alone and releases at the first byte. A committed stream therefore
+	// carries a cancelable lifetime and no deadline, because a stream a
+	// caller reads must not be cut in half.
 	streamSource, err := os.ReadFile(filepath.Join(root, "internal", "execution", "stream.go"))
 	require.NoError(t, err)
-	require.Contains(t, string(streamSource), "context.WithTimeout(")
+	require.NotContains(t, string(streamSource), "context.WithTimeout(",
+		"a committed stream must carry no elapsed deadline")
+	require.NotContains(t, string(streamSource), "context.WithDeadline(",
+		"a committed stream must carry no elapsed deadline")
+	require.Contains(t, string(streamSource), "watchSelection(",
+		"the stream must bound route selection")
+	require.Contains(t, string(streamSource), "releaseSelection(",
+		"the stream must release the selection bound at the first byte")
 }
 
 func TestPublicPackageBoundary(t *testing.T) {

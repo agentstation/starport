@@ -5,9 +5,9 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import type { CatalogChanges } from "@/lib/api";
 
-import { ChangesPanel } from "./ChangesPanel";
+import { CatalogChangesSection } from "./CatalogChanges";
 
-// The panel's one read is the generation diff. Each test sets the diff
+// The section's one read is the generation diff. Each test sets the diff
 // the stub answers with.
 const gateway = vi.hoisted(() => ({
   diff: {} as Record<string, unknown>,
@@ -29,7 +29,7 @@ function mount() {
   });
   render(
     <QueryClientProvider client={client}>
-      <ChangesPanel onClose={() => {}} />
+      <CatalogChangesSection />
     </QueryClientProvider>,
   );
 }

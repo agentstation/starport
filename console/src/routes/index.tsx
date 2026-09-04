@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { CatalogCard } from "@/components/overview/CatalogCard";
 import { EndpointsCard } from "@/components/overview/EndpointsCard";
 import { ProvidersCard } from "@/components/overview/ProvidersCard";
 import { QuickstartCard } from "@/components/overview/QuickstartCard";
@@ -18,7 +17,9 @@ export const Route = createFileRoute("/")({
 });
 
 // Overview is mission control for the local gateway: identity, endpoints,
-// quickstart, live metrics, provider posture, and the Starmap snapshot.
+// quickstart, live metrics, and provider posture. The catalog is not a card
+// here: the shell carries one catalog chip on every route, so a reader who
+// wants the snapshot opens it from where the reader already is.
 function OverviewPage() {
   return (
     <div className="flex flex-col gap-4">
@@ -28,10 +29,7 @@ function OverviewPage() {
         <QuickstartCard />
       </div>
       <StatsRow />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ProvidersCard />
-        <CatalogCard />
-      </div>
+      <ProvidersCard />
     </div>
   );
 }

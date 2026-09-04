@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/agentstation/starmap"
 	"github.com/agentstation/starmap/pkg/catalogs"
 	"github.com/rs/zerolog/log"
 
@@ -94,9 +96,9 @@ type App struct {
 	httpServer          httpRuntime
 	registry            *registry.Registry
 	catalogRuntime      catalogRuntime
-	catalogUpdates      catalogUpdateRuntime
 	catalog             *runtimecatalog.ControlPlane
 	catalogFreshness    *runtimecatalog.FreshnessService
+	catalogOperations   *runtimecatalog.Operations
 	store               storage.KVStore
 	blobStore           blob.Store
 	files               *files.Service
@@ -336,7 +338,8 @@ func (b *runtimeBuilder) openConcepts() error {
 	catalogRuntime, err := b.factories.openCatalog(
 		context.Background(),
 		b.application.store,
-		b.config.Catalog,
+		catalogSettings(b.config),
+		runtimecatalog.DeploymentLookup(os.LookupEnv),
 	)
 	if err != nil {
 		return fmt.Errorf("open catalog: %w", err)
@@ -351,19 +354,17 @@ func (b *runtimeBuilder) openConcepts() error {
 		return fmt.Errorf("open catalog generation store: %w", err)
 	}
 	b.application.catalogFreshness = runtimecatalog.NewFreshnessService(b.application.catalog, generations)
-	if updates, ok := catalogRuntime.(catalogUpdateRuntime); ok {
-		b.application.catalogUpdates = updates
-		b.application.own("remote catalog", updates.Close)
-	}
-	if b.config.Catalog.RefreshOnStart {
-		state, err := b.application.syncCatalog(context.Background())
-		if err == nil {
-			err = b.application.catalog.Activate(state)
-		}
-		if err != nil {
-			log.Warn().Err(err).Msg("startup Starmap catalog refresh failed; retaining current generation")
-		}
-	}
+	// One deployment setting bounds the whole run: the operation registry and
+	// the refresh it carries read the same cap, so the registry never cancels
+	// a transfer the transfer policy still allows.
+	b.application.catalogOperations = runtimecatalog.NewOperations(
+		runtimecatalog.WithOperationTimeout(b.config.Catalog.RefreshTimeout),
+	)
+	b.application.own("catalog operations", func(context.Context) error {
+		b.application.catalogOperations.Close()
+		return nil
+	})
+	b.application.own("catalog runtime", catalogRuntime.Close)
 	b.application.providerStates = providerstate.New()
 	incidentTransitions, err := providerstate.OpenTransitions(b.sqlDB)
 	if err != nil {
@@ -1168,32 +1169,28 @@ func (a *App) Run(ctx context.Context) error {
 			incidentPoller.Run(runCtx)
 		}()
 	}
-	if a.catalogUpdates != nil {
-		if err := a.catalogUpdates.Start(runCtx); err != nil {
+	if a.catalogRuntime != nil {
+		if err := a.catalogRuntime.Start(runCtx); err != nil {
 			return errors.Join(
-				fmt.Errorf("start remote catalog: %w", err),
+				fmt.Errorf("start catalog runtime: %w", err),
 				a.closeWithTimeout(),
 			)
 		}
-		if err := a.activateRuntimeState(
-			runCtx,
-			a.catalogUpdates.CurrentCandidate(),
-		); err != nil {
+		candidate, err := a.catalogRuntime.CurrentCandidate(runCtx)
+		switch {
+		case err != nil:
 			log.Warn().Err(err).Msg(
-				"remote catalog candidate failed; serving the current complete runtime",
+				"catalog runtime reports no candidate yet; waiting for the first one",
 			)
+		default:
+			// activateRuntimeState owns the sanitized log line, so the
+			// startup path only keeps serving what it already has.
+			_ = a.activateRuntimeState(runCtx, candidate)
 		}
 		a.runtimeWG.Add(1)
 		go func() {
 			defer a.runtimeWG.Done()
-			a.remoteCatalogLoop(runCtx)
-		}()
-	}
-	if a.catalogUpdates == nil && a.config.Catalog.RefreshInterval > 0 {
-		a.runtimeWG.Add(1)
-		go func() {
-			defer a.runtimeWG.Done()
-			a.refreshCatalogLoop(runCtx)
+			a.catalogCandidateLoop(runCtx)
 		}()
 	}
 
@@ -1252,32 +1249,16 @@ func defaultRuntimeFactories() runtimeFactories {
 		openStorage: openStorage,
 		openSQL:     openSQL,
 		openBlob:    openBlob,
+		// One source, one runtime. The composition root names no
+		// local-or-remote choice: the operator selects a source kind, and
+		// every kind reaches the same connected runtime.
 		openCatalog: func(
 			ctx context.Context,
 			store storage.KVStore,
-			catalogConfig config.CatalogConfig,
+			settings runtimecatalog.Settings,
+			lookup runtimecatalog.DeploymentLookup,
 		) (catalogRuntime, error) {
-			if strings.TrimSpace(catalogConfig.RemoteURL) != "" {
-				runtime, err := runtimecatalog.OpenRemoteRuntime(
-					ctx,
-					store,
-					runtimecatalog.RemoteConfig{
-						BaseURL:            catalogConfig.RemoteURL,
-						APIKey:             catalogConfig.RemoteAPIKey,
-						ActivationInterval: catalogConfig.RemoteActivationInterval,
-						FetchTimeout:       catalogConfig.RefreshTimeout,
-					},
-				)
-				if err != nil {
-					return nil, err
-				}
-				return runtime, nil
-			}
-			runtime, err := runtimecatalog.OpenRuntime(
-				ctx,
-				store,
-				catalogConfig.WorkspacePath,
-			)
+			runtime, err := runtimecatalog.OpenRuntime(ctx, store, settings, lookup)
 			if err != nil {
 				return nil, err
 			}
@@ -1309,24 +1290,73 @@ func defaultRuntimeFactories() runtimeFactories {
 	}
 }
 
-func (a *App) syncCatalog(ctx context.Context) (starmap.CatalogState, error) {
+// catalogSettings translates the deployment catalog settings into the plain
+// settings the catalog package owns. The configuration package holds no
+// Starmap option, and this is the only place composition restates the map.
+//
+// The listen address comes from the server settings, because the instance
+// identity has to separate two gateway processes on one host.
+func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
+	cfg := deployment.Catalog
+	return runtimecatalog.Settings{
+		ListenAddress: net.JoinHostPort(
+			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
+		),
+		StateDirectory:       cfg.StateDirectory,
+		Source:               cfg.Source,
+		SourceURL:            cfg.SourceURL,
+		SourceAPIKey:         cfg.SourceAPIKey,
+		SourceRepository:     cfg.SourceRepository,
+		SourceChannel:        cfg.SourceChannel,
+		SourceSignerWorkflow: cfg.SourceSignerWorkflow,
+		SourceToken:          cfg.SourceToken,
+		SourcePollInterval:   cfg.SourcePollInterval,
+		SourceStartupPolicy:  cfg.SourceStartupPolicy,
+		SourceMaxAge:         cfg.SourceMaxAge,
+		SourceMaxHops:        cfg.SourceMaxHops,
+		AcquisitionEnabled:   cfg.AcquisitionEnabled,
+		AcquisitionInterval:  cfg.AcquisitionInterval,
+		WorkspacePath:        cfg.WorkspacePath,
+		StartupSpread:        cfg.StartupSpread,
+		TransferIdleTimeout:  cfg.TransferIdleTimeout,
+		TransferMaxDuration:  cfg.TransferMaxDuration,
+		RefreshTimeout:       cfg.RefreshTimeout,
+	}
+}
+
+func (a *App) syncCatalog(ctx context.Context) (runtimecatalog.Candidate, error) {
 	if a == nil || a.catalogRuntime == nil {
-		return starmap.CatalogState{}, ErrCatalogRequired
+		return runtimecatalog.Candidate{}, ErrCatalogRequired
 	}
 	return a.catalogRuntime.RefreshCandidate(ctx, a.config.Catalog.RefreshTimeout)
 }
 
-func (a *App) refreshRuntime(ctx context.Context) error {
-	state, err := a.syncCatalog(ctx)
-	if err != nil {
-		return err
+// activateRuntimeState validates one candidate and advances the routable head.
+// A candidate that fails leaves the accepted head where it is, and the refusal
+// is recorded with its safe cause so the admin surface separates a refused
+// candidate from the generation that still routes.
+func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog.Candidate) error {
+	err := a.applyCandidate(ctx, candidate)
+	if err == nil {
+		return nil
 	}
-	return a.activateRuntimeState(ctx, state)
+	if a.catalogRuntime != nil {
+		a.catalogRuntime.Reject(candidate, err)
+	}
+	// The log carries the closed-set reason and the generation, never the
+	// failure text, because a provider or source failure can hold an address.
+	log.Warn().
+		Str("reason", string(runtimecatalog.ClassifyOperationFailure(err))).
+		Str("candidate_generation_id", candidate.State.GenerationID).
+		Msg("catalog candidate refused; the accepted head still routes")
+	return err
 }
 
-func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogState) error {
+// applyCandidate performs the validation and the acceptance of one candidate.
+func (a *App) applyCandidate(ctx context.Context, candidate runtimecatalog.Candidate) error {
 	a.runtimeMu.Lock()
 	defer a.runtimeMu.Unlock()
+	state := candidate.State
 	if state.Catalog == nil || strings.TrimSpace(state.GenerationID) == "" {
 		return ErrCatalogRequired
 	}
@@ -1354,28 +1384,31 @@ func (a *App) activateRuntimeState(ctx context.Context, state starmap.CatalogSta
 	if err != nil {
 		return err
 	}
-	candidate, err := a.registry.Prepare(registrations)
+	prepared, err := a.registry.Prepare(registrations)
 	if err != nil {
 		return err
 	}
-	availability := candidate.Availability()
+	availability := prepared.Availability()
 	if err := a.catalog.ValidateRuntime(state, availability); err != nil {
-		return errors.Join(err, candidate.Close())
+		return errors.Join(
+			fmt.Errorf("%w: %w", runtimecatalog.ErrRouteValidationFailed, err),
+			prepared.Close(),
+		)
 	}
-	if a.catalogUpdates != nil {
-		if err := a.catalogUpdates.Accept(ctx, state); err != nil {
+	if a.catalogRuntime != nil {
+		if err := a.catalogRuntime.Accept(ctx, candidate); err != nil {
 			return errors.Join(
-				fmt.Errorf("record accepted remote catalog generation: %w", err),
-				candidate.Close(),
+				fmt.Errorf("record accepted catalog generation: %w", err),
+				prepared.Close(),
 			)
 		}
 	}
 	snapshot, err := a.catalog.ReplaceRuntime(state, availability)
 	if err != nil {
-		return errors.Join(err, candidate.Close())
+		return errors.Join(err, prepared.Close())
 	}
-	if err := a.registry.Publish(candidate, snapshot); err != nil {
-		return errors.Join(err, candidate.Close())
+	if err := a.registry.Publish(prepared, snapshot); err != nil {
+		return errors.Join(err, prepared.Close())
 	}
 	if err := a.publishProviderCatalogState(); err != nil {
 		return err
@@ -1471,35 +1504,19 @@ func (a *App) sweepJobAssets(ctx context.Context) {
 		Msg("job sweep reclaimed storage and closed finished work")
 }
 
-func (a *App) refreshCatalogLoop(ctx context.Context) {
-	ticker := time.NewTicker(a.config.Catalog.RefreshInterval)
-	defer ticker.Stop()
+// catalogCandidateLoop validates and accepts every candidate the connected
+// runtime publishes. The runtime owns the source and acquisition schedules, so
+// composition keeps no interval of its own.
+func (a *App) catalogCandidateLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			if err := a.refreshRuntime(ctx); err != nil {
-				log.Warn().Err(err).Msg("provider runtime refresh failed; retaining current generation")
-			}
-		}
-	}
-}
-
-func (a *App) remoteCatalogLoop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case state, ok := <-a.catalogUpdates.Updates():
+		case candidate, ok := <-a.catalogRuntime.Updates():
 			if !ok {
 				return
 			}
-			if err := a.activateRuntimeState(ctx, state); err != nil {
-				log.Warn().Err(err).Msg(
-					"remote catalog candidate failed; serving the current complete runtime",
-				)
-			}
+			_ = a.activateRuntimeState(ctx, candidate)
 		}
 	}
 }

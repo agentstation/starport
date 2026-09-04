@@ -30,8 +30,9 @@ export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev
 ```
 
-The command binds to `127.0.0.1`, uses in-memory storage, and creates no
-configuration file. It prints one temporary gateway API key and one console
+The command binds to `127.0.0.1`, uses in-memory storage, creates no
+configuration file, and keeps its catalog state in a scratch directory that it
+removes on exit. It prints one temporary gateway API key and one console
 launch link, and opens the console in a browser:
 
 ```text
@@ -695,62 +696,206 @@ Every usage record names the source that paid, as `credential_source`. That is
 how an operator sees an account drawing on the deployment's credential rather
 than its own.
 
-Set `STARPORT_CATALOG_REFRESH_ON_START=true` to run Starmap acquisition before
-runtime activation. Set `STARPORT_CATALOG_REFRESH_INTERVAL` for later catalog
-refreshes. These values update catalog facts. They do not control inference
-credential reconciliation.
-Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed account facts, including
+`STARPORT_CATALOG_ACQUISITION_ENABLED` and
+`STARPORT_CATALOG_ACQUISITION_INTERVAL` control Starmap provider observation.
+They update catalog facts. They do not control inference credential
+reconciliation.
+Use `STARPORT_CATALOG_WORKSPACE_PATH` for reviewed account facts, such as
 Azure deployment names and local Ollama model mappings. Those facts enter a
 durable Starmap generation before Starport makes the adapter routable.
 
-## Remote Starmap Catalogs
+## Catalog Configuration
 
-Set one versioned Starmap API base URL to receive verified catalog generations:
+Starport reads one connected Starmap runtime. A deployment names one source
+kind. The runtime holds a candidate, Starport validates that candidate against
+its own routes, and the accepted head advances under a lease epoch. The
+[deployment topologies guide](DEPLOYMENT-TOPOLOGIES.md) maps the five
+topologies onto the settings below.
 
-```bash
-export STARPORT_CATALOG_REMOTE_URL="https://catalog.example.com/api/v1"
-export STARPORT_CATALOG_REMOTE_API_KEY="replace-if-the-server-requires-one"
-export STARPORT_CATALOG_REMOTE_ACTIVATION_INTERVAL="250ms"
+The five source kinds are `public`, `github`, `starmap`, `file`, and
+`embedded`. A private source never falls back to the public channel. The
+selected kind reaches Starmap exactly as the operator named it, and startup
+fails rather than reads another source.
+
+Catalog-acquisition credentials stay separate from inference credentials.
+`STARPORT_CATALOG_SOURCE_API_KEY` speaks the Starmap protocol, and
+`STARPORT_CATALOG_SOURCE_TOKEN` reads a GitHub release. Neither one pays a
+provider. Configuration inspection redacts both values and the source URL.
+
+### The catalog settings
+
+| Name | Default | Valid values | Interactions |
+| --- | --- | --- | --- |
+| `STARPORT_CATALOG_SOURCE` | `public` | `public`, `github`, `starmap`, `file`, `embedded` | `starmap` and `file` each need a source URL. Another value fails startup. |
+| `STARPORT_CATALOG_SOURCE_URL` | empty | Safe source endpoint, or the file identity for the `file` kind | Required for `starmap` and for `file`. A `github` source treats it as an optional API base override, and the `public` and `embedded` kinds ignore it. A non-loopback endpoint uses HTTPS with a valid certificate chain, and it holds the versioned path, normally `/api/v1`. |
+| `STARPORT_CATALOG_SOURCE_API_KEY` | empty | Starmap protocol credential | Starport sends it as `X-API-Key` to a `starmap` source. It is not a provider inference credential. |
+| `STARPORT_CATALOG_SOURCE_REPOSITORY` | `agentstation/starmap` | GitHub repository | Read by the `public` and `github` kinds. |
+| `STARPORT_CATALOG_SOURCE_CHANNEL` | `catalog-latest` | Attested channel name | Read by the `public` and `github` kinds. |
+| `STARPORT_CATALOG_SOURCE_SIGNER_WORKFLOW` | empty | Expected GitHub workflow identity | An empty value selects the publisher preset. |
+| `STARPORT_CATALOG_SOURCE_TOKEN` | empty | GitHub API token | Raises the hourly ceiling from 60 for each egress address to 5,000 for each token. It also reads a private repository. |
+| `STARPORT_CATALOG_SOURCE_POLL_INTERVAL` | `1h` | Nonnegative duration | Each polling hop adds one interval to the freshness age. A push hop adds none. |
+| `STARPORT_CATALOG_SOURCE_STARTUP_POLICY` | `prefer_source` | `prefer_source`, `require_source` | `prefer_source` starts on the embedded baseline and adopts the source at the first successful read. `require_source` reads the source once at open and fails startup when that read fails. |
+| `STARPORT_CATALOG_SOURCE_MAX_AGE` | `6h` | Nonnegative duration | The served-catalog age at which this instance counts its catalog as stale. A negative value fails startup. The runtime grades the channel `warn` above this age and `critical` above five thirds of it. The default gives `6h` warn and `10h` critical. |
+| `STARPORT_CATALOG_SOURCE_MAX_HOPS` | `8` | Positive integer | Bounds the publication chain of a `starmap` source. Zero fails startup. |
+| `STARPORT_CATALOG_ACQUISITION_ENABLED` | `true` | `true`, `false` | A false value stops every automatic observation, and only an admin refresh then moves the catalog. |
+| `STARPORT_CATALOG_ACQUISITION_INTERVAL` | `4h` | Nonnegative duration | `0s` means one observation at startup and no repeat. It has no effect while acquisition is off. |
+| `STARPORT_CATALOG_WORKSPACE_PATH` | empty | Directory path | Holds the catalog files an operator supplies. It is never the state directory. |
+| `STARPORT_CATALOG_STATE_DIR` | empty | Directory path | Names the process-local runtime state root. An empty value resolves to the user state directory. Startup refuses a value equal to the workspace path. |
+| `STARPORT_CATALOG_STARTUP_SPREAD` | `15m` | Nonnegative duration | Spreads the first source read of a fleet, so many instances that start together do not ask at one moment. |
+| `STARPORT_CATALOG_TRANSFER_IDLE_TIMEOUT` | `2m` | Positive duration | Ends a transfer that stops making progress. It does not bound a stream subscription. |
+| `STARPORT_CATALOG_TRANSFER_MAX_DURATION` | `60m` | Positive duration | Bounds one complete body transfer. Zero fails startup, because a transfer with no bound never ends. |
+| `STARPORT_CATALOG_REFRESH_TIMEOUT` | `0s` | Nonnegative duration | An added cap on one refresh run. `0s` adds no cap, and the two transfer bounds alone end a run that does not progress. |
+
+### The removed catalog settings
+
+The local-or-remote catalog choice is gone. One connected runtime reads one
+source, so the names that selected a remote publication and a separate local
+refresh schedule carry no meaning. A removed name has no runtime alias.
+Startup fails and names the replacement, because a silent skip would leave an
+operator believing a setting still applies.
+
+| Removed name | Replacement | Reason |
+| --- | --- | --- |
+| `STARPORT_CATALOG_REFRESH_ON_START` | `STARPORT_CATALOG_ACQUISITION_ENABLED` | The connected runtime always reads its source at startup. |
+| `STARPORT_CATALOG_REFRESH_INTERVAL` | `STARPORT_CATALOG_ACQUISITION_INTERVAL` | Provider observation owns its own schedule. |
+| `STARPORT_CATALOG_REMOTE_URL` | `STARPORT_CATALOG_SOURCE_URL` | One source setting replaces the local and remote choice. |
+| `STARPORT_CATALOG_REMOTE_API_KEY` | `STARPORT_CATALOG_SOURCE_API_KEY` | One source setting replaces the local and remote choice. |
+| `STARPORT_CATALOG_REMOTE_ACTIVATION_INTERVAL` | `STARPORT_CATALOG_SOURCE_POLL_INTERVAL` | The source reports a new publication instead of a poll loop. |
+
+### The workspace and the state directory
+
+The workspace holds catalog files an operator writes and reviews. Starmap
+reads that directory as a local source. The layout is:
+
+```text
+<workspace>/
+  providers.yaml
+  providers/<provider-id>/models/<model>.yaml
+  providers/<provider-id>/logo.svg
+  authors/<author>/models/<slug>.yaml
 ```
 
-Starport sends the optional API key as `X-API-Key`. Configuration inspection
-redacts the key and the remote URL. A non-loopback publisher must use HTTPS
-with a valid certificate chain. Starmap accepts plain HTTP only for a loopback
-publisher. The URL identifies the publisher origin and must include the
-server's versioned path, normally `/api/v1`.
+`providers.yaml` names each provider. Each provider model file carries the
+exact provider model ID. Each author model file carries the canonical model
+identity, and a provider model file links to it with `model: author/slug`.
 
-Remote mode is mutually exclusive with
-`STARPORT_CATALOG_WORKSPACE_PATH`,
-`STARPORT_CATALOG_REFRESH_ON_START=true`, and a nonzero
-`STARPORT_CATALOG_REFRESH_INTERVAL`. The remote API key is invalid without the
-remote URL. `STARPORT_CATALOG_REFRESH_TIMEOUT` bounds manifest and payload
-requests. It does not impose a timeout on the SSE connection. Starmap heartbeat
-and liveness rules own that connection.
+The state directory is a different idea. It holds the state the connected
+runtime retains: the layer store, the instance identity seed, and the source
+discovery record. Two processes that share a seed derive one instance identity,
+and the runtime lease then fences nothing. A workspace can sit on a volume a
+fleet shares, so the state directory is never the workspace path and never a
+shared volume. Keep it on local disk, one directory for each process.
 
-Starmap verifies the manifest, schema range, immutable payload identity,
-content type, size, and SHA-256 checksum before it publishes one atomic
-candidate. Starport then validates the complete routable catalog, connector,
-and credential projection before it accepts that generation. A failed
-candidate leaves the current routes, connectors, and response-cache identity
-unchanged.
+```bash
+export STARPORT_CATALOG_WORKSPACE_PATH=/srv/starport/catalog
+export STARPORT_CATALOG_STATE_DIR=/var/lib/starport/catalog-state
+```
 
-Starport stores two current pointers over shared immutable generation records:
+An empty `STARPORT_CATALOG_STATE_DIR` resolves to `starport/catalog` under the
+user state root. That root is `XDG_STATE_HOME`, or `~/.local/state` when the
+variable is empty. A process with no home directory and no state root refuses
+to start, and the error names both settings. A development gateway keeps its
+default catalog state in the session scratch directory and removes it on exit.
+It leaves nothing under the user state root.
 
-- The remote head records the latest Starmap-verified generation.
-- The accepted head records the latest generation that passed the complete
-  Starport runtime transaction.
+### Generation procedures
 
-This separation prevents a Starmap-valid but Starport-incompatible generation
-from replacing restart-safe routing state. On restart, the accepted generation
-is the pinned bootstrap. A network failure keeps that last accepted state while
-the subscriber uses bounded reconnect and catch-up. HTTP 401 and 403 stop the
-active subscriber lifecycle and require corrected credentials or access before
-a new process starts it again.
+Starport keeps two pointers over shared immutable generation records. The
+candidate is the newest generation the runtime holds. The accepted head is the
+newest generation that passed the complete Starport route, connector, and
+credential transaction. A refused candidate leaves the accepted head in place,
+so the routes, the connectors, and the response-cache identity do not change.
 
-The activation interval samples Starmap's in-memory atomic state. It causes no
-catalog network request and is not on the inference path. `starport doctor`
-and `starport doctor --probe` inspect the durable accepted generation without a
-remote fetch.
+Read the accepted head and the validation state:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/catalog/status
+```
+
+`provenance.effective` names the accepted head this gateway routes on.
+`route_validation.state` reads `none`, `pending`, `accepted`, or `refused`.
+`route_validation.candidate` names the newest candidate, and
+`route_validation.rejected` names the refusal.
+
+Start a refresh. The route answers `202` with the run that carries the work,
+and a second caller joins the run in flight:
+
+```bash
+curl --fail-with-body -X POST \
+  -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/catalog/refresh
+```
+
+Read the run through the `Location` header, and cancel a run that no longer
+serves the deployment:
+
+```bash
+curl --fail-with-body \
+  -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/catalog/refreshes/<run_id>
+
+curl --fail-with-body -X DELETE \
+  -H "Authorization: Bearer $STARPORT_ADMIN_KEY" \
+  http://127.0.0.1:8080/api/v1/admin/catalog/refreshes/<run_id>
+```
+
+To pin a generation, set `STARPORT_CATALOG_SOURCE=embedded` and restart. The
+gateway then adopts no new publication. To roll back to a known generation,
+set `STARPORT_CATALOG_SOURCE=file`. Point `STARPORT_CATALOG_SOURCE_URL` at the
+saved payload, and restart. The accepted head is the restart bootstrap in
+every case, so a gateway that cannot reach its source still routes. Both
+`starport doctor` and `starport doctor --probe` read the durable accepted
+generation with no source request.
+
+### The catalog routes
+
+| Route | Scope | Meaning |
+| --- | --- | --- |
+| `GET /api/v1/catalog` | `models:read` | The allowlisted reader summary. |
+| `GET /api/v1/catalog/changes` | `models:read` | What the last accepted generation changed. |
+| `GET /api/v1/admin/catalog/status` | `admin` | The complete operator view. |
+| `POST /api/v1/admin/catalog/refresh` | `admin` | Start one refresh run. |
+| `GET /api/v1/admin/catalog/refreshes/{run_id}` | `admin` | Read one run. |
+| `DELETE /api/v1/admin/catalog/refreshes/{run_id}` | `admin` | Cancel one run. |
+
+The safe summary is an allowlist and not a redaction. It carries the generation
+identity, the age, the usable verdict, and the freshness grade. It also carries
+the source kind, the fallback verdict, the provider and model counts, and the
+next update time.
+It carries no source address, no source identity, no publication chain, no
+lease, no run identifier, and no failure reason. Those values reach the admin
+status route alone. A gateway with no catalog answers the safe route with a
+sanitized `503`.
+
+### Freshness alert rules
+
+The server evaluates freshness and serves the verdict. An alert reads that
+verdict. It does not compute an age from a timestamp, because the server owns
+the grade. The closed grade set is `current`, `warn`, `critical`, and
+`unknown`. Freshness measures the propagated channel time through every hop,
+and local acquisition never resets it.
+
+| Alert | Condition | Severity | Meaning |
+| --- | --- | --- | --- |
+| Catalog stale | `freshness.catalog` is `warn` for 30 minutes | warning | The source is late or a hop is slow. |
+| Catalog critical | `freshness.catalog` is `critical` | page | The served facts are old enough to misprice a request. |
+| Channel stale | `freshness.channel` is `warn` or worse for 30 minutes | warning | The upstream publication chain is late. |
+| Source check stale | `freshness.source_check` is `critical` | warning | This instance did not reach its source. |
+| Fallback active | `runtime.fallback` is true 15 minutes after startup | warning | The gateway serves the embedded baseline. |
+| Candidate refused | `route_validation.state` is `refused` | warning | A candidate failed Starport route validation. |
+| Freshness unknown | `freshness.catalog` is `unknown` for 30 minutes | warning | The runtime reported no grade. |
+
+Poll `GET /api/v1/admin/catalog/status` with an admin gateway key and read
+`freshness.catalog`, `freshness.channel`, `freshness.source_check`,
+`runtime.fallback`, and `route_validation.state`. The gateway serves no
+catalog metric on the Prometheus scrape, so a JSON probe owns these rules.
+
+Pair each rule with the operator action. A `critical` grade with
+`runtime.fallback` false means the accepted head still routes and the source
+is late. A `critical` grade with `runtime.fallback` true means the gateway
+serves the embedded baseline, and the deployment needs its source back.
 
 ## Storage Modes
 

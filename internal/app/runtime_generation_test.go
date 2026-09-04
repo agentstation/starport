@@ -27,7 +27,9 @@ func TestAppRefreshPublishesCompleteRuntimeGeneration(t *testing.T) {
 	require.NoError(t, err)
 	oldGenerationID := oldLease.Snapshot().GenerationID()
 
-	require.NoError(t, fixture.application.refreshRuntime(t.Context()))
+	result, err := fixture.application.runCatalogUpdate(t.Context())
+	require.NoError(t, err)
+	require.True(t, result.Changed)
 	newLease, err := fixture.registry.AcquireRuntime()
 	require.NoError(t, err)
 	defer newLease.Release()
@@ -85,7 +87,7 @@ func TestAppRefreshFailureRetainsPriorRuntimeGeneration(t *testing.T) {
 		return nil, errors.New("connector construction failed")
 	}
 
-	err := fixture.application.refreshRuntime(t.Context())
+	_, err := fixture.application.runCatalogUpdate(t.Context())
 	require.ErrorContains(t, err, "connector construction failed")
 	require.Same(t, before, fixture.registry.Snapshot())
 	current, err := fixture.registry.Get("openai")
@@ -166,7 +168,11 @@ func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
 	}
 }
 
+// runtimeSyncFixture serves one fixed candidate. It embeds the recording
+// runtime, so the composition reads the complete catalog runtime contract and
+// this fixture states only what the refresh test needs.
 type runtimeSyncFixture struct {
+	recordingCatalogRuntime
 	plane *runtimecatalog.ControlPlane
 	state starmap.CatalogState
 }
@@ -176,8 +182,14 @@ func (r *runtimeSyncFixture) ControlPlane() *runtimecatalog.ControlPlane { retur
 func (r *runtimeSyncFixture) RefreshCandidate(
 	context.Context,
 	time.Duration,
-) (starmap.CatalogState, error) {
-	return r.state, nil
+) (runtimecatalog.Candidate, error) {
+	return runtimecatalog.Candidate{State: r.state}, nil
+}
+
+func (r *runtimeSyncFixture) CurrentCandidate(
+	context.Context,
+) (runtimecatalog.Candidate, error) {
+	return runtimecatalog.Candidate{State: r.state}, nil
 }
 
 type runtimeRefreshConnector struct {

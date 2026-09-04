@@ -5,7 +5,9 @@ import { IconButton } from "@/components/ui/IconButton";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 // SmallScreenNav is the top bar the shell renders below the breakpoint: a
-// trigger for the navigation sheet, the brand, and a search button. The
+// trigger for the navigation sheet, the brand, a status control, and a search
+// button. The status control is where the catalog chip lands on a small
+// screen, because the screen has no room for a header slot of its own. The
 // shell loads it lazily, so a desktop first paint never downloads the
 // sheet machinery. The sheet body and the brand arrive as elements, which
 // keeps this module free of an import back into the shell.
@@ -15,12 +17,14 @@ export default function SmallScreenNav({
   brand,
   body,
   onSearch,
+  status,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   brand: ReactNode;
   body: ReactNode;
   onSearch: () => void;
+  status?: ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-1.5 border-b border-border-1 bg-bg-panel px-1">
@@ -40,10 +44,15 @@ export default function SmallScreenNav({
         </SheetContent>
       </Sheet>
       {brand}
+      {status && (
+        <div data-testid="top-bar-status" className="ml-auto flex items-center">
+          {status}
+        </div>
+      )}
       <IconButton
         label="Search"
         onClick={onSearch}
-        className="ml-auto size-11 rounded-sm text-text-2 hover:bg-bg-hover hover:text-text-1"
+        className={`size-11 rounded-sm text-text-2 hover:bg-bg-hover hover:text-text-1 ${status ? "" : "ml-auto"}`}
       >
         <SearchIcon aria-hidden="true" className="size-4" />
       </IconButton>

@@ -3,7 +3,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { FreshnessBar } from "@/components/models/FreshnessBar";
 import { ModelsTable } from "@/components/models/ModelsTable";
 import { FacetFilter } from "@/components/ui/FacetFilter";
 import { accessMessage, ApiError } from "@/lib/api";
@@ -197,7 +196,6 @@ function ModelsPage() {
   return (
     <div className="flex flex-col gap-4">
       <Header />
-      <FreshnessBar />
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-4" />

@@ -4,6 +4,7 @@ import { MessageSquare, SplitSquareHorizontal } from "lucide-react";
 import type {
   Model,
   ModelOffering,
+  ProviderOfferingStatus,
   ProviderRuntimeStatus,
 } from "@/lib/api";
 import {
@@ -13,6 +14,7 @@ import {
   formatPricePerM,
   formatUnitPrice,
   providerLabel,
+  shortGenerationID,
 } from "@/lib/format";
 import { operationsOf } from "@/lib/modelFilter";
 
@@ -159,6 +161,44 @@ export function offeringCircuit(
   )?.state;
 }
 
+// offeringRuntime finds the live projection of one offering. Circuit state,
+// routing state, and the reason each come from it, and each stays a value of
+// its own: a router that refuses a route says nothing about the circuit, and
+// an open circuit says nothing about the credential that pays.
+export function offeringRuntime(
+  providers: ProviderRuntimeStatus[] | undefined,
+  offering: ModelOffering,
+): ProviderOfferingStatus | undefined {
+  return providers
+    ?.find((candidate) => candidate.provider_id === offering.provider)
+    ?.offerings?.find(
+      (candidate) => candidate.provider_model_id === offering.provider_model_id,
+    );
+}
+
+// offeringCredential reads the operator credential that pays this provider.
+// Availability is credential-specific: the same offering is usable for a
+// deployment that holds a working credential and unusable for one that does
+// not, and no catalog fact states that.
+export function offeringCredential(
+  providers: ProviderRuntimeStatus[] | undefined,
+  offering: ModelOffering,
+): { state?: string; usable?: boolean } | undefined {
+  return providers?.find((candidate) => candidate.provider_id === offering.provider)
+    ?.operator_credential;
+}
+
+// credentialText says what the credential means for this offering in one
+// word. A credential the gateway can use reads usable; one it cannot reads
+// the state the gateway recorded; a provider with none reads none.
+export function credentialText(
+  credential: { state?: string; usable?: boolean } | undefined,
+): string {
+  if (!credential) return "none";
+  if (credential.usable) return "usable";
+  return credential.state ?? "unusable";
+}
+
 // offeringAvailability summarizes a model's live routability: how many
 // of its offerings sit on circuits the router still admits attempts
 // against (healthy or half-open).
@@ -207,9 +247,14 @@ function unitPrice(offering: ModelOffering): string {
 export function OfferingTable({
   model,
   providers,
+  generation,
 }: {
   model: Model;
   providers: ProviderRuntimeStatus[] | undefined;
+  // generation is the catalog generation the offering facts came from. It is
+  // the provenance of every row: a reader who compares two deployments needs
+  // to know which catalog each one read.
+  generation?: string;
 }) {
   const offerings = model.offerings ?? [];
   if (offerings.length === 0) {
@@ -232,13 +277,18 @@ export function OfferingTable({
             <th scope="col" className="px-4 py-2.5 text-right">Cache read / M</th>
             <th scope="col" className="px-4 py-2.5 text-right">Unit price</th>
             <th scope="col" className="px-4 py-2.5 text-right">Max docs</th>
-            <th scope="col" className="px-4 py-2.5">Circuit</th>
             <th scope="col" className="px-4 py-2.5">Lifecycle</th>
+            <th scope="col" className="px-4 py-2.5">Availability</th>
+            <th scope="col" className="px-4 py-2.5">Credential</th>
+            <th scope="col" className="px-4 py-2.5">Circuit</th>
+            <th scope="col" className="px-4 py-2.5">Routing</th>
           </tr>
         </thead>
         <tbody>
           {offerings.map((offering) => {
             const circuit = offeringCircuit(providers, offering);
+            const routing = offeringRuntime(providers, offering)?.routing?.state;
+            const credential = offeringCredential(providers, offering);
             return (
               <tr
                 key={`${offering.provider}/${offering.provider_model_id}`}
@@ -279,29 +329,46 @@ export function OfferingTable({
                 <td className="px-4 py-2.5 text-right tabular-nums text-text-2">
                   {offering.max_documents ? formatCount(offering.max_documents) : "—"}
                 </td>
-                <td className="px-4 py-2.5">
-                  {circuit ? (
-                    <span
-                      className={`inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
-                        CIRCUIT_TONES[circuit] ?? "bg-bg-raised text-text-3"
-                      }`}
-                    >
-                      {circuit.replaceAll("_", " ")}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-text-3">
-                      {offering.availability ?? "—"}
-                    </span>
-                  )}
+                <td className="px-4 py-2.5 text-xs text-text-3">
+                  <span data-testid="offering-lifecycle">{offering.lifecycle ?? "—"}</span>
                 </td>
                 <td className="px-4 py-2.5 text-xs text-text-3">
-                  {offering.lifecycle ?? "—"}
+                  <span data-testid="offering-availability">
+                    {offering.availability ?? "—"}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-xs text-text-3">
+                  <span data-testid="offering-credential">{credentialText(credential)}</span>
+                </td>
+                <td className="px-4 py-2.5">
+                  <span
+                    data-testid="offering-circuit"
+                    className={
+                      circuit
+                        ? `inline-flex h-5 items-center whitespace-nowrap rounded-xs px-1.5 text-xs font-medium ${
+                            CIRCUIT_TONES[circuit] ?? "bg-bg-raised text-text-3"
+                          }`
+                        : "text-xs text-text-3"
+                    }
+                  >
+                    {circuit ? circuit.replaceAll("_", " ") : "—"}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-xs text-text-3">
+                  <span data-testid="offering-routing">
+                    {routing ? routing.replaceAll("_", " ") : "—"}
+                  </span>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      <p data-testid="offering-provenance" className="px-4 py-2.5 text-xs text-text-3">
+        {generation
+          ? `These offerings come from catalog generation ${shortGenerationID(generation)}.`
+          : "The catalog generation behind these offerings is not reported."}
+      </p>
     </div>
   );
 }

@@ -2,110 +2,213 @@ package catalog
 
 import (
 	"context"
-	"fmt"
 	"sort"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/agentstation/starmap/acquisition"
 	"github.com/agentstation/starmap/pkg/catalogs"
+	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 	"github.com/agentstation/starmap/pkg/sources"
-	pkgsync "github.com/agentstation/starmap/pkg/sync"
+	"github.com/agentstation/starmap/runtime"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/storage"
 )
 
+// acquisitionSecret is the catalog-acquisition credential the deployment
+// lookup supplies. No inference plane holds it, so a provider observation that
+// carries it proves the acquisition plane is the one acquisition read.
+const acquisitionSecret = "sk-acquisition-secret"
+
+// observedMarker is what the observation adds to one model name. A published
+// generation that carries it proves the refresh served the observed layer.
+const observedMarker = " observed"
+
+// TestStarmapAcquisitionPublishesRefresh proves the catalog-acquisition plane
+// stands alone and reaches the refresh.
+//
+// The deployment lookup is the only credential source the resolver reads, and
+// the observation records what it resolved. A refresh then publishes the
+// observed provider layer as one effective generation, so what acquisition
+// observed is what the runtime serves as its candidate.
 func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "sk-acquisition-secret")
-	var capturedSecret string
-	runtime, err := OpenRuntime(
-		context.Background(),
+	observer := &recordingProviderObserver{provider: catalogs.ProviderIDOpenAI}
+	acquirer, err := acquisition.NewAcquirer(
+		acquisition.WithProviderObserver(observer),
+		acquisition.WithAcquirerCoalesceWindow(time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	runtime, err := openRuntime(
+		t.Context(),
 		storage.NewMockStore(),
-		"",
-		acquisition.WithProviderClientFactory(func(
-			provider *catalogs.Provider,
-		) (sources.ProviderClient, error) {
-			credentialField, found := acquisitionCredentialField(
-				provider.Credentials,
-				"OPENAI_API_KEY",
-			)
-			if !found {
-				return nil, fmt.Errorf("OPENAI_API_KEY credential field is required")
-			}
-			modelIDs := make([]string, 0, len(provider.Models))
-			for modelID, model := range provider.Models {
-				if model != nil && model.ModelRef != "" {
-					modelIDs = append(modelIDs, modelID)
-				}
-			}
-			sort.Strings(modelIDs)
-			models := make([]catalogs.Model, 0, len(modelIDs))
-			for _, modelID := range modelIDs {
-				models = append(models, *provider.Models[modelID])
-			}
-			if len(models) > 0 {
-				models[0].Name += " observed"
-			}
-			return staticProviderCatalogClient{
-				models: models,
-				capture: func(material sources.ProviderCredentialMaterial) error {
-					value, exists := material.Value(credentialField.ID)
-					if !exists {
-						return fmt.Errorf("resolved %s credential is required", credentialField.ID)
-					}
-					capturedSecret = value
-					return nil
-				},
-			}, nil
-		}),
+		Settings{
+			Source:              string(runtime.SourceEmbedded),
+			SourceStartupPolicy: string(runtime.StartupPreferLocal),
+			SourcePollInterval:  time.Hour,
+			SourceMaxHops:       8,
+			AcquisitionEnabled:  true,
+			TransferIdleTimeout: time.Minute,
+			TransferMaxDuration: time.Minute,
+		},
+		acquirer,
 	)
 	require.NoError(t, err)
-	before := runtime.ControlPlane().Current().GenerationID()
+	t.Cleanup(func() {
+		require.NoError(t, runtime.Close(context.Background()))
+	})
 
-	result, err := runtime.Refresh(
-		context.Background(),
-		pkgsync.WithSources(sources.ProvidersID),
-		pkgsync.WithProvider(catalogs.ProviderIDOpenAI),
-	)
+	before := runtime.Status().GenerationID
+
+	report, err := runtime.Refresh(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, "sk-acquisition-secret", capturedSecret)
-	require.NotEmpty(t, result.GenerationID)
-	require.NotEqual(t, before, runtime.ControlPlane().Current().GenerationID())
-	require.Equal(t, result.GenerationID, runtime.ControlPlane().Current().GenerationID())
+	assert.NotEmpty(t, report.RunID, "a refresh names the run it served")
+
+	assert.Equal(
+		t, acquisitionSecret, observer.resolved(),
+		"acquisition must read the deployment lookup alone",
+	)
+
+	after, err := runtime.CurrentCandidate(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, after.State.GenerationID)
+	assert.NotEqual(
+		t, before, after.State.GenerationID,
+		"the observed provider layer must publish a new effective generation",
+	)
+	assert.Equal(
+		t, after.State.GenerationID, runtime.Status().GenerationID,
+		"the status must report the generation the candidate carries",
+	)
+
+	// The published generation carries what the observation changed, so the
+	// refresh served the acquisition layer and not the embedded bootstrap.
+	provider, found := after.State.Catalog.Providers().Get(catalogs.ProviderIDOpenAI)
+	require.True(t, found)
+	assert.True(
+		t, observedMarkerPresent(provider),
+		"the published generation must carry the observed provider layer",
+	)
 }
 
-type staticProviderCatalogClient struct {
-	models  []catalogs.Model
-	capture func(sources.ProviderCredentialMaterial) error
+// recordingProviderObserver observes one provider through the deployment
+// credential plane and records the value it resolved. Every other provider
+// answers with no layer, so the run publishes exactly one observation.
+type recordingProviderObserver struct {
+	provider catalogs.ProviderID
+
+	mu     sync.Mutex
+	secret string
 }
 
-func (c staticProviderCatalogClient) ListModels(
-	_ context.Context,
-	material sources.ProviderCredentialMaterial,
-) ([]catalogs.Model, error) {
-	if c.capture != nil {
-		if err := c.capture(material); err != nil {
-			return nil, err
+// ObserveProvider implements acquisition.ProviderObserver.
+func (o *recordingProviderObserver) ObserveProvider(
+	ctx context.Context,
+	current *catalogs.Catalog,
+	id catalogs.ProviderID,
+) (acquisition.ProviderObservation, error) {
+	if id != o.provider {
+		return acquisition.ProviderObservation{Attempt: sources.ProviderAttempt{
+			ProviderID: id,
+			Outcome:    sources.ProviderOutcomeSkippedNotConfigured,
+			Reason:     sources.ProviderReasonCredentialUnavailable,
+		}}, nil
+	}
+	provider, found := current.Providers().Get(id)
+	if !found {
+		return acquisition.ProviderObservation{}, &starmaperrors.NotFoundError{
+			Resource: "provider", ID: string(id),
 		}
 	}
-	return append([]catalogs.Model(nil), c.models...), nil
+
+	// The resolver holds the deployment lookup alone. Reading it here proves
+	// the acquisition plane supplied the credential the observation used.
+	resolver := NewAcquisitionResolver(func(name string) (string, bool) {
+		if name == "OPENAI_API_KEY" {
+			return acquisitionSecret, true
+		}
+		return "", false
+	})
+	material, err := resolver.ResolveCatalog(ctx, provider)
+	if err != nil {
+		return acquisition.ProviderObservation{}, err
+	}
+	value, _ := material.Value("api-key")
+	o.mu.Lock()
+	o.secret = value
+	o.mu.Unlock()
+
+	observed, err := observedProviderCatalog(*provider)
+	if err != nil {
+		return acquisition.ProviderObservation{}, err
+	}
+	payload, err := catalogs.EncodeCatalogPayload(observed)
+	if err != nil {
+		return acquisition.ProviderObservation{}, err
+	}
+	return acquisition.ProviderObservation{
+		Layer: runtime.ProviderLayer{
+			ProviderID: id,
+			Payload:    payload,
+			Digest:     catalogs.DescribeCatalogPayload(payload).Checksum,
+			ObservedAt: time.Now().UTC(),
+		},
+		Attempt: sources.ProviderAttempt{
+			ProviderID: id,
+			Outcome:    sources.ProviderOutcomeSucceeded,
+			Requested:  true,
+			Records:    len(provider.Models),
+		},
+	}, nil
 }
 
-var _ sources.ProviderClient = staticProviderCatalogClient{}
+// resolved returns the credential value the observation read.
+func (o *recordingProviderObserver) resolved() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.secret
+}
 
-func acquisitionCredentialField(
-	credentials *catalogs.ProviderCredentials,
-	environment string,
-) (catalogs.ProviderCredentialField, bool) {
-	if credentials == nil {
-		return catalogs.ProviderCredentialField{}, false
+// observedProviderCatalog returns a catalog that holds one provider whose
+// first model carries an observation marker. The marker makes the observed
+// payload differ from the current one, so the refresh must move the
+// generation forward.
+func observedProviderCatalog(provider catalogs.Provider) (catalogs.Reader, error) {
+	modelIDs := make([]string, 0, len(provider.Models))
+	for modelID := range provider.Models {
+		modelIDs = append(modelIDs, modelID)
 	}
-	for _, field := range credentials.Fields {
-		for _, name := range field.Environment {
-			if name == environment {
-				return field, true
-			}
+	sort.Strings(modelIDs)
+	if len(modelIDs) > 0 {
+		observed := *provider.Models[modelIDs[0]]
+		observed.Name += observedMarker
+		models := make(map[string]*catalogs.Model, len(provider.Models))
+		for modelID, model := range provider.Models {
+			models[modelID] = model
+		}
+		models[modelIDs[0]] = &observed
+		provider.Models = models
+	}
+	builder := catalogs.NewEmpty()
+	if err := builder.SetProvider(provider); err != nil {
+		return nil, err
+	}
+	return builder, nil
+}
+
+// observedMarkerPresent reports whether one model of the provider carries the
+// marker the observation added.
+func observedMarkerPresent(provider *catalogs.Provider) bool {
+	for _, model := range provider.Models {
+		if model != nil && strings.HasSuffix(model.Name, observedMarker) {
+			return true
 		}
 	}
-	return catalogs.ProviderCredentialField{}, false
+	return false
 }
+
+var _ acquisition.ProviderObserver = (*recordingProviderObserver)(nil)
