@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"time"
@@ -20,15 +21,27 @@ import (
 
 const developmentAPIKeyName = "local-development"
 
+// developmentFilesDirectory holds stored file bytes under the scratch root.
+const developmentFilesDirectory = "files"
+
+// developmentCatalogStateDirectory holds the retained catalog state under the
+// scratch root.
+const developmentCatalogStateDirectory = "catalog-state"
+
+// developmentScratchPermissions keeps the scratch directories private to the
+// user that runs the session.
+const developmentScratchPermissions = 0o700
+
 // Development owns one isolated local application and its one-time key.
 type Development struct {
 	application *App
 	url         string
 	apiKey      string
-	// filesRoot is the session-owned scratch directory holding stored file
-	// bytes. The session removes it on close, so a development gateway leaves
-	// nothing behind.
-	filesRoot string
+	// scratchRoot is the session-owned scratch directory. It holds the stored
+	// file bytes and the catalog state the connected runtime retains. The
+	// session removes it on close, so a development gateway leaves nothing
+	// behind.
+	scratchRoot string
 }
 
 // NewDevelopment creates an in-memory gateway bound to loopback.
@@ -49,23 +62,36 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 		return nil, fmt.Errorf("generate development master key: %w", err)
 	}
 	cfg.Security.MasterKey = base64.RawURLEncoding.EncodeToString(masterKey)
-	// Stored file bytes have no in-memory backend, so the session owns a
-	// temporary directory instead and removes it on close. What matters for
-	// the development promise is that the shared data directory stays
-	// untouched: a scratch directory the session deletes is working memory,
-	// not configuration another run would inherit.
-	filesRoot, err := os.MkdirTemp("", "starport-dev-files-")
+	// Stored file bytes and the retained catalog state have no in-memory
+	// backend, so the session owns a temporary directory instead and removes
+	// it on close. What matters for the development promise is that the
+	// shared data directory and the user state root stay untouched: a scratch
+	// directory the session deletes is working memory, not configuration
+	// another run would inherit.
+	scratchRoot, err := os.MkdirTemp("", "starport-dev-")
 	if err != nil {
-		return nil, fmt.Errorf("create development file storage: %w", err)
+		return nil, fmt.Errorf("create development scratch directory: %w", err)
 	}
-	cfg.Files.Path = filesRoot
+	cfg.Files.Path = filepath.Join(scratchRoot, developmentFilesDirectory)
+	scratch := []string{cfg.Files.Path}
+	// An operator who names a state directory keeps it. The default is
+	// scratch, so the session retains no catalog state on the machine.
+	if cfg.Catalog.StateDirectoryIsScratch() {
+		cfg.Catalog.StateDirectory = filepath.Join(scratchRoot, developmentCatalogStateDirectory)
+		scratch = append(scratch, cfg.Catalog.StateDirectory)
+	}
+	for _, directory := range scratch {
+		if err := os.MkdirAll(directory, developmentScratchPermissions); err != nil {
+			return nil, errors.Join(fmt.Errorf("create development scratch directory: %w", err), os.RemoveAll(scratchRoot))
+		}
+	}
 	if err := cfg.Validate(); err != nil {
-		return nil, errors.Join(fmt.Errorf("validate development config: %w", err), os.RemoveAll(filesRoot))
+		return nil, errors.Join(fmt.Errorf("validate development config: %w", err), os.RemoveAll(scratchRoot))
 	}
 
 	store, err := storage.Open(cfg.Storage.RuntimeStorage())
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("open development storage: %w", err), os.RemoveAll(filesRoot))
+		return nil, errors.Join(fmt.Errorf("open development storage: %w", err), os.RemoveAll(scratchRoot))
 	}
 	// A key is issued only when one is needed. With authentication disabled
 	// the session has nothing to print and nothing to paste, and minting a key
@@ -90,14 +116,14 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 		if !claimed {
 			err = errors.Join(err, store.Close())
 		}
-		return nil, errors.Join(fmt.Errorf("create development application: %w", err), os.RemoveAll(filesRoot))
+		return nil, errors.Join(fmt.Errorf("create development application: %w", err), os.RemoveAll(scratchRoot))
 	}
 
 	return &Development{
 		application: application,
 		url:         "http://" + net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
 		apiKey:      apiKey,
-		filesRoot:   filesRoot,
+		scratchRoot: scratchRoot,
 	}, nil
 }
 
@@ -143,15 +169,15 @@ func (runtime *Development) Run(ctx context.Context) error {
 	return runtime.application.Run(ctx)
 }
 
-// Close releases the development gateway and removes its scratch file
-// storage. The CLI calls it on every exit path, started or not.
+// Close releases the development gateway and removes its scratch directory.
+// The CLI calls it on every exit path, started or not.
 func (runtime *Development) Close(ctx context.Context) error {
 	if runtime == nil || runtime.application == nil {
 		return nil
 	}
 	err := runtime.application.Close(ctx)
-	if runtime.filesRoot != "" {
-		err = errors.Join(err, os.RemoveAll(runtime.filesRoot))
+	if runtime.scratchRoot != "" {
+		err = errors.Join(err, os.RemoveAll(runtime.scratchRoot))
 	}
 	return err
 }

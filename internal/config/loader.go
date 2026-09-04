@@ -243,10 +243,13 @@ func resolveConfiguredPaths(cfg *Config, paths Paths) error {
 	}
 	// The state directory is process-local by contract, so it resolves against
 	// the user state root and never against the configuration directory, which
-	// a fleet can share.
-	cfg.Catalog.StateDirectory, err = ResolveStateDirectory(cfg.Catalog.StateDirectory)
-	if err != nil {
-		return fmt.Errorf("catalog state directory: %w", err)
+	// a fleet can share. A development gateway owns scratch instead, so it
+	// never reaches the user state root.
+	if !cfg.Catalog.StateDirectoryIsScratch() {
+		cfg.Catalog.StateDirectory, err = ResolveStateDirectory(cfg.Catalog.StateDirectory)
+		if err != nil {
+			return fmt.Errorf("catalog state directory: %w", err)
+		}
 	}
 	cfg.Security.TLSCertPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSCertPath)
 	if err != nil {

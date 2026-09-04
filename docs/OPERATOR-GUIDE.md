@@ -30,8 +30,9 @@ export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev
 ```
 
-The command binds to `127.0.0.1`, uses in-memory storage, and creates no
-configuration file. It prints one temporary gateway API key and one console
+The command binds to `127.0.0.1`, uses in-memory storage, creates no
+configuration file, and keeps its catalog state in a scratch directory that it
+removes on exit. It prints one temporary gateway API key and one console
 launch link, and opens the console in a browser:
 
 ```text
@@ -792,7 +793,10 @@ export STARPORT_CATALOG_STATE_DIR=/var/lib/starport/catalog-state
 
 An empty `STARPORT_CATALOG_STATE_DIR` resolves to `starport/catalog` under the
 user state root. That root is `XDG_STATE_HOME`, or `~/.local/state` when the
-variable is empty.
+variable is empty. A process with no home directory and no state root refuses
+to start, and the error names both settings. A development gateway keeps its
+default catalog state in the session scratch directory and removes it on exit.
+It leaves nothing under the user state root.
 
 ### Generation procedures
 

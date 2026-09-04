@@ -319,7 +319,7 @@ func TestResolveStateDirectoryIsProcessLocal(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv(stateHomeEnvironment, test.stateHome)
-			t.Setenv("HOME", test.home)
+			setHomeDirectory(t, test.home)
 			directory, err := ResolveStateDirectory(test.configured)
 			if err != nil {
 				t.Fatalf("resolve the state directory: %v", err)
@@ -331,5 +331,33 @@ func TestResolveStateDirectoryIsProcessLocal(t *testing.T) {
 				t.Fatalf("state directory = %q, want %q", directory, test.want)
 			}
 		})
+	}
+}
+
+// TestResolveStateDirectoryWithoutHomeNamesTheSettings proves that a process
+// with no user home directory and no state root gets an error that names the
+// two settings which supply one, instead of an empty or invented path.
+func TestResolveStateDirectoryWithoutHomeNamesTheSettings(t *testing.T) {
+	t.Setenv(stateHomeEnvironment, "")
+	setHomeDirectory(t, "")
+
+	directory, err := ResolveStateDirectory("")
+	if err == nil {
+		t.Fatalf("resolved %q without a home directory", directory)
+	}
+	for _, name := range []string{stateDirectoryEnvironment, stateHomeEnvironment} {
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("error %q does not name %s", err, name)
+		}
+	}
+}
+
+// setHomeDirectory points the user home directory at home for one test. Go
+// reads HOME on Unix, USERPROFILE on Windows, and home on Plan 9, so the
+// helper sets all three and an empty value leaves the process with no home.
+func setHomeDirectory(t *testing.T, home string) {
+	t.Helper()
+	for _, name := range []string{"HOME", "USERPROFILE", "home"} {
+		t.Setenv(name, home)
 	}
 }

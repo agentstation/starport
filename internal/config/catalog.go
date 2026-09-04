@@ -48,6 +48,10 @@ const catalogStateSubdirectory = "starport/catalog"
 // stateHomeEnvironment names the XDG user state root.
 const stateHomeEnvironment = "XDG_STATE_HOME"
 
+// stateDirectoryEnvironment names the operator setting for the state
+// directory, so a resolution failure can name it.
+const stateDirectoryEnvironment = "STARPORT_CATALOG_STATE_DIR"
+
 // CatalogConfig holds the canonical Starmap catalog settings. Starport uses
 // the suffixes Starmap names, with the gateway prefix. One connected runtime
 // reads one source and, when acquisition is enabled, observes providers on its
@@ -114,6 +118,15 @@ type CatalogConfig struct {
 	// the runtime lease then fences nothing. An empty value resolves to the
 	// process-local user state directory.
 	StateDirectory string `env:"STATE_DIR"`
+
+	// stateDirectoryScratch marks an empty state directory as session scratch
+	// that the development composition creates and removes. Only
+	// ConfigureDevelopmentRuntime sets it: a development gateway promises to
+	// leave nothing behind, so the loader never resolves its default against
+	// the user state root. The field has no environment tag, so no
+	// environment variable or configuration file can select it for a serving
+	// gateway.
+	stateDirectoryScratch bool
 
 	// StartupSpread spreads the first source read of a fleet, so many
 	// instances that start together do not ask at the same moment.
@@ -210,10 +223,18 @@ func (c *CatalogConfig) Validate() error {
 	return nil
 }
 
+// StateDirectoryIsScratch reports whether the development composition owns
+// the state directory as session scratch. The loader then leaves the value
+// empty, and the composition fills it with a directory it removes on close.
+// An operator value is never scratch.
+func (c CatalogConfig) StateDirectoryIsScratch() bool { return c.stateDirectoryScratch }
+
 // ResolveStateDirectory returns the catalog state directory of this process.
 // An operator value wins. An empty value resolves to the user state root,
 // which is process-local: it is never the workspace path and never a storage
-// path, so two instances that share a volume still hold two identities.
+// path, so two instances that share a volume still hold two identities. A
+// process with no user home directory has no state root, so the error names
+// the two settings that supply one.
 func ResolveStateDirectory(configured string) (string, error) {
 	if directory := strings.TrimSpace(configured); directory != "" {
 		return directory, nil
@@ -222,11 +243,14 @@ func ResolveStateDirectory(configured string) (string, error) {
 		return filepath.Join(root, filepath.FromSlash(catalogStateSubdirectory)), nil
 	}
 	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve user home directory: %w", err)
+	if err == nil && home == "" {
+		err = fmt.Errorf("user home directory is empty")
 	}
-	if home == "" {
-		return "", fmt.Errorf("user home directory is empty")
+	if err != nil {
+		return "", fmt.Errorf(
+			"no user state root: set %s or %s: %w",
+			stateDirectoryEnvironment, stateHomeEnvironment, err,
+		)
 	}
 	return filepath.Join(
 		home, ".local", "state", filepath.FromSlash(catalogStateSubdirectory),
