@@ -386,7 +386,11 @@ const TOP_BAR_HEIGHT = "3rem";
 // The slot is stated once and consumed twice: the strip is exactly this tall,
 // and its height joins --app-banner so chat sizes its column correctly. A
 // small screen renders no slot, because the chip moves into the top bar.
-const STATUS_SLOT_HEIGHT = "2.5rem";
+//
+// The slot is as tall as the sidebar's brand row, and the chip sits centered
+// in it, so the chip and the STARPORT wordmark share one line across every
+// route and the chip keeps clear air above it.
+const STATUS_SLOT_HEIGHT = "3.5rem";
 
 export function Shell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(
@@ -476,7 +480,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {!small && (
           <div
             data-testid="catalog-slot"
-            className="mx-auto flex h-10 max-w-[1280px] items-center justify-end px-4 sm:px-8"
+            className="mx-auto flex h-14 max-w-[1280px] items-center justify-end px-4 sm:px-8"
           >
             <CatalogIndicator />
           </div>

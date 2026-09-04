@@ -66,8 +66,8 @@ test("a small screen drops the header slot and puts a 44 px control in the top b
   expect(chip.getAttribute("class")).toContain("size-11");
   expect(screen.getByTestId("top-bar-status").contains(chip)).toBe(true);
   expect(screen.queryByTestId("catalog-slot")).toBeNull();
-  // The icon-only control carries every fact in its name.
-  const named = await screen.findByLabelText(/01J9ABCDEFGHJKMNPQRS/);
+  // The icon-only control carries the verdict and the age in its name.
+  const named = await screen.findByLabelText(/The catalog is fresh\. It is 2h old\./);
   expect(named).toBe(chip);
 });
 
