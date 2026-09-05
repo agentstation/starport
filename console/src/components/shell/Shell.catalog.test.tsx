@@ -3,7 +3,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { PANEL_WIDTH } from "@/components/shell/CatalogPanel";
-import { SMALL_SCREEN } from "@/lib/useMediaQuery";
+import { PHONE_SCREEN } from "@/lib/useMediaQuery";
 import { openConsole, resetGateway, stubGateway } from "@/test/console";
 
 // The catalog indicator belongs to the shell, not to a page. A reader who
@@ -26,7 +26,7 @@ function stubViewport(small: boolean) {
   vi.stubGlobal(
     "matchMedia",
     vi.fn((query: string) => ({
-      matches: small && query === SMALL_SCREEN,
+      matches: small && query === PHONE_SCREEN,
       addEventListener: () => {},
       removeEventListener: () => {},
     })),

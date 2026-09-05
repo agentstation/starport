@@ -178,8 +178,8 @@ function ProviderDetailPage() {
 
       {runtime && (
         <>
-          <div className="grid items-start gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2">
+          <div className="grid items-start gap-4 @4xl:grid-cols-3">
+            <div className="@4xl:col-span-2">
               <ProviderCredentialCard
                 providerId={providerId}
                 name={name}

@@ -19,7 +19,7 @@ type Fact = { label: string; value: ReactNode; variable?: string; detail?: strin
 
 function FactList({ facts }: { facts: Fact[] }) {
   return (
-    <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr_auto]">
+    <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm @2xl:grid-cols-[auto_1fr_auto]">
       {facts.map((fact) => (
         <div key={fact.label} className="contents">
           <dt className="text-text-3">{fact.label}</dt>
@@ -27,7 +27,7 @@ function FactList({ facts }: { facts: Fact[] }) {
             <span className="font-mono">{fact.value}</span>
             {fact.detail && <span className="ml-2 text-text-3">{fact.detail}</span>}
           </dd>
-          <dd className="col-start-2 font-mono text-xs text-text-4 sm:col-start-3 sm:text-right">
+          <dd className="col-start-2 font-mono text-xs text-text-4 @2xl:col-start-3 @2xl:text-right">
             {fact.variable}
           </dd>
         </div>

@@ -113,20 +113,25 @@ export function QuickstartCard() {
         Quickstart
       </CardTitle>
       <Tabs value={current} onValueChange={(value) => setCurrent(String(value))}>
-        <TabsList aria-label="Snippet language" className="gap-0">
-          {all.map((snippet) => (
-            <TabsTrigger key={snippet.name} value={snippet.name} className="h-8 px-2.5 text-xs">
-              {snippet.name}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* The copy control shares the tab row, so it never sits over the
+            code when the card is narrow. */}
+        <div className="flex items-center justify-between gap-2">
+          <TabsList aria-label="Snippet language" className="gap-0">
+            {all.map((snippet) => (
+              <TabsTrigger key={snippet.name} value={snippet.name} className="h-8 px-2.5 text-xs">
+                {snippet.name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <CopyButton
+            text={() => all.find((snippet) => snippet.name === current)?.text ?? ""}
+            label="snippet"
+          />
+        </div>
         {all.map((snippet) => (
           <TabsContent key={snippet.name} value={snippet.name} className="min-w-0">
-            <div className="relative min-w-0 rounded-sm border border-border-1 bg-bg-canvas">
-              <div className="absolute right-1.5 top-1.5">
-                <CopyButton text={snippet.text} label="snippet" />
-              </div>
-              <pre className="overflow-x-auto p-3 pr-10 font-mono text-xs leading-4 text-text-2">
+            <div className="min-w-0 rounded-sm border border-border-1 bg-bg-canvas">
+              <pre className="overflow-x-auto p-3 font-mono text-xs leading-4 text-text-2">
                 <code data-testid={`snippet-${snippet.name}`}>
                   <Highlighted snippet={snippet} />
                 </code>

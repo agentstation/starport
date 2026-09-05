@@ -408,7 +408,7 @@ export function HealthPanel({
         );
       })()}
       {stats && stats.requests > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
           <Stat label="Requests (1h)" value={formatCount(stats.requests)} />
           <Stat
             label="Error rate"

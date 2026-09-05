@@ -154,11 +154,26 @@ report lifecycle.**
 - Sidebar footer: gateway status dot + version, theme toggle, GitHub link.
 - Content region: max-width 1280px, 32px gutters, left-aligned within the
   remaining space.
-- Below 640px the sidebar becomes a left sheet behind a 48px top bar (menu
-  trigger, wordmark, search). The content region drops to 16px gutters. The
-  collapse state belongs to the desktop layout and never applies in the
-  sheet. Two-column grids declare `grid-cols-1` below their breakpoint, so an
-  implicit `auto` track never widens the page past the viewport.
+- Three shell tiers, decided by viewport width. Test at 390, 768, 1024, and
+  1280, plus 767 and 1023 as edge checks.
+  - **Wide** (1024px and up): the 240px sidebar with the persisted collapse
+    preference.
+  - **Compact** (768–1023px): the 64px icon rail. "Expand" opens the full
+    sidebar as an overlay that closes on navigation, Escape, or a click on
+    the backdrop. The collapse preference does not apply.
+  - **Phone** (below 768px): the sidebar becomes a left sheet behind a 48px
+    top bar (menu trigger, wordmark, catalog chip, search). The content
+    region drops to 16px gutters.
+- The catalog chip and the page's primary action sit on the title line on
+  the wide and compact tiers, and in the top bar on the phone tier.
+- Page grids use container queries against the content column
+  (`@2xl:`, `@3xl:`, `@4xl:`, `@5xl:`), never viewport prefixes, because the
+  sidebar takes 64–240px of the viewport and a viewport breakpoint cannot
+  know which. Two-column grids declare `grid-cols-1` below their threshold,
+  so an implicit `auto` track never widens the page past the column.
+- Dense tables declare priority columns: a column carries the table width
+  it needs, and a narrower table drops it instead of clipping it behind a
+  scrollbar.
 
 ### Page header
 
