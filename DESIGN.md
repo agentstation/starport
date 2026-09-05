@@ -159,21 +159,21 @@ report lifecycle.**
   - **Wide** (1024px and up): the 240px sidebar with the persisted collapse
     preference.
   - **Compact** (768–1023px): the 64px icon rail. "Expand" opens the full
-    sidebar as an overlay that closes on navigation, Escape, or a click on
-    the backdrop. The collapse preference does not apply.
+    sidebar as an overlay. The overlay closes on navigation, Escape, or a
+    click on the backdrop. The collapse preference does not apply.
   - **Phone** (below 768px): the sidebar becomes a left sheet behind a 48px
     top bar (menu trigger, wordmark, catalog chip, search). The content
     region drops to 16px gutters.
-- The catalog chip and the page's primary action sit on the title line on
-  the wide and compact tiers, and in the top bar on the phone tier.
+- The catalog chip and the page's primary action sit on the title line. On
+  the phone tier they move into the top bar.
 - Page grids use container queries against the content column
-  (`@2xl:`, `@3xl:`, `@4xl:`, `@5xl:`), never viewport prefixes, because the
-  sidebar takes 64–240px of the viewport and a viewport breakpoint cannot
-  know which. Two-column grids declare `grid-cols-1` below their threshold,
-  so an implicit `auto` track never widens the page past the column.
-- Dense tables declare priority columns: a column carries the table width
-  it needs, and a narrower table drops it instead of clipping it behind a
-  scrollbar.
+  (`@2xl:`, `@3xl:`, `@4xl:`, `@5xl:`), never viewport prefixes. The sidebar
+  takes 64 to 240px of the viewport, and a viewport breakpoint cannot know
+  which. Two-column grids declare `grid-cols-1` below their threshold, so an
+  implicit `auto` track never widens the page past the column.
+- Dense tables declare priority columns. A column carries the table width
+  it needs. A narrower table drops the column instead of clipping it behind
+  a scrollbar.
 
 ### Page header
 
