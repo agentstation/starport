@@ -99,7 +99,7 @@ export function CardSkeleton({ lines = 3, className }: { lines?: number; classNa
 // provider lists: a logo, a name, and two lines per card.
 export function CardGridSkeleton({ count = 4, className }: { count?: number; className?: string }) {
   return (
-    <LoadingStatus className={cn("grid grid-cols-1 gap-3 md:grid-cols-2", className)}>
+    <LoadingStatus className={cn("grid grid-cols-1 gap-3 @3xl:grid-cols-2", className)}>
       {Array.from({ length: count }, (_, card) => (
         <div
           key={card}
@@ -149,7 +149,7 @@ export function StatSkeleton({ count = 6, className }: { count?: number; classNa
     <LoadingStatus
       className={cn("rounded-md border border-border-1 bg-bg-panel p-5", className)}
     >
-      <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5 @2xl:grid-cols-3 @4xl:grid-cols-6">
         {Array.from({ length: count }, (_, stat) => (
           <div key={stat} className="flex flex-col gap-2">
             <Skeleton className="h-3 w-20" />

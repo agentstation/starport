@@ -44,7 +44,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { queries } from "@/lib/queries";
 import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
-import { SMALL_SCREEN, useMediaQuery } from "@/lib/useMediaQuery";
+import { useShellTier } from "@/lib/useMediaQuery";
 
 // The small-screen top bar carries the sheet machinery, which a desktop
 // first paint does not need.
@@ -215,7 +215,7 @@ function OpenGatewayBanner() {
     <div
       role="status"
       data-testid="auth-mode-banner"
-      className="flex h-9 items-center gap-2 border-b border-border-1 bg-warning-tint px-4 text-sm text-text-1 sm:px-8"
+      className="flex h-9 items-center gap-2 border-b border-border-1 bg-warning-tint px-4 text-sm text-text-1 md:px-8"
     >
       <ShieldAlert aria-hidden="true" className="size-4 shrink-0 text-warning" />
       <span>
@@ -281,7 +281,7 @@ function SidebarBody({
         </button>
       </div>
 
-      <nav aria-label="Console" className="flex flex-1 flex-col px-2 pt-2">
+      <nav aria-label="Console" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pt-2">
         {NAV_SECTIONS.map((section, sectionIndex) => (
           <div key={section.label ?? sectionIndex} className="flex flex-col gap-0.5">
             {sectionIndex > 0 &&
@@ -304,6 +304,8 @@ function SidebarBody({
                   key={item.to}
                   to={item.to}
                   onClick={onNavigate}
+                  aria-label={item.label}
+                  title={collapsed ? item.label : undefined}
                   activeOptions={{ exact: item.to === "/" }}
                   activeProps={{ "aria-current": "page" }}
                   className={`relative flex ${rowHeight} items-center gap-2.5 rounded-sm px-3 text-base font-medium transition-colors duration-150 ease-standard ${collapsed ? "justify-center px-0" : ""}`}
@@ -432,16 +434,35 @@ function CatalogOverlay({
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(
+  // The wide tier keeps the operator's collapse preference. The compact tier
+  // is always the rail, and "expand" opens the full sidebar as an overlay
+  // that closes on navigation, on Escape, or on a click outside it.
+  const [preferCollapsed, setPreferCollapsed] = useState(
     () => localStorage.getItem(COLLAPSE_KEY) === "1",
   );
   useEffect(() => {
-    localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
-  }, [collapsed]);
+    localStorage.setItem(COLLAPSE_KEY, preferCollapsed ? "1" : "0");
+  }, [preferCollapsed]);
 
-  // Below the breakpoint the sidebar is a sheet behind a top-bar trigger,
-  // and the main column takes the whole width.
-  const small = useMediaQuery(SMALL_SCREEN);
+  const tier = useShellTier();
+  const small = tier === "phone";
+  const compact = tier === "compact";
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  useEffect(() => {
+    if (!compact) setOverlayOpen(false);
+  }, [compact]);
+  useEffect(() => {
+    if (!overlayOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOverlayOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [overlayOpen]);
+  const collapsed = compact ? !overlayOpen : preferCollapsed;
+  const onCollapse = compact
+    ? () => setOverlayOpen((open) => !open)
+    : () => setPreferCollapsed((value) => !value);
   const [navOpen, setNavOpen] = useState(false);
 
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -493,18 +514,29 @@ export function Shell({ children }: { children: ReactNode }) {
           />
         </Suspense>
       ) : (
-        <aside
-          id={SIDEBAR_ID}
-          className={`fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-[width] duration-150 ease-standard ${
-            collapsed ? "w-16" : "w-60"
-          }`}
-        >
-          <SidebarBody
-            collapsed={collapsed}
-            inSheet={false}
-            onCollapse={() => setCollapsed((value) => !value)}
-          />
-        </aside>
+        <>
+          {overlayOpen && (
+            <div
+              aria-hidden="true"
+              data-testid="sidebar-backdrop"
+              onClick={() => setOverlayOpen(false)}
+              className="fixed inset-0 z-30 bg-black/20"
+            />
+          )}
+          <aside
+            id={SIDEBAR_ID}
+            className={`fixed inset-y-0 left-0 flex flex-col border-r border-border-1 bg-bg-panel transition-[width] duration-150 ease-standard ${
+              collapsed ? "w-16" : "w-60"
+            } ${overlayOpen ? "z-40 shadow-overlay" : ""}`}
+          >
+            <SidebarBody
+              collapsed={collapsed}
+              inSheet={false}
+              onCollapse={onCollapse}
+              onNavigate={compact ? () => setOverlayOpen(false) : undefined}
+            />
+          </aside>
+        </>
       )}
 
       <main
@@ -517,7 +549,7 @@ export function Shell({ children }: { children: ReactNode }) {
           } as React.CSSProperties
         }
         className={`min-w-0 flex-1 transition-[margin] duration-150 ease-standard ${
-          small ? "" : collapsed ? "ml-16" : "ml-60"
+          small ? "" : compact || preferCollapsed ? "ml-16" : "ml-60"
         }`}
       >
         {openGateway && <OpenGatewayBanner />}
@@ -534,15 +566,15 @@ export function Shell({ children }: { children: ReactNode }) {
           // The chip is centered on the 28 px line the page title occupies,
           // 24 px below the top, so the title and the chip share one row.
           // The first row of a page yields the chip's width at its right end.
-          <div className="relative mx-auto max-w-[1280px]">
+          <div className="relative mx-auto max-w-[1280px] @container">
             {!small && (
               <CatalogOverlay
-                className="right-4 top-[22px] sm:right-8"
+                className="right-4 top-[22px] md:right-8"
                 onWidth={setChipWidth}
                 onTarget={setActionsTarget}
               />
             )}
-            <div className="px-4 pt-6 pb-6 sm:px-8 sm:pb-8 [&>*>:first-child]:pr-[var(--catalog-clearance,0px)]">
+            <div className="px-4 pt-6 pb-6 md:px-8 md:pb-8 [&>*>:first-child]:pr-[var(--catalog-clearance,0px)]">
               <TitleActionsTarget.Provider value={small ? null : actionsTarget}>
                 {children}
               </TitleActionsTarget.Provider>

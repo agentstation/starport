@@ -20,7 +20,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select } from "@/components/ui/Select";
 import { queries } from "@/lib/queries";
-import { SMALL_SCREEN, useMediaQuery } from "@/lib/useMediaQuery";
+import { useShellTier } from "@/lib/useMediaQuery";
 import {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_KINDS,
@@ -354,7 +354,7 @@ export function Composer({
   onCompareRemove?: (id: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const small = useMediaQuery(SMALL_SCREEN);
+  const small = useShellTier() === "phone";
   const [menu, setMenu] = useState<"none" | "effort" | "params">("none");
   // Attached media; it ships with the next send.
   const [attachments, setAttachments] = useState<Attachment[]>([]);

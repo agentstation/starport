@@ -89,7 +89,7 @@ function AuthorsPage() {
     );
   } else {
     body = (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 @3xl:grid-cols-2">
         {visible.map((author) => (
           <AuthorCard
             key={author.id}

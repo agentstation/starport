@@ -131,6 +131,9 @@ const columns = helper.columns([
   helper.accessor((row) => operationsOf(row).join(" "), {
     id: "operations",
     header: "Operations",
+    // Priority columns: a narrow content column drops price, then context,
+    // then operations, so the name and ID never clip behind a scrollbar.
+    meta: { minTableWidth: 790 },
     sortFn: "alphanumeric",
     size: 170,
     minSize: 120,
@@ -145,9 +148,9 @@ const columns = helper.columns([
     header: "Context",
     sortFn: "basic",
     sortUndefined: "last",
-    size: 90,
-    minSize: 80,
-    meta: { align: "end" },
+    size: 100,
+    minSize: 90,
+    meta: { align: "end", minTableWidth: 890 },
     cell: ({ row }) => (
       <span className="font-mono text-xs tabular-nums text-text-2">
         {formatContext(row.original.context_length)}
@@ -164,7 +167,7 @@ const columns = helper.columns([
     // compares.
     size: 240,
     minSize: 200,
-    meta: { align: "end" },
+    meta: { align: "end", minTableWidth: 1130 },
     cell: ({ row }) => <PriceCell model={row.original} />,
   }),
 ]);
