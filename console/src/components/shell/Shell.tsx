@@ -30,6 +30,7 @@ import {
   Suspense,
   lazy,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -382,15 +383,44 @@ function SidebarBody({
 // main column through the --app-banner variable to size its own layout.
 const TOP_BAR_HEIGHT = "3rem";
 
-// STATUS_SLOT_HEIGHT is the wide-screen header slot the catalog chip sits in.
-// The slot is stated once and consumed twice: the strip is exactly this tall,
-// and its height joins --app-banner so chat sizes its column correctly. A
-// small screen renders no slot, because the chip moves into the top bar.
-//
-// The slot is as tall as the sidebar's brand row, and the chip sits centered
-// in it, so the chip and the STARPORT wordmark share one line across every
-// route and the chip keeps clear air above it.
-const STATUS_SLOT_HEIGHT = "3.5rem";
+// CATALOG_GAP is the air between the floating catalog chip and whatever a
+// page puts at the right end of its title line.
+const CATALOG_GAP = 16;
+
+// CatalogOverlay floats the catalog chip over the title line of a wide
+// screen. It takes no vertical space of its own: the chip is centered on
+// the line the page title occupies, so the wordmark, the title, and the
+// chip read as one row. The overlay measures the chip and publishes its
+// width as --catalog-clearance, and the page container pads the first row
+// of every page by that amount, so a title line that ends in buttons never
+// runs under the chip.
+function CatalogOverlay({
+  className,
+  onWidth,
+}: {
+  className: string;
+  onWidth: (width: number) => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (node === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      onWidth(entry?.contentRect.width ?? 0);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onWidth]);
+  return (
+    <div
+      data-testid="catalog-slot"
+      ref={ref}
+      className={`absolute z-20 flex h-8 items-center ${className}`}
+    >
+      <CatalogIndicator />
+    </div>
+  );
+}
 
 export function Shell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(
@@ -411,8 +441,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const above = [
     small ? TOP_BAR_HEIGHT : null,
     openGateway ? BANNER_HEIGHT : null,
-    small ? null : STATUS_SLOT_HEIGHT,
   ].filter((part): part is string => part !== null);
+  // The chip floats over the title line, so its width is the only space a
+  // page yields to it.
+  const [chipWidth, setChipWidth] = useState(0);
+  const clearance = small || chipWidth === 0 ? "0px" : `${chipWidth + CATALOG_GAP}px`;
   const aboveMain = above.length === 0 ? "0px" : above.length === 1 ? above[0] : `calc(${above.join(" + ")})`;
 
   return (
@@ -470,6 +503,7 @@ export function Shell({ children }: { children: ReactNode }) {
         style={
           {
             "--app-banner": aboveMain,
+            "--catalog-clearance": clearance,
           } as React.CSSProperties
         }
         className={`min-w-0 flex-1 transition-[margin] duration-150 ease-standard ${
@@ -477,23 +511,24 @@ export function Shell({ children }: { children: ReactNode }) {
         }`}
       >
         {openGateway && <OpenGatewayBanner />}
-        {!small && (
-          <div
-            data-testid="catalog-slot"
-            className="mx-auto flex h-14 max-w-[1280px] items-center justify-end px-4 sm:px-8"
-          >
-            <CatalogIndicator />
-          </div>
-        )}
         {pathname === "/chat" ? (
-          // Chat owns its full-height layout (thread sidebar + column).
-          children
-        ) : (
-          // The status slot already holds the space above the page, so the
-          // wide-screen container starts just below it instead of opening a
-          // second gap.
-          <div className="mx-auto max-w-[1280px] px-4 pt-6 pb-6 sm:px-8 sm:pt-2 sm:pb-8">
+          // Chat owns its full-height layout (thread sidebar + column). The
+          // chip sits at the right end of its 48 px top bar.
+          <div className="relative">
+            {!small && <CatalogOverlay className="right-3 top-2" onWidth={setChipWidth} />}
             {children}
+          </div>
+        ) : (
+          // The chip is centered on the 28 px line the page title occupies,
+          // 24 px below the top, so the title and the chip share one row.
+          // The first row of a page yields the chip's width at its right end.
+          <div className="relative mx-auto max-w-[1280px]">
+            {!small && (
+              <CatalogOverlay className="right-4 top-[22px] sm:right-8" onWidth={setChipWidth} />
+            )}
+            <div className="px-4 pt-6 pb-6 sm:px-8 sm:pb-8 [&>*>:first-child]:pr-[var(--catalog-clearance,0px)]">
+              {children}
+            </div>
           </div>
         )}
       </main>
