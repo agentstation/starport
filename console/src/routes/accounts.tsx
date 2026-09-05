@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/Select";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
+import { TitleActions } from "@/components/shell/TitleActions";
 import {
   accessMessage,
   ApiError,
@@ -379,18 +380,20 @@ function AccountsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <Header />
-        <div className="flex items-center gap-2">
-          <GhostButton
-            onClick={() => setSearch({ selected: undefined, panel: "templates" })}
-          >
-            <LayoutTemplate className="size-4" />
-            Templates
-          </GhostButton>
-          <PrimaryButton onClick={() => setCreating(true)}>
-            <Plus className="size-4" />
-            New account
-          </PrimaryButton>
-        </div>
+        <TitleActions>
+          <div className="flex items-center gap-2">
+            <GhostButton
+              onClick={() => setSearch({ selected: undefined, panel: "templates" })}
+            >
+              <LayoutTemplate className="size-4" />
+              Templates
+            </GhostButton>
+            <PrimaryButton onClick={() => setCreating(true)}>
+              <Plus className="size-4" />
+              New account
+            </PrimaryButton>
+          </div>
+        </TitleActions>
       </div>
       {body}
       {managingTemplates && (
