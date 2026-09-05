@@ -38,6 +38,7 @@ import {
 
 import { CommandPalette, openCommandPalette } from "@/components/palette/CommandPalette";
 import { CatalogIndicator } from "@/components/shell/CatalogPanel";
+import { TitleActionsTarget } from "@/components/shell/TitleActions";
 import { GitHubMark } from "@/components/ui/icons";
 import { Toaster } from "@/components/ui/sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -387,19 +388,22 @@ const TOP_BAR_HEIGHT = "3rem";
 // page puts at the right end of its title line.
 const CATALOG_GAP = 16;
 
-// CatalogOverlay floats the catalog chip over the title line of a wide
-// screen. It takes no vertical space of its own: the chip is centered on
-// the line the page title occupies, so the wordmark, the title, and the
-// chip read as one row. The overlay measures the chip and publishes its
-// width as --catalog-clearance, and the page container pads the first row
-// of every page by that amount, so a title line that ends in buttons never
-// runs under the chip.
+// CatalogOverlay floats one row over the title line of a wide screen: the
+// catalog chip, then the page's title-line actions (see TitleActions), so
+// the primary action keeps the far right. It takes no vertical space of
+// its own: the row is centered on the line the page title occupies, so the
+// wordmark, the title, the chip, and the actions read as one row. The
+// overlay measures itself and publishes its width as --catalog-clearance,
+// and the page container pads the first row of every page by that amount,
+// so a long title or description never runs under the row.
 function CatalogOverlay({
   className,
   onWidth,
+  onTarget,
 }: {
   className: string;
   onWidth: (width: number) => void;
+  onTarget: (node: HTMLDivElement | null) => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -415,9 +419,14 @@ function CatalogOverlay({
     <div
       data-testid="catalog-slot"
       ref={ref}
-      className={`absolute z-20 flex h-8 items-center ${className}`}
+      className={`absolute z-20 flex h-8 items-center gap-4 ${className}`}
     >
       <CatalogIndicator />
+      <div
+        ref={onTarget}
+        data-testid="title-actions"
+        className="flex items-center gap-3 empty:hidden"
+      />
     </div>
   );
 }
@@ -445,6 +454,7 @@ export function Shell({ children }: { children: ReactNode }) {
   // The chip floats over the title line, so its width is the only space a
   // page yields to it.
   const [chipWidth, setChipWidth] = useState(0);
+  const [actionsTarget, setActionsTarget] = useState<HTMLDivElement | null>(null);
   const clearance = small || chipWidth === 0 ? "0px" : `${chipWidth + CATALOG_GAP}px`;
   const aboveMain = above.length === 0 ? "0px" : above.length === 1 ? above[0] : `calc(${above.join(" + ")})`;
 
@@ -515,7 +525,9 @@ export function Shell({ children }: { children: ReactNode }) {
           // Chat owns its full-height layout (thread sidebar + column). The
           // chip sits at the right end of its 48 px top bar.
           <div className="relative">
-            {!small && <CatalogOverlay className="right-3 top-2" onWidth={setChipWidth} />}
+            {!small && (
+              <CatalogOverlay className="right-3 top-2" onWidth={setChipWidth} onTarget={setActionsTarget} />
+            )}
             {children}
           </div>
         ) : (
@@ -524,10 +536,16 @@ export function Shell({ children }: { children: ReactNode }) {
           // The first row of a page yields the chip's width at its right end.
           <div className="relative mx-auto max-w-[1280px]">
             {!small && (
-              <CatalogOverlay className="right-4 top-[22px] sm:right-8" onWidth={setChipWidth} />
+              <CatalogOverlay
+                className="right-4 top-[22px] sm:right-8"
+                onWidth={setChipWidth}
+                onTarget={setActionsTarget}
+              />
             )}
             <div className="px-4 pt-6 pb-6 sm:px-8 sm:pb-8 [&>*>:first-child]:pr-[var(--catalog-clearance,0px)]">
-              {children}
+              <TitleActionsTarget.Provider value={small ? null : actionsTarget}>
+                {children}
+              </TitleActionsTarget.Provider>
             </div>
           </div>
         )}

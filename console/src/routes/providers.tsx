@@ -11,6 +11,7 @@ import {
 import { IconButton } from "@/components/ui/IconButton";
 import { Select } from "@/components/ui/Select";
 import { CardGridSkeleton } from "@/components/ui/skeleton";
+import { TitleActions } from "@/components/shell/TitleActions";
 import {
   accessMessage,
   ApiError,
@@ -214,7 +215,7 @@ function ProvidersPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <Header />
-        <div className="flex items-center gap-3">
+        <TitleActions>
           <IconButton
             label="Refresh provider status"
             onClick={() => refresh.mutate()}
@@ -223,7 +224,7 @@ function ProvidersPage() {
           >
             <RefreshCw className={`size-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
           </IconButton>
-        </div>
+        </TitleActions>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex h-8 flex-1 basis-56 items-center gap-2 rounded-sm border border-border-2 bg-bg-raised px-2.5 focus-within:border-accent">
