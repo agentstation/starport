@@ -29,9 +29,7 @@ func TestRuntimeRequiresNamedAPIKey(t *testing.T) {
 		requireAPIKey(context.Background(), apiKeys, config.AuthModeRequired),
 		ErrAPIKeyRequired)
 
-	// An empty API key store is the expected state of a gateway that requires
-	// no key, and refusing to start there would make the mode unusable for the
-	// operator it exists for.
+	// An empty API key store must permit startup when authentication is disabled.
 	require.NoError(t, requireAPIKey(context.Background(), apiKeys, config.AuthModeDisabled))
 
 	_, err = apiKeys.Create(context.Background(), testAPIKey())
@@ -342,7 +340,7 @@ func testCatalogSettings(t *testing.T) runtimecatalog.Settings {
 	deployment := &config.Config{Catalog: testCatalogConfig()}
 	deployment.Server.Host = "127.0.0.1"
 	deployment.Server.Port = 8080
-	deployment.Catalog.StateDirectory = t.TempDir()
+	deployment.Catalog.StateDirectory = filepath.Join(t.TempDir(), "catalog-state")
 	return catalogSettings(deployment)
 }
 
