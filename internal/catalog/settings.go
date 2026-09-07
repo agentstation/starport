@@ -19,10 +19,9 @@ import (
 // it cannot hold.
 const cascadeFallbackAfterFailures = 3
 
-// Settings are the catalog settings one connected runtime reads. They mirror
-// the canonical Starmap settings contract with plain Go types, so the
-// configuration package names no Starmap option and this package alone owns
-// the translation.
+// Settings contains the catalog values one connected runtime reads.
+// It mirrors the canonical Starmap settings with plain Go types.
+// The configuration package names no Starmap options. This package owns the translation.
 type Settings struct {
 	// Source selects the catalog source kind.
 	Source string
@@ -45,7 +44,7 @@ type Settings struct {
 	// SourceToken reads a GitHub release.
 	SourceToken string
 
-	// SourcePollInterval bounds how often the source is asked.
+	// SourcePollInterval sets the polling interval for the source.
 	SourcePollInterval time.Duration
 
 	// SourceStartupPolicy decides what startup does without a source answer.
@@ -72,10 +71,8 @@ type Settings struct {
 	// source discovery record. It belongs to one process on one machine.
 	StateDirectory string
 
-	// ListenAddress is the host and port this gateway serves. It joins the
-	// identity seed and the host name in the instance identity, so two
-	// processes on one host hold two identities and the runtime lease fences
-	// one holder.
+	// ListenAddress is the host and port this gateway serves.
+	// Changing this address does not change the durable runtime identity.
 	ListenAddress string
 
 	// StartupSpread spreads the first source read across a fleet.
@@ -95,9 +92,9 @@ type Settings struct {
 // the only place that names a Starmap option, so the settings contract and the
 // Starmap contract stay one translation apart.
 //
-// A private source never falls back to the public channel: the source kind
-// reaches Starmap exactly as the operator selected it, and Starmap fails Open
-// instead of reading a different source.
+// Starmap receives the source kind that the operator selected.
+// A private source never falls back to the public channel.
+// If runtime.Open fails, that error propagates without a source change.
 func (s Settings) starmapOptions() []runtime.Option {
 	options := []runtime.Option{
 		runtime.WithCatalogSource(s.Source),
@@ -145,8 +142,7 @@ func (s Settings) starmapOptions() []runtime.Option {
 		options = append(options, runtime.WithStateDirectory(directory))
 	}
 
-	// The listen address separates two processes that share one host and one
-	// state root, so each one derives its own instance identity.
+	// Record the listen address without changing the durable runtime identity.
 	if address := strings.TrimSpace(s.ListenAddress); address != "" {
 		options = append(options, runtime.WithListenAddress(address))
 	}

@@ -37,22 +37,20 @@ func instanceIdentity(t *testing.T, settings Settings) string {
 		t.Context(), storage.NewMockStore(), settings, nil,
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, runtime.Close(t.Context())) })
-	return runtime.Status().InstanceIdentity
+	identity := runtime.Status().InstanceIdentity
+	require.NoError(t, runtime.Close(t.Context()))
+	return identity
 }
 
-// TestListenAddressSeparatesTwoInstances proves the listen address reaches the
-// connected runtime options. Two processes that share one host and one state
-// root derive two instance identities, so the runtime lease still fences a
-// durable commit.
-func TestListenAddressSeparatesTwoInstances(t *testing.T) {
-	state := t.TempDir()
+// TestRuntimeIdentityFollowsPrivateStateDirectory verifies stable identity across port changes.
+// Separate private state directories identify separate runtime instances.
+func TestRuntimeIdentityFollowsPrivateStateDirectory(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "state")
+	peerState := filepath.Join(t.TempDir(), "state")
 	workspace := t.TempDir()
-
 	first := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:8080"))
-	second := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:9090"))
-	repeat := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:8080"))
-
+	second := instanceIdentity(t, identityTestSettings(peerState, workspace, "127.0.0.1:9090"))
+	repeat := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:7070"))
 	require.NotEmpty(t, first)
 	require.NotEmpty(t, second)
 	assert.NotEqual(t, first, second)
@@ -60,11 +58,10 @@ func TestListenAddressSeparatesTwoInstances(t *testing.T) {
 }
 
 // TestStateDirectoryIsNeverTheWorkspacePath proves the two directories stay
-// apart. The connected runtime writes its identity seed and its layers under
-// the state directory alone, so a workspace an operator shares between two
-// instances carries no identity.
+// apart. The connected runtime writes its identity seed and layers only under its state directory.
+// The workspace that two instances share carries no runtime identity.
 func TestStateDirectoryIsNeverTheWorkspacePath(t *testing.T) {
-	state := t.TempDir()
+	state := filepath.Join(t.TempDir(), "state")
 	workspace := t.TempDir()
 
 	identity := instanceIdentity(t, identityTestSettings(state, workspace, "127.0.0.1:8080"))
@@ -95,4 +92,18 @@ func entryNames(directory string) ([]string, error) {
 		names = append(names, entry.Name())
 	}
 	return names, nil
+}
+
+func TestRuntimeRejectsConcurrentStateDirectoryUse(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "state")
+	settings := identityTestSettings(state, t.TempDir(), "127.0.0.1:8080")
+	first, err := openRuntime(t.Context(), storage.NewMockStore(), settings, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, first.Close(t.Context())) })
+	settings.ListenAddress = "127.0.0.1:9090"
+	second, err := openRuntime(t.Context(), storage.NewMockStore(), settings, nil)
+	if second != nil {
+		require.NoError(t, second.Close(t.Context()))
+	}
+	require.ErrorContains(t, err, "another process owns this directory")
 }
