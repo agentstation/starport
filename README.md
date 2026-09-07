@@ -376,7 +376,7 @@ gh attestation verify "oci://ghcr.io/agentstation/starport:$STARPORT_VERSION" \
 docker run --rm "ghcr.io/agentstation/starport:$STARPORT_VERSION" --version
 ```
 
-The Compose file builds Starport locally and uses Valkey for shared state. Put
+The Compose file builds one Starport process locally and uses Valkey for KV records. Put
 the master key and any catalog-declared provider values in the ignored `.env`
 file. This example uses OpenAI:
 
@@ -385,11 +385,20 @@ cp .env.example .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
+docker compose run --rm starport auth rotate
 docker compose up -d starport
 ```
 
 Save the gateway key from initialization. Do not initialize the same identity
 repository again.
+
+Rotation prepares the local admin token for the container's network bind.
+Keep its printed value private. The named Starport volumes retain SQLite records,
+uploaded files, local admin state, and the accepted catalog through container replacement.
+The Valkey volume retains gateway keys and other KV records. Back up all three volumes and the master key.
+
+Do not scale this example to multiple Starport processes. It uses local SQLite and file storage.
+See [current production limits](docs/PRODUCTION-STATUS.md) for replicated deployments.
 
 ## Develop
 
