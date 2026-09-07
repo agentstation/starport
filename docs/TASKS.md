@@ -12,9 +12,10 @@ The production catalog plan is active. Its canonical owner is
 It owns catalog lifecycle, configuration, storage, request latency, operator UX,
 documentation, the Starport README, and its demonstration.
 
-The canonical plan holds the only status ledger. Tasks CSP0, CSP0.1, CSP0.4, and CSP1 are complete.
-CSP0.2 awaits native CI evidence. CSP2 still needs checked service configuration and native qualification.
-CSP3 is in progress.
+The canonical plan holds the only status ledger. Tasks CSP0, CSP0.4, and CSP1 are complete.
+All six native archive jobs passed on draft PR #366. CSP0.2 still needs E02 registration and installation-method review.
+CSP0.1 needs renewed visual evidence after integration with the responsive console changes.
+CSP2 needs checked service configuration and native qualification. CSP3 is in progress.
 
 The ledger contains 38 tasks, 50 primary cases, and 324 required subcases.
 Eight additional local checks supplement the candidate gate without qualifying incomplete publication cases.
