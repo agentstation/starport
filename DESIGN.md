@@ -17,6 +17,21 @@ and out-finish).
 
 ## Laws
 
+### Static documentation
+
+The documentation route works without console authentication or deployment queries.
+It uses a separate page layout with an explicit link to the protected console.
+Audience selection belongs in the URL. Section headings have stable fragment links.
+
+Documentation body text uses `1rem` with a 1.625 line height.
+The reading column stops at `68ch` or 720 px, with at least `1rem` side gutters.
+Titles use `1.875rem`, section headings use `1.375rem`, and code uses `0.875rem`.
+Code blocks scroll inside the page and accept keyboard focus.
+Copy controls and audience tabs have a minimum height of `2.75rem`.
+Settings instructions use readable text roles even when a field cannot change.
+
+### Console laws
+
 These seven laws resolve every ambiguous decision:
 
 1. **One accent, four jobs.** The beacon amber appears only as: primary CTA,

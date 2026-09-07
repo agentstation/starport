@@ -60,6 +60,10 @@ export function FirstContact({ next }: { next?: string }) {
         </p>
       </header>
 
+      <a href="/docs?audience=operate" className="text-[0.875rem] text-accent-link hover:underline">
+        Read documentation without console access
+      </a>
+
       <div className="flex flex-col gap-1 rounded-sm border border-border-1 bg-bg-panel px-3 py-2">
         <div className="flex items-center gap-2">
           <span

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Gateway overhead benchmark gate. Runs the chat pipeline against a mock
-# upstream and fails when the p99 gateway-added latency exceeds the bound
-# published in README.md. Methodology: docs/PERFORMANCE.md.
+# Guard the controller timer against its component threshold.
+# Measurement boundaries: docs/PERFORMANCE.md.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

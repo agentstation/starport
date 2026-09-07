@@ -277,7 +277,7 @@ func TestRunCancellationStopsHTTPAndDependencies(t *testing.T) {
 	require.True(t, fakeHTTP.wasStopped())
 }
 
-func validProductionConfig(t *testing.T) *config.Config {
+func validProductionConfig(t testing.TB) *config.Config {
 	t.Helper()
 	credentialPath := filepath.Join(t.TempDir(), "openai-api-key")
 	require.NoError(t, os.WriteFile(credentialPath, []byte("sk-test-key"), 0o600))

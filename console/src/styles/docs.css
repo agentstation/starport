@@ -1,0 +1,53 @@
+.documentation-shell {
+  padding: 2rem 1rem 4rem;
+}
+
+.documentation {
+  max-width: min(68ch, 720px);
+  min-width: 0;
+  font-size: 1rem;
+  line-height: 1.625;
+  overflow-wrap: anywhere;
+}
+
+.documentation h1 {
+  font-size: 1.875rem;
+  line-height: 1.25;
+}
+
+.documentation h2 {
+  font-size: 1.375rem;
+  line-height: 1.4;
+  scroll-margin-top: 2rem;
+}
+
+.documentation h2 a:hover {
+  text-decoration: underline;
+}
+
+.documentation pre,
+.documentation code,
+.documentation table,
+.documentation th,
+.documentation td,
+.documentation .text-sm,
+.documentation .text-xs,
+.documentation [role="tab"] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.documentation pre {
+  max-width: 100%;
+  overflow-wrap: normal;
+}
+
+.documentation button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.documentation :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
