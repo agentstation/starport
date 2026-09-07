@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -103,6 +103,29 @@ test("a credentialed provider the gateway cannot use is named with its reason", 
   expect(screen.getByText("Known").nextElementSibling?.textContent).toBe("3");
   expect(screen.getByText("Credentialed").nextElementSibling?.textContent).toBe("2");
   expect(screen.getByText("Usable").nextElementSibling?.textContent).toBe("1");
+});
+
+test("each count opens the providers it counts, and each name links to its page", async () => {
+  gateway.providers = [usable, invalid, unconfigured];
+  mount();
+
+  fireEvent.click(await screen.findByTestId("count-credentialed"));
+  const list = await screen.findByTestId("count-credentialed-list");
+  const links = within(list).getAllByRole("link");
+  expect(links.map((link) => link.textContent)).toEqual(["anthropic", "groq"]);
+  expect(links.map((link) => link.getAttribute("href"))).toEqual([
+    "/providers/anthropic",
+    "/providers/groq",
+  ]);
+});
+
+test("a count of zero explains itself instead of opening an empty list", async () => {
+  gateway.providers = [unconfigured];
+  mount();
+
+  fireEvent.click(await screen.findByTestId("count-usable"));
+  expect(await screen.findByText("No provider credential is usable.")).toBeTruthy();
+  expect(screen.queryByTestId("count-usable-list")).toBeNull();
 });
 
 test("the reason list stays absent when every credential is usable", async () => {

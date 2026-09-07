@@ -16,6 +16,7 @@ import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHea
 import { Pill, type PillTone } from "@/components/ui/Pill";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
+import { TitleActions } from "@/components/shell/TitleActions";
 import {
   accessMessage,
   ApiError,
@@ -922,14 +923,14 @@ function KeysPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <Header />
-        <div className="flex items-center gap-3">
+        <TitleActions>
           {canCreate && (
             <PrimaryButton onClick={() => setModal({ kind: "create" })}>
               <Plus className="size-3.5" />
               New key
             </PrimaryButton>
           )}
-        </div>
+        </TitleActions>
       </div>
       {body}
       {modal?.kind === "create" && (

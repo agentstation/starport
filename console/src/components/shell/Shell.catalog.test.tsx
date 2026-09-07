@@ -3,7 +3,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { PANEL_WIDTH } from "@/components/shell/CatalogPanel";
-import { SMALL_SCREEN } from "@/lib/useMediaQuery";
+import { PHONE_SCREEN } from "@/lib/useMediaQuery";
 import { openConsole, resetGateway, stubGateway } from "@/test/console";
 
 // The catalog indicator belongs to the shell, not to a page. A reader who
@@ -26,7 +26,7 @@ function stubViewport(small: boolean) {
   vi.stubGlobal(
     "matchMedia",
     vi.fn((query: string) => ({
-      matches: small && query === SMALL_SCREEN,
+      matches: small && query === PHONE_SCREEN,
       addEventListener: () => {},
       removeEventListener: () => {},
     })),
@@ -66,8 +66,8 @@ test("a small screen drops the header slot and puts a 44 px control in the top b
   expect(chip.getAttribute("class")).toContain("size-11");
   expect(screen.getByTestId("top-bar-status").contains(chip)).toBe(true);
   expect(screen.queryByTestId("catalog-slot")).toBeNull();
-  // The icon-only control carries every fact in its name.
-  const named = await screen.findByLabelText(/01J9ABCDEFGHJKMNPQRS/);
+  // The icon-only control carries the verdict and the age in its name.
+  const named = await screen.findByLabelText(/The catalog is fresh\. It is 2h old\./);
   expect(named).toBe(chip);
 });
 

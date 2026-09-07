@@ -51,14 +51,16 @@ function draw(read: CatalogSummaryRead, admin: CatalogAdminRead, small = false) 
   );
 }
 
-test("the healthy chip states freshness, generation, and age in three elements", () => {
+test("the healthy chip states freshness, label, and age in three elements", () => {
   draw(reader(), operator(undefined));
 
   const dot = screen.getByTestId("catalog-freshness-dot");
   expect(dot.getAttribute("data-verdict")).toBe("fresh");
   expect(dot.textContent).toBe("");
   expect(screen.getByTestId("catalog-label").textContent).toBe("Catalog");
-  expect(screen.getByTestId("catalog-generation").textContent).toBe("01J9ABCDEFGHJKMNPQRS…");
+  // The generation belongs to the panel's identity section, not to the chip.
+  expect(screen.queryByTestId("catalog-generation")).toBeNull();
+  expect(screen.getByTestId("catalog-chip").textContent).not.toContain("01J9ABCDEFGHJKMNPQRS");
   expect(screen.getByTestId("catalog-age").textContent).toBe("2h");
   expect(screen.getByTestId("catalog-chip").getAttribute("aria-expanded")).toBe("false");
 });
@@ -126,14 +128,14 @@ test("a models:read render holds no admin pill and no activity icon", () => {
   expect(screen.queryByTestId("catalog-activity-icon")).toBeNull();
 });
 
-test("the small-screen control carries label, generation, age, and verdict in its name", () => {
+test("the small-screen control carries label, age, and verdict in its name", () => {
   draw(reader(), operator(undefined), true);
 
   const chip = screen.getByTestId("catalog-chip");
   const name = chip.getAttribute("aria-label") ?? "";
   expect(name).toContain("The catalog is fresh.");
-  expect(name).toContain("01J9ABCDEFGHJKMNPQRS…");
-  expect(name).toContain("2h");
+  expect(name).toContain("It is 2h old.");
+  expect(name).not.toContain("01J9ABCDEFGHJKMNPQRS");
   expect(screen.queryByTestId("catalog-label")).toBeNull();
 });
 

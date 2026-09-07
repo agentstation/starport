@@ -144,7 +144,7 @@ export function StatsRow() {
   const errors = requests.errors ?? 0;
   return (
     <Card>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5 @2xl:grid-cols-3 @4xl:grid-cols-6">
         <Stat
           label="Requests 24h"
           value={formatCount(total)}

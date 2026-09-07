@@ -24,7 +24,7 @@ function OverviewPage() {
   return (
     <div className="flex flex-col gap-4">
       <StatusHero />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-2">
         <EndpointsCard />
         <QuickstartCard />
       </div>

@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { Dialog, DialogBody, DialogContent, DialogError, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
+import { TitleActions } from "@/components/shell/TitleActions";
 import {
   accessMessage,
   ApiError,
@@ -1005,14 +1006,14 @@ function PresetsPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <Header />
-        <div className="flex items-center gap-3">
+        <TitleActions>
           {canCreate && (
             <PrimaryButton onClick={() => setModal({ kind: "create" })}>
               <Plus className="size-3.5" />
               New preset
             </PrimaryButton>
           )}
-        </div>
+        </TitleActions>
       </div>
       {body}
       {(modal?.kind === "create" || editing) && (

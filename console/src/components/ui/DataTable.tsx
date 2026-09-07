@@ -1,6 +1,7 @@
 import {
   columnResizingFeature,
   columnSizingFeature,
+  columnVisibilityFeature,
   createColumnHelper,
   createSortedRowModel,
   flexRender,
@@ -12,6 +13,7 @@ import {
   useTable,
   type CellData,
   type ColumnDef,
+  type ColumnVisibilityState,
   type Row,
   type RowData,
   type RowSelectionState,
@@ -22,6 +24,7 @@ import {
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -65,6 +68,10 @@ declare module "@tanstack/react-table" {
     flex?: boolean;
     // className is added to every body cell of the column.
     className?: string;
+    // minTableWidth hides the column while the table is narrower than this
+    // many pixels, so a narrow content column drops its least important
+    // columns instead of clipping them. Columns without it always show.
+    minTableWidth?: number;
   }
 }
 
@@ -72,6 +79,7 @@ export const dataTableFeatures = tableFeatures({
   rowSortingFeature,
   columnSizingFeature,
   columnResizingFeature,
+  columnVisibilityFeature,
   rowSelectionFeature,
   sortedRowModel: createSortedRowModel(),
   sortFns: { alphanumeric: sortFn_alphanumeric, basic: sortFn_basic },
@@ -175,6 +183,31 @@ export function DataTable<TData extends RowData>({
   className,
 }: DataTableProps<TData>) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  // The table's own width decides which priority columns show. Zero means
+  // "not measured" (first render, a test without layout), which shows all.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    setWidth(root.getBoundingClientRect().width);
+  }, []);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(entry?.contentRect.width ?? 0);
+    });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+  const columnVisibility: ColumnVisibilityState = {};
+  for (const column of columns) {
+    const min = column.meta?.minTableWidth;
+    if (column.id !== undefined && min !== undefined && width > 0 && width < min) {
+      columnVisibility[column.id] = false;
+    }
+  }
   const table = useTable({
     features: dataTableFeatures,
     columns,
@@ -184,7 +217,7 @@ export function DataTable<TData extends RowData>({
     enableColumnResizing: resizable,
     enableRowSelection,
     meta,
-    state: { rowSelection },
+    state: { rowSelection, columnVisibility },
     onRowSelectionChange: (updater) => {
       setRowSelection((previous) => {
         const next = typeof updater === "function" ? updater(previous) : updater;
@@ -195,7 +228,7 @@ export function DataTable<TData extends RowData>({
     initialState: initialSorting ? { sorting: initialSorting } : undefined,
   });
 
-  const leafColumns = table.getAllLeafColumns();
+  const leafColumns = table.getVisibleLeafColumns();
   const flexIndex = Math.max(
     0,
     leafColumns.findIndex((column) => column.columnDef.meta?.flex) === -1
@@ -277,7 +310,7 @@ export function DataTable<TData extends RowData>({
       )}
       style={{ gridTemplateColumns: template, ...style }}
     >
-      {row.getAllCells().map((cell) => {
+      {row.getVisibleCells().map((cell) => {
         const meta = cell.column.columnDef.meta;
         return (
           <div
@@ -298,6 +331,7 @@ export function DataTable<TData extends RowData>({
 
   return (
     <div
+      ref={rootRef}
       role="table"
       aria-label={ariaLabel}
       aria-rowcount={rows.length + 1}

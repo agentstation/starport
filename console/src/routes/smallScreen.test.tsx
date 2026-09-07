@@ -2,10 +2,10 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-import { SMALL_SCREEN } from "@/lib/useMediaQuery";
+import { PHONE_SCREEN } from "@/lib/useMediaQuery";
 import { openConsole, resetGateway, stubGateway } from "@/test/console";
 
-// CPL-G1. Below 640 px the sidebar is a sheet behind a top-bar trigger and
+// CPL-G1. Below 768 px the sidebar is a sheet behind a top-bar trigger and
 // the model picker is a bottom sheet. The viewport is a matchMedia answer,
 // so the same tree renders both layouts here.
 const MODELS = {
@@ -24,7 +24,7 @@ function stubViewport(small: boolean) {
   vi.stubGlobal(
     "matchMedia",
     vi.fn((query: string) => ({
-      matches: small && query === SMALL_SCREEN,
+      matches: small && query === PHONE_SCREEN,
       addEventListener: () => {},
       removeEventListener: () => {},
     })),

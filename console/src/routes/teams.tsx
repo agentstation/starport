@@ -9,6 +9,7 @@ import { TeamDetailPanel } from "@/components/teams/TeamDetailPanel";
 import { INPUT_CLASS, PrimaryButton, RowAction } from "@/components/ui/Form";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/ui/RelativeTime";
+import { TitleActions } from "@/components/shell/TitleActions";
 import {
   accessMessage,
   ApiError,
@@ -163,24 +164,26 @@ function TeamsPage() {
             it, including whoever joins later.
           </p>
         </div>
-        {!identityOff && (
-        <div className="flex items-center gap-2">
-          <input
-            value={draftName}
-            onChange={(event) => setDraftName(event.target.value)}
-            placeholder="Team name"
-            aria-label="Team name"
-            className={INPUT_CLASS}
-          />
-          <PrimaryButton
-            onClick={() => draftName.trim() && create.mutate(draftName.trim())}
-            disabled={!draftName.trim() || create.isPending}
-          >
-            <Plus className="size-4" />
-            New team
-          </PrimaryButton>
-        </div>
-        )}
+        <TitleActions>
+          {!identityOff && (
+            <div className="flex items-center gap-2">
+              <input
+                value={draftName}
+                onChange={(event) => setDraftName(event.target.value)}
+                placeholder="Team name"
+                aria-label="Team name"
+                className={INPUT_CLASS}
+              />
+              <PrimaryButton
+                onClick={() => draftName.trim() && create.mutate(draftName.trim())}
+                disabled={!draftName.trim() || create.isPending}
+              >
+                <Plus className="size-4" />
+                New team
+              </PrimaryButton>
+            </div>
+          )}
+        </TitleActions>
       </div>
       {body}
       {open && <TeamDetailPanel team={open} onClose={() => setSelected(null)} />}

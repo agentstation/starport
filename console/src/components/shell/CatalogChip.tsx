@@ -8,7 +8,7 @@ import {
 } from "@/components/shell/CatalogSummary";
 import { Pill } from "@/components/ui/Pill";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatAge, shortGenerationID } from "@/lib/format";
+import { formatAge } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // CatalogChip is the one catalog indicator of the console. It sits in the
@@ -20,7 +20,8 @@ import { cn } from "@/lib/utils";
 // adds an icon and never replaces the dot.
 //
 // A healthy catalog deserves almost no attention, so the healthy chip is a
-// small dot, the word Catalog, a short generation, and an age.
+// small dot, the word Catalog, and an age. The generation lives in the panel's
+// identity section, where a reader who needs to quote it can copy it.
 
 // CatalogVerdict is what the chip states about freshness. The server grades
 // the age and the console reads the grade. This console holds no age rule of
@@ -50,15 +51,13 @@ export function postureOf(read: CatalogSummaryRead): CatalogPosture {
 
 // chipSentence is the accessible name of the chip and the text of its tooltip.
 // The small-screen control shows the glyph alone, so this sentence carries the
-// label, the generation, the age, and the verdict for a reader who cannot see
-// them.
+// label, the age, and the verdict for a reader who cannot see them.
 export function chipSentence(read: CatalogSummaryRead): string {
   const posture = postureOf(read);
   if (posture === "authorization") return UNAUTHORIZED_SENTENCE;
   if (posture === "unusable") return "No catalog is available. Open the catalog panel.";
   if (read.summary === undefined) return "The catalog state is loading.";
   const verdict = verdictOf(read.summary.freshness);
-  const generation = shortGenerationID(read.summary.generation_id);
   const age = formatAge(read.summary.age_seconds);
   const grade =
     verdict === "fresh"
@@ -66,7 +65,7 @@ export function chipSentence(read: CatalogSummaryRead): string {
       : verdict === "stale"
         ? "The catalog is stale."
         : "The catalog freshness is unknown.";
-  return `${grade} Generation ${generation} is ${age} old. Open the catalog panel.`;
+  return `${grade} It is ${age} old. Open the catalog panel.`;
 }
 
 // FreshnessDot reports liveness. A stale dot carries a short exclamation mark
@@ -161,14 +160,9 @@ export function CatalogChip({ read, admin, open, onToggle, small, chipRef }: Cat
           <>
             <span data-testid="catalog-label">{label}</span>
             {posture === "catalog" && summary !== undefined && (
-              <>
-                <span data-testid="catalog-generation" className="font-mono text-text-3">
-                  {shortGenerationID(summary.generation_id)}
-                </span>
-                <span data-testid="catalog-age" className="text-text-3">
-                  {formatAge(summary.age_seconds)}
-                </span>
-              </>
+              <span data-testid="catalog-age" className="text-text-3">
+                {formatAge(summary.age_seconds)}
+              </span>
             )}
             {degraded && (
               <span data-testid="catalog-degraded-pill">
