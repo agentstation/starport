@@ -10,11 +10,12 @@ One Starmap catalog generation gives it every provider, model, capability,
 context, and price fact. The 2026-08-29 generation lists 17 providers and
 routes 511 models.
 
-[![The Starport console: the gateway overview, the model catalog, one model across providers, and provider health with incident history.](docs/assets/2026-08-29_starport-console.gif)](docs/assets/2026-08-29_starport-console.gif)
+[![Starport returns a real streamed OpenAI answer after installation, catalog inspection, and provider setup. Select the preview to play.](docs/assets/first-use-v1.2.0/poster.png)](docs/assets/first-use-v1.2.0/first-use.gif)
 
-The embedded console above shows the gateway overview, the model catalog with
-prices, one model across two providers, and provider health with incident
-history.
+[Watch the 38-second first request](docs/assets/first-use-v1.2.0/first-use.gif)
+or read the [transcript and reproduction steps](docs/assets/first-use-v1.2.0/TRANSCRIPT.md).
+The recording uses release v1.2.0 and a real provider. It shortens the credential-entry wait and preserves inference timing.
+The static preview does not autoplay. The earlier [console tour](docs/assets/2026-08-29_starport-console.gif) shows the catalog and provider views.
 
 The current overhead benchmark guards one part of chat request processing.
 It does not establish complete gateway latency or a production p99 limit.
