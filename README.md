@@ -16,11 +16,9 @@ The embedded console above shows the gateway overview, the model catalog with
 prices, one model across two providers, and provider health with incident
 history.
 
-Starport adds less than 50 ms p99 gateway overhead per request. The overhead
-benchmark measures 0 ms p50 and p99 over 200 requests against a mock upstream.
-Every response reports its own number in the `x-starport-overhead-ms` header.
-A CI benchmark fails the build when the bound breaks. See
-[docs/PERFORMANCE.md](docs/PERFORMANCE.md) for the methodology and exclusions.
+The current overhead benchmark guards one part of chat request processing.
+It does not establish complete gateway latency or a production p99 limit.
+See [the measurement boundaries](docs/PERFORMANCE.md) before using its results.
 
 Starport serves individual developers, startups, and enterprises:
 
@@ -54,6 +52,18 @@ make build
 
 ## Quick start
 
+### Explore the catalog without provider keys
+
+Inspect the embedded catalog before starting a gateway or configuring a provider:
+
+```bash
+starport models search gpt-4o --json
+starport models show openai/gpt-4o-mini --json
+```
+
+These commands need no provider credential or network access.
+Catalog presence does not prove that a provider will accept an inference request.
+
 Starport checks every provider in the active catalog generation. It registers
 each provider whose transport and authentication primitive it supports. It
 discovers deployment-owned provider inference credentials from the ordered
@@ -70,13 +80,14 @@ pays a provider, and a provider credential never authenticates a client.
 Set one conventional provider credential. This example uses OpenAI:
 
 ```bash
+unset STARPORT_CATALOG_STATE_DIR STARPORT_FILES_BACKEND
 export OPENAI_API_KEY="replace-with-provider-inference-key"
 starport dev
 ```
 
-The command starts an isolated gateway at `http://127.0.0.1:8080`. It uses
-in-memory state, creates no configuration files, prints one temporary Starport
-gateway API key, and opens the console in a browser:
+The command starts a development gateway at `http://127.0.0.1:8080`.
+It uses in-memory state for Badger and SQLite and creates no configuration files.
+It prints one temporary Starport gateway API key and opens the console:
 
 ```text
 Starport development gateway
@@ -92,10 +103,17 @@ into the browser, and the browser stores no key. Add `--no-open` to print the
 link instead, which fits a machine you reach over SSH. `starport ui` opens a
 new link at any time.
 
-A browser without a link must present this machine's local admin token.
+A browser on the gateway machine can also present its local admin token.
 `starport auth token --copy` puts the token on the clipboard of the gateway
 machine. Both paths prove presence at that machine and end in the same console
 session.
+
+Development mode skips `config.env` but still reads process environment values.
+An explicit `STARPORT_CATALOG_STATE_DIR` retains catalog state after exit.
+An explicit `STARPORT_FILES_BACKEND=objectstore` keeps remote blob storage active.
+The `unset` command above removes those two persistence selectors for this example.
+Default catalog state and uploaded files use temporary directories that normal shutdown removes.
+A crash can leave those temporary files behind.
 
 Keep this terminal open.
 
@@ -122,10 +140,10 @@ curl --fail-with-body \
 Send an OpenRouter-style chat request:
 
 ```bash
-curl --fail-with-body \
+curl --no-buffer --fail-with-body \
   -H "Authorization: Bearer $STARPORT_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model":"openrouter/auto","messages":[{"role":"user","content":"Hello"}]}' \
+  -d '{"model":"openai/gpt-4o-mini","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"Hello"}]}' \
   http://127.0.0.1:8080/api/v1/chat/completions
 ```
 
@@ -154,6 +172,8 @@ provider or persist provider inference credentials. Then use `starport serve`,
 and `starport ui` to open the console. Issue further gateway API keys in the
 console under Keys.
 See the [operator guide](docs/OPERATOR-GUIDE.md#initialize-persistent-state).
+
+Review [current production limits](docs/PRODUCTION-STATUS.md) before deploying multiple replicas.
 
 Local Ollama inference needs no credential. Add each installed model to a
 reviewed Starmap workspace, and set `STARPORT_CATALOG_WORKSPACE_PATH` before

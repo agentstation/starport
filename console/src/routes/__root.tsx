@@ -12,20 +12,14 @@ import { Shell } from "@/components/shell/Shell";
 import { hasCredential } from "@/lib/api";
 import { useGatewayAccessRejected } from "@/lib/useGatewayAccess";
 
-// RouterContext is what every route loader receives: the query client, so a
-// loader warms the reads its page makes through the same cache the page
-// reads from.
+// Route loaders and page components share this query client.
 export type RouterContext = { queryClient: QueryClient };
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  // The guard is here rather than in each route so a route cannot be added
-  // without it, and it runs before loading rather than during rendering so a
-  // credentialless browser never mounts a component that fetches. A redirect
-  // issued from a render pass happens after the queries in that pass have
-  // already gone out; the gateway then answers a burst of 401s to a reader who
-  // was on the way to being told what to present.
+  // Protect deployment routes before their loaders run. Static documentation
+  // and the access page do not require a console session.
   beforeLoad: ({ location }) => {
-    if (location.pathname === AUTH_PATH) return;
+    if (location.pathname === AUTH_PATH || location.pathname === "/docs") return;
     if (hasCredential()) return;
     // location.href is the path with its search and hash, so a reader who
     // followed a deep link comes back to it rather than to the overview.
@@ -38,15 +32,15 @@ function RootLayout() {
   const location = useRouterState({ select: (state) => state.location });
   const rejected = useGatewayAccessRejected();
 
+  if (location.pathname === "/docs") {
+    return <div className="documentation-shell"><Outlet /></div>;
+  }
   if (location.pathname === AUTH_PATH) {
     return <Outlet />;
   }
-  // A credential that stops working is discovered by a fetch, not by a
-  // navigation, so `beforeLoad` cannot catch it: it ran before the request that
-  // learned the news and will not run again until the reader moves. Redirecting
-  // from the render pass is right here and wrong above — the 401 this reacts to
-  // has already happened, so there is no burst of requests left to prevent.
-  if (rejected) {
+  // Recheck access before the shell mounts during a public-to-protected
+  // transition. Rejected credentials also require recovery between navigations.
+  if (rejected || !hasCredential()) {
     return <Navigate to={AUTH_PATH} search={{ next: location.href }} replace />;
   }
   return (

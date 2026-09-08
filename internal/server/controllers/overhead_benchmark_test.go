@@ -20,12 +20,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The published performance claim: the gateway adds under 50ms p99 to a
-// request, measured as x-starport-overhead-ms through the real chat
-// pipeline (decode, validate, route, execute, encode) against a mock
-// upstream. scripts/benchmark-overhead.sh runs this in CI and fails the
-// build when the bound breaks. The methodology lives in
-// docs/PERFORMANCE.md.
+// This component guard checks the partial x-starport-overhead-ms timer.
+// It excludes authentication, budget middleware and final response encoding.
+// The timer also subtracts complete connector calls. It cannot qualify
+// complete gateway latency. See docs/PERFORMANCE.md for the boundaries.
 const (
 	overheadBenchRequests   = 200
 	overheadBenchBoundMS    = 50
@@ -95,5 +93,5 @@ func TestGatewayOverheadBenchmark(t *testing.T) {
 	t.Logf("gateway overhead over %d requests (mock upstream %dms): p50=%dms p99=%dms",
 		overheadBenchRequests, overheadBenchUpstreamMS, p50, p99)
 	require.LessOrEqual(t, p99, int64(overheadBenchBoundMS),
-		"gateway overhead p99 exceeds the published %dms bound", overheadBenchBoundMS)
+		"controller timer p99 exceeds the component %dms bound", overheadBenchBoundMS)
 }

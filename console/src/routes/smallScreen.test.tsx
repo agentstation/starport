@@ -46,7 +46,7 @@ test("a 375 px screen gets a top bar whose trigger opens the navigation sheet", 
   stubViewport(true);
   // The top bar is a lazy chunk; load it so the first query finds it.
   await import("@/components/shell/SmallScreenNav");
-  openConsole("/docs");
+  openConsole("/models");
   const trigger = await screen.findByRole("button", { name: "Open navigation" });
   expect(screen.queryByRole("navigation", { name: "Console" })).toBeNull();
   fireEvent.click(trigger);
@@ -56,7 +56,7 @@ test("a 375 px screen gets a top bar whose trigger opens the navigation sheet", 
 
 test("a desktop screen keeps the sidebar and has no sheet trigger", async () => {
   stubViewport(false);
-  openConsole("/docs");
+  openConsole("/models");
   await screen.findByRole("navigation", { name: "Console" });
   expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
 });

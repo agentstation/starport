@@ -1,0 +1,62 @@
+name: Native Release Verification
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/native-release.yaml
+      - scripts/verify-native-release.py
+      - scripts/test-native-release.py
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published Starport release to verify
+        required: true
+        default: v1.2.0
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-archive:
+    name: Native ${{ matrix.os }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows, arch: x86_64, python_arch: x64, runner: windows-2025}
+          - {os: windows, arch: arm64, python_arch: arm64, runner: windows-11-arm}
+          - {os: linux, arch: x86_64, python_arch: x64, runner: ubuntu-24.04}
+          - {os: linux, arch: arm64, python_arch: arm64, runner: ubuntu-24.04-arm}
+          - {os: darwin, arch: x86_64, python_arch: x64, runner: macos-15-intel}
+          - {os: darwin, arch: arm64, python_arch: arm64, runner: macos-15}
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up native Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.python_arch }}
+      - name: Test verifier refusal and isolation contracts
+        run: python scripts/test-native-release.py
+      - name: Verify the published archive natively
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || 'v1.2.0' }}
+        run: python scripts/verify-native-release.py --expected-os ${{ matrix.os }} --expected-arch ${{ matrix.arch }} --output native-evidence/result.json
+      - name: Retain native verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-release-${{ matrix.os }}-${{ matrix.arch }}
+          path: native-evidence/result.json
+          if-no-files-found: error

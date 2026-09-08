@@ -45,7 +45,7 @@ beforeEach(() => {
 afterEach(resetGateway);
 
 test("an 800 px screen gets the icon rail, and expanding it opens an overlay", async () => {
-  openConsole("/docs");
+  openConsole("/providers");
   const nav = await screen.findByRole("navigation", { name: "Console" });
   // The rail keeps every destination reachable by name, without a label.
   const models = within(nav).getByRole("link", { name: "Models" });
@@ -64,7 +64,7 @@ test("an 800 px screen gets the icon rail, and expanding it opens an overlay", a
 });
 
 test("Escape and the backdrop close the overlay, and the preference is untouched", async () => {
-  openConsole("/docs");
+  openConsole("/models");
   await screen.findByRole("navigation", { name: "Console" });
   fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
   fireEvent.keyDown(window, { key: "Escape" });

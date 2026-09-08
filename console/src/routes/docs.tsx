@@ -1,22 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { type ComponentProps, type ReactNode, useSyncExternalStore } from "react";
 
 import { CopyButton } from "@/components/ui/CopyButton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { appliedTheme, onThemeChange, setTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/docs")({
+  validateSearch: (search: Record<string, unknown>): { audience?: Persona } => ({
+    audience: search.audience === "account" || search.audience === "operate"
+      ? search.audience
+      : "build",
+  }),
   component: DocsPage,
 });
 
-// The console's built-in documentation. One page, three readers: a
-// developer pointing an SDK at the gateway, an account holder managing
-// keys and spend, and an operator running the deployment. A persona
-// switcher keeps each reader on one path instead of interleaving all
-// three (progressive disclosure over a wall of prose).
-//
-// Every console page has a sentence here that links to it. docs.test.tsx
-// holds that line: it reads the sidebar's own destination list and fails
-// when a destination has no link on this page.
+// Static documentation has separate paths for developers, account holders,
+// and operators. The route tests require links to every console destination.
 
 type Persona = "build" | "account" | "operate";
 
@@ -39,16 +38,29 @@ const PERSONAS: Array<{ id: Persona; label: string; blurb: string }> = [
 ];
 
 function DocsPage() {
-  const [persona, setPersona] = useState<Persona>("build");
+  const { audience: persona = "build" } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const theme = useSyncExternalStore(onThemeChange, appliedTheme);
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+    <main className="documentation mx-auto flex w-full flex-col gap-6">
+      <nav aria-label="Documentation navigation" className="flex flex-wrap items-center justify-between gap-3">
+        <span className="font-semibold text-text-1">Starport</span>
+        <div className="flex flex-wrap items-center gap-4">
+          <button type="button" className="text-text-2 hover:underline"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+            {theme === "dark" ? "Dark theme" : "Light theme"}
+          </button>
+          <Link to="/" preload={false} className="text-accent-link hover:underline">Open console</Link>
+        </div>
+      </nav>
       <div>
-        <h1 className="text-xl font-semibold tracking-[-0.01em]">Documentation</h1>
-        <p className="mt-1 text-sm text-text-3">
+        <h1 className="font-semibold tracking-[-0.01em]">Documentation</h1>
+        <p className="mt-2 text-text-2">
           How to call, manage, and run the Starport gateway.
         </p>
       </div>
-      <Tabs value={persona} onValueChange={(value) => setPersona(value as Persona)}>
+      <Tabs value={persona} onValueChange={(value) => void navigate({ search: { audience: value as Persona }, hash: "" })}>
         <TabsList variant="chips" aria-label="Documentation audience">
           {PERSONAS.map((entry) => (
             <TabsTrigger key={entry.id} value={entry.id}>
@@ -56,7 +68,7 @@ function DocsPage() {
             </TabsTrigger>
           ))}
         </TabsList>
-        <p className="text-sm text-text-3">
+        <p className="text-text-2">
           {PERSONAS.find((entry) => entry.id === persona)?.blurb}
         </p>
         <TabsContent value="build" className="flex flex-col gap-6 pt-2">
@@ -69,34 +81,33 @@ function DocsPage() {
           <OperateDocs />
         </TabsContent>
       </Tabs>
-    </div>
+    </main>
   );
 }
 
 // ---- Shared blocks ----
 
-function CodeBlock({ text }: { text: string }) {
+function CodeBlock({ text, language = "Shell" }: { text: string; language?: string }) {
   return (
-    <div className="relative rounded-sm border border-border-1 bg-bg-canvas">
-      <div className="absolute right-1.5 top-1.5">
+    <div className="min-w-0 rounded-sm border border-border-1 bg-bg-canvas">
+      <div className="flex items-center justify-between border-b border-border-1 px-3 text-text-2">
+        <span>{language}</span>
         <CopyButton text={() => text} label="snippet" />
       </div>
-      <pre className="overflow-x-auto p-3 pr-10 font-mono text-xs leading-4 text-text-2">
+      <pre tabIndex={0} aria-label={`${language} example`} className="overflow-x-auto p-3 font-mono text-text-2">
         <code>{text}</code>
       </pre>
     </div>
   );
 }
 
-// A docs section is a heading and its prose, separated from the next by a
-// rule. The sections read in order, so they are one document, not a grid
-// of cards; a card frame around each would put a border between sentences
-// that belong together.
+// Sections provide stable heading links and a continuous reading column.
 function DocSection({ title, children }: { title: string; children: ReactNode }) {
+  const id = `doc-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "")}`;
   return (
     <section className="flex flex-col gap-3 border-t border-border-1 pt-5 first:border-t-0 first:pt-0">
-      <h2 className="text-base font-semibold tracking-[-0.01em] text-text-1">{title}</h2>
-      <div className="flex flex-col gap-3 text-base leading-relaxed text-text-2">
+      <h2 id={id} tabIndex={-1} className="font-semibold tracking-[-0.01em] text-text-1"><a href={`#${id}`}>{title}</a></h2>
+      <div className="docs-prose flex flex-col gap-3 text-text-2">
         {children}
       </div>
     </section>
@@ -109,15 +120,14 @@ function Term({ children }: { children: ReactNode }) {
 
 function PageLink({ to, children }: { to: ComponentProps<typeof Link>["to"]; children: ReactNode }) {
   return (
-    <Link to={to} className="text-accent-link hover:underline">
+    <Link to={to} preload={false} className="text-accent-link hover:underline">
       {children}
     </Link>
   );
 }
 
-// The scopes a gateway API key can carry, with the routes each one opens.
-// The keys page grants the whole inference set to a non-admin key; this
-// table is where a reader learns what that set contains.
+// The table maps gateway API key scopes to their routes.
+// The keys page grants this inference set to a non-admin key.
 const SCOPES: Array<{ scope: string; opens: string }> = [
   { scope: "chat:write", opens: "Chat completions and responses" },
   { scope: "embeddings:write", opens: "Embeddings" },
@@ -137,7 +147,7 @@ function ScopeTable() {
   return (
     <div className="overflow-x-auto rounded-sm border border-border-1">
       <table className="w-full text-sm">
-        <thead className="bg-bg-raised text-left text-xs font-medium text-text-3">
+        <thead className="bg-bg-raised text-left text-xs font-medium text-text-2">
           <tr>
             <th scope="col" className="px-3 py-2">
               Scope
@@ -188,6 +198,7 @@ function BuildDocs() {
           variable and read it from there, so no source file carries it.
         </p>
         <CodeBlock
+          language="Python"
           text={`import os
 from openai import OpenAI
 
@@ -201,6 +212,7 @@ reply = client.chat.completions.create(
 )`}
         />
         <CodeBlock
+          language="JavaScript"
           text={`import OpenAI from "openai";
 
 const client = new OpenAI({
@@ -215,15 +227,18 @@ const reply = await client.chat.completions.create({
       </DocSection>
       <DocSection title="Get a key">
         <p>
-          Requests authenticate with a gateway API key. On your own machine,
-          the <Term>starport</Term> CLI prints a local admin token:
+          Requests authenticate with a gateway API key. On the gateway machine,
+          open the console through its local launch link:
         </p>
-        <CodeBlock text={`export STARPORT_API_KEY="$(starport auth token)"`} />
+        <CodeBlock text="starport ui" />
         <p>
-          For anything longer-lived, create a scoped key on the{" "}
-          <PageLink to="/keys">API keys</PageLink> page. A gateway API key
-          identifies the caller and never pays a provider. Provider bills are
-          settled by provider credentials, which the operator configures.
+          Create a scoped gateway key on the <PageLink to="/keys">API keys</PageLink>{" "}
+          page and store it in <Term>STARPORT_API_KEY</Term> for your SDK.
+          The local admin token grants console access. It cannot authenticate inference requests.
+        </p>
+        <p>
+          A gateway API key identifies the caller. A separate provider credential pays for inference.
+          If you do not operate the gateway, ask its administrator for a scoped gateway key.
         </p>
       </DocSection>
       <DocSection title="Pick a model">
@@ -335,8 +350,9 @@ function AccountDocs() {
         <p>
           Every request is metered: tokens, cost, latency, cache hits, and
           which credential paid. The <PageLink to="/usage">Usage</PageLink>{" "}
-          page breaks this down by model, provider, and key over time. A
-          cached response costs nothing and shows as a hit.
+          page groups this data by model, provider, and key over time.
+          An exact response-cache hit avoids another completion call.
+          A semantic-cache lookup can require a paid embedding.
         </p>
         <p>
           A key, an account, or a team can carry a spend budget for a fixed
@@ -377,7 +393,7 @@ function OperateDocs() {
             <Term>ANTHROPIC_API_KEY</Term>) at startup.
           </li>
           <li>
-            <span className="font-medium text-text-1">Gateway</span>: a
+            <span className="font-medium text-text-1">Shared</span>: a
             credential you apply in the console for the whole deployment.
           </li>
           <li>
@@ -504,9 +520,9 @@ function OperateDocs() {
         </p>
         <p>
           Authentication mode, retention windows, and appearance live in{" "}
-          <PageLink to="/settings">Settings</PageLink>. The console itself
-          talks to the gateway through your console session; it holds no
-          gateway API key.
+          <PageLink to="/settings">Settings</PageLink>.
+          A local console launch uses a console session.
+          Remote readers can use the access page's gateway API key option.
         </p>
       </DocSection>
     </>

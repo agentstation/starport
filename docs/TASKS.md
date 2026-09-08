@@ -1,17 +1,25 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-09-04
+Last Updated: 2026-09-07
 
 ## 🚀 Current Sprint: Starport v1
 
 ### Active Work
 
-No plan is active.
+The production catalog plan is active. Its canonical owner is
+`agentstation/starmap`, at `docs/plans/starport-production-catalog-plan.html`.
+It owns catalog lifecycle, configuration, storage, request latency, operator UX,
+documentation, the Starport README, and its demonstration.
 
-### Proposed Work
+The canonical plan holds the current task status and the only status ledger.
+Draft PR #366 publishes the first documentation and qualification changes.
+All six native archive jobs passed. The plan records their evidence and the remaining production qualification work.
 
-No plan is proposed.
+The ledger contains 38 tasks, 50 primary cases, and 324 required subcases.
+Eight additional local checks supplement the candidate gate without qualifying incomplete publication cases.
+The activation proof is `proof/starport-production-catalog/activation-2026-09-05/` beside the canonical plan.
+Historical storage, latency, and audit evidence remains unchanged.
 
 ### Recently Completed
 
