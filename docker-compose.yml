@@ -19,10 +19,14 @@ services:
         required: false
     ports:
       - "8080:8080"
+    volumes:
+      - starport-config:/var/lib/starport/config
+      - starport-data:/var/lib/starport/data
     environment:
       STARPORT_SERVER_HOST: 0.0.0.0
       STARPORT_STORAGE_MODE: valkey
       STARPORT_STORAGE_VALKEY_URL: valkey://valkey:6379
+      STARPORT_CATALOG_STATE_DIR: /var/lib/starport/data/catalog
       STARPORT_SECURITY_MASTER_KEY: ${STARPORT_SECURITY_MASTER_KEY:?set STARPORT_SECURITY_MASTER_KEY}
     depends_on:
       valkey:
@@ -31,3 +35,5 @@ services:
 
 volumes:
   valkey-data:
+  starport-config:
+  starport-data:

@@ -1378,11 +1378,25 @@ cp .env.example .env
 # Edit .env. Set STARPORT_SECURITY_MASTER_KEY and OPENAI_API_KEY.
 docker compose up --build -d valkey
 docker compose run --rm starport init --configured-storage --name primary-admin
+docker compose run --rm starport auth rotate
 docker compose up -d starport
 ```
 
 Save the gateway key from the initialization output. Do not run the
 initialization command again for the same Valkey data set.
+
+Rotation prepares the local admin token for the container's network bind. Keep its printed value private.
+The example runs one Starport process. Its named volumes retain the following state with the default paths:
+
+| Volume | Container path | State |
+| --- | --- | --- |
+| `valkey-data` | `/data` in Valkey | Gateway keys and other KV records. |
+| `starport-config` | `/var/lib/starport/config` | SQLite, uploaded files, local admin token, and local configuration under `starport/`. |
+| `starport-data` | `/var/lib/starport/data` | Accepted catalog under `catalog/`. The image also reserves `badger/` for the Badger backend. |
+
+Back up all three volumes and the master key. Container replacement preserves the volumes. `docker compose down --volumes` deletes them.
+Do not scale this example to multiple Starport processes. SQLite, catalog state, and local files belong to one process.
+See [production status](PRODUCTION-STATUS.md) for the shared storage requirements and qualification limits.
 
 ## Limits and Shutdown
 
