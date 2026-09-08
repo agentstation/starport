@@ -1,7 +1,7 @@
 # Starport Task Management & Status
 
 **Single Source of Truth for Task Status**  
-Last Updated: 2026-09-07
+Last Updated: 2026-09-08
 
 ## 🚀 Current Sprint: Starport v1
 
@@ -13,7 +13,7 @@ It owns catalog lifecycle, configuration, storage, request latency, operator UX,
 documentation, the Starport README, and its demonstration.
 
 The canonical plan holds the current task status and the only status ledger.
-Draft PR #366 publishes the first documentation and qualification changes.
+PR #366 merged the first documentation and qualification changes.
 All six native archive jobs passed. The plan records their evidence and the remaining production qualification work.
 
 The ledger contains 38 tasks, 50 primary cases, and 324 required subcases.
