@@ -34,15 +34,25 @@ Starport serves individual developers, startups, and enterprises:
 Install the released cask on macOS or Linux:
 
 ```bash
-brew install agentstation/tap/starport
+brew trust --cask agentstation/tap/starport
+brew install --cask agentstation/tap/starport
 starport --version
+```
+
+Homebrew 6 requires package trust. See [Homebrew tap trust](https://docs.brew.sh/Tap-Trust).
+Use `brew install` for the first installation. To upgrade an installed cask:
+
+```bash
+brew update
+brew upgrade --cask agentstation/tap/starport
 ```
 
 The current public release also contains checksummed archives for macOS,
 Linux, and Windows. Download an archive from
 [GitHub Releases](https://github.com/agentstation/starport/releases).
 
-To build from source, install the Go version from `go.mod`, then run:
+To build from source, install the Go version from `go.mod` and pnpm 11.22.0.
+Then run:
 
 ```bash
 git clone https://github.com/agentstation/starport.git
