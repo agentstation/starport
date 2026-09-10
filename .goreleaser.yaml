@@ -3,12 +3,16 @@ version: 2
 before:
   hooks:
     - go mod verify
+    - bash scripts/build-console.sh
     - bash scripts/generate-release-artifacts.sh build/release-artifacts
 
 builds:
   - id: starport
     binary: starport
     main: ./cmd/starport
+    hooks:
+      post:
+        - python3 scripts/verify-embedded-console.py "{{ .Path }}" internal/console/dist
     env:
       - CGO_ENABLED=0
     mod_timestamp: "{{ .CommitTimestamp }}"
@@ -79,12 +83,12 @@ homebrew_casks:
       bash: completions/starport.bash
       zsh: completions/starport.zsh
       fish: completions/starport.fish
-    hooks:
-      post:
-        install: |
-          if OS.mac? && system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/starport"], sudo: false
-          end
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/starport"], sudo: false
+        end
+      end
 
 # Sign and notarize macOS binaries when Apple credentials are available.
 notarize:

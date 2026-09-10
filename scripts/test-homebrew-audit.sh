@@ -22,6 +22,15 @@ export STARPORT_AUDIT_TEST_ROOT="$test_root"
 export PATH="$test_root/bin:$PATH"
 
 "$repository_root/scripts/audit-homebrew-cask.sh" "$test_root/starport.rb" >/dev/null
-test -f "$test_root/tap/Casks/starport.rb"
+test -f "$test_root/audited"
+test ! -e "$test_root/tap/Casks/starport.rb"
+test ! -e "$test_root/trusted"
+
+if STARPORT_AUDIT_TEST_EXIT=1 "$repository_root/scripts/audit-homebrew-cask.sh" "$test_root/starport.rb" >/dev/null 2>&1; then
+	printf 'Homebrew audit helper accepted a failed audit\n' >&2
+	exit 1
+fi
+test ! -e "$test_root/tap/Casks/starport.rb"
+test ! -e "$test_root/trusted"
 
 printf 'PASS repository-free Homebrew audit tap\n'

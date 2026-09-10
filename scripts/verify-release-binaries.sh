@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 distribution_directory="${1:-dist}"
 metadata_file="$distribution_directory/metadata.json"
 # This value is unset unless an approved release policy supplies a hard budget.
@@ -115,6 +116,7 @@ while IFS= read -r binary; do
 				"$version_output" "starport version $expected_version" >&2
 			exit 1
 		fi
+		python3 "$repository_root/scripts/verify-console-binary.py" "$binary"
 		native_verified=$((native_verified + 1))
 	fi
 

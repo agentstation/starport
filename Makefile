@@ -70,12 +70,8 @@ build: console-build ## Build the binary
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
 .PHONY: console-build
-console-build: ## Build the embedded SPA console when pnpm is available
-	@if command -v pnpm >/dev/null 2>&1; then \
-		pnpm -C console install --frozen-lockfile && pnpm -C console build; \
-	else \
-		echo "pnpm not found; skipping console build (the binary serves a console-not-built notice)"; \
-	fi
+console-build: ## Build the embedded SPA console
+	bash scripts/build-console.sh
 
 .PHONY: build-race
 build-race: ## Build with race detector enabled
@@ -84,7 +80,7 @@ build-race: ## Build with race detector enabled
 	@echo "Build complete with race detector"
 
 .PHONY: release
-release: ## Build optimized production binary
+release: console-build ## Build optimized production binary
 	@echo "Building release version..."
 	$(GO) build -trimpath -ldflags "-s -w \
 		-X main.version=$(VERSION) \

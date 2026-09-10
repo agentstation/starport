@@ -37,20 +37,23 @@ require_text '^[[:space:]]*on_arm do$' 'ARM archives'
 require_text '^[[:space:]]*on_intel do$' 'x86-64 archives'
 require_text '^[[:space:]]*on_macos do$' 'macOS archives'
 require_text '^[[:space:]]*on_linux do$' 'Linux archives'
-require_text '^[[:space:]]*postflight do$' 'the post-install hook'
+require_text '^[[:space:]]*postflight_steps do$' 'the structured post-install hook'
 
-if ! grep -Fq 'if OS.mac? && system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0' "$cask"; then
-	printf 'Homebrew cask is missing the macOS-only xattr availability check\n' >&2
-	exit 1
-fi
-if ! grep -Fq 'system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/starport"], sudo: false' "$cask"; then
-	printf 'Homebrew cask is missing the scoped Starport quarantine hook\n' >&2
-	exit 1
-fi
-if [[ "$(grep -Ec 'xattr|com\.apple\.quarantine' "$cask")" -ne 2 ]]; then
-	printf 'Homebrew cask contains an unexpected quarantine operation\n' >&2
-	exit 1
-fi
+ruby - "$cask" <<'RUBY'
+source = File.read(ARGV.fetch(0))
+expected = <<~'HOOK'
+  postflight_steps do
+    on_macos do
+      run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{staged_path}}/starport"], sudo: false
+    end
+  end
+HOOK
+hook = source[/^([ ]*)postflight_steps do\n.*?^\1end$/m]
+normalized = hook&.lines&.map { |line| line.delete_prefix("  ") }&.join
+abort "Homebrew cask must scope quarantine cleanup to the macOS Starport binary" unless normalized == expected.chomp
+abort "Homebrew cask contains an unexpected quarantine operation" unless source.scan(/com\.apple\.quarantine/).length == 1
+abort "Homebrew cask contains a legacy hook" if source.match?(/\b(?:postflight|system_command)\b/)
+RUBY
 
 if [[ -n "$expected_version" ]]; then
 	if [[ "$actual_version" != "$expected_version" ]]; then
