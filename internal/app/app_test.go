@@ -149,7 +149,32 @@ func TestDefaultFactoryErrorsReturnNilInterfaces(t *testing.T) {
 		Mode: "badger", Badger: config.BadgerConfig{Path: storagePath, Compression: "snappy"},
 	})
 	require.Error(t, err)
-	require.Nil(t, store)
+	require.True(t, store == nil, "failed storage constructor must return a nil interface")
+}
+
+func TestProductionCompositionReturnsStorageOpenError(t *testing.T) {
+	for _, reason := range []string{"not a directory", "already open"} {
+		t.Run(reason, func(t *testing.T) {
+			cfg := validProductionConfig(t)
+			if reason == "not a directory" {
+				cfg.Storage.Badger.Path = filepath.Join(t.TempDir(), "occupied")
+				require.NoError(t, os.WriteFile(cfg.Storage.Badger.Path, []byte("occupied"), 0o600))
+			} else {
+				store, err := openStorage(cfg.Storage)
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, store.Close()) })
+			}
+			application, err := New(cfg)
+			require.ErrorContains(t, err, "open storage:")
+			require.Nil(t, application)
+			if reason == "not a directory" {
+				var pathError *os.PathError
+				require.ErrorAs(t, err, &pathError)
+			} else {
+				require.ErrorContains(t, err, "failed to open badger:")
+			}
+		})
+	}
 }
 
 // TestDefaultCatalogFactoryComposesOneConnectedRuntime proves the composition
