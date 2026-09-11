@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
@@ -112,6 +113,42 @@ def request_json(url, key=None):
         return response.status, json.load(response)
 
 
+class ConsoleAssets(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.paths = set()
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        path = attributes.get('src') if tag == 'script' else attributes.get('href') if tag == 'link' else None
+        if path and path.startswith('/assets/'):
+            self.paths.add(path)
+
+
+def console_response(url):
+    try:
+        with urllib.request.urlopen(url, timeout=5) as response:
+            return response.status, response.headers.get_content_type(), response.read()
+    except urllib.error.HTTPError as error:
+        error.close()
+        raise ValueError(f'The console returned HTTP {error.code}.') from None
+
+
+def verify_console(base):
+    status, content_type, body = console_response(base + '/')
+    if status != 200 or content_type != 'text/html':
+        raise ValueError('The console must return HTML with HTTP 200.')
+    assets = ConsoleAssets()
+    assets.feed(body.decode('utf-8'))
+    if not any(path.endswith('.js') for path in assets.paths) or not any(path.endswith('.css') for path in assets.paths):
+        raise ValueError('The console HTML must reference JavaScript and CSS assets.')
+    for path in sorted(assets.paths):
+        status, content_type, body = console_response(base + path)
+        if status != 200 or not body or content_type == 'text/html':
+            raise ValueError('A console asset is missing or returns the HTML fallback.')
+    return len(assets.paths)
+
+
 def verify_development(binary, environment, home, port, report):
     options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {}
     process = subprocess.Popen([str(binary), 'dev', '--no-open'], env=environment, cwd=home,
@@ -142,6 +179,8 @@ def verify_development(binary, environment, home, port, report):
             time.sleep(0.1)
         else:
             raise RuntimeError('The released development server did not become ready.')
+        report['console_asset_count'] = verify_console(base)
+        report['console_status'] = 200
         status, catalog = request_json(base + '/api/v1/models', key)
         if status != 200 or not any(model['id'] == 'openai/gpt-4o-mini' for model in catalog['data']):
             raise ValueError('The native server catalog is incomplete.')

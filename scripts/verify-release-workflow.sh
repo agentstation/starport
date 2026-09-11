@@ -82,6 +82,12 @@ for credential in \
 	require_goreleaser_text "enabled:.*isEnvSet.*$credential" "conditional macOS signing credential $credential"
 done
 
+require_goreleaser_text 'bash scripts/build-console.sh' 'the mandatory console build'
+require_goreleaser_text 'python3 scripts/verify-embedded-console.py' 'embedded console verification for every binary'
+require_text 'python3 scripts/verify-console-binary.py' 'installed console verification'
+python3 "$repository_root/scripts/test-console-release.py"
+python3 "$repository_root/scripts/test-native-release.py"
+
 if grep -q 'Require Apple signing and notarization credentials' "$workflow"; then
 	printf 'release workflow has a mandatory Apple credential gate\n' >&2
 	exit 1

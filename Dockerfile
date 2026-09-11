@@ -1,3 +1,12 @@
+FROM --platform=$BUILDPLATFORM node:24-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81 AS console
+
+WORKDIR /src
+RUN npm install -g pnpm@11.22.0
+COPY console/package.json console/pnpm-lock.yaml ./console/
+RUN pnpm -C console install --frozen-lockfile
+COPY console ./console
+RUN pnpm -C console build
+
 FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
 
 ARG TARGETOS
@@ -12,6 +21,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+COPY --from=console /src/internal/console/dist ./internal/console/dist
 RUN CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build \
     -trimpath \
     -buildvcs=false \
