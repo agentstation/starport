@@ -3,7 +3,6 @@ package catalog
 import (
 	"context"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -44,8 +43,6 @@ func authorityAcceptanceSource(t *testing.T) *permissionTestSource {
 // The test supplies a deterministic qualified clock. Native clock qualification is separate.
 func openAuthorityAcceptance(t *testing.T, kv storage.KVStore, directory string, source *permissionTestSource, authority, policy string) *Runtime {
 	t.Helper()
-	require.NoError(t, os.MkdirAll(directory, 0700))
-	require.NoError(t, os.Chmod(directory, 0700))
 	accepted, err := NewGenerationStore(kv)
 	require.NoError(t, err)
 	candidates, err := newCandidateGenerationStore(kv)
