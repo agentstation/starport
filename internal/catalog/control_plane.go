@@ -73,7 +73,8 @@ func (a AdapterAvailability) routable() bool {
 // ControlPlane atomically publishes one routable view derived from an immutable
 // Starmap generation and separately versioned runtime availability.
 type ControlPlane struct {
-	source Source
+	source     Source
+	permission catalogAttemptPermission
 
 	mu                         sync.Mutex
 	state                      starmap.CatalogState
@@ -95,6 +96,7 @@ func Open(source Source) (*ControlPlane, error) {
 		adapters:             make(map[catalogs.ProviderID]AdapterAvailability),
 		unavailableOfferings: make(map[catalogs.OfferingKey]struct{}),
 	}
+	plane.permission, _ = source.(catalogAttemptPermission)
 	if err := plane.Activate(source.CurrentCatalogState()); err != nil {
 		return nil, err
 	}
@@ -132,6 +134,7 @@ func (p *ControlPlane) Activate(state starmap.CatalogState) error {
 		return err
 	}
 	p.state = state
+	snapshot.permission = p.permission
 	p.current.Store(snapshot)
 	return nil
 }
@@ -214,6 +217,7 @@ func (p *ControlPlane) ReplaceRuntime(
 	p.state = state
 	p.availabilityRevision = nextRevision
 	p.adapters = cloneAdapters(next)
+	snapshot.permission = p.permission
 	p.current.Store(snapshot)
 	return snapshot, nil
 }
@@ -320,6 +324,7 @@ func (p *ControlPlane) publishAvailabilityLocked(
 	p.availabilityRevision = nextRevision
 	p.adapters = cloneAdapters(adapters)
 	p.unavailableOfferings = cloneUnavailableOfferings(unavailable)
+	snapshot.permission = p.permission
 	p.current.Store(snapshot)
 	return nil
 }

@@ -115,10 +115,6 @@ func openRuntime(
 	if err != nil {
 		return nil, fmt.Errorf("open accepted Starmap catalog: %w", err)
 	}
-	control, err := Open(acceptedClient)
-	if err != nil {
-		return nil, err
-	}
 
 	options := settings.starmapOptions()
 	options = append(
@@ -143,6 +139,14 @@ func openRuntime(
 			_ = cascade.Close()
 		}
 		return nil, fmt.Errorf("open Starmap runtime: %w", err)
+	}
+	control, err := Open(acceptedCatalogSource{Source: acceptedClient, catalogAttemptPermission: connected})
+	if err != nil {
+		_ = connected.Close()
+		if cascade != nil {
+			_ = cascade.Close()
+		}
+		return nil, err
 	}
 	return newRuntime(connected, cascade, candidateStore, acceptedStore, control, leases), nil
 }

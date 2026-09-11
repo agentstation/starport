@@ -108,6 +108,7 @@ type RoutableSnapshot struct {
 	generatedAt          time.Time
 	catalogSequence      uint64
 	authorityHead        catalogs.CatalogAuthorityHead
+	permission           catalogAttemptPermission
 	availabilityRevision uint64
 	routes               []Route
 	routability          []OfferingRoutability
