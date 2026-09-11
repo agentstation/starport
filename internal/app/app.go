@@ -1312,6 +1312,8 @@ func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 		SourceToken:          cfg.SourceToken,
 		SourcePollInterval:   cfg.SourcePollInterval,
 		SourceStartupPolicy:  cfg.SourceStartupPolicy,
+		SourceAuthorityID:    cfg.SourceAuthorityID,
+		SourcePolicyID:       cfg.SourcePolicyID,
 		SourceMaxAge:         cfg.SourceMaxAge,
 		SourceMaxHops:        cfg.SourceMaxHops,
 		AcquisitionEnabled:   cfg.AcquisitionEnabled,

@@ -33,6 +33,8 @@ const (
 	CatalogStartupPreferSource = "prefer_source"
 	// CatalogStartupRequireSource refuses to start until the source answers.
 	CatalogStartupRequireSource = "require_source"
+	// CatalogStartupRequireAuthority retains internal metadata and requires valid authority permission for inference.
+	CatalogStartupRequireAuthority = "require_authority"
 )
 
 // DefaultCatalogSourceRepository is the signed publication repository.
@@ -92,6 +94,12 @@ type CatalogConfig struct {
 
 	// SourceStartupPolicy decides what startup does without a source answer.
 	SourceStartupPolicy string `env:"SOURCE_STARTUP_POLICY,default=prefer_source"`
+
+	// SourceAuthorityID pins the authority used by require_authority.
+	SourceAuthorityID string `env:"SOURCE_AUTHORITY_ID"`
+
+	// SourcePolicyID pins the permission policy within the selected authority.
+	SourcePolicyID string `env:"SOURCE_POLICY_ID"`
 
 	// SourceMaxAge is the oldest publication this instance accepts.
 	SourceMaxAge time.Duration `env:"SOURCE_MAX_AGE,default=6h"`
@@ -176,12 +184,15 @@ func (c *CatalogConfig) Validate() error {
 		)
 	}
 	switch c.SourceStartupPolicy {
-	case CatalogStartupPreferSource, CatalogStartupRequireSource:
+	case CatalogStartupPreferSource, CatalogStartupRequireSource, CatalogStartupRequireAuthority:
 	default:
 		return fmt.Errorf(
-			"catalog source startup policy %q is not one of prefer_source, require_source",
+			"catalog source startup policy %q is not one of prefer_source, require_source, require_authority",
 			c.SourceStartupPolicy,
 		)
+	}
+	if err := c.validateAuthority(); err != nil {
+		return err
 	}
 	if c.Source == CatalogSourceStarmap && strings.TrimSpace(c.SourceURL) == "" {
 		return fmt.Errorf("catalog source starmap requires a source URL")

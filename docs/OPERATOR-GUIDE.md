@@ -734,7 +734,9 @@ provider. Configuration inspection redacts both values and the source URL.
 | `STARPORT_CATALOG_SOURCE_SIGNER_WORKFLOW` | empty | Expected GitHub workflow identity | An empty value selects the publisher preset. |
 | `STARPORT_CATALOG_SOURCE_TOKEN` | empty | GitHub API token | Raises the hourly ceiling from 60 for each egress address to 5,000 for each token. It also reads a private repository. |
 | `STARPORT_CATALOG_SOURCE_POLL_INTERVAL` | `1h` | Nonnegative duration | Each polling hop adds one interval to the freshness age. A push hop adds none. |
-| `STARPORT_CATALOG_SOURCE_STARTUP_POLICY` | `prefer_source` | `prefer_source`, `require_source` | `prefer_source` starts on the embedded baseline and adopts the source at the first successful read. `require_source` reads the source once at open and fails startup when that read fails. |
+| `STARPORT_CATALOG_SOURCE_STARTUP_POLICY` | `prefer_source` | `prefer_source`, `require_source`, `require_authority` | `prefer_source` starts on the embedded baseline and adopts the source at the first successful read. `require_source` reads the source once at open and fails startup when that read fails. `require_authority` keeps diagnostics available and requires current authority permission before new inference. |
+| `STARPORT_CATALOG_SOURCE_AUTHORITY_ID` | empty | Stable authority identity | Required with `require_authority`; rejected with another startup policy. The source must be `starmap` and acquisition must be disabled. |
+| `STARPORT_CATALOG_SOURCE_POLICY_ID` | empty | Stable policy identity within the authority | Required with `require_authority`; rejected with another startup policy. Both identities must exactly match the configured upstream authority. |
 | `STARPORT_CATALOG_SOURCE_MAX_AGE` | `6h` | Nonnegative duration | The served-catalog age at which this instance counts its catalog as stale. A negative value fails startup. The runtime grades the channel `warn` above this age and `critical` above five thirds of it. The default gives `6h` warn and `10h` critical. |
 | `STARPORT_CATALOG_SOURCE_MAX_HOPS` | `8` | Positive integer | Bounds the publication chain of a `starmap` source. Zero fails startup. |
 | `STARPORT_CATALOG_ACQUISITION_ENABLED` | `true` | `true`, `false` | A false value stops every automatic observation, and only an admin refresh then moves the catalog. |
@@ -745,6 +747,17 @@ provider. Configuration inspection redacts both values and the source URL.
 | `STARPORT_CATALOG_TRANSFER_IDLE_TIMEOUT` | `2m` | Positive duration | Ends a transfer that stops making progress. It does not bound a stream subscription. |
 | `STARPORT_CATALOG_TRANSFER_MAX_DURATION` | `60m` | Positive duration | Bounds one complete body transfer. Zero fails startup, because a transfer with no bound never ends. |
 | `STARPORT_CATALOG_REFRESH_TIMEOUT` | `0s` | Nonnegative duration | An added cap on one refresh run. `0s` adds no cap, and the two transfer bounds alone end a run that does not progress. |
+
+### Internal authority qualification
+
+The `require_authority` policy binds catalog permission to one authority and policy identity.
+An embedded catalog can supply diagnostics at cold startup, but it cannot grant inference permission.
+Cached responses and each new provider attempt require permission for the accepted catalog.
+An already admitted stream can finish after permission expires.
+
+This build has no qualified host clock adapter for authority mode.
+Catalog diagnostics remain available, but inference cannot become ready in this mode.
+The production catalog plan owns clock qualification and the retained-startup acceptance checks.
 
 ### The removed catalog settings
 

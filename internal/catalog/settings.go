@@ -50,6 +50,12 @@ type Settings struct {
 	// SourceStartupPolicy decides what startup does without a source answer.
 	SourceStartupPolicy string
 
+	// SourceAuthorityID pins the authority used by require_authority.
+	SourceAuthorityID string
+
+	// SourcePolicyID pins the permission policy within the selected authority.
+	SourcePolicyID string
+
 	// SourceMaxAge is the oldest publication this instance accepts.
 	SourceMaxAge time.Duration
 
@@ -99,6 +105,7 @@ func (s Settings) starmapOptions() []runtime.Option {
 	options := []runtime.Option{
 		runtime.WithCatalogSource(s.Source),
 		runtime.WithSourceStartupPolicy(s.SourceStartupPolicy),
+		runtime.WithSourceAuthority(s.SourceAuthorityID, s.SourcePolicyID),
 		runtime.WithSourcePollInterval(s.SourcePollInterval),
 		runtime.WithSourceMaxAge(s.SourceMaxAge),
 		runtime.WithSourceMaxHops(s.SourceMaxHops),
