@@ -18,10 +18,11 @@ import (
 type attemptPermissionReader interface{ AllowsNewAttempt() bool }
 
 type permissionTestSource struct {
-	mu         sync.Mutex
-	generation catalogs.Generation
-	receipt    catalogs.CatalogPermissionEnvelope
-	failure    error
+	mu                sync.Mutex
+	generation        catalogs.Generation
+	receipt           catalogs.CatalogPermissionEnvelope
+	failure           error
+	permissionFailure error
 }
 
 func (*permissionTestSource) Identity() string { return "internal-authority" }
@@ -33,7 +34,7 @@ func (s *permissionTestSource) Read(context.Context) (starmapruntime.SourceRead,
 func (s *permissionTestSource) ReadPermission(context.Context) (catalogs.CatalogPermissionEnvelope, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.receipt, nil
+	return s.receipt, s.permissionFailure
 }
 
 type permissionTestCatalogSource struct {
