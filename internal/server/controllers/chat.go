@@ -186,6 +186,13 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 		return
 	}
 	defer func() { _ = stream.Close() }()
+	// Read the first event before headers so cache permission refusals keep their HTTP status.
+	firstEvent, firstErr := stream.Read()
+	if firstErr != nil && firstErr != io.EOF {
+		h.logError(r.Context(), firstErr, "chat stream admission failed")
+		h.writeError(w, firstErr)
+		return
+	}
 
 	// http.Server.WriteTimeout applies to the whole response by default, and
 	// the request timing bound applies to the whole request. A committed stream
@@ -223,8 +230,7 @@ func (h *ChatController) handleStream(w http.ResponseWriter, r *http.Request, re
 	}
 
 	var lastEvent inference.StreamEvent
-	for {
-		event, err := stream.Read()
+	for event, err := firstEvent, firstErr; ; event, err = stream.Read() {
 		if err == io.EOF {
 			// End of stream
 			_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")

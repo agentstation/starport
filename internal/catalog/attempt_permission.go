@@ -1,6 +1,9 @@
 package catalog
 
-import "github.com/agentstation/starmap/pkg/catalogs"
+import (
+	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/failure"
+)
 
 // catalogAttemptPermission checks current permission for one accepted authority head.
 // Implementations must read only memory and support concurrent calls.
@@ -25,4 +28,13 @@ func (s *RoutableSnapshot) AllowsNewAttempt() bool {
 		return s.permission.AllowsCatalogAttempt(s.authorityHead)
 	}
 	return s.authorityHead == (catalogs.CatalogAuthorityHead{})
+}
+
+// CheckNewAttempt returns a retryable gateway refusal when current permission is unavailable.
+// A refusal carries no provider-health evidence. Successful checks allocate no memory.
+func (s *RoutableSnapshot) CheckNewAttempt() *failure.Failure {
+	if s.AllowsNewAttempt() {
+		return nil
+	}
+	return failure.New(failure.GatewayUnavailable, "Catalog permission is unavailable.", true, failure.ProviderDetails{}, nil)
 }

@@ -254,6 +254,13 @@ func bindSelectedEndpoint(
 	route routing.Route,
 	selected credentialSelection,
 ) (routing.Route, *failure.Failure) {
+	if runtime != nil {
+		if snapshot := runtime.Snapshot(); snapshot != nil {
+			if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+				return routing.Route{}, refusal
+			}
+		}
+	}
 	if route.Operation == "" {
 		return route, nil
 	}

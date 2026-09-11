@@ -80,6 +80,11 @@ func TestSnapshotPermissionTracksWithdrawalWithoutReplacingMetadata(t *testing.T
 			t.Fatal("valid permission refused")
 		}
 	}))
+	require.Zero(t, testing.AllocsPerRun(100, func() {
+		if retained.CheckNewAttempt() != nil {
+			t.Fatal("valid attempt refused")
+		}
+	}))
 	source.mu.Lock()
 	source.receipt.Head.Sequence++
 	source.receipt.Head.GenerationID = "withdrawn-next"

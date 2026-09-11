@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/catalog/view"
+	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/proxy"
 	"github.com/agentstation/starport/internal/server/controllers"
@@ -25,6 +26,30 @@ type mockProxy struct {
 	stream   proxy.ChatCompletionStreamResponse
 	err      error
 	lastChat *proxy.ChatCompletionRequest
+}
+
+func TestChatStreamCatalogPermissionBeforeHeaders(t *testing.T) {
+	for _, openRouter := range []bool{false, true} {
+		name := "openai"
+		if openRouter {
+			name = "openrouter"
+		}
+		t.Run(name, func(t *testing.T) {
+			service := &mockProxy{stream: &eventStream{err: failure.New(failure.GatewayUnavailable, "Catalog permission is unavailable.", true, failure.ProviderDetails{}, nil)}}
+			controller := controllers.NewChatController(service)
+			if openRouter {
+				controller = controllers.NewOpenRouterChatController(service)
+			}
+			request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(
+				`{"model":"openai/gpt-4.1","messages":[{"role":"user","content":"hello"}],"stream":true}`,
+			))
+			recorder := httptest.NewRecorder()
+			controller.Create(recorder, request)
+			require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+			require.Contains(t, recorder.Header().Get("Content-Type"), "application/json")
+			require.Contains(t, recorder.Body.String(), "Catalog permission is unavailable.")
+		})
+	}
 }
 
 func (m *mockProxy) ProcessChatCompletion(_ context.Context, request *proxy.ChatCompletionRequest) (*proxy.ChatCompletionResponse, error) {
