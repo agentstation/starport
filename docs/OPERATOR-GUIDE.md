@@ -755,9 +755,32 @@ An embedded catalog can supply diagnostics at cold startup, but it cannot grant 
 Cached responses and each new provider attempt require permission for the accepted catalog.
 An already admitted stream can finish after permission expires.
 
-This build has no qualified host clock adapter for authority mode.
-Catalog diagnostics remain available, but inference cannot become ready in this mode.
-The production catalog plan owns clock qualification and the retained-startup acceptance checks.
+Authority mode needs current permission and qualified clock evidence before it permits inference.
+The permission clock defaults to disabled. Select `native` only after qualifying the host time service and its error bounds.
+Starmap validates those bounds and owns the background monitor. Startup and shutdown manage that monitor with the catalog runtime.
+
+Failed observations clear cached clock evidence. Diagnostics remain available while new inference waits for valid permission and clock evidence.
+Permission checks read the cached sample and elapsed counter. They do not query the time service.
+
+All clock settings belong to one node and require restart after a change.
+The loader reads the same names with a `STARMAP_` prefix as fallback aliases.
+Process environment values precede file values. Within each source, the `STARPORT_` name precedes its `STARMAP_` alias.
+An explicit empty value does not select an alias. Changing the catalog source does not change clock settings.
+
+| Name | Default | Required bound in native mode |
+| --- | --- | --- |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_SOURCE` | `disabled` | `disabled` or `native` |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_REFRESH_INTERVAL` | unset | Positive duration below half the maximum age |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_MAX_AGE` | unset | Positive duration, at most five minutes |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_MAX_DRIFT_PPM` | unset | Positive counter rate error below one million parts per million |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_COUNTER_UNCERTAINTY` | unset | Positive counter reading error, at most thirty seconds |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_WINDOWS_MAX_SOURCE_AGE` | unset | Windows synchronization age, positive and at most one day |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_WINDOWS_MAX_SOURCE_DRIFT_PPM` | unset | Windows source rate error, positive and below one million parts per million |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_WINDOWS_SOURCE_UNCERTAINTY` | unset | Additional Windows source error, positive and at most thirty seconds |
+
+Windows requires all three Windows bounds. Other supported hosts can accept a complete Windows profile in shared configuration.
+Configuration validation does not prove the declared bounds. The deployment must qualify its time service separately.
+The production catalog plan retains platform qualification, delivery checks, and merge evidence.
 
 ### The removed catalog settings
 

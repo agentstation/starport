@@ -1303,6 +1303,7 @@ func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
 		),
 		StateDirectory:       cfg.StateDirectory,
+		PermissionClock:      cfg.PermissionClock,
 		Source:               cfg.Source,
 		SourceURL:            cfg.SourceURL,
 		SourceAPIKey:         cfg.SourceAPIKey,

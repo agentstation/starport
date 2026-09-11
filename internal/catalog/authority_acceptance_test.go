@@ -56,7 +56,9 @@ func openAuthorityAcceptance(t *testing.T, kv storage.KVStore, directory string,
 	require.NoError(t, err)
 	settings := Settings{Source: "starmap", SourceURL: "https://authority.example", SourceStartupPolicy: "require_authority", SourceAuthorityID: authority, SourcePolicyID: policy,
 		StateDirectory: directory, SourceMaxHops: 8, TransferIdleTimeout: time.Minute, TransferMaxDuration: time.Minute}
-	options := append(settings.starmapOptions(), starmapruntime.WithSource(source), starmapruntime.WithLeaseStore(leases),
+	options, err := settings.starmapOptions()
+	require.NoError(t, err)
+	options = append(options, starmapruntime.WithSource(source), starmapruntime.WithLeaseStore(leases),
 		starmapruntime.WithClientOptions(starmap.WithCatalogStore(candidates)),
 		starmapruntime.WithClock(func() time.Time { return time.Date(2026, 9, 11, 0, 0, 1, 0, time.UTC) }),
 		starmapruntime.WithPermissionClockUncertainty(func() (time.Duration, bool) { return time.Millisecond, true }))

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock/profile"
 	"github.com/sethvargo/go-envconfig"
 )
 
@@ -63,6 +64,10 @@ const stateDirectoryEnvironment = "STARPORT_CATALOG_STATE_DIR"
 // SourceAPIKey speaks the Starmap protocol, and SourceToken reads a GitHub
 // release. Neither one pays a provider.
 type CatalogConfig struct {
+	// PermissionClock holds node-local bounds parsed through Starmap's canonical schema.
+	// Changes require restart. Loading starts no clock observation.
+	PermissionClock profile.Config
+
 	// Source selects the catalog source kind.
 	Source string `env:"SOURCE,default=public"`
 
@@ -174,6 +179,9 @@ func DefaultCatalogConfig() CatalogConfig {
 
 // Validate refuses a catalog setting the runtime cannot honor.
 func (c *CatalogConfig) Validate() error {
+	if err := c.PermissionClock.Validate(); err != nil {
+		return fmt.Errorf("catalog permission clock: %w", err)
+	}
 	switch c.Source {
 	case CatalogSourcePublic, CatalogSourceGitHub, CatalogSourceStarmap,
 		CatalogSourceFile, CatalogSourceEmbedded:

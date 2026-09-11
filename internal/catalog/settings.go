@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock"
+	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock/profile"
 	protocol "github.com/agentstation/starmap/pkg/catalogs/remote"
 	catalogstorage "github.com/agentstation/starmap/pkg/catalogs/storage"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
@@ -23,6 +25,9 @@ const cascadeFallbackAfterFailures = 3
 // It mirrors the canonical Starmap settings with plain Go types.
 // The configuration package names no Starmap options. This package owns the translation.
 type Settings struct {
+	// PermissionClock contains the canonical host bounds. The runtime owns its monitor.
+	PermissionClock profile.Config
+
 	// Source selects the catalog source kind.
 	Source string
 
@@ -101,7 +106,11 @@ type Settings struct {
 // Starmap receives the source kind that the operator selected.
 // A private source never falls back to the public channel.
 // If runtime.Open fails, that error propagates without a source change.
-func (s Settings) starmapOptions() []runtime.Option {
+func (s Settings) starmapOptions() ([]runtime.Option, error) {
+	monitor, err := hostclock.NewMonitor(s.PermissionClock)
+	if err != nil {
+		return nil, err
+	}
 	options := []runtime.Option{
 		runtime.WithCatalogSource(s.Source),
 		runtime.WithSourceStartupPolicy(s.SourceStartupPolicy),
@@ -113,6 +122,9 @@ func (s Settings) starmapOptions() []runtime.Option {
 		runtime.WithStartupSpread(s.StartupSpread),
 		runtime.WithTransferIdleTimeout(s.TransferIdleTimeout),
 		runtime.WithTransferMaxDuration(s.TransferMaxDuration),
+	}
+	if monitor != nil {
+		options = append(options, runtime.WithPermissionClockMonitor(monitor))
 	}
 	if url := strings.TrimSpace(s.SourceURL); url != "" {
 		options = append(options, runtime.WithSourceURL(url))
@@ -153,7 +165,7 @@ func (s Settings) starmapOptions() []runtime.Option {
 	if address := strings.TrimSpace(s.ListenAddress); address != "" {
 		options = append(options, runtime.WithListenAddress(address))
 	}
-	return options
+	return options, nil
 }
 
 // cascadeSource builds the Starmap cascade source of a deployment that reads
