@@ -36,6 +36,8 @@ const (
 	Timeout Kind = "timeout"
 	// Canceled identifies caller cancellation.
 	Canceled Kind = "canceled"
+	// GatewayUnavailable identifies a temporary gateway admission refusal.
+	GatewayUnavailable Kind = "gateway_unavailable"
 	// Internal identifies a gateway implementation failure.
 	Internal Kind = "internal"
 )

@@ -64,8 +64,9 @@ write_import "internal/providers/connectors" "connectors"
 printf '%s\n' 'package connectors' 'type LeasingRegistry interface{}' >"$FIXTURE/internal/providers/connectors/package.go"
 write_proxy
 
+# Each fixture must use its own module instead of the caller's workspace.
 clean_report="$FIXTURE/clean.txt"
-STARPORT_DEPENDENCY_DIRECTION_ROOT="$FIXTURE" bash "$VERIFIER" >"$clean_report"
+GOWORK=off STARPORT_DEPENDENCY_DIRECTION_ROOT="$FIXTURE" bash "$VERIFIER" >"$clean_report"
 assert_complete_report "$clean_report"
 grep -Fq 'Summary: 6 passed, 0 failed' "$clean_report"
 
@@ -76,7 +77,7 @@ run_mutation() {
 	shift 2
 
 	"$@"
-	if STARPORT_DEPENDENCY_DIRECTION_ROOT="$FIXTURE" bash "$VERIFIER" >"$report" 2>&1; then
+	if GOWORK=off STARPORT_DEPENDENCY_DIRECTION_ROOT="$FIXTURE" bash "$VERIFIER" >"$report" 2>&1; then
 		printf '%s mutation unexpectedly passed verification\n' "$id" >&2
 		exit 1
 	fi

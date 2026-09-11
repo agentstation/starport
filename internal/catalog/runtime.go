@@ -99,6 +99,10 @@ func openRuntime(
 	if ctx == nil {
 		return nil, errors.New("catalog runtime context is required")
 	}
+	options, err := settings.starmapOptions()
+	if err != nil {
+		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
+	}
 	acceptedStore, err := NewGenerationStore(store)
 	if err != nil {
 		return nil, err
@@ -115,12 +119,7 @@ func openRuntime(
 	if err != nil {
 		return nil, fmt.Errorf("open accepted Starmap catalog: %w", err)
 	}
-	control, err := Open(acceptedClient)
-	if err != nil {
-		return nil, err
-	}
 
-	options := settings.starmapOptions()
 	options = append(
 		options,
 		runtime.WithClientOptions(starmap.WithCatalogStore(candidateStore)),
@@ -143,6 +142,14 @@ func openRuntime(
 			_ = cascade.Close()
 		}
 		return nil, fmt.Errorf("open Starmap runtime: %w", err)
+	}
+	control, err := Open(acceptedCatalogSource{Source: acceptedClient, catalogAttemptPermission: connected})
+	if err != nil {
+		_ = connected.Close()
+		if cascade != nil {
+			_ = cascade.Close()
+		}
+		return nil, err
 	}
 	return newRuntime(connected, cascade, candidateStore, acceptedStore, control, leases), nil
 }

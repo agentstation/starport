@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
 )
 
@@ -71,6 +72,9 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 			Actual:   generation.Manifest.GeneratedAt.Format(time.RFC3339Nano),
 		}
 	}
+	if generation.Manifest.AuthorityHead != state.AuthorityHead {
+		return ErrCatalogAuthorityMismatch
+	}
 
 	expectedID := ""
 	current, currentErr := r.accepted.Current(ctx)
@@ -81,22 +85,8 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 			r.validation.accept(candidate)
 			return nil
 		}
-		if generation.Manifest.GeneratedAt.Before(current.Manifest.GeneratedAt) {
-			return &starmaperrors.ConflictError{
-				Resource: "accepted catalog generation order",
-				Expected: current.Manifest.GeneratedAt.Format(time.RFC3339Nano),
-				Actual:   generation.Manifest.GeneratedAt.Format(time.RFC3339Nano),
-				Message:  "an accepted generation cannot move backward",
-			}
-		}
-		if generation.Manifest.GeneratedAt.Equal(current.Manifest.GeneratedAt) &&
-			generation.Manifest.Payload.Checksum != current.Manifest.Payload.Checksum {
-			return &starmaperrors.ConflictError{
-				Resource: "accepted catalog generation order",
-				Expected: current.Manifest.Payload.Checksum,
-				Actual:   generation.Manifest.Payload.Checksum,
-				Message:  "distinct payloads cannot share an accepted generation timestamp",
-			}
+		if err := validateAcceptedOrder(current.Manifest, generation.Manifest); err != nil {
+			return err
 		}
 	case notFound(currentErr):
 	default:
@@ -106,6 +96,42 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 		return fmt.Errorf("accept catalog generation: %w", err)
 	}
 	r.validation.accept(candidate)
+	return nil
+}
+
+// validateAcceptedOrder uses authority sequence or ordinary publication time.
+// Changing authority requires an explicit transition outside candidate acceptance.
+func validateAcceptedOrder(current, next catalogs.GenerationManifest) error {
+	zero := catalogs.CatalogAuthorityHead{}
+	if current.AuthorityHead != zero || next.AuthorityHead != zero {
+		if current.AuthorityHead == zero || next.AuthorityHead == zero {
+			return &starmaperrors.ConflictError{
+				Resource: "accepted catalog authority",
+				Message:  "requires an explicit authority transition",
+			}
+		}
+		if err := current.AuthorityHead.ValidateSuccessor(next.AuthorityHead); err != nil {
+			return fmt.Errorf("validate accepted catalog authority order: %w", err)
+		}
+		return nil
+	}
+	if next.GeneratedAt.Before(current.GeneratedAt) {
+		return &starmaperrors.ConflictError{
+			Resource: "accepted catalog generation order",
+			Expected: current.GeneratedAt.Format(time.RFC3339Nano),
+			Actual:   next.GeneratedAt.Format(time.RFC3339Nano),
+			Message:  "an accepted generation cannot move backward",
+		}
+	}
+	if next.GeneratedAt.Equal(current.GeneratedAt) &&
+		next.Payload.Checksum != current.Payload.Checksum {
+		return &starmaperrors.ConflictError{
+			Resource: "accepted catalog generation order",
+			Expected: current.Payload.Checksum,
+			Actual:   next.Payload.Checksum,
+			Message:  "distinct payloads cannot share an accepted generation timestamp",
+		}
+	}
 	return nil
 }
 

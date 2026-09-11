@@ -107,6 +107,8 @@ type RoutableSnapshot struct {
 	payloadChecksum      string
 	generatedAt          time.Time
 	catalogSequence      uint64
+	authorityHead        catalogs.CatalogAuthorityHead
+	permission           catalogAttemptPermission
 	availabilityRevision uint64
 	routes               []Route
 	routability          []OfferingRoutability
@@ -124,6 +126,7 @@ func newRoutableSnapshot(
 		payloadChecksum:      state.PayloadChecksum,
 		generatedAt:          state.GeneratedAt,
 		catalogSequence:      state.Sequence,
+		authorityHead:        state.AuthorityHead,
 		availabilityRevision: availabilityRevision,
 		routes:               cloneRoutes(routes),
 		routability:          append([]OfferingRoutability(nil), routability...),
@@ -153,6 +156,15 @@ func (s *RoutableSnapshot) PayloadChecksum() string {
 		return ""
 	}
 	return s.payloadChecksum
+}
+
+// AuthorityHead returns the authority head bound to this catalog.
+// This read does not grant permission.
+func (s *RoutableSnapshot) AuthorityHead() catalogs.CatalogAuthorityHead {
+	if s == nil {
+		return catalogs.CatalogAuthorityHead{}
+	}
+	return s.authorityHead
 }
 
 // GeneratedAt returns the Starmap generation timestamp.

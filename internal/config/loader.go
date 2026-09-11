@@ -147,6 +147,10 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	}); err != nil {
 		return nil, newLoadFailure("configuration values could not be decoded", err)
 	}
+	cfg.Catalog.PermissionClock, err = loadPermissionClock(lookuper)
+	if err != nil {
+		return nil, newLoadFailure("catalog permission clock values could not be decoded", err)
+	}
 	if cfg.CredentialSources.RemoteRefreshInterval == 0 {
 		cfg.CredentialSources.RemoteRefreshInterval = credentials.DefaultDirectSecretRefreshInterval
 	}
@@ -206,7 +210,7 @@ func (l *Loader) sourceLookuper(paths Paths) (envconfig.Lookuper, error) {
 		files = []string{paths.ConfigFile}
 	}
 
-	lookupers := []envconfig.Lookuper{l.environment}
+	lookupers := []envconfig.Lookuper{catalogClockLookuper{l.environment}}
 	for _, file := range files {
 		values, err := godotenv.Read(file)
 		if err != nil {
@@ -215,7 +219,7 @@ func (l *Loader) sourceLookuper(paths Paths) (envconfig.Lookuper, error) {
 			}
 			return nil, fmt.Errorf("read environment file %q: %w", file, err)
 		}
-		lookupers = append(lookupers, envconfig.MapLookuper(values))
+		lookupers = append(lookupers, catalogClockLookuper{envconfig.MapLookuper(values)})
 	}
 	return envconfig.MultiLookuper(lookupers...), nil
 }

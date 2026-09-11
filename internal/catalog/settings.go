@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock"
+	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock/profile"
 	protocol "github.com/agentstation/starmap/pkg/catalogs/remote"
 	catalogstorage "github.com/agentstation/starmap/pkg/catalogs/storage"
 	starmaperrors "github.com/agentstation/starmap/pkg/errors"
@@ -19,11 +21,13 @@ import (
 // it cannot hold.
 const cascadeFallbackAfterFailures = 3
 
-// Settings are the catalog settings one connected runtime reads. They mirror
-// the canonical Starmap settings contract with plain Go types, so the
-// configuration package names no Starmap option and this package alone owns
-// the translation.
+// Settings contains the catalog values one connected runtime reads.
+// It mirrors the canonical Starmap settings with plain Go types.
+// The configuration package names no Starmap options. This package owns the translation.
 type Settings struct {
+	// PermissionClock contains the canonical host bounds. The runtime owns its monitor.
+	PermissionClock profile.Config
+
 	// Source selects the catalog source kind.
 	Source string
 
@@ -45,11 +49,17 @@ type Settings struct {
 	// SourceToken reads a GitHub release.
 	SourceToken string
 
-	// SourcePollInterval bounds how often the source is asked.
+	// SourcePollInterval sets the polling interval for the source.
 	SourcePollInterval time.Duration
 
 	// SourceStartupPolicy decides what startup does without a source answer.
 	SourceStartupPolicy string
+
+	// SourceAuthorityID pins the authority used by require_authority.
+	SourceAuthorityID string
+
+	// SourcePolicyID pins the permission policy within the selected authority.
+	SourcePolicyID string
 
 	// SourceMaxAge is the oldest publication this instance accepts.
 	SourceMaxAge time.Duration
@@ -72,10 +82,8 @@ type Settings struct {
 	// source discovery record. It belongs to one process on one machine.
 	StateDirectory string
 
-	// ListenAddress is the host and port this gateway serves. It joins the
-	// identity seed and the host name in the instance identity, so two
-	// processes on one host hold two identities and the runtime lease fences
-	// one holder.
+	// ListenAddress is the host and port this gateway serves.
+	// Changing this address does not change the durable runtime identity.
 	ListenAddress string
 
 	// StartupSpread spreads the first source read across a fleet.
@@ -95,13 +103,18 @@ type Settings struct {
 // the only place that names a Starmap option, so the settings contract and the
 // Starmap contract stay one translation apart.
 //
-// A private source never falls back to the public channel: the source kind
-// reaches Starmap exactly as the operator selected it, and Starmap fails Open
-// instead of reading a different source.
-func (s Settings) starmapOptions() []runtime.Option {
+// Starmap receives the source kind that the operator selected.
+// A private source never falls back to the public channel.
+// If runtime.Open fails, that error propagates without a source change.
+func (s Settings) starmapOptions() ([]runtime.Option, error) {
+	monitor, err := hostclock.NewMonitor(s.PermissionClock)
+	if err != nil {
+		return nil, err
+	}
 	options := []runtime.Option{
 		runtime.WithCatalogSource(s.Source),
 		runtime.WithSourceStartupPolicy(s.SourceStartupPolicy),
+		runtime.WithSourceAuthority(s.SourceAuthorityID, s.SourcePolicyID),
 		runtime.WithSourcePollInterval(s.SourcePollInterval),
 		runtime.WithSourceMaxAge(s.SourceMaxAge),
 		runtime.WithSourceMaxHops(s.SourceMaxHops),
@@ -109,6 +122,9 @@ func (s Settings) starmapOptions() []runtime.Option {
 		runtime.WithStartupSpread(s.StartupSpread),
 		runtime.WithTransferIdleTimeout(s.TransferIdleTimeout),
 		runtime.WithTransferMaxDuration(s.TransferMaxDuration),
+	}
+	if monitor != nil {
+		options = append(options, runtime.WithPermissionClockMonitor(monitor))
 	}
 	if url := strings.TrimSpace(s.SourceURL); url != "" {
 		options = append(options, runtime.WithSourceURL(url))
@@ -145,12 +161,11 @@ func (s Settings) starmapOptions() []runtime.Option {
 		options = append(options, runtime.WithStateDirectory(directory))
 	}
 
-	// The listen address separates two processes that share one host and one
-	// state root, so each one derives its own instance identity.
+	// Record the listen address without changing the durable runtime identity.
 	if address := strings.TrimSpace(s.ListenAddress); address != "" {
 		options = append(options, runtime.WithListenAddress(address))
 	}
-	return options
+	return options, nil
 }
 
 // cascadeSource builds the Starmap cascade source of a deployment that reads

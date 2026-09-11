@@ -88,7 +88,7 @@ func newPerformanceFixture(tb testing.TB, wait time.Duration) *performanceFixtur
 	}))
 	tb.Cleanup(f.upstream.Close)
 	cfg := validProductionConfig(tb)
-	cfg.Catalog.StateDirectory = tb.TempDir()
+	cfg.Catalog.StateDirectory = filepath.Join(tb.TempDir(), "catalog-state")
 	cfg.Storage.SQL.SQLite.Path = filepath.Join(tb.TempDir(), "starport.db")
 	cfg.Telemetry.Metrics = config.TelemetryMetricsOn
 	cfg.RateLimiting.DefaultRequestsPerMinute = 1_000_000
@@ -183,8 +183,8 @@ func (f *performanceFixture) serveUpstream(w http.ResponseWriter, r *http.Reques
 	f.samples <- sample
 }
 
-// measure includes the loopback client, HTTP stacks and gateway work. Only
-// observed deliberate upstream sleeps are removed from AdjustedNS.
+// measure includes the loopback client, HTTP stacks and gateway work.
+// It subtracts only observed deliberate upstream sleeps from AdjustedNS.
 func (f *performanceFixture) measure(tb testing.TB, proxied, stream bool) performanceSample {
 	tb.Helper()
 	base, model, key := f.upstream.URL, "gpt-4o-mini", "sk-test-key"

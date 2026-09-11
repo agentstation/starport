@@ -62,28 +62,22 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 		return nil, fmt.Errorf("generate development master key: %w", err)
 	}
 	cfg.Security.MasterKey = base64.RawURLEncoding.EncodeToString(masterKey)
-	// Stored file bytes and the retained catalog state have no in-memory
-	// backend, so the session owns a temporary directory instead and removes
-	// it on close. What matters for the development promise is that the
-	// shared data directory and the user state root stay untouched: a scratch
-	// directory the session deletes is working memory, not configuration
-	// another run would inherit.
+	// The file-byte and retained catalog backends use a temporary directory.
+	// The session removes it on close and leaves the shared data and user state roots untouched.
+	// Later runs inherit no configuration from this temporary state.
 	scratchRoot, err := os.MkdirTemp("", "starport-dev-")
 	if err != nil {
 		return nil, fmt.Errorf("create development scratch directory: %w", err)
 	}
 	cfg.Files.Path = filepath.Join(scratchRoot, developmentFilesDirectory)
-	scratch := []string{cfg.Files.Path}
 	// An operator who names a state directory keeps it. The default is
 	// scratch, so the session retains no catalog state on the machine.
+	// Starmap creates its own state directory with native access rules.
 	if cfg.Catalog.StateDirectoryIsScratch() {
 		cfg.Catalog.StateDirectory = filepath.Join(scratchRoot, developmentCatalogStateDirectory)
-		scratch = append(scratch, cfg.Catalog.StateDirectory)
 	}
-	for _, directory := range scratch {
-		if err := os.MkdirAll(directory, developmentScratchPermissions); err != nil {
-			return nil, errors.Join(fmt.Errorf("create development scratch directory: %w", err), os.RemoveAll(scratchRoot))
-		}
+	if err := os.MkdirAll(cfg.Files.Path, developmentScratchPermissions); err != nil {
+		return nil, errors.Join(fmt.Errorf("create development scratch directory: %w", err), os.RemoveAll(scratchRoot))
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, errors.Join(fmt.Errorf("validate development config: %w", err), os.RemoveAll(scratchRoot))
@@ -93,9 +87,8 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("open development storage: %w", err), os.RemoveAll(scratchRoot))
 	}
-	// A key is issued only when one is needed. With authentication disabled
-	// the session has nothing to print and nothing to paste, and minting a key
-	// anyway would teach the wrong thing about the mode it is running in.
+	// The session issues a gateway key only when authentication requires one.
+	// With authentication disabled, it prints no key and requires no pasted key.
 	var apiKey string
 	if cfg.Security.AuthMode.Effective() != config.AuthModeDisabled {
 		issued, err := setup.InitializeAPIKey(ctx, store, developmentAPIKeyName)
@@ -138,10 +131,8 @@ func (runtime *Development) URL() string {
 // ConsoleURL returns a one-time link that signs one browser in to this
 // development gateway.
 //
-// The link is minted here rather than read from a file so it names this
-// session's address and this session's port. A development gateway picks both
-// at start, and a link that pointed at the configured gateway would sign the
-// operator in to a different process than the one they just started.
+// The session creates this link from its current address and port.
+// It reads no link from a file. A saved link can identify another gateway.
 func (runtime *Development) ConsoleURL() (string, error) {
 	if runtime == nil || runtime.application == nil {
 		return "", errors.New("development application is required")

@@ -734,7 +734,9 @@ provider. Configuration inspection redacts both values and the source URL.
 | `STARPORT_CATALOG_SOURCE_SIGNER_WORKFLOW` | empty | Expected GitHub workflow identity | An empty value selects the publisher preset. |
 | `STARPORT_CATALOG_SOURCE_TOKEN` | empty | GitHub API token | Raises the hourly ceiling from 60 for each egress address to 5,000 for each token. It also reads a private repository. |
 | `STARPORT_CATALOG_SOURCE_POLL_INTERVAL` | `1h` | Nonnegative duration | Each polling hop adds one interval to the freshness age. A push hop adds none. |
-| `STARPORT_CATALOG_SOURCE_STARTUP_POLICY` | `prefer_source` | `prefer_source`, `require_source` | `prefer_source` starts on the embedded baseline and adopts the source at the first successful read. `require_source` reads the source once at open and fails startup when that read fails. |
+| `STARPORT_CATALOG_SOURCE_STARTUP_POLICY` | `prefer_source` | `prefer_source`, `require_source`, `require_authority` | `prefer_source` starts on the embedded baseline and adopts the source at the first successful read. `require_source` reads the source once at open and fails startup when that read fails. `require_authority` keeps diagnostics available and requires current authority permission before new inference. |
+| `STARPORT_CATALOG_SOURCE_AUTHORITY_ID` | empty | Stable authority identity | Required with `require_authority`; rejected with another startup policy. The source must be `starmap` and acquisition must be disabled. |
+| `STARPORT_CATALOG_SOURCE_POLICY_ID` | empty | Stable policy identity within the authority | Required with `require_authority`; rejected with another startup policy. Both identities must exactly match the configured upstream authority. |
 | `STARPORT_CATALOG_SOURCE_MAX_AGE` | `6h` | Nonnegative duration | The served-catalog age at which this instance counts its catalog as stale. A negative value fails startup. The runtime grades the channel `warn` above this age and `critical` above five thirds of it. The default gives `6h` warn and `10h` critical. |
 | `STARPORT_CATALOG_SOURCE_MAX_HOPS` | `8` | Positive integer | Bounds the publication chain of a `starmap` source. Zero fails startup. |
 | `STARPORT_CATALOG_ACQUISITION_ENABLED` | `true` | `true`, `false` | A false value stops every automatic observation, and only an admin refresh then moves the catalog. |
@@ -745,6 +747,40 @@ provider. Configuration inspection redacts both values and the source URL.
 | `STARPORT_CATALOG_TRANSFER_IDLE_TIMEOUT` | `2m` | Positive duration | Ends a transfer that stops making progress. It does not bound a stream subscription. |
 | `STARPORT_CATALOG_TRANSFER_MAX_DURATION` | `60m` | Positive duration | Bounds one complete body transfer. Zero fails startup, because a transfer with no bound never ends. |
 | `STARPORT_CATALOG_REFRESH_TIMEOUT` | `0s` | Nonnegative duration | An added cap on one refresh run. `0s` adds no cap, and the two transfer bounds alone end a run that does not progress. |
+
+### Internal authority qualification
+
+The `require_authority` policy binds catalog permission to one authority and policy identity.
+An embedded catalog can supply diagnostics at cold startup, but it cannot grant inference permission.
+Cached responses and each new provider attempt require permission for the accepted catalog.
+An already admitted stream can finish after permission expires.
+
+Authority mode needs current permission and qualified clock evidence before it permits inference.
+The permission clock defaults to disabled. Select `native` only after qualifying the host time service and its error bounds.
+Starmap validates those bounds and owns the background monitor. Startup and shutdown manage that monitor with the catalog runtime.
+
+Failed observations clear cached clock evidence. Diagnostics remain available while new inference waits for valid permission and clock evidence.
+Permission checks read the cached sample and elapsed counter. They do not query the time service.
+
+All clock settings belong to one node and require restart after a change.
+The loader reads the same names with a `STARMAP_` prefix as fallback aliases.
+Process environment values precede file values. Within each source, the `STARPORT_` name precedes its `STARMAP_` alias.
+An explicit empty value does not select an alias. Changing the catalog source does not change clock settings.
+
+| Name | Default | Required bound in native mode |
+| --- | --- | --- |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_SOURCE` | `disabled` | `disabled` or `native` |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_REFRESH_INTERVAL` | unset | Positive duration below half the maximum age |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_MAX_AGE` | unset | Positive duration, at most five minutes |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_MAX_DRIFT_PPM` | unset | Positive counter rate error below one million parts per million |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_COUNTER_UNCERTAINTY` | unset | Positive counter reading error, at most thirty seconds |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_WINDOWS_MAX_SOURCE_AGE` | unset | Windows synchronization age, positive and at most one day |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_WINDOWS_MAX_SOURCE_DRIFT_PPM` | unset | Windows source rate error, positive and below one million parts per million |
+| `STARPORT_CATALOG_PERMISSION_CLOCK_WINDOWS_SOURCE_UNCERTAINTY` | unset | Additional Windows source error, positive and at most thirty seconds |
+
+Windows requires all three Windows bounds. Other supported hosts can accept a complete Windows profile in shared configuration.
+Configuration validation does not prove the declared bounds. The deployment must qualify its time service separately.
+The production catalog plan retains platform qualification, delivery checks, and merge evidence.
 
 ### The removed catalog settings
 

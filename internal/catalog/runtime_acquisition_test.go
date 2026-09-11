@@ -146,17 +146,26 @@ func (o *recordingProviderObserver) ObserveProvider(
 	if err != nil {
 		return acquisition.ProviderObservation{}, err
 	}
-	payload, err := catalogs.EncodeCatalogPayload(observed)
+	immutable, err := catalogs.NewObservationCatalog(observed)
+	if err != nil {
+		return acquisition.ProviderObservation{}, err
+	}
+	observation, err := sources.NewObservation(sources.ProvidersID, immutable, sources.ObservationMetadata{
+		ObservedAt:   time.Now().UTC(),
+		Revision:     sources.Revision{Kind: sources.RevisionKindContentDigest},
+		Completeness: sources.ObservationCompletenessComplete,
+		Status:       sources.ObservationStatusSucceeded,
+		Records:      sources.ObservationRecordCounts{Accepted: len(provider.Models)},
+	})
+	if err != nil {
+		return acquisition.ProviderObservation{}, err
+	}
+	layer, err := runtime.NewProviderLayer(id, observation)
 	if err != nil {
 		return acquisition.ProviderObservation{}, err
 	}
 	return acquisition.ProviderObservation{
-		Layer: runtime.ProviderLayer{
-			ProviderID: id,
-			Payload:    payload,
-			Digest:     catalogs.DescribeCatalogPayload(payload).Checksum,
-			ObservedAt: time.Now().UTC(),
-		},
+		Layer: layer,
 		Attempt: sources.ProviderAttempt{
 			ProviderID: id,
 			Outcome:    sources.ProviderOutcomeSucceeded,
