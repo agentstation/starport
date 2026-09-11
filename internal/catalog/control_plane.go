@@ -29,6 +29,8 @@ var (
 	ErrModelNotCatalogued = errors.New("model is not in the catalog")
 	// ErrCatalogGenerationRequired means that a Starmap state has no generation identity.
 	ErrCatalogGenerationRequired = errors.New("catalog state must contain a generation ID")
+	// ErrCatalogAuthorityMismatch reports authority metadata from a different publication.
+	ErrCatalogAuthorityMismatch = errors.New("catalog authority head does not match the catalog generation")
 	// ErrMissingPagePrice reports an offering that serves document recognition
 	// and states no price per page.
 	//
@@ -328,6 +330,14 @@ func validateCatalogState(state starmap.CatalogState) error {
 	}
 	if strings.TrimSpace(state.GenerationID) == "" {
 		return ErrCatalogGenerationRequired
+	}
+	if head := state.AuthorityHead; head != (catalogs.CatalogAuthorityHead{}) {
+		if err := head.Validate(); err != nil {
+			return fmt.Errorf("catalog authority head: %w", err)
+		}
+		if head.GenerationID != state.GenerationID || head.PayloadChecksum != state.PayloadChecksum {
+			return ErrCatalogAuthorityMismatch
+		}
 	}
 	return nil
 }

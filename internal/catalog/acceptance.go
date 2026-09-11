@@ -71,6 +71,9 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 			Actual:   generation.Manifest.GeneratedAt.Format(time.RFC3339Nano),
 		}
 	}
+	if generation.Manifest.AuthorityHead != state.AuthorityHead {
+		return ErrCatalogAuthorityMismatch
+	}
 
 	expectedID := ""
 	current, currentErr := r.accepted.Current(ctx)
