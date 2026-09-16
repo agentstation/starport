@@ -27,6 +27,12 @@ const cascadeFallbackAfterFailures = 3
 // It mirrors the canonical Starmap settings with plain Go types.
 // The configuration package names no Starmap options. This package owns the translation.
 type Settings struct {
+	// BaselineDirectory selects the host-owned immutable embedded export.
+	BaselineDirectory string
+	// InstanceID and DeploymentID bind the runtime directory to this Starport process.
+	InstanceID   string
+	DeploymentID string
+
 	// Values retains the canonical settings that have no gateway-specific projection.
 	Values map[string]string
 
@@ -120,7 +126,11 @@ func (s Settings) starmapOptions() ([]runtime.Option, error) {
 	if err != nil {
 		return nil, err
 	}
-	options := parsed.Options()
+	owner := s.directoryOwner()
+	if err := owner.Validate(); err != nil {
+		return nil, err
+	}
+	options := append(parsed.Options(), runtime.WithDirectoryOwner(owner))
 	if monitor != nil {
 		options = append(options, runtime.WithPermissionClockMonitor(monitor))
 	}
@@ -211,4 +221,15 @@ func (s Settings) cascadeSource(ctx context.Context) (*remote.Source, error) {
 		MaxHops: s.SourceMaxHops,
 		MaxAge:  s.SourceMaxAge,
 	})
+}
+
+func (s Settings) directoryOwner() runtime.DirectoryOwner {
+	instance, deployment := s.InstanceID, s.DeploymentID
+	if instance == "" {
+		instance = "default"
+	}
+	if deployment == "" {
+		deployment = "local"
+	}
+	return runtime.DirectoryOwner{Product: "starport", Deployment: deployment, Instance: instance}
 }

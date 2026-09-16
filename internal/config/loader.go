@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"path/filepath"
 
+	"github.com/agentstation/starmap/pkg/productpaths"
+	"github.com/agentstation/starmap/pkg/productpaths/policy"
 	"github.com/joho/godotenv"
 	"github.com/sethvargo/go-envconfig"
 
@@ -52,9 +53,8 @@ func newLoadFailure(message string, cause error) error {
 // NewLoader creates a loader for the process environment and platform paths.
 func NewLoader() *Loader {
 	return &Loader{
-		prefix:       "STARPORT_",
-		environment:  envconfig.OsLookuper(),
-		resolvePaths: PlatformPaths,
+		prefix:      "STARPORT_",
+		environment: envconfig.OsLookuper(),
 	}
 }
 
@@ -119,14 +119,31 @@ func (l *Loader) LoadDevelopment(ctx context.Context, overrides ...Override) (*C
 }
 
 func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Override) (*Config, error) {
-	paths, err := l.resolvePaths()
+	paths, err := l.bootstrapPaths()
 	if err != nil {
 		return nil, newLoadFailure("configuration paths could not be resolved", err)
 	}
 
-	lookuper, err := l.sourceLookuper(paths)
+	lookuper, err := l.sourceLookuper(ctx, paths)
 	if err != nil {
 		return nil, newLoadFailure("configuration sources could not be read", err)
+	}
+
+	selected := lookuper.(catalogSettingsLookuper)
+	paths, err = l.managedPaths(paths, lookuper, selected.pathLayers)
+	if err != nil {
+		return nil, newLoadFailure("configuration paths could not be resolved", err)
+	}
+	base, err := relativeBase(lookuper)
+	if err != nil {
+		return nil, newLoadFailure("relative path base is invalid", err)
+	}
+
+	raw := envconfig.MultiLookuper(selected.sources...)
+	for _, key := range []string{"STARPORT_STORAGE_BADGER_PATH", "STARPORT_STORAGE_SQL_SQLITE_PATH", "STARPORT_CATALOG_STATE_DIR", "STARPORT_FILES_PATH"} {
+		if value, present := raw.Lookup(key); present && value == "" {
+			return nil, newLoadFailure(key+" requires a nonempty path", fmt.Errorf("%s requires a nonempty path", key))
+		}
 	}
 
 	// A removed setting fails startup before anything reads a value. A
@@ -175,12 +192,13 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 		}
 	}
 
-	if err := resolveConfiguredPaths(cfg, paths); err != nil {
+	if err := resolveConfiguredPaths(cfg, &paths, base); err != nil {
 		return nil, newLoadFailure("configured paths could not be resolved", err)
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, newLoadFailure("configuration values are invalid", err)
 	}
+	cfg.paths = paths
 	cfg.providerEnvironment = lookuper
 	resolverOptions := []credentials.ResolverOption{
 		credentials.WithEnvironmentLookup(lookuper.Lookup),
@@ -205,79 +223,95 @@ func defaultConfig(paths Paths) *Config {
 	}
 }
 
-func (l *Loader) sourceLookuper(paths Paths) (envconfig.Lookuper, error) {
+func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Lookuper, error) {
 	files := l.envFiles
-	if files == nil {
+	primary := files == nil
+	if primary {
 		files = []string{paths.ConfigFile}
 	}
-
+	access, _ := l.environment.Lookup("STARPORT_CONFIG_ACCESS")
+	if _, err := policy.Configuration(access, primary && paths.configExplicit); err != nil {
+		return nil, err
+	}
+	base, err := relativeBase(l.environment)
+	if err != nil {
+		return nil, err
+	}
 	lookupers := []envconfig.Lookuper{catalogClockLookuper{l.environment}}
+	layers := []productpaths.Layer{rootLayer("environment", l.environment)}
 	for _, file := range files {
-		values, err := godotenv.Read(file)
+		selected, err := selectedLeaf(paths.ConfigDir, file, "go-option", base)
 		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+		var data []byte
+		if primary {
+			data, err = productpaths.ReadConfiguration(ctx, productpaths.ConfigurationInput{Path: selected.Path, AccessPolicy: access, Explicit: paths.configExplicit, MaxBytes: 1 << 20})
+		} else {
+			data, err = productpaths.ReadDotenv(ctx, selected.Path, 1<<20)
+		}
+		if err != nil {
+			if primary && !paths.configExplicit && errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
-			return nil, fmt.Errorf("read environment file %q: %w", file, err)
+			return nil, fmt.Errorf("read configuration file %q: %w", selected.Path, err)
+		}
+		values, err := godotenv.Unmarshal(string(data))
+		if err != nil {
+			return nil, fmt.Errorf("parse configuration file %q: %w", selected.Path, err)
 		}
 		lookupers = append(lookupers, catalogClockLookuper{envconfig.MapLookuper(values)})
+		layers = append(layers, rootLayer("file:"+selected.Path, envconfig.MapLookuper(values)))
 	}
-	return resolveCatalogLookuper(lookupers)
+	resolved, err := resolveCatalogLookuper(lookupers)
+	if err != nil {
+		return nil, err
+	}
+	selected := resolved.(catalogSettingsLookuper)
+	selected.pathLayers, selected.sources = layers, lookupers
+	return selected, nil
 }
 
-func resolveConfiguredPaths(cfg *Config, paths Paths) error {
-	var err error
-	if cfg.Storage.Mode == storageModeBadger {
-		cfg.Storage.Badger.Path, err = resolvePath(paths.ConfigDir, cfg.Storage.Badger.Path)
-		if err != nil {
-			return fmt.Errorf("badger path: %w", err)
-		}
+func resolveConfiguredPaths(cfg *Config, paths *Paths, base string) error {
+	if !cfg.Catalog.StateDirectoryIsScratch() && cfg.Catalog.StateDirectory == "" {
+		cfg.Catalog.StateDirectory = paths.RuntimeDir
+	}
+	type leafSelection struct {
+		name     string
+		value    *string
+		required bool
+	}
+	selections := []leafSelection{
+		{"workspace", &cfg.Catalog.WorkspacePath, false},
+		{"runtime", &cfg.Catalog.StateDirectory, !cfg.Catalog.StateDirectoryIsScratch()},
+		{"local-token", &cfg.Security.LocalTokenPath, true},
+		{"tls-certificate", &cfg.Security.TLSCertPath, false},
+		{"tls-key", &cfg.Security.TLSKeyPath, false},
+		{"logs", &cfg.Logging.FilePath, false},
+	}
+	if cfg.Storage.Mode == storageModeBadger && !cfg.Storage.Badger.inMemory {
+		selections = append(selections, leafSelection{"badger", &cfg.Storage.Badger.Path, true})
+	}
+	if cfg.Storage.SQL.Mode == sqlModeSQLite && !cfg.Storage.Badger.inMemory {
+		selections = append(selections, leafSelection{"sqlite", &cfg.Storage.SQL.SQLite.Path, true})
 	}
 	if cfg.Files.SelectedBackend() == BlobBackendFilesystem {
-		if cfg.Files.Path == "" {
-			cfg.Files.Path = paths.FilesDir
+		selections = append(selections, leafSelection{"files", &cfg.Files.Path, true})
+	}
+	for _, selection := range selections {
+		if *selection.value == "" && !selection.required {
+			continue
 		}
-		cfg.Files.Path, err = resolvePath(paths.ConfigDir, cfg.Files.Path)
+		path, err := selectedLeaf(paths.ConfigDir, *selection.value, "configuration", base)
 		if err != nil {
-			return fmt.Errorf("files path: %w", err)
+			return fmt.Errorf("%s path: %w", selection.name, err)
 		}
+		*selection.value = path.Path
+		paths.Origins[selection.name] = path
 	}
-	cfg.Catalog.WorkspacePath, err = resolvePath(paths.ConfigDir, cfg.Catalog.WorkspacePath)
-	if err != nil {
-		return fmt.Errorf("catalog workspace path: %w", err)
-	}
-	// The process-local state directory resolves against the user state root.
-	// A fleet can share its configuration directory without sharing runtime state.
-	// A development gateway owns scratch and does not use the user state root.
-	if !cfg.Catalog.StateDirectoryIsScratch() {
-		cfg.Catalog.StateDirectory, err = ResolveStateDirectory(cfg.Catalog.StateDirectory)
-		if err != nil {
-			return fmt.Errorf("catalog state directory: %w", err)
-		}
-	}
-	cfg.Security.TLSCertPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSCertPath)
-	if err != nil {
-		return fmt.Errorf("TLS certificate path: %w", err)
-	}
-	cfg.Security.TLSKeyPath, err = resolvePath(paths.ConfigDir, cfg.Security.TLSKeyPath)
-	if err != nil {
-		return fmt.Errorf("TLS key path: %w", err)
-	}
-	cfg.Logging.FilePath, err = resolvePath(paths.ConfigDir, cfg.Logging.FilePath)
-	if err != nil {
-		return fmt.Errorf("log file path: %w", err)
-	}
+	paths.BadgerDir, paths.SQLiteFile, paths.FilesDir = cfg.Storage.Badger.Path, cfg.Storage.SQL.SQLite.Path, cfg.Files.Path
+	paths.RuntimeDir, paths.LocalTokenFile = cfg.Catalog.StateDirectory, cfg.Security.LocalTokenPath
 	return nil
-}
-
-func resolvePath(base, value string) (string, error) {
-	if value == "" || filepath.IsAbs(value) {
-		return value, nil
-	}
-	if base == "" {
-		return "", fmt.Errorf("base directory is empty")
-	}
-	return filepath.Join(base, value), nil
 }
 
 // LoadWithDefaults loads configuration from the standard sources.

@@ -17,6 +17,7 @@ import (
 
 // Config represents the complete application configuration
 type Config struct {
+	paths             Paths
 	Server            ServerConfig            `env:",prefix=SERVER_"`
 	Storage           StorageConfig           `env:",prefix=STORAGE_"`
 	Catalog           CatalogConfig           `env:",prefix=CATALOG_"`

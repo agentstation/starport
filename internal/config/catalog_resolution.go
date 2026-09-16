@@ -7,10 +7,13 @@ import (
 	"strings"
 
 	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
+	"github.com/agentstation/starmap/pkg/productpaths"
 	"github.com/sethvargo/go-envconfig"
 )
 
 type catalogSettingsLookuper struct {
+	pathLayers []productpaths.Layer
+	sources    []envconfig.Lookuper
 	envconfig.Lookuper
 	resolution catalogconfig.Resolution
 	values     map[string]string

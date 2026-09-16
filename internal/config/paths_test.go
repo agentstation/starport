@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/agentstation/starmap/pkg/productpaths"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,7 +9,10 @@ import (
 
 func TestPlatformPathsUseUserConfigDirectory(t *testing.T) {
 	t.Setenv(configDirectoryEnvironment, "")
-	userConfigDir, err := os.UserConfigDir()
+	if err := os.Unsetenv(configDirectoryEnvironment); err != nil {
+		t.Fatal(err)
+	}
+	userConfigDir, err := productpaths.UserDefaults(productpaths.Starport)(productpaths.Config)
 	if err != nil {
 		t.Fatalf("resolve user config directory: %v", err)
 	}
@@ -16,7 +20,7 @@ func TestPlatformPathsUseUserConfigDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve platform paths: %v", err)
 	}
-	want := filepath.Join(userConfigDir, applicationDirectory)
+	want := userConfigDir
 	if paths.ConfigDir != want {
 		t.Errorf("config directory = %q, want %q", paths.ConfigDir, want)
 	}
@@ -30,8 +34,15 @@ func TestPlatformPathsUseExplicitDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve explicit config directory: %v", err)
 	}
-	if paths != PathsForConfigDir(configured) {
-		t.Errorf("paths = %#v, want %#v", paths, PathsForConfigDir(configured))
+	if paths.ConfigDir != configured {
+		t.Fatalf("config root = %q", paths.ConfigDir)
+	}
+	wantData, err := productpaths.UserDefaults(productpaths.Starport)(productpaths.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paths.DataDir != wantData {
+		t.Fatalf("config override changed data root: %q, want %q", paths.DataDir, wantData)
 	}
 }
 

@@ -223,6 +223,7 @@ type authRuntime struct {
 
 func (b *runtimeBuilder) compose() error {
 	steps := []func() error{
+		b.validateCatalogStorage,
 		b.openStorage,
 		b.openSQLStore,
 		b.openBlob,
@@ -1298,8 +1299,16 @@ func defaultRuntimeFactories() runtimeFactories {
 // identity has to separate two gateway processes on one host.
 func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 	cfg := deployment.Catalog
+	paths := deployment.EffectivePaths()
+	baseline := paths.BaselineDir
+	if cfg.StateDirectoryIsScratch() {
+		baseline = ""
+	}
 	return runtimecatalog.Settings{
-		Values: cfg.CatalogValues(),
+		BaselineDirectory: baseline,
+		InstanceID:        paths.InstanceID,
+		DeploymentID:      paths.DeploymentID,
+		Values:            cfg.CatalogValues(),
 		ListenAddress: net.JoinHostPort(
 			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
 		),

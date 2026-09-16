@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -271,6 +270,7 @@ func TestOperatorErrorDoesNotTrustExternalErrors(t *testing.T) {
 func TestLoaderResolvesRelativePathsFromConfigDirectory(t *testing.T) {
 	paths := PathsForConfigDir(t.TempDir())
 	environment := map[string]string{
+		"STARPORT_RELATIVE_PATH_BASE":              "config",
 		"STARPORT_STORAGE_BADGER_PATH":             "state",
 		"STARPORT_CATALOG_WORKSPACE_PATH":          "catalog",
 		"STARPORT_SECURITY_TLS_CERT_PATH":          "tls/cert.pem",
@@ -412,35 +412,29 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 	}
 }
 
-// TestDevelopmentLoaderNeedsNoHomeDirectory proves that a development gateway
-// loads with no home directory and no state root, because its catalog state
-// is session scratch and never resolves against the user state root. A
-// serving gateway in the same process refuses to load and names the settings.
+// TestDevelopmentLoaderNeedsNoHomeDirectory checks caller-owned roots without a user home.
 func TestDevelopmentLoaderNeedsNoHomeDirectory(t *testing.T) {
 	t.Setenv(stateHomeEnvironment, "")
 	setHomeDirectory(t, "")
-	loader := NewLoader().
-		WithPaths(PathsForConfigDir(t.TempDir())).
-		WithEnvironment(map[string]string{}).
-		WithEnvFiles()
-
+	paths := PathsForConfigDir(t.TempDir())
+	loader := NewLoader().WithPaths(paths).WithEnvironment(nil).WithEnvFiles()
 	cfg, err := loader.LoadDevelopment(t.Context())
 	if err != nil {
-		t.Fatalf("load development config without a home directory: %v", err)
+		t.Fatal(err)
 	}
 	if cfg.Catalog.StateDirectory != "" || !cfg.Catalog.StateDirectoryIsScratch() {
-		t.Fatalf("development catalog state directory = %q, want scratch", cfg.Catalog.StateDirectory)
+		t.Fatal("development state must use scratch")
 	}
-
-	_, err = loader.Load(t.Context())
+	persistent, err := loader.Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persistent.Catalog.StateDirectory != paths.RuntimeDir {
+		t.Fatal("explicit roots must not require a home directory")
+	}
+	_, err = NewLoader().WithEnvironment(nil).WithEnvFiles().Load(t.Context())
 	if err == nil {
-		t.Fatal("a serving gateway loaded without a home directory or a state root")
-	}
-	// The operator-facing message carries no value, so the cause names the
-	// settings.
-	cause := errors.Unwrap(err)
-	if cause == nil || !strings.Contains(cause.Error(), stateDirectoryEnvironment) {
-		t.Fatalf("serving load cause %v does not name %s", cause, stateDirectoryEnvironment)
+		t.Fatal("platform defaults require native root inputs")
 	}
 }
 

@@ -103,6 +103,14 @@ func openRuntime(
 	if err != nil {
 		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
 	}
+	if err := settings.ValidateStorageSelection(ctx); err != nil {
+		return nil, err
+	}
+	if settings.BaselineDirectory != "" {
+		if _, err := starmap.ExportEmbeddedBaseline(ctx, settings.BaselineDirectory); err != nil {
+			return nil, fmt.Errorf("persist embedded catalog baseline: %w", err)
+		}
+	}
 	acceptedStore, err := NewGenerationStore(store)
 	if err != nil {
 		return nil, err

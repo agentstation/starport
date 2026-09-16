@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -301,7 +302,7 @@ func (s *Service) validate(request Request) error {
 		return ErrPathsRequired
 	}
 	expected := config.PathsForConfigDir(s.paths.ConfigDir)
-	if !filepath.IsAbs(s.paths.ConfigDir) || s.paths != expected {
+	if !filepath.IsAbs(s.paths.ConfigDir) || !reflect.DeepEqual(s.paths, expected) {
 		return ErrPathsRequired
 	}
 	if err := (apikey.APIKey{ID: "validation", Name: request.APIKeyName, Hash: "validation", Scopes: []string{"*"}}).Validate(); err != nil {
