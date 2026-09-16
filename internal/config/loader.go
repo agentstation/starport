@@ -147,6 +147,13 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 	if err != nil {
 		return nil, newLoadFailure("relative path base is invalid", err)
 	}
+	paths.RelativePathBase, paths.RelativePathBaseOrigin = base, pathOriginDefault
+	for index, source := range selected.sources {
+		if _, present := source.Lookup("STARPORT_RELATIVE_PATH_BASE"); present {
+			paths.RelativePathBaseOrigin = selected.pathLayers[index].Name
+			break
+		}
+	}
 
 	raw := envconfig.MultiLookuper(selected.sources...)
 	for _, key := range []string{badgerPathEnvironment, sqlitePathEnvironment, stateDirectoryEnvironment, filesPathEnvironment} {
@@ -219,6 +226,7 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 		return nil, newLoadFailure("configuration values are invalid", err)
 	}
 	cfg.paths = paths
+	cfg.fileInputs = selected.fileInputs
 	cfg.providerEnvironment = lookuper
 	resolverOptions := []credentials.ResolverOption{
 		credentials.WithEnvironmentLookup(lookuper.Lookup),
@@ -250,7 +258,8 @@ func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Loo
 		files = []string{paths.ConfigFile}
 	}
 	access, _ := l.environment.Lookup("STARPORT_CONFIG_ACCESS")
-	if _, err := policy.Configuration(access, primary && paths.configExplicit); err != nil {
+	checkedAccess, err := policy.Configuration(access, primary && paths.configExplicit)
+	if err != nil {
 		return nil, err
 	}
 	base, err := relativeBase(l.environment)
@@ -259,11 +268,21 @@ func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Loo
 	}
 	lookupers := []envconfig.Lookuper{catalogClockLookuper{l.environment}}
 	layers := []productpaths.Layer{rootLayer("environment", l.environment)}
+	var inputs []configurationFile
 	for _, file := range files {
 		selected, err := selectedLeaf(paths.ConfigDir, file, "go-option", base)
 		if err != nil {
 			return nil, err
 		}
+		input := configurationFile{location: selected, access: policy.OwnerOnly}
+		if primary {
+			input.primary, input.access = true, checkedAccess
+			input.location = paths.Origins["configuration"]
+			if input.location.Path == "" {
+				input.location = productpaths.Path{Path: selected.Path, Origin: "derived:config"}
+			}
+		}
+		inputs = append(inputs, input)
 		var data []byte
 		if primary {
 			data, err = productpaths.ReadConfiguration(ctx, productpaths.ConfigurationInput{Path: selected.Path, AccessPolicy: access, Explicit: paths.configExplicit, MaxBytes: 1 << 20})
@@ -289,6 +308,7 @@ func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Loo
 	}
 	selected := resolved.(catalogSettingsLookuper)
 	selected.pathLayers, selected.sources = layers, lookupers
+	selected.fileInputs = inputs
 	return selected, nil
 }
 

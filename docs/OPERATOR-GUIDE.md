@@ -329,6 +329,19 @@ The command reads configuration without creating directories or opening database
 Use `starport config paths --json` to include selection origins and relative-path anchors.
 Origins distinguish configuration files, environment values, Starmap fallbacks, root-derived paths, and changed Go overrides.
 
+Use `starport config paths --files` to report file roles, selected backends, access requirements, and recovery rules.
+The report marks inactive database paths as disabled and identifies shared KV, SQL, and object storage without connection credentials.
+Accepted catalog generations use the selected KV backend. Each process keeps its private catalog runtime evidence under the runtime directory.
+The embedded baseline export remains separate from that mutable state.
+
+Use `starport config paths --inspect --json` to add bounded filesystem metadata.
+Set `--max-entries` to change the scan bound from 10,000 entries, up to 100,000 entries.
+Inspection reads no data-file contents, opens no databases, takes no runtime locks, and changes no files.
+It reports access conflicts and unverified access. It does not establish effective access, runtime ownership, readiness, or a consistent backup.
+
+The report records the configuration access policy selected before the loader read the file.
+This prevents a value inside the file from changing its reported access requirement.
+
 For a file catalog source, use an absolute `STARPORT_CATALOG_SOURCE_URL`.
 Set `STARPORT_RELATIVE_PATH_BASE=config` to anchor relative paths under the configuration root.
 

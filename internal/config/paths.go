@@ -13,27 +13,32 @@ import (
 )
 
 const pathOriginGoOption = "go-option"
+const pathOriginDefault = "default"
+const pathRoleSQLite = "sqlite"
+const pathRoleBaseline = "baseline"
 const pathRoleRuntime = "runtime"
 const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
 
 // Paths contains resolved files, roots, and their selection origins.
 type Paths struct {
-	ConfigDir        string                       `json:"config_dir"`
-	ConfigFile       string                       `json:"config_file"`
-	DataDir          string                       `json:"data_dir"`
-	StateDir         string                       `json:"state_dir"`
-	CacheDir         string                       `json:"cache_dir"`
-	RuntimeDir       string                       `json:"runtime_dir"`
-	BaselineDir      string                       `json:"baseline_dir"`
-	BadgerDir        string                       `json:"badger_dir"`
-	SQLiteFile       string                       `json:"sqlite_file"`
-	FilesDir         string                       `json:"files_dir"`
-	LocalTokenFile   string                       `json:"local_token_file"`
-	WelcomeStampFile string                       `json:"welcome_stamp_file"`
-	InstanceID       string                       `json:"instance_id"`
-	DeploymentID     string                       `json:"deployment_id"`
-	Origins          map[string]productpaths.Path `json:"origins"`
-	configExplicit   bool
+	RelativePathBase       string                       `json:"relative_path_base"`
+	RelativePathBaseOrigin string                       `json:"relative_path_base_origin"`
+	ConfigDir              string                       `json:"config_dir"`
+	ConfigFile             string                       `json:"config_file"`
+	DataDir                string                       `json:"data_dir"`
+	StateDir               string                       `json:"state_dir"`
+	CacheDir               string                       `json:"cache_dir"`
+	RuntimeDir             string                       `json:"runtime_dir"`
+	BaselineDir            string                       `json:"baseline_dir"`
+	BadgerDir              string                       `json:"badger_dir"`
+	SQLiteFile             string                       `json:"sqlite_file"`
+	FilesDir               string                       `json:"files_dir"`
+	LocalTokenFile         string                       `json:"local_token_file"`
+	WelcomeStampFile       string                       `json:"welcome_stamp_file"`
+	InstanceID             string                       `json:"instance_id"`
+	DeploymentID           string                       `json:"deployment_id"`
+	Origins                map[string]productpaths.Path `json:"origins"`
+	configExplicit         bool
 }
 
 // PlatformPaths resolves product settings from the environment without reading files.

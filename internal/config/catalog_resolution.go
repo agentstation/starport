@@ -13,6 +13,7 @@ import (
 
 type catalogSettingsLookuper struct {
 	pathLayers []productpaths.Layer
+	fileInputs []configurationFile
 	sources    []envconfig.Lookuper
 	envconfig.Lookuper
 	resolution catalogconfig.Resolution

@@ -98,16 +98,16 @@ func (c *Config) BindDevelopmentScratch(root string) error {
 	c.paths.DataDir, c.paths.StateDir, c.paths.CacheDir = root, root, filepath.Join(root, "cache")
 	c.paths.BadgerDir, c.paths.SQLiteFile = "", ""
 	c.paths.FilesDir, c.paths.RuntimeDir = c.Files.Path, c.Catalog.StateDirectory
-	c.paths.BaselineDir = filepath.Join(root, "catalog", "baseline")
+	c.paths.BaselineDir = filepath.Join(root, "catalog", pathRoleBaseline)
 	c.paths.WelcomeStampFile = ""
 	c.paths.Origins = maps.Clone(c.paths.Origins)
 	if c.paths.Origins == nil {
 		c.paths.Origins = make(map[string]productpaths.Path)
 	}
-	for _, name := range []string{"badger", "sqlite"} {
+	for _, name := range []string{"badger", pathRoleSQLite} {
 		delete(c.paths.Origins, name)
 	}
-	for name, path := range map[string]string{"data": root, "state": root, "cache": c.paths.CacheDir, "files": c.Files.Path, pathRoleRuntime: c.Catalog.StateDirectory, "baseline": c.paths.BaselineDir} {
+	for name, path := range map[string]string{"data": root, "state": root, "cache": c.paths.CacheDir, "files": c.Files.Path, pathRoleRuntime: c.Catalog.StateDirectory, pathRoleBaseline: c.paths.BaselineDir} {
 		c.paths.Origins[name] = productpaths.Path{Path: path, Origin: "development-scratch"}
 	}
 	return nil

@@ -31,7 +31,7 @@ func pathSelections(cfg *Config) []pathSelection {
 		selections = append(selections, pathSelection{"badger", badgerPathEnvironment, "", productpaths.Data, &cfg.Storage.Badger.Path, true})
 	}
 	if cfg.Storage.SQL.Mode == sqlModeSQLite && !cfg.Storage.Badger.inMemory {
-		selections = append(selections, pathSelection{"sqlite", sqlitePathEnvironment, "", productpaths.Data, &cfg.Storage.SQL.SQLite.Path, true})
+		selections = append(selections, pathSelection{pathRoleSQLite, sqlitePathEnvironment, "", productpaths.Data, &cfg.Storage.SQL.SQLite.Path, true})
 	}
 	if cfg.Files.SelectedBackend() == BlobBackendFilesystem && !cfg.Catalog.StateDirectoryIsScratch() {
 		selections = append(selections, pathSelection{"files", filesPathEnvironment, "", productpaths.Data, &cfg.Files.Path, true})
@@ -47,7 +47,7 @@ type pathSelectionOrigin struct {
 func loadedPathOrigins(cfg *Config, selected catalogSettingsLookuper) map[string]pathSelectionOrigin {
 	origins := make(map[string]pathSelectionOrigin)
 	for _, selection := range pathSelections(cfg) {
-		origin := "default"
+		origin := pathOriginDefault
 		if selection.root != "" {
 			origin = "derived:" + string(selection.root)
 		}
