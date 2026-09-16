@@ -324,6 +324,12 @@ Show each managed path:
 starport config paths
 ```
 
+The report reads the same configuration as `starport serve`. It includes configuration, data, state, cache, runtime, baseline, database, and upload locations.
+The command reads configuration without creating directories or opening databases. The selected storage backends determine which locations the runtime uses.
+
+For a file catalog source, use an absolute `STARPORT_CATALOG_SOURCE_URL`.
+Set `STARPORT_RELATIVE_PATH_BASE=config` to anchor relative paths under the configuration root.
+
 Show the effective configuration without secret values:
 
 ```bash

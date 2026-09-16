@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/agentstation/starport/internal/config"
@@ -35,17 +34,17 @@ func newConfigCommand(deps Dependencies, usageError usageErrorHandler) *urfavecl
 		},
 	}
 	paths := &urfavecli.Command{
-		Name: "paths", Usage: "Show platform configuration and data paths",
+		Name: "paths", Usage: "Show effective configuration, storage, and catalog paths",
 		OnUsageError: usageError, Flags: []urfavecli.Flag{jsonFlag()},
-		Action: func(_ context.Context, cmd *urfavecli.Command) error {
+		Action: func(ctx context.Context, cmd *urfavecli.Command) error {
 			if err := rejectArguments(cmd); err != nil {
 				return err
 			}
-			resolved, err := deps.ResolvePaths()
+			cfg, err := deps.LoadConfig(ctx)
 			if err != nil {
-				return runtimeFailure{cause: errors.New("resolve configuration paths: platform paths could not be resolved")}
+				return runtimeFailure{cause: fmt.Errorf("load configuration paths: %w", config.OperatorError(err))}
 			}
-			if err := writePaths(cmd.Writer, resolved, cmd.Bool(configFormatJSON)); err != nil {
+			if err := writePaths(cmd.Writer, cfg.EffectivePaths(), cmd.Bool(configFormatJSON)); err != nil {
 				return runtimeFailure{cause: fmt.Errorf("write configuration paths: %w", err)}
 			}
 			return nil

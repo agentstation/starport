@@ -308,6 +308,9 @@ func resolveConfiguredPaths(cfg *Config, paths *Paths, base string) error {
 		{"tls-key", &cfg.Security.TLSKeyPath, false},
 		{"logs", &cfg.Logging.FilePath, false},
 	}
+	if cfg.Catalog.Source == CatalogSourceFile {
+		selections = append(selections, leafSelection{"source-file", &cfg.Catalog.SourceURL, true})
+	}
 	if cfg.Storage.Mode == storageModeBadger && !cfg.Storage.Badger.inMemory {
 		selections = append(selections, leafSelection{"badger", &cfg.Storage.Badger.Path, true})
 	}
