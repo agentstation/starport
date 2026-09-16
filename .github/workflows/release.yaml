@@ -23,6 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  GOTOOLCHAIN: go1.27.1
   CONTAINER_IMAGE: ghcr.io/agentstation/starport
   GORELEASER_VERSION: v2.17.1
   SYFT_VERSION: v1.51.0
@@ -42,7 +43,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.27.1"
           cache: true
 
       - name: Set up Node.js
@@ -138,7 +139,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.27.1"
           cache: true
 
       - name: Set up Node.js
@@ -507,7 +508,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.27.1"
           cache: false
 
       - name: Set up Docker Buildx

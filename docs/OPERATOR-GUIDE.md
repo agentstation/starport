@@ -12,7 +12,7 @@ The security review answers live in the
 
 ## Requirements
 
-- Go 1.26.5 for a source build.
+- Go 1.27.1 for a source build.
 - A writable Badger path, or a reachable Valkey service.
 
 Local initialization generates the credential-encryption master key. A

@@ -51,7 +51,10 @@ The current public release also contains checksummed archives for macOS,
 Linux, and Windows. Download an archive from
 [GitHub Releases](https://github.com/agentstation/starport/releases).
 
-To build from source, install the Go version from `go.mod` and pnpm 11.22.0.
+To build from source, install Go 1.27.1 and pnpm 11.22.0.
+
+Starport and Starmap use the same exact Go version for development, CI, and releases.
+Qualify future upgrades across both repositories and update their pins together.
 Then run:
 
 ```bash
