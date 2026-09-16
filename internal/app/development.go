@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"slices"
 	"strconv"
 	"time"
@@ -20,10 +19,6 @@ import (
 
 const developmentAPIKeyName = "local-development"
 
-// developmentScratchPermissions keeps the scratch directories private to the
-// user that runs the session.
-const developmentScratchPermissions = 0o700
-
 // Development owns one isolated local application and its one-time key.
 type Development struct {
 	application *App
@@ -31,9 +26,9 @@ type Development struct {
 	apiKey      string
 	// scratchRoot is the session-owned scratch directory. It holds the stored
 	// file bytes and the catalog state the connected runtime retains. The
-	// session removes it on close, so a development gateway leaves nothing
-	// behind.
+	// session removes verified state on close. Changed state remains for recovery.
 	scratchRoot string
+	scratch     *developmentScratch
 }
 
 // NewDevelopment creates an in-memory gateway bound to loopback.
@@ -59,23 +54,20 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 	// The file-byte and retained catalog backends use a temporary directory.
 	// The session removes it on close and leaves the shared data and user state roots untouched.
 	// Later runs inherit no configuration from this temporary state.
-	scratchRoot, err := os.MkdirTemp("", "starport-dev-")
+	scratch, err := prepareDevelopmentScratch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create development scratch directory: %w", err)
 	}
-	if err := cfg.BindDevelopmentScratch(scratchRoot); err != nil {
-		return nil, errors.Join(err, os.RemoveAll(scratchRoot))
-	}
-	if err := os.MkdirAll(cfg.Files.Path, developmentScratchPermissions); err != nil {
-		return nil, errors.Join(fmt.Errorf("create development scratch directory: %w", err), os.RemoveAll(scratchRoot))
+	if err := cfg.BindDevelopmentScratch(scratch.path); err != nil {
+		return nil, errors.Join(err, scratch.close())
 	}
 	if err := cfg.Validate(); err != nil {
-		return nil, errors.Join(fmt.Errorf("validate development config: %w", err), os.RemoveAll(scratchRoot))
+		return nil, errors.Join(fmt.Errorf("validate development config: %w", err), scratch.close())
 	}
 
 	store, err := storage.Open(cfg.Storage.RuntimeStorage())
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("open development storage: %w", err), os.RemoveAll(scratchRoot))
+		return nil, errors.Join(fmt.Errorf("open development storage: %w", err), scratch.close())
 	}
 	// The session issues a gateway key only when authentication requires one.
 	// With authentication disabled, it prints no key and requires no pasted key.
@@ -83,7 +75,7 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 	if cfg.Security.AuthMode.Effective() != config.AuthModeDisabled {
 		issued, err := setup.InitializeAPIKey(ctx, store, developmentAPIKeyName)
 		if err != nil {
-			return nil, errors.Join(err, store.Close(), os.RemoveAll(scratchRoot))
+			return nil, errors.Join(err, store.Close(), scratch.close())
 		}
 		apiKey = issued.Secret
 	}
@@ -99,14 +91,24 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 		if !claimed {
 			err = errors.Join(err, store.Close())
 		}
-		return nil, errors.Join(fmt.Errorf("create development application: %w", err), os.RemoveAll(scratchRoot))
+		// Failed composition can include a resource shutdown failure.
+		// Without a published record, later runs preserve this directory.
+		return nil, errors.Join(fmt.Errorf("create development application; preserve scratch %s: %w", scratch.path, err), scratch.lock.Close())
+	}
+	if err := scratch.publish(ctx); err != nil {
+		closeErr := application.Close(ctx)
+		if closeErr != nil {
+			return nil, errors.Join(fmt.Errorf("publish development ownership; preserve scratch %s: %w", scratch.path, err), closeErr)
+		}
+		return nil, errors.Join(err, scratch.close())
 	}
 
 	return &Development{
 		application: application,
 		url:         "http://" + net.JoinHostPort(cfg.Server.Host, strconv.Itoa(cfg.Server.Port)),
 		apiKey:      apiKey,
-		scratchRoot: scratchRoot,
+		scratchRoot: scratch.path,
+		scratch:     scratch,
 	}, nil
 }
 
@@ -156,9 +158,8 @@ func (runtime *Development) Close(ctx context.Context) error {
 	if runtime == nil || runtime.application == nil {
 		return nil
 	}
-	err := runtime.application.Close(ctx)
-	if runtime.scratchRoot != "" {
-		err = errors.Join(err, os.RemoveAll(runtime.scratchRoot))
+	if err := runtime.application.Close(ctx); err != nil {
+		return err
 	}
-	return err
+	return runtime.scratch.close()
 }

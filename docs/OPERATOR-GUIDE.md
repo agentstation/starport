@@ -62,6 +62,21 @@ The model response contains the active Starmap catalog view. It does not prove
 that a provider accepts its resolved credential. The first inference attempt
 provides that evidence.
 
+## Development scratch recovery
+
+`starport dev` keeps Badger and SQLite in memory. Its catalog state and uploaded files use a private `starport-dev-` directory under the operating system temporary directory.
+The directory contains `files/`, `catalog/`, and `cache/`.
+After application construction succeeds, the private `.starport-development/session.json` record binds these directories to their native filesystem identities.
+The session holds `.starport-development/session.lock` until its resources close.
+
+Normal shutdown removes verified scratch state. A later development run can remove abandoned state after the prior process exits.
+Recovery requires a valid ownership record and an exclusive lock. It preserves live sessions, changed identities, unknown files, and unrecognized records.
+Cleanup never selects a directory from its name or process identifier alone.
+
+A recovery warning names preserved directories. Inspect those paths before manual recovery and confirm that no development process uses them.
+Failed or interrupted initialization without a complete ownership record requires manual recovery.
+Each startup scans at most 16,384 temporary entries and examines at most 256 candidate sessions. A limited scan reports `scan_limited`.
+
 ## Authentication Mode
 
 Starport requires a gateway API key on every inference and management route by

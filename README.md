@@ -124,7 +124,9 @@ Explicit persistent KV, SQL, blob, and catalog-state selections cause startup to
 The error names each conflicting setting and directs you to `starport init` and `starport serve`.
 The `unset` command above removes the catalog-state and object-store selectors for this example.
 The catalog baseline, runtime state, and uploaded files use session scratch directories that normal shutdown removes.
-A crash can leave those temporary files behind.
+A later development run recovers abandoned scratch directories after it verifies ownership and excludes live sessions.
+Changed or unrecognized directories remain available for explicit recovery.
+See [development scratch recovery](docs/OPERATOR-GUIDE.md#development-scratch-recovery).
 
 Keep this terminal open.
 
