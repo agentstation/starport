@@ -21,6 +21,8 @@ func TestDevLetsStarmapCreateCatalogState(t *testing.T) {
 		openCatalog := options.factories.openCatalog
 		options.factories.openCatalog = func(ctx context.Context, store storage.KVStore, settings runtimecatalog.Settings, lookup runtimecatalog.DeploymentLookup) (catalogRuntime, error) {
 			factoryReached = true
+			require.Equal(t, cfg.EffectivePaths().CacheDir, settings.SourceCacheDirectory)
+			require.True(t, filepath.IsLocal(mustRelative(t, filepath.Dir(cfg.Files.Path), settings.SourceCacheDirectory)))
 			if _, err := os.Stat(settings.StateDirectory); !errors.Is(err, os.ErrNotExist) {
 				return nil, errors.New("development must let Starmap create its catalog state directory")
 			}

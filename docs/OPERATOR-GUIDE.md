@@ -342,6 +342,12 @@ It reports access conflicts and unverified access. It does not establish effecti
 The report records the configuration access policy selected before the loader read the file.
 This prevents a value inside the file from changing its reported access requirement.
 
+Source acquisition uses Starport's cache root, including the session cache during development.
+The models.dev HTTP cache uses `models.dev/`. Its managed Git checkout uses `sources/models.dev-git/`.
+`STARPORT_CATALOG_ACQUISITION_SOURCES` selects permitted provider and metadata sources. An explicit empty value disables them all.
+`STARPORT_CATALOG_ACQUISITION_ENABLED=false` stops automatic observations. Explicit refresh can still collect permitted sources.
+Offline mode and internal authority continue to restrict explicit acquisition.
+
 For a file catalog source, use an absolute `STARPORT_CATALOG_SOURCE_URL`.
 Set `STARPORT_RELATIVE_PATH_BASE=config` to anchor relative paths under the configuration root.
 

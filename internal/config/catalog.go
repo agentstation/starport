@@ -117,7 +117,7 @@ type CatalogConfig struct {
 	// SourceMaxHops bounds the publication chain this instance follows.
 	SourceMaxHops int `env:"SOURCE_MAX_HOPS"`
 
-	// AcquisitionEnabled decides whether this instance observes providers.
+	// AcquisitionEnabled controls automatic observations. Explicit refresh still checks network and authority policy.
 	AcquisitionEnabled bool `env:"ACQUISITION_ENABLED"`
 
 	// AcquisitionInterval is the period between provider observations. Zero

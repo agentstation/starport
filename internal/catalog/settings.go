@@ -29,6 +29,8 @@ const cascadeFallbackAfterFailures = 3
 type Settings struct {
 	// BaselineDirectory selects the host-owned immutable embedded export.
 	BaselineDirectory string
+	// SourceCacheDirectory selects the host-owned parent for source caches and checkouts.
+	SourceCacheDirectory string
 	// InstanceID and DeploymentID bind the runtime directory to this Starport process.
 	InstanceID   string
 	DeploymentID string
@@ -78,7 +80,7 @@ type Settings struct {
 	// SourceMaxHops bounds the publication chain.
 	SourceMaxHops int
 
-	// AcquisitionEnabled decides whether this instance observes providers.
+	// AcquisitionEnabled controls automatic observations. Explicit refresh still checks network and authority policy.
 	AcquisitionEnabled bool
 
 	// AcquisitionInterval is the period between provider observations.

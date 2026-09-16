@@ -55,7 +55,7 @@ func TestStarmapAcquisitionPublishesRefresh(t *testing.T) {
 			TransferIdleTimeout: time.Minute,
 			TransferMaxDuration: time.Minute,
 		},
-		acquirer,
+		runtimeCollectors{providers: acquirer},
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() {

@@ -1303,10 +1303,11 @@ func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 	paths := deployment.EffectivePaths()
 	baseline := paths.BaselineDir
 	return runtimecatalog.Settings{
-		BaselineDirectory: baseline,
-		InstanceID:        paths.InstanceID,
-		DeploymentID:      paths.DeploymentID,
-		Values:            cfg.CatalogValues(),
+		BaselineDirectory:    baseline,
+		SourceCacheDirectory: paths.CacheDir,
+		InstanceID:           paths.InstanceID,
+		DeploymentID:         paths.DeploymentID,
+		Values:               cfg.CatalogValues(),
 		ListenAddress: net.JoinHostPort(
 			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
 		),

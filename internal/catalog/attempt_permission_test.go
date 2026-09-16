@@ -104,7 +104,7 @@ func TestRuntimeSnapshotPermissionStopsAfterClose(t *testing.T) {
 	r, err := openRuntime(t.Context(), authoritySnapshotBadger(t, t.TempDir()), Settings{
 		Source: "embedded", SourceStartupPolicy: "prefer_local", SourceMaxHops: 8,
 		TransferIdleTimeout: time.Minute, TransferMaxDuration: time.Minute,
-	}, nil)
+	}, runtimeCollectors{})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, r.Close(context.Background())) })
 	reader, ok := any(r.ControlPlane().Current()).(attemptPermissionReader)

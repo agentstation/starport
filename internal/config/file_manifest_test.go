@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentstation/starmap/pkg/productpaths"
 	"github.com/agentstation/starmap/pkg/productpaths/policy"
+	"github.com/agentstation/starmap/pkg/sources"
 	"github.com/stretchr/testify/require"
 )
 
@@ -113,5 +114,37 @@ func TestFileManifestDevelopmentDisablesPersistentStores(t *testing.T) {
 		if entry.ID == "kv" || entry.ID == "sql" {
 			require.Equal(t, "process-memory", entry.Selection)
 		}
+	}
+}
+
+func TestFileManifestSourceCachesFollowCanonicalSelection(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		value     *string
+		http, git string
+	}{
+		{"default", nil, fileAvailable, fileDisabled},
+		{"disabled", new(""), fileDisabled, fileDisabled},
+		{"git", new(string(sources.ModelsDevGitID)), fileDisabled, fileAvailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			paths := PathsForConfigDir(t.TempDir())
+			env := map[string]string{}
+			if test.value != nil {
+				env["STARPORT_CATALOG_ACQUISITION_SOURCES"] = *test.value
+			}
+			cfg, err := NewLoader().WithPaths(paths).WithEnvironment(env).WithEnvFiles().Load(t.Context())
+			require.NoError(t, err)
+			report, err := cfg.FileManifest("test")
+			require.NoError(t, err)
+			http := manifestEntry(t, report, "source-http")
+			git := manifestEntry(t, report, "source-checkout")
+			require.Equal(t, filepath.Join(paths.CacheDir, "models.dev"), http.Location.Path)
+			require.Equal(t, filepath.Join(paths.CacheDir, "sources", "models.dev-git"), git.Location.Path)
+			require.Equal(t, test.http, http.Availability)
+			require.Equal(t, test.git, git.Availability)
+			require.Equal(t, policy.DeploymentControlled, http.Policy.Access)
+			require.NoDirExists(t, paths.CacheDir)
+		})
 	}
 }

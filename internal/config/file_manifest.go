@@ -2,10 +2,13 @@ package config
 
 import (
 	"path/filepath"
+	"slices"
 	"strconv"
 
+	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
 	"github.com/agentstation/starmap/pkg/productpaths"
 	"github.com/agentstation/starmap/pkg/productpaths/policy"
+	"github.com/agentstation/starmap/pkg/sources"
 )
 
 const (
@@ -114,6 +117,33 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	}
 	add("logs", c.Logging.FilePath, "file", filePlanned, policy.OwnerOnly,
 		"File logging has no implemented application writer.", "Current application logging uses streams.", "STARPORT_LOGGING_FILE_PATH")
+	selection := make(map[string]string)
+	if value, present := c.Catalog.canonicalValues[catalogconfig.AcquisitionSources]; present {
+		selection[catalogconfig.AcquisitionSources] = value
+	}
+	parsed, err := catalogconfig.Parse(selection)
+	if err != nil {
+		return productpaths.FileManifest{}, err
+	}
+	ids, explicit := parsed.AcquisitionSourceSelection()
+	if !explicit {
+		ids = []sources.ID{sources.LocalCatalogID, sources.ModelsDevHTTPID}
+	}
+	for _, source := range []struct {
+		role, path string
+		id         sources.ID
+	}{
+		{"source-http", childPath(p.CacheDir, "models.dev"), sources.ModelsDevHTTPID},
+		{"source-checkout", childPath(p.CacheDir, "sources", "models.dev-git"), sources.ModelsDevGitID},
+	} {
+		access, err := policy.ForRole(source.role)
+		if err != nil {
+			return productpaths.FileManifest{}, err
+		}
+		selected := p.CacheDir != "" && slices.Contains(ids, source.id) && c.Catalog.SourceStartupPolicy != CatalogStartupRequireAuthority
+		add(source.role, source.path, fileKindTree, selectedAvailability(selected), access,
+			"Permitted explicit or scheduled source acquisition creates this cache.", "Rebuild only through permitted source access. Preserve accepted catalog evidence in runtime state.", "STARPORT_CACHE_DIR", "STARPORT_CATALOG_ACQUISITION_SOURCES")
+	}
 	c.addExternalStorage(&report)
 	return report, nil
 }
@@ -171,6 +201,8 @@ func manifestPath(paths Paths, role, path string) productpaths.Path {
 		switch role {
 		case pathRoleBaseline, fileRoleBaselineRecovery, "welcome-stamp":
 			selected.Origin = "derived:data"
+		case "source-http", "source-checkout":
+			selected.Origin = "derived:cache"
 		default:
 			selected.Origin = pathOriginDefault
 		}
