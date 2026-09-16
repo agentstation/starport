@@ -12,7 +12,7 @@ import (
 	"github.com/sethvargo/go-envconfig"
 )
 
-const applicationDirectory = "starport"
+const pathOriginGoOption = "go-option"
 const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
 
 // Paths contains resolved files, roots, and their selection origins.
@@ -56,7 +56,7 @@ func PathsForConfigDir(configDir string) Paths {
 		productpaths.State:  filepath.Join(configDir, "state"),
 		productpaths.Cache:  filepath.Join(configDir, "cache"),
 	} {
-		roots[root] = productpaths.Path{Path: path, Origin: "go-option"}
+		roots[root] = productpaths.Path{Path: path, Origin: pathOriginGoOption}
 	}
 	return pathsFromRoots(roots)
 }
@@ -110,7 +110,7 @@ func (l *Loader) bootstrapPaths() (Paths, error) {
 			return Paths{}, err
 		}
 		paths.ConfigDir, paths.ConfigFile = root.Path, filepath.Join(root.Path, "config.env")
-		paths.Origins = map[string]productpaths.Path{"config": root}
+		paths.Origins = map[string]productpaths.Path{string(productpaths.Config): root}
 	}
 	if !filepath.IsAbs(paths.ConfigDir) {
 		return Paths{}, fmt.Errorf("configuration root must be absolute")
@@ -132,7 +132,7 @@ func (l *Loader) bootstrapPaths() (Paths, error) {
 
 func (l *Loader) managedPaths(bootstrap Paths, source envconfig.Lookuper, layers []productpaths.Layer) (Paths, error) {
 	if l.resolvePaths != nil {
-		layers = append([]productpaths.Layer{{Name: "go-option", Values: map[productpaths.Root]string{
+		layers = append([]productpaths.Layer{{Name: pathOriginGoOption, Values: map[productpaths.Root]string{
 			productpaths.Data: bootstrap.DataDir, productpaths.State: bootstrap.StateDir, productpaths.Cache: bootstrap.CacheDir,
 		}}}, layers...)
 	}
@@ -142,9 +142,9 @@ func (l *Loader) managedPaths(bootstrap Paths, source envconfig.Lookuper, layers
 	if err != nil {
 		return Paths{}, err
 	}
-	roots[productpaths.Config] = bootstrap.Origins["config"]
+	roots[productpaths.Config] = bootstrap.Origins[string(productpaths.Config)]
 	if roots[productpaths.Config].Path == "" {
-		roots[productpaths.Config] = productpaths.Path{Path: bootstrap.ConfigDir, Origin: "go-option"}
+		roots[productpaths.Config] = productpaths.Path{Path: bootstrap.ConfigDir, Origin: pathOriginGoOption}
 	}
 	paths := pathsFromRoots(roots)
 	paths.ConfigFile, paths.configExplicit = bootstrap.ConfigFile, bootstrap.configExplicit

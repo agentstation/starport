@@ -224,6 +224,7 @@ type authRuntime struct {
 func (b *runtimeBuilder) compose() error {
 	steps := []func() error{
 		b.validateCatalogStorage,
+		b.guardLocalSetup,
 		b.openStorage,
 		b.openSQLStore,
 		b.openBlob,
