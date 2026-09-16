@@ -109,16 +109,25 @@ func AllowRemoteWithoutAuthentication() Override {
 // Load resolves configuration sources, applies defaults and any overrides, and
 // validates the result.
 func (l *Loader) Load(ctx context.Context, overrides ...Override) (*Config, error) {
-	return l.load(ctx, nil, overrides)
+	return l.load(ctx, false, overrides)
 }
 
 // LoadDevelopment reads process settings, applies the guarded development
 // runtime contract and any overrides, and validates the result.
 func (l *Loader) LoadDevelopment(ctx context.Context, overrides ...Override) (*Config, error) {
-	return l.load(ctx, func(cfg *Config) { cfg.ConfigureDevelopmentRuntime() }, overrides)
+	return l.load(ctx, true, overrides)
 }
 
-func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Override) (*Config, error) {
+func (l *Loader) load(ctx context.Context, development bool, overrides []Override) (*Config, error) {
+	if development {
+		if err := rejectDevelopmentEnvironment(l.environment); err != nil {
+			return nil, newLoadFailure(err.Error(), err)
+		}
+		// Development reads no saved configuration, including explicitly selected files.
+		selected := *l
+		selected.envFiles = []string{}
+		l = &selected
+	}
 	paths, err := l.bootstrapPaths()
 	if err != nil {
 		return nil, newLoadFailure("configuration paths could not be resolved", err)
@@ -140,7 +149,7 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	}
 
 	raw := envconfig.MultiLookuper(selected.sources...)
-	for _, key := range []string{"STARPORT_STORAGE_BADGER_PATH", "STARPORT_STORAGE_SQL_SQLITE_PATH", "STARPORT_CATALOG_STATE_DIR", "STARPORT_FILES_PATH"} {
+	for _, key := range []string{badgerPathEnvironment, sqlitePathEnvironment, stateDirectoryEnvironment, filesPathEnvironment} {
 		if value, present := raw.Lookup(key); present && value == "" {
 			return nil, newLoadFailure(key+" requires a nonempty path", fmt.Errorf("%s requires a nonempty path", key))
 		}
@@ -156,6 +165,9 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	}
 
 	cfg := defaultConfig(paths)
+	if development {
+		cfg.Storage.Badger.Path, cfg.Storage.SQL.SQLite.Path, cfg.Files.Path = "", "", ""
+	}
 	if err := envconfig.ProcessWith(ctx, &envconfig.Config{
 		Target:   cfg,
 		Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper),
@@ -181,15 +193,22 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 	} else if endpoint, ok := lookuper.Lookup("OTEL_EXPORTER_OTLP_ENDPOINT"); ok && endpoint != "" {
 		cfg.Telemetry.TracesEndpoint = endpoint
 	}
-	if prepare != nil {
-		prepare(cfg)
+	if development {
+		// No source selects Valkey. Remove its unused environment defaults.
+		cfg.Storage.Valkey = ValkeyConfig{}
 	}
-	// Overrides land last so an explicit flag beats both the environment and
-	// the development contract, and first so validation still judges them.
+	// Overrides retain precedence over loaded values and pass the same validation.
 	for _, override := range overrides {
 		if override != nil {
 			override(cfg)
 		}
+	}
+
+	if development {
+		if err := cfg.ConfigureDevelopmentRuntime(); err != nil {
+			return nil, newLoadFailure(err.Error(), err)
+		}
+		paths.DataDir, paths.StateDir, paths.CacheDir, paths.BaselineDir = "", "", "", ""
 	}
 
 	if err := resolveConfiguredPaths(cfg, &paths, base); err != nil {
@@ -295,7 +314,7 @@ func resolveConfiguredPaths(cfg *Config, paths *Paths, base string) error {
 	if cfg.Storage.SQL.Mode == sqlModeSQLite && !cfg.Storage.Badger.inMemory {
 		selections = append(selections, leafSelection{"sqlite", &cfg.Storage.SQL.SQLite.Path, true})
 	}
-	if cfg.Files.SelectedBackend() == BlobBackendFilesystem {
+	if cfg.Files.SelectedBackend() == BlobBackendFilesystem && !cfg.Catalog.StateDirectoryIsScratch() {
 		selections = append(selections, leafSelection{"files", &cfg.Files.Path, true})
 	}
 	for _, selection := range selections {

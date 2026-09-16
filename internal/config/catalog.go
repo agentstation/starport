@@ -245,7 +245,7 @@ func (c *CatalogConfig) Validate() error {
 // StateDirectoryIsScratch reports whether the development composition owns
 // the state directory as session scratch. The loader then leaves the value
 // empty, and the composition fills it with a directory it removes on close.
-// An operator value is never scratch.
+// Persistent selections fail before the development composition binds scratch.
 func (c CatalogConfig) StateDirectoryIsScratch() bool { return c.stateDirectoryScratch }
 
 // ResolveStateDirectory returns the catalog state directory of this process.

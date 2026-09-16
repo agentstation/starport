@@ -1,8 +1,6 @@
 package config
 
 import (
-	"strings"
-
 	"github.com/agentstation/starport/internal/sqlstore"
 	"github.com/agentstation/starport/internal/storage"
 )
@@ -54,36 +52,27 @@ func (c StorageConfig) RuntimeStorage() storage.Config {
 
 // ConfigureDevelopmentRuntime selects process-local settings that cannot expose
 // a development gateway or create persistent state.
-func (c *Config) ConfigureDevelopmentRuntime() {
+func (c *Config) ConfigureDevelopmentRuntime() error {
 	if c == nil {
-		return
+		return nil
+	}
+	if err := c.validateDevelopmentStorage(); err != nil {
+		return err
 	}
 	c.Server.Host = "127.0.0.1"
 	c.Server.EnableProfiling = false
 	// Catalog acquisition stays on. A development gateway that reads no
 	// catalog routes nothing, and an operator who wants a quiet gateway
 	// sets STARPORT_CATALOG_ACQUISITION_ENABLED=false.
-	c.Storage = StorageConfig{
-		Mode: storageModeBadger,
-		Badger: BadgerConfig{
-			Compression: compressionNone, inMemory: true,
-		},
-		// An empty SQLite path is the in-memory database: real schema,
-		// no file, gone with the process — the relational twin of the
-		// in-memory Badger above.
-		SQL: SQLConfig{Mode: sqlModeSQLite},
-	}
-	// The local admin token file is read but never written. The path stays
-	// so a machine that already holds a token keeps `starport auth token`
-	// and the console paste path in agreement with a development gateway;
-	// the read-only mark keeps a machine that holds none exactly as it was.
+	c.Storage.Mode = storageModeBadger
+	c.Storage.Badger.inMemory = true
+	c.Storage.SQL.Mode = sqlModeSQLite
+	c.Files.Backend = BlobBackendFilesystem
+	// Development can read an existing machine token for local authentication.
+	// It never creates or rotates that persistent token.
 	c.Security.localTokenReadOnly = true
-	// The default catalog state directory is session scratch. The development
-	// composition creates it and removes it on close. The runtime then retains
-	// no layer, no identity seed, and no discovery record on the machine. An
-	// operator value stays. An operator who names a directory asks the
-	// session to retain its catalog state there.
-	c.Catalog.stateDirectoryScratch = strings.TrimSpace(c.Catalog.StateDirectory) == ""
+	// The composition supplies every development storage path from owned scratch.
+	c.Catalog.stateDirectoryScratch = true
 	c.Security.MasterKey = ""
 	c.Security.EnableTLS = false
 	c.Security.TLSCertPath = ""
@@ -93,4 +82,5 @@ func (c *Config) ConfigureDevelopmentRuntime() {
 	c.Security.JWTSecret = ""
 	c.Logging.Output = "stdout"
 	c.Logging.FilePath = ""
+	return nil
 }

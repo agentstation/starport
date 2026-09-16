@@ -1302,9 +1302,6 @@ func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 	cfg := deployment.Catalog
 	paths := deployment.EffectivePaths()
 	baseline := paths.BaselineDir
-	if cfg.StateDirectoryIsScratch() {
-		baseline = ""
-	}
 	return runtimecatalog.Settings{
 		BaselineDirectory: baseline,
 		InstanceID:        paths.InstanceID,

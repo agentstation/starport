@@ -120,10 +120,10 @@ machine. Both paths prove presence at that machine and end in the same console
 session.
 
 Development mode skips `config.env` but still reads process environment values.
-An explicit `STARPORT_CATALOG_STATE_DIR` retains catalog state after exit.
-An explicit `STARPORT_FILES_BACKEND=objectstore` keeps remote blob storage active.
-The `unset` command above removes those two persistence selectors for this example.
-Default catalog state and uploaded files use temporary directories that normal shutdown removes.
+Explicit persistent KV, SQL, blob, and catalog-state selections cause startup to fail before storage access.
+The error names each conflicting setting and directs you to `starport init` and `starport serve`.
+The `unset` command above removes the catalog-state and object-store selectors for this example.
+The catalog baseline, runtime state, and uploaded files use session scratch directories that normal shutdown removes.
 A crash can leave those temporary files behind.
 
 Keep this terminal open.

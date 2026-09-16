@@ -16,9 +16,7 @@ import (
 )
 
 func TestDevUsesInMemoryBadger(t *testing.T) {
-	cfg := validProductionConfig(t)
-	persistentPath := filepath.Join(t.TempDir(), "persistent-badger")
-	cfg.Storage.Badger.Path = persistentPath
+	cfg := validDevelopmentConfig(t)
 	cfg.Providers = config.ProvidersConfig{}
 
 	runtime, err := NewDevelopment(t.Context(), cfg)
@@ -31,8 +29,6 @@ func TestDevUsesInMemoryBadger(t *testing.T) {
 	require.Empty(t, projected.Badger.Path)
 	_, isBadger := runtime.application.store.(*storage.BadgerStore)
 	require.True(t, isBadger)
-	_, err = os.Stat(persistentPath)
-	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 // TestDevKeepsTheLocalTokenOffDisk is the release gate's claim in miniature: a
@@ -40,7 +36,7 @@ func TestDevUsesInMemoryBadger(t *testing.T) {
 // token is minted in memory, the launch link still comes from it in-process,
 // and the file the loader named is never touched.
 func TestDevKeepsTheLocalTokenOffDisk(t *testing.T) {
-	cfg := validProductionConfig(t)
+	cfg := validDevelopmentConfig(t)
 	tokenPath := cfg.Security.LocalTokenPath
 	require.NotEmpty(t, tokenPath, "the loader-shaped config names a token file")
 	configuredFilesPath := cfg.Files.Path
@@ -64,7 +60,7 @@ func TestDevKeepsTheLocalTokenOffDisk(t *testing.T) {
 // CLI prints, so the console paste path and `starport ui` agree with it, and
 // the file itself is left byte-for-byte alone.
 func TestDevAcceptsTheMachineTokenWithoutTouchingIt(t *testing.T) {
-	cfg := validProductionConfig(t)
+	cfg := validDevelopmentConfig(t)
 	cfg.Providers = config.ProvidersConfig{}
 	store, err := localauth.NewStore(cfg.Security.LocalTokenPath)
 	require.NoError(t, err)
@@ -91,7 +87,7 @@ func TestDevAcceptsTheMachineTokenWithoutTouchingIt(t *testing.T) {
 // story: the scratch directory is working memory, and a session that kept it
 // would leave state behind after all.
 func TestDevRemovesItsScratchFileStorageOnClose(t *testing.T) {
-	cfg := validProductionConfig(t)
+	cfg := validDevelopmentConfig(t)
 	cfg.Providers = config.ProvidersConfig{}
 
 	runtime, err := NewDevelopment(t.Context(), cfg)
@@ -109,7 +105,7 @@ func TestDevRemovesItsScratchFileStorageOnClose(t *testing.T) {
 // writes a layer, an identity seed, or a discovery record to the user state
 // root.
 func TestDevKeepsCatalogStateInScratch(t *testing.T) {
-	cfg := validProductionConfig(t)
+	cfg := validDevelopmentConfig(t)
 	cfg.Providers = config.ProvidersConfig{}
 	require.Empty(t, cfg.Catalog.StateDirectory)
 
@@ -118,32 +114,25 @@ func TestDevKeepsCatalogStateInScratch(t *testing.T) {
 	stateDirectory := cfg.Catalog.StateDirectory
 	require.NotEmpty(t, stateDirectory)
 	require.DirExists(t, stateDirectory)
-	require.Equal(t, filepath.Dir(cfg.Files.Path), filepath.Dir(stateDirectory))
+	require.Equal(t, runtime.scratchRoot, filepath.Dir(filepath.Dir(stateDirectory)))
 
 	require.NoError(t, runtime.Close(context.Background()))
 	require.NoDirExists(t, stateDirectory)
 }
 
-// TestDevKeepsAnOperatorCatalogStateDirectory proves an operator value is
-// never scratch: the session opens the runtime there and leaves the directory
-// in place on close.
-func TestDevKeepsAnOperatorCatalogStateDirectory(t *testing.T) {
-	cfg := validProductionConfig(t)
-	cfg.Providers = config.ProvidersConfig{}
+func TestDevRejectsAnOperatorCatalogStateDirectory(t *testing.T) {
+	cfg := validDevelopmentConfig(t)
 	stateDirectory := filepath.Join(t.TempDir(), "operator-state")
 	cfg.Catalog.StateDirectory = stateDirectory
-
 	runtime, err := NewDevelopment(t.Context(), cfg)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, config.ErrDevelopmentStorage)
+	require.Nil(t, runtime)
 	require.Equal(t, stateDirectory, cfg.Catalog.StateDirectory)
-	require.DirExists(t, stateDirectory)
-
-	require.NoError(t, runtime.Close(context.Background()))
-	require.DirExists(t, stateDirectory)
+	require.NoDirExists(t, stateDirectory)
 }
 
 func TestDevBindsLoopbackOnly(t *testing.T) {
-	cfg := validProductionConfig(t)
+	cfg := validDevelopmentConfig(t)
 	cfg.Server.Host = "0.0.0.0"
 	cfg.Server.Port = 18991
 	cfg.Providers = config.ProvidersConfig{}
@@ -157,7 +146,7 @@ func TestDevBindsLoopbackOnly(t *testing.T) {
 }
 
 func TestDevRejectsCanceledContextBeforeCreatingState(t *testing.T) {
-	cfg := validProductionConfig(t)
+	cfg := validDevelopmentConfig(t)
 	persistentPath := filepath.Join(t.TempDir(), "persistent-badger")
 	cfg.Storage.Badger.Path = persistentPath
 	cancelled, cancel := context.WithCancel(context.Background())
@@ -168,4 +157,13 @@ func TestDevRejectsCanceledContextBeforeCreatingState(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	_, statErr := os.Stat(persistentPath)
 	require.True(t, errors.Is(statErr, os.ErrNotExist))
+}
+
+func validDevelopmentConfig(t testing.TB) *config.Config {
+	t.Helper()
+	cfg := validProductionConfig(t)
+	cfg.Storage.Badger.Path = ""
+	cfg.Files.Path = ""
+	cfg.Providers = config.ProvidersConfig{}
+	return cfg
 }

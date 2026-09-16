@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"time"
@@ -20,13 +19,6 @@ import (
 )
 
 const developmentAPIKeyName = "local-development"
-
-// developmentFilesDirectory holds stored file bytes under the scratch root.
-const developmentFilesDirectory = "files"
-
-// developmentCatalogStateDirectory holds the retained catalog state under the
-// scratch root.
-const developmentCatalogStateDirectory = "catalog-state"
 
 // developmentScratchPermissions keeps the scratch directories private to the
 // user that runs the session.
@@ -56,7 +48,9 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 		return nil, err
 	}
 
-	cfg.ConfigureDevelopmentRuntime()
+	if err := cfg.ConfigureDevelopmentRuntime(); err != nil {
+		return nil, err
+	}
 	masterKey, err := credentials.GenerateMasterKey()
 	if err != nil {
 		return nil, fmt.Errorf("generate development master key: %w", err)
@@ -69,12 +63,8 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 	if err != nil {
 		return nil, fmt.Errorf("create development scratch directory: %w", err)
 	}
-	cfg.Files.Path = filepath.Join(scratchRoot, developmentFilesDirectory)
-	// An operator who names a state directory keeps it. The default is
-	// scratch, so the session retains no catalog state on the machine.
-	// Starmap creates its own state directory with native access rules.
-	if cfg.Catalog.StateDirectoryIsScratch() {
-		cfg.Catalog.StateDirectory = filepath.Join(scratchRoot, developmentCatalogStateDirectory)
+	if err := cfg.BindDevelopmentScratch(scratchRoot); err != nil {
+		return nil, errors.Join(err, os.RemoveAll(scratchRoot))
 	}
 	if err := os.MkdirAll(cfg.Files.Path, developmentScratchPermissions); err != nil {
 		return nil, errors.Join(fmt.Errorf("create development scratch directory: %w", err), os.RemoveAll(scratchRoot))
@@ -93,7 +83,7 @@ func NewDevelopment(ctx context.Context, cfg *config.Config, options ...Option) 
 	if cfg.Security.AuthMode.Effective() != config.AuthModeDisabled {
 		issued, err := setup.InitializeAPIKey(ctx, store, developmentAPIKeyName)
 		if err != nil {
-			return nil, errors.Join(err, store.Close())
+			return nil, errors.Join(err, store.Close(), os.RemoveAll(scratchRoot))
 		}
 		apiKey = issued.Secret
 	}

@@ -378,7 +378,6 @@ func TestDevelopmentLoaderUsesProcessSettingsAndGuardedRuntime(t *testing.T) {
 			"OPENAI_API_KEY":                           "process-secret",
 			"STARPORT_SERVER_HOST":                     "0.0.0.0",
 			"STARPORT_SERVER_PORT":                     "18994",
-			"STARPORT_STORAGE_MODE":                    "valkey",
 			"STARPORT_SECURITY_MASTER_KEY":             "short",
 			"STARPORT_SECURITY_ENABLE_TLS":             "true",
 			"STARPORT_LOGGING_OUTPUT":                  "file",
@@ -438,24 +437,16 @@ func TestDevelopmentLoaderNeedsNoHomeDirectory(t *testing.T) {
 	}
 }
 
-// TestDevelopmentLoaderKeepsAnOperatorStateDirectory proves that an operator
-// value survives the development contract, so a session that names a
-// directory retains its catalog state there.
-func TestDevelopmentLoaderKeepsAnOperatorStateDirectory(t *testing.T) {
-	stateDirectory := t.TempDir()
-	loader := NewLoader().
-		WithPaths(PathsForConfigDir(t.TempDir())).
-		WithEnvironment(map[string]string{
-			"STARPORT_CATALOG_STATE_DIR": stateDirectory,
-		}).
-		WithEnvFiles()
-
-	cfg, err := loader.LoadDevelopment(t.Context())
-	if err != nil {
-		t.Fatalf("load development config: %v", err)
+func TestDevelopmentLoaderRefusesAnOperatorStateDirectory(t *testing.T) {
+	stateDirectory := filepath.Join(t.TempDir(), "untouched")
+	cfg, err := NewLoader().WithPaths(PathsForConfigDir(t.TempDir())).WithEnvironment(map[string]string{
+		"STARPORT_CATALOG_STATE_DIR": stateDirectory,
+	}).LoadDevelopment(t.Context())
+	if err == nil || cfg != nil {
+		t.Fatal("development accepted persistent catalog state")
 	}
-	if cfg.Catalog.StateDirectory != stateDirectory || cfg.Catalog.StateDirectoryIsScratch() {
-		t.Fatalf("development catalog state directory = %q, scratch %t", cfg.Catalog.StateDirectory, cfg.Catalog.StateDirectoryIsScratch())
+	if _, err := os.Stat(stateDirectory); !os.IsNotExist(err) {
+		t.Fatal("development accessed persistent catalog state")
 	}
 }
 
