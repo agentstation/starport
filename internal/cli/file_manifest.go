@@ -5,7 +5,25 @@ import (
 	"io"
 
 	"github.com/agentstation/starmap/pkg/productpaths"
+	"github.com/agentstation/starport/internal/config"
 )
+
+func writeLegacyPaths(writer io.Writer, conflicts []config.LegacyPath, asJSON bool) error {
+	if asJSON {
+		return writeIndentedJSON(writer, conflicts)
+	}
+	if len(conflicts) == 0 {
+		_, err := fmt.Fprintln(writer, "No legacy path conflicts detected.")
+		return err
+	}
+	for _, conflict := range conflicts {
+		if _, err := fmt.Fprintf(writer, "%s: previous=%q selected=%q\n  Preserve the previous location with %s before startup.\n",
+			conflict.Role, conflict.PreviousPath, conflict.SelectedPath, conflict.Selector); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func writeFileManifest(writer io.Writer, report productpaths.FileManifest, asJSON bool) error {
 	if asJSON {

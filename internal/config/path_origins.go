@@ -28,13 +28,13 @@ func pathSelections(cfg *Config) []pathSelection {
 		selections = append(selections, pathSelection{"source-file", "", catalogconfig.SourceURL, "", &cfg.Catalog.SourceURL, true})
 	}
 	if cfg.Storage.Mode == storageModeBadger && !cfg.Storage.Badger.inMemory {
-		selections = append(selections, pathSelection{"badger", badgerPathEnvironment, "", productpaths.Data, &cfg.Storage.Badger.Path, true})
+		selections = append(selections, pathSelection{pathRoleBadger, badgerPathEnvironment, "", productpaths.Data, &cfg.Storage.Badger.Path, true})
 	}
 	if cfg.Storage.SQL.Mode == sqlModeSQLite && !cfg.Storage.Badger.inMemory {
 		selections = append(selections, pathSelection{pathRoleSQLite, sqlitePathEnvironment, "", productpaths.Data, &cfg.Storage.SQL.SQLite.Path, true})
 	}
 	if cfg.Files.SelectedBackend() == BlobBackendFilesystem && !cfg.Catalog.StateDirectoryIsScratch() {
-		selections = append(selections, pathSelection{"files", filesPathEnvironment, "", productpaths.Data, &cfg.Files.Path, true})
+		selections = append(selections, pathSelection{pathRoleFiles, filesPathEnvironment, "", productpaths.Data, &cfg.Files.Path, true})
 	}
 	return selections
 }

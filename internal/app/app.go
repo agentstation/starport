@@ -168,6 +168,9 @@ func prepareComposition(cfg *config.Config, options []Option) (buildOptions, err
 	if err := cfg.Validate(); err != nil {
 		return buildOptions{}, fmt.Errorf("validate application config: %w", err)
 	}
+	if err := cfg.CheckLegacyPaths(context.Background()); err != nil {
+		return buildOptions{}, err
+	}
 	if strings.TrimSpace(cfg.Security.MasterKey) == "" {
 		return buildOptions{}, ErrCredentialsRequired
 	}

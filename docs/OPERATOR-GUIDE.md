@@ -342,6 +342,20 @@ It reports access conflicts and unverified access. It does not establish effecti
 The report records the configuration access policy selected before the loader read the file.
 This prevents a value inside the file from changing its reported access requirement.
 
+Before an upgrade, run `starport config paths --legacy --json` to inspect previous default locations.
+The report lists existing paths that the new defaults would abandon. It reads metadata without opening databases or reading their contents.
+Startup and local initialization refuse these conflicts before creating replacement stores. They preserve the old files, including conflicting or incomplete state.
+
+Older versions keep local data under `<previous-config>/data/` and catalog runtime state under the XDG state root.
+On macOS, the default primary configuration moves from `starport/config.env` to `starport/config/config.env` under Application Support.
+The report names the exact old path, selected path, and configuration selector.
+
+Set explicit paths to retain the previous locations while preparing a verified migration. Changing a selector does not copy files or prove migration completion.
+Runtime ownership checks still apply. A retained runtime from another owner requires ownership migration before use.
+
+Explicit roots and leaf paths keep their selected locations. Development storage and unselected database backends do not inspect legacy data.
+Use `--legacy` separately from `--files` and `--inspect`. This command does not migrate or remove old state.
+
 Source acquisition uses Starport's cache root, including the session cache during development.
 The models.dev HTTP cache uses `models.dev/`. Its managed Git checkout uses `sources/models.dev-git/`.
 `STARPORT_CATALOG_ACQUISITION_SOURCES` selects permitted provider and metadata sources. An explicit empty value disables them all.

@@ -71,7 +71,7 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		report.Files[len(report.Files)-1].Location = input.location
 	}
 	badger := selectedAvailability(c.Storage.Mode == storageModeBadger && !c.Storage.Badger.inMemory)
-	add("badger", p.BadgerDir, fileKindTree, badger, policy.OwnerOnly,
+	add(pathRoleBadger, p.BadgerDir, fileKindTree, badger, policy.OwnerOnly,
 		"The local KV backend opens this directory.", "Back up durable KV records and accepted catalog generations consistently. Do not share this directory between processes.", badgerPathEnvironment)
 	sqlite := selectedAvailability(c.Storage.SQL.Mode == sqlModeSQLite && !c.Storage.Badger.inMemory)
 	add(pathRoleSQLite, p.SQLiteFile, "file", sqlite, policy.OwnerOnly,
@@ -84,7 +84,7 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		add(pathRoleSQLite+suffix, path, "file", sqlite, policy.OwnerOnly,
 			"SQLite creates sidecars when its journal mode requires them.", "Keep database sidecars with the live database. Do not delete them during operation.", sqlitePathEnvironment)
 	}
-	add("files", p.FilesDir, fileKindTree, selectedAvailability(c.Files.SelectedBackend() == BlobBackendFilesystem && p.FilesDir != ""), policy.OwnerOnly,
+	add(pathRoleFiles, p.FilesDir, fileKindTree, selectedAvailability(c.Files.SelectedBackend() == BlobBackendFilesystem && p.FilesDir != ""), policy.OwnerOnly,
 		"The filesystem blob backend stores uploaded bytes.", "Restore file records and bytes together. File retention controls normal removal.", filesPathEnvironment)
 	add("local-token", p.LocalTokenFile, "file", selectedAvailability(p.LocalTokenFile != ""), policy.OwnerOnly,
 		"Persistent startup creates the local administrator token. Development only reads an existing token.", "Treat this file as an administrator credential.")

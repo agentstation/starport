@@ -82,6 +82,9 @@ func (s *Service) Initialize(ctx context.Context, request Request) (_ Result, re
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
+	if err := s.paths.CheckLegacyPaths(ctx); err != nil {
+		return Result{}, err
+	}
 	guard, err := lockDatabase(ctx, s.paths)
 	if err != nil {
 		return Result{}, err

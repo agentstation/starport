@@ -104,10 +104,10 @@ func (c *Config) BindDevelopmentScratch(root string) error {
 	if c.paths.Origins == nil {
 		c.paths.Origins = make(map[string]productpaths.Path)
 	}
-	for _, name := range []string{"badger", pathRoleSQLite} {
+	for _, name := range []string{pathRoleBadger, pathRoleSQLite} {
 		delete(c.paths.Origins, name)
 	}
-	for name, path := range map[string]string{"data": root, "state": root, "cache": c.paths.CacheDir, "files": c.Files.Path, pathRoleRuntime: c.Catalog.StateDirectory, pathRoleBaseline: c.paths.BaselineDir} {
+	for name, path := range map[string]string{"data": root, "state": root, "cache": c.paths.CacheDir, pathRoleFiles: c.Files.Path, pathRoleRuntime: c.Catalog.StateDirectory, pathRoleBaseline: c.paths.BaselineDir} {
 		c.paths.Origins[name] = productpaths.Path{Path: path, Origin: "development-scratch"}
 	}
 	return nil

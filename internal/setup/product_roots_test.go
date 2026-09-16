@@ -5,9 +5,31 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/agentstation/starmap/pkg/productpaths"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLegacyStateRefusesInitializationBeforeMetadataWrites(t *testing.T) {
+	paths := config.PathsForConfigDir(filepath.Join(t.TempDir(), "configuration"))
+	previous := paths.BadgerDir
+	require.NoError(t, os.MkdirAll(previous, 0o700))
+	paths.DataDir = filepath.Join(t.TempDir(), "replacement")
+	paths.BadgerDir = filepath.Join(paths.DataDir, "badger")
+	paths.Origins["data"] = productpaths.Path{Path: paths.DataDir, Origin: "platform-default"}
+	service := New(paths)
+	service.openStore = func(string) (storage.KVStore, error) {
+		t.Fatal("legacy detection must precede database access")
+		return nil, nil
+	}
+	_, err := service.Initialize(t.Context(), Request{APIKeyName: "local-admin"})
+	require.ErrorIs(t, err, config.ErrLegacyPaths)
+	require.NoDirExists(t, paths.DataDir)
+	require.NoDirExists(t, filepath.Join(paths.ConfigDir, setupMetadataDirectory))
+	require.NoFileExists(t, paths.ConfigFile)
+	require.DirExists(t, previous)
+}
 
 func productSetupPaths(t *testing.T) config.Paths {
 	t.Helper()

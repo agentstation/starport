@@ -15,9 +15,12 @@ import (
 const pathOriginGoOption = "go-option"
 const pathOriginDefault = "default"
 const pathRoleSQLite = "sqlite"
+const pathRoleBadger = "badger"
+const pathRoleFiles = "files"
 const pathRoleBaseline = "baseline"
 const pathRoleRuntime = "runtime"
 const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
+const dataDirectoryEnvironment = "STARPORT_DATA_DIR"
 
 // Paths contains resolved files, roots, and their selection origins.
 type Paths struct {
@@ -39,6 +42,7 @@ type Paths struct {
 	DeploymentID           string                       `json:"deployment_id"`
 	Origins                map[string]productpaths.Path `json:"origins"`
 	configExplicit         bool
+	legacyLocations        []LegacyPath
 }
 
 // PlatformPaths resolves product settings from the environment without reading files.
@@ -48,7 +52,11 @@ func PlatformPaths() (Paths, error) {
 	if err != nil {
 		return Paths{}, err
 	}
-	return loader.managedPaths(paths, loader.environment, []productpaths.Layer{rootLayer("environment", loader.environment)})
+	paths, err = loader.managedPaths(paths, loader.environment, []productpaths.Layer{rootLayer("environment", loader.environment)})
+	if err == nil {
+		paths.legacyLocations, err = paths.legacyCandidates()
+	}
+	return paths, err
 }
 
 // PathsForConfigDir selects a caller-owned layout below one absolute directory.
@@ -89,7 +97,7 @@ func rootLayer(name string, source envconfig.Lookuper) productpaths.Layer {
 	values := make(map[productpaths.Root]string)
 	for root, key := range map[productpaths.Root]string{
 		productpaths.Home: "STARPORT_HOME", productpaths.Config: configDirectoryEnvironment,
-		productpaths.Data: "STARPORT_DATA_DIR", productpaths.State: "STARPORT_STATE_ROOT", productpaths.Cache: "STARPORT_CACHE_DIR",
+		productpaths.Data: dataDirectoryEnvironment, productpaths.State: "STARPORT_STATE_ROOT", productpaths.Cache: "STARPORT_CACHE_DIR",
 	} {
 		if value, present := source.Lookup(key); present {
 			values[root] = value

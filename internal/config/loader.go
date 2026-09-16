@@ -222,8 +222,8 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 	if err := resolveConfiguredPaths(cfg, &paths, base, pathOrigins); err != nil {
 		return nil, newLoadFailure("configured paths could not be resolved", err)
 	}
-	if err := cfg.Validate(); err != nil {
-		return nil, newLoadFailure("configuration values are invalid", err)
+	if err := validateLoadedConfiguration(cfg, &paths, development); err != nil {
+		return nil, err
 	}
 	cfg.paths = paths
 	cfg.fileInputs = selected.fileInputs
@@ -238,6 +238,21 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 	cfg.credentialResolver = credentials.NewResolver(resolverOptions...)
 
 	return cfg, nil
+}
+
+func validateLoadedConfiguration(cfg *Config, paths *Paths, development bool) error {
+	if err := cfg.Validate(); err != nil {
+		return newLoadFailure("configuration values are invalid", err)
+	}
+	if development {
+		return nil
+	}
+	var err error
+	paths.legacyLocations, err = paths.legacyCandidates()
+	if err != nil {
+		return newLoadFailure("previous configuration paths could not be resolved", err)
+	}
+	return nil
 }
 
 func defaultConfig(paths Paths) *Config {

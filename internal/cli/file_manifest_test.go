@@ -55,6 +55,7 @@ func TestConfigFileManifestInspectionHasABoundAndReadsNoContents(t *testing.T) {
 func TestConfigFileManifestRejectsInvalidInspectionBeforeLoading(t *testing.T) {
 	for _, args := range [][]string{
 		{"--max-entries", "1"}, {"--inspect", "--max-entries", "0"}, {"--inspect", "--max-entries", "100001"},
+		{"--legacy", "--files"}, {"--legacy", "--inspect"}, {"--legacy", "--max-entries", "10"},
 	} {
 		t.Run(args[len(args)-1], func(t *testing.T) {
 			deps, _, _ := testDependencies()
@@ -66,6 +67,41 @@ func TestConfigFileManifestRejectsInvalidInspectionBeforeLoading(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+func TestLegacyPathsCommandUsesEffectiveSelectionWithoutOpeningStores(t *testing.T) {
+	root := t.TempDir()
+	for name, path := range map[string]string{
+		"HOME": root, "USERPROFILE": root,
+		"XDG_DATA_HOME": filepath.Join(root, "data"), "XDG_STATE_HOME": filepath.Join(root, "state"),
+		"LOCALAPPDATA": filepath.Join(root, "local"),
+	} {
+		t.Setenv(name, path)
+	}
+	previousConfig := filepath.Join(root, "previous-config")
+	previous := filepath.Join(previousConfig, "data", "badger")
+	require.NoError(t, os.MkdirAll(previous, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(previous, "MANIFEST"), []byte("private old database"), 0o600))
+	loader := config.NewLoader().WithEnvironment(map[string]string{"STARPORT_CONFIG_DIR": previousConfig}).WithEnvFiles()
+	cfg, err := loader.Load(t.Context())
+	require.NoError(t, err)
+	// Inspection uses the loaded selection after process directory inputs change.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	deps, stdout, _ := testDependencies()
+	deps.LoadConfig = func(context.Context) (*config.Config, error) { return cfg, nil }
+	require.NoError(t, Run(t.Context(), []string{"starport", "config", "paths", "--legacy", "--json"}, deps))
+	var conflicts []config.LegacyPath
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &conflicts))
+	require.Len(t, conflicts, 1)
+	require.Equal(t, previous, conflicts[0].PreviousPath)
+	require.Equal(t, cfg.Storage.Badger.Path, conflicts[0].SelectedPath)
+	require.NotContains(t, stdout.String(), "private old database")
+	require.NoFileExists(t, filepath.Join(previous, "LOCK"))
+	require.NoDirExists(t, cfg.Storage.Badger.Path)
+	stdout.Reset()
+	require.NoError(t, Run(t.Context(), []string{"starport", "config", "paths", "--legacy"}, deps))
+	require.Contains(t, stdout.String(), "STARPORT_STORAGE_BADGER_PATH")
 }
 
 func TestConfigFileManifestReportsPrivateStateAccessConflict(t *testing.T) {
