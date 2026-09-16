@@ -107,7 +107,7 @@ func (c *Config) BindDevelopmentScratch(root string) error {
 	for _, name := range []string{"badger", "sqlite"} {
 		delete(c.paths.Origins, name)
 	}
-	for name, path := range map[string]string{"data": root, "state": root, "cache": c.paths.CacheDir, "files": c.Files.Path, "runtime": c.Catalog.StateDirectory, "baseline": c.paths.BaselineDir} {
+	for name, path := range map[string]string{"data": root, "state": root, "cache": c.paths.CacheDir, "files": c.Files.Path, pathRoleRuntime: c.Catalog.StateDirectory, "baseline": c.paths.BaselineDir} {
 		c.paths.Origins[name] = productpaths.Path{Path: path, Origin: "development-scratch"}
 	}
 	return nil

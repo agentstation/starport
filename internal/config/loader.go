@@ -198,6 +198,7 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 		cfg.Storage.Valkey = ValkeyConfig{}
 	}
 	// Overrides retain precedence over loaded values and pass the same validation.
+	pathOrigins := loadedPathOrigins(cfg, selected)
 	for _, override := range overrides {
 		if override != nil {
 			override(cfg)
@@ -211,7 +212,7 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 		paths.DataDir, paths.StateDir, paths.CacheDir, paths.BaselineDir = "", "", "", ""
 	}
 
-	if err := resolveConfiguredPaths(cfg, &paths, base); err != nil {
+	if err := resolveConfiguredPaths(cfg, &paths, base, pathOrigins); err != nil {
 		return nil, newLoadFailure("configured paths could not be resolved", err)
 	}
 	if err := cfg.Validate(); err != nil {
@@ -291,40 +292,20 @@ func (l *Loader) sourceLookuper(ctx context.Context, paths Paths) (envconfig.Loo
 	return selected, nil
 }
 
-func resolveConfiguredPaths(cfg *Config, paths *Paths, base string) error {
-	if !cfg.Catalog.StateDirectoryIsScratch() && cfg.Catalog.StateDirectory == "" {
-		cfg.Catalog.StateDirectory = paths.RuntimeDir
-	}
-	type leafSelection struct {
-		name     string
-		value    *string
-		required bool
-	}
-	selections := []leafSelection{
-		{"workspace", &cfg.Catalog.WorkspacePath, false},
-		{"runtime", &cfg.Catalog.StateDirectory, !cfg.Catalog.StateDirectoryIsScratch()},
-		{"local-token", &cfg.Security.LocalTokenPath, true},
-		{"tls-certificate", &cfg.Security.TLSCertPath, false},
-		{"tls-key", &cfg.Security.TLSKeyPath, false},
-		{"logs", &cfg.Logging.FilePath, false},
-	}
-	if cfg.Catalog.Source == CatalogSourceFile {
-		selections = append(selections, leafSelection{"source-file", &cfg.Catalog.SourceURL, true})
-	}
-	if cfg.Storage.Mode == storageModeBadger && !cfg.Storage.Badger.inMemory {
-		selections = append(selections, leafSelection{"badger", &cfg.Storage.Badger.Path, true})
-	}
-	if cfg.Storage.SQL.Mode == sqlModeSQLite && !cfg.Storage.Badger.inMemory {
-		selections = append(selections, leafSelection{"sqlite", &cfg.Storage.SQL.SQLite.Path, true})
-	}
-	if cfg.Files.SelectedBackend() == BlobBackendFilesystem && !cfg.Catalog.StateDirectoryIsScratch() {
-		selections = append(selections, leafSelection{"files", &cfg.Files.Path, true})
-	}
-	for _, selection := range selections {
+func resolveConfiguredPaths(cfg *Config, paths *Paths, base string, origins map[string]pathSelectionOrigin) error {
+	for _, selection := range pathSelections(cfg) {
+		loaded, known := origins[selection.name]
+		origin := loaded.origin
+		if !known || loaded.value != *selection.value {
+			origin = pathOriginGoOption
+		}
+		if selection.name == pathRoleRuntime && *selection.value == "" && selection.required {
+			*selection.value = paths.RuntimeDir
+		}
 		if *selection.value == "" && !selection.required {
 			continue
 		}
-		path, err := selectedLeaf(paths.ConfigDir, *selection.value, "configuration", base)
+		path, err := selectedLeaf(paths.ConfigDir, *selection.value, origin, base)
 		if err != nil {
 			return fmt.Errorf("%s path: %w", selection.name, err)
 		}

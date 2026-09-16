@@ -13,6 +13,7 @@ import (
 )
 
 const pathOriginGoOption = "go-option"
+const pathRoleRuntime = "runtime"
 const configDirectoryEnvironment = "STARPORT_CONFIG_DIR"
 
 // Paths contains resolved files, roots, and their selection origins.
