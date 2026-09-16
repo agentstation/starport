@@ -1299,6 +1299,7 @@ func defaultRuntimeFactories() runtimeFactories {
 func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 	cfg := deployment.Catalog
 	return runtimecatalog.Settings{
+		Values: cfg.CatalogValues(),
 		ListenAddress: net.JoinHostPort(
 			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
 		),

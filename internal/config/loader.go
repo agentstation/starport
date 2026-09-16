@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"path/filepath"
 
 	"github.com/joho/godotenv"
@@ -81,19 +82,16 @@ func (l *Loader) WithPaths(paths Paths) *Loader {
 	return l
 }
 
-// Override is one decision a caller made outside the environment, applied
-// after configuration sources are read and before validation runs. A command
-// line flag is the reason it exists: a flag has to meet exactly the same
-// validation an environment value meets, or the checks that read it prove
-// nothing about the flag.
+// Override applies a caller decision after the loader reads configuration sources.
+// Validation checks overrides and environment values with the same rules.
+// Command-line flags use this contract.
 type Override func(*Config)
 
-// DisableAuthentication turns off the gateway API key check. It carries the
-// same weight as STARPORT_SECURITY_AUTH_MODE=disabled, including the exposure
-// tripwire that refuses a non-loopback bind address.
-// It also records that a flag, not the environment, decided: the two write the
-// same field, and a mode an operator stored from the console yields to either,
-// so startup has to be able to name which one it is honoring.
+// DisableAuthentication disables the gateway API key check.
+// It has the same authority as STARPORT_SECURITY_AUTH_MODE=disabled.
+// The exposure rule still refuses a non-loopback bind without explicit permission.
+// A flag or environment value overrides the mode saved through the console.
+// This override records the flag origin so startup can report the selected authority.
 func DisableAuthentication() Override {
 	return func(cfg *Config) {
 		cfg.Security.AuthMode = AuthModeDisabled
@@ -102,8 +100,8 @@ func DisableAuthentication() Override {
 }
 
 // AllowRemoteWithoutAuthentication acknowledges that an unauthenticated
-// gateway may bind an address the network can reach. Alone it changes nothing;
-// it only lifts the tripwire that DisableAuthentication would otherwise trip.
+// gateway may bind an address the network can reach. Alone it changes nothing.
+// It permits the remote address when DisableAuthentication disables authentication.
 func AllowRemoteWithoutAuthentication() Override {
 	return func(cfg *Config) { cfg.Security.AllowRemoteNoAuth = true }
 }
@@ -146,6 +144,9 @@ func (l *Loader) load(ctx context.Context, prepare func(*Config), overrides []Ov
 		Lookuper: envconfig.PrefixLookuper(l.prefix, lookuper),
 	}); err != nil {
 		return nil, newLoadFailure("configuration values could not be decoded", err)
+	}
+	if selected, ok := lookuper.(catalogSettingsLookuper); ok {
+		cfg.Catalog.canonicalValues = maps.Clone(selected.values)
 	}
 	cfg.Catalog.PermissionClock, err = loadPermissionClock(lookuper)
 	if err != nil {
@@ -221,7 +222,7 @@ func (l *Loader) sourceLookuper(paths Paths) (envconfig.Lookuper, error) {
 		}
 		lookupers = append(lookupers, catalogClockLookuper{envconfig.MapLookuper(values)})
 	}
-	return envconfig.MultiLookuper(lookupers...), nil
+	return resolveCatalogLookuper(lookupers)
 }
 
 func resolveConfiguredPaths(cfg *Config, paths Paths) error {
@@ -245,10 +246,9 @@ func resolveConfiguredPaths(cfg *Config, paths Paths) error {
 	if err != nil {
 		return fmt.Errorf("catalog workspace path: %w", err)
 	}
-	// The state directory is process-local by contract, so it resolves against
-	// the user state root and never against the configuration directory, which
-	// a fleet can share. A development gateway owns scratch instead, so it
-	// never reaches the user state root.
+	// The process-local state directory resolves against the user state root.
+	// A fleet can share its configuration directory without sharing runtime state.
+	// A development gateway owns scratch and does not use the user state root.
 	if !cfg.Catalog.StateDirectoryIsScratch() {
 		cfg.Catalog.StateDirectory, err = ResolveStateDirectory(cfg.Catalog.StateDirectory)
 		if err != nil {

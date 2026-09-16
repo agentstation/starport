@@ -1,12 +1,14 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
 	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock/profile"
 	"github.com/sethvargo/go-envconfig"
 )
@@ -34,6 +36,8 @@ const (
 	CatalogStartupPreferSource = "prefer_source"
 	// CatalogStartupRequireSource refuses to start until the source answers.
 	CatalogStartupRequireSource = "require_source"
+	// CatalogStartupPreferLocal starts from the retained or embedded catalog.
+	CatalogStartupPreferLocal = "prefer_local"
 	// CatalogStartupRequireAuthority retains internal metadata and requires valid authority permission for inference.
 	CatalogStartupRequireAuthority = "require_authority"
 )
@@ -57,19 +61,21 @@ const stateDirectoryEnvironment = "STARPORT_CATALOG_STATE_DIR"
 
 // CatalogConfig holds the canonical Starmap catalog settings. Starport uses
 // the suffixes Starmap names, with the gateway prefix. One connected runtime
-// reads one source and, when acquisition is enabled, observes providers on its
-// own schedule.
+// reads one source. When acquisition is active, that runtime observes providers
+// on its own schedule.
 //
 // Catalog-acquisition credentials stay separate from inference credentials:
 // SourceAPIKey speaks the Starmap protocol, and SourceToken reads a GitHub
 // release. Neither one pays a provider.
 type CatalogConfig struct {
+	canonicalValues map[string]string
+
 	// PermissionClock holds node-local bounds parsed through Starmap's canonical schema.
 	// Changes require restart. Loading starts no clock observation.
 	PermissionClock profile.Config
 
 	// Source selects the catalog source kind.
-	Source string `env:"SOURCE,default=public"`
+	Source string `env:"SOURCE"`
 
 	// SourceURL is the safe source endpoint, or the file identity when the
 	// source kind is a file.
@@ -80,13 +86,12 @@ type CatalogConfig struct {
 	SourceAPIKey string `env:"SOURCE_API_KEY" secret:"true"`
 
 	// SourceRepository names the signed publication repository.
-	SourceRepository string `env:"SOURCE_REPOSITORY,default=agentstation/starmap"`
+	SourceRepository string `env:"SOURCE_REPOSITORY"`
 
 	// SourceChannel names the publication channel of that repository.
-	SourceChannel string `env:"SOURCE_CHANNEL,default=catalog/v1"`
+	SourceChannel string `env:"SOURCE_CHANNEL"`
 
-	// SourceSignerWorkflow names the workflow that must have signed a
-	// publication. Empty selects the publisher preset.
+	// SourceSignerWorkflow names the required publication signing workflow. Empty selects the publisher preset.
 	SourceSignerWorkflow string `env:"SOURCE_SIGNER_WORKFLOW"`
 
 	// SourceToken is an optional GitHub API token. It raises the anonymous
@@ -95,10 +100,10 @@ type CatalogConfig struct {
 
 	// SourcePollInterval bounds how often this instance asks the source for
 	// a newer publication.
-	SourcePollInterval time.Duration `env:"SOURCE_POLL_INTERVAL,default=1h"`
+	SourcePollInterval time.Duration `env:"SOURCE_POLL_INTERVAL"`
 
 	// SourceStartupPolicy decides what startup does without a source answer.
-	SourceStartupPolicy string `env:"SOURCE_STARTUP_POLICY,default=prefer_source"`
+	SourceStartupPolicy string `env:"SOURCE_STARTUP_POLICY"`
 
 	// SourceAuthorityID pins the authority used by require_authority.
 	SourceAuthorityID string `env:"SOURCE_AUTHORITY_ID"`
@@ -107,17 +112,17 @@ type CatalogConfig struct {
 	SourcePolicyID string `env:"SOURCE_POLICY_ID"`
 
 	// SourceMaxAge is the oldest publication this instance accepts.
-	SourceMaxAge time.Duration `env:"SOURCE_MAX_AGE,default=6h"`
+	SourceMaxAge time.Duration `env:"SOURCE_MAX_AGE"`
 
 	// SourceMaxHops bounds the publication chain this instance follows.
-	SourceMaxHops int `env:"SOURCE_MAX_HOPS,default=8"`
+	SourceMaxHops int `env:"SOURCE_MAX_HOPS"`
 
 	// AcquisitionEnabled decides whether this instance observes providers.
-	AcquisitionEnabled bool `env:"ACQUISITION_ENABLED,default=true"`
+	AcquisitionEnabled bool `env:"ACQUISITION_ENABLED"`
 
 	// AcquisitionInterval is the period between provider observations. Zero
 	// means one observation at startup and no repeat.
-	AcquisitionInterval time.Duration `env:"ACQUISITION_INTERVAL,default=4h"`
+	AcquisitionInterval time.Duration `env:"ACQUISITION_INTERVAL"`
 
 	// WorkspacePath is an optional local catalog workspace directory. It
 	// holds catalog files an operator supplies. It is never the state
@@ -126,9 +131,9 @@ type CatalogConfig struct {
 
 	// StateDirectory is where this process keeps the state the connected
 	// runtime retains: the layer store, the instance identity seed, and the
-	// source discovery record. It must belong to one process on one machine,
-	// because two processes that share a seed derive one instance identity and
-	// the runtime lease then fences nothing. An empty value resolves to the
+	// source discovery record. It must belong to one process on one machine.
+	// Two processes that share a seed derive one instance identity, which defeats
+	// the runtime lease fence. An empty value resolves to the
 	// process-local user state directory.
 	StateDirectory string `env:"STATE_DIR"`
 
@@ -143,38 +148,33 @@ type CatalogConfig struct {
 
 	// StartupSpread spreads the first source read of a fleet, so many
 	// instances that start together do not ask at the same moment.
-	StartupSpread time.Duration `env:"STARTUP_SPREAD,default=15m"`
+	StartupSpread time.Duration `env:"STARTUP_SPREAD"`
 
 	// TransferIdleTimeout ends a transfer that stops making progress.
-	TransferIdleTimeout time.Duration `env:"TRANSFER_IDLE_TIMEOUT,default=2m"`
+	TransferIdleTimeout time.Duration `env:"TRANSFER_IDLE_TIMEOUT"`
 
 	// TransferMaxDuration bounds one complete transfer. Zero is invalid,
 	// because a transfer without a bound never ends.
-	TransferMaxDuration time.Duration `env:"TRANSFER_MAX_DURATION,default=60m"`
+	TransferMaxDuration time.Duration `env:"TRANSFER_MAX_DURATION"`
 
 	// RefreshTimeout is an added cap on one refresh run. Zero adds no cap,
 	// and the transfer bounds alone end a run that does not progress.
-	RefreshTimeout time.Duration `env:"REFRESH_TIMEOUT,default=0s"`
+	RefreshTimeout time.Duration `env:"REFRESH_TIMEOUT"`
 }
 
-// DefaultCatalogConfig returns the canonical catalog settings. It states the
-// same values the environment tags name, so a caller that builds a
-// configuration without the environment starts from the shipped contract.
+// DefaultCatalogConfig derives host defaults from the shared Starmap descriptors.
 func DefaultCatalogConfig() CatalogConfig {
-	return CatalogConfig{
-		Source:              CatalogSourcePublic,
-		SourceRepository:    DefaultCatalogSourceRepository,
-		SourceChannel:       DefaultCatalogSourceChannel,
-		SourcePollInterval:  time.Hour,
-		SourceStartupPolicy: CatalogStartupPreferSource,
-		SourceMaxAge:        6 * time.Hour,
-		SourceMaxHops:       8,
-		AcquisitionEnabled:  true,
-		AcquisitionInterval: 4 * time.Hour,
-		StartupSpread:       15 * time.Minute,
-		TransferIdleTimeout: 2 * time.Minute,
-		TransferMaxDuration: 60 * time.Minute,
+	values := make(map[string]string)
+	for _, descriptor := range catalogconfig.Descriptors() {
+		values[catalogEnvironmentName(descriptor.Name)] = descriptor.Default
 	}
+	var cfg CatalogConfig
+	if err := envconfig.ProcessWith(context.Background(), &envconfig.Config{
+		Target: &cfg, Lookuper: envconfig.PrefixLookuper("STARPORT_CATALOG_", envconfig.MapLookuper(values)),
+	}); err != nil {
+		panic(fmt.Sprintf("decode canonical catalog defaults: %v", err))
+	}
+	return cfg
 }
 
 // Validate refuses a catalog setting the runtime cannot honor.
@@ -192,10 +192,10 @@ func (c *CatalogConfig) Validate() error {
 		)
 	}
 	switch c.SourceStartupPolicy {
-	case CatalogStartupPreferSource, CatalogStartupRequireSource, CatalogStartupRequireAuthority:
+	case CatalogStartupPreferSource, CatalogStartupRequireSource, CatalogStartupRequireAuthority, CatalogStartupPreferLocal:
 	default:
 		return fmt.Errorf(
-			"catalog source startup policy %q is not one of prefer_source, require_source, require_authority",
+			"catalog source startup policy %q is not one of prefer_source, require_source, require_authority, prefer_local",
 			c.SourceStartupPolicy,
 		)
 	}
@@ -249,11 +249,10 @@ func (c *CatalogConfig) Validate() error {
 func (c CatalogConfig) StateDirectoryIsScratch() bool { return c.stateDirectoryScratch }
 
 // ResolveStateDirectory returns the catalog state directory of this process.
-// An operator value wins. An empty value resolves to the user state root,
-// which is process-local: it is never the workspace path and never a storage
-// path, so two instances that share a volume still hold two identities. A
-// process with no user home directory has no state root, so the error names
-// the two settings that supply one.
+// An operator value wins. An empty value resolves to the process-local user
+// state root. This root is separate from workspace and storage paths, so two
+// instances with a shared volume retain separate identities. Without a user
+// home directory, the error names the two settings that supply a state root.
 func ResolveStateDirectory(configured string) (string, error) {
 	if directory := strings.TrimSpace(configured); directory != "" {
 		return directory, nil
@@ -297,9 +296,9 @@ func (e *RemovedSettingError) Error() string {
 }
 
 // removedCatalogSettings maps every removed catalog variable to the canonical
-// setting that replaced it. The local-or-remote catalog choice is gone: one
-// connected runtime reads one source, so the variables that selected a remote
-// publication and a separate local refresh schedule no longer have a meaning.
+// setting that replaced it. One connected runtime reads one source. The old
+// variables for a remote publication and a separate local refresh schedule
+// no longer apply.
 var removedCatalogSettings = []RemovedSettingError{
 	{
 		Name:        "STARPORT_CATALOG_REFRESH_ON_START",
