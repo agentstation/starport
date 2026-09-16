@@ -94,7 +94,6 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 		{pathRoleBaseline, p.BaselineDir, fileKindTree, "Persistent catalog startup exports the embedded catalog.", "Reproduce from the same binary or preserve the verified export."},
 		{fileRoleBaselineRecovery, childPath(p.BaselineDir, ".starmap-baseline"), fileKindTree, "Embedded export records publication and recovery state.", "Keep locks and journals until verified recovery completes."},
 		{"runtime-evidence", p.RuntimeDir, fileKindTree, "The connected catalog runtime saves private identity and acquisition evidence.", "Preserve runtime identity, layer evidence, replay floors, migration records, and locks. Accepted generations live in the selected KV backend."},
-		{"workspace", c.Catalog.WorkspacePath, fileKindTree, "Explicit catalog authoring uses this operator-owned tree.", "Preserve operator input and adjacent Starmap projection receipts."},
 	} {
 		access, err := policy.ForRole(item.id)
 		if err != nil {
@@ -105,6 +104,11 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 			report.Files[len(report.Files)-1].Patterns = []string{"*/manifest.json", "*/catalog.json", ".baseline-*/**"}
 		}
 	}
+	workspaceFiles, err := productpaths.WorkspaceFiles(manifestPath(p, "workspace", c.Catalog.WorkspacePath), "STARPORT_CATALOG_WORKSPACE_PATH")
+	if err != nil {
+		return productpaths.FileManifest{}, err
+	}
+	report.Files = append(report.Files, workspaceFiles...)
 	if c.Catalog.Source == CatalogSourceFile {
 		add("source-file", c.Catalog.SourceURL, "file", fileAvailable, policy.DeploymentControlled,
 			"The operator selects a file catalog source.", "Preserve the source catalog and its access policy.", "STARPORT_CATALOG_SOURCE_URL")

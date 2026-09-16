@@ -334,6 +334,10 @@ The report marks inactive database paths as disabled and identifies shared KV, S
 Accepted catalog generations use the selected KV backend. Each process keeps its private catalog runtime evidence under the runtime directory.
 The embedded baseline export remains separate from that mutable state.
 
+Workspace entries include adjacent projection receipts, replacement journals, writer locks, candidates, and backups.
+Starmap supplies these file names and access policies to both products. Each entry retains the selected workspace origin.
+Disabled workspaces have no sibling entries. Inventory and inspection do not authorize removal of recovery files.
+
 Use `starport config paths --inspect --json` to add bounded filesystem metadata.
 Set `--max-entries` to change the scan bound from 10,000 entries, up to 100,000 entries.
 Inspection reads no data-file contents, opens no databases, takes no runtime locks, and changes no files.

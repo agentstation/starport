@@ -23,6 +23,28 @@ func manifestEntry(t *testing.T, report productpaths.FileManifest, id string) pr
 	return productpaths.FileEntry{}
 }
 
+func TestFileManifestIncludesWorkspaceRecoveryArtifacts(t *testing.T) {
+	root := t.TempDir()
+	workspace := filepath.Join(root, "workspace[local]")
+	cfg, err := NewLoader().WithPaths(PathsForConfigDir(filepath.Join(root, "config"))).WithEnvFiles().WithEnvironment(map[string]string{
+		"STARPORT_CATALOG_WORKSPACE_PATH": workspace,
+	}).Load(t.Context())
+	require.NoError(t, err)
+	report, err := cfg.FileManifest("test")
+	require.NoError(t, err)
+	receipt := manifestEntry(t, report, "workspace-receipt")
+	require.Equal(t, filepath.Join(root, ".workspace[local].starmap-projection.json"), receipt.Location.Path)
+	require.Equal(t, "environment", receipt.Location.Origin)
+	require.Equal(t, policy.DeploymentControlled, receipt.Policy.Access)
+	require.Equal(t, policy.OwnerOnly, manifestEntry(t, report, "workspace-preparing").Policy.Access)
+	for _, id := range []string{"workspace-journal", "workspace-lock", "workspace-staging", "workspace-backup", "catalog-migration-lock"} {
+		require.Equal(t, "available", manifestEntry(t, report, id).Availability)
+	}
+	entries, err := os.ReadDir(root)
+	require.NoError(t, err)
+	require.Empty(t, entries)
+}
+
 func TestFileManifestUsesConfigurationReadPolicy(t *testing.T) {
 	for _, selected := range []string{policy.OwnerOnly, policy.ServiceManaged} {
 		t.Run(selected, func(t *testing.T) {
