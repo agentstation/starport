@@ -105,7 +105,8 @@ provider_yaml_uses_credential_schema() {
 
 environment_precedence() {
   starmap_tests "./internal/auth" \
-    TestCatalogCredentialEnvironmentPrecedence &&
+    TestLegacyCatalogCredentialEnvironmentPrecedence \
+    TestCatalogRoleEnvironmentSelection &&
     starport_tests "./internal/config ./internal/credentials" \
       TestCatalogCredentialEnvironmentPrecedence
 }

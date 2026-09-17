@@ -23,6 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  GOTOOLCHAIN: go1.27.1
   CONTAINER_IMAGE: ghcr.io/agentstation/starport
   GORELEASER_VERSION: v2.17.1
   SYFT_VERSION: v1.51.0
@@ -42,7 +43,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.27.1"
           cache: true
 
       - name: Set up Node.js
@@ -84,10 +85,7 @@ jobs:
           printf 'root=%s\n' "$ROOT" >> "$GITHUB_OUTPUT"
 
       - name: Run Go lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.12.2
-          args: --timeout=5m
+        run: make lint
 
       - name: Run repository release gates
         env:
@@ -138,7 +136,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.27.1"
           cache: true
 
       - name: Set up Node.js
@@ -507,7 +505,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.27.1"
           cache: false
 
       - name: Set up Docker Buildx

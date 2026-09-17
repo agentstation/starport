@@ -56,7 +56,7 @@ write_proxy_import() {
 	printf 'package proxy\nimport _ "%s"\n' "$imported" >"$FIXTURE/internal/proxy/mutation.go"
 }
 
-printf 'module github.com/agentstation/starport\n\ngo 1.25.0\n' >"$FIXTURE/go.mod"
+printf 'module github.com/agentstation/starport\n\ngo 1.27.1\n' >"$FIXTURE/go.mod"
 write_import "internal/app" "app"
 write_import "internal/cache" "cache"
 write_import "internal/registry" "registry"
