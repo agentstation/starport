@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
@@ -12,7 +13,7 @@ export default defineConfig({
   },
   test: {
     // Bound concurrent jsdom instances during local and CI verification.
-    maxWorkers: 4,
+    maxWorkers: Math.min(4, availableParallelism()),
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["src/test/setup.ts"],
