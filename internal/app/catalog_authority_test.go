@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,13 +18,22 @@ import (
 func TestConfiguredAuthorityColdStartupKeepsDiagnostics(t *testing.T) {
 	for _, state := range []string{"unavailable", "pending"} {
 		t.Run(state, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 			t.Cleanup(cancel)
 			requestStarted := make(chan struct{}, 1)
+			startupReturned := make(chan struct{})
+			releaseResponse := sync.OnceFunc(func() { close(startupReturned) })
+			defer releaseResponse()
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				select {
 				case requestStarted <- struct{}{}:
 				default:
+				}
+				// No authority response can complete before local startup returns.
+				select {
+				case <-startupReturned:
+				case <-r.Context().Done():
+					return
 				}
 				if state == "pending" {
 					<-r.Context().Done()
@@ -51,6 +61,7 @@ func TestConfiguredAuthorityColdStartupKeepsDiagnostics(t *testing.T) {
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, connected.Close(t.Context())) })
 			require.NoError(t, ctx.Err(), "startup must not wait for an authority response")
+			releaseResponse()
 
 			// Authority polling runs in the background. Diagnostics do not await its response.
 			select {
