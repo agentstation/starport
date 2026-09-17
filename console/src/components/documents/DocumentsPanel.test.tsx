@@ -61,6 +61,7 @@ const OCR_MODEL = {
       provider: "mistral",
       provider_model_id: "mistral-ocr-2505",
       operations: ["documents-recognition"],
+      billing: { recognition: { basis: "pages" } },
       pricing: { page_input: "0.001", currency: "USD" },
     },
   ],
@@ -186,8 +187,9 @@ test("the catalogued recognition models render with their page price", async () 
   const row = screen.getByTestId("recognition-row");
   expect(row.textContent).toContain("mistral/mistral-ocr");
   expect(row.textContent).toContain("mistral-ocr-2505");
-  expect(row.textContent).toContain("$1 USD");
-  expect(screen.getByText("Per 1K pages")).toBeTruthy();
+  expect(row.textContent).toContain("1 USD");
+  expect(screen.getByText("Billing")).toBeTruthy();
+  expect(row.textContent).toContain("/ 1K pages");
 });
 
 test("a catalog that serves no recognition says so", async () => {
@@ -208,4 +210,32 @@ test("a catalog that serves no recognition says so", async () => {
   const notice = await waitFor(() => screen.getByTestId("recognition-models"));
   expect(notice.textContent).toContain("No provider in this catalog reads");
   expect(screen.queryByTestId("recognition-row")).toBeNull();
+});
+
+
+test("recognition shows actual token units and labels input estimates", async () => {
+  gateway.models = [{id: "example/document", offerings: [{
+    provider: "example", provider_model_id: "document",
+    operations: ["documents-recognition"],
+    billing: {recognition: {basis: "tokens", input_page_estimate: {
+      tokens: 258, source: "provider documentation", assumptions: "Standard resolution only.",
+    }}},
+    pricing: {prompt: "0.000001", completion: "0.000002", currency: "USD"},
+  }]}];
+  mount();
+  expect(await screen.findByText("Token billing · USD")).toBeTruthy();
+  expect(screen.getByText(/Input estimate: 258 tokens/).textContent).toContain("excludes output");
+  expect(screen.getByText(/Input estimate: 258 tokens/).textContent).toContain("Standard resolution only.");
+  expect(screen.queryByText(/unpriced/)).toBeNull();
+});
+
+
+test("failed recognition with missing usage is unknown, not free", async () => {
+  gateway.records = [{...RECOGNIZED, recognized_pages: 0, extraction_cost: undefined,
+    extractions: [{offering: "example/document", pages: 0, billing_basis: "tokens", cost_unavailable_reason: "invalid_usage"}],
+  }];
+  mount();
+  await waitFor(() => screen.getByTestId("document-row"));
+  expect(screen.getByTestId("document-cost").textContent).toContain("invalid_usage");
+  expect(screen.getByTestId("document-cost").textContent).not.toContain("free");
 });

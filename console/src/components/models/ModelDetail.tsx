@@ -239,7 +239,9 @@ function price(value: string | undefined): string {
 function unitPrice(offering: ModelOffering): string {
   const searchUnit = formatUnitPrice(offering.pricing?.search_unit);
   if (searchUnit !== null) return `${searchUnit} / search`;
-  const page = formatUnitPrice(offering.pricing?.page_input);
+  if (offering.billing?.recognition?.basis === "tokens") return "Token billing";
+  const page = offering.billing?.recognition?.basis === "pages"
+    ? formatUnitPrice(offering.pricing?.page_input) : null;
   if (page !== null) return `${page} / page`;
   return "—";
 }

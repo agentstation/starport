@@ -29,52 +29,10 @@ func recognitionCost(offering catalogs.ProviderOffering, pages int, measured *in
 		}
 		total = float64(pages) * *offering.Pricing.Operations.PageInput
 	case catalogs.RecognitionBillingTokens:
-		if measured == nil || measured.Estimated {
-			return nil, usage.CostReasonNoUsage
-		}
-		tokens := usageTokens(*measured)
-		if !validRecognitionTokens(tokens) {
-			return nil, usage.CostReasonInvalidUsage
-		}
-		rates := offering.Pricing.Tokens
-		var selectedThreshold int64
-		for _, tier := range offering.Pricing.Tiers {
-			if tier.Type == catalogs.ModelPricingTierTypeContext && tokens.Input > tier.Size && tier.Size > selectedThreshold {
-				selectedThreshold = tier.Size
-				rates = tier.Tokens
-			}
-		}
-		if rates == nil {
-			return nil, usage.CostReasonNoPricing
-		}
-		if _, known := recognitionTokenRate(rates.Input); !known {
-			return nil, usage.CostReasonNoPricing
-		}
-		if _, known := recognitionTokenRate(rates.Output); !known {
-			return nil, usage.CostReasonNoPricing
-		}
-		reasoning := int64(0)
-		if rates.Reasoning != nil {
-			reasoning = tokens.Reasoning
-		}
-		for _, item := range []struct {
-			count int64
-			rate  *catalogs.ModelTokenCost
-		}{
-			{tokens.Input - tokens.CacheRead - tokens.CacheWrite - tokens.AudioInput, rates.Input},
-			{tokens.Output - tokens.AudioOutput - reasoning, rates.Output},
-			{reasoning, rates.Reasoning},
-			{tokens.CacheRead, rates.CacheRead}, {tokens.CacheWrite, rates.CacheWrite},
-			{tokens.AudioInput, rates.AudioInput}, {tokens.AudioOutput, rates.AudioOutput},
-		} {
-			if item.count == 0 {
-				continue
-			}
-			rate, known := recognitionTokenRate(item.rate)
-			if !known {
-				return nil, usage.CostReasonNoPricing
-			}
-			total += float64(item.count) * rate
+		var reason string
+		total, reason = recognitionTokenCost(offering.Pricing, measured)
+		if reason != "" {
+			return nil, reason
 		}
 	default:
 		return nil, usage.CostReasonNoPricing
@@ -117,4 +75,57 @@ func validRecognitionTokens(tokens usage.Tokens) bool {
 		remaining -= share
 	}
 	return tokens.AudioOutput <= tokens.Output && tokens.Reasoning <= tokens.Output-tokens.AudioOutput
+}
+
+// recognitionTokenCost prices measured token dimensions within one context tier.
+func recognitionTokenCost(pricing *catalogs.ModelPricing, measured *inference.Usage) (float64, string) {
+	var total float64
+	if measured == nil || measured.Estimated {
+		return 0, usage.CostReasonNoUsage
+	}
+	tokens := usageTokens(*measured)
+	if !validRecognitionTokens(tokens) {
+		return 0, usage.CostReasonInvalidUsage
+	}
+	rates := pricing.Tokens
+	var selectedThreshold int64
+	for _, tier := range pricing.Tiers {
+		if tier.Type == catalogs.ModelPricingTierTypeContext && tokens.Input > tier.Size && tier.Size > selectedThreshold {
+			selectedThreshold = tier.Size
+			rates = tier.Tokens
+		}
+	}
+	if rates == nil {
+		return 0, usage.CostReasonNoPricing
+	}
+	if _, known := recognitionTokenRate(rates.Input); !known {
+		return 0, usage.CostReasonNoPricing
+	}
+	if _, known := recognitionTokenRate(rates.Output); !known {
+		return 0, usage.CostReasonNoPricing
+	}
+	reasoning := int64(0)
+	if rates.Reasoning != nil {
+		reasoning = tokens.Reasoning
+	}
+	for _, item := range []struct {
+		count int64
+		rate  *catalogs.ModelTokenCost
+	}{
+		{tokens.Input - tokens.CacheRead - tokens.CacheWrite - tokens.AudioInput, rates.Input},
+		{tokens.Output - tokens.AudioOutput - reasoning, rates.Output},
+		{reasoning, rates.Reasoning},
+		{tokens.CacheRead, rates.CacheRead}, {tokens.CacheWrite, rates.CacheWrite},
+		{tokens.AudioInput, rates.AudioInput}, {tokens.AudioOutput, rates.AudioOutput},
+	} {
+		if item.count == 0 {
+			continue
+		}
+		rate, known := recognitionTokenRate(item.rate)
+		if !known {
+			return 0, usage.CostReasonNoPricing
+		}
+		total += float64(item.count) * rate
+	}
+	return total, ""
 }

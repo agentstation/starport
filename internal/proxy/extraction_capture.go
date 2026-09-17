@@ -32,7 +32,7 @@ func captureExtraction(ctx context.Context, report parseReport) {
 	capture.mu.Unlock()
 }
 
-func applyCapturedExtraction(record *usage.Record, ctx context.Context, fallback *ChatCompletionResponse) {
+func applyCapturedExtraction(ctx context.Context, record *usage.Record, fallback *ChatCompletionResponse) {
 	capture, _ := ctx.Value(extractionCaptureKey{}).(*extractionCapture)
 	if capture == nil {
 		applyExtraction(record, fallback)

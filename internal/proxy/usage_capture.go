@@ -165,7 +165,7 @@ func (s *usageCaptureService) ProcessChatCompletion(ctx context.Context, req *Ch
 		snapshot = response.CatalogSnapshot
 	}
 	record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
-	applyCapturedExtraction(&record, ctx, response)
+	applyCapturedExtraction(ctx, &record, response)
 	if overheadMS, ok := OverheadMS(ctx); ok {
 		record.OverheadMS = overheadMS
 	}
@@ -186,7 +186,7 @@ func (s *usageCaptureService) ProcessChatCompletionStream(ctx context.Context, r
 	if err != nil {
 		applyOutcome(&record, err)
 		record.Cost, record.CostUnavailableReason = usageCost(nil, record)
-		applyCapturedExtraction(&record, ctx, nil)
+		applyCapturedExtraction(ctx, &record, nil)
 		if overheadMS, ok := OverheadMS(ctx); ok {
 			record.OverheadMS = overheadMS
 		}
@@ -442,7 +442,7 @@ func (s *usageCaptureStream) finalize(terminal error) {
 			snapshot = evidence.CatalogSnapshot()
 		}
 		record.Cost, record.CostUnavailableReason = usageCost(snapshot, record)
-		applyCapturedExtraction(&record, s.requestCtx, nil)
+		applyCapturedExtraction(s.requestCtx, &record, nil)
 		if s.timer != nil {
 			record.OverheadMS = s.timer.OverheadMS()
 		}

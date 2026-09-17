@@ -610,9 +610,7 @@ export type OfferingPricing = {
   // Audio tokens bill at their own rate wherever a provider meters them.
   audio_input?: string;
   audio_output?: string;
-  // A page is the unit document recognition bills in. No token price converts
-  // into it, so an offering that reads documents and publishes no page price
-  // is one this console cannot price at all.
+  // Published charge for page-based billing.
   page_input?: string;
   // A search unit is what reranking bills in on the providers that meter it:
   // one query against a bounded document count. Such an offering may publish
@@ -632,6 +630,12 @@ export type ModelOffering = {
   availability?: string;
   lifecycle?: string;
   pricing?: OfferingPricing;
+  billing?: {
+    recognition?: {
+      basis: "pages" | "tokens";
+      input_page_estimate?: { tokens: number; source: string; assumptions: string };
+    };
+  };
   // max_documents is the longest document list this offering ranks in one
   // rerank request. A caller that sends more gets a refusal.
   max_documents?: number;
@@ -859,6 +863,16 @@ export type ActivityRecord = {
   // The recognized share of `cost`, reported on its own so a reader can tell
   // what reading the document cost from what answering about it cost.
   extraction_cost?: { nano_usd?: number; currency?: string };
+  extractions?: {
+    started_at?: string;
+    offering: string;
+    generation_id?: string;
+    pages: number;
+    billing_basis?: string;
+    tokens?: Record<string, number | boolean>;
+    cost?: { nano_usd?: number; currency?: string };
+    cost_unavailable_reason?: string;
+  }[];
   cost?: { nano_usd?: number; currency?: string };
   cost_unavailable_reason?: string;
 };
@@ -900,6 +914,7 @@ export const ACTIVITY_RECORD_KEYS = [
   "extraction_cached",
   "extraction_millis",
   "extraction_cost",
+  "extractions",
   "cost",
   "cost_unavailable_reason",
 ] as const satisfies readonly (keyof ActivityRecord)[];

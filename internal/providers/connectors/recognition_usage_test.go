@@ -1,8 +1,10 @@
 package connectors
 
 import (
-	"github.com/stretchr/testify/require"
+	"encoding/json"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRecognitionUsageRetainsPresenceAndDimensions(t *testing.T) {
@@ -36,4 +38,24 @@ func TestGeminiBilledOutputIncludesThinkingOnce(t *testing.T) {
 	require.Equal(t, 10, measured.CompletionTokensDetails.ReasoningTokens)
 	require.Equal(t, 130, measured.TotalTokens)
 	require.Equal(t, 15, measured.PromptTokensDetails.CachedTokens)
+}
+
+func TestGeminiUsagePresencePreservesExplicitZero(t *testing.T) {
+	for _, tc := range []struct {
+		name, payload string
+		reported      bool
+	}{
+		{"absent", `{}`, false},
+		{"null", `{"usageMetadata":null}`, false},
+		{"zero", `{"usageMetadata":{"promptTokenCount":0,"candidatesTokenCount":0,"totalTokenCount":0}}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var raw geminiResponse
+			require.NoError(t, json.Unmarshal([]byte(tc.payload), &raw))
+			connector := &googleBaseConnector{}
+			converted := connector.convertToOpenAIResponse(&raw, &ChatRequest{Model: "document"})
+			require.Equal(t, tc.reported, converted.usageReported)
+			require.Zero(t, converted.Usage.TotalTokens)
+		})
+	}
 }

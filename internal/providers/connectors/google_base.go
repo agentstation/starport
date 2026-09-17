@@ -273,13 +273,19 @@ func (c *googleBaseConnector) convertToGeminiRequest(req *ChatRequest) map[strin
 
 // convertToOpenAIResponse converts Gemini response to OpenAI format
 func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req *ChatRequest) *ChatResponse {
+	var measured Usage
+	if resp.UsageMetadata != nil {
+		measured = convertGeminiUsage(*resp.UsageMetadata)
+	}
 	if len(resp.Candidates) == 0 {
 		return &ChatResponse{
-			ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
-			Object:  objectChatCompletion,
-			Created: time.Now().Unix(),
-			Model:   req.Model,
-			Choices: []Choice{},
+			ID:            fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
+			Object:        objectChatCompletion,
+			Created:       time.Now().Unix(),
+			Model:         req.Model,
+			Choices:       []Choice{},
+			Usage:         measured,
+			usageReported: resp.UsageMetadata != nil,
 		}
 	}
 
@@ -332,7 +338,8 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 				FinishReason: c.mapFinishReason(candidate.FinishReason),
 			},
 		},
-		Usage: convertGeminiUsage(resp.UsageMetadata),
+		Usage:         measured,
+		usageReported: resp.UsageMetadata != nil,
 	}
 }
 
@@ -497,8 +504,8 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			}
 
 			// Include usage metadata if available (typically in the final chunk)
-			if geminiResp.UsageMetadata.TotalTokenCount > 0 {
-				usage := convertGeminiUsage(geminiResp.UsageMetadata)
+			if geminiResp.UsageMetadata != nil {
+				usage := convertGeminiUsage(*geminiResp.UsageMetadata)
 				chunk.Usage = &usage
 			}
 

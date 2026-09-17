@@ -11,6 +11,8 @@ export default defineConfig({
     fs: { allow: [fileURLToPath(new URL("..", import.meta.url))] },
   },
   test: {
+    // Bound concurrent jsdom instances during local and CI verification.
+    maxWorkers: 4,
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["src/test/setup.ts"],

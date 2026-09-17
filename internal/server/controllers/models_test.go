@@ -197,6 +197,7 @@ func TestOpenRouterOfferingsMirrorTheCatalogProjection(t *testing.T) {
 		MaxDocuments:        &documents,
 		Availability:        "available",
 		Lifecycle:           "active",
+		Billing:             &view.OfferingBillingInfo{Recognition: &view.RecognitionBillingInfo{Basis: "pages"}},
 		Pricing: &view.OfferingPricingInfo{
 			PageInput:  "0.001",
 			SearchUnit: "0.0025",
@@ -229,4 +230,16 @@ func wireNames(value any) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func TestOpenRouterRecognitionBillingPreservesEstimate(t *testing.T) {
+	source := &view.RecognitionInputPageEstimateInfo{Tokens: 258, Source: "provider documentation", Assumptions: "Standard resolution only"}
+	converted := openRouterOffering(proxy.ModelOfferingInfo{Billing: &view.OfferingBillingInfo{
+		Recognition: &view.RecognitionBillingInfo{Basis: "tokens", InputPageEstimate: source},
+	}})
+	encoded, err := json.Marshal(converted)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"provider":"","provider_model_id":"","billing":{"recognition":{"basis":"tokens","input_page_estimate":{"tokens":258,"source":"provider documentation","assumptions":"Standard resolution only"}}}}`, string(encoded))
+	source.Tokens = 999
+	require.Equal(t, 258.0, converted.Billing.Recognition.InputPageEstimate.Tokens)
 }

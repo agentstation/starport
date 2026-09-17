@@ -30,8 +30,8 @@ type geminiUsageMetadata struct {
 
 // geminiResponse is the shared response type for Google AI Studio and Vertex AI
 type geminiResponse struct {
-	Candidates    []geminiCandidate   `json:"candidates"`
-	UsageMetadata geminiUsageMetadata `json:"usageMetadata"`
+	Candidates    []geminiCandidate    `json:"candidates"`
+	UsageMetadata *geminiUsageMetadata `json:"usageMetadata"`
 	// Error is a provider rejection delivered inside the stream body. A
 	// chunk that carries it is a failure, never an empty candidate list.
 	Error *geminiError `json:"error,omitempty"`

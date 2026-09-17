@@ -1124,7 +1124,7 @@ The file store that `## File Storage` above configures owns the stored one.
 | Engine | What it does | What it costs |
 | --- | --- | --- |
 | `native` | reads the text layer inside this process | nothing |
-| `recognition` | sends the page to a model that serves `documents-recognition` | one page price per page |
+| `recognition` | sends the page to a model that serves `documents-recognition` | published page or token rates |
 
 A request that names no engine gets `native`. A request that names no plugin
 leaves the document to the chat model. That asks a different question, and it
@@ -1141,33 +1141,39 @@ pages, and it refuses an extraction that runs past 15 seconds. A document with
 no usable text layer reads as scanned, and a caller that wanted its contents
 asks again with `recognition`.
 
-### Where the page price comes from
+### Recognition billing
 
-Starmap owns the `documents-recognition` operation and the price of one page.
-An offering that serves the operation publishes `page_input` beside its token
-prices, and `/api/v1/models` reports both. Starport publishes no page price of
-its own and holds no table of recognition vendors.
+Starmap owns the `documents-recognition` operation, billing basis, and prices.
+Each offering declares `billing.recognition.basis` as `pages` or `tokens`.
+The `/api/v1/models` response reports this declaration beside the offering's prices.
 
-An offering that serves recognition and publishes no page price does not
-project at all. A page that reaches such an offering records
-`cost_unavailable_reason`, which says the gateway lost its catalog rather than
-that the page was free.
+Page billing uses the published `page_input` rate.
+Token billing uses measured provider usage and the selected offering's token rates.
+Google PDF recognition uses token billing.
+An optional `input_page_estimate` states estimated input tokens, source, and assumptions.
+It excludes output tokens and never sets the actual charge.
 
-The spend budget refuses a document before the provider sees it. The gateway
-prices the pages against the lowest page price in the generation, because the
-planner chooses the offering afterward. A bound built on a higher price would
-refuse work the account could pay for.
+An offering needs a known billing basis and the corresponding USD rates to serve recognition.
+Starport records missing, estimated, or inconsistent usage as an unknown cost.
+It does not treat unknown usage as free work.
+
+The current admission check uses a minimum page charge where available.
+That check does not reserve the full cost of a token-billed request.
+CSP12.2 owns atomic reservations for recognition and chat against the selected route.
+Production budget qualification remains incomplete until that task passes.
 
 ### What a reader sees
 
-The usage record names the engine and the pages the turn attached. It also
-names the pages a model recognized, the pages this process read, the
-milliseconds the reads took, and the recognized share of the cost. The share is
-also inside `cost`, because the spend budget meters that field alone.
+The usage record names the engine, page counts, elapsed time, and recognition cost.
+Each `extractions` entry retains the offering, generation, call time, billing basis, measured tokens, and known cost or failure reason.
+Recognition charges remain recorded when later chat or streaming fails.
+Missing whole-request cost does not erase a known recognition charge.
+Spend totals include known charges but cannot prove that all provider work settled.
 
-The console reads those fields at `/documents`. The page names the engine, the
-count, the time, and the cost of each document read. It also lists the
-recognition models this catalog reaches, with the price of one page at each.
+The console at `/documents` shows each document read and the available recognition offerings.
+Page-based offerings show a price per thousand pages.
+Token-based offerings show input and output rates per thousand tokens.
+Optional input estimates state their assumptions and exclude output.
 
 ### The extraction cache
 
