@@ -48,6 +48,7 @@ func pagePricedCatalog(t *testing.T, prices map[string]*float64) *catalogs.Catal
 				Status:   catalogs.ModelStatusActive,
 				Features: &catalogs.ModelFeatures{Modalities: modalities},
 				Pricing:  pricing,
+				Billing:  &catalogs.ModelBilling{Recognition: &catalogs.RecognitionBilling{Basis: catalogs.RecognitionBillingPages}},
 			}},
 		}))
 	}

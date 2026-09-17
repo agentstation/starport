@@ -78,10 +78,11 @@ func (c *GoogleAIStudioConnector) RecognizeDocument(
 
 	response := &RecognitionResponse{Pages: recognizedPages(contentText(answer.Choices[0].Message.Content))}
 	if answer.Usage.TotalTokens > 0 || answer.Usage.PromptTokens > 0 {
+		measured := usageToInference(answer.Usage)
 		response.Usage = &MediaUsage{
-			InputTokens:  answer.Usage.PromptTokens,
-			OutputTokens: answer.Usage.CompletionTokens,
-			TotalTokens:  answer.Usage.TotalTokens,
+			InputTokens: measured.InputTokens, OutputTokens: measured.OutputTokens, TotalTokens: measured.TotalTokens,
+			ReasoningTokens: measured.ReasoningTokens, CacheReadTokens: measured.CacheReadTokens, CacheWriteTokens: measured.CacheWriteTokens,
+			AudioInputTokens: measured.AudioInputTokens, AudioOutputTokens: measured.AudioOutputTokens,
 		}
 	}
 	return response, nil

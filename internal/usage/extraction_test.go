@@ -191,3 +191,34 @@ func TestATurnThatAttachedNoDocumentReportsNoExtraction(t *testing.T) {
 		require.Nil(t, stored.ExtractionCost)
 	})
 }
+
+func TestRecognitionMeasurementsPersistWithUnknownTotal(t *testing.T) {
+	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
+		ctx := context.Background()
+		repository, err := Open(store, Options{})
+		require.NoError(t, err)
+		record := testRecord("key-a", "req-measured-extraction", testBase)
+		record.Cost = nil
+		record.CostUnavailableReason = CostReasonNoUsage
+		record.Extractions = []Extraction{
+			{Offering: "provider/opaque", GenerationID: "generation-1", Pages: 1, BillingBasis: "tokens", Tokens: &Tokens{Input: 100, Output: 30, Total: 130}, Cost: &Cost{NanoUSD: 160000, Currency: "USD"}},
+			{Offering: "other/opaque", Pages: 1, BillingBasis: "tokens", CostUnavailableReason: CostReasonNoUsage},
+		}
+		require.NoError(t, repository.Put(ctx, record))
+		page, err := repository.List(ctx, Query{KeyID: "key-a"})
+		require.NoError(t, err)
+		require.Len(t, page.Records, 1)
+		stored := page.Records[0]
+		require.Equal(t, record.Extractions, stored.Extractions)
+		require.Nil(t, stored.Cost)
+		require.Equal(t, CostReasonNoUsage, stored.CostUnavailableReason)
+		totals, err := repository.Totals(ctx, KeyScope("key-a"), IntervalDay, testBase)
+		require.NoError(t, err)
+		require.EqualValues(t, 160000, totals.SpendNanoUSD)
+	})
+}
+
+func TestKnownSpendDoesNotDoubleCountExtraction(t *testing.T) {
+	record := Record{Cost: &Cost{NanoUSD: 200000, Currency: "USD"}, Extractions: []Extraction{{Cost: &Cost{NanoUSD: 160000, Currency: "USD"}}}}
+	require.EqualValues(t, 200000, record.knownSpendNanoUSD())
+}

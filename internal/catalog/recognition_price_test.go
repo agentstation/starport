@@ -10,9 +10,7 @@ import (
 	"github.com/agentstation/starport/internal/routing"
 )
 
-// recognitionOffering builds one offering that serves document recognition
-// beside chat, which is the shape the shipped catalog carries. The page price
-// is the only variable, because it is the only fact this rule reads.
+// recognitionOffering builds a page-billed offering beside chat.
 func recognitionOffering(page *float64) catalogs.ProviderOffering {
 	pricing := &catalogs.ModelPricing{Currency: "USD"}
 	if page != nil {
@@ -23,6 +21,7 @@ func recognitionOffering(page *float64) catalogs.ProviderOffering {
 		ProviderModelID: "gemini-2.5-flash",
 		DefinitionID:    "google/gemini-2.5-flash",
 		Pricing:         pricing,
+		Billing:         &catalogs.ModelBilling{Recognition: &catalogs.RecognitionBilling{Basis: catalogs.RecognitionBillingPages}},
 		Service: catalogs.ProviderOfferingServiceCapabilities{
 			Operations: []catalogs.ProviderOperation{
 				catalogs.ProviderOperationChatCompletions,
@@ -75,15 +74,8 @@ func TestAPricedRecognitionOfferingKeepsBothOperations(t *testing.T) {
 	require.Len(t, endpoints, 2)
 }
 
-// TestARecognitionOfferingWithNoPagePriceLosesTheOperation states the rule
-// PLG3 adds. A page price is not decoration on an offering that already has
-// token prices: it is the only number that turns a recognized page into a
-// charge. Without it the gateway would answer a recognition request, pay the
-// provider for it, and record no cost against the account that asked.
-//
-// The chat operation is deliberately untouched. A missing page price is a
-// statement about one operation, and taking the whole model away would refuse a
-// caller who never asked to read a document.
+// TestARecognitionOfferingWithNoPagePriceLosesTheOperation checks page billing.
+// Missing page rates exclude recognition without changing chat support.
 func TestARecognitionOfferingWithNoPagePriceLosesTheOperation(t *testing.T) {
 	for _, test := range []struct {
 		name string
@@ -96,7 +88,7 @@ func TestARecognitionOfferingWithNoPagePriceLosesTheOperation(t *testing.T) {
 			offering := recognitionOffering(test.page)
 			require.ErrorIs(t,
 				billableOperation(offering, catalogs.ProviderOperationDocumentsRecognition),
-				ErrMissingPagePrice,
+				ErrRecognitionUnpriced,
 			)
 
 			operations, endpoints, unpriced := compatibleOfferingService(recognitionAdapter(), offering)
@@ -199,4 +191,34 @@ func TestTheRecognitionOperationKeepsItsWireValue(t *testing.T) {
 		string(catalogs.ProviderOperationDocumentsRecognition),
 		string(routing.OperationDocumentsRecognition),
 	)
+}
+
+func TestRecognitionBillingUsesDeclaredUnits(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		basis catalogs.RecognitionBillingBasis
+		rates *catalogs.ModelTokenPricing
+		valid bool
+	}{
+		{"token rates", catalogs.RecognitionBillingTokens, &catalogs.ModelTokenPricing{Input: &catalogs.ModelTokenCost{Per1M: 1}, Output: &catalogs.ModelTokenCost{Per1M: 2}}, true},
+		{"missing output rate", catalogs.RecognitionBillingTokens, &catalogs.ModelTokenPricing{Input: &catalogs.ModelTokenCost{Per1M: 1}}, false},
+		{"absent units", "", &catalogs.ModelTokenPricing{Input: &catalogs.ModelTokenCost{Per1M: 1}, Output: &catalogs.ModelTokenCost{Per1M: 2}}, false},
+		{"page basis requires page rate", catalogs.RecognitionBillingPages, &catalogs.ModelTokenPricing{Input: &catalogs.ModelTokenCost{Per1M: 1}, Output: &catalogs.ModelTokenCost{Per1M: 2}}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			offering := recognitionOffering(nil)
+			offering.Billing.Recognition.Basis = test.basis
+			offering.Pricing.Tokens = test.rates
+			err := billableRecognition(offering)
+			if test.valid {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, ErrRecognitionUnpriced)
+			}
+		})
+	}
+	offering := recognitionOffering(priceOf(0))
+	require.NoError(t, billableRecognition(offering))
+	offering.Pricing.Currency = "EUR"
+	require.ErrorIs(t, billableRecognition(offering), ErrRecognitionUnpriced)
 }

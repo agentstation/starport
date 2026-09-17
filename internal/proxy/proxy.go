@@ -448,9 +448,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 	keyConfig := transformAPIKeyConfig(req.APIKeyConfig)
 	metadata := p.buildRequestMetadata(req)
 
-	// A stream reports no extraction hit. The saving is real and the stream
-	// has nowhere to state it: the first event a caller reads is a token of
-	// the answer, and by then the document is long read.
+	// Request capture retains parser accounting through stream completion or failure.
 	parsed, _, err := p.parseDocuments(ctx, req, keyConfig)
 	if err != nil {
 		return nil, err

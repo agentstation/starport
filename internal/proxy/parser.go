@@ -19,6 +19,7 @@ import (
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/router"
+	"github.com/agentstation/starport/internal/usage"
 )
 
 // The document parser turns an attached document into text before the chat
@@ -59,7 +60,8 @@ func (p *proxy) parseDocuments(
 	}
 
 	started := time.Now()
-	report := parseReport{Cached: true, Engine: engine}
+	report := parseReport{Cached: true, Engine: engine, GenerationID: p.catalogGeneration(ctx)}
+	defer func() { report.Duration = time.Since(started); captureExtraction(ctx, report) }()
 	parsed := *req
 	parsed.Request = req.Request.Clone()
 	for messageIndex := range parsed.Request.Messages {
@@ -70,11 +72,11 @@ func (p *proxy) parseDocuments(
 				continue
 			}
 			reading, err := p.readDocument(ctx, &parsed, *part.Document, engine, policy)
-			if err != nil {
-				return nil, parseReport{}, err
-			}
 			report.add(reading)
 			report.charge(p.catalogPrices(ctx), reading)
+			if err != nil {
+				return nil, report, err
+			}
 			*part = inference.ContentPart{
 				Kind: inference.ContentText,
 				Text: renderDocument(part.Document.Filename, reading.Text),
@@ -92,6 +94,8 @@ func (p *proxy) parseDocuments(
 // one from the cache paid, so it reports no hit. With the single attachment
 // almost every request carries, the two readings are the same.
 type parseReport struct {
+	GenerationID string
+	Extractions  []usage.Extraction
 	// Documents is how many attachments the parser replaced with text.
 	Documents int
 	// Pages is how many pages those attachments held.
@@ -108,11 +112,9 @@ type parseReport struct {
 	// Offering is the recognition model that read the last document this turn
 	// recognized. It is empty when the turn recognized nothing.
 	Offering string
-	// CostNanoUSD is what the recognized pages cost.
+	// CostNanoUSD is the known recognition subtotal.
 	CostNanoUSD int64
-	// Unpriced reports a recognized page the catalog gave no price for. The
-	// projection refuses such an offering, so this states a gap rather than a
-	// free page.
+	// Unpriced reports missing rates, missing usage, or inconsistent measurements.
 	Unpriced bool
 	// Duration is how long the reads took, the cache lookups included.
 	Duration time.Duration
@@ -155,6 +157,7 @@ func (r parseReport) report(response *ChatCompletionResponse) {
 	response.ExtractionOffering = r.Offering
 	response.ExtractionNanoUSD = r.CostNanoUSD
 	response.ExtractionUnpriced = r.Unpriced
+	response.Extractions = r.Extractions
 	response.ExtractionDuration = r.Duration
 }
 
@@ -164,25 +167,45 @@ func (r parseReport) report(response *ChatCompletionResponse) {
 // the record carries is the number the provider charges. A native read and a
 // cached read both skip this: neither reached a provider.
 func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
-	if reading.Cached || reading.Offering == "" || reading.Pages == 0 {
+	if reading.Cached || reading.Offering == "" {
 		return
 	}
-	if prices == nil {
+	entry := usage.Extraction{Offering: reading.Offering, GenerationID: r.GenerationID, Pages: int64(reading.Pages)}
+	if reading.Usage != nil {
+		tokens := usageTokens(*reading.Usage)
+		entry.Tokens = &tokens
+	}
+	entry.CostUnavailableReason = usage.CostReasonNoPricing
+	if prices != nil {
+		if offering, found := prices.RecognitionOfferingFor(reading.Offering); found {
+			if offering.Billing != nil && offering.Billing.Recognition != nil {
+				entry.BillingBasis = string(offering.Billing.Recognition.Basis)
+			}
+			pages := reading.Pages
+			if reading.Failed {
+				pages = 0
+			}
+			entry.Cost, entry.CostUnavailableReason = recognitionCost(offering, pages, reading.Usage, time.Now())
+		}
+	}
+	if entry.Cost == nil {
 		r.Unpriced = true
-		return
-	}
-	price, priced := prices.PagePriceFor(reading.Offering,
-		starmapcatalogs.ProviderOperationDocumentsRecognition)
-	if !priced {
+	} else if entry.Cost.NanoUSD > math.MaxInt64-r.CostNanoUSD {
+		entry.Cost = nil
+		entry.CostUnavailableReason = usage.CostReasonNoPricing
 		r.Unpriced = true
-		return
+	} else {
+		r.CostNanoUSD += entry.Cost.NanoUSD
 	}
-	r.CostNanoUSD += nanoUSD(float64(reading.Pages) * price)
+	r.Extractions = append(r.Extractions, entry)
 }
 
 // documentReading is one attachment after the named engine read it.
 type documentReading struct {
 	document.Reading
+	// Usage retains measurements only for a fresh recognition call.
+	Usage  *inference.Usage
+	Failed bool
 	// Cached reports that this text came back from the cache rather than from
 	// a read this turn paid for.
 	Cached bool
@@ -239,12 +262,14 @@ func (p *proxy) readDocument(
 		if err := p.affordable(ctx, attached.Filename, extraction.PageCount()); err != nil {
 			return documentReading{}, err
 		}
-		recognized, offering, err := p.recognize(ctx, req, attached, data, mediaType, extraction, policy)
-		if err != nil {
-			return documentReading{}, err
-		}
+		recognized, offering, measured, err := p.recognize(ctx, req, attached, data, mediaType, extraction, policy)
 		reading.Text = recognized
 		reading.Offering = offering
+		reading.Usage = measured
+		if err != nil {
+			reading.Failed = true
+			return reading, err
+		}
 	}
 	p.storeReading(ctx, key, reading.Reading)
 	return reading, nil
@@ -333,6 +358,7 @@ func nanoUSD(usd float64) int64 {
 // the questions rather than the whole snapshot, because a price is all they
 // need.
 type catalogPrices interface {
+	RecognitionOfferingFor(modelID string) (starmapcatalogs.ProviderOffering, bool)
 	// PagePriceFor is what one recognition model charges for one page.
 	PagePriceFor(modelID string, operation starmapcatalogs.ProviderOperation) (float64, bool)
 	// LowestPagePrice is the least any offering charges for one page.
@@ -395,9 +421,9 @@ func (p *proxy) recognize(
 	mediaType string,
 	extraction document.Extraction,
 	policy *router.APIKeyConfig,
-) (text, offering string, err error) {
+) (text, offering string, measured *inference.Usage, err error) {
 	// No model is named. The catalog states which offerings serve this
-	// operation and what a page costs at each of them, so the planner picks
+	// operation and its billing units, so the planner picks
 	// one under the same cost and latency policy every other route uses. A
 	// model named here would be a second engine table beside the catalog's.
 	answer, err := p.router.RouteDocumentRecognition(ctx, &router.RecognitionRequest{
@@ -413,7 +439,7 @@ func (p *proxy) recognize(
 		AccountID:    req.AccountID,
 	})
 	if err != nil {
-		return "", "", recognitionFailure(attached.Filename, err)
+		return "", "", nil, recognitionFailure(attached.Filename, err)
 	}
 
 	// A short answer is the failure this step actually has. A model that
@@ -421,12 +447,12 @@ func (p *proxy) recognize(
 	// hand the chat model a document that ends in the middle with nothing
 	// saying so. The turn fails instead.
 	if read := len(answer.Response.Pages); read != extraction.PageCount() {
-		return "", "", recognitionFailure(attached.Filename, fmt.Errorf(
+		return answer.Response.Text(), answer.ModelUsed, answer.Response.Usage, recognitionFailure(attached.Filename, fmt.Errorf(
 			"%w: read %d of %d pages at %s",
 			document.ErrRecognitionFailed, read, extraction.PageCount(), answer.ModelUsed,
 		))
 	}
-	return answer.Response.Text(), answer.ModelUsed, nil
+	return answer.Response.Text(), answer.ModelUsed, answer.Response.Usage, nil
 }
 
 // recognitionFailure names the recognition step in an answer the caller reads.

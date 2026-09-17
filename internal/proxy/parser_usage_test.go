@@ -29,6 +29,7 @@ import (
 // exists: one price for the offering the planner chose, one for the cheapest
 // offering there is, and one search unit floor for reranking.
 type priceFixture struct {
+	offerings  map[string]starmapcatalogs.ProviderOffering
 	perModel   map[string]float64
 	lowest     float64
 	priced     bool
@@ -341,4 +342,19 @@ func TestAnUnpricedRecognitionSaysSoRatherThanReadingAsFree(t *testing.T) {
 	require.Nil(t, record.Cost)
 	require.Equal(t, usage.CostReasonNoPricing, record.CostUnavailableReason,
 		"a page charged at an unknown price was recorded as costing nothing")
+}
+
+func (f *priceFixture) RecognitionOfferingFor(modelID string) (starmapcatalogs.ProviderOffering, bool) {
+	if f.offerings != nil {
+		offering, found := f.offerings[modelID]
+		return offering, found
+	}
+	price, found := f.perModel[modelID]
+	if !found {
+		return starmapcatalogs.ProviderOffering{}, false
+	}
+	return starmapcatalogs.ProviderOffering{
+		Billing: &starmapcatalogs.ModelBilling{Recognition: &starmapcatalogs.RecognitionBilling{Basis: starmapcatalogs.RecognitionBillingPages}},
+		Pricing: &starmapcatalogs.ModelPricing{Currency: "USD", Operations: &starmapcatalogs.ModelOperationPricing{PageInput: &price}},
+	}, true
 }

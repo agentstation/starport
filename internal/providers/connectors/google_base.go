@@ -337,11 +337,12 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 }
 
 // convertGeminiUsage normalizes Gemini usage metadata. promptTokenCount
-// already includes cachedContentTokenCount, matching OpenAI semantics.
+// already includes cachedContentTokenCount. Billed output includes both
+// candidate and thinking tokens.
 func convertGeminiUsage(m geminiUsageMetadata) Usage {
 	usage := Usage{
 		PromptTokens:     m.PromptTokenCount,
-		CompletionTokens: m.CandidatesTokenCount,
+		CompletionTokens: m.CandidatesTokenCount + m.ThoughtsTokenCount,
 		TotalTokens:      m.TotalTokenCount,
 	}
 	if m.ThoughtsTokenCount > 0 {
