@@ -72,11 +72,15 @@ func (c *GoogleAIStudioConnector) RecognizeDocument(
 	if err != nil {
 		return nil, err
 	}
-	if answer == nil || len(answer.Choices) == 0 {
+	if answer == nil {
 		return nil, fmt.Errorf("%w: recognition answer carries no content", ErrInvalidMediaRequest)
 	}
 
-	response := &RecognitionResponse{Pages: recognizedPages(contentText(answer.Choices[0].Message.Content))}
+	response := &RecognitionResponse{}
+	if len(answer.Choices) > 0 {
+		response.Pages = recognizedPages(contentText(answer.Choices[0].Message.Content))
+	}
+	// The document seam rejects missing pages. Retain measured usage for that failure.
 	if answer.usageReported {
 		measured := usageToInference(answer.Usage)
 		response.Usage = &MediaUsage{

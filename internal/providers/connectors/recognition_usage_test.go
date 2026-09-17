@@ -2,6 +2,10 @@ package connectors
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+
+	"github.com/agentstation/starmap/pkg/catalogs"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,4 +64,30 @@ func TestGeminiUsagePresencePreservesExplicitZero(t *testing.T) {
 			require.Zero(t, converted.Usage.TotalTokens)
 		})
 	}
+}
+
+func TestGoogleRecognitionRetainsUsageWithoutCandidates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/recognize", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`{"candidates":[],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":0,"thoughtsTokenCount":10,"totalTokenCount":110}}`))
+		require.NoError(t, err)
+	}))
+	t.Cleanup(server.Close)
+	connector, err := NewGoogleAIStudioConnector(ProviderConfig{BaseURL: server.URL})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, connector.Close()) })
+	response, err := connector.RecognizeDocument(t.Context(), &RecognitionRequest{
+		MediaTarget: MediaTarget{Model: "document", Credential: testGoogleMaterial("test-key"), Endpoint: InferenceEndpoint{Type: catalogs.EndpointTypeGoogle, URL: server.URL + "/recognize"}},
+		Document:    UploadedFile{Bytes: []byte("document"), MediaType: "application/pdf"}, Pages: 1,
+	})
+	require.NoError(t, err)
+	require.Empty(t, response.Pages)
+	canonical, err := RecognitionResponseToInference(response)
+	require.NoError(t, err)
+	require.NotNil(t, canonical.Usage)
+	require.Equal(t, 100, canonical.Usage.InputTokens)
+	require.Equal(t, 10, canonical.Usage.OutputTokens)
+	require.Equal(t, 10, canonical.Usage.ReasoningTokens)
+	require.Equal(t, 110, canonical.Usage.TotalTokens)
 }
