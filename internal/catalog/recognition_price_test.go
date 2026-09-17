@@ -113,9 +113,7 @@ func TestAFreeRecognitionOfferingIsBillable(t *testing.T) {
 	))
 }
 
-// TestEveryOtherOperationIsBillableWithoutAPagePrice keeps the rule narrow. A
-// page price is required of recognition alone, so a chat or embedding offering
-// that carries none still plans.
+// TestEveryOtherOperationIsBillableWithoutAPagePrice keeps page billing requirements within recognition.
 func TestEveryOtherOperationIsBillableWithoutAPagePrice(t *testing.T) {
 	offering := recognitionOffering(nil)
 	for _, operation := range []catalogs.ProviderOperation{
@@ -145,10 +143,7 @@ func TestAnUnpricedRecognitionOfferingReportsItsOwnExclusion(t *testing.T) {
 	require.NotEqual(t, RouteExclusionOperationUnsupported, RouteExclusionOperationUnpriced)
 }
 
-// TestTheShippedCatalogPricesEveryRecognitionRoute reads the real generation.
-// Starmap derives the page price from Google's published page-to-token rule,
-// and this is the assertion that the derived number reached Starport rather
-// than being dropped somewhere between the two repositories.
+// TestTheShippedCatalogPricesEveryRecognitionRoute checks declared units and rates in the embedded generation.
 func TestTheShippedCatalogPricesEveryRecognitionRoute(t *testing.T) {
 	client, err := starmap.New()
 	require.NoError(t, err)

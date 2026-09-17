@@ -141,9 +141,7 @@ test("a natively read document says the pages cost nothing", async () => {
   );
 });
 
-// The projection drops a recognition offering that publishes no page price, so
-// a record with recognized pages and no cost means the gateway lost its
-// catalog. A zero there would understate a real charge.
+// A missing measurement or price leaves the cost unknown. It must not display as zero.
 test("a page the gateway could not price says so rather than showing nothing", async () => {
   gateway.records = [
     {
