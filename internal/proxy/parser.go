@@ -170,7 +170,7 @@ func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
 	if reading.Cached || reading.Offering == "" {
 		return
 	}
-	entry := usage.Extraction{Offering: reading.Offering, GenerationID: r.GenerationID, Pages: int64(reading.Pages)}
+	entry := usage.Extraction{Offering: reading.Offering, GenerationID: r.GenerationID, Pages: int64(reading.Pages), StartedAt: reading.StartedAt}
 	if reading.Usage != nil {
 		tokens := usageTokens(*reading.Usage)
 		entry.Tokens = &tokens
@@ -185,7 +185,7 @@ func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
 			if reading.Failed {
 				pages = 0
 			}
-			entry.Cost, entry.CostUnavailableReason = recognitionCost(offering, pages, reading.Usage, time.Now())
+			entry.Cost, entry.CostUnavailableReason = recognitionCost(offering, pages, reading.Usage, recognitionPriceTime(reading.StartedAt))
 		}
 	}
 	if entry.Cost == nil {
@@ -203,6 +203,8 @@ func (r *parseReport) charge(prices catalogPrices, reading documentReading) {
 // documentReading is one attachment after the named engine read it.
 type documentReading struct {
 	document.Reading
+	// StartedAt binds prices to the recognition call start.
+	StartedAt time.Time
 	// Usage retains measurements only for a fresh recognition call.
 	Usage  *inference.Usage
 	Failed bool
@@ -262,6 +264,7 @@ func (p *proxy) readDocument(
 		if err := p.affordable(ctx, attached.Filename, extraction.PageCount()); err != nil {
 			return documentReading{}, err
 		}
+		reading.StartedAt = time.Now()
 		recognized, offering, measured, err := p.recognize(ctx, req, attached, data, mediaType, extraction, policy)
 		reading.Text = recognized
 		reading.Offering = offering
@@ -571,4 +574,11 @@ func parseDocumentDataURL(url string) (mediaType, payload string, ok bool) {
 		return "", "", false
 	}
 	return strings.TrimSuffix(header, ";base64"), url[separator+1:], true
+}
+
+func recognitionPriceTime(startedAt time.Time) time.Time {
+	if startedAt.IsZero() {
+		return time.Now()
+	}
+	return startedAt
 }

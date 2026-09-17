@@ -53,12 +53,17 @@ func recognitionCost(offering catalogs.ProviderOffering, pages int, measured *in
 		if _, known := recognitionTokenRate(rates.Output); !known {
 			return nil, usage.CostReasonNoPricing
 		}
+		reasoning := int64(0)
+		if rates.Reasoning != nil {
+			reasoning = tokens.Reasoning
+		}
 		for _, item := range []struct {
 			count int64
 			rate  *catalogs.ModelTokenCost
 		}{
 			{tokens.Input - tokens.CacheRead - tokens.CacheWrite - tokens.AudioInput, rates.Input},
-			{tokens.Output - tokens.AudioOutput, rates.Output},
+			{tokens.Output - tokens.AudioOutput - reasoning, rates.Output},
+			{reasoning, rates.Reasoning},
 			{tokens.CacheRead, rates.CacheRead}, {tokens.CacheWrite, rates.CacheWrite},
 			{tokens.AudioInput, rates.AudioInput}, {tokens.AudioOutput, rates.AudioOutput},
 		} {
@@ -111,5 +116,5 @@ func validRecognitionTokens(tokens usage.Tokens) bool {
 		}
 		remaining -= share
 	}
-	return tokens.AudioOutput <= tokens.Output && tokens.Reasoning <= tokens.Output
+	return tokens.AudioOutput <= tokens.Output && tokens.Reasoning <= tokens.Output-tokens.AudioOutput
 }

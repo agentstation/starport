@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"encoding/json"
+	"github.com/agentstation/starport/internal/document"
 	"testing"
 	"time"
 
@@ -89,4 +91,28 @@ func TestRecognitionMeasurementsReachUsageRecord(t *testing.T) {
 	require.EqualValues(t, 150000, record.Extractions[0].Cost.NanoUSD)
 	response.Extractions[0].Tokens.Input = 1
 	require.EqualValues(t, 100, record.Extractions[0].Tokens.Input)
+}
+
+func TestRecognitionReasoningRateReclassifiesOutput(t *testing.T) {
+	offering := tokenRecognitionOffering()
+	offering.Pricing.Tokens.Reasoning = &catalogs.ModelTokenCost{Per1M: 5}
+	cost, reason := recognitionCost(offering, 1, &inference.Usage{InputTokens: 100, OutputTokens: 30, ReasoningTokens: 10, TotalTokens: 130}, time.Now())
+	require.Empty(t, reason)
+	require.EqualValues(t, 190000, cost.NanoUSD)
+}
+
+func TestRecognitionPriceValidityUsesCallStart(t *testing.T) {
+	offering := tokenRecognitionOffering()
+	require.NoError(t, json.Unmarshal([]byte(`{"currency":"USD","effective_until":"2026-01-02T00:00:00Z","tokens":{"input":{"per_1m_tokens":1},"output":{"per_1m_tokens":2}}}`), offering.Pricing))
+	prices := recognitionPrices()
+	prices.offerings = map[string]catalogs.ProviderOffering{"provider/model": offering}
+	started := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	report := parseReport{}
+	report.charge(prices, documentReading{Reading: document.Reading{Offering: "provider/model", Pages: 1}, Usage: &inference.Usage{InputTokens: 100, OutputTokens: 30, TotalTokens: 130}, StartedAt: started})
+	require.False(t, report.Unpriced)
+	require.EqualValues(t, 160000, report.CostNanoUSD)
+	require.Equal(t, started, report.Extractions[0].StartedAt)
+	cost, reason := recognitionCost(offering, 1, &inference.Usage{InputTokens: 100, OutputTokens: 30, TotalTokens: 130}, started.Add(24*time.Hour))
+	require.Nil(t, cost)
+	require.Equal(t, usage.CostReasonNoPricing, reason)
 }

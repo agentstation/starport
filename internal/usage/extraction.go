@@ -1,16 +1,20 @@
 package usage
 
-import "math"
+import (
+	"math"
+	"time"
+)
 
 // Extraction records one fresh provider recognition call. Cache hits add no call.
 type Extraction struct {
-	Offering              string  `json:"offering"`
-	GenerationID          string  `json:"generation_id,omitempty"`
-	Pages                 int64   `json:"pages"`
-	BillingBasis          string  `json:"billing_basis,omitempty"`
-	Tokens                *Tokens `json:"tokens,omitempty"`
-	Cost                  *Cost   `json:"cost,omitempty"`
-	CostUnavailableReason string  `json:"cost_unavailable_reason,omitempty"`
+	StartedAt             time.Time `json:"started_at,omitzero"`
+	Offering              string    `json:"offering"`
+	GenerationID          string    `json:"generation_id,omitempty"`
+	Pages                 int64     `json:"pages"`
+	BillingBasis          string    `json:"billing_basis,omitempty"`
+	Tokens                *Tokens   `json:"tokens,omitempty"`
+	Cost                  *Cost     `json:"cost,omitempty"`
+	CostUnavailableReason string    `json:"cost_unavailable_reason,omitempty"`
 }
 
 // Clone copies measurements and cost so asynchronous persistence owns its data.
