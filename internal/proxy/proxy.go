@@ -48,8 +48,8 @@ type Config struct {
 	DocumentExtractor *document.Extractor
 
 	// DocumentCache holds one document's text for reuse inside a window
-	// (optional). A deployment without one reads every attachment on every
-	// turn, which is correct and pays the page price each time.
+	// (optional). Without it, each turn reads every attachment again.
+	// Fresh provider recognition incurs the provider's published charges.
 	DocumentCache *document.Cache
 }
 

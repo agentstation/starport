@@ -311,15 +311,9 @@ func (p *proxy) storeReading(ctx context.Context, key document.CacheKey, reading
 	}
 }
 
-// affordable refuses a recognition call the holder cannot pay for, before the
-// call happens.
-//
-// The estimate uses the cheapest page price the catalog publishes, not the
-// price of the offering the planner will choose, because the planner chooses
-// after this runs. Erring low is the right direction: a bound that refused work
-// the account could have paid for would cost a caller a request over a price
-// that was never charged. Erring low overshoots the bound by at most one
-// document, and the account's own cap refuses the request after it.
+// affordable checks a preliminary cost floor using available page rates.
+// It does not price token recognition or reserve the selected route's cost.
+// CSP12.2 owns atomic admission and reservation for both billing bases.
 func (p *proxy) affordable(ctx context.Context, filename string, pages int) error {
 	allowance := limits.AllowanceFromContext(ctx)
 	if !allowance.Bounded || pages == 0 {

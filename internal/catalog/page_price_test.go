@@ -132,11 +132,8 @@ func TestTheLowestPagePriceIsTheCheapestOfferingInTheGeneration(t *testing.T) {
 		"a spend bound refused a document the cheapest offering could have read")
 }
 
-// TestAGenerationThatPricesNoPageAnswersNothing holds how the lookup fails.
-//
-// The projection drops a recognition offering that publishes no page price, so
-// this state means the gateway has no priced reader at all. Answering zero
-// would read as a free page and let an unpriced document through every bound.
+// TestAGenerationThatPricesNoPageAnswersNothing uses a fixture without usable page rates.
+// An unknown rate must not read as zero.
 func TestAGenerationThatPricesNoPageAnswersNothing(t *testing.T) {
 	snapshot := pagePricedSnapshot(t, map[string]*float64{"cheap-provider": nil})
 

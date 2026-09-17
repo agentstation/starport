@@ -310,12 +310,12 @@ export function DocumentsPanel() {
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-text-2">
-          What a page costs here
+          Recognition billing
         </h2>
         <p className="text-sm text-text-3">
-          The engine that runs inside this gateway charges nothing. A page sent
-          to one of these models is billed by the page, and the catalog
-          publishes the price.
+          The local engine has no provider charge. Provider recognition uses the
+          catalog’s declared page or token billing units. Input estimates exclude
+          output and never determine the billed amount.
         </p>
         <RecognitionPrices offerings={recognitionOfferings(models.data ?? [])} />
       </section>
