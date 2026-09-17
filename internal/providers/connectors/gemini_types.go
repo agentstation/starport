@@ -1,5 +1,7 @@
 package connectors
 
+import "encoding/json"
+
 // geminiPart represents a part of content which can be text or thought
 type geminiPart struct {
 	Text    string `json:"text,omitempty"`
@@ -21,11 +23,42 @@ type geminiCandidate struct {
 
 // geminiUsageMetadata represents token usage information
 type geminiUsageMetadata struct {
+	zeroReported            bool
 	PromptTokenCount        int `json:"promptTokenCount"`
 	CandidatesTokenCount    int `json:"candidatesTokenCount"`
 	TotalTokenCount         int `json:"totalTokenCount"`
 	CachedContentTokenCount int `json:"cachedContentTokenCount,omitempty"`
 	ThoughtsTokenCount      int `json:"thoughtsTokenCount,omitempty"`
+}
+
+// UnmarshalJSON preserves explicit zero usage without treating an empty object as a measurement.
+func (m *geminiUsageMetadata) UnmarshalJSON(data []byte) error {
+	var decoded struct {
+		Prompt     *int `json:"promptTokenCount"`
+		Total      *int `json:"totalTokenCount"`
+		Candidates int  `json:"candidatesTokenCount"`
+		Cached     int  `json:"cachedContentTokenCount"`
+		Thoughts   int  `json:"thoughtsTokenCount"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*m = geminiUsageMetadata{
+		CandidatesTokenCount: decoded.Candidates, CachedContentTokenCount: decoded.Cached,
+		ThoughtsTokenCount: decoded.Thoughts,
+		zeroReported:       decoded.Prompt != nil && decoded.Total != nil,
+	}
+	if decoded.Prompt != nil {
+		m.PromptTokenCount = *decoded.Prompt
+	}
+	if decoded.Total != nil {
+		m.TotalTokenCount = *decoded.Total
+	}
+	return nil
+}
+
+func (m *geminiUsageMetadata) reported() bool {
+	return m != nil && (m.zeroReported || m.PromptTokenCount != 0 || m.CandidatesTokenCount != 0 || m.TotalTokenCount != 0 || m.ThoughtsTokenCount != 0 || m.CachedContentTokenCount != 0)
 }
 
 // geminiResponse is the shared response type for Google AI Studio and Vertex AI

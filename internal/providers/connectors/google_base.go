@@ -285,7 +285,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 			Model:         req.Model,
 			Choices:       []Choice{},
 			Usage:         measured,
-			usageReported: resp.UsageMetadata != nil,
+			usageReported: resp.UsageMetadata.reported(),
 		}
 	}
 
@@ -339,7 +339,7 @@ func (c *googleBaseConnector) convertToOpenAIResponse(resp *geminiResponse, req 
 			},
 		},
 		Usage:         measured,
-		usageReported: resp.UsageMetadata != nil,
+		usageReported: resp.UsageMetadata.reported(),
 	}
 }
 
@@ -504,7 +504,7 @@ func (s *googleStream) Recv() (*ChatStreamChunk, error) {
 			}
 
 			// Include usage metadata if available (typically in the final chunk)
-			if geminiResp.UsageMetadata != nil {
+			if geminiResp.UsageMetadata.reported() {
 				usage := convertGeminiUsage(*geminiResp.UsageMetadata)
 				chunk.Usage = &usage
 			}

@@ -2,11 +2,11 @@ package proxy
 
 import (
 	"encoding/json"
-	"github.com/agentstation/starport/internal/document"
 	"testing"
 	"time"
 
 	"github.com/agentstation/starmap/pkg/catalogs"
+	"github.com/agentstation/starport/internal/document"
 	"github.com/agentstation/starport/internal/inference"
 	"github.com/agentstation/starport/internal/usage"
 	"github.com/stretchr/testify/require"
@@ -115,4 +115,26 @@ func TestRecognitionPriceValidityUsesCallStart(t *testing.T) {
 	cost, reason := recognitionCost(offering, 1, &inference.Usage{InputTokens: 100, OutputTokens: 30, TotalTokens: 130}, started.Add(24*time.Hour))
 	require.Nil(t, cost)
 	require.Equal(t, usage.CostReasonNoPricing, reason)
+}
+
+func TestRecognitionIncludesSelectedRequestFee(t *testing.T) {
+	offering := tokenRecognitionOffering()
+	fee := 0.01
+	offering.Pricing.Operations = &catalogs.ModelOperationPricing{Request: &fee}
+	measured := &inference.Usage{InputTokens: 100, OutputTokens: 10, TotalTokens: 110}
+	cost, reason := recognitionCost(offering, 1, measured, time.Now())
+	require.Empty(t, reason)
+	require.EqualValues(t, 10_120_000, cost.NanoUSD)
+	tierFee := 0.02
+	offering.Pricing.Tiers = []catalogs.ModelPricingTier{{Type: catalogs.ModelPricingTierTypeContext, Size: 50, Tokens: offering.Pricing.Tokens, Operations: &catalogs.ModelOperationPricing{Request: &tierFee}}}
+	cost, reason = recognitionCost(offering, 1, measured, time.Now())
+	require.Empty(t, reason)
+	require.EqualValues(t, 20_120_000, cost.NanoUSD)
+	offering.Billing.Recognition.Basis = catalogs.RecognitionBillingPages
+	pagePrice := 0.001
+	offering.Pricing.Operations.PageInput = &pagePrice
+	offering.Pricing.Tiers = nil
+	cost, reason = recognitionCost(offering, 2, nil, time.Now())
+	require.Empty(t, reason)
+	require.EqualValues(t, 12_000_000, cost.NanoUSD)
 }

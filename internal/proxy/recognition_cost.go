@@ -28,6 +28,9 @@ func recognitionCost(offering catalogs.ProviderOffering, pages int, measured *in
 			return nil, usage.CostReasonNoPricing
 		}
 		total = float64(pages) * *offering.Pricing.Operations.PageInput
+		if request := offering.Pricing.Operations.Request; request != nil {
+			total += *request
+		}
 	case catalogs.RecognitionBillingTokens:
 		var reason string
 		total, reason = recognitionTokenCost(offering.Pricing, measured)
@@ -88,11 +91,13 @@ func recognitionTokenCost(pricing *catalogs.ModelPricing, measured *inference.Us
 		return 0, usage.CostReasonInvalidUsage
 	}
 	rates := pricing.Tokens
+	operations := pricing.Operations
 	var selectedThreshold int64
 	for _, tier := range pricing.Tiers {
 		if tier.Type == catalogs.ModelPricingTierTypeContext && tokens.Input > tier.Size && tier.Size > selectedThreshold {
 			selectedThreshold = tier.Size
 			rates = tier.Tokens
+			operations = tier.Operations
 		}
 	}
 	if rates == nil {
@@ -126,6 +131,9 @@ func recognitionTokenCost(pricing *catalogs.ModelPricing, measured *inference.Us
 			return 0, usage.CostReasonNoPricing
 		}
 		total += float64(item.count) * rate
+	}
+	if operations != nil && operations.Request != nil {
+		total += *operations.Request
 	}
 	return total, ""
 }

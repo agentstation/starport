@@ -47,6 +47,8 @@ func TestGeminiUsagePresencePreservesExplicitZero(t *testing.T) {
 	}{
 		{"absent", `{}`, false},
 		{"null", `{"usageMetadata":null}`, false},
+		{"empty", `{"usageMetadata":{}}`, false},
+		{"null counts", `{"usageMetadata":{"promptTokenCount":null,"totalTokenCount":null}}`, false},
 		{"zero", `{"usageMetadata":{"promptTokenCount":0,"candidatesTokenCount":0,"totalTokenCount":0}}`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
