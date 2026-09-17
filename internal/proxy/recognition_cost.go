@@ -24,12 +24,24 @@ func recognitionCost(offering catalogs.ProviderOffering, pages int, measured *in
 		if pages <= 0 {
 			return nil, usage.CostReasonNoUsage
 		}
-		if offering.Pricing.Operations == nil || offering.Pricing.Operations.PageInput == nil {
+		input := int64(0)
+		if len(offering.Pricing.Tiers) > 0 {
+			if measured == nil || measured.Estimated {
+				return nil, usage.CostReasonNoUsage
+			}
+			tokens := usageTokens(*measured)
+			if !validRecognitionTokens(tokens) {
+				return nil, usage.CostReasonInvalidUsage
+			}
+			input = tokens.Input
+		}
+		_, operations := recognitionContextRates(offering.Pricing, input)
+		if operations == nil || operations.PageInput == nil {
 			return nil, usage.CostReasonNoPricing
 		}
-		total = float64(pages) * *offering.Pricing.Operations.PageInput
-		if request := offering.Pricing.Operations.Request; request != nil {
-			total += *request
+		total = float64(pages) * *operations.PageInput
+		if operations.Request != nil {
+			total += *operations.Request
 		}
 	case catalogs.RecognitionBillingTokens:
 		var reason string
@@ -90,16 +102,7 @@ func recognitionTokenCost(pricing *catalogs.ModelPricing, measured *inference.Us
 	if !validRecognitionTokens(tokens) {
 		return 0, usage.CostReasonInvalidUsage
 	}
-	rates := pricing.Tokens
-	operations := pricing.Operations
-	var selectedThreshold int64
-	for _, tier := range pricing.Tiers {
-		if tier.Type == catalogs.ModelPricingTierTypeContext && tokens.Input > tier.Size && tier.Size > selectedThreshold {
-			selectedThreshold = tier.Size
-			rates = tier.Tokens
-			operations = tier.Operations
-		}
-	}
+	rates, operations := recognitionContextRates(pricing, tokens.Input)
 	if rates == nil {
 		return 0, usage.CostReasonNoPricing
 	}
@@ -136,4 +139,17 @@ func recognitionTokenCost(pricing *catalogs.ModelPricing, measured *inference.Us
 		total += *operations.Request
 	}
 	return total, ""
+}
+
+// recognitionContextRates selects one complete tier for the measured input size.
+func recognitionContextRates(pricing *catalogs.ModelPricing, input int64) (*catalogs.ModelTokenPricing, *catalogs.ModelOperationPricing) {
+	tokens, operations := pricing.Tokens, pricing.Operations
+	var threshold int64
+	for _, tier := range pricing.Tiers {
+		if tier.Type == catalogs.ModelPricingTierTypeContext && input > tier.Size && tier.Size > threshold {
+			threshold = tier.Size
+			tokens, operations = tier.Tokens, tier.Operations
+		}
+	}
+	return tokens, operations
 }

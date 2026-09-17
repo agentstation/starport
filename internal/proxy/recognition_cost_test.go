@@ -138,3 +138,26 @@ func TestRecognitionIncludesSelectedRequestFee(t *testing.T) {
 	require.Empty(t, reason)
 	require.EqualValues(t, 12_000_000, cost.NanoUSD)
 }
+
+func TestRecognitionPageTierRequiresContextMeasurement(t *testing.T) {
+	offering := tokenRecognitionOffering()
+	offering.Billing.Recognition.Basis = catalogs.RecognitionBillingPages
+	base, tier := 0.001, 0.002
+	offering.Pricing.Operations = &catalogs.ModelOperationPricing{PageInput: &base}
+	offering.Pricing.Tiers = []catalogs.ModelPricingTier{{Type: catalogs.ModelPricingTierTypeContext, Size: 100, Operations: &catalogs.ModelOperationPricing{PageInput: &tier}}}
+	cost, reason := recognitionCost(offering, 2, nil, time.Now())
+	require.Nil(t, cost)
+	require.Equal(t, usage.CostReasonNoUsage, reason)
+	for _, tc := range []struct {
+		input int
+		want  int64
+	}{{100, 2_000_000}, {101, 4_000_000}} {
+		cost, reason = recognitionCost(offering, 2, &inference.Usage{InputTokens: tc.input, TotalTokens: tc.input}, time.Now())
+		require.Empty(t, reason)
+		require.Equal(t, tc.want, cost.NanoUSD)
+	}
+	offering.Pricing.Tiers[0].Operations = nil
+	cost, reason = recognitionCost(offering, 2, &inference.Usage{InputTokens: 101, TotalTokens: 101}, time.Now())
+	require.Nil(t, cost)
+	require.Equal(t, usage.CostReasonNoPricing, reason)
+}
