@@ -79,9 +79,14 @@ type ImageDatum struct {
 // that reports nothing leaves it absent, and the cost seam names the gap rather
 // than inventing a number.
 type MediaUsage struct {
-	InputTokens  int `json:"input_tokens,omitempty"`
-	OutputTokens int `json:"output_tokens,omitempty"`
-	TotalTokens  int `json:"total_tokens,omitempty"`
+	ReasoningTokens   int `json:"reasoning_tokens,omitempty"`
+	CacheReadTokens   int `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens  int `json:"cache_write_tokens,omitempty"`
+	AudioInputTokens  int `json:"audio_input_tokens,omitempty"`
+	AudioOutputTokens int `json:"audio_output_tokens,omitempty"`
+	InputTokens       int `json:"input_tokens,omitempty"`
+	OutputTokens      int `json:"output_tokens,omitempty"`
+	TotalTokens       int `json:"total_tokens,omitempty"`
 }
 
 // SpeechRequest is one text-to-speech call.

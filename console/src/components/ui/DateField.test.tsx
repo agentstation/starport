@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test } from "vitest";
 
 import { DateField, formatIsoDay, parseIsoDay } from "./DateField";
+
+beforeAll(async () => {
+  // Load the calendar dependency before measuring the field interaction.
+  await import("./calendar");
+});
 
 afterEach(cleanup);
 
@@ -29,12 +34,8 @@ test("the ISO day round-trips without a time zone shift", () => {
 test("the trigger reads the chosen day, opens the month grid, and a pick closes it", async () => {
   render(<Harness initial="2026-09-30" />);
   const trigger = screen.getByRole("button", { name: /Sep 30, 2026/ });
-  // The month grid is a lazy chunk, so the test loads the module first and
-  // lets React settle the resolved import before it reads the grid.
-  await import("./calendar");
-  fireEvent.click(trigger);
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    fireEvent.click(trigger);
   });
 
   const grid = await screen.findByRole("grid", { name: "September 2026" });

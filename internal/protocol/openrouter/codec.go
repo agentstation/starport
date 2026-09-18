@@ -597,6 +597,7 @@ type ModelOffering struct {
 	Availability        string           `json:"availability,omitempty"`
 	Lifecycle           string           `json:"lifecycle,omitempty"`
 	Pricing             *OfferingPricing `json:"pricing,omitempty"`
+	Billing             *OfferingBilling `json:"billing,omitempty"`
 	// MaxDocuments is the longest document list this offering ranks in one
 	// rerank request. A caller that sends more gets a refusal.
 	MaxDocuments *int `json:"max_documents,omitempty"`
@@ -604,6 +605,24 @@ type ModelOffering struct {
 	// which route answers for the model, because a model that reads documents
 	// and a model that answers chat reach different paths.
 	Operations []string `json:"operations,omitempty"`
+}
+
+// OfferingBilling declares the units used for recognition charges.
+type OfferingBilling struct {
+	Recognition *RecognitionBilling `json:"recognition,omitempty"`
+}
+
+// RecognitionBilling separates actual units from optional input estimates.
+type RecognitionBilling struct {
+	Basis             string                        `json:"basis"`
+	InputPageEstimate *RecognitionInputPageEstimate `json:"input_page_estimate,omitempty"`
+}
+
+// RecognitionInputPageEstimate estimates input tokens per page, excluding output.
+type RecognitionInputPageEstimate struct {
+	Tokens      float64 `json:"tokens"`
+	Source      string  `json:"source"`
+	Assumptions string  `json:"assumptions"`
 }
 
 // OfferingPricing carries the published prices of one offering. The token
@@ -617,8 +636,7 @@ type OfferingPricing struct {
 	// Audio tokens bill at their own rate wherever a provider meters them.
 	AudioInput  string `json:"audio_input,omitempty"`
 	AudioOutput string `json:"audio_output,omitempty"`
-	// A page is the unit document recognition bills in. No token price
-	// converts into it.
+	// PageInput is the published charge for page-based billing.
 	PageInput string `json:"page_input,omitempty"`
 	// A search unit is the unit reranking bills in on the providers that
 	// meter it: one query against a bounded document count. Such an offering

@@ -340,8 +340,7 @@ func (s *RoutableSnapshot) Offering(route Route) (catalogs.ProviderOffering, err
 }
 
 // PagePriceFor returns what one model charges to read one page of a document,
-// in USD. A page is the unit recognition is billed in, and no token price
-// converts into it.
+// in USD, only when the offering declares page billing.
 func (s *RoutableSnapshot) PagePriceFor(
 	modelID string,
 	operation catalogs.ProviderOperation,
@@ -420,14 +419,16 @@ func (s *RoutableSnapshot) LowestPagePrice(operation catalogs.ProviderOperation)
 }
 
 // routePagePrice reads the per-page price one route's offering publishes. The
-// projection refuses a recognition offering that publishes none, so an offering
-// this gateway can route always answers.
+// token-billed offering returns no page price.
 func (s *RoutableSnapshot) routePagePrice(route Route) (float64, bool) {
 	offering, err := s.Offering(route)
 	if err != nil {
 		return 0, false
 	}
-	if offering.Pricing == nil || offering.Pricing.Operations == nil {
+	if offering.Billing == nil || offering.Billing.Recognition == nil ||
+		offering.Billing.Recognition.Basis != catalogs.RecognitionBillingPages ||
+		offering.Pricing == nil || offering.Pricing.Operations == nil ||
+		offering.Pricing.Currency != catalogs.ModelPricingCurrencyUSD {
 		return 0, false
 	}
 	page := offering.Pricing.Operations.PageInput

@@ -16,19 +16,15 @@ import (
 	"github.com/agentstation/starport/internal/usage"
 )
 
-// PLG-V14 and PLG-V15. A document read is the one provider call this gateway
-// makes that the request did not name. It happens before the model the caller
-// asked for runs, it is billed by the page rather than by the token, and
-// nothing else in the record would show it.
-//
-// The prices come from a fixture rather than from the shipped catalog, because
-// no offering in the catalog serves recognition yet. What the tests hold is the
-// arithmetic and the refusal, and both have to be right on the day one does.
+// PLG-V14 and PLG-V15 verify page-billed recognition with explicit price fixtures.
+// Recognition runs before the requested chat model and needs separate usage evidence.
+// The recognition-cost tests cover token billing.
 
 // priceFixture prices the two operations that ask a price before a route
 // exists: one price for the offering the planner chose, one for the cheapest
 // offering there is, and one search unit floor for reranking.
 type priceFixture struct {
+	offerings  map[string]starmapcatalogs.ProviderOffering
 	perModel   map[string]float64
 	lowest     float64
 	priced     bool
@@ -323,10 +319,8 @@ func TestAnAccountWithNoSpendBudgetIsRefusedNothing(t *testing.T) {
 	require.Equal(t, 1, router.calls)
 }
 
-// TestAnUnpricedRecognitionSaysSoRatherThanReadingAsFree holds how the meter
-// fails. The projection refuses a recognition offering with no page price, so
-// this state means the gateway lost the catalog rather than that the page was
-// free. A zero cost would be a silent understatement of a real charge.
+// TestAnUnpricedRecognitionSaysSoRatherThanReadingAsFree verifies unknown cost.
+// Unavailable catalog pricing must not turn a provider call into a free operation.
 func TestAnUnpricedRecognitionSaysSoRatherThanReadingAsFree(t *testing.T) {
 	t.Parallel()
 	service, _, read := meteredProxyWithPrices(t, nil, "INVOICE 4471")
@@ -341,4 +335,19 @@ func TestAnUnpricedRecognitionSaysSoRatherThanReadingAsFree(t *testing.T) {
 	require.Nil(t, record.Cost)
 	require.Equal(t, usage.CostReasonNoPricing, record.CostUnavailableReason,
 		"a page charged at an unknown price was recorded as costing nothing")
+}
+
+func (f *priceFixture) RecognitionOfferingFor(modelID string) (starmapcatalogs.ProviderOffering, bool) {
+	if f.offerings != nil {
+		offering, found := f.offerings[modelID]
+		return offering, found
+	}
+	price, found := f.perModel[modelID]
+	if !found {
+		return starmapcatalogs.ProviderOffering{}, false
+	}
+	return starmapcatalogs.ProviderOffering{
+		Billing: &starmapcatalogs.ModelBilling{Recognition: &starmapcatalogs.RecognitionBilling{Basis: starmapcatalogs.RecognitionBillingPages}},
+		Pricing: &starmapcatalogs.ModelPricing{Currency: "USD", Operations: &starmapcatalogs.ModelOperationPricing{PageInput: &price}},
+	}, true
 }

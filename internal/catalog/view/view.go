@@ -56,6 +56,7 @@ type ModelOfferingInfo struct {
 	Availability        string               `json:"availability,omitempty"`
 	Lifecycle           string               `json:"lifecycle,omitempty"`
 	Pricing             *OfferingPricingInfo `json:"pricing,omitempty"`
+	Billing             *OfferingBillingInfo `json:"billing,omitempty"`
 	// MaxDocuments is the longest document list this offering ranks in one
 	// request. A rerank caller that sends more gets a refusal, so the bound
 	// belongs beside the context window rather than inside the pricing block.
@@ -64,6 +65,24 @@ type ModelOfferingInfo struct {
 	// spelling. A media model reaches a different path than a chat model, so
 	// a reader who cannot see the operations cannot tell which path to call.
 	Operations []string `json:"operations,omitempty"`
+}
+
+// OfferingBillingInfo declares the units used for recognition charges.
+type OfferingBillingInfo struct {
+	Recognition *RecognitionBillingInfo `json:"recognition,omitempty"`
+}
+
+// RecognitionBillingInfo separates actual units from optional input estimates.
+type RecognitionBillingInfo struct {
+	Basis             string                            `json:"basis"`
+	InputPageEstimate *RecognitionInputPageEstimateInfo `json:"input_page_estimate,omitempty"`
+}
+
+// RecognitionInputPageEstimateInfo estimates input tokens per page, excluding output.
+type RecognitionInputPageEstimateInfo struct {
+	Tokens      float64 `json:"tokens"`
+	Source      string  `json:"source"`
+	Assumptions string  `json:"assumptions"`
 }
 
 // OfferingPricingInfo carries the published prices of one offering as decimal
@@ -79,9 +98,7 @@ type OfferingPricingInfo struct {
 	// so an audio turn cannot be priced from Prompt and Completion alone.
 	AudioInput  string `json:"audio_input,omitempty"`
 	AudioOutput string `json:"audio_output,omitempty"`
-	// PageInput is what one document page costs at this offering. No token
-	// price converts into it, so an offering that reads documents and
-	// publishes no page price is one a caller cannot price at all.
+	// PageInput is the published charge for page-based billing.
 	PageInput string `json:"page_input,omitempty"`
 	// SearchUnit is what one rerank search unit costs at this offering, which
 	// is one query against a bounded document count. A rerank provider bills
