@@ -2,7 +2,9 @@ package authorization
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -18,7 +20,11 @@ import (
 
 func TestRepositorySourceRealStoresAndLocalMutation(t *testing.T) {
 	repotest.Run(t, func(t *testing.T, store storage.KVStore) {
-		db, err := sqlstore.Open(sqlstore.Config{Type: sqlstore.TypeSQLite, SQLite: sqlstore.SQLiteConfig{Path: filepath.Join(t.TempDir(), "identity.db")}})
+		config := sqlstore.Config{Type: sqlstore.TypeSQLite, SQLite: sqlstore.SQLiteConfig{Path: filepath.Join(t.TempDir(), "identity.db")}}
+		if address := os.Getenv("TEST_AUTHORIZATION_POSTGRES_URL"); address != "" {
+			config = sqlstore.Config{Type: sqlstore.TypePostgres, Postgres: sqlstore.PostgresConfig{URL: address}}
+		}
+		db, err := sqlstore.Open(config)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +65,7 @@ func TestRepositorySourceRealStoresAndLocalMutation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		team, err := identities.Teams.Create(t.Context(), identity.Team{ID: "team", Name: "team"})
+		team, err := identities.Teams.Create(t.Context(), identity.Team{ID: "team-" + rand.Text(), Name: "team"})
 		if err != nil {
 			t.Fatal(err)
 		}
