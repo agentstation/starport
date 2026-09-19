@@ -50,7 +50,7 @@ func newMigrationCommand(deps Dependencies, usageError usageErrorHandler) *urfav
 				if cmd.Bool("json") {
 					return writeIndentedJSON(cmd.Writer, result)
 				}
-				_, err = fmt.Fprintf(cmd.Writer, "Phase: %s\nTarget: %s\nJournal: %s\nScheduler identity: %s\n", result.Phase, result.TargetDirectory, result.JournalDirectory, result.SchedulerIdentity)
+				_, err = fmt.Fprintf(cmd.Writer, "Phase: %s\nTarget: %s\nJournal: %s\nHost journal: %s\nScheduler identity: %s\n", result.Phase, result.TargetDirectory, result.JournalDirectory, result.HostJournalDirectory, result.SchedulerIdentity)
 				return err
 			},
 		})

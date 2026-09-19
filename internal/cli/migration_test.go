@@ -24,12 +24,13 @@ func TestRuntimeMigrationCommands(t *testing.T) {
 				require.Equal(t, "move", request.OperationID)
 				require.Equal(t, filepath.Join(root, "source"), request.SourceDirectory)
 				require.Equal(t, "scheduler", request.SourceIdentity)
-				return catalog.RuntimeMigrationResult{Phase: phase, TargetDirectory: request.TargetDirectory}, nil
+				return catalog.RuntimeMigrationResult{Phase: phase, TargetDirectory: request.TargetDirectory, HostJournalDirectory: filepath.Join(root, "host-journal")}, nil
 			}
 			err := Run(t.Context(), []string{"starport", "migrate", "runtime", phase, "--operation", "move", "--source", filepath.Join(root, "source"), "--target", filepath.Join(root, "target"), "--journal", filepath.Join(root, "journal"), "--identity", "scheduler", "--json"}, deps)
 			require.NoError(t, err)
 			require.Equal(t, 1, calls)
 			require.Contains(t, output.String(), `"phase": "`+phase+`"`)
+			require.Contains(t, output.String(), `"host_journal_directory"`)
 		})
 	}
 }

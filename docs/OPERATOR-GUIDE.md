@@ -378,7 +378,8 @@ All three path flags require absolute paths. Read the retained scheduler identit
 Keep the original runtime selected in configuration through `publish`. Select the target only before `complete`.
 
 Completion verifies the configuration again after opening the replacement. Environment-only target settings cannot complete the move.
-Use `--json` for the phase result. The command does not start the gateway or open SQL.
+Use `--json` for the phase result. The result reports `journal_directory` and `host_journal_directory` for the selected operation.
+The command does not start the gateway or open SQL.
 
 The explicit journal directory contains Starmap recovery records and Starport's `starport-runtime/<operation-hash>/catalog-binding.json`.
 The catalog KV store retains matching migration checkpoints under `catalog_migration:v1:`.

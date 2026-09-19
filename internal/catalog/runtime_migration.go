@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"path/filepath"
+	"strings"
 
 	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
 	"github.com/agentstation/starmap/runtime"
@@ -23,12 +25,13 @@ type RuntimeMigration struct {
 
 // RuntimeMigrationResult reports the durable phase of a runtime directory move.
 type RuntimeMigrationResult struct {
-	Phase             string `json:"phase"`
-	JournalDirectory  string `json:"journal_directory"`
-	TargetDirectory   string `json:"target_directory"`
-	SchedulerIdentity string `json:"scheduler_identity"`
-	FileCount         int    `json:"file_count,omitempty"`
-	IdentityVerified  *bool  `json:"identity_verified,omitempty"`
+	Phase                string `json:"phase"`
+	HostJournalDirectory string `json:"host_journal_directory"`
+	JournalDirectory     string `json:"journal_directory"`
+	TargetDirectory      string `json:"target_directory"`
+	SchedulerIdentity    string `json:"scheduler_identity"`
+	FileCount            int    `json:"file_count,omitempty"`
+	IdentityVerified     *bool  `json:"identity_verified,omitempty"`
 }
 
 func (m RuntimeMigration) request(settings Settings) runtime.DirectoryMigrationRequest {
@@ -41,7 +44,7 @@ func (m RuntimeMigration) Prepare(ctx context.Context, store storage.KVStore, se
 	if err == nil {
 		err = m.bindStore(ctx, store, settings)
 	}
-	return RuntimeMigrationResult{Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
+	return RuntimeMigrationResult{HostJournalDirectory: m.hostJournalDirectory(settings), Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
 }
 
 // Stage copies and verifies private staging files without publishing the target.
@@ -50,7 +53,7 @@ func (m RuntimeMigration) Stage(ctx context.Context, store storage.KVStore, sett
 		return RuntimeMigrationResult{}, err
 	}
 	result, err := runtime.StageDirectoryMigration(ctx, m.request(settings))
-	return RuntimeMigrationResult{Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
+	return RuntimeMigrationResult{HostJournalDirectory: m.hostJournalDirectory(settings), Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
 }
 
 // Publish installs the verified target and retires the source runtime.
@@ -59,7 +62,7 @@ func (m RuntimeMigration) Publish(ctx context.Context, store storage.KVStore, se
 		return RuntimeMigrationResult{}, err
 	}
 	result, err := runtime.PublishDirectoryMigration(ctx, m.request(settings))
-	return migrationPublication(result), err
+	return m.migrationPublication(settings, result), err
 }
 
 // OpenReplacement verifies migration evidence before opening the selected runtime.
@@ -99,9 +102,13 @@ func (m RuntimeMigration) Complete(ctx context.Context, connected *Runtime, sett
 		return RuntimeMigrationResult{}, err
 	}
 	result, err := connected.runtime.CompleteDirectoryMigration(ctx, m.request(settings))
-	return migrationPublication(result), err
+	return m.migrationPublication(settings, result), err
 }
 
-func migrationPublication(result runtime.DirectoryMigrationPublication) RuntimeMigrationResult {
-	return RuntimeMigrationResult{Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: result.TargetDirectory, SchedulerIdentity: result.SchedulerIdentity}
+func (m RuntimeMigration) migrationPublication(settings Settings, result runtime.DirectoryMigrationPublication) RuntimeMigrationResult {
+	return RuntimeMigrationResult{HostJournalDirectory: m.hostJournalDirectory(settings), Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: result.TargetDirectory, SchedulerIdentity: result.SchedulerIdentity}
+}
+
+func (m RuntimeMigration) hostJournalDirectory(settings Settings) string {
+	return filepath.Join(m.JournalRoot, "starport-runtime", strings.TrimPrefix(m.storeReceiptKey(settings), "catalog_migration:v1:"))
 }
