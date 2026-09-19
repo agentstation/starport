@@ -757,8 +757,8 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (response
 			response, err = nil, refusal
 		}
 	}()
-	if !snapshot.Names(modelID) {
-		return nil, &ProviderError{Code: resourceNotFoundCode, Message: "Model not found"}
+	if err := checkEndpointDisclosure(ctx, snapshot, modelID); err != nil {
+		return nil, err
 	}
 	if policy, ok := disclosure.FromContext(ctx); ok {
 		return &ModelEndpointsResponse{Model: modelID, Endpoints: view.EndpointsForViewer(snapshot, modelID, policy)}, nil
@@ -767,6 +767,17 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (response
 		Model:     modelID,
 		Endpoints: view.Endpoints(snapshot, modelID),
 	}, nil
+}
+
+func checkEndpointDisclosure(ctx context.Context, snapshot *runtimecatalog.RoutableSnapshot, modelID string) error {
+	name, valid := snapshot.ResolveAlias(modelID)
+	if !valid || !snapshot.Names(name) {
+		return &ProviderError{Code: resourceNotFoundCode, Message: "Model not found"}
+	}
+	if policy, scoped := disclosure.FromContext(ctx); scoped && !policy.AllowsName(name) {
+		return &ProviderError{Code: resourceNotFoundCode, Message: "Model not found"}
+	}
+	return nil
 }
 
 func (p *proxy) acquireRuntime(

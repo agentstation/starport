@@ -6,6 +6,7 @@ import (
 	"github.com/agentstation/starport/internal/account"
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/catalog"
+	"strings"
 )
 
 // Policy selects catalog membership permitted by a key and its account.
@@ -49,4 +50,14 @@ func New(snapshot *catalog.RoutableSnapshot, key apikey.APIKey, owner account.Ac
 		}
 	}
 	return policy
+}
+
+// AllowsName reports permitted canonical or exact provider-scoped membership.
+// The caller must resolve aliases within the retained generation first.
+func (p Policy) AllowsName(name string) bool {
+	if p.AllowsDefinition(catalogs.ModelDefinitionID(name)) {
+		return true
+	}
+	provider, model, found := strings.Cut(name, "/")
+	return found && p.AllowsOffering(catalogs.OfferingKey{ProviderID: catalogs.ProviderID(provider), ProviderModelID: catalogs.ProviderModelID(model)})
 }

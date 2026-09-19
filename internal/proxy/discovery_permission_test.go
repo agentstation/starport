@@ -96,7 +96,7 @@ func TestDiscoveryCacheLookupRechecksAuthority(t *testing.T) {
 					v, e := service.ListProviders(t.Context())
 					return v == nil, e
 				default:
-					v, e := service.GetModelEndpoints(t.Context(), "retained-private-model")
+					v, e := service.GetModelEndpoints(t.Context(), string(plane.Current().Catalog().Definitions()[0].ID))
 					return v == nil, e
 				}
 			}
@@ -176,4 +176,28 @@ func TestDiscoveryCacheSeparatesDisclosureMembership(t *testing.T) {
 			require.Equal(t, 2, manager.calls["SetModel"])
 		})
 	}
+}
+
+func TestEndpointLookupDoesNotRevealDeniedMembership(t *testing.T) {
+	client, err := starmap.New()
+	require.NoError(t, err)
+	plane, err := runtimecatalog.Open(client)
+	require.NoError(t, err)
+	_, offering := firstDiscoveryOffering(t, client.Catalog())
+	snapshot := plane.Current()
+	direct := &proxy{registry: catalogDiscoveryRegistry{runtime: &catalogDiscoveryRuntime{snapshot: snapshot}}}
+	manager := newMockCacheManager()
+	cached := &cachedService{service: direct, runtime: &cacheRuntimeSource{snapshot: snapshot}, cacheManager: manager, cacheConfig: CacheConfig{EnableModelCache: true}}
+	ctx := disclosure.WithPolicy(t.Context(), disclosure.Policy{})
+	for _, service := range []Proxy{direct, cached} {
+		for _, name := range []string{string(offering.DefinitionID), "unknown/model"} {
+			response, err := service.GetModelEndpoints(ctx, name)
+			require.Nil(t, response)
+			var refusal *ProviderError
+			require.ErrorAs(t, err, &refusal)
+			require.Equal(t, "not_found", refusal.Code)
+			require.Equal(t, "Model not found", refusal.Message)
+		}
+	}
+	require.Zero(t, manager.calls["GetModel"], "denied membership must not reach cache lookup")
 }

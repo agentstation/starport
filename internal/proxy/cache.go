@@ -581,6 +581,11 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 		}
 	}()
 
+	if runtime != nil {
+		if err := checkEndpointDisclosure(ctx, runtime.Snapshot(), modelID); err != nil {
+			return nil, err
+		}
+	}
 	cacheKey := fmt.Sprintf("model:endpoints:%s:%s:%s", s.catalogGeneration(ctx), disclosure.CacheScope(ctx), modelID)
 
 	// Try to get from cache using GetModel
