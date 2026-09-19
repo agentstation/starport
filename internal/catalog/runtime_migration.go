@@ -35,19 +35,28 @@ func (m RuntimeMigration) request(settings Settings) runtime.DirectoryMigrationR
 }
 
 // Prepare inventories source files without creating the target directory.
-func (m RuntimeMigration) Prepare(ctx context.Context, settings Settings) (RuntimeMigrationResult, error) {
+func (m RuntimeMigration) Prepare(ctx context.Context, store storage.KVStore, settings Settings) (RuntimeMigrationResult, error) {
 	result, err := runtime.PrepareDirectoryMigration(ctx, m.request(settings))
+	if err == nil {
+		err = m.bindStore(ctx, store, settings)
+	}
 	return RuntimeMigrationResult{Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
 }
 
 // Stage copies and verifies private staging files without publishing the target.
-func (m RuntimeMigration) Stage(ctx context.Context, settings Settings) (RuntimeMigrationResult, error) {
+func (m RuntimeMigration) Stage(ctx context.Context, store storage.KVStore, settings Settings) (RuntimeMigrationResult, error) {
+	if err := m.verifyStore(ctx, store, settings); err != nil {
+		return RuntimeMigrationResult{}, err
+	}
 	result, err := runtime.StageDirectoryMigration(ctx, m.request(settings))
 	return RuntimeMigrationResult{Phase: result.Phase, JournalDirectory: result.JournalDirectory, TargetDirectory: m.TargetDirectory, SchedulerIdentity: m.SourceIdentity, FileCount: result.FileCount, IdentityVerified: new(result.IdentityVerified)}, err
 }
 
 // Publish installs the verified target and retires the source runtime.
-func (m RuntimeMigration) Publish(ctx context.Context, settings Settings) (RuntimeMigrationResult, error) {
+func (m RuntimeMigration) Publish(ctx context.Context, store storage.KVStore, settings Settings) (RuntimeMigrationResult, error) {
+	if err := m.verifyStore(ctx, store, settings); err != nil {
+		return RuntimeMigrationResult{}, err
+	}
 	result, err := runtime.PublishDirectoryMigration(ctx, m.request(settings))
 	return migrationPublication(result), err
 }
@@ -67,12 +76,8 @@ func (m RuntimeMigration) OpenReplacement(ctx context.Context, store storage.KVS
 	if err := runtime.VerifyDirectoryMigrationPublication(ctx, request); err != nil {
 		return nil, err
 	}
-	accepted, err := NewGenerationStore(store)
-	if err != nil {
+	if err := m.verifyStore(ctx, store, settings); err != nil {
 		return nil, err
-	}
-	if _, err := accepted.Current(ctx); err != nil {
-		return nil, fmt.Errorf("runtime migration requires the retained accepted catalog store: %w", err)
 	}
 	settings.Values = maps.Clone(settings.Values)
 	if settings.Values == nil {
@@ -88,6 +93,9 @@ func (m RuntimeMigration) OpenReplacement(ctx context.Context, store storage.KVS
 func (m RuntimeMigration) Complete(ctx context.Context, connected *Runtime, settings Settings) (RuntimeMigrationResult, error) {
 	if connected == nil || connected.runtime == nil {
 		return RuntimeMigrationResult{}, fmt.Errorf("runtime migration requires an active replacement")
+	}
+	if err := m.verifyStore(ctx, connected.accepted.store, settings); err != nil {
+		return RuntimeMigrationResult{}, err
 	}
 	result, err := connected.runtime.CompleteDirectoryMigration(ctx, m.request(settings))
 	return migrationPublication(result), err

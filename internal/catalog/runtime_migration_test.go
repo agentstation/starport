@@ -2,13 +2,13 @@ package catalog
 
 import (
 	"context"
-	"github.com/agentstation/starmap/pkg/catalogs"
-	"github.com/agentstation/starmap/runtime"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/agentstation/starmap/pkg/catalogs"
 	catalogconfig "github.com/agentstation/starmap/pkg/catalogs/config"
+	"github.com/agentstation/starmap/runtime"
 	"github.com/agentstation/starport/internal/storage"
 	"github.com/stretchr/testify/require"
 )
@@ -34,22 +34,22 @@ func TestRuntimeDirectoryMigrationPreservesAcceptedCatalog(t *testing.T) {
 	accepted, err := original.accepted.Get(t.Context(), candidate.State.GenerationID)
 	require.NoError(t, err)
 	migration := RuntimeMigration{OperationID: "move-runtime", SourceDirectory: settings.StateDirectory, TargetDirectory: filepath.Join(root, "target"), JournalRoot: filepath.Join(root, "journal"), SourceIdentity: original.runtime.Status().InstanceIdentity}
-	_, err = migration.Prepare(t.Context(), settings)
+	_, err = migration.Prepare(t.Context(), store, settings)
 	require.Error(t, err, "an active source must retain its directory lock")
 	require.NoError(t, original.Close(t.Context()))
-	prepared, err := migration.Prepare(t.Context(), settings)
+	prepared, err := migration.Prepare(t.Context(), store, settings)
 	require.NoError(t, err)
 	require.NotNil(t, prepared.IdentityVerified)
 	require.True(t, *prepared.IdentityVerified)
 	require.Positive(t, prepared.FileCount)
 	require.NoDirExists(t, migration.TargetDirectory)
-	staged, err := migration.Stage(t.Context(), settings)
+	staged, err := migration.Stage(t.Context(), store, settings)
 	require.NoError(t, err)
 	require.Equal(t, prepared.FileCount, staged.FileCount)
 	require.NotNil(t, staged.IdentityVerified)
 	require.True(t, *staged.IdentityVerified)
 	require.NoDirExists(t, migration.TargetDirectory)
-	published, err := migration.Publish(t.Context(), settings)
+	published, err := migration.Publish(t.Context(), store, settings)
 	require.NoError(t, err)
 	require.Equal(t, migration.SourceIdentity, published.SchedulerIdentity)
 	require.DirExists(t, migration.SourceDirectory)
@@ -64,6 +64,12 @@ func TestRuntimeDirectoryMigrationPreservesAcceptedCatalog(t *testing.T) {
 		require.NoError(t, foreign.Close(t.Context()))
 	}
 	require.Error(t, foreignErr, "migration must not bootstrap an empty replacement catalog store")
+	foreignStore := storage.NewMockStore()
+	foreignAccepted, err := NewGenerationStore(foreignStore)
+	require.NoError(t, err)
+	require.NoError(t, foreignAccepted.Commit(t.Context(), accepted, ""))
+	_, err = migration.OpenReplacement(t.Context(), foreignStore, settings)
+	require.Error(t, err, "a different nonempty store has no original operation binding")
 	replacement, err := migration.OpenReplacement(t.Context(), store, settings)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, replacement.Close(context.Background())) })
