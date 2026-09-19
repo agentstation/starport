@@ -654,12 +654,24 @@ func (b *runtimeBuilder) buildGateway() error {
 		return fmt.Errorf("open provider availability owner: %w", err)
 	}
 	b.application.availability = availabilityOwner
+	approvals := b.config.InferenceDestinationApprovals
+	if approvals == nil {
+		bundled, err := runtimecatalog.Bundled()
+		if err != nil {
+			return fmt.Errorf("load bundled destination contracts: %w", err)
+		}
+		approvals, err = providers.InstallationDestinationApprovals(bundled)
+		if err != nil {
+			return fmt.Errorf("compile installation destination approvals: %w", err)
+		}
+	}
 	routerOptions := []router.Option{
 		router.WithCatalog(b.application.catalog),
 		router.WithAvailability(availabilityOwner),
 		router.WithOutcomePublisher(b.application.providerStates),
 		router.WithOperatorCredentialGate(b.application.providerStates),
 		router.WithStoredCredentials(b.providerKeys),
+		router.WithDestinationApprovals(approvals),
 	}
 	// A distributed store makes provider health a fleet fact: each replica
 	// publishes its breaker transitions and latency snapshots there and

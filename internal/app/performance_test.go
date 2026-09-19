@@ -25,8 +25,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/agentstation/starport/internal/apikey"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
 	"github.com/agentstation/starport/internal/config"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/limits"
+	"github.com/agentstation/starport/internal/providers"
+	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/server"
 )
 
@@ -84,6 +88,11 @@ func newPerformanceFixture(tb testing.TB, wait time.Duration) *performanceFixtur
 
 func newPerformanceFixtureForCatalog(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig) *performanceFixture {
 	tb.Helper()
+	return newPerformanceFixtureWithApproval(tb, wait, catalog, true)
+}
+
+func newPerformanceFixtureWithApproval(tb testing.TB, wait time.Duration, catalog *config.CatalogConfig, approve bool) *performanceFixture {
+	tb.Helper()
 	f := &performanceFixture{samples: make(chan performanceUpstreamSample, 1), handlers: make(chan time.Duration, 1), wait: wait}
 	f.upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer sk-test-key" {
@@ -108,6 +117,17 @@ func newPerformanceFixtureForCatalog(tb testing.TB, wait time.Duration, catalog 
 		WithPaths(config.PathsForConfigDir(tb.TempDir())).Load(tb.Context(), func(target *config.Config) { *target = *cfg })
 	require.NoError(tb, err)
 	cfg = loaded
+
+	if approve {
+		bundled, err := runtimecatalog.Bundled()
+		require.NoError(tb, err)
+		provider, err := bundled.Provider(catalogs.ProviderIDOpenAI)
+		require.NoError(tb, err)
+		policy, err := providers.CompileDestinationPolicy(provider, string(keyring.SourceEnvironment), provider.Credentials.Inference.Alternatives[0], f.upstream.URL, nil)
+		require.NoError(tb, err)
+		cfg.InferenceDestinationApprovals, err = credentials.NewDestinationApprovals(nil, policy)
+		require.NoError(tb, err)
+	}
 
 	// Seed and reopen the real on-disk adapter as application startup does.
 	store, err := openStorage(cfg.Storage)

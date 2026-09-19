@@ -58,3 +58,25 @@ func TestRouterFallsBackToApprovedCredentialRole(t *testing.T) {
 	require.Equal(t, []string{"account"}, fixture.materialVersions())
 	require.Equal(t, []string{target}, fixture.endpoints())
 }
+
+func TestRouterDerivesHandleGrantFromApprovedRolePolicy(t *testing.T) {
+	fixture := newEndpointBindingFixture(t)
+	target := "https://account.example/projects/account-project/models/opaque/model@001/chat/completions"
+	policy, err := credentials.NewDestinationPolicy("acme", string(keyring.SourceBYOK), fixture.operator.material.Profile(), []credentials.Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: http.MethodPost, URL: target}})
+	require.NoError(t, err)
+	approvals, err := credentials.NewDestinationApprovals(nil, policy)
+	require.NoError(t, err)
+	WithDestinationApprovals(approvals)(fixture.router.(*modelRouter))
+	_, err = fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.OperatorFirst))
+	require.NoError(t, err)
+	require.Equal(t, []string{"account"}, fixture.materialVersions())
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, target, nil)
+	require.NoError(t, err)
+	authorization, err := fixture.seen[0].material.AuthorizeDestination(request)
+	require.NoError(t, err)
+	policy.Revoke()
+	require.ErrorIs(t, authorization.Check(request), credentials.ErrDestinationUnapproved)
+	_, err = fixture.router.RouteWithFallback(t.Context(), fixture.request(keyring.BYOKOnly))
+	require.Error(t, err)
+	require.Len(t, fixture.seen, 1)
+}

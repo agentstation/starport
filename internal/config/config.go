@@ -23,20 +23,24 @@ type Config struct {
 	Storage           StorageConfig           `env:",prefix=STORAGE_"`
 	Catalog           CatalogConfig           `env:",prefix=CATALOG_"`
 	CredentialSources CredentialSourcesConfig `env:",prefix=CREDENTIAL_SOURCES_"`
-	Providers         ProvidersConfig
-	RateLimiting      RateLimitingConfig  `env:",prefix=RATE_LIMITING_"`
-	Security          SecurityConfig      `env:",prefix=SECURITY_"`
-	Logging           LoggingConfig       `env:",prefix=LOGGING_"`
-	Cache             CacheConfig         `env:",prefix=CACHE_"`
-	Files             FilesConfig         `env:",prefix=FILES_"`
-	Jobs              JobsConfig          `env:",prefix=JOBS_"`
-	Console           ConsoleConfig       `env:",prefix=CONSOLE_"`
-	Identity          IdentityConfig      `env:",prefix=IDENTITY_"`
-	Telemetry         TelemetryConfig     `env:",prefix=TELEMETRY_"`
-	Audit             AuditConfig         `env:",prefix=AUDIT_"`
-	Events            EventsConfig        `env:",prefix=EVENTS_"`
-	Guardrails        GuardrailsConfig    `env:",prefix=GUARDRAILS_"`
-	SemanticCache     SemanticCacheConfig `env:",prefix=SEMANTIC_CACHE_"`
+	// InferenceDestinationApprovals holds the applied deployment policy.
+	// Nil selects pinned installation defaults. An explicit empty set denies all destinations.
+	// The configuration authority supplies this value, never catalog refresh.
+	InferenceDestinationApprovals *credentials.DestinationApprovals `json:"-"`
+	Providers                     ProvidersConfig
+	RateLimiting                  RateLimitingConfig  `env:",prefix=RATE_LIMITING_"`
+	Security                      SecurityConfig      `env:",prefix=SECURITY_"`
+	Logging                       LoggingConfig       `env:",prefix=LOGGING_"`
+	Cache                         CacheConfig         `env:",prefix=CACHE_"`
+	Files                         FilesConfig         `env:",prefix=FILES_"`
+	Jobs                          JobsConfig          `env:",prefix=JOBS_"`
+	Console                       ConsoleConfig       `env:",prefix=CONSOLE_"`
+	Identity                      IdentityConfig      `env:",prefix=IDENTITY_"`
+	Telemetry                     TelemetryConfig     `env:",prefix=TELEMETRY_"`
+	Audit                         AuditConfig         `env:",prefix=AUDIT_"`
+	Events                        EventsConfig        `env:",prefix=EVENTS_"`
+	Guardrails                    GuardrailsConfig    `env:",prefix=GUARDRAILS_"`
+	SemanticCache                 SemanticCacheConfig `env:",prefix=SEMANTIC_CACHE_"`
 
 	providerEnvironment        environmentLookup
 	credentialResolver         *credentials.Resolver

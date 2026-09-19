@@ -65,3 +65,71 @@ func TestDestinationApprovalSelectionHasNoAllocations(t *testing.T) {
 	})
 	require.Zero(t, count)
 }
+
+func TestDestinationPolicyBindsEachSelectedHandle(t *testing.T) {
+	identity, material, _, request := destinationFixture(t)
+	policy, err := NewDestinationPolicy(identity.Provider, identity.Role, material.Profile(), []Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: request.Method, URL: request.URL.String()}})
+	require.NoError(t, err)
+	approvals, err := NewDestinationApprovals(nil, policy)
+	require.NoError(t, err)
+	first, err := approvals.Bind(identity.Provider, identity.Role, material, catalogs.ProviderOperationChatCompletions)
+	require.NoError(t, err)
+	other := NewMaterial(material.Profile(), nil, MaterialMetadata{Handle: "other-account"})
+	second, err := approvals.Bind(identity.Provider, identity.Role, other, catalogs.ProviderOperationChatCompletions)
+	require.NoError(t, err)
+	_, err = first.AuthorizeDestination(request)
+	require.NoError(t, err)
+	authorization, err := second.AuthorizeDestination(request)
+	require.NoError(t, err)
+	other.destination = first.destination
+	other.destinationBound = true
+	_, err = other.AuthorizeDestination(request)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+	_, err = approvals.Bind(identity.Provider, "other-role", material, catalogs.ProviderOperationChatCompletions)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+	policy.Revoke()
+	require.ErrorIs(t, authorization.Check(request), ErrDestinationUnapproved)
+	_, err = first.AuthorizeDestination(request)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+	_, err = approvals.Bind(identity.Provider, identity.Role, material, catalogs.ProviderOperationChatCompletions)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+}
+
+func TestDestinationPolicyBindingHasNoAllocations(t *testing.T) {
+	identity, material, _, request := destinationFixture(t)
+	policy, err := NewDestinationPolicy(identity.Provider, identity.Role, material.Profile(), []Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: request.Method, URL: request.URL.String()}})
+	require.NoError(t, err)
+	approvals, err := NewDestinationApprovals(nil, policy)
+	require.NoError(t, err)
+	allocations := testing.AllocsPerRun(100, func() {
+		bound, err := approvals.Bind(identity.Provider, identity.Role, material, catalogs.ProviderOperationChatCompletions)
+		if err != nil {
+			panic(err)
+		}
+		authorization, err := bound.AuthorizeDestination(request)
+		if err != nil {
+			panic(err)
+		}
+		if err := authorization.Check(request); err != nil {
+			panic(err)
+		}
+	})
+	require.Zero(t, allocations)
+}
+
+func TestDestinationPolicyDoesNotOverrideRevokedExactGrant(t *testing.T) {
+	identity, material, grant, request := destinationFixture(t)
+	policy, err := NewDestinationPolicy(identity.Provider, identity.Role, material.Profile(), []Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: request.Method, URL: request.URL.String()}})
+	require.NoError(t, err)
+	approvals, err := NewDestinationApprovals([]*DestinationGrant{grant}, policy)
+	require.NoError(t, err)
+	grant.Revoke()
+	_, err = approvals.Bind(identity.Provider, identity.Role, material, catalogs.ProviderOperationChatCompletions)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+	_, err = NewDestinationApprovals(nil, policy, policy)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+	_, err = NewDestinationApprovals(nil, nil)
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+	_, err = NewDestinationApprovals([]*DestinationGrant{{}})
+	require.ErrorIs(t, err, ErrDestinationUnapproved)
+}

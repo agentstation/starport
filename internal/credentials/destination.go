@@ -41,9 +41,13 @@ type Destination struct {
 // Catalog refresh cannot extend this immutable grant.
 type DestinationGrant struct {
 	identity DestinationIdentity
-	profile  catalogs.ProviderCredentialProfile
-	targets  []destinationTarget
-	revoked  atomic.Bool
+	*destinationContract
+}
+
+type destinationContract struct {
+	profile catalogs.ProviderCredentialProfile
+	targets []destinationTarget
+	revoked atomic.Bool
 }
 
 type destinationTarget struct {
@@ -60,10 +64,21 @@ type destinationTarget struct {
 // NewDestinationGrant validates an explicit approval without network access.
 // The caller must receive approval before it constructs or replaces a grant.
 func NewDestinationGrant(identity DestinationIdentity, profile catalogs.ProviderCredentialProfile, destinations []Destination) (*DestinationGrant, error) {
-	if identity.Provider == "" || identity.Role == "" || identity.Handle == "" || profile.ID == "" || len(destinations) == 0 {
+	if identity.Provider == "" || identity.Role == "" || identity.Handle == "" {
 		return nil, ErrDestinationUnapproved
 	}
-	grant := &DestinationGrant{identity: identity, profile: copyCredentialProfile(profile)}
+	contract, err := newDestinationContract(profile, destinations)
+	if err != nil {
+		return nil, err
+	}
+	return &DestinationGrant{identity: identity, destinationContract: contract}, nil
+}
+
+func newDestinationContract(profile catalogs.ProviderCredentialProfile, destinations []Destination) (*destinationContract, error) {
+	if profile.ID == "" || len(destinations) == 0 {
+		return nil, ErrDestinationUnapproved
+	}
+	grant := &destinationContract{profile: copyCredentialProfile(profile)}
 	for _, destination := range destinations {
 		parsed, err := url.Parse(destination.URL)
 		if err != nil || !validDestinationURL(parsed) || destination.Operation == "" || !validDestinationMethod(destination.Method) {
@@ -87,7 +102,7 @@ func NewDestinationGrant(identity DestinationIdentity, profile catalogs.Provider
 
 // Revoke prevents new authorizations and invalidates existing request handles.
 func (g *DestinationGrant) Revoke() {
-	if g != nil {
+	if g != nil && g.destinationContract != nil {
 		g.revoked.Store(true)
 	}
 }
@@ -95,7 +110,7 @@ func (g *DestinationGrant) Revoke() {
 // Authorize binds material to an approved operation and request target.
 // It compares the complete profile before credential placement can occur.
 func (g *DestinationGrant) Authorize(identity DestinationIdentity, material Material, operation catalogs.ProviderOperation, request *http.Request) (DestinationAuthorization, error) {
-	if g == nil || g.revoked.Load() || identity != g.identity || material.Handle() != identity.Handle || request == nil || !validDestinationURL(request.URL) ||
+	if g == nil || g.destinationContract == nil || g.revoked.Load() || identity != g.identity || material.Handle() != identity.Handle || request == nil || !validDestinationURL(request.URL) ||
 		!sameDestinationProfile(g.profile, material.profile) {
 		return DestinationAuthorization{}, ErrDestinationUnapproved
 	}
@@ -105,7 +120,7 @@ func (g *DestinationGrant) Authorize(identity DestinationIdentity, material Mate
 			exact := *target
 			exact.template = nil
 			exact.path = request.URL.EscapedPath()
-			return DestinationAuthorization{grant: g, target: exact}, nil
+			return DestinationAuthorization{grant: g.destinationContract, target: exact}, nil
 		}
 	}
 	return DestinationAuthorization{}, ErrDestinationUnapproved
@@ -114,7 +129,7 @@ func (g *DestinationGrant) Authorize(identity DestinationIdentity, material Mate
 // DestinationAuthorization checks a request target before credential placement.
 // Revocation invalidates all authorizations from the grant.
 type DestinationAuthorization struct {
-	grant  *DestinationGrant
+	grant  *destinationContract
 	target destinationTarget
 }
 
@@ -173,13 +188,16 @@ func approvedQueryChange(before, after string, placements []catalogs.ProviderCre
 // WithDestinationGrant binds material to its selected approval and operation.
 // A nil grant remains a bound refusal rather than unrestricted material.
 func (m Material) WithDestinationGrant(grant *DestinationGrant, identity DestinationIdentity, operation catalogs.ProviderOperation) Material {
-	m.destination = materialDestination{grant: grant, identity: identity, operation: operation}
+	m.destination = materialDestination{identity: identity, operation: operation}
+	if grant != nil {
+		m.destination.grant = *grant
+	}
 	m.destinationBound = true
 	return m
 }
 
 type materialDestination struct {
-	grant     *DestinationGrant
+	grant     DestinationGrant
 	identity  DestinationIdentity
 	operation catalogs.ProviderOperation
 }

@@ -243,7 +243,7 @@ func supportedAuthentication(
 			continue
 		}
 		if anonymous.Empty() {
-			anonymous = defaultAnonymousMaterial(profile, fields)
+			anonymous = defaultAnonymousMaterial(provider.ID, profile, fields)
 		}
 	}
 	return requiresAuth, anonymous, supported
@@ -267,6 +267,7 @@ func hasAnonymousInferenceProfile(provider catalogs.Provider) bool {
 }
 
 func defaultAnonymousMaterial(
+	providerID catalogs.ProviderID,
 	profile catalogs.ProviderCredentialProfile,
 	fields map[catalogs.ProviderCredentialFieldID]catalogs.ProviderCredentialField,
 ) credentials.Material {
@@ -283,5 +284,5 @@ func defaultAnonymousMaterial(
 			values[fieldID] = field.Default
 		}
 	}
-	return credentials.NewMaterial(profile, values, credentials.MaterialMetadata{Version: "catalog-default"})
+	return credentials.NewMaterial(profile, values, credentials.MaterialMetadata{Version: "catalog-default", Handle: string(providerID)})
 }

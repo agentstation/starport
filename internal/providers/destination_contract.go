@@ -17,24 +17,40 @@ import (
 // Base URL overrides and resolved parameter bindings require the same approval.
 // Never call this function merely because a catalog refresh changes provider facts.
 func CompileDestinationGrant(provider catalogs.Provider, identity credentials.DestinationIdentity, profileID catalogs.ProviderCredentialProfileID, baseURL string, bindings map[string]string) (*credentials.DestinationGrant, error) {
-	if identity.Provider != provider.ID || provider.Inference == nil || provider.Credentials == nil ||
-		!slices.Contains(provider.Credentials.Inference.Alternatives, profileID) {
+	if identity.Provider != provider.ID {
 		return nil, credentials.ErrDestinationUnapproved
 	}
-	for _, profile := range provider.Credentials.Profiles {
-		if profile.ID != profileID {
-			continue
-		}
-		if !approvedDestinationBindings(profile, bindings) {
-			return nil, credentials.ErrDestinationUnapproved
-		}
-		destinations, err := contractDestinations(provider.Inference, baseURL, bindings)
-		if err != nil {
-			return nil, err
-		}
-		return credentials.NewDestinationGrant(identity, profile, destinations)
+	profile, destinations, err := approvedDestinationContract(provider, profileID, baseURL, bindings)
+	if err != nil {
+		return nil, err
 	}
-	return nil, credentials.ErrDestinationUnapproved
+	return credentials.NewDestinationGrant(identity, profile, destinations)
+}
+
+// CompileDestinationPolicy approves the selected contract for all handles in one credential role.
+// The caller must select the contract and configuration through its deployment authority.
+func CompileDestinationPolicy(provider catalogs.Provider, role string, profileID catalogs.ProviderCredentialProfileID, baseURL string, bindings map[string]string) (*credentials.DestinationPolicy, error) {
+	profile, destinations, err := approvedDestinationContract(provider, profileID, baseURL, bindings)
+	if err != nil {
+		return nil, err
+	}
+	return credentials.NewDestinationPolicy(provider.ID, role, profile, destinations)
+}
+
+func approvedDestinationContract(provider catalogs.Provider, profileID catalogs.ProviderCredentialProfileID, baseURL string, bindings map[string]string) (catalogs.ProviderCredentialProfile, []credentials.Destination, error) {
+	if provider.Inference != nil && provider.Credentials != nil && slices.Contains(provider.Credentials.Inference.Alternatives, profileID) {
+		for _, profile := range provider.Credentials.Profiles {
+			if profile.ID != profileID {
+				continue
+			}
+			if !approvedDestinationBindings(profile, bindings) {
+				break
+			}
+			destinations, err := contractDestinations(provider.Inference, baseURL, bindings)
+			return profile, destinations, err
+		}
+	}
+	return catalogs.ProviderCredentialProfile{}, nil, credentials.ErrDestinationUnapproved
 }
 
 func approvedDestinationBindings(profile catalogs.ProviderCredentialProfile, bindings map[string]string) bool {
