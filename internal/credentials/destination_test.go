@@ -128,7 +128,8 @@ func TestDestinationAuthorizationCheckHasNoAllocations(t *testing.T) {
 
 func TestDestinationGrantRejectsInvalidApproval(t *testing.T) {
 	identity, material, _, _ := destinationFixture(t)
-	for _, target := range []string{"", "/relative", "ftp://provider.example", "https://user:pass@provider.example/v1", "https://provider.example/v1#fragment"} {
+	withUserInfo := url.URL{Scheme: "https", Host: "provider.example", Path: "/v1", User: url.UserPassword("fixture-user", "fixture-password")}
+	for _, target := range []string{"", "/relative", "ftp://provider.example", withUserInfo.String(), "https://provider.example/v1#fragment"} {
 		_, err := NewDestinationGrant(identity, material.Profile(), []Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: http.MethodPost, URL: target}})
 		require.ErrorIs(t, err, ErrDestinationUnapproved)
 	}
