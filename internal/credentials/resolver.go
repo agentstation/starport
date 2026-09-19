@@ -254,6 +254,9 @@ func (r *Resolver) Provider(
 			return nil, &ReferenceError{Field: "backend", Message: "is not supported"}
 		}
 	}
+	if err := validateSecretVersionScope(policies); err != nil {
+		return nil, err
+	}
 	copiedPolicies := make(map[catalogs.ProviderCredentialFieldID]ReferencePolicy, len(policies))
 	for fieldID, policy := range policies {
 		copiedPolicies[fieldID] = policy

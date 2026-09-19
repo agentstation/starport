@@ -159,3 +159,23 @@ func (s *policyChainSnapshot) Resolve(ctx context.Context, profile catalogs.Prov
 	s.results[profile.ID] = capturedSource{material, err}
 	return material, err
 }
+
+func validateSecretVersionScope(policies map[catalogs.ProviderCredentialFieldID]ReferencePolicy) error {
+	type resourceKey struct {
+		backend  ReferenceBackend
+		resource string
+	}
+	versions := make(map[resourceKey]string)
+	for _, policy := range policies {
+		ref := policy.Reference
+		if !isDirectSecretBackend(ref.backend) {
+			continue
+		}
+		key := resourceKey{ref.backend, ref.resource}
+		if previous, exists := versions[key]; exists && previous != ref.version {
+			return &ReferenceError{Field: "version", Message: "one secret resource requires one version selection"}
+		}
+		versions[key] = ref.version
+	}
+	return nil
+}
