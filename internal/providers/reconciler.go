@@ -268,7 +268,7 @@ func (r *Reconciler) reconcile(
 				ProviderID: result.providerID,
 				Err:        result.err,
 			})
-			if retainPrior {
+			if retainPrior && credentials.MayRetainMaterial(result.err) {
 				if retained, exists := prior[result.providerID]; exists {
 					next[result.providerID] = retained
 				}

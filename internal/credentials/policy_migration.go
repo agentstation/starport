@@ -57,7 +57,7 @@ func (r *Resolver) resolveUncached(ctx context.Context, handle *ProviderHandle, 
 		return Material{}, false, err
 	}
 	if !materialUsable(material, r.now()) {
-		return Material{}, false, NewSourceError(SourceErrorUnavailable, "inference")
+		return Material{}, false, NewSourceError(SourceErrorInvalid, "inference")
 	}
 	return material, true, nil
 }

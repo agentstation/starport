@@ -140,7 +140,7 @@ type SourceErrorKind string
 const (
 	// SourceErrorNotConfigured means that the selected source has no material.
 	SourceErrorNotConfigured SourceErrorKind = "not_configured"
-	// SourceErrorDenied means that source access or authentication was denied.
+	// SourceErrorDenied means the source refused access or authentication.
 	SourceErrorDenied SourceErrorKind = "denied"
 	// SourceErrorInvalid means that the source reference or material is invalid.
 	SourceErrorInvalid SourceErrorKind = "invalid"
@@ -167,6 +167,12 @@ func (e *SourceError) Error() string {
 func IsSourceError(err error, kind SourceErrorKind) bool {
 	var sourceErr *SourceError
 	return errors.As(err, &sourceErr) && sourceErr.Kind == kind
+}
+
+// MayRetainMaterial permits prior usable material only after a transient refresh failure.
+// The caller must still enforce the material's expiry and revocation state.
+func MayRetainMaterial(err error) bool {
+	return IsSourceError(err, SourceErrorUnavailable) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 func classifySourceIOError(backend ReferenceBackend, err error) error {

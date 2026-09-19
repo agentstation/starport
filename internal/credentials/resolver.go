@@ -329,8 +329,8 @@ func (h *ProviderHandle) CachedMaterial(ctx context.Context) (Material, error) {
 	return material, nil
 }
 
-// Refresh forces one source resolution and atomically replaces cached
-// material only after success.
+// Refresh resolves sources again. Success replaces cached material atomically.
+// Terminal failures invalidate it. Transient failures retain usable prior material.
 func (h *ProviderHandle) Refresh(ctx context.Context) (Material, bool, error) {
 	return h.resolve(ctx, true, true, true)
 }
@@ -420,6 +420,9 @@ func (r *Resolver) resolve(
 		call.configured = configured
 		call.err = resolveErr
 		call.retryForWaiters = retryForWaiters
+		if call.err != nil && !MayRetainMaterial(call.err) {
+			delete(r.cache, handle.identity)
+		}
 		if call.err == nil {
 			if call.configured {
 				r.cache[handle.identity] = call.material
