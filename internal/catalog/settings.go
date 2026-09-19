@@ -27,6 +27,8 @@ const cascadeFallbackAfterFailures = 3
 // It mirrors the canonical Starmap settings with plain Go types.
 // The configuration package names no Starmap options. This package owns the translation.
 type Settings struct {
+	// CredentialPolicyDirectory retains private acquisition policy decisions. Empty selects an ephemeral resolver.
+	CredentialPolicyDirectory string
 	// BaselineDirectory selects the host-owned immutable embedded export.
 	BaselineDirectory string
 	// SourceCacheDirectory selects the host-owned parent for source caches and checkouts.

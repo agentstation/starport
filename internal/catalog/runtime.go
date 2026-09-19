@@ -79,8 +79,22 @@ func OpenRuntime(
 	settings Settings,
 	lookup DeploymentLookup,
 ) (*Runtime, error) {
+	if _, err := settings.starmapOptions(); err != nil {
+		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
+	}
+	if err := settings.ValidateStorageSelection(ctx); err != nil {
+		return nil, err
+	}
+	state, err := settings.credentialPolicy(ctx, store)
+	if err != nil {
+		return nil, err
+	}
+	resolver := newAcquisitionResolver(ctx, lookup, state)
+	if resolver.err != nil {
+		return nil, fmt.Errorf("open catalog credential policy: %w", resolver.err)
+	}
 	providers, err := acquisition.NewAcquirer(
-		acquisition.WithAcquirerCredentialResolver(NewAcquisitionResolver(lookup)),
+		acquisition.WithAcquirerCredentialResolver(resolver),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open Starmap acquisition: %w", err)

@@ -493,3 +493,40 @@ func TestLoaderReadsStandardOTLPEndpoint(t *testing.T) {
 		t.Errorf("TracesEndpoint = %q, want empty without OTLP environment", cfg.Telemetry.TracesEndpoint)
 	}
 }
+
+func TestCatalogLookupUsesCheckedFilesAndPreservesEmptyValues(t *testing.T) {
+	root := t.TempDir()
+	dotenv := filepath.Join(root, "operator.env")
+	if err := os.WriteFile(dotenv, []byte("STARPORT_CATALOG_OPENAI_API_KEY=file-key\nSELECTED_CATALOG_KEY=file-reference-key\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := NewLoader().WithPaths(PathsForConfigDir(root)).WithEnvironment(map[string]string{"STARPORT_CATALOG_OPENAI_API_KEY": ""}).WithEnvFiles(dotenv).Load(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, present := cfg.LookupDeployment("STARPORT_CATALOG_OPENAI_API_KEY"); !present || value != "" {
+		t.Fatal("empty process selection did not override checked file")
+	}
+	if value, present := cfg.LookupDeployment("SELECTED_CATALOG_KEY"); !present || value != "file-reference-key" {
+		t.Fatal("catalog lookup lost checked file values")
+	}
+	if len(cfg.Providers) != 0 {
+		t.Fatal("loading catalog configuration resolved inference material")
+	}
+	if got := cfg.CatalogCredentialPolicyDirectory(); got != filepath.Join(root, "state", "credentials", "catalog", "default") {
+		t.Fatalf("unexpected catalog policy path: %s", got)
+	}
+	manifest, err := cfg.FileManifest("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range manifest.Files {
+		if file.ID == "credential-policy" {
+			if file.Location.Path != cfg.CatalogCredentialPolicyDirectory() || file.Policy.Access != "owner-only" || file.Location.Origin != cfg.EffectivePaths().Origins["state"].Origin {
+				t.Fatal("credential policy diagnostic disagrees with runtime")
+			}
+			return
+		}
+	}
+	t.Fatal("credential policy missing from file inventory")
+}

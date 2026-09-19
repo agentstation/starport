@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -344,7 +343,7 @@ func (b *runtimeBuilder) openConcepts() error {
 		context.Background(),
 		b.application.store,
 		catalogSettings(b.config),
-		runtimecatalog.DeploymentLookup(os.LookupEnv),
+		runtimecatalog.DeploymentLookup(b.config.LookupDeployment),
 	)
 	if err != nil {
 		return fmt.Errorf("open catalog: %w", err)
@@ -1306,11 +1305,12 @@ func catalogSettings(deployment *config.Config) runtimecatalog.Settings {
 	paths := deployment.EffectivePaths()
 	baseline := paths.BaselineDir
 	return runtimecatalog.Settings{
-		BaselineDirectory:    baseline,
-		SourceCacheDirectory: paths.CacheDir,
-		InstanceID:           paths.InstanceID,
-		DeploymentID:         paths.DeploymentID,
-		Values:               cfg.CatalogValues(),
+		BaselineDirectory:         baseline,
+		CredentialPolicyDirectory: deployment.CatalogCredentialPolicyDirectory(),
+		SourceCacheDirectory:      paths.CacheDir,
+		InstanceID:                paths.InstanceID,
+		DeploymentID:              paths.DeploymentID,
+		Values:                    cfg.CatalogValues(),
 		ListenAddress: net.JoinHostPort(
 			deployment.Server.Host, strconv.Itoa(deployment.Server.Port),
 		),

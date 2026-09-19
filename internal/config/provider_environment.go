@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -428,4 +429,13 @@ func cloneCredentialReferences(
 
 func providerConfigurationPresent(provider ProviderConfig) bool {
 	return provider.Enabled || provider.BaseURL != "" || len(provider.CredentialReferences) > 0
+}
+
+// LookupDeployment reads the same checked configuration sources as inference resolution.
+// It does not read account credentials or resolved inference material.
+func (c *Config) LookupDeployment(name string) (string, bool) {
+	if c != nil && c.providerEnvironment != nil {
+		return c.providerEnvironment.Lookup(name)
+	}
+	return os.LookupEnv(name)
 }

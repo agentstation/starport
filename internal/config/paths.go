@@ -212,3 +212,12 @@ func (c *Config) EffectivePaths() Paths {
 	paths.Origins = maps.Clone(paths.Origins)
 	return paths
 }
+
+// CatalogCredentialPolicyDirectory selects persistent acquisition policy history.
+// Development sessions use the current policy without persistent history.
+func (c *Config) CatalogCredentialPolicyDirectory() string {
+	if c == nil || c.Catalog.StateDirectoryIsScratch() || c.paths.StateDir == "" {
+		return ""
+	}
+	return filepath.Join(c.paths.StateDir, "credentials", "catalog", c.paths.InstanceID)
+}
