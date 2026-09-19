@@ -12,6 +12,7 @@ import (
 	"github.com/agentstation/starport/internal/providers/connectors"
 	"github.com/agentstation/starport/internal/providers/keyring"
 	"github.com/agentstation/starport/internal/registry"
+	"github.com/agentstation/starport/internal/routing"
 	"github.com/stretchr/testify/require"
 )
 
@@ -156,4 +157,31 @@ func TestAliasRemovalKeepsAdmittedRequestAndRejectsNewAttempts(t *testing.T) {
 	}
 	require.Equal(t, int64(1), oldCalls.Load())
 	require.Equal(t, int64(1), newCalls.Load())
+}
+
+func TestMissingCatalogNamesPreserveFallbackOverridesAndUnavailable(t *testing.T) {
+	plane := embeddingTestCatalogPlane(t)
+	runtime := &embeddingTestRuntime{snapshot: plane.Current(), connector: &mockConnector{name: "acme"}, operator: embeddingTestMaterial("operator")}
+	modelRouter := New(&embeddingTestRegistry{runtime: runtime}, WithCatalog(plane)).(*modelRouter)
+	for _, tc := range []struct {
+		name    string
+		request routing.Request
+	}{
+		{"explicit fallback", routing.Request{Models: []string{"author/missing", "author/embed"}}},
+		{"automatic fallback", routing.Request{Models: []string{"author/missing", AutoModelID}}},
+		{"account override", routing.Request{Models: []string{"account/default"}, Account: routing.AccountPolicy{ModelOverrides: map[string]string{"account/default": "author/embed"}}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan, err := modelRouter.planOperation(t.Context(), tc.request, routing.OperationEmbeddings, runtime, nil)
+			require.NoError(t, err)
+			require.Equal(t, "opaque/embed@002", plan.Attempts()[0].Route.ProviderModelID)
+		})
+	}
+	_, err := modelRouter.planOperation(t.Context(), routing.Request{Models: []string{"author/missing"}}, routing.OperationEmbeddings, runtime, nil)
+	require.ErrorIs(t, err, runtimecatalog.ErrModelNotCatalogued)
+	require.NoError(t, plane.RemoveAdapter("acme"))
+	runtime.snapshot = plane.Current()
+	_, err = modelRouter.planOperation(t.Context(), routing.Request{Models: []string{"author/embed"}}, routing.OperationEmbeddings, runtime, nil)
+	require.ErrorIs(t, err, routing.ErrNoCandidate)
+	require.NotErrorIs(t, err, runtimecatalog.ErrModelNotCatalogued)
 }

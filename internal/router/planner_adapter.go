@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -68,7 +69,23 @@ func (r *modelRouter) planOperation(
 		AvailabilityRevision: snapshot.AvailabilityRevision(),
 		Candidates:           r.toPlanningCandidates(snapshot, runtime),
 	}
-	return r.routePlanner.Plan(request, input)
+	plan, err := r.routePlanner.Plan(request, input)
+	if errors.Is(err, routing.ErrNoCandidate) && !request.AllowAnyModelFallback && len(request.Models) > 0 {
+		found := false
+		for _, name := range request.Models {
+			if override := request.Account.ModelOverrides[name]; override != "" {
+				name = override
+			}
+			if snapshot.Names(name) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, runtimecatalog.ErrModelNotCatalogued
+		}
+	}
+	return plan, err
 }
 
 func resolveModelAliases(snapshot *runtimecatalog.RoutableSnapshot, names []string) ([]string, error) {

@@ -381,6 +381,9 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 	// Route the request with fallback
 	result, err := p.router.RouteWithFallback(ctx, routingReq)
 	if err != nil {
+		if errors.Is(err, runtimecatalog.ErrModelNotCatalogued) {
+			return nil, err
+		}
 		if refusal := modalityRefusal(err); refusal != nil {
 			return nil, refusal
 		}

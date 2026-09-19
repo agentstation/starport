@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json/v2"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/agentstation/starmap"
@@ -132,5 +134,36 @@ func TestHTTPAliasRemovalWithSerializedDiscoveryCache(t *testing.T) {
 		response := serveAuthorized(s, http.MethodGet, prefix+"/models/author%2Fcurrent+variant", secret, t.Context())
 		require.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
 		require.NotContains(t, response.Body.String(), "opaque/model@002")
+	}
+}
+
+func TestMissingModelReturnsNotFoundInBothInferenceProtocols(t *testing.T) {
+	empty, err := catalogs.NewEmpty().Build()
+	require.NoError(t, err)
+	plane, err := runtimecatalog.Open(aliasHTTPSource{state: starmap.CatalogState{Catalog: empty, GenerationID: "removed-model", Sequence: 2}})
+	require.NoError(t, err)
+	reg, err := registry.Open(plane, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, reg.Close()) })
+	s := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, func(config *testServerConfig) { config.runtimeRegistry = reg })
+	secret := createServerAPIKey(t, s, "inference-reader", []string{"chat:write"})
+	for _, prefix := range []string{"/v1", "/api/v1"} {
+		for _, tc := range []struct{ name, route, body string }{
+			{"chat", "/chat/completions", `{"model":"author/removed","messages":[{"role":"user","content":"hello"}]}`},
+			{"stream", "/chat/completions", `{"model":"author/removed","messages":[{"role":"user","content":"hello"}],"stream":true}`},
+			{"embeddings", "/embeddings", `{"model":"author/removed","input":"hello"}`},
+		} {
+			t.Run(prefix+"/"+tc.name, func(t *testing.T) {
+				request := httptest.NewRequest(http.MethodPost, prefix+tc.route, strings.NewReader(tc.body)).WithContext(t.Context())
+				request.Header.Set("Authorization", "Bearer "+secret)
+				request.Header.Set("Content-Type", "application/json")
+				response := httptest.NewRecorder()
+				s.Router().ServeHTTP(response, request)
+				require.Equal(t, http.StatusNotFound, response.Code, response.Body.String())
+				require.Contains(t, response.Header().Get("Content-Type"), "application/json")
+				require.Contains(t, response.Body.String(), "not_found_error")
+				require.NotContains(t, response.Body.String(), "data:")
+			})
+		}
 	}
 }
