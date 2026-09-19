@@ -22,7 +22,7 @@ type Candidate struct {
 	// State is the effective generation the connected runtime published.
 	State starmap.CatalogState
 
-	// Epoch is the lease epoch the candidate was produced under. Zero means
+	// Epoch identifies the lease epoch active when the runtime produced the candidate. Zero means
 	// the deployment shares no lease, and every candidate then passes the
 	// fence.
 	Epoch uint64
@@ -32,7 +32,7 @@ type Candidate struct {
 //
 // The transaction has three parts, in this order. The lease epoch fences the
 // write, so a run that lost the lease writes nothing. The candidate must move
-// the head forward, so a stale or contradictory generation is refused. The
+// the head forward. Acceptance refuses stale or contradictory generations. The
 // write itself is a compare-and-swap against the head the caller read, so two
 // instances that reach this point together produce exactly one advance.
 //
@@ -94,7 +94,7 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 			r.validation.accept(candidate)
 			return nil
 		}
-		if err := validateAcceptedOrder(current.Manifest, generation.Manifest); err != nil {
+		if err := validateAcceptedOrder(current.Manifest, generation.Manifest); err != nil && !r.approvesAuthorityTransition(current.Manifest, generation.Manifest) {
 			return err
 		}
 	case notFound(currentErr):
@@ -109,7 +109,7 @@ func (r *Runtime) Accept(ctx context.Context, candidate Candidate) error {
 }
 
 // validateAcceptedOrder uses authority sequence or ordinary publication time.
-// Changing authority requires an explicit transition outside candidate acceptance.
+// A configured authority transition needs separate runtime approval.
 func validateAcceptedOrder(current, next catalogs.GenerationManifest) error {
 	zero := catalogs.CatalogAuthorityHead{}
 	if current.AuthorityHead != zero || next.AuthorityHead != zero {
@@ -187,3 +187,19 @@ var ErrStaleLeaseEpoch = errors.New("catalog candidate carries a stale lease epo
 // Is reports the sentinel, so a caller matches the refusal without reading the
 // epochs.
 func (e *staleLeaseEpochError) Is(target error) bool { return target == ErrStaleLeaseEpoch }
+
+// approvesAuthorityTransition binds a configured transition to its approved source state.
+func (r *Runtime) approvesAuthorityTransition(current, next catalogs.GenerationManifest) bool {
+	if r.runtime == nil || !r.runtime.Status().AuthorityRequired {
+		return false
+	}
+	before, after := current.AuthorityHead, next.AuthorityHead
+	if before.AuthorityID == after.AuthorityID && before.PolicyID == after.PolicyID {
+		return false
+	}
+	selected := r.runtime.State()
+	if selected.GenerationID != next.GenerationID || selected.PayloadChecksum != next.Payload.Checksum || selected.AuthorityHead != after {
+		return false
+	}
+	return r.runtime.AllowsCatalogAttempt(after)
+}
