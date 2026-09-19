@@ -248,6 +248,10 @@ When the grants name several accounts, send `X-Starport-Account-ID` with each AP
 Starport returns `409 account_selection_required` when the request supplies no selection.
 An ungranted account returns 403. No grant permits access to the deployment's default account implicitly.
 
+For cross-origin clients, set `STARPORT_SECURITY_ENABLE_CORS=true` and name the console origin in `STARPORT_SECURITY_ALLOWED_ORIGINS`.
+When CORS is active, the server permits the account selection header.
+Session credentials require an explicit origin. The wildcard origin does not permit session credentials.
+
 Identity sessions receive account scopes, without deployment-admin access.
 Removing a user, grant, or team membership invalidates affected authorization.
 Each queued batch line checks current policy before execution. Its account and caller identity remain fixed.

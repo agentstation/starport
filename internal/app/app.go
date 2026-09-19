@@ -1652,7 +1652,7 @@ func serverConfig(cfg *config.Config, auth authRuntime) *server.Config {
 		CORS: server.CORSConfig{
 			AllowedOrigins:   allowedOrigins,
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-API-Key", "X-Starport-Account-ID"},
 			AllowCredentials: allowCredentials, MaxAge: 300,
 		},
 	}

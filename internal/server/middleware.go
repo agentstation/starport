@@ -155,6 +155,9 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 
 // CORS returns a configured CORS handler
 func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
+	if len(cfg.AllowedOrigins) == 0 {
+		return func(next http.Handler) http.Handler { return next }
+	}
 	return cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   cfg.AllowedMethods,
