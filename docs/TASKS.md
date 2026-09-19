@@ -16,10 +16,17 @@ The canonical plan holds the current task status and the only status ledger.
 PR #366 merged the first documentation and qualification changes.
 All six native archive jobs passed. The plan records their evidence and the remaining production qualification work.
 
-The ledger contains 38 tasks, 50 primary cases, and 324 required subcases.
+The ledger contains 40 tasks, 50 primary cases, and 324 required subcases.
 Eight additional local checks supplement the candidate gate without qualifying incomplete publication cases.
 The activation proof is `proof/starport-production-catalog/activation-2026-09-05/` beside the canonical plan.
 Historical storage, latency, and audit evidence remains unchanged.
+
+CSP6.1 now standardizes both products on Go 1.27.1. It preserves behavioral and platform checks while removing older compiler coverage.
+The canonical plan records current qualification and merge status.
+
+CSP6.2 repairs recognition billing and protocol facts across both projects.
+Its local implementation preserves actual units, measured usage, and charges after request failures.
+Paired qualification, review, module publication, and merges remain open.
 
 ### Recently Completed
 

@@ -125,10 +125,12 @@ func RecognitionResponseToInference(response *RecognitionResponse) (inference.Re
 	for index, page := range response.Pages {
 		pages[index] = inference.RecognizedPage{Number: page.Number, Text: page.Text}
 	}
-	return inference.RecognitionResponse{
-		Pages: pages,
-		Usage: mediaUsageToInference(response.Usage, 0),
-	}, nil
+	var measured *inference.Usage
+	if response.Usage != nil {
+		converted := mediaUsageToInference(response.Usage, 0)
+		measured = &converted
+	}
+	return inference.RecognitionResponse{Pages: pages, Usage: measured}, nil
 }
 
 func uploadFromInference(upload inference.UploadedFile) UploadedFile {
@@ -152,6 +154,11 @@ func mediaUsageToInference(usage *MediaUsage, generatedImages int) inference.Usa
 	converted.InputTokens = usage.InputTokens
 	converted.OutputTokens = usage.OutputTokens
 	converted.TotalTokens = usage.TotalTokens
+	converted.ReasoningTokens = usage.ReasoningTokens
+	converted.CacheReadTokens = usage.CacheReadTokens
+	converted.CacheWriteTokens = usage.CacheWriteTokens
+	converted.AudioInputTokens = usage.AudioInputTokens
+	converted.AudioOutputTokens = usage.AudioOutputTokens
 	if converted.TotalTokens == 0 {
 		converted.TotalTokens = usage.InputTokens + usage.OutputTokens
 	}

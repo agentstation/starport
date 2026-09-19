@@ -25,6 +25,9 @@ concurrency:
   group: native-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  GOTOOLCHAIN: go1.27.1
+
 jobs:
   native-archive:
     name: Native ${{ matrix.os }} ${{ matrix.arch }}
@@ -58,7 +61,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version: "1.27.1"
       - name: Set up Node for the candidate console
         if: github.event_name == 'pull_request'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

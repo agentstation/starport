@@ -216,6 +216,7 @@ type ResponseJSONSchema struct {
 
 // ChatResponse represents a chat completion response
 type ChatResponse struct {
+	usageReported     bool
 	ID                string   `json:"id"`
 	Object            string   `json:"object"`
 	Created           int64    `json:"created"`

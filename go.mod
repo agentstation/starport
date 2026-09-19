@@ -1,8 +1,6 @@
 module github.com/agentstation/starport
 
-go 1.26.0
-
-toolchain go1.26.5
+go 1.27.1
 
 require (
 	cloud.google.com/go/auth v0.23.2
@@ -10,7 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.1
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.0
-	github.com/agentstation/starmap v0.16.6-0.20260916084858-c754d1c9ef8e
+	github.com/agentstation/starmap v0.16.6-0.20260917204518-b09931c66d7d
 	github.com/agentstation/uuidkey v1.2.0
 	github.com/aws/aws-sdk-go-v2 v1.47.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.4

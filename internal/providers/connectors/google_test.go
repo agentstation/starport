@@ -144,7 +144,7 @@ func TestGoogleAPIKeyUsesInferenceHeader(t *testing.T) {
 					Index:        0,
 				},
 			},
-			UsageMetadata: geminiUsageMetadata{
+			UsageMetadata: &geminiUsageMetadata{
 				PromptTokenCount:     10,
 				CandidatesTokenCount: 20,
 				TotalTokenCount:      30,
@@ -214,7 +214,7 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 					Index:        0,
 				},
 			},
-			UsageMetadata: geminiUsageMetadata{
+			UsageMetadata: &geminiUsageMetadata{
 				PromptTokenCount:     10,
 				CandidatesTokenCount: 20,
 				TotalTokenCount:      30,

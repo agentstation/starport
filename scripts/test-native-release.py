@@ -27,6 +27,25 @@ class NativeReleaseTests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
 
+    def test_startup_failure_keeps_the_cause_without_generated_credentials(self):
+        home, temporary = self.root / 'home', self.root / 'temporary'
+        home.mkdir()
+        temporary.mkdir()
+        environment = verifier.isolated_environment(home, temporary, 3000)
+        script = "print('Gateway API key (shown once): STARPORT_fixture_secret'); print('storage failed for STARPORT_fixture_secret http://127.0.0.1/launch?lt=private-ticket'); raise SystemExit(23)"
+        popen = verifier.subprocess.Popen
+        def start(_arguments, **options):
+            return popen([sys.executable, '-c', script], **options)
+        report = {}
+        with patch.object(verifier.subprocess, 'Popen', side_effect=start):
+            with self.assertRaisesRegex(RuntimeError, 'storage failed') as raised:
+                verifier.verify_development(Path(sys.executable), environment, home, 3000, report)
+        self.assertNotIn('STARPORT_fixture_secret', str(raised.exception))
+        self.assertNotIn('STARPORT_fixture_secret', json.dumps(report))
+        self.assertNotIn('private-ticket', str(raised.exception))
+        self.assertNotIn('private-ticket', json.dumps(report))
+        self.assertEqual(report['shutdown_exit_code'], 23)
+
     def test_native_targets(self):
         for system, machine, expected in [('Windows', 'AMD64', ('windows', 'x86_64')),
                                           ('Windows', 'ARM64', ('windows', 'arm64')),

@@ -1,6 +1,6 @@
 module github.com/agentstation/starport/scripts/smoke_openrouter_go
 
-go 1.25.10
+go 1.27.1
 
 require github.com/OpenRouterTeam/go-sdk v0.7.32
 

@@ -217,6 +217,14 @@ func openRouterOffering(offering proxy.ModelOfferingInfo) openrouter.ModelOfferi
 		MaxDocuments:        offering.MaxDocuments,
 		Operations:          offering.Operations,
 	}
+	if offering.Billing != nil && offering.Billing.Recognition != nil {
+		source := offering.Billing.Recognition
+		recognition := &openrouter.RecognitionBilling{Basis: source.Basis}
+		if estimate := source.InputPageEstimate; estimate != nil {
+			recognition.InputPageEstimate = &openrouter.RecognitionInputPageEstimate{Tokens: estimate.Tokens, Source: estimate.Source, Assumptions: estimate.Assumptions}
+		}
+		converted.Billing = &openrouter.OfferingBilling{Recognition: recognition}
+	}
 	if offering.Pricing != nil {
 		converted.Pricing = &openrouter.OfferingPricing{
 			Prompt:      offering.Pricing.Prompt,

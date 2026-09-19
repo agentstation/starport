@@ -229,17 +229,13 @@ function price(value: string | undefined): string {
   return formatPricePerM(value) ?? "—";
 }
 
-// unitPrice names the price of one whole unit and the unit it buys, because
-// the number alone reads as a token price beside four of them.
-//
-// A rerank offering that bills search units publishes no token price at all,
-// and a document reader publishes a page price beside them. Either one shows
-// four dashes across the token columns, so an offering with a real published
-// price would read as one nobody priced.
+// unitPrice identifies search units, pages, or token billing for one offering.
 function unitPrice(offering: ModelOffering): string {
   const searchUnit = formatUnitPrice(offering.pricing?.search_unit);
   if (searchUnit !== null) return `${searchUnit} / search`;
-  const page = formatUnitPrice(offering.pricing?.page_input);
+  if (offering.billing?.recognition?.basis === "tokens") return "Token billing";
+  const page = offering.billing?.recognition?.basis === "pages"
+    ? formatUnitPrice(offering.pricing?.page_input) : null;
   if (page !== null) return `${page} / page`;
   return "—";
 }

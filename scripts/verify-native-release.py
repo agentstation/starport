@@ -160,12 +160,18 @@ def verify_development(binary, environment, home, port, report):
     reader = threading.Thread(target=collect, daemon=True)
     reader.start()
     key = None
+    failed = False
     base = f'http://127.0.0.1:{port}'
     try:
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                raise RuntimeError('The released development server exited before readiness.')
+                reader.join(timeout=2)
+                detail = next((line.strip() for line in reversed(lines) if line.strip()), 'No startup diagnostic.')
+                detail = re.sub(r'\b(?:STARPORT_|starport_local_)[A-Za-z0-9._-]+', '[redacted]', detail)
+                detail = re.sub(r'https?://\S+', '[redacted URL]', detail)
+                report['startup_error'] = detail[-4096:]
+                raise RuntimeError(f'The released development server exited before readiness (exit {process.returncode}): {report["startup_error"]}')
             for line in list(lines):
                 if line.startswith('Gateway API key (shown once): '):
                     key = line.split(': ', 1)[1].strip()
@@ -194,6 +200,9 @@ def verify_development(binary, environment, home, port, report):
             report['unauthenticated_admin_status'] = error.code
         else:
             raise ValueError('An unauthenticated admin request was accepted.')
+    except Exception:
+        failed = True
+        raise
     finally:
         if process.poll() is None:
             process.send_signal(signal.CTRL_BREAK_EVENT if os.name == 'nt' else signal.SIGINT)
@@ -207,7 +216,7 @@ def verify_development(binary, environment, home, port, report):
         process.stdout.close()
         # Raw startup output contains a generated gateway key and is never retained.
         report['shutdown_exit_code'] = process.returncode
-        if process.returncode != 0 or report.get('forced_shutdown'):
+        if not failed and (process.returncode != 0 or report.get('forced_shutdown')):
             raise RuntimeError('The native server did not shut down cleanly.')
 
 

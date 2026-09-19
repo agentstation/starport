@@ -6,8 +6,8 @@
 #     engines this gateway actually runs, and refuses every other name,
 #   - one extraction seam reads a text layer in process and reaches no
 #     provider, so a document that carries text costs nothing,
-#   - Starmap owns the recognition operation, its offerings, and its per-page
-#     price, and Starport reads all three from one catalog snapshot,
+#   - Starmap owns the recognition operation, its offerings, billing units,
+#     and prices, and Starport reads all three from one catalog snapshot,
 #   - a recognized page is cached once, billed once, and reported once, and a
 #     plugin never moves the chat route.
 #
@@ -95,12 +95,11 @@ extraction_is_local() {
   ! grep -Rq --include='*.go' -- 'internal/providers' internal/document
 }
 
-# recognition_priced_per_page holds PLG-V07. An offering that names the
-# operation and carries no page price would bill a caller nothing for real
-# provider work, so the projection has to carry the price beside the operation.
-recognition_priced_per_page() {
-  all_present PageInput 'documents-recognition' -- internal/catalog || return 1
-  tests_all_present PageInput -- internal/catalog
+# PLG-V07 holds both billing bases and the rates required by each basis.
+recognition_billing_units() {
+  all_present RecognitionBillingPages RecognitionBillingTokens -- internal/catalog || return 1
+  tests_all_present TestRecognitionBillingUsesDeclaredUnits -- internal/catalog || return 1
+  tests_all_present TestRecognitionBillingProjectionPreservesUnitsAndEstimate -- internal/catalog/view
 }
 
 # extraction_cached_once holds PLG-V12. Three parts make the key, and dropping
@@ -188,11 +187,11 @@ check PLG-V05 "the extraction package reaches no provider and the graph test nam
 check PLG-V06 "the catalog projects the recognition operation and the named set holds it" \
   all_present 'documents-recognition' -- internal/catalog internal/routing
 
-check PLG-V07 "every recognition offering carries a per-page price" \
-  recognition_priced_per_page
+check PLG-V07 "recognition uses declared page or token billing units" \
+  recognition_billing_units
 
-check PLG-V08 "a recognition offering with no page price fails projection" \
-  tests_all_present ErrMissingPagePrice -- internal/catalog
+check PLG-V08 "recognition with unknown required rates fails projection" \
+  tests_all_present ErrRecognitionUnpriced -- internal/catalog
 
 check PLG-V09 "a scanned document reaches a recognition offering before the chat model" \
   tests_all_present OperationDocumentsRecognition -- internal/routing internal/proxy

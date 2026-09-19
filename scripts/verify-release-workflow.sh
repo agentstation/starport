@@ -29,6 +29,20 @@ if [ ! -f "$workflow" ]; then
 	exit 1
 fi
 
+grep -Fxq 'go 1.27.1' "$repository_root/go.mod"
+grep -Fxq 'export GOTOOLCHAIN := go1.27.1' "$repository_root/Makefile"
+require_goreleaser_text 'GOTOOLCHAIN=go1\.27\.1$' 'the exact Go toolchain'
+for source in "$repository_root"/.github/workflows/*; do
+	if grep -q 'actions/setup-go@' "$source"; then
+		setups="$(grep -c 'actions/setup-go@' "$source")"
+		pins="$(grep -Ec 'go-version: "1\.27\.1"$' "$source" || true)"
+		if [ "$setups" != "$pins" ]; then
+			printf 'workflow Go pins do not match Go 1.27.1: %s\n' "$source" >&2
+			exit 1
+		fi
+	fi
+done
+
 require_text '^permissions:$' 'a default permission boundary'
 require_text '^[[:space:]]+contents: read$' 'read-only default contents permission'
 if [ "$(grep -Ec '^[[:space:]]+artifact-metadata: write$' "$workflow")" -ne 2 ]; then

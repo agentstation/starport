@@ -31,15 +31,8 @@ var (
 	ErrCatalogGenerationRequired = errors.New("catalog state must contain a generation ID")
 	// ErrCatalogAuthorityMismatch reports authority metadata from a different publication.
 	ErrCatalogAuthorityMismatch = errors.New("catalog authority head does not match the catalog generation")
-	// ErrMissingPagePrice reports an offering that serves document recognition
-	// and states no price per page.
-	//
-	// Recognition is the one operation whose unit is neither a token nor a
-	// request, so a token price says nothing about what a page costs. An
-	// offering the gateway cannot price is one it would serve for free against
-	// real provider time, and a spend limit set on that account would never
-	// fire. Planning drops the operation instead of guessing a price.
-	ErrMissingPagePrice = errors.New("offering serves document recognition with no page price")
+	// ErrRecognitionUnpriced reports missing billing units or usable rates.
+	ErrRecognitionUnpriced = errors.New("offering serves document recognition without known billing units and rates")
 	// ErrRerankUnpriced reports an offering that serves reranking and states
 	// no price in the unit it bills.
 	//
@@ -465,35 +458,17 @@ func compatibleOfferingService(
 	return operations, endpoints, unpriced
 }
 
-// billableOperation reports whether the catalog states the price this operation
-// is charged in.
-//
-// Two operations are checked, and the rest are skipped on purpose rather than
-// by omission. Every other operation this build plans is billed in tokens or in
-// requests, and a token price is already required of any offering the catalog
-// publishes. Recognition is billed by the page and reranking by a unit the
-// offering itself names, and neither is a unit a token price converts into.
+// billableOperation verifies prices for operation-specific billing units.
+// Recognition and reranking declare their own basis in the catalog.
 func billableOperation(offering catalogs.ProviderOffering, operation catalogs.ProviderOperation) error {
 	switch operation {
 	case catalogs.ProviderOperationDocumentsRecognition:
-		return billablePages(offering)
+		return billableRecognition(offering)
 	case catalogs.ProviderOperationRerank:
 		return billableRerank(offering)
 	default:
 		return nil
 	}
-}
-
-// billablePages reports whether the offering states what one page costs.
-func billablePages(offering catalogs.ProviderOffering) error {
-	if offering.Pricing == nil || offering.Pricing.Operations == nil {
-		return fmt.Errorf("%w: %s/%s", ErrMissingPagePrice, offering.ProviderID, offering.ProviderModelID)
-	}
-	page := offering.Pricing.Operations.PageInput
-	if page == nil || *page < 0 {
-		return fmt.Errorf("%w: %s/%s", ErrMissingPagePrice, offering.ProviderID, offering.ProviderModelID)
-	}
-	return nil
 }
 
 // billableRerank reports whether the offering states a price in the unit it

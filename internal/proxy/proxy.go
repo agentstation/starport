@@ -48,8 +48,8 @@ type Config struct {
 	DocumentExtractor *document.Extractor
 
 	// DocumentCache holds one document's text for reuse inside a window
-	// (optional). A deployment without one reads every attachment on every
-	// turn, which is correct and pays the page price each time.
+	// (optional). Without it, each turn reads every attachment again.
+	// Fresh provider recognition incurs the provider's published charges.
 	DocumentCache *document.Cache
 }
 
@@ -448,9 +448,7 @@ func (p *proxy) ProcessChatCompletionStream(ctx context.Context, req *ChatComple
 	keyConfig := transformAPIKeyConfig(req.APIKeyConfig)
 	metadata := p.buildRequestMetadata(req)
 
-	// A stream reports no extraction hit. The saving is real and the stream
-	// has nowhere to state it: the first event a caller reads is a token of
-	// the answer, and by then the document is long read.
+	// Request capture retains parser accounting through stream completion or failure.
 	parsed, _, err := p.parseDocuments(ctx, req, keyConfig)
 	if err != nil {
 		return nil, err
