@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/agentstation/starport/internal/authorization/revision"
 	"github.com/agentstation/starport/internal/sqlstore"
 )
 
@@ -90,16 +91,21 @@ type Repositories struct {
 
 // Open returns sqlstore-backed identity repositories. The caller has
 // already migrated the store; this constructor only refuses a nil one.
-func Open(db *sqlstore.DB) (Repositories, error) {
+func Open(db *sqlstore.DB, options ...Option) (Repositories, error) {
 	if db == nil {
 		return Repositories{}, ErrRepositoryRequired
 	}
+	settings := repositoryOptions{}
+	for _, option := range options {
+		option(&settings)
+	}
+	authority := revision.NewSQL(db, settings.begin)
 	now := time.Now
 	return Repositories{
-		Users:         &userRepository{db: db, now: now},
-		Teams:         &teamRepository{db: db, now: now},
-		Memberships:   &membershipRepository{db: db, now: now},
-		AccountGrants: &accountGrantRepository{db: db, now: now},
+		Users:         &userRepository{db: db, now: now, authority: authority},
+		Teams:         &teamRepository{db: db, now: now, authority: authority},
+		Memberships:   &membershipRepository{db: db, now: now, authority: authority},
+		AccountGrants: &accountGrantRepository{db: db, now: now, authority: authority},
 	}, nil
 }
 
@@ -113,8 +119,9 @@ type userRecord struct {
 }
 
 type userRepository struct {
-	db  *sqlstore.DB
-	now func() time.Time
+	authority *revision.SQL
+	db        *sqlstore.DB
+	now       func() time.Time
 }
 
 func (r *userRepository) Create(ctx context.Context, value User) (UserRecord, error) {
@@ -131,9 +138,10 @@ func (r *userRepository) Create(ctx context.Context, value User) (UserRecord, er
 	}
 	// #nosec G701 -- The SQL is a compile-time constant; the OAuth-derived
 	// values only ever ride placeholders.
-	_, err = r.db.ExecContext(ctx,
-		r.db.Bind(`INSERT INTO users (id, subject, revision, record) VALUES (?, ?, ?, ?)`),
-		stored.User.ID, stored.User.Subject, stored.Revision, string(data))
+	err = r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, r.db.Bind(`INSERT INTO users (id, subject, revision, record) VALUES (?, ?, ?, ?)`), stored.User.ID, stored.User.Subject, stored.Revision, string(data))
+		return err
+	})
 	if err != nil {
 		// The insert has two unique constraints — the id and the subject —
 		// and violating either is the duplicate-create conflict, whatever
@@ -221,14 +229,15 @@ func (r *userRepository) Update(ctx context.Context, value User, expectedRevisio
 	// The revision guard in the WHERE clause is the compare-and-swap.
 	// #nosec G701 -- The SQL is a compile-time constant; the OAuth-derived
 	// values only ever ride placeholders.
-	result, err := r.db.ExecContext(ctx,
-		r.db.Bind(`UPDATE users SET revision = ?, record = ? WHERE id = ? AND revision = ?`),
-		updated.Revision, string(data), updated.User.ID, expectedRevision)
+	err = r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, r.db.Bind(`UPDATE users SET revision = ?, record = ? WHERE id = ? AND revision = ?`), updated.Revision, string(data), updated.User.ID, expectedRevision)
+		if err != nil {
+			return err
+		}
+		return oneRowMoved(result, ErrUserConflict)
+	})
 	if err != nil {
 		return UserRecord{}, fmt.Errorf("update user: %w", err)
-	}
-	if err := oneRowMoved(result, ErrUserConflict); err != nil {
-		return UserRecord{}, err
 	}
 	return UserRecord{Revision: updated.Revision, User: updated.User}, nil
 }
@@ -241,19 +250,7 @@ func (r *userRepository) Delete(ctx context.Context, id string, expectedRevision
 	if expectedRevision != 0 && current.Revision != expectedRevision {
 		return ErrUserConflict
 	}
-	// Grants are access control, so they must never outlive the user they
-	// name: a dangling grant would wait for whatever next claims the id.
-	if _, err := r.db.ExecContext(ctx,
-		r.db.Bind(`DELETE FROM account_grants WHERE user_id = ?`), id); err != nil {
-		return fmt.Errorf("delete user account grants: %w", err)
-	}
-	result, err := r.db.ExecContext(ctx,
-		r.db.Bind(`DELETE FROM users WHERE id = ? AND revision = ?`),
-		id, current.Revision)
-	if err != nil {
-		return fmt.Errorf("delete user: %w", err)
-	}
-	return oneRowMoved(result, ErrUserConflict)
+	return deletePrincipal(ctx, r.db, r.authority, userPrincipal, id, current.Revision)
 }
 
 func (r *userRepository) taken(ctx context.Context, id, subject string) (bool, error) {
@@ -294,8 +291,9 @@ type teamRecord struct {
 }
 
 type teamRepository struct {
-	db  *sqlstore.DB
-	now func() time.Time
+	authority *revision.SQL
+	db        *sqlstore.DB
+	now       func() time.Time
 }
 
 func (r *teamRepository) Create(ctx context.Context, value Team) (TeamRecord, error) {
@@ -310,9 +308,10 @@ func (r *teamRepository) Create(ctx context.Context, value Team) (TeamRecord, er
 	if err != nil {
 		return TeamRecord{}, fmt.Errorf("encode team record: %w", err)
 	}
-	_, err = r.db.ExecContext(ctx,
-		r.db.Bind(`INSERT INTO teams (id, revision, record) VALUES (?, ?, ?)`),
-		stored.Team.ID, stored.Revision, string(data))
+	err = r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, r.db.Bind(`INSERT INTO teams (id, revision, record) VALUES (?, ?, ?)`), stored.Team.ID, stored.Revision, string(data))
+		return err
+	})
 	if err != nil {
 		if exists, existsErr := r.exists(ctx, stored.Team.ID); existsErr == nil && exists {
 			return TeamRecord{}, ErrTeamConflict
@@ -377,14 +376,15 @@ func (r *teamRepository) Update(ctx context.Context, value Team, expectedRevisio
 	if err != nil {
 		return TeamRecord{}, fmt.Errorf("encode team update: %w", err)
 	}
-	result, err := r.db.ExecContext(ctx,
-		r.db.Bind(`UPDATE teams SET revision = ?, record = ? WHERE id = ? AND revision = ?`),
-		updated.Revision, string(data), updated.Team.ID, expectedRevision)
+	err = r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, r.db.Bind(`UPDATE teams SET revision = ?, record = ? WHERE id = ? AND revision = ?`), updated.Revision, string(data), updated.Team.ID, expectedRevision)
+		if err != nil {
+			return err
+		}
+		return oneRowMoved(result, ErrTeamConflict)
+	})
 	if err != nil {
 		return TeamRecord{}, fmt.Errorf("update team: %w", err)
-	}
-	if err := oneRowMoved(result, ErrTeamConflict); err != nil {
-		return TeamRecord{}, err
 	}
 	return TeamRecord{Revision: updated.Revision, Team: updated.Team}, nil
 }
@@ -397,26 +397,7 @@ func (r *teamRepository) Delete(ctx context.Context, id string, expectedRevision
 	if expectedRevision != 0 && current.Revision != expectedRevision {
 		return ErrTeamConflict
 	}
-	// Members belong to the team, so removing the team removes them: a
-	// membership must never outlive either end it ties.
-	if _, err := r.db.ExecContext(ctx,
-		r.db.Bind(`DELETE FROM team_memberships WHERE team_id = ?`), id); err != nil {
-		return fmt.Errorf("delete team memberships: %w", err)
-	}
-	// Grants are access control, so they go with the team for the same
-	// reason: nothing may keep reaching an account through a team that is
-	// gone.
-	if _, err := r.db.ExecContext(ctx,
-		r.db.Bind(`DELETE FROM account_grants WHERE team_id = ?`), id); err != nil {
-		return fmt.Errorf("delete team account grants: %w", err)
-	}
-	result, err := r.db.ExecContext(ctx,
-		r.db.Bind(`DELETE FROM teams WHERE id = ? AND revision = ?`),
-		id, current.Revision)
-	if err != nil {
-		return fmt.Errorf("delete team: %w", err)
-	}
-	return oneRowMoved(result, ErrTeamConflict)
+	return deletePrincipal(ctx, r.db, r.authority, teamPrincipal, id, current.Revision)
 }
 
 func (r *teamRepository) exists(ctx context.Context, id string) (bool, error) {
@@ -448,8 +429,9 @@ func decodeTeam(data string) (teamRecord, error) {
 }
 
 type membershipRepository struct {
-	db  *sqlstore.DB
-	now func() time.Time
+	authority *revision.SQL
+	db        *sqlstore.DB
+	now       func() time.Time
 }
 
 func (r *membershipRepository) Add(ctx context.Context, value Membership) (Membership, error) {
@@ -457,16 +439,16 @@ func (r *membershipRepository) Add(ctx context.Context, value Membership) (Membe
 		return Membership{}, err
 	}
 	value.CreatedAt = r.now().UTC()
-	// Both ends must exist: a membership names a real user on a real team.
-	if _, err := (&userRepository{db: r.db, now: r.now}).GetByID(ctx, value.UserID); err != nil {
-		return Membership{}, err
-	}
-	if _, err := (&teamRepository{db: r.db, now: r.now}).GetByID(ctx, value.TeamID); err != nil {
-		return Membership{}, err
-	}
-	_, err := r.db.ExecContext(ctx,
-		r.db.Bind(`INSERT INTO team_memberships (user_id, team_id, created_at) VALUES (?, ?, ?)`),
-		value.UserID, value.TeamID, value.CreatedAt.Format(time.RFC3339Nano))
+	err := r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		if err := requireIdentityEndpoint(ctx, tx, r.db.Bind(`SELECT id FROM users WHERE id = ?`), value.UserID, ErrUserNotFound); err != nil {
+			return err
+		}
+		if err := requireIdentityEndpoint(ctx, tx, r.db.Bind(`SELECT id FROM teams WHERE id = ?`), value.TeamID, ErrTeamNotFound); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, r.db.Bind(`INSERT INTO team_memberships (user_id, team_id, created_at) VALUES (?, ?, ?)`), value.UserID, value.TeamID, value.CreatedAt.Format(time.RFC3339Nano))
+		return err
+	})
 	if err != nil {
 		if exists, existsErr := r.exists(ctx, value.UserID, value.TeamID); existsErr == nil && exists {
 			return Membership{}, ErrMembershipConflict
@@ -480,13 +462,13 @@ func (r *membershipRepository) Remove(ctx context.Context, userID, teamID string
 	if !validID(userID) || !validID(teamID) {
 		return ErrMissingID
 	}
-	result, err := r.db.ExecContext(ctx,
-		r.db.Bind(`DELETE FROM team_memberships WHERE user_id = ? AND team_id = ?`),
-		userID, teamID)
-	if err != nil {
-		return fmt.Errorf("remove membership: %w", err)
-	}
-	return oneRowMoved(result, ErrMembershipNotFound)
+	return r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, r.db.Bind(`DELETE FROM team_memberships WHERE user_id = ? AND team_id = ?`), userID, teamID)
+		if err != nil {
+			return err
+		}
+		return oneRowMoved(result, ErrMembershipNotFound)
+	})
 }
 
 func (r *membershipRepository) ListByUser(ctx context.Context, userID string) ([]Membership, error) {
@@ -542,8 +524,9 @@ func (r *membershipRepository) exists(ctx context.Context, userID, teamID string
 }
 
 type accountGrantRepository struct {
-	db  *sqlstore.DB
-	now func() time.Time
+	authority *revision.SQL
+	db        *sqlstore.DB
+	now       func() time.Time
 }
 
 func (r *accountGrantRepository) Add(ctx context.Context, value AccountGrant) (AccountGrant, error) {
@@ -551,22 +534,20 @@ func (r *accountGrantRepository) Add(ctx context.Context, value AccountGrant) (A
 		return AccountGrant{}, err
 	}
 	value.CreatedAt = r.now().UTC()
-	// The grantee must exist: a grant names a real user or a real team. The
-	// account is not checked here because accounts live outside this store;
-	// the row only names one, like a shared credential's grant list does.
-	if value.UserID != "" {
-		if _, err := (&userRepository{db: r.db, now: r.now}).GetByID(ctx, value.UserID); err != nil {
-			return AccountGrant{}, err
+	err := r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		if value.UserID != "" {
+			if err := requireIdentityEndpoint(ctx, tx, r.db.Bind(`SELECT id FROM users WHERE id = ?`), value.UserID, ErrUserNotFound); err != nil {
+				return err
+			}
 		}
-	}
-	if value.TeamID != "" {
-		if _, err := (&teamRepository{db: r.db, now: r.now}).GetByID(ctx, value.TeamID); err != nil {
-			return AccountGrant{}, err
+		if value.TeamID != "" {
+			if err := requireIdentityEndpoint(ctx, tx, r.db.Bind(`SELECT id FROM teams WHERE id = ?`), value.TeamID, ErrTeamNotFound); err != nil {
+				return err
+			}
 		}
-	}
-	_, err := r.db.ExecContext(ctx,
-		r.db.Bind(`INSERT INTO account_grants (account_id, user_id, team_id, created_at) VALUES (?, ?, ?, ?)`),
-		value.AccountID, value.UserID, value.TeamID, value.CreatedAt.Format(time.RFC3339Nano))
+		_, err := tx.ExecContext(ctx, r.db.Bind(`INSERT INTO account_grants (account_id, user_id, team_id, created_at) VALUES (?, ?, ?, ?)`), value.AccountID, value.UserID, value.TeamID, value.CreatedAt.Format(time.RFC3339Nano))
+		return err
+	})
 	if err != nil {
 		if exists, existsErr := r.exists(ctx, value); existsErr == nil && exists {
 			return AccountGrant{}, ErrAccountGrantConflict
@@ -580,13 +561,13 @@ func (r *accountGrantRepository) Remove(ctx context.Context, value AccountGrant)
 	if err := value.Validate(); err != nil {
 		return err
 	}
-	result, err := r.db.ExecContext(ctx,
-		r.db.Bind(`DELETE FROM account_grants WHERE account_id = ? AND user_id = ? AND team_id = ?`),
-		value.AccountID, value.UserID, value.TeamID)
-	if err != nil {
-		return fmt.Errorf("remove account grant: %w", err)
-	}
-	return oneRowMoved(result, ErrAccountGrantNotFound)
+	return r.authority.Apply(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, r.db.Bind(`DELETE FROM account_grants WHERE account_id = ? AND user_id = ? AND team_id = ?`), value.AccountID, value.UserID, value.TeamID)
+		if err != nil {
+			return err
+		}
+		return oneRowMoved(result, ErrAccountGrantNotFound)
+	})
 }
 
 func (r *accountGrantRepository) ListByAccount(ctx context.Context, accountID string) ([]AccountGrant, error) {
@@ -735,4 +716,23 @@ func oneRowMoved(result sql.Result, conflict error) error {
 		return conflict
 	}
 	return nil
+}
+
+type repositoryOptions struct{ begin func() func() }
+
+// Option configures local authorization mutation fencing.
+type Option func(*repositoryOptions)
+
+// WithAuthorizationFence revokes cached grants before each relational mutation.
+func WithAuthorizationFence(begin func() func()) Option {
+	return func(options *repositoryOptions) { options.begin = begin }
+}
+
+func requireIdentityEndpoint(ctx context.Context, tx *sql.Tx, query, id string, missing error) error {
+	var found string
+	err := tx.QueryRowContext(ctx, query, id).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return missing
+	}
+	return err
 }
