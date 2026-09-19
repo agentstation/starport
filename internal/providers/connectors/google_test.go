@@ -162,7 +162,7 @@ func TestGoogleAPIKeyUsesInferenceHeader(t *testing.T) {
 		t.Fatalf("failed to create connector: %v", err)
 	}
 
-	resp, err := connector.Chat(context.Background(), &ChatRequest{Credential: testGoogleMaterial("test-key"),
+	resp, err := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testGoogleMaterial("test-key"),
 		Model: "google-ai-studio/gemini-1.5-flash",
 		Endpoint: InferenceEndpoint{
 			Type: catalogs.EndpointTypeGoogle,
@@ -172,7 +172,7 @@ func TestGoogleAPIKeyUsesInferenceHeader(t *testing.T) {
 			{Role: "user", Content: "Hello"},
 		},
 		MaxTokens: IntPtr(100),
-	})
+	}))
 
 	if err != nil {
 		t.Fatalf("chat failed: %v", err)
@@ -232,7 +232,7 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 		t.Fatalf("failed to create connector: %v", err)
 	}
 
-	resp, err := connector.Chat(context.Background(), &ChatRequest{Credential: testGoogleDefaultMaterial("test-token"),
+	resp, err := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testGoogleDefaultMaterial("test-token"),
 		Model: "google-vertex/gemini-1.5-flash",
 		Endpoint: InferenceEndpoint{
 			Type: catalogs.EndpointTypeGoogleCloud,
@@ -242,7 +242,7 @@ func TestVertexAIConnector_Chat(t *testing.T) {
 			{Role: "user", Content: "Hello"},
 		},
 		MaxTokens: IntPtr(100),
-	})
+	}))
 
 	if err != nil {
 		t.Fatalf("chat failed: %v", err)
@@ -303,7 +303,7 @@ func TestGoogleAIStudioConnector_ChatStream(t *testing.T) {
 		t.Fatalf("failed to create connector: %v", err)
 	}
 
-	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testGoogleMaterial("test-key"),
+	stream, err := connector.ChatStream(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testGoogleMaterial("test-key"),
 		Model: "google-ai-studio/gemini-1.5-flash",
 		Endpoint: InferenceEndpoint{
 			Type: catalogs.EndpointTypeGoogle,
@@ -312,7 +312,7 @@ func TestGoogleAIStudioConnector_ChatStream(t *testing.T) {
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("stream failed: %v", err)
 	}
@@ -351,14 +351,14 @@ func TestGoogleAIStudioConnector_EmbeddingsUsesOfferingEndpoint(t *testing.T) {
 	})
 	require.NoError(t, err)
 	defer connector.Close()
-	response, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testGoogleMaterial("test-key"),
+	response, err := connector.Embeddings(context.Background(), approveConnectorFixture(t, &EmbeddingsRequest{Credential: testGoogleMaterial("test-key"),
 		Model: "opaque/embedding@001",
 		Input: []string{"first", "second"},
 		Endpoint: InferenceEndpoint{
 			Type: catalogs.EndpointTypeGoogle,
 			URL:  server.URL + "/selected/embed",
 		},
-	})
+	}))
 	require.NoError(t, err)
 	require.Len(t, response.Data, 2)
 	require.Equal(t, "opaque/embedding@001", response.Model)

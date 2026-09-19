@@ -45,7 +45,7 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 		t.Fatal("connector name must not be empty")
 	}
 
-	chatResp, err := connector.Chat(ctx, &ChatRequest{
+	chatResp, err := connector.Chat(ctx, approveConnectorFixture(t, &ChatRequest{
 		Credential: testAPIMaterial("test-key"),
 		Model:      "openai/gpt-4o-mini",
 		Endpoint: InferenceEndpoint{
@@ -55,7 +55,7 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 		Messages: []Message{
 			{Role: RoleUser, Content: "hello"},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("chat: %v", err)
 	}
@@ -63,7 +63,7 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 		t.Fatalf("chat response must include at least one choice: %#v", chatResp)
 	}
 
-	stream, err := connector.ChatStream(ctx, &ChatRequest{
+	stream, err := connector.ChatStream(ctx, approveConnectorFixture(t, &ChatRequest{
 		Credential: testAPIMaterial("test-key"),
 		Model:      "openai/gpt-4o-mini",
 		Stream:     true,
@@ -74,7 +74,7 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 		Messages: []Message{
 			{Role: RoleUser, Content: "hello"},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("chat stream: %v", err)
 	}
@@ -98,7 +98,7 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 		t.Fatalf("stream close: %v", err)
 	}
 
-	embeddingsResp, err := connector.Embeddings(ctx, &EmbeddingsRequest{
+	embeddingsResp, err := connector.Embeddings(ctx, approveConnectorFixture(t, &EmbeddingsRequest{
 		Credential: testAPIMaterial("test-key"),
 		Model:      "openai/text-embedding-3-small",
 		Input:      "hello",
@@ -106,7 +106,7 @@ func runConnectorContract(t *testing.T, endpointBaseURL string, newConnector fun
 			Type: "openai",
 			URL:  endpointBaseURL + "/embeddings",
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("embeddings: %v", err)
 	}

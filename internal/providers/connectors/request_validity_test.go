@@ -21,9 +21,10 @@ func TestDispatchRejectsMaterialRevokedAfterAuthentication(t *testing.T) {
 	material := credentials.NewMaterial(catalogs.ProviderCredentialProfile{
 		ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
 		Placements: []catalogs.ProviderCredentialPlacement{{Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader, Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer}},
-	}, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{}).WithValidity(validity)
+	}, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{Handle: "opaque-handle"}).WithValidity(validity)
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://provider.example/inference", nil)
 	require.NoError(t, err)
+	material, _ = approvedDestinationMaterial(t, material, request.Method, request.URL.String())
 	require.NoError(t, applyRequestAuthentication(material, request))
 	validity.Revoke()
 	calls := 0
@@ -101,7 +102,8 @@ func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, e
 	material := credentials.NewMaterial(catalogs.ProviderCredentialProfile{
 		ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
 		Placements: []catalogs.ProviderCredentialPlacement{{Field: "api-key", Kind: catalogs.ProviderCredentialPlacementHeader, Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer}},
-	}, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{}).WithValidity(validity)
+	}, map[catalogs.ProviderCredentialFieldID]string{"api-key": "fixture-secret"}, credentials.MaterialMetadata{Handle: "opaque-handle"}).WithValidity(validity)
+	material, _ = approvedDestinationMaterial(t, material, http.MethodGet, server.URL)
 	firstDone := make(chan error, 1)
 	go func() {
 		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)

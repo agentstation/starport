@@ -33,11 +33,11 @@ func TestRequestAuthenticationAppliesCatalogPlacements(t *testing.T) {
 		map[catalogs.ProviderCredentialFieldID]string{
 			"api-key": "secret-value", "account": "account-a",
 		},
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "fixture-handle"},
 	)
 	request, err := http.NewRequest(http.MethodPost, "https://provider.example/inference", nil)
 	require.NoError(t, err)
-	require.NoError(t, registry.Apply(material, request))
+	require.NoError(t, registry.Apply(approvedAuthenticationFixture(t, material, request), request))
 	require.Equal(t, "Bearer secret-value", request.Header.Get("Authorization"))
 	require.Equal(t, "account-a", request.URL.Query().Get("account"))
 }
@@ -56,11 +56,11 @@ func TestRequestAuthenticationRejectsQueryPlacementOnHTTP(t *testing.T) {
 	material := credentials.NewMaterial(
 		profile,
 		map[catalogs.ProviderCredentialFieldID]string{"api-key": "secret-value"},
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "fixture-handle"},
 	)
 	request, err := http.NewRequest(http.MethodPost, "http://provider.example/inference", nil)
 	require.NoError(t, err)
-	require.ErrorContains(t, registry.Apply(material, request), "requires an HTTPS request")
+	require.ErrorContains(t, registry.Apply(approvedAuthenticationFixture(t, material, request), request), "requires an HTTPS request")
 	require.Empty(t, request.URL.RawQuery)
 }
 
@@ -85,11 +85,11 @@ func TestGoogleDefaultAppliesQuotaProjectFromTypedOptions(t *testing.T) {
 		map[catalogs.ProviderCredentialFieldID]string{
 			"access-token": "token", "quota-project": "billing-project",
 		},
-		credentials.MaterialMetadata{Version: "test"},
+		credentials.MaterialMetadata{Version: "test", Handle: "fixture-handle"},
 	)
 	request, err := http.NewRequest(http.MethodPost, "https://provider.example/inference", nil)
 	require.NoError(t, err)
-	require.NoError(t, registry.Apply(material, request))
+	require.NoError(t, registry.Apply(approvedAuthenticationFixture(t, material, request), request))
 	require.Equal(t, "Bearer token", request.Header.Get("Authorization"))
 	require.Equal(t, "billing-project", request.Header.Get("x-goog-user-project"))
 }
@@ -105,4 +105,26 @@ func TestRequestAuthenticationRejectsExpiredMaterial(t *testing.T) {
 	require.NoError(t, err)
 	require.Error(t, registry.Apply(material, request))
 	require.Empty(t, request.Header.Get("Authorization"))
+}
+
+func TestRequestAuthenticationRequiresDestinationApproval(t *testing.T) {
+	registry, err := ProductionRegistry()
+	require.NoError(t, err)
+	material := credentials.NewMaterial(catalogs.ProviderCredentialProfile{
+		ID: "api-key", Primitive: catalogs.ProviderAuthenticationAPIKey,
+		Fields:     []catalogs.ProviderCredentialFieldID{"key"},
+		Placements: []catalogs.ProviderCredentialPlacement{{Field: "key", Kind: catalogs.ProviderCredentialPlacementHeader, Name: "Authorization", Scheme: catalogs.ProviderCredentialSchemeBearer}},
+	}, map[catalogs.ProviderCredentialFieldID]string{"key": "fixture-secret"}, credentials.MaterialMetadata{Handle: "fixture-handle"})
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://unapproved.example/inference", nil)
+	require.NoError(t, err)
+	require.ErrorIs(t, registry.Apply(material, request), credentials.ErrDestinationUnapproved)
+	require.Empty(t, request.Header.Get("Authorization"))
+}
+
+func approvedAuthenticationFixture(t *testing.T, material credentials.Material, request *http.Request) credentials.Material {
+	t.Helper()
+	identity := credentials.DestinationIdentity{Provider: "fixture", Role: "fixture-role", Handle: material.Handle()}
+	grant, err := credentials.NewDestinationGrant(identity, material.Profile(), []credentials.Destination{{Operation: catalogs.ProviderOperationChatCompletions, Method: request.Method, URL: request.URL.String()}})
+	require.NoError(t, err)
+	return material.WithDestinationGrant(grant, identity, catalogs.ProviderOperationChatCompletions)
 }

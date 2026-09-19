@@ -145,11 +145,11 @@ func TestConcurrentRequestsUseOnlySelectedCredentialMaterial(t *testing.T) {
 		go func() {
 			defer group.Done()
 			model := fmt.Sprintf("%d", index)
-			_, requestErr := connector.Chat(context.Background(), &ChatRequest{
+			_, requestErr := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{
 				Model: model, Messages: []Message{{Role: RoleUser, Content: "hello"}},
 				Endpoint:   InferenceEndpoint{Type: catalogs.EndpointTypeOpenAI, URL: server.URL},
 				Credential: testAPIMaterial("token-" + model),
-			})
+			}))
 			if requestErr != nil {
 				t.Errorf("chat %s: %v", model, requestErr)
 			}

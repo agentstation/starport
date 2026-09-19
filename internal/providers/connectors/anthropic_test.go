@@ -199,7 +199,7 @@ func TestAnthropicConnector_Chat(t *testing.T) {
 			})
 			tt.request.Endpoint = InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"}
 
-			resp, err := connector.Chat(context.Background(), tt.request)
+			resp, err := connector.Chat(context.Background(), approveConnectorFixture(t, tt.request))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Chat() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -256,13 +256,13 @@ func TestAnthropicConnector_ChatStream(t *testing.T) {
 		MaxConnections: 10,
 	})
 
-	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAnthropicMaterial("test-key"),
+	stream, err := connector.ChatStream(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 		Model:    "claude-3-haiku-20240307",
 		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
@@ -329,13 +329,13 @@ func TestAnthropicStreamReportsPromptTokens(t *testing.T) {
 		MaxConnections: 10,
 	})
 
-	stream, err := connector.ChatStream(context.Background(), &ChatRequest{Credential: testAnthropicMaterial("test-key"),
+	stream, err := connector.ChatStream(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 		Model:    "claude-3-haiku-20240307",
 		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
 		Messages: []Message{
 			{Role: "user", Content: "Hello"},
 		},
-	})
+	}))
 	if err != nil {
 		t.Fatalf("ChatStream() error = %v", err)
 	}
@@ -382,10 +382,10 @@ func TestAnthropicConnector_Embeddings(t *testing.T) {
 		MaxConnections: 10,
 	})
 
-	_, err := connector.Embeddings(context.Background(), &EmbeddingsRequest{Credential: testAnthropicMaterial("test-key"),
+	_, err := connector.Embeddings(context.Background(), approveConnectorFixture(t, &EmbeddingsRequest{Credential: testAnthropicMaterial("test-key"),
 		Model: "text-embedding-ada-002",
 		Input: "Hello world",
-	})
+	}))
 
 	if err == nil {
 		t.Error("Expected error for unsupported embeddings endpoint")
@@ -443,7 +443,7 @@ func TestAnthropicConnector_ConvertMessageContent(t *testing.T) {
 	})
 
 	// Test multimodal content
-	_, err := connector.Chat(context.Background(), &ChatRequest{Credential: testAnthropicMaterial("test-key"),
+	_, err := connector.Chat(context.Background(), approveConnectorFixture(t, &ChatRequest{Credential: testAnthropicMaterial("test-key"),
 		Model:    "claude-3-haiku-20240307",
 		Endpoint: InferenceEndpoint{Type: "anthropic", URL: server.URL + "/v1/messages"},
 		Messages: []Message{
@@ -455,7 +455,7 @@ func TestAnthropicConnector_ConvertMessageContent(t *testing.T) {
 				},
 			},
 		},
-	})
+	}))
 
 	if err != nil {
 		t.Errorf("Chat() with multimodal content error = %v", err)

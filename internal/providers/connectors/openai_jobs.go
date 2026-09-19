@@ -106,11 +106,11 @@ func (c *OpenAICompatibleConnector) FetchJobAsset(
 	setHeaders setHeadersFunc,
 	handleError handleErrorFunc,
 ) (*JobAsset, error) {
-	endpoint, err := jobEndpoint(&ref.ProviderJobRef)
+	endpoint, err := jobResourceURL(&ref.ProviderJobRef, true)
 	if err != nil {
 		return nil, err
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/content", nil)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -229,7 +229,9 @@ func jobFailureReason(raw json.RawMessage) string {
 }
 
 // jobEndpoint addresses one job under the collection path the catalog names.
-func jobEndpoint(ref *ProviderJobRef) (string, error) {
+func jobEndpoint(ref *ProviderJobRef) (string, error) { return jobResourceURL(ref, false) }
+
+func jobResourceURL(ref *ProviderJobRef, content bool) (string, error) {
 	if strings.TrimSpace(ref.ProviderJobID) == "" {
 		return "", fmt.Errorf("%w: no provider job was named", ErrInvalidMediaRequest)
 	}
@@ -237,5 +239,19 @@ func jobEndpoint(ref *ProviderJobRef) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSuffix(collection, "/") + "/" + url.PathEscape(ref.ProviderJobID), nil
+	parsed, err := url.Parse(collection)
+	if err != nil {
+		return "", fmt.Errorf("parse job collection: %w", err)
+	}
+	escaped := strings.TrimSuffix(parsed.EscapedPath(), "/") + "/" + url.PathEscape(ref.ProviderJobID)
+	if content {
+		escaped += "/content"
+	}
+	path, err := url.PathUnescape(escaped)
+	if err != nil {
+		return "", fmt.Errorf("decode job path: %w", err)
+	}
+	parsed.Path = path
+	parsed.RawPath = escaped
+	return parsed.String(), nil
 }

@@ -44,7 +44,7 @@ func TestHTTPClientConnectionReuse(t *testing.T) {
 	defer connector.Close()
 
 	for range 5 {
-		if _, err := connector.Chat(context.Background(), testChatRequest("openai", server.URL+"/chat/completions")); err != nil {
+		if _, err := connector.Chat(context.Background(), approveConnectorFixture(t, testChatRequest("openai", server.URL+"/chat/completions"))); err != nil {
 			t.Fatal(err)
 		}
 	}
