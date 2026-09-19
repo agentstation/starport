@@ -46,13 +46,14 @@ func TestManagedMaterialWarmRequestsDoNotReadRepository(t *testing.T) {
 				_, err = manager.AddKey(t.Context(), AccountScope("account-a"), string(provider.ID), map[string]string{"api-key": "fixture-secret"}, nil, false, 0)
 			}
 			require.NoError(t, err)
+			scope := AccountScope("account-a")
 			resolve := func() credentials.Material {
 				var material credentials.Material
 				var resolveErr error
 				if shared {
 					material, resolveErr = manager.ResolveSharedMaterial(t.Context(), "account-a", provider)
 				} else {
-					material, resolveErr = manager.ResolveStoredMaterial(t.Context(), AccountScope("account-a"), provider)
+					material, resolveErr = manager.ResolveStoredMaterial(t.Context(), scope, provider)
 				}
 				require.NoError(t, resolveErr)
 				value, ok := material.Value("api-key")
@@ -65,6 +66,17 @@ func TestManagedMaterialWarmRequestsDoNotReadRepository(t *testing.T) {
 			for range 3 {
 				resolve()
 			}
+
+			var allocationErr error
+			allocations := testing.AllocsPerRun(100, func() {
+				if shared {
+					_, allocationErr = manager.ResolveSharedMaterial(t.Context(), "account-a", provider)
+				} else {
+					_, allocationErr = manager.ResolveStoredMaterial(t.Context(), scope, provider)
+				}
+			})
+			require.NoError(t, allocationErr)
+			require.Zero(t, allocations, "warm selection must not allocate loader closures")
 			require.Equal(t, before, counted.reads.Load(), "warm requests must use managed material without repository reads")
 		})
 	}

@@ -684,15 +684,33 @@ func (m *keyManager) RotateEncryptionKey(_ context.Context) error {
 
 // ResolveStoredMaterial returns valid managed material for one account.
 func (m *keyManager) ResolveStoredMaterial(ctx context.Context, scope string, provider catalogs.Provider) (credentials.Material, error) {
-	return m.materials.resolve(ctx, materialIdentity{scope: scope, provider: string(provider.ID)}, provider, false, func(ctx context.Context) (credentials.Material, error) {
-		return m.loadStoredMaterial(ctx, scope, provider)
-	})
+	if scope == SharedScope {
+		return credentials.Material{}, ErrScopeIsShared
+	}
+	return m.resolveMaterial(ctx, materialIdentity{scope: scope, provider: string(provider.ID)}, provider)
 }
 
 // ResolveSharedMaterial returns material bound to the account grant snapshot.
 func (m *keyManager) ResolveSharedMaterial(ctx context.Context, accountID string, provider catalogs.Provider) (credentials.Material, error) {
-	return m.materials.resolve(ctx, materialIdentity{scope: SharedScope, provider: string(provider.ID), account: accountID}, provider, false, func(ctx context.Context) (credentials.Material, error) {
-		return m.loadSharedMaterial(ctx, accountID, provider)
+	return m.resolveMaterial(ctx, materialIdentity{scope: SharedScope, provider: string(provider.ID), account: accountID}, provider)
+}
+
+func (m *keyManager) resolveMaterial(ctx context.Context, key materialIdentity, provider catalogs.Provider) (credentials.Material, error) {
+	if err := ctx.Err(); err != nil {
+		return credentials.Material{}, err
+	}
+	if material, ok := m.materials.cached(key, provider); ok {
+		return material, nil
+	}
+	return m.resolveMaterialCold(ctx, key, provider)
+}
+
+func (m *keyManager) resolveMaterialCold(ctx context.Context, key materialIdentity, provider catalogs.Provider) (credentials.Material, error) {
+	return m.materials.resolve(ctx, key, provider, false, func(ctx context.Context) (credentials.Material, error) {
+		if key.scope == SharedScope {
+			return m.loadSharedMaterial(ctx, key.account, provider)
+		}
+		return m.loadStoredMaterial(ctx, key.scope, provider)
 	})
 }
 

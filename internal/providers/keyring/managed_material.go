@@ -58,6 +58,17 @@ func newManagedMaterials() *managedMaterials {
 	return &managedMaterials{ctx: ctx, cancel: cancel, entries: make(map[materialIdentity]*managedEntry), tenants: make(map[string]int), now: time.Now, limits: credentials.DefaultMaterialLimits()}
 }
 
+func (c *managedMaterials) cached(key materialIdentity, provider catalogs.Provider) (credentials.Material, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.entries[key]
+	if c.closed || entry == nil || !c.now().Before(entry.deadline) || !reflect.DeepEqual(entry.provider.Credentials, provider.Credentials) {
+		return credentials.Material{}, false
+	}
+	entry.lastUsed = c.now()
+	return entry.material, true
+}
+
 func (c *managedMaterials) invalidate(scope, provider string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
