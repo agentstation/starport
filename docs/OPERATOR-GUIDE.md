@@ -906,7 +906,16 @@ Development sessions use the current policy without persistent policy history.
 The `require_authority` policy binds catalog permission to one authority and policy identity.
 An embedded catalog can supply diagnostics at cold startup, but it cannot grant inference permission.
 Cached responses and each new provider attempt require permission for the accepted catalog.
-An already admitted stream can finish after permission expires.
+An already admitted stream can finish after permission expires or a known withdrawal.
+New requests, retries, queued batch lines, and cache delivery require current permission.
+
+Completed catalog operations report `permission_at_completion`.
+Its `new_attempts_allowed` field records catalog permission when the operation ended.
+Credentials, budgets, and routing rules can still refuse an attempt.
+
+Its `admitted_streams_may_finish` field reports that catalog withdrawal does not cancel admitted streams.
+These fields also appear after a failed replacement that retains catalog metadata.
+They describe the completed operation. Read current catalog status for current permission.
 
 Authority mode needs current permission and qualified clock evidence before it permits inference.
 The permission clock defaults to disabled. Select `native` only after qualifying the host time service and its error bounds.

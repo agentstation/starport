@@ -149,11 +149,12 @@ func TestAdminRefreshReturnsAcceptedOperation(t *testing.T) {
 
 	t.Run("the run route reports the operation", func(t *testing.T) {
 		operations := &fakeCatalogOperations{operation: catalog.Operation{
-			ID:           "run-1",
-			Kind:         catalog.KindCatalogUpdate,
-			State:        catalog.OperationSucceeded,
-			GenerationID: "gen-2",
-			Changed:      true,
+			ID:                     "run-1",
+			Kind:                   catalog.KindCatalogUpdate,
+			State:                  catalog.OperationSucceeded,
+			GenerationID:           "gen-2",
+			Changed:                true,
+			PermissionAtCompletion: catalog.AttemptPermissionStatus{NewAttemptsAllowed: true, AdmittedStreamsMayFinish: true},
 		}}
 		router := chi.NewRouter()
 		router.Get("/refreshes/{run_id}", NewCatalogController(operations).RefreshStatus)
@@ -170,6 +171,7 @@ func TestAdminRefreshReturnsAcceptedOperation(t *testing.T) {
 		assert.Equal(t, "run-1", operation.ID)
 		assert.Equal(t, catalog.OperationSucceeded, operation.State)
 		assert.Equal(t, "gen-2", operation.GenerationID)
+		assert.Equal(t, operations.operation.PermissionAtCompletion, operation.PermissionAtCompletion)
 	})
 
 	t.Run("the cancel route ends the run and records the actor", func(t *testing.T) {

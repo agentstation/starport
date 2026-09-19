@@ -1380,7 +1380,7 @@ func (a *App) syncCatalog(ctx context.Context) (runtimecatalog.Candidate, error)
 // activateRuntimeState validates one candidate and advances the routable head.
 // A candidate that fails leaves the accepted head where it is, and the refusal
 // is recorded with its safe cause so the admin surface separates a refused
-// candidate from the generation that still routes.
+// candidate from the retained generation. Catalog permission controls new attempts.
 func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog.Candidate) error {
 	err := a.applyCandidate(ctx, candidate)
 	if err == nil {
@@ -1394,7 +1394,8 @@ func (a *App) activateRuntimeState(ctx context.Context, candidate runtimecatalog
 	log.Warn().
 		Str("reason", string(runtimecatalog.ClassifyOperationFailure(err))).
 		Str("candidate_generation_id", candidate.State.GenerationID).
-		Msg("catalog candidate refused; the accepted head still routes")
+		Bool("new_attempts_allowed", a.catalog.Current().AllowsNewAttempt()).
+		Msg("catalog candidate refused; accepted metadata retained")
 	return err
 }
 

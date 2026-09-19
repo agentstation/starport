@@ -102,6 +102,7 @@ type runtimeRefreshFixture struct {
 	registry     *registry.Registry
 	oldConnector *runtimeRefreshConnector
 	newConnector *runtimeRefreshConnector
+	permission   *runtimeRefreshPermission
 }
 
 func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
@@ -113,7 +114,9 @@ func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
 	cfg.Catalog.RefreshTimeout = time.Second
 	client, err := starmap.New()
 	require.NoError(t, err)
-	plane, err := runtimecatalog.Open(client)
+	permission := &runtimeRefreshPermission{Client: client}
+	permission.allowed.Store(true)
+	plane, err := runtimecatalog.Open(permission)
 	require.NoError(t, err)
 	state := client.CurrentCatalogState()
 	state.GenerationID += "-replacement"
@@ -164,7 +167,7 @@ func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
 	}
 	return runtimeRefreshFixture{
 		application: application, runtime: runtime, registry: runtimeRegistry,
-		oldConnector: oldConnector, newConnector: newConnector,
+		oldConnector: oldConnector, newConnector: newConnector, permission: permission,
 	}
 }
 
@@ -173,8 +176,10 @@ func newRuntimeRefreshFixture(t *testing.T) runtimeRefreshFixture {
 // this fixture states only what the refresh test needs.
 type runtimeSyncFixture struct {
 	recordingCatalogRuntime
-	plane *runtimecatalog.ControlPlane
-	state starmap.CatalogState
+	plane          *runtimecatalog.ControlPlane
+	state          starmap.CatalogState
+	onRefresh      func()
+	refreshFailure error
 }
 
 func (r *runtimeSyncFixture) ControlPlane() *runtimecatalog.ControlPlane { return r.plane }
@@ -183,7 +188,10 @@ func (r *runtimeSyncFixture) RefreshCandidate(
 	context.Context,
 	time.Duration,
 ) (runtimecatalog.Candidate, error) {
-	return runtimecatalog.Candidate{State: r.state}, nil
+	if r.onRefresh != nil {
+		r.onRefresh()
+	}
+	return runtimecatalog.Candidate{State: r.state}, r.refreshFailure
 }
 
 func (r *runtimeSyncFixture) CurrentCandidate(
@@ -249,4 +257,13 @@ func (s intervalMaterialSource) ResolveMaterial(context.Context) (credentials.Ma
 func (c *runtimeRefreshConnector) Close() error {
 	c.closed.Add(1)
 	return nil
+}
+
+type runtimeRefreshPermission struct {
+	*starmap.Client
+	allowed atomic.Bool
+}
+
+func (p *runtimeRefreshPermission) AllowsCatalogAttempt(catalogs.CatalogAuthorityHead) bool {
+	return p.allowed.Load()
 }

@@ -94,6 +94,8 @@ type Operation struct {
 	GenerationID string `json:"generation_id,omitempty"`
 	// Changed reports whether the work moved the accepted head.
 	Changed bool `json:"changed"`
+	// PermissionAtCompletion records admission and stream policy when the operation ended.
+	PermissionAtCompletion AttemptPermissionStatus `json:"permission_at_completion,omitzero"`
 }
 
 // Open reports whether the operation can still change.
@@ -107,6 +109,8 @@ type OperationResult struct {
 	GenerationID string
 	// Changed reports whether the work moved the accepted head.
 	Changed bool
+	// PermissionAtCompletion records admission and stream policy when the work ended.
+	PermissionAtCompletion AttemptPermissionStatus
 }
 
 // ErrOperationNotFound reports an operation identifier the registry does not
@@ -265,6 +269,7 @@ func (o *Operations) close(id string, result OperationResult, failure error) {
 	record.operation.CompletedAt = o.now().UTC()
 	record.operation.GenerationID = result.GenerationID
 	record.operation.Changed = result.Changed
+	record.operation.PermissionAtCompletion = result.PermissionAtCompletion
 	switch {
 	case failure == nil:
 		record.operation.State = OperationSucceeded

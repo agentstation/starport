@@ -119,7 +119,10 @@ func (a *App) StartCatalogRefresh(context.Context) (runtimecatalog.Operation, bo
 
 // runCatalogUpdate performs one catalog update: read the source, observe the
 // providers, validate the candidate, and advance the accepted head.
-func (a *App) runCatalogUpdate(ctx context.Context) (runtimecatalog.OperationResult, error) {
+func (a *App) runCatalogUpdate(ctx context.Context) (result runtimecatalog.OperationResult, failure error) {
+	defer func() {
+		result.PermissionAtCompletion = a.catalog.Current().AttemptPermissionStatus()
+	}()
 	before := a.catalog.Current()
 	candidate, err := a.syncCatalog(ctx)
 	if err != nil {
@@ -129,7 +132,7 @@ func (a *App) runCatalogUpdate(ctx context.Context) (runtimecatalog.OperationRes
 		return runtimecatalog.OperationResult{}, err
 	}
 	after := a.catalog.Current()
-	result := runtimecatalog.OperationResult{GenerationID: after.GenerationID()}
+	result.GenerationID = after.GenerationID()
 	result.Changed = before == nil ||
 		before.GenerationID() != after.GenerationID() ||
 		before.PayloadChecksum() != after.PayloadChecksum()
