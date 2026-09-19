@@ -146,8 +146,9 @@ func (r catalogDiscoveryRegistry) AcquireRuntime() (connectors.RuntimeLease, err
 }
 
 type catalogDiscoveryRuntime struct {
-	snapshot *runtimecatalog.RoutableSnapshot
-	getCalls atomic.Int32
+	snapshot                 *runtimecatalog.RoutableSnapshot
+	getCalls                 atomic.Int32
+	onRequiresAuthentication func()
 }
 
 func (r *catalogDiscoveryRuntime) Snapshot() *runtimecatalog.RoutableSnapshot { return r.snapshot }
@@ -155,7 +156,12 @@ func (r *catalogDiscoveryRuntime) Get(string) connectors.Connector {
 	r.getCalls.Add(1)
 	return nil
 }
-func (*catalogDiscoveryRuntime) RequiresAuthentication(string) bool { return true }
+func (r *catalogDiscoveryRuntime) RequiresAuthentication(string) bool {
+	if r.onRequiresAuthentication != nil {
+		r.onRequiresAuthentication()
+	}
+	return true
+}
 func (*catalogDiscoveryRuntime) ResolveMaterial(
 	context.Context,
 	string,

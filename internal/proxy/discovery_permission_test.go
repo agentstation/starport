@@ -1,0 +1,132 @@
+package proxy
+
+import (
+	"context"
+	"testing"
+
+	"github.com/agentstation/starmap"
+	"github.com/agentstation/starmap/pkg/catalogs"
+	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/catalog/view"
+	"github.com/stretchr/testify/require"
+)
+
+type withdrawingCatalogCache struct {
+	*mockCacheManager
+	onRead func()
+}
+
+func (m *withdrawingCatalogCache) GetModel(ctx context.Context, key string) (any, bool, error) {
+	value, found, err := m.mockCacheManager.GetModel(ctx, key)
+	if m.onRead != nil {
+		m.onRead()
+	}
+	return value, found, err
+}
+
+func TestCompatibilityDiscoveryRejectsWithdrawnAuthority(t *testing.T) {
+	client, err := starmap.New()
+	require.NoError(t, err)
+	source := &cachePermissionSource{Client: client}
+	source.allowed.Store(true)
+	plane, err := runtimecatalog.Open(source)
+	require.NoError(t, err)
+	service := &proxy{registry: catalogDiscoveryRegistry{runtime: &catalogDiscoveryRuntime{snapshot: plane.Current()}}}
+	source.allowed.Store(false)
+	for _, operation := range []struct {
+		name string
+		read func(*testing.T) error
+	}{
+		{"models", func(t *testing.T) error {
+			value, err := service.ListModels(t.Context())
+			require.Nil(t, value)
+			return err
+		}},
+		{"providers", func(t *testing.T) error {
+			value, err := service.ListProviders(t.Context())
+			require.Nil(t, value)
+			return err
+		}},
+		{"endpoints", func(t *testing.T) error {
+			value, err := service.GetModelEndpoints(t.Context(), "model")
+			require.Nil(t, value)
+			return err
+		}},
+		{"authors", func(t *testing.T) error {
+			value, err := service.ListAuthors(t.Context())
+			require.Nil(t, value)
+			return err
+		}},
+		{"author", func(t *testing.T) error {
+			value, err := service.GetAuthor(t.Context(), "author")
+			require.Nil(t, value)
+			return err
+		}},
+		{"logo", func(t *testing.T) error {
+			value, err := service.GetLogo(t.Context(), view.LogoKindProviders, "provider")
+			require.Nil(t, value)
+			return err
+		}},
+	} {
+		t.Run(operation.name, func(t *testing.T) { requireCatalogPermissionRefusal(t, operation.read(t)) })
+	}
+}
+
+func TestDiscoveryCacheLookupRechecksAuthority(t *testing.T) {
+	for _, operation := range []string{"models", "providers", "endpoints"} {
+		t.Run(operation, func(t *testing.T) {
+			client, err := starmap.New()
+			require.NoError(t, err)
+			source := &cachePermissionSource{Client: client}
+			source.allowed.Store(true)
+			plane, err := runtimecatalog.Open(source)
+			require.NoError(t, err)
+			manager := &withdrawingCatalogCache{mockCacheManager: newMockCacheManager()}
+			upstream := &mockProxyImpl{modelsResponse: &ModelsResponse{Data: []ModelInfo{{ID: "retained-private-model"}}}, providersResponse: &ProvidersResponse{Providers: []ProviderInfo{{ID: "retained-private-provider"}}}}
+			service := &cachedService{service: upstream, runtime: &cacheRuntimeSource{snapshot: plane.Current()}, cacheManager: manager, cacheConfig: CacheConfig{EnableModelCache: true, EnableProviderCache: true}}
+			read := func() (bool, error) {
+				switch operation {
+				case "models":
+					v, e := service.ListModels(t.Context())
+					return v == nil, e
+				case "providers":
+					v, e := service.ListProviders(t.Context())
+					return v == nil, e
+				default:
+					v, e := service.GetModelEndpoints(t.Context(), "retained-private-model")
+					return v == nil, e
+				}
+			}
+			empty, err := read()
+			require.NoError(t, err)
+			require.False(t, empty)
+			require.Equal(t, 1, manager.calls["SetModel"])
+			manager.onRead = func() { source.allowed.Store(false) }
+			empty, err = read()
+			require.True(t, empty)
+			requireCatalogPermissionRefusal(t, err)
+		})
+	}
+}
+
+func TestCompatibilityProjectionRechecksAuthorityAtDelivery(t *testing.T) {
+	client, err := starmap.New()
+	require.NoError(t, err)
+	source := &cachePermissionSource{Client: client}
+	source.allowed.Store(true)
+	plane, err := runtimecatalog.Open(source)
+	require.NoError(t, err)
+	provider, offering := firstDiscoveryOffering(t, client.Catalog())
+	var endpointTypes []catalogs.EndpointType
+	for _, endpoint := range offering.Endpoints {
+		endpointTypes = append(endpointTypes, endpoint.Type)
+	}
+	require.NoError(t, plane.SetAdapter(runtimecatalog.AdapterAvailability{ProviderID: provider, Registered: true, Operations: offering.Service.Operations, EndpointTypes: endpointTypes}))
+	projected := false
+	runtime := &catalogDiscoveryRuntime{snapshot: plane.Current(), onRequiresAuthentication: func() { projected = true; source.allowed.Store(false) }}
+	service := &proxy{registry: catalogDiscoveryRegistry{runtime: runtime}}
+	response, err := service.ListProviders(t.Context())
+	require.True(t, projected)
+	require.Nil(t, response)
+	requireCatalogPermissionRefusal(t, err)
+}

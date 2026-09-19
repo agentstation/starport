@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"github.com/agentstation/starport/internal/catalog/view"
 	"os"
 	"path/filepath"
 	"sort"
@@ -97,7 +98,7 @@ func TestModelsProjectionGolden(t *testing.T) {
 func TestProvidersProjectionGolden(t *testing.T) {
 	snapshot := goldenSnapshot(t)
 	runtime := &catalogDiscoveryRuntime{snapshot: snapshot}
-	providers := providerInfosFromRuntime(runtime)
+	providers := view.Providers(runtime.Snapshot(), runtime.RequiresAuthentication)
 	require.Len(t, providers, len(goldenProviders))
 	assertProjectionGolden(t, "projection_providers.golden.json", providers)
 }

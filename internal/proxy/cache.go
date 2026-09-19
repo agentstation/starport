@@ -497,26 +497,37 @@ func (s *cachedService) cacheListResponse(ctx context.Context, cacheKey, cacheMs
 	return resp, nil
 }
 
-// ListModels with caching
-func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error) {
-	if !s.cacheConfig.EnableModelCache {
-		return s.service.ListModels(ctx)
-	}
+// readCachedCatalogList binds lookup and delivery to current catalog permission.
+func (s *cachedService) readCachedCatalogList(ctx context.Context, kind string, fetch func(context.Context) (any, error)) (response any, err error) {
 	ctx, runtime, owned := s.runtimeContext(ctx)
 	if owned {
 		defer runtime.Release()
 	}
 	if s.runtime != nil && runtime == nil {
+		return fetch(ctx)
+	}
+	if refusal := cachePermissionFailure(runtime); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := cachePermissionFailure(runtime); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
+	key := kind + ":list:" + s.catalogGeneration(ctx)
+	return s.cacheListResponse(ctx, key, kind, func() (any, error) { return fetch(ctx) })
+}
+
+// ListModels with caching
+func (s *cachedService) ListModels(ctx context.Context) (*ModelsResponse, error) {
+	if !s.cacheConfig.EnableModelCache {
 		return s.service.ListModels(ctx)
 	}
-	cacheKey := "models:list:" + s.catalogGeneration(ctx)
-
-	resp, err := s.cacheListResponse(ctx, cacheKey, "models",
-		func() (any, error) { return s.service.ListModels(ctx) })
+	response, err := s.readCachedCatalogList(ctx, "models", func(bound context.Context) (any, error) { return s.service.ListModels(bound) })
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*ModelsResponse), nil
+	return response.(*ModelsResponse), nil
 }
 
 // ListAuthors delegates to the wrapped service. Author projections read
@@ -541,25 +552,15 @@ func (s *cachedService) ListProviders(ctx context.Context) (*ProvidersResponse, 
 	if !s.cacheConfig.EnableProviderCache {
 		return s.service.ListProviders(ctx)
 	}
-	ctx, runtime, owned := s.runtimeContext(ctx)
-	if owned {
-		defer runtime.Release()
-	}
-	if s.runtime != nil && runtime == nil {
-		return s.service.ListProviders(ctx)
-	}
-	cacheKey := "providers:list:" + s.catalogGeneration(ctx)
-
-	resp, err := s.cacheListResponse(ctx, cacheKey, "providers",
-		func() (any, error) { return s.service.ListProviders(ctx) })
+	response, err := s.readCachedCatalogList(ctx, "providers", func(bound context.Context) (any, error) { return s.service.ListProviders(bound) })
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*ProvidersResponse), nil
+	return response.(*ProvidersResponse), nil
 }
 
 // GetModelEndpoints with caching
-func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
+func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (response *ModelEndpointsResponse, err error) {
 	if !s.cacheConfig.EnableModelCache {
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
@@ -570,6 +571,14 @@ func (s *cachedService) GetModelEndpoints(ctx context.Context, modelID string) (
 	if s.runtime != nil && runtime == nil {
 		return s.service.GetModelEndpoints(ctx, modelID)
 	}
+	if refusal := cachePermissionFailure(runtime); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := cachePermissionFailure(runtime); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 
 	cacheKey := fmt.Sprintf("model:endpoints:%s:%s", s.catalogGeneration(ctx), modelID)
 

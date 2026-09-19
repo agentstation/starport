@@ -562,7 +562,7 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 }
 
 // ListModels returns models from one retained routable catalog generation.
-func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
+func (p *proxy) ListModels(ctx context.Context) (response *ModelsResponse, err error) {
 	if p == nil || p.registry == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
@@ -577,6 +577,14 @@ func (p *proxy) ListModels(ctx context.Context) (*ModelsResponse, error) {
 	if snapshot == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 	return modelsResponseFromSnapshot(snapshot), nil
 }
 
@@ -585,7 +593,7 @@ func modelsResponseFromSnapshot(snapshot *runtimecatalog.RoutableSnapshot) *Mode
 }
 
 // ListProviders returns available provider information
-func (p *proxy) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
+func (p *proxy) ListProviders(ctx context.Context) (response *ProvidersResponse, err error) {
 	runtime, owned, err := p.acquireRuntime(ctx)
 	if err != nil {
 		return nil, connectors.ErrRuntimeUnavailable
@@ -593,26 +601,45 @@ func (p *proxy) ListProviders(ctx context.Context) (*ProvidersResponse, error) {
 	if owned {
 		defer runtime.Release()
 	}
-	return &ProvidersResponse{Providers: providerInfosFromRuntime(runtime)}, nil
+	snapshot := runtime.Snapshot()
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
+	return &ProvidersResponse{Providers: view.Providers(snapshot, runtime.RequiresAuthentication)}, nil
 }
 
 // ListAuthors returns catalog author information
-func (p *proxy) ListAuthors(ctx context.Context) (*AuthorsResponse, error) {
+func (p *proxy) ListAuthors(ctx context.Context) (response *AuthorsResponse, err error) {
 	snapshot, release, err := p.acquireSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 	return &AuthorsResponse{Authors: view.Authors(snapshot)}, nil
 }
 
 // GetAuthor returns one catalog author by ID
-func (p *proxy) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, error) {
+func (p *proxy) GetAuthor(ctx context.Context, authorID string) (response *AuthorInfo, err error) {
 	snapshot, release, err := p.acquireSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 	author, ok := view.AuthorByID(snapshot, authorID)
 	if !ok {
 		return nil, &ProviderError{Code: "not_found", Message: "Author not found"}
@@ -621,12 +648,17 @@ func (p *proxy) GetAuthor(ctx context.Context, authorID string) (*AuthorInfo, er
 }
 
 // GetLogo returns the catalog-carried SVG brand mark for one provider or author.
-func (p *proxy) GetLogo(ctx context.Context, kind view.LogoKind, id string) ([]byte, error) {
+func (p *proxy) GetLogo(ctx context.Context, kind view.LogoKind, id string) (response []byte, err error) {
 	snapshot, release, err := p.acquireSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 	svg, ok := view.Logo(snapshot, kind, id)
 	if !ok {
 		return nil, &ProviderError{Code: "not_found", Message: "Logo not found"}
@@ -650,14 +682,11 @@ func (p *proxy) acquireSnapshot(ctx context.Context) (*runtimecatalog.RoutableSn
 		release()
 		return nil, nil, runtimecatalog.ErrCatalogRequired
 	}
-	return snapshot, release, nil
-}
-
-func providerInfosFromRuntime(runtime connectors.RuntimeLease) []ProviderInfo {
-	if runtime == nil {
-		return nil
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		release()
+		return nil, nil, refusal
 	}
-	return view.Providers(runtime.Snapshot(), runtime.RequiresAuthentication)
+	return snapshot, release, nil
 }
 
 func cacheTokenPrices(snapshot *runtimecatalog.RoutableSnapshot, modelID string) (float64, float64, bool) {
@@ -692,7 +721,7 @@ func modelTokenPrice(cost *starmapcatalogs.ModelTokenCost) float64 {
 }
 
 // GetModelEndpoints returns provider endpoints for a specific model
-func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEndpointsResponse, error) {
+func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (response *ModelEndpointsResponse, err error) {
 	if p == nil || p.registry == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
@@ -707,6 +736,14 @@ func (p *proxy) GetModelEndpoints(ctx context.Context, modelID string) (*ModelEn
 	if snapshot == nil {
 		return nil, runtimecatalog.ErrCatalogRequired
 	}
+	if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+		return nil, refusal
+	}
+	defer func() {
+		if refusal := snapshot.CheckNewAttempt(); refusal != nil {
+			response, err = nil, refusal
+		}
+	}()
 	return &ModelEndpointsResponse{
 		Model:     modelID,
 		Endpoints: view.Endpoints(snapshot, modelID),
