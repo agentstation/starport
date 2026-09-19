@@ -46,3 +46,20 @@ func (state *authorizationState) Check() error {
 	now, healthy := state.clock()
 	return state.bundle.Permit().Check(now, healthy)
 }
+
+// AuthorizationRefresh resolves current policy for one queued operation.
+// It must preserve caller identity and must not retain the submitting context.
+type AuthorizationRefresh func(context.Context) (context.Context, error)
+
+type authorizationRefreshKey struct{}
+
+// WithAuthorizationRefresh binds a queued-operation resolver to an admitted request.
+func WithAuthorizationRefresh(ctx context.Context, refresh AuthorizationRefresh) context.Context {
+	return context.WithValue(ctx, authorizationRefreshKey{}, refresh)
+}
+
+// GetAuthorizationRefresh returns the resolver without renewing this request's permit.
+func GetAuthorizationRefresh(ctx context.Context) AuthorizationRefresh {
+	refresh, _ := ctx.Value(authorizationRefreshKey{}).(AuthorizationRefresh)
+	return refresh
+}

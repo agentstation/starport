@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/agentstation/starport/internal/failure"
+	"github.com/agentstation/starport/internal/inference"
+	"github.com/agentstation/starport/internal/server/requestctx"
 
 	"github.com/agentstation/starport/internal/limits"
 	"github.com/agentstation/starport/internal/ratelimit"
@@ -40,11 +42,37 @@ func (s *Server) batchGovernor() controllers.BatchGovernor {
 }
 
 // AdmitLine blocks until the line may run, or reports why it never may.
-func (g *batchGovernor) AdmitLine(ctx context.Context, admission controllers.BatchAdmission) error {
-	if err := g.admitBudget(ctx, admission); err != nil {
-		return err
+func (g *batchGovernor) AdmitLine(ctx context.Context, admission controllers.BatchAdmission) (context.Context, error) {
+	if admission.Reauthorize == nil {
+		return nil, unavailableBatchAuthorization()
 	}
-	return g.admitRate(ctx, admission)
+	current, err := admission.Reauthorize(ctx)
+	if err != nil || current == nil {
+		return nil, unavailableBatchAuthorization()
+	}
+	bundle, err := requestctx.Authorization(current)
+	if err != nil {
+		return nil, unavailableBatchAuthorization()
+	}
+	key, owner := bundle.Key().APIKey, bundle.Account().Account
+	if key.ID != admission.KeyID || owner.ID != admission.AccountID || !key.HasScope("batches:write") {
+		return nil, failure.New(failure.Permission, "Batch authorization was withdrawn.", false, failure.ProviderDetails{}, nil)
+	}
+	admission.TeamID, admission.KeyLimits, admission.AccountLimits = key.TeamID, key.Limits, owner.Limits
+	if err := g.admitBudget(current, admission); err != nil {
+		return nil, err
+	}
+	if err := g.admitRate(current, admission); err != nil {
+		return nil, err
+	}
+	if err := inference.CheckPermission(current); err != nil {
+		return nil, unavailableBatchAuthorization()
+	}
+	return current, nil
+}
+
+func unavailableBatchAuthorization() error {
+	return failure.New(failure.GatewayUnavailable, "Batch authorization is unavailable.", true, failure.ProviderDetails{}, nil)
 }
 
 // admitBudget refuses the line when a budget for the current window is
@@ -104,6 +132,9 @@ func (g *batchGovernor) admitRate(ctx context.Context, admission controllers.Bat
 		subject := rateLimitSubject(rule.Scope, admission.AccountID, admission.KeyID)
 		window := time.Duration(rule.Limit.WindowSeconds) * time.Second
 		for {
+			if err := inference.CheckPermission(ctx); err != nil {
+				return unavailableBatchAuthorization()
+			}
 			decision, err := g.rateLimits.Consume(ctx, subject, rule.Limit.Limit, window)
 			if err != nil {
 				return err

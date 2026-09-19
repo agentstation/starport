@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
+	"github.com/agentstation/starport/internal/storage"
 	"net/http"
 	"strings"
 	"sync"
@@ -53,6 +54,14 @@ func (c *heldBatchConnector) Chat(ctx context.Context, request *connectors.ChatR
 }
 
 func TestQueuedBatchLineRechecksCatalogPermission(t *testing.T) {
+	testQueuedBatchLineRechecksPermission(t, false)
+}
+
+func TestQueuedBatchLineRechecksKeyPermission(t *testing.T) {
+	testQueuedBatchLineRechecksPermission(t, true)
+}
+
+func testQueuedBatchLineRechecksPermission(t *testing.T, revokeKey bool) {
 	builder := catalogs.NewEmpty()
 	author := catalogs.Author{ID: "author", Name: "Author"}
 	require.NoError(t, builder.SetAuthor(author))
@@ -71,7 +80,9 @@ func TestQueuedBatchLineRechecksCatalogPermission(t *testing.T) {
 	reg, err := registry.Open(plane, []registry.Registration{{Provider: "acme", Connector: connector, Operations: []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions}, EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}, Anonymous: credentials.NewMaterial(catalogs.ProviderCredentialProfile{ID: "none", Primitive: catalogs.ProviderAuthenticationNone}, nil, credentials.MaterialMetadata{})}})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, reg.Close()) })
-	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, func(config *testServerConfig) { config.runtimeRegistry = reg })
+	store := storage.NewMockStore()
+	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, withTestStore(store), func(config *testServerConfig) { config.runtimeRegistry = reg })
+	useCachedBatchAuthorization(t, server, store)
 	defer release()
 	key := storeMediaTestKey(t, server, "permission-batch", "batches:write", "files:write", "files:read")
 	var input strings.Builder
@@ -94,7 +105,17 @@ func TestQueuedBatchLineRechecksCatalogPermission(t *testing.T) {
 			t.Fatal("batch workers did not enter the provider")
 		}
 	}
-	source.allowed.Store(false)
+	readerKey := key
+	if revokeKey {
+		readerKey = storeMediaTestKey(t, server, "batch-reader", "batches:write", "files:read")
+		record, err := server.apiKeys.GetByHash(t.Context(), hashSecret(key))
+		require.NoError(t, err)
+		record.APIKey.Active = false
+		_, err = server.apiKeys.Update(t.Context(), record.APIKey, record.Revision)
+		require.NoError(t, err)
+	} else {
+		source.allowed.Store(false)
+	}
 	release()
 	var completed struct {
 		Status      string `json:"status"`
@@ -106,7 +127,7 @@ func TestQueuedBatchLineRechecksCatalogPermission(t *testing.T) {
 		} `json:"request_counts"`
 	}
 	require.Eventually(t, func() bool {
-		response := getBatchRequest(server, batchesPath+"/"+submitted.ID, key)
+		response := getBatchRequest(server, batchesPath+"/"+submitted.ID, readerKey)
 		if response.Code != http.StatusOK {
 			return false
 		}
@@ -117,7 +138,7 @@ func TestQueuedBatchLineRechecksCatalogPermission(t *testing.T) {
 	require.Equal(t, jobs.DefaultBatchConcurrency, completed.Counts.Completed)
 	require.Equal(t, 1, completed.Counts.Failed)
 	require.Equal(t, int32(jobs.DefaultBatchConcurrency), connector.calls.Load())
-	response := getBatchRequest(server, "/v1/files/"+completed.ErrorFileID+"/content", key)
+	response := getBatchRequest(server, "/v1/files/"+completed.ErrorFileID+"/content", readerKey)
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 	var failure struct {
 		CustomID string `json:"custom_id"`

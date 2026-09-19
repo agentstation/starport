@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/agentstation/starport/internal/storage"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -103,7 +104,9 @@ func TestBatchCreateRefusesTheWrongPurpose(t *testing.T) {
 // every line, so the record reaches completed with three responses in the
 // output file, each carrying the online chat envelope under its custom_id.
 func TestBatchRunsToATerminalRecordThroughTheRouter(t *testing.T) {
-	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20})
+	store := storage.NewMockStore()
+	server := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, withTestStore(store))
+	useCachedBatchAuthorization(t, server, store)
 	key := storeMediaTestKey(t, server, "batches-run",
 		"batches:write", "files:write", "files:read")
 

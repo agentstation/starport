@@ -44,7 +44,9 @@ func (m *AuthMiddleware) cachedBearer(ctx context.Context, secret, hash string) 
 		return nil, err
 	}
 	ctx = requestctx.WithAuthorization(ctx, bundle, m.permissionClock, policy)
-	return ctx, nil
+	return requestctx.WithAuthorizationRefresh(ctx, func(next context.Context) (context.Context, error) {
+		return m.cachedBearer(next, "", hash)
+	}), nil
 }
 
 func writeAuthorizationRefusal(w http.ResponseWriter, r *http.Request, err error) {
@@ -81,5 +83,12 @@ func (m *AuthMiddleware) cachedLocal(ctx context.Context, subject string, policy
 			return nil, err
 		}
 	}
-	return requestctx.WithAuthorization(ctx, bundle, m.permissionClock, policy), nil
+	ctx = requestctx.WithAuthorization(ctx, bundle, m.permissionClock, policy)
+	grant, actor, console := requestctx.GetConsoleSession(ctx)
+	return requestctx.WithAuthorizationRefresh(ctx, func(next context.Context) (context.Context, error) {
+		if console {
+			next = requestctx.WithConsoleSession(next, grant, actor)
+		}
+		return m.cachedLocal(next, subject, policy)
+	}), nil
 }
