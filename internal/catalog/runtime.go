@@ -99,12 +99,25 @@ func openRuntime(
 	settings Settings,
 	collectors runtimeCollectors,
 ) (*Runtime, error) {
+	return openRuntimeWithMigration(ctx, store, settings, collectors, nil)
+}
+
+func openRuntimeWithMigration(
+	ctx context.Context,
+	store storage.KVStore,
+	settings Settings,
+	collectors runtimeCollectors,
+	migration *runtime.DirectoryMigrationRequest,
+) (*Runtime, error) {
 	if ctx == nil {
 		return nil, errors.New("catalog runtime context is required")
 	}
 	options, err := settings.starmapOptions()
 	if err != nil {
 		return nil, fmt.Errorf("configure Starmap runtime: %w", err)
+	}
+	if migration != nil {
+		options = append(options, runtime.WithPublishedDirectoryMigration(*migration))
 	}
 	if err := settings.ValidateStorageSelection(ctx); err != nil {
 		return nil, err
