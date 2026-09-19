@@ -67,7 +67,6 @@ type modelRouter struct {
 	credentialGate OperatorCredentialGate
 	storedKeys     StoredCredentialResolver
 	destinations   *credentials.DestinationApprovals
-	sharedHealth   availability.KVStore
 
 	// Advanced routing features
 	config                       Config
@@ -106,12 +105,12 @@ func WithAvailability(tracker *availability.Tracker) Option {
 	}
 }
 
-// WithSharedHealthStore supplies the distributed store that replicas share.
-// The latency tracker publishes its snapshots there and reads peer
-// measurements back. Without it every measurement stays process-local.
-func WithSharedHealthStore(store availability.KVStore) Option {
+// WithLatencyTracker supplies the lifecycle-owned latency view.
+func WithLatencyTracker(tracker LatencyTracker) Option {
 	return func(r *modelRouter) {
-		r.sharedHealth = store
+		if tracker != nil {
+			r.latencyTracker = tracker
+		}
 	}
 }
 
@@ -141,8 +140,8 @@ func WithOperatorCredentialGate(gate OperatorCredentialGate) Option {
 // New creates a new model router with all features enabled by default
 func New(registry connectors.Registry, opts ...Option) ModelRouter {
 	config := Config{
-		LatencyAlpha:           0.2,
-		LatencyWindowSize:      5,
+		LatencyAlpha:           defaultLatencyAlpha,
+		LatencyWindowSize:      defaultLatencyWindowSize,
 		EnableCostOptimization: true,
 		EnableStickySessions:   true,
 		SessionTTL:             30 * time.Minute,
@@ -160,9 +159,6 @@ func New(registry connectors.Registry, opts ...Option) ModelRouter {
 	}
 	for _, opt := range opts {
 		opt(router)
-	}
-	if router.sharedHealth != nil {
-		router.latencyTracker = NewSharedLatencyTracker(latencyTracker, router.sharedHealth)
 	}
 	if router.availability == nil {
 		tracker, err := availability.New(router.config.Availability, nil, router.catalog)

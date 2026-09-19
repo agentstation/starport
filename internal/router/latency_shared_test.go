@@ -62,6 +62,8 @@ func TestSharedLatencyTrackerConvergesPeers(t *testing.T) {
 	second := NewSharedLatencyTracker(NewLatencyTracker(0.2, 5), store)
 
 	first.RecordLatency("openai", 120*time.Millisecond)
+	first.exchange(t.Context())
+	second.exchange(t.Context())
 	require.Equal(t, 120*time.Millisecond, second.GetLatency("openai"),
 		"a fresh replica starts with the fleet measurement")
 	require.Equal(t, map[string]time.Duration{"openai": 120 * time.Millisecond},
@@ -85,16 +87,19 @@ func TestSharedLatencyLocalMeasurementWins(t *testing.T) {
 	require.Equal(t, 40*time.Millisecond, second.GetLatency("openai"))
 	require.Equal(t, 40*time.Millisecond, second.GetAllLatencies()["openai"])
 
+	first.exchange(t.Context())
 	second.Reset()
+	second.exchange(t.Context())
 	require.Equal(t, 120*time.Millisecond, second.GetLatency("openai"),
 		"a reset replica falls back to the fleet view")
 }
 
-// TestSharedHealthStoreOptionWrapsTheLatencyTracker holds the composition:
-// the option turns the router's tracker into the shared one.
-func TestSharedHealthStoreOptionWrapsTheLatencyTracker(t *testing.T) {
+// TestLatencyTrackerOptionUsesOwnedTracker preserves explicit lifecycle ownership.
+func TestLatencyTrackerOptionUsesOwnedTracker(t *testing.T) {
 	registry := &mockRegistry{}
-	shared := New(registry, WithSharedHealthStore(newFakeHealthStore())).(*modelRouter)
+	tracker := NewSharedLatencyTracker(nil, newFakeHealthStore())
+	shared := New(registry, WithLatencyTracker(tracker)).(*modelRouter)
+	require.Same(t, tracker, shared.latencyTracker)
 	_, ok := shared.latencyTracker.(*SharedLatencyTracker)
 	require.True(t, ok, "a distributed store must wrap the latency tracker")
 

@@ -111,6 +111,7 @@ type App struct {
 	incidentHistory     *statuspage.HistoryReader
 	incidentTransitions providerstate.TransitionRepository
 	availability        *availability.Tracker
+	advisory            *advisoryWorkers
 	// build is the provenance the admin and health surfaces report, with
 	// the start time New recorded.
 	build controllers.BuildInfo
@@ -673,15 +674,14 @@ func (b *runtimeBuilder) buildGateway() error {
 		router.WithStoredCredentials(b.providerKeys),
 		router.WithDestinationApprovals(approvals),
 	}
-	// A distributed store makes provider health a fleet fact: each replica
-	// publishes its breaker transitions and latency snapshots there and
-	// merges peer state on refresh. An embedded store keeps every replica
-	// process-local, exactly as before.
 	if b.config.Storage.Distributed() && b.application.store != nil {
 		if err := availabilityOwner.UseSharedStore(b.application.store, availability.SharedConfig{}); err != nil {
 			return fmt.Errorf("share provider availability state: %w", err)
 		}
-		routerOptions = append(routerOptions, router.WithSharedHealthStore(b.application.store))
+		latency := router.NewSharedLatencyTracker(nil, b.application.store)
+		routerOptions = append(routerOptions, router.WithLatencyTracker(latency))
+		b.application.advisory = &advisoryWorkers{workers: []func(context.Context){availabilityOwner.RunShared, latency.Run}}
+		b.application.own("advisory exchange", b.application.advisory.Close)
 	}
 	modelRouter := router.New(registryAdapter, routerOptions...)
 	proxyOptions := make([]proxy.Option, 0, 3)
@@ -1227,6 +1227,10 @@ func (a *App) Run(ctx context.Context) error {
 			defer a.runtimeWG.Done()
 			a.catalogCandidateLoop(runCtx)
 		}()
+	}
+
+	if a.advisory != nil {
+		a.advisory.Start(runCtx)
 	}
 
 	serverResult := make(chan error, 1)

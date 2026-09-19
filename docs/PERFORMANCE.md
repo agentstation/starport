@@ -158,3 +158,26 @@ It also names large-input, long-stream, retry, refresh, outage, saturation, slow
 Native functional archive checks cover all six published platforms.
 Initial numeric qualification covers Linux x64 and ARM64, macOS ARM64, and Windows x64.
 Other latency claims require a profile revision and evidence.
+
+## Advisory fleet exchange
+
+Shared health and latency use one background worker each. App.Run starts them.
+App.Close cancels and joins them before it closes storage.
+Inference callbacks update or read process memory without shared-storage calls.
+Periodic publication coalesces observations without a per-request queue.
+
+By default, each worker exchanges state every five seconds and gives an exchange two seconds.
+Peer scans select at most 1,024 replica keys.
+A document can contain at most 4,096 records and one MiB of encoded data.
+A refresh decodes at most four MiB of accepted documents.
+These bounds apply after the storage adapter returns a value.
+The workers retain at most 4,096 peer records each.
+
+The default peer lifetime is one minute. Expired latency hints return no measurement.
+Expired health hints restore local evidence or remove the peer restriction.
+Cold replicas use local state while their worker reads peers.
+Local breaker transitions remain immediate during shared-storage failure.
+Health publications contain local observations, so replicas do not renew each other's stale evidence.
+
+These hints do not grant catalog permission or replace required budget and credential checks.
+The callback tests establish storage isolation. They do not qualify production HTTP percentiles.
