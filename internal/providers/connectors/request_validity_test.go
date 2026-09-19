@@ -63,6 +63,7 @@ func TestDispatchRejectsMaterialExpiredWhileWaitingForConnection(t *testing.T) {
 func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, expire bool) {
 	t.Helper()
 	firstStarted := make(chan struct{})
+	firstHeaders := make(chan struct{})
 	releaseFirst := make(chan struct{})
 	var received atomic.Int64
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +112,7 @@ func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, e
 				response, err = client.Do(request)
 			}
 			if response != nil {
+				close(firstHeaders)
 				data, readErr := io.ReadAll(response.Body)
 				if readErr != nil {
 					err = readErr
@@ -123,6 +125,7 @@ func testDispatchRevocationDuringConnectionWait(t *testing.T, protocol string, e
 		firstDone <- err
 	}()
 	<-firstStarted
+	<-firstHeaders
 
 	waiting := make(chan struct{})
 	trace := &httptrace.ClientTrace{GetConn: func(string) { close(waiting) }}
