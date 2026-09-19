@@ -41,7 +41,7 @@ func (r *modelRouter) RouteEmbeddings(ctx context.Context, req *EmbeddingRequest
 	credentialPolicy, err := newCredentialPolicy(
 		req.APIKeyConfig.credentialStrategy(), req.AccountID,
 		req.APIKeyConfig.byokProviderGate(),
-		runtime, r.storedKeys, r.credentialGate,
+		runtime, r.storedKeys, r.credentialGate, r.destinations,
 	)
 	if err != nil {
 		return nil, err

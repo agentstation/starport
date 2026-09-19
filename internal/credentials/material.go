@@ -12,11 +12,12 @@ import (
 // values. The values are private so serializers and generic formatters cannot
 // expose them.
 type Material struct {
-	profile     catalogs.ProviderCredentialProfile
-	values      map[catalogs.ProviderCredentialFieldID]string
-	metadata    MaterialMetadata
-	validity    *MaterialValidity
-	destination *materialDestination
+	profile          catalogs.ProviderCredentialProfile
+	values           map[catalogs.ProviderCredentialFieldID]string
+	metadata         MaterialMetadata
+	validity         *MaterialValidity
+	destination      materialDestination
+	destinationBound bool
 }
 
 // MaterialMetadata describes one resolved credential lifecycle. Version is

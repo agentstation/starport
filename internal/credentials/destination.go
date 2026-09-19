@@ -157,7 +157,8 @@ func approvedQueryChange(before, after string, placements []catalogs.ProviderCre
 // WithDestinationGrant binds material to its selected approval and operation.
 // A nil grant remains a bound refusal rather than unrestricted material.
 func (m Material) WithDestinationGrant(grant *DestinationGrant, identity DestinationIdentity, operation catalogs.ProviderOperation) Material {
-	m.destination = &materialDestination{grant: grant, identity: identity, operation: operation}
+	m.destination = materialDestination{grant: grant, identity: identity, operation: operation}
+	m.destinationBound = true
 	return m
 }
 
@@ -168,11 +169,11 @@ type materialDestination struct {
 }
 
 // HasDestinationGrant reports whether selection supplied a grant binding.
-func (m Material) HasDestinationGrant() bool { return m.destination != nil }
+func (m Material) HasDestinationGrant() bool { return m.destinationBound }
 
 // AuthorizeDestination refuses absent or mismatched destination approval.
 func (m Material) AuthorizeDestination(request *http.Request) (DestinationAuthorization, error) {
-	if m.destination == nil {
+	if !m.destinationBound {
 		return DestinationAuthorization{}, ErrDestinationUnapproved
 	}
 	return m.destination.grant.Authorize(m.destination.identity, m, m.destination.operation, request)

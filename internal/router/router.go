@@ -15,6 +15,7 @@ import (
 
 	"github.com/agentstation/starport/internal/availability"
 	runtimecatalog "github.com/agentstation/starport/internal/catalog"
+	"github.com/agentstation/starport/internal/credentials"
 	"github.com/agentstation/starport/internal/execution"
 	"github.com/agentstation/starport/internal/failure"
 	"github.com/agentstation/starport/internal/inference"
@@ -65,6 +66,7 @@ type modelRouter struct {
 	outcomes       execution.OutcomePublisher
 	credentialGate OperatorCredentialGate
 	storedKeys     StoredCredentialResolver
+	destinations   *credentials.DestinationApprovals
 	sharedHealth   availability.KVStore
 
 	// Advanced routing features
@@ -80,6 +82,15 @@ type OperatorCredentialGate interface {
 
 // Option configures the transitional router composition.
 type Option func(*modelRouter)
+
+// WithDestinationApprovals supplies the applied inference approval set.
+// A nil set selects an explicit deny-all policy.
+func WithDestinationApprovals(approvals *credentials.DestinationApprovals) Option {
+	if approvals == nil {
+		approvals = &credentials.DestinationApprovals{}
+	}
+	return func(r *modelRouter) { r.destinations = approvals }
+}
 
 // WithCatalog supplies the shared generation-consistent routable snapshot.
 func WithCatalog(catalogPlane *runtimecatalog.ControlPlane) Option {
@@ -243,7 +254,7 @@ func (r *modelRouter) RouteWithFallback(ctx context.Context, req *Request) (*Res
 	}
 	strategy, accountID, byokGate := credentialRequestPolicy(req)
 	credentialPolicy, err := newCredentialPolicy(
-		strategy, accountID, byokGate, runtime, r.storedKeys, r.credentialGate,
+		strategy, accountID, byokGate, runtime, r.storedKeys, r.credentialGate, r.destinations,
 	)
 	if err != nil {
 		return nil, err

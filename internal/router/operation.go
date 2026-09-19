@@ -128,7 +128,7 @@ func routeOperation[Response any](
 	credentialPolicy, err := newCredentialPolicy(
 		policy.APIKeyConfig.credentialStrategy(), policy.AccountID,
 		policy.APIKeyConfig.byokProviderGate(),
-		runtime, r.storedKeys, r.credentialGate,
+		runtime, r.storedKeys, r.credentialGate, r.destinations,
 	)
 	if err != nil {
 		return nil, err
