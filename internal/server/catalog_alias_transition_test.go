@@ -167,3 +167,66 @@ func TestMissingModelReturnsNotFoundInBothInferenceProtocols(t *testing.T) {
 		}
 	}
 }
+
+func TestInferenceErrorsDoNotDiscloseDeniedCatalogMembership(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		registered, denied bool
+		route, body        string
+		status             int
+		errorType          string
+	}{
+		{"unavailable", false, false, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 503, "service_unavailable"},
+		{"unsupported", true, false, "/embeddings", `{"model":"author/current","input":"hello"}`, 400, "invalid_request_error"},
+		{"denied chat", true, true, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 404, "not_found_error"},
+		{"denied unsupported", true, true, "/embeddings", `{"model":"author/current","input":"hello"}`, 404, "not_found_error"},
+		{"denied unavailable", false, true, "/chat/completions", `{"model":"author/current","messages":[{"role":"user","content":"hello"}]}`, 404, "not_found_error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := catalogs.NewEmpty()
+			author := catalogs.Author{ID: "author", Name: "Author"}
+			require.NoError(t, builder.SetAuthor(author))
+			features := &catalogs.ModelFeatures{Modalities: catalogs.ModelModalities{Input: []catalogs.ModelModality{catalogs.ModelModalityText}, Output: []catalogs.ModelModality{catalogs.ModelModalityText}}}
+			require.NoError(t, builder.SetAuthorModel("author", catalogs.Model{ID: "current", Name: "Current", Authors: []catalogs.Author{author}, Features: features}))
+			require.NoError(t, builder.SetProvider(catalogs.Provider{ID: "acme", Name: "Acme", Inference: &catalogs.ProviderInference{BaseURL: "https://provider.test/v1", Endpoints: []catalogs.ProviderInferenceEndpoint{{Operation: catalogs.ProviderOperationChatCompletions, Type: catalogs.EndpointTypeOpenAI, Path: "/chat/completions"}}}, Models: map[string]*catalogs.Model{"private/opaque@001": {ID: "private/opaque@001", ModelRef: "author/current", Name: "Private offering", Status: catalogs.ModelStatusActive, Features: features}}}))
+			accepted, err := builder.Build()
+			require.NoError(t, err)
+			plane, err := runtimecatalog.Open(aliasHTTPSource{state: starmap.CatalogState{Catalog: accepted, GenerationID: "error-policy"}})
+			require.NoError(t, err)
+			var registrations []registry.Registration
+			if tc.registered {
+				registrations = []registry.Registration{{Provider: "acme", Connector: connectors.NewMockConnector(connectors.ProviderConfig{}), Operations: []catalogs.ProviderOperation{catalogs.ProviderOperationChatCompletions}, EndpointTypes: []catalogs.EndpointType{catalogs.EndpointTypeOpenAI}}}
+			}
+			reg, err := registry.Open(plane, registrations)
+			require.NoError(t, err)
+			if tc.registered {
+				require.Len(t, plane.Current().Routes(), 1)
+			}
+			t.Cleanup(func() { require.NoError(t, reg.Close()) })
+			s := newTestServer(t, &Config{MaxRequestSize: 1 << 20}, func(config *testServerConfig) { config.runtimeRegistry = reg })
+			secret := createServerAPIKey(t, s, "error-reader", []string{"chat:write"})
+			if tc.denied {
+				record, err := s.accounts.GetByID(t.Context(), account.DefaultID)
+				require.NoError(t, err)
+				record.Account.Access = []account.ProviderAccess{{Provider: "other"}}
+				_, err = s.accounts.Update(t.Context(), record.Account, record.Revision)
+				require.NoError(t, err)
+			}
+			for _, prefix := range []string{"/v1", "/api/v1"} {
+				t.Run(prefix, func(t *testing.T) {
+					request := httptest.NewRequest(http.MethodPost, prefix+tc.route, strings.NewReader(tc.body)).WithContext(t.Context())
+					request.Header.Set("Authorization", "Bearer "+secret)
+					request.Header.Set("Content-Type", "application/json")
+					response := httptest.NewRecorder()
+					s.Router().ServeHTTP(response, request)
+					require.Equal(t, tc.status, response.Code, response.Body.String())
+					require.Contains(t, response.Body.String(), tc.errorType)
+					if tc.denied {
+						require.NotContains(t, response.Body.String(), "private/opaque@001")
+						require.NotContains(t, response.Body.String(), "acme")
+					}
+				})
+			}
+		})
+	}
+}

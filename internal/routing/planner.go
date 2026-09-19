@@ -301,6 +301,9 @@ func rejectCandidate(
 	reject := func(code RejectionCode, detail string) (Rejection, bool) {
 		return Rejection{Route: candidate.Route, Code: code, Detail: detail}, true
 	}
+	if code, detail := accountRejection(candidate.Route, accountModels, accountProviders, accountAccess); code != "" {
+		return reject(code, detail)
+	}
 	if candidate.Unavailable {
 		return reject(RejectionUnavailable, "runtime availability disabled the offering")
 	}
@@ -316,22 +319,7 @@ func rejectCandidate(
 			return reject(RejectionMissingEndpoint, "offering has no usable operation endpoint")
 		}
 	}
-	if !modelAllowed(candidate.Route, accountModels) {
-		return reject(RejectionAccountModel, "account policy denied the model")
-	}
 	providerID := normalize(candidate.Route.ProviderID)
-	if !setAllows(providerID, accountProviders) {
-		return reject(RejectionAccountProvider, "account policy denied the provider")
-	}
-	if len(accountAccess) > 0 {
-		grantedModels, granted := accountAccess[providerID]
-		if !granted {
-			return reject(RejectionAccountProvider, "account access does not grant the provider")
-		}
-		if grantedModels != nil && !modelAllowed(candidate.Route, grantedModels) {
-			return reject(RejectionAccountModel, "account access does not grant the model on this provider")
-		}
-	}
 	if !setAllows(providerID, onlyProviders) {
 		return reject(RejectionProviderPolicy, "provider is not in the only list")
 	}

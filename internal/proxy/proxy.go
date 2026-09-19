@@ -384,6 +384,9 @@ func (p *proxy) ProcessChatCompletion(ctx context.Context, req *ChatCompletionRe
 		if errors.Is(err, runtimecatalog.ErrModelNotCatalogued) {
 			return nil, err
 		}
+		if errors.Is(err, router.ErrNoModelsAvailable) {
+			return nil, &RoutingError{Model: req.Request.Model, Reason: "no models available for routing", Err: err}
+		}
 		if refusal := modalityRefusal(err); refusal != nil {
 			return nil, refusal
 		}
@@ -547,9 +550,7 @@ func (p *proxy) ProcessEmbeddings(ctx context.Context, req *EmbeddingsRequest) (
 		AccountID:         req.AccountID,
 	})
 	if err != nil {
-		return nil, &RoutingError{
-			Model: req.Request.Model, Reason: "failed to route embedding request", Err: err,
-		}
+		return nil, routeFailure(req.Request.Model, err)
 	}
 	response := &EmbeddingsResponse{
 		Response:         result.Response,

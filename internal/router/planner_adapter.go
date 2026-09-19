@@ -76,7 +76,7 @@ func (r *modelRouter) planOperation(
 			if override := request.Account.ModelOverrides[name]; override != "" {
 				name = override
 			}
-			if snapshot.Names(name) {
+			if catalogNamePermitted(snapshot, request.Account, name) {
 				found = true
 				break
 			}
