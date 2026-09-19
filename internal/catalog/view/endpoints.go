@@ -32,10 +32,7 @@ func endpoints(snapshot *runtimecatalog.RoutableSnapshot, modelID string, policy
 	if !valid {
 		return endpoints
 	}
-	for _, route := range permittedRoutes(snapshot.Routes(), policy) {
-		if route.ID() != modelID && string(route.DefinitionID) != modelID {
-			continue
-		}
+	for _, route := range permittedRoutes(snapshot.RoutesForModel(modelID), policy) {
 		endpoint, found := route.Endpoint(starmapcatalogs.ProviderOperationChatCompletions)
 		if !found {
 			continue
