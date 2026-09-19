@@ -360,6 +360,30 @@ Runtime ownership checks still apply. A retained runtime from another owner requ
 Explicit roots and leaf paths keep their selected locations. Development storage and unselected database backends do not inspect legacy data.
 Use `--legacy` separately from `--files` and `--inspect`. This command does not migrate or remove old state.
 
+To move catalog runtime evidence, stop the gateway and use `starport migrate runtime`.
+Keep the same catalog KV backend, deployment, instance, and scheduler identity throughout the move.
+This procedure does not move Badger, SQLite, SQL services, uploaded files, or the authoring workspace.
+
+Run these phases with the same `--operation`, `--source`, `--target`, `--journal`, and `--identity` values:
+
+1. `prepare` records the source inventory and binds the journal to the original catalog KV store.
+2. `stage` copies and verifies private staging files.
+3. `publish` installs the target and retires the source runtime.
+4. Save the absolute target in `STARPORT_CATALOG_STATE_DIR` and the retained identity in `STARPORT_SCHEDULER_IDENTITY` in the primary configuration file.
+5. `complete` verifies the saved configuration, opens the replacement offline, and records completion.
+
+All three path flags require absolute paths. Read the retained scheduler identity from the original runtime status.
+Keep the original runtime selected in configuration through `publish`. Select the target only before `complete`.
+
+Completion verifies the configuration again after opening the replacement. Environment-only target settings cannot complete the move.
+Use `--json` for the phase result. The command does not start the gateway or open SQL.
+
+The explicit journal directory contains Starmap recovery records and Starport's `starport-runtime/<operation-hash>/catalog-binding.json`.
+The catalog KV store retains matching migration checkpoints under `catalog_migration:v1:`.
+Preserve these records and the source files until the migration and recovery procedure permits removal.
+If a phase fails, correct the reported cause and repeat that phase with the same operation values.
+A different catalog store cannot resume the operation, even when it contains the same catalog generation.
+
 Source acquisition uses Starport's cache root, including the session cache during development.
 The models.dev HTTP cache uses `models.dev/`. Its managed Git checkout uses `sources/models.dev-git/`.
 `STARPORT_CATALOG_ACQUISITION_SOURCES` selects permitted provider and metadata sources. An explicit empty value disables them all.
