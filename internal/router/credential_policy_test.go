@@ -170,7 +170,7 @@ func TestBYOKGateSkipsTheBYOKSource(t *testing.T) {
 }
 
 func TestManagedCredentialRefusalIsRetryableWithoutCredentialFallback(t *testing.T) {
-	for _, err := range []error{keyring.ErrMaterialCapacity, keyring.ErrMaterialChanged, keyring.ErrMaterialClosed} {
+	for _, err := range []error{keyring.ErrMaterialCapacity, keyring.ErrMaterialChanged, keyring.ErrMaterialClosed, credentials.NewSourceError(credentials.SourceErrorUnavailable, "stored")} {
 		result, notConfigured := credentialResolutionFailure("acme", err)
 		require.Equal(t, failure.GatewayUnavailable, result.Kind())
 		require.True(t, result.Retryable())

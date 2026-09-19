@@ -179,7 +179,7 @@ func (m *keyManager) loadStoredMaterial(
 		if errors.Is(err, credentials.ErrNotFound) {
 			return credentials.Material{}, ErrKeyNotFound
 		}
-		return credentials.Material{}, fmt.Errorf("read scoped provider credential: %w", err)
+		return credentials.Material{}, storedReadFailure(err)
 	}
 	version, err := storedRecordVersion(record)
 	if err != nil {
@@ -207,7 +207,7 @@ func (m *keyManager) loadSharedMaterial(
 		if errors.Is(err, credentials.ErrNotFound) {
 			return credentials.Material{}, ErrKeyNotFound
 		}
-		return credentials.Material{}, fmt.Errorf("read shared provider credential: %w", err)
+		return credentials.Material{}, storedReadFailure(err)
 	}
 	for _, credential := range record.Key.Shared {
 		if !credential.Usable(accountID) {
@@ -702,4 +702,11 @@ func storedRecordVersion(record credentials.Record) (string, error) {
 		return "", fmt.Errorf("encode credential revision: %w", err)
 	}
 	return fmt.Sprintf("stored:%x", sha256.Sum256(encoded)), nil
+}
+
+func storedReadFailure(err error) error {
+	if errors.Is(err, credentials.ErrCorruptRecord) {
+		return credentials.NewSourceError(credentials.SourceErrorInvalid, "stored")
+	}
+	return credentials.NewSourceError(credentials.SourceErrorUnavailable, "stored")
 }

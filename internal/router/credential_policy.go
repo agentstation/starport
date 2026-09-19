@@ -295,7 +295,7 @@ func (p *credentialPolicy) advance(route routing.Route, previous *failure.Failur
 func credentialResolutionFailure(providerID string, err error) (*failure.Failure, bool) {
 	details := failure.ProviderDetails{Provider: providerID}
 	switch {
-	case errors.Is(err, credentials.ErrMaterialExpired), errors.Is(err, credentials.ErrMaterialRevoked), errors.Is(err, keyring.ErrMaterialCapacity), errors.Is(err, keyring.ErrMaterialChanged), errors.Is(err, keyring.ErrMaterialClosed):
+	case credentials.IsSourceError(err, credentials.SourceErrorUnavailable), errors.Is(err, credentials.ErrMaterialExpired), errors.Is(err, credentials.ErrMaterialRevoked), errors.Is(err, keyring.ErrMaterialCapacity), errors.Is(err, keyring.ErrMaterialChanged), errors.Is(err, keyring.ErrMaterialClosed):
 		return failure.New(failure.GatewayUnavailable, "Provider credential material is temporarily unavailable.", true, details, err), false
 	case errors.Is(err, context.Canceled):
 		return failure.New(failure.Canceled, "The request was canceled.", false, details, err), false

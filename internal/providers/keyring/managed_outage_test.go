@@ -52,7 +52,7 @@ func TestManagedMaterialValkeyOutageAndRecovery(t *testing.T) {
 	require.NoError(t, warm.CheckValidity(now))
 	now = now.Add(manager.materials.limits.Validity)
 	_, err = keys.ResolveStoredMaterial(t.Context(), scope, provider)
-	require.Error(t, err)
+	require.True(t, credentials.IsSourceError(err, credentials.SourceErrorUnavailable))
 	require.Error(t, original.CheckValidity(now))
 	proxy.setOffline(false)
 	require.Eventually(t, func() bool {

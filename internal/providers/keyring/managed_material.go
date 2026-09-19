@@ -156,8 +156,8 @@ func (c *managedMaterials) loadFlight(key materialIdentity, entry *managedEntry,
 	defer c.work.Done()
 	loadCtx, cancel := context.WithTimeout(c.ctx, c.limits.LoadTimeout)
 	material, err := load(loadCtx)
-	if err == nil {
-		err = loadCtx.Err()
+	if loadCtx.Err() != nil {
+		err = errors.Join(credentials.NewSourceError(credentials.SourceErrorUnavailable, "stored"), loadCtx.Err())
 	}
 	cancel()
 	c.mu.Lock()
