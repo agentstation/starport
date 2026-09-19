@@ -26,3 +26,16 @@ func (b *runtimeBuilder) guardLocalSetup() error {
 	b.application.own("local setup guard", func(context.Context) error { return guard.Close() })
 	return nil
 }
+
+func (b *runtimeBuilder) prepareInferencePolicy() error {
+	ctx := context.Background()
+	legacy := false
+	if b.config.InferenceCredentialPolicyDirectory() != "" {
+		retained, err := catalogSettings(b.config).HasRetainedInstallation(ctx, b.application.store)
+		if err != nil {
+			return fmt.Errorf("inspect inference policy installation: %w", err)
+		}
+		legacy = retained
+	}
+	return b.config.InitializeInferencePolicy(ctx, legacy)
+}

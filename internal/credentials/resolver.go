@@ -166,6 +166,9 @@ func WithDirectSecretRefreshInterval(interval time.Duration) ResolverOption {
 // Resolver owns inference credential source selection, caching, refresh, and
 // single-flight work. It contains no provider roster.
 type Resolver struct {
+	environmentPolicy           EnvironmentPolicy
+	starmapFallback             bool
+	selectionPolicy             SelectionPolicyStore
 	lookup                      EnvironmentLookup
 	sources                     map[ReferenceBackend]ReferenceSource
 	cloudChains                 map[catalogs.ProviderAuthenticationPrimitive]CloudChain
@@ -192,7 +195,8 @@ type resolutionCall struct {
 func NewResolver(options ...ResolverOption) *Resolver {
 	lookup := EnvironmentLookup(os.LookupEnv)
 	resolver := &Resolver{
-		lookup: lookup,
+		environmentPolicy: InferencePolicyCurrent,
+		lookup:            lookup,
 		sources: map[ReferenceBackend]ReferenceSource{
 			ReferenceBackendEnvironment: environmentSource{lookup: lookup},
 			ReferenceBackendFile:        fileSource{},
@@ -427,7 +431,7 @@ func (r *Resolver) resolve(
 	}
 }
 
-func (r *Resolver) resolveUncached(
+func (r *Resolver) resolveProfiles(
 	ctx context.Context,
 	handle *ProviderHandle,
 	allowCloudChain bool,
@@ -620,20 +624,17 @@ func (r *Resolver) resolveAmbientField(
 	providerID catalogs.ProviderID,
 	field catalogs.ProviderCredentialField,
 ) (resolvedField, bool, bool, error) {
-	candidates := append([]string(nil), field.Environment...)
-	derived, err := catalogs.DerivedCredentialEnvironmentName(
-		starportCredentialProduct,
-		providerID,
-		field.ID,
-	)
+	candidates, err := r.environmentCandidates(providerID, field)
 	if err != nil {
 		return resolvedField{}, false, false, err
 	}
-	candidates = append(candidates, derived)
 	for _, name := range candidates {
 		value, exists := r.lookup(name)
-		if !exists || value == "" {
+		if !exists || (r.environmentPolicy == InferencePolicyLegacy && value == "") {
 			continue
+		}
+		if r.emptySelection(value) {
+			return resolvedField{}, false, true, &SelectedValueError{Environment: name, ProviderID: providerID, FieldID: field.ID}
 		}
 		if err := validateResolvedField(field, value); err != nil {
 			return resolvedField{}, false, true, &SelectedValueError{

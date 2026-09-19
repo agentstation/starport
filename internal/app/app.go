@@ -228,6 +228,7 @@ func (b *runtimeBuilder) compose() error {
 		b.validateCatalogStorage,
 		b.guardLocalSetup,
 		b.openStorage,
+		b.prepareInferencePolicy,
 		b.openSQLStore,
 		b.openBlob,
 		b.openEvents,

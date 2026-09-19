@@ -38,9 +38,10 @@ type Config struct {
 	Guardrails        GuardrailsConfig    `env:",prefix=GUARDRAILS_"`
 	SemanticCache     SemanticCacheConfig `env:",prefix=SEMANTIC_CACHE_"`
 
-	providerEnvironment  environmentLookup
-	credentialResolver   *credentials.Resolver
-	credentialResolverMu *sync.Mutex
+	providerEnvironment        environmentLookup
+	credentialResolver         *credentials.Resolver
+	credentialResolverMu       *sync.Mutex
+	inferencePolicyInitialized bool
 
 	// authModeFromFlag records that a command-line flag, and not the
 	// environment, stated the authentication mode. It is unexported so the

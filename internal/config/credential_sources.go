@@ -9,6 +9,9 @@ import (
 // source. It owns inference credentials alone. The catalog settings in
 // catalog.go own catalog acquisition, and the two never share a variable.
 type CredentialSourcesConfig struct {
+	// AllowStarmapFallback permits acquisition-prefixed keys as the last inference fallback.
+	AllowStarmapFallback bool `env:"ALLOW_STARMAP_FALLBACK,default=false"`
+
 	// RemoteRefreshInterval is the period between reads of a remote secret
 	// store that holds an inference credential.
 	RemoteRefreshInterval time.Duration `env:"REMOTE_REFRESH_INTERVAL,default=5m"`

@@ -536,13 +536,28 @@ commands.
 Starmap owns each provider's exact ID, credential fields, ordered conventional
 environment names, authentication profiles, endpoint templates, and service
 metadata. Starport evaluates every catalog provider against that contract. It
-checks conventional names first. It then checks a derived
-`STARPORT_<PROVIDER>_<FIELD>` name. For example, it checks `OPENAI_API_KEY`
-before `STARPORT_OPENAI_API_KEY`.
+checks `STARPORT_<PROVIDER>_<FIELD>` first, then the catalog's conventional
+names. For example, `STARPORT_OPENAI_API_KEY` precedes `OPENAI_API_KEY`.
+An explicitly empty or invalid selected value stops resolution.
 
-Starport selects the first nonempty value in that order. If the selected value
-does not satisfy the catalog field contract, resolution fails. Starport does
-not continue to a later name.
+`STARPORT_CREDENTIAL_SOURCES_ALLOW_STARMAP_FALLBACK=true` permits
+`STARMAP_<PROVIDER>_<FIELD>` as the last inference fallback. The default is
+`false`. Enable it only when the acquisition account may also pay for inference.
+Explicit inference references precede environment discovery.
+
+Retained installations compare the previous conventional-first selection with
+the new selection before migration. Different complete credential profiles
+block that provider until an operator selects explicit references or removes
+the conflicting variables. Other providers can remain available.
+
+Accepted policy versions persist under
+`<state-root>/credentials/inference/<instance-id>/`. These private records
+contain owner and policy identifiers, not credential values. Restart preserves
+accepted decisions. Invalid records refuse initialization. Development scratch
+mode uses ephemeral policy.
+
+Request routing reads cached credential material.
+Credential resolution reads policy files and secret sources.
 
 `starport init` creates gateway security and identity state. It never selects
 or writes provider inference credential material. Runtime credential

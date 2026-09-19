@@ -26,15 +26,15 @@ func TestCatalogCredentialEnvironmentPrecedence(t *testing.T) {
 		want   string
 	}{
 		{
-			name: "conventional precedes product alias",
+			name: "product precedes conventional name",
 			values: map[string]string{
 				"OPENAI_API_KEY":          "valid-conventional",
 				"STARPORT_OPENAI_API_KEY": "valid-product",
 			},
-			want: "valid-conventional",
+			want: "valid-product",
 		},
 		{
-			name: "product alias is the final ambient candidate",
+			name: "product alias resolves without conventional name",
 			values: map[string]string{
 				"STARPORT_OPENAI_API_KEY": "valid-product",
 			},
@@ -58,8 +58,8 @@ func TestCatalogCredentialEnvironmentPrecedence(t *testing.T) {
 		cfg := &Config{providerEnvironment: lookupFunc(func(name string) (string, bool) {
 			lookups = append(lookups, name)
 			values := map[string]string{
-				"OPENAI_API_KEY":          "invalid",
-				"STARPORT_OPENAI_API_KEY": "valid-product",
+				"OPENAI_API_KEY":          "valid-conventional",
+				"STARPORT_OPENAI_API_KEY": "invalid",
 			}
 			value, found := values[name]
 			return value, found
@@ -72,9 +72,9 @@ func TestCatalogCredentialEnvironmentPrecedence(t *testing.T) {
 		if !reflect.DeepEqual(lookups, []string{
 			"STARPORT_OPENAI_API_KEY_REFERENCE",
 			"STARPORT_OPENAI_API_KEY_REFERENCE_FALLBACK_AMBIENT",
-			"OPENAI_API_KEY",
+			"STARPORT_OPENAI_API_KEY",
 		}) {
-			t.Fatalf("lookups = %#v, want terminal conventional selection", lookups)
+			t.Fatalf("lookups = %#v, want terminal product selection", lookups)
 		}
 	})
 }

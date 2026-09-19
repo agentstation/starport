@@ -131,6 +131,10 @@ func (c *Config) FileManifest(version string) (productpaths.FileManifest, error)
 	policyDirectory := c.CatalogCredentialPolicyDirectory()
 	add("credential-policy", policyDirectory, fileKindTree, selectedAvailability(policyDirectory != ""), policy.OwnerOnly,
 		"Catalog startup records the acquisition policy before it creates catalog state.", "Preserve policy records with the deployment. Resolve conflicts through explicit credential references.", "STARPORT_STATE_ROOT", "STARPORT_INSTANCE_ID")
+
+	inferencePolicyDirectory := c.InferenceCredentialPolicyDirectory()
+	add("inference-credential-policy", inferencePolicyDirectory, fileKindTree, selectedAvailability(inferencePolicyDirectory != ""), policy.OwnerOnly,
+		"Gateway startup records inference selection policy before provider activation.", "Preserve accepted policy records. Resolve conflicts with explicit inference references.", "STARPORT_STATE_ROOT", "STARPORT_INSTANCE_ID")
 	workspaceFiles, err := productpaths.WorkspaceFiles(manifestPath(p, "workspace", c.Catalog.WorkspacePath), "STARPORT_CATALOG_WORKSPACE_PATH")
 	if err != nil {
 		return productpaths.FileManifest{}, err
@@ -220,7 +224,7 @@ func childPath(parent string, parts ...string) string {
 func manifestPath(paths Paths, role, path string) productpaths.Path {
 	originRole := role
 	switch role {
-	case "credential-policy":
+	case "credential-policy", "inference-credential-policy":
 		originRole = "state"
 	case fileRoleBaselineRecovery:
 		originRole = pathRoleBaseline

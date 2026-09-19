@@ -103,7 +103,7 @@ func (c *Config) ValidateProviderCredentialContracts(
 	if c == nil {
 		return errors.New("configuration is required")
 	}
-	return validateCredentialAliases(providers)
+	return validateCredentialAliases(providers, c.CredentialSources.AllowStarmapFallback)
 }
 
 // ResolveProviderRuntime resolves one catalog provider. Refresh bypasses a
@@ -221,7 +221,7 @@ func (c *Config) providerCredentialResolver() *credentials.Resolver {
 	if c.credentialResolver != nil {
 		return c.credentialResolver
 	}
-	options := []credentials.ResolverOption{}
+	options := []credentials.ResolverOption{credentials.WithStarmapFallback(c.CredentialSources.AllowStarmapFallback)}
 	if c.providerEnvironment != nil {
 		options = append(options, credentials.WithEnvironmentLookup(c.providerEnvironment.Lookup))
 	}
@@ -307,7 +307,7 @@ func credentialReferencePolicies(
 	return policies, nil
 }
 
-func validateCredentialAliases(providers []catalogs.Provider) error {
+func validateCredentialAliases(providers []catalogs.Provider, allowStarmap bool) error {
 	aliases := make(map[string]credentialFieldOwner)
 	for _, provider := range providers {
 		if err := provider.ValidateContract(); err != nil {
@@ -327,6 +327,13 @@ func validateCredentialAliases(providers []catalogs.Provider) error {
 				return err
 			}
 			candidates = append(candidates, derived)
+			if allowStarmap {
+				inherited, err := catalogs.DerivedCredentialEnvironmentName("STARMAP", provider.ID, field.ID)
+				if err != nil {
+					return err
+				}
+				candidates = append(candidates, inherited)
+			}
 			for _, candidate := range candidates {
 				owner := credentialFieldOwner{
 					providerID: provider.ID, fieldID: field.ID, role: "value",

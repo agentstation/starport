@@ -230,6 +230,7 @@ func (l *Loader) load(ctx context.Context, development bool, overrides []Overrid
 	cfg.fileInputs = selected.fileInputs
 	cfg.providerEnvironment = lookuper
 	resolverOptions := []credentials.ResolverOption{
+		credentials.WithStarmapFallback(cfg.CredentialSources.AllowStarmapFallback),
 		credentials.WithEnvironmentLookup(lookuper.Lookup),
 		credentials.WithDirectSecretRefreshInterval(cfg.CredentialSources.RemoteRefreshInterval),
 	}

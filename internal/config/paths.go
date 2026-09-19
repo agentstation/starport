@@ -221,3 +221,11 @@ func (c *Config) CatalogCredentialPolicyDirectory() string {
 	}
 	return filepath.Join(c.paths.StateDir, "credentials", "catalog", c.paths.InstanceID)
 }
+
+// InferenceCredentialPolicyDirectory selects private inference selection history.
+func (c *Config) InferenceCredentialPolicyDirectory() string {
+	if c == nil || c.Catalog.StateDirectoryIsScratch() || c.paths.StateDir == "" {
+		return ""
+	}
+	return filepath.Join(c.paths.StateDir, "credentials", "inference", c.paths.InstanceID)
+}
