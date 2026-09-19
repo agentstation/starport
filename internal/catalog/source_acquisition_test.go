@@ -35,7 +35,17 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	settings.SourceCacheDirectory = filepath.Join(t.TempDir(), "source-cache")
 	settings.AcquisitionEnabled = false
 	settings.Values = map[string]string{catalogconfig.AcquisitionSources: string(sources.ModelsDevHTTPID)}
-	store := storage.NewMockStore()
+	storePath := filepath.Join(t.TempDir(), "badger")
+	openStore := func() *storage.BadgerStore {
+		t.Helper()
+		store, err := storage.OpenBadger(storage.BadgerConfig{
+			Path: storePath, SyncWrites: true, NumVersions: 1, NumLevelZero: 5, MemTableSize: 64 << 20,
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, store.Close()) })
+		return store
+	}
+	store := openStore()
 	connected, err := OpenRuntime(t.Context(), store, settings, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, connected.Close(context.Background())) })
@@ -67,6 +77,8 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, report.Acquisition.SourceObservations, accepted.Manifest.SourceObservations)
 	require.NoError(t, connected.Close(t.Context()))
+	require.NoError(t, store.Close())
+	store = openStore()
 	beforeRestart := calls.Load()
 	settings.Values[catalogconfig.NetworkMode] = "offline"
 	reopened, err := OpenRuntime(t.Context(), store, settings, nil)
@@ -74,6 +86,10 @@ func TestRuntimeAcquiresSelectedMetadataSource(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, reopened.Close(context.Background())) })
 	require.Equal(t, candidate.State.GenerationID, reopened.ControlPlane().Current().GenerationID())
 	require.Equal(t, beforeRestart, calls.Load())
+	retained, err := reopened.accepted.Get(t.Context(), candidate.State.GenerationID)
+	require.NoError(t, err)
+	require.Equal(t, accepted.Manifest.SourceObservations, retained.Manifest.SourceObservations)
+	require.Equal(t, accepted.Payload, retained.Payload)
 }
 
 func TestMetadataCollectorConstructionIsPassiveAndChecksPaths(t *testing.T) {
