@@ -34,7 +34,7 @@ func TestSessionProjectionWarmReadsAvoidPolicyStorage(t *testing.T) {
 		require.Equal(t, "account", selected)
 		return "account", nil
 	})
-	cache, err := NewCache(source, source.authorities, cacheTestLimits(), source.clock)
+	cache, err := NewCache(source, source.authorities, cacheTestLimits(), source.clock, testElapsedClock(source.clock))
 	require.NoError(t, err)
 	t.Cleanup(cache.Close)
 	caller := Identity{Subject: SessionSubjectPrefix + "issuer:person", Tenant: "account"}

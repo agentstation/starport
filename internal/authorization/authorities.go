@@ -74,7 +74,10 @@ func (s *AuthoritySet) beginMutation() func() {
 
 // Permit requires every authority receipt to remain valid.
 // Its private receipts cannot change after publication.
-type Permit struct{ receipts []Receipt }
+type Permit struct {
+	receipts []Receipt
+	elapsed  *elapsedValidity
+}
 
 func (t tickets) accept(evidence []Evidence, now time.Time, lifetime, uncertainty time.Duration, healthy bool) (Permit, error) {
 	if len(t) == 0 || len(evidence) != len(t) {
@@ -111,6 +114,11 @@ func (t tickets) accept(evidence []Evidence, now time.Time, lifetime, uncertaint
 func (p Permit) Check(now time.Time, healthy bool) error {
 	if len(p.receipts) == 0 {
 		return ErrEvidence
+	}
+	if p.elapsed != nil {
+		if err := p.elapsed.check(); err != nil {
+			return err
+		}
 	}
 	for _, receipt := range p.receipts {
 		if err := receipt.Check(now, healthy); err != nil {

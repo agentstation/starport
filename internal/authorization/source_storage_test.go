@@ -71,7 +71,7 @@ func TestRepositorySourceRealStoresAndLocalMutation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cache, err := NewCache(source, authorities, cacheTestLimits(), source.clock)
+		cache, err := NewCache(source, authorities, cacheTestLimits(), source.clock, testElapsedClock(source.clock))
 		if err != nil {
 			t.Fatal(err)
 		}

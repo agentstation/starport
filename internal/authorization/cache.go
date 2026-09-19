@@ -33,6 +33,10 @@ type CacheLimits struct {
 // It must support concurrent calls without blocking or storage reads.
 type Clock func() (time.Time, bool)
 
+// ElapsedClock reads a process-local counter that includes system sleep.
+// It must support concurrent calls without file or network reads.
+type ElapsedClock func() (time.Duration, bool)
+
 type cacheEntry struct {
 	bundle *Bundle
 	flight *flight
@@ -52,6 +56,7 @@ type Cache struct {
 	authorities *AuthoritySet
 	limits      CacheLimits
 	clock       Clock
+	elapsed     ElapsedClock
 	ctx         context.Context
 	cancel      context.CancelFunc
 	entries     map[Identity]*cacheEntry
@@ -65,12 +70,12 @@ type Cache struct {
 }
 
 // NewCache requires explicit limits and a clock-health provider.
-func NewCache(source Source, authorities *AuthoritySet, limits CacheLimits, clock Clock) (*Cache, error) {
-	if source == nil || authorities == nil || len(authorities.fences) == 0 || clock == nil || limits.Entries <= 0 || limits.Bytes <= 0 || limits.BundleBytes <= 0 || limits.BundleBytes > limits.Bytes || limits.ConcurrentLoads <= 0 || limits.TenantLoads <= 0 || limits.TenantLoads > limits.ConcurrentLoads || limits.LoadTimeout <= 0 || limits.PermissionLifetime <= 0 || limits.ClockUncertainty < 0 || limits.ClockUncertainty >= limits.PermissionLifetime {
+func NewCache(source Source, authorities *AuthoritySet, limits CacheLimits, clock Clock, elapsed ElapsedClock) (*Cache, error) {
+	if source == nil || authorities == nil || len(authorities.fences) == 0 || clock == nil || elapsed == nil || limits.Entries <= 0 || limits.Bytes <= 0 || limits.BundleBytes <= 0 || limits.BundleBytes > limits.Bytes || limits.ConcurrentLoads <= 0 || limits.TenantLoads <= 0 || limits.TenantLoads > limits.ConcurrentLoads || limits.LoadTimeout <= 0 || limits.PermissionLifetime <= 0 || limits.ClockUncertainty < 0 || limits.ClockUncertainty >= limits.PermissionLifetime {
 		return nil, ErrEvidence
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Cache{source: source, authorities: authorities, limits: limits, clock: clock, ctx: ctx, cancel: cancel, entries: make(map[Identity]*cacheEntry), tenants: make(map[string]int)}, nil
+	return &Cache{source: source, authorities: authorities, limits: limits, clock: clock, elapsed: elapsed, ctx: ctx, cancel: cancel, entries: make(map[Identity]*cacheEntry), tenants: make(map[string]int)}, nil
 }
 
 // Resolve returns a valid memory bundle or joins one bounded cold load.
@@ -210,6 +215,14 @@ func (c *Cache) loadBundle(ctx context.Context, identity Identity, ticket ticket
 }
 
 func (c *Cache) loadOnce(ctx context.Context, identity Identity, ticket tickets) (*Bundle, error) {
+	started, known := c.elapsed()
+	if !known || started < 0 {
+		return nil, ErrUnavailable
+	}
+	wallStart, healthy := c.clock()
+	if !healthy {
+		return nil, ErrUnavailable
+	}
 	candidate, err := c.source.Load(ctx, identity)
 	if err == nil {
 		err = ctx.Err()
@@ -223,6 +236,9 @@ func (c *Cache) loadOnce(ctx context.Context, identity Identity, ticket tickets)
 			deadline := candidate.Key.APIKey.ExpiresAt.Add(-c.limits.ClockUncertainty)
 			receipt.clamp(deadline, now)
 			err = receipt.Check(now, healthy)
+		}
+		if err == nil {
+			err = receipt.boundElapsed(c.elapsed, started, min(c.limits.PermissionLifetime, receipt.Deadline().Sub(wallStart)))
 		}
 		if err == nil {
 			bundle, err = freeze(candidate, identity, receipt, c.limits.BundleBytes)

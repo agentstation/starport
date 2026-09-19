@@ -88,7 +88,7 @@ func TestRepositorySourceCoherentInterval(t *testing.T) {
 
 func TestRepositorySourceObservesWithdrawalAfterRecordFailure(t *testing.T) {
 	s, _ := sourceFixture(t)
-	cache, err := NewCache(s, s.authorities, cacheTestLimits(), s.clock)
+	cache, err := NewCache(s, s.authorities, cacheTestLimits(), s.clock, testElapsedClock(s.clock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestCacheRetriesWholeSourceAfterObservedChange(t *testing.T) {
 		}
 		return revision.Stamp{Epoch: "kv-epoch", Sequence: seq}, nil
 	})
-	cache, err := NewCache(s, s.authorities, cacheTestLimits(), s.clock)
+	cache, err := NewCache(s, s.authorities, cacheTestLimits(), s.clock, testElapsedClock(s.clock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestCacheBoundsSourceChangeRetries(t *testing.T) {
 		calls++
 		return revision.Stamp{Epoch: "kv-epoch", Sequence: uint64(calls)}, nil
 	})
-	cache, err := NewCache(s, s.authorities, cacheTestLimits(), s.clock)
+	cache, err := NewCache(s, s.authorities, cacheTestLimits(), s.clock, testElapsedClock(s.clock))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,7 @@ func newTestCache(t *testing.T, source Source, limits CacheLimits, clock Clock) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	cache, err := NewCache(source, authorities, limits, clock)
+	cache, err := NewCache(source, authorities, limits, clock, testElapsedClock(clock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +450,7 @@ func TestCacheRetainsEveryAuthorityRequirement(t *testing.T) {
 		candidate.Evidence = []Evidence{authorityEvidence("kv", "kv-epoch", kvSequence, now), authorityEvidence("sql", "sql-epoch", sqlSequence, now)}
 		return candidate, nil
 	})
-	cache, err := NewCache(source, set, cacheTestLimits(), func() (time.Time, bool) { return now, true })
+	cache, err := NewCache(source, set, cacheTestLimits(), func() (time.Time, bool) { return now, true }, func() (time.Duration, bool) { return time.Duration(now.UnixNano()), true })
 	if err != nil {
 		t.Fatal(err)
 	}

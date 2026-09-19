@@ -16,6 +16,9 @@ func (c *Cache) Ready() bool {
 	if !healthy || now.IsZero() {
 		return false
 	}
+	if elapsed, known := c.elapsed(); !known || elapsed < 0 {
+		return false
+	}
 	for _, fence := range c.authorities.fences {
 		if _, err := fence.Start(); err != nil {
 			return false

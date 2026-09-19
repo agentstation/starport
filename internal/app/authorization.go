@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/agentstation/starmap/pkg/catalogs/permission/hostclock"
+
 	"github.com/agentstation/starport/internal/apikey"
 	"github.com/agentstation/starport/internal/authorization"
 	"github.com/agentstation/starport/internal/authorization/revision"
@@ -96,7 +98,7 @@ func (b *runtimeBuilder) openAuthorizationCache() error {
 	}
 	owner.cache, err = authorization.NewCache(source, owner.authorities, authorization.CacheLimits{
 		Entries: 1024, Bytes: 16 << 20, BundleBytes: 64 << 10, ConcurrentLoads: 16, TenantLoads: 4, LoadTimeout: time.Second, PermissionLifetime: authorizationPermissionLifetime,
-	}, owner.clock)
+	}, owner.clock, hostclock.Elapsed)
 	if err != nil {
 		return err
 	}
