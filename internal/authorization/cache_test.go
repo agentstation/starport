@@ -30,13 +30,17 @@ func cacheCandidate(id Identity, now time.Time) Candidate {
 	return Candidate{
 		Key:      apikey.Record{Revision: 1, APIKey: apikey.APIKey{ID: "key", Hash: id.Subject, AccountID: tenant, Active: true, Scopes: []string{"chat:write"}, Metadata: map[string]any{"nested": map[string]any{"value": "original"}}}},
 		Account:  account.Record{Revision: 1, Account: account.Account{ID: tenant, Active: true, Access: []account.ProviderAccess{{Provider: "provider", Models: []string{"model"}}}}},
-		Evidence: Evidence{Authority: "deployment", Epoch: "epoch", Sequence: 1, VerifiedAt: now, ValidUntil: now.Add(5 * time.Minute)},
+		Evidence: []Evidence{{Authority: "deployment", Epoch: "epoch", Sequence: 1, VerifiedAt: now, ValidUntil: now.Add(5 * time.Minute)}},
 	}
 }
 
 func newTestCache(t *testing.T, source Source, limits CacheLimits, clock Clock) *Cache {
 	t.Helper()
-	cache, err := NewCache(source, NewFence("deployment", "epoch"), limits, clock)
+	authorities, err := NewAuthoritySet(NewFence("deployment", "epoch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, err := NewCache(source, authorities, limits, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +166,7 @@ func TestCacheMutationRejectsInFlightPublication(t *testing.T) {
 		done := make(chan error, 1)
 		go func() { _, err := cache.Resolve(t.Context(), Identity{Subject: "hash"}); done <- err }()
 		synctest.Wait()
-		cache.fence.BeginMutation()()
+		cache.authorities.beginMutation()()
 		close(release)
 		if err := <-done; !errors.Is(err, ErrWithdrawn) {
 			t.Fatalf("stale publication = %v", err)
@@ -196,7 +200,7 @@ func TestCacheExpiryDoesNotConvertFailureToAbsence(t *testing.T) {
 		if calls.Load() != 3 {
 			t.Fatalf("failed reads became cached absence: %d calls", calls.Load())
 		}
-		if err := old.Receipt().Check(time.Now(), true); !errors.Is(err, ErrExpired) {
+		if err := old.Permit().Check(time.Now(), true); !errors.Is(err, ErrExpired) {
 			t.Fatalf("old receipt = %v", err)
 		}
 	})
@@ -278,7 +282,7 @@ func TestCacheEvictsWorkingSetAndCloseRevokesReceipts(t *testing.T) {
 		t.Fatalf("source calls = %d", calls.Load())
 	}
 	cache.Close()
-	if err := first.Receipt().Check(now, true); !errors.Is(err, ErrWithdrawn) {
+	if err := first.Permit().Check(now, true); !errors.Is(err, ErrWithdrawn) {
 		t.Fatalf("closed receipt = %v", err)
 	}
 }
@@ -296,11 +300,11 @@ func TestCacheKeyExpiryDoesNotRewriteAuthorityReceipt(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if bundle.Receipt().Evidence().ValidUntil != now.Add(5*time.Minute) {
+		if bundle.Permit().Evidence()[0].ValidUntil != now.Add(5*time.Minute) {
 			t.Fatal("key expiry rewrote authority evidence")
 		}
 		time.Sleep(30 * time.Second)
-		if err := bundle.Receipt().Check(time.Now(), true); !errors.Is(err, ErrExpired) {
+		if err := bundle.Permit().Check(time.Now(), true); !errors.Is(err, ErrExpired) {
 			t.Fatalf("key expiry = %v", err)
 		}
 	})
@@ -310,11 +314,15 @@ func TestCacheBoundsTotalBytes(t *testing.T) {
 	now := time.Unix(1000, 0)
 	id := Identity{Subject: "one"}
 	candidate := cacheCandidate(id, now)
-	ticket, err := NewFence("deployment", "epoch").Start()
+	authorities, err := NewAuthoritySet(NewFence("deployment", "epoch"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := ticket.Accept(candidate.Evidence, now, 5*time.Minute, 30*time.Second, true)
+	ticket, err := authorities.start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := ticket.accept(candidate.Evidence, now, 5*time.Minute, 30*time.Second, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,5 +395,67 @@ func TestCacheUnknownClockRefusesWarmRead(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatal("unknown clock started another authority load")
+	}
+}
+
+func TestInvalidColdLookupPreservesWarmWorkingSet(t *testing.T) {
+	now := time.Unix(1000, 0)
+	var calls atomic.Int64
+	limits := cacheTestLimits()
+	limits.Entries = 1
+	cache := newTestCache(t, sourceFunc(func(_ context.Context, id Identity) (Candidate, error) {
+		calls.Add(1)
+		if id.Subject == "invalid" {
+			return Candidate{}, ErrEvidence
+		}
+		return cacheCandidate(id, now), nil
+	}), limits, func() (time.Time, bool) { return now, true })
+	if _, err := cache.Resolve(t.Context(), Identity{Subject: "valid"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cache.Resolve(t.Context(), Identity{Subject: "invalid"}); !errors.Is(err, ErrEvidence) {
+		t.Fatalf("invalid lookup = %v", err)
+	}
+	if _, err := cache.Resolve(t.Context(), Identity{Subject: "valid"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 {
+		t.Fatal("invalid lookup evicted valid policy")
+	}
+}
+
+func TestCacheRetainsEveryAuthorityRequirement(t *testing.T) {
+	now := time.Unix(1000, 0)
+	set := authorityPair(t)
+	sqlSequence := uint64(1)
+	kvSequence := uint64(1)
+	source := sourceFunc(func(_ context.Context, id Identity) (Candidate, error) {
+		candidate := cacheCandidate(id, now)
+		candidate.Evidence = []Evidence{authorityEvidence("kv", "kv-epoch", kvSequence, now), authorityEvidence("sql", "sql-epoch", sqlSequence, now)}
+		return candidate, nil
+	})
+	cache, err := NewCache(source, set, cacheTestLimits(), func() (time.Time, bool) { return now, true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cache.Close)
+	id := Identity{Subject: "hash"}
+	old, err := cache.Resolve(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := set.Observe(authorityEvidence("sql", "sql-epoch", 2, now)); err != nil {
+		t.Fatal(err)
+	}
+	kvSequence = 100
+	if _, err := cache.Resolve(t.Context(), id); !errors.Is(err, ErrEvidence) {
+		t.Fatalf("stale SQL admitted: %v", err)
+	}
+	if err := old.Permit().Check(now, true); !errors.Is(err, ErrWithdrawn) {
+		t.Fatalf("old permit = %v", err)
+	}
+	sqlSequence = 2
+	if _, err := cache.Resolve(t.Context(), id); err != nil {
+		t.Fatal(err)
 	}
 }

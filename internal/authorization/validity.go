@@ -30,6 +30,7 @@ type Evidence struct {
 }
 
 type fenceState struct {
+	blocked   bool
 	mutations uint64
 	sequence  uint64
 }
@@ -59,7 +60,7 @@ type Ticket struct {
 // Start refuses loads during a local mutation or recovery operation.
 func (f *Fence) Start() (Ticket, error) {
 	state := f.state.Load()
-	if state == nil || state.mutations != 0 || f.authority == "" || f.epoch == "" {
+	if state == nil || state.mutations != 0 || state.blocked || f.authority == "" || f.epoch == "" {
 		return Ticket{}, ErrUnavailable
 	}
 	return Ticket{fence: f, state: state}, nil
@@ -75,6 +76,7 @@ func (f *Fence) BeginMutation() func() {
 	if previous != nil {
 		next.mutations = previous.mutations + 1
 		next.sequence = previous.sequence
+		next.blocked = previous.blocked
 	}
 	f.state.Store(next)
 	f.mu.Unlock()
@@ -82,7 +84,7 @@ func (f *Fence) BeginMutation() func() {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		current := f.state.Load()
-		f.state.Store(&fenceState{mutations: current.mutations - 1, sequence: current.sequence})
+		f.state.Store(&fenceState{mutations: current.mutations - 1, sequence: current.sequence, blocked: current.blocked})
 	})
 }
 
@@ -99,7 +101,7 @@ func (f *Fence) Require(sequence uint64) error {
 		return ErrUnavailable
 	}
 	if sequence > current.sequence {
-		f.state.Store(&fenceState{sequence: sequence, mutations: current.mutations})
+		f.state.Store(&fenceState{sequence: sequence, mutations: current.mutations, blocked: current.blocked})
 	}
 	return nil
 }
@@ -167,3 +169,14 @@ func (r Receipt) Evidence() Evidence { return r.evidence }
 
 // Deadline returns the effective expiry after the clock allowance.
 func (r Receipt) Deadline() time.Time { return r.deadline }
+
+// Withdraw closes an authority until explicit recovery constructs a new fence.
+func (f *Fence) Withdraw() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	current := f.state.Load()
+	if current == nil || current.blocked {
+		return
+	}
+	f.state.Store(&fenceState{blocked: true, mutations: current.mutations, sequence: current.sequence})
+}

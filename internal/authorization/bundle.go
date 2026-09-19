@@ -24,7 +24,7 @@ type Candidate struct {
 	Key      apikey.Record
 	Account  account.Record
 	Team     *identity.TeamRecord
-	Evidence Evidence
+	Evidence []Evidence
 }
 
 // Bundle holds immutable caller records and their permission receipt.
@@ -32,11 +32,11 @@ type Bundle struct {
 	key     apikey.Record
 	account account.Record
 	team    *identity.TeamRecord
-	receipt Receipt
+	receipt Permit
 	bytes   int
 }
 
-func freeze(candidate Candidate, identity Identity, receipt Receipt, limit int) (*Bundle, error) {
+func freeze(candidate Candidate, identity Identity, receipt Permit, limit int) (*Bundle, error) {
 	key := candidate.Key.APIKey
 	if key.Hash != identity.Subject || candidate.Key.Revision == 0 || key.ID == "" || !key.Active {
 		return nil, ErrEvidence
@@ -70,8 +70,8 @@ func freeze(candidate Candidate, identity Identity, receipt Receipt, limit int) 
 	return &Bundle{key: owned.Key, account: owned.Account, team: owned.Team, receipt: receipt, bytes: len(data)}, nil
 }
 
-// Receipt returns the immutable validity handle for retries and cache delivery.
-func (b *Bundle) Receipt() Receipt { return b.receipt }
+// Permit returns the immutable validity handle for retries and cache delivery.
+func (b *Bundle) Permit() Permit { return b.receipt }
 
 // Key returns caller-owned key policy without exposing cached collections.
 func (b *Bundle) Key() apikey.Record {

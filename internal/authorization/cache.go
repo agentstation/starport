@@ -47,29 +47,30 @@ type flight struct {
 
 // Cache owns a bounded active-caller working set. NewCache does not read storage.
 type Cache struct {
-	mu      sync.Mutex
-	source  Source
-	fence   *Fence
-	limits  CacheLimits
-	clock   Clock
-	ctx     context.Context
-	cancel  context.CancelFunc
-	entries map[Identity]*cacheEntry
-	tenants map[string]int
-	bytes   int
-	active  int
-	access  uint64
-	closed  bool
-	work    sync.WaitGroup
+	mu          sync.Mutex
+	source      Source
+	authorities *AuthoritySet
+	limits      CacheLimits
+	clock       Clock
+	ctx         context.Context
+	cancel      context.CancelFunc
+	entries     map[Identity]*cacheEntry
+	tenants     map[string]int
+	bytes       int
+	resident    int
+	active      int
+	access      uint64
+	closed      bool
+	work        sync.WaitGroup
 }
 
 // NewCache requires explicit limits and a clock-health provider.
-func NewCache(source Source, fence *Fence, limits CacheLimits, clock Clock) (*Cache, error) {
-	if source == nil || fence == nil || clock == nil || limits.Entries <= 0 || limits.Bytes <= 0 || limits.BundleBytes <= 0 || limits.BundleBytes > limits.Bytes || limits.ConcurrentLoads <= 0 || limits.TenantLoads <= 0 || limits.TenantLoads > limits.ConcurrentLoads || limits.LoadTimeout <= 0 || limits.PermissionLifetime <= 0 || limits.ClockUncertainty < 0 || limits.ClockUncertainty >= limits.PermissionLifetime {
+func NewCache(source Source, authorities *AuthoritySet, limits CacheLimits, clock Clock) (*Cache, error) {
+	if source == nil || authorities == nil || len(authorities.fences) == 0 || clock == nil || limits.Entries <= 0 || limits.Bytes <= 0 || limits.BundleBytes <= 0 || limits.BundleBytes > limits.Bytes || limits.ConcurrentLoads <= 0 || limits.TenantLoads <= 0 || limits.TenantLoads > limits.ConcurrentLoads || limits.LoadTimeout <= 0 || limits.PermissionLifetime <= 0 || limits.ClockUncertainty < 0 || limits.ClockUncertainty >= limits.PermissionLifetime {
 		return nil, ErrEvidence
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Cache{source: source, fence: fence, limits: limits, clock: clock, ctx: ctx, cancel: cancel, entries: make(map[Identity]*cacheEntry), tenants: make(map[string]int)}, nil
+	return &Cache{source: source, authorities: authorities, limits: limits, clock: clock, ctx: ctx, cancel: cancel, entries: make(map[Identity]*cacheEntry), tenants: make(map[string]int)}, nil
 }
 
 // Resolve returns a valid memory bundle or joins one bounded cold load.
@@ -111,14 +112,10 @@ func (c *Cache) Resolve(ctx context.Context, identity Identity) (*Bundle, error)
 		c.mu.Unlock()
 		return nil, ErrCapacity
 	}
-	ticket, err := c.fence.Start()
+	ticket, err := c.authorities.start()
 	if err != nil {
 		c.mu.Unlock()
 		return nil, err
-	}
-	if len(c.entries) >= c.limits.Entries && !c.evict() {
-		c.mu.Unlock()
-		return nil, ErrCapacity
 	}
 	pending := &flight{done: make(chan struct{})}
 	entry = &cacheEntry{flight: pending}
@@ -150,7 +147,7 @@ func (c *Cache) wait(ctx context.Context, pending *flight) (*Bundle, error) {
 	}
 }
 
-func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, ticket Ticket) {
+func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, ticket tickets) {
 	defer c.work.Done()
 	ctx, cancel := context.WithTimeout(c.ctx, c.limits.LoadTimeout)
 	defer cancel()
@@ -161,13 +158,11 @@ func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, tick
 	var bundle *Bundle
 	if err == nil {
 		now, healthy := c.clock()
-		var receipt Receipt
-		receipt, err = ticket.Accept(candidate.Evidence, now, c.limits.PermissionLifetime, c.limits.ClockUncertainty, healthy)
+		var receipt Permit
+		receipt, err = ticket.accept(candidate.Evidence, now, c.limits.PermissionLifetime, c.limits.ClockUncertainty, healthy)
 		if err == nil && candidate.Key.APIKey.ExpiresAt != nil {
 			deadline := candidate.Key.APIKey.ExpiresAt.Add(-c.limits.ClockUncertainty)
-			if deadline.Before(receipt.deadline) {
-				receipt.deadline = deadline
-			}
+			receipt.clamp(deadline)
 			err = receipt.Check(now, healthy)
 		}
 		if err == nil {
@@ -189,7 +184,7 @@ func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, tick
 		err = bundle.receipt.Check(now, healthy)
 	}
 	if err == nil {
-		for c.bytes+bundle.bytes > c.limits.Bytes {
+		for c.resident >= c.limits.Entries || c.bytes+bundle.bytes > c.limits.Bytes {
 			if !c.evict() {
 				err = ErrCapacity
 				break
@@ -200,6 +195,7 @@ func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, tick
 		c.access++
 		entry.bundle, entry.flight, entry.used = bundle, nil, c.access
 		c.bytes += bundle.bytes
+		c.resident++
 		pending.bundle = bundle
 	} else {
 		delete(c.entries, identity)
@@ -211,6 +207,7 @@ func (c *Cache) load(identity Identity, entry *cacheEntry, pending *flight, tick
 func (c *Cache) remove(identity Identity, entry *cacheEntry) {
 	if entry.bundle != nil {
 		c.bytes -= entry.bundle.bytes
+		c.resident--
 	}
 	delete(c.entries, identity)
 }
@@ -239,9 +236,10 @@ func (c *Cache) Close() {
 		return
 	}
 	c.closed = true
-	finish := c.fence.BeginMutation()
+	finish := c.authorities.beginMutation()
 	clear(c.entries)
 	c.bytes = 0
+	c.resident = 0
 	c.cancel()
 	c.mu.Unlock()
 	c.work.Wait()
